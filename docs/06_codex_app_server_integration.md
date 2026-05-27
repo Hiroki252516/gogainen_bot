@@ -6,15 +6,18 @@
 
 ただし、Codex app-serverは通常の汎用LLM APIではなく、Codex rich client向けのJSON-RPCプロトコルである。そのため、AI呼び出し部分は `AIBackend` として隔離し、将来の仕様変更に対応できるようにする。
 
-## 公式仕様メモ
+## ローカルCLI確認メモ
 
-Codex app-serverはJSON-RPC風のプロトコルを使う。主なトランスポートは以下。
+2026-05-27時点でローカルの `codex app-server --help` では以下が確認できた。
 
-- stdio JSONL
-- WebSocket
-- Unix socket
+- `--listen <URL>` は `stdio://`, `unix://`, `ws://IP:PORT`, `off` を受け付ける
+- `--ws-auth` は `capability-token` と `signed-bearer-token` を受け付ける
+- `--ws-token-file` でcapability tokenファイルを指定できる
+- `generate-json-schema --out <DIR>` でプロトコルJSON Schemaを生成できる
+- v2 schemaには `thread/start`, `turn/start`, `account/read`, `account/login/start`, `account/login/cancel` が含まれる
+- `turn/start` は `outputSchema` を受け付ける
 
-MVPでは、実装しやすさのためWebSocket接続を優先する。ただしWebSocket transportはExperimental/Unsupported扱いなので、接続層は差し替え可能にする。
+実装時はローカルの `codex app-server generate-json-schema --experimental --out <tmpdir>` を再実行し、その時点のschemaに合わせる。
 
 ## 認証方針
 
@@ -56,7 +59,7 @@ backendコンテナには同じtokenファイルをread-only mountする。
 
 ## JSON-RPC初期化
 
-接続直後、必ず `initialize` を送る。その後 `initialized` 通知を送る。
+接続直後、必ず `initialize` を送る。以後、schemaに従って通知・レスポンスを処理する。
 
 ```json
 {
@@ -68,12 +71,12 @@ backendコンテナには同じtokenファイルをread-only mountする。
       "title": "Learning Log AI Tutor",
       "version": "0.1.0"
     },
-    "capabilities": {
-      "experimentalApi": false
-    }
+    "capabilities": {}
   }
 }
 ```
+
+実装時にschemaが `initialized` 通知を要求する場合は送る。要求がない場合は送らない。app-server部分は固定実装ではなく、schema駆動で小さく保つ。
 
 ## アカウント状態確認
 
@@ -115,15 +118,28 @@ backendコンテナには同じtokenファイルをread-only mountする。
 
 返却される `verificationUrl` と `userCode` をUIに表示する。
 
+### Cancel
+
+```json
+{
+  "method": "account/login/cancel",
+  "id": 5,
+  "params": { "loginId": "..." }
+}
+```
+
 ## AI呼び出しの作り方
 
 Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造化JSONを返すタスク」としてAIに依頼する。
 
-診断・教授・採点でスレッドを分ける。
+診断・教授・採点で用途を分ける。
 
 - diagnosis thread
 - tutoring thread
 - grading thread
+- feedback thread
+
+スレッドを用途ごとに使い回すか、毎回ephemeralにするかは実装時に選ぶ。MVPでは再現性とログ単純化のため、用途ごとにephemeral threadを作る方針でよい。
 
 ## thread/start 例
 
@@ -132,17 +148,16 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
   "method": "thread/start",
   "id": 10,
   "params": {
-    "model": "gpt-5.4",
+    "model": null,
     "cwd": "/workspace",
     "approvalPolicy": "never",
-    "sandbox": "readOnly",
-    "personality": "precise",
-    "serviceName": "learning_log_ai_tutor"
+    "baseInstructions": "You are a structured-output educational diagnosis assistant.",
+    "ephemeral": true
   }
 }
 ```
 
-モデル名はCodex環境に依存するため、設定ファイルで指定可能にする。
+モデル名はCodex環境に依存するため、固定文字列をハードコードしない。`.env` の `CODEX_MODEL` が空ならCodex側の既定値を使う。
 
 ## turn/start 例
 
@@ -163,10 +178,10 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
       "properties": {
         "is_correct": { "type": "boolean" },
         "misconception_type": { "type": ["string", "null"] },
-        "confidence": { "type": "number" },
-        "reason": { "type": "string" }
+        "diagnosis_confidence": { "type": "number" },
+        "evidence": { "type": "string" }
       },
-      "required": ["is_correct", "misconception_type", "confidence", "reason"],
+      "required": ["is_correct", "misconception_type", "diagnosis_confidence", "evidence"],
       "additionalProperties": false
     }
   }
@@ -175,10 +190,53 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 
 `outputSchema` が使えない、または不安定な場合は、プロンプトでJSONのみ返すようにし、backendでJSON抽出・検証・再試行する。
 
+## ストリーミング処理
+
+app-serverからは `turn/started`, `item/started`, `agent/message/delta`, `turn/completed`, `error` などの通知が来る可能性がある。実装では通知をすべてログ可能にしつつ、AIBackendの戻り値は最終JSONだけに正規化する。
+
+MVPではフロントエンドにAI生成途中のストリームを見せなくてよい。バックエンド内部で完了まで待つ。
+
+## AIBackendの戻り値正規化
+
+`CodexAppServerBackend` は以下を行う。
+
+1. JSON-RPC接続
+2. initialize
+3. account/read
+4. thread/start
+5. turn/start
+6. turn completedまで通知を読む
+7. 最終assistant messageからJSON抽出
+8. Pydantic schemaで検証
+9. `ai_call_logs` にrequest/response/raw/errorを保存
+10. `DiagnosisResult` などの内部型へ変換
+
 ## 失敗時の扱い
 
 AI呼び出しに失敗した場合、実験を止めずに以下のいずれかを行う。
 
-1. MockAIBackendに切り替える
-2. 管理者確認待ちにする
-3. 「AI診断保留」として保存する
+1. `AI_BACKEND=mock` ならMock結果を返す
+2. `AI_BACKEND=codex_app_server` で失敗した場合は `ai_call_logs.status = failed` とする
+3. 管理者画面に「AI診断保留」と表示する
+4. 研究フローを継続できない診断だけ、管理者の手動確認待ちにする
+
+自動でMockへフォールバックする場合は、`ai_call_logs.provider = codex_app_server`, `fallback_provider = mock` のように記録し、分析時に除外可能にする。
+
+## エラー分類
+
+| error_code | UI表示 | 処理 |
+|---|---|---|
+| app_server_unreachable | Codex app-serverに接続できません | 起動手順を表示 |
+| not_logged_in | Codexへのログインが必要です | login startを案内 |
+| auth_failed | app-server認証に失敗しました | token確認を案内 |
+| schema_validation_failed | AI出力を検証できませんでした | 再試行後、保留 |
+| turn_failed | AI応答生成に失敗しました | ai_call_logsに保存 |
+| timeout | AI応答がタイムアウトしました | 再試行または保留 |
+
+## 実装しないこと
+
+- OpenAI APIキー入力画面
+- ChatGPTアクセストークンのDB保存
+- `~/.codex/auth.json` の読み書き
+- app-serverをインターネットへ公開する機能
+- app-serverの仕様を研究ロジックへ直接埋め込むこと

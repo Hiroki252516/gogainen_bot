@@ -17,6 +17,8 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - backend
 
   backend:
     build: ./backend
@@ -24,9 +26,12 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+psycopg://app:app@db:5432/ai_tutor
-      AI_BACKEND: codex_app_server
+      AI_BACKEND: mock
       CODEX_APP_SERVER_URL: ws://host.docker.internal:4500
       CODEX_WS_TOKEN_FILE: /run/secrets/codex_ws_token
+      MAX_LEARNING_TARGETS: "4"
+      MAX_TURNS_PER_TERM: "3"
+      RANDOM_SEED: "20260525"
     volumes:
       - ./exports:/app/exports
       - ./.local/codex-ws-token:/run/secrets/codex_ws_token:ro
@@ -47,6 +52,8 @@ services:
 volumes:
   pgdata:
 ```
+
+MVPの初期値は `AI_BACKEND=mock` にする。Codex app-server接続確認後に `codex_app_server` へ切り替える。
 
 ## Codex app-server
 
@@ -77,6 +84,21 @@ codex app-server \
 
 backendからは `host.docker.internal:4500` へ接続する。
 
+## .env.example
+
+```env
+APP_ENV=development
+DATABASE_URL=postgresql+psycopg://app:app@db:5432/ai_tutor
+AI_BACKEND=mock
+CODEX_APP_SERVER_URL=ws://host.docker.internal:4500
+CODEX_WS_TOKEN_FILE=/run/secrets/codex_ws_token
+CODEX_MODEL=
+MAX_LEARNING_TARGETS=4
+MAX_TURNS_PER_TERM=3
+RANDOM_SEED=20260525
+EXPORT_DIR=/app/exports
+```
+
 ## Makefile
 
 以下のターゲットを用意する。
@@ -100,20 +122,31 @@ seed:
 test:
 	docker compose exec backend pytest
 	docker compose exec frontend npm test
+
+export:
+	docker compose exec backend python -m app.exports.export_all
 ```
 
-## .env.example
+## 開発起動順
 
-```env
-AI_BACKEND=codex_app_server
-CODEX_APP_SERVER_URL=ws://host.docker.internal:4500
-DATABASE_URL=postgresql+psycopg://app:app@db:5432/ai_tutor
-APP_ENV=development
-```
+1. `docker compose up --build`
+2. `docker compose exec backend alembic upgrade head`
+3. `docker compose exec backend python -m app.seed.seed_questions`
+4. `http://localhost:3000` を開く
+5. `http://localhost:8000/api/health` を確認
+
+## app-server接続確認
+
+1. ホストで `codex app-server --listen ws://127.0.0.1:4500`
+2. `.env` の `AI_BACKEND=codex_app_server`
+3. backend再起動
+4. `/admin` のAI statusで接続確認
 
 ## 注意
 
 - Apple Silicon対応のため、古いx86専用イメージを使わない
 - Node/Pythonとも公式multi-arch imageを使う
 - app-serverをコンテナ内で動かすのは後回しでよい
-- まずはホストCodex app-server + Dockerized appで動かす
+- まずはMockAIBackendで研究フローを完成させる
+- Docker内にChatGPT認証情報をコピーしない
+- `.local/` と `exports/` はgitignore対象にする
