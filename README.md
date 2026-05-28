@@ -1,8 +1,8 @@
 # 学習ログ駆動型AIチューター 開発仕様リポジトリ
 
-このリポジトリは、卒業研究で使う「誤概念タイプと足場掛けレベルに基づく AI・情報系専門用語の概念理解支援システム」を、将来Codexに実装させるための仕様書一式です。
+このリポジトリは、卒業研究で使う「誤概念タイプと足場掛けレベルに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 
-現時点では仕様整理だけを行い、システム実装は行いません。実装を開始するときは `prompt.md` を最初の依頼文として使い、`docs/` 以下をすべて読ませてください。
+`docs/` 以下に研究・設計仕様、`backend/` にFastAPIアプリ、`frontend/` にNext.jsアプリがあります。
 
 ## 研究の要点
 
@@ -61,6 +61,80 @@
 | `docs/19_experiment_operation_runbook.md` | 実験運用手順 |
 | `docs/99_sources_and_notes.md` | PPTX由来メモ、参考文献、設計判断 |
 
-## Codexへの依頼
+## 起動方法
 
-将来実装するときは、`prompt.md` をCodexの最初のプロンプトとして渡してください。実装者は必ず `docs/00_project_summary.md` から順に読み、研究条件を壊さない範囲でWebアプリを作成します。
+### Docker Compose
+
+```bash
+docker compose up --build
+```
+
+- frontend: http://localhost:3000
+- backend health: http://localhost:8000/api/health
+- admin: http://localhost:3000/admin
+
+DockerではPostgreSQLを使用します。初期seedはbackend起動時に自動投入されます。
+
+### ローカル開発
+
+```bash
+cp .env.example .env
+cd backend
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+別ターミナル:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+ローカル開発の既定DBはSQLiteです。研究本番に近い確認はDocker Composeで行ってください。
+
+## テスト
+
+```bash
+cd backend && pytest
+cd frontend && npm test
+cd frontend && npm run build
+```
+
+## AIバックエンド
+
+既定では `AI_BACKEND=mock` です。MockAIBackendだけで、事前テスト、診断、学習、再テスト、L0確認、転移テスト、CSV出力まで動きます。
+
+Codex app-serverを使う場合:
+
+```bash
+codex app-server --listen ws://127.0.0.1:4500
+```
+
+その後、backend環境変数を以下に変更します。
+
+```env
+AI_BACKEND=codex_app_server
+CODEX_APP_SERVER_URL=ws://host.docker.internal:4500
+```
+
+app-server連携は `AIBackend` アダプタとして隔離しており、接続できない場合もMockで研究フローを検証できます。
+
+## CSV出力
+
+管理画面または以下のAPIから出力できます。
+
+```text
+GET /api/admin/export/participants.csv
+GET /api/admin/export/attempts.csv
+GET /api/admin/export/learner_states.csv
+GET /api/admin/export/tutor_turns.csv
+GET /api/admin/export/recurrence_events.csv
+GET /api/admin/export/ai_call_logs.csv
+GET /api/admin/export/evaluation_summary.csv
+```
+
+出力先は `exports/` です。
