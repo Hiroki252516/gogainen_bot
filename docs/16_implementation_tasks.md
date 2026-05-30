@@ -107,7 +107,7 @@
 - [ ] outputSchema validation
 - [ ] timeout/retry/error handling
 - [ ] capability token support
-- [ ] provider fallback logging
+- [ ] no-Mock-fallback failure logging
 
 ## Milestone 10: Frontend Completion
 
@@ -141,10 +141,11 @@
 
 必ず以下の順で進める。
 
-1. MockAIBackendで全実験フローを完成させる
-2. その後 CodexAppServerBackend をつなぐ
-3. app-server接続に詰まっても、研究システム本体は動く状態を維持する
+1. Codex app-serverを通常実行のAIバックエンドにする
+2. ChatGPT/Codexログイン、`account/read`、`thread/start`、`turn/start` を確認する
+3. MockAIBackendは自動テスト・障害切り分け用に明示指定した場合だけ使う
+4. app-server接続失敗時はMockへ自動フォールバックせず、失敗ログと管理画面エラーを出す
 
 ## Do Not Implement Before Requested
 
-このリポジトリ整備段階では、上記タスクは仕様として記録するだけであり、実際のfrontend/backendコードは作成しない。
+このリポジトリには実装コードも含まれる。仕様整理だけを依頼された場合はMarkdownのみを編集し、実装依頼時だけfrontend/backendコードを変更する。

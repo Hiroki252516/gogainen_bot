@@ -10,7 +10,17 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `API ${res.status}`);
+    let message = "";
+    try {
+      const parsed = JSON.parse(text);
+      const detail = parsed.detail;
+      if (typeof detail === "string") message = detail;
+      if (detail?.message) message = detail.message;
+    } catch {
+      message = text;
+    }
+    if (message) throw new Error(message);
+    throw new Error(`API ${res.status}`);
   }
   return res.json() as Promise<T>;
 }

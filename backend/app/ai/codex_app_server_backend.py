@@ -1,12 +1,98 @@
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import Any
+import re
+from pathlib import Path
+from typing import Any, Callable
 
 import websockets
 
-from app.ai.mock_backend import MockAIBackend
 from app.core.config import get_settings
+
+
+class CodexAppServerError(RuntimeError):
+    def __init__(self, code: str, user_message: str, detail: str | None = None) -> None:
+        super().__init__(detail or user_message)
+        self.code = code
+        self.user_message = user_message
+        self.detail = detail or user_message
+
+
+class _CodexRpcClient:
+    def __init__(self, url: str, token_file: str | None, timeout_sec: int) -> None:
+        self.url = url
+        self.token_file = token_file
+        self.timeout_sec = timeout_sec
+        self._next_id = 1
+        self._ws: Any = None
+
+    async def __aenter__(self) -> "_CodexRpcClient":
+        headers = self._auth_headers()
+        self._ws = await websockets.connect(
+            self.url,
+            open_timeout=min(10, self.timeout_sec),
+            ping_interval=None,
+            additional_headers=headers or None,
+        )
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        if self._ws:
+            await self._ws.close()
+
+    def _auth_headers(self) -> list[tuple[str, str]]:
+        if not self.token_file:
+            return []
+        token_path = Path(self.token_file)
+        if not token_path.exists():
+            raise CodexAppServerError(
+                "auth_token_missing",
+                "Codex app-serverの認証トークンファイルが見つかりません。",
+                str(token_path),
+            )
+        token = token_path.read_text(encoding="utf-8").strip()
+        if not token:
+            raise CodexAppServerError("auth_token_empty", "Codex app-serverの認証トークンが空です。")
+        return [("Authorization", f"Bearer {token}")]
+
+    async def call(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        notification_handler: Callable[[dict[str, Any]], None] | None = None,
+    ) -> Any:
+        request_id = self._next_id
+        self._next_id += 1
+        request: dict[str, Any] = {"jsonrpc": "2.0", "id": request_id, "method": method}
+        if params is not None:
+            request["params"] = params
+        await self._ws.send(json.dumps(request, ensure_ascii=False))
+
+        while True:
+            message = await self.recv(notification_handler)
+            if message.get("id") != request_id:
+                continue
+            if "error" in message:
+                raise CodexAppServerError("jsonrpc_error", f"Codex app-serverで `{method}` が失敗しました。", json.dumps(message["error"], ensure_ascii=False))
+            return message.get("result")
+
+    async def recv(self, notification_handler: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
+        raw = await asyncio.wait_for(self._ws.recv(), timeout=self.timeout_sec)
+        message = json.loads(raw)
+        if "id" in message and "method" in message:
+            await self._reject_server_request(message)
+        elif notification_handler and "method" in message:
+            notification_handler(message)
+        return message
+
+    async def _reject_server_request(self, message: dict[str, Any]) -> None:
+        response = {
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "error": {"code": -32601, "message": f"Unsupported server request: {message.get('method')}"},
+        }
+        await self._ws.send(json.dumps(response, ensure_ascii=False))
 
 
 class CodexAppServerBackend:
@@ -14,33 +100,418 @@ class CodexAppServerBackend:
 
     def __init__(self) -> None:
         self.settings = get_settings()
-        self.mock = MockAIBackend()
 
     async def status(self) -> dict[str, Any]:
         try:
-            async with websockets.connect(self.settings.codex_app_server_url, open_timeout=2) as ws:
-                await ws.send(json.dumps({"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "learning_log_ai_tutor", "version": "0.1.0"}, "capabilities": {}}}))
-                await ws.recv()
-            return {"app_server_reachable": True, "logged_in": None, "last_error": None}
+            async with self._client() as rpc:
+                await self._initialize(rpc)
+                account_result = await rpc.call("account/read", {"refreshToken": False})
+            account = account_result.get("account") if isinstance(account_result, dict) else None
+            return {
+                "app_server_reachable": True,
+                "logged_in": bool(account),
+                "account_label": self._account_label(account),
+                "plan_type": account.get("planType") if isinstance(account, dict) else None,
+                "last_error": None,
+            }
         except Exception as exc:  # pragma: no cover - depends on local app-server
-            return {"app_server_reachable": False, "logged_in": False, "last_error": str(exc)}
+            return {
+                "app_server_reachable": False,
+                "logged_in": False,
+                "account_label": "Codex app-server",
+                "plan_type": None,
+                "last_error": str(exc),
+            }
 
-    async def _fallback(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
-        result = await getattr(self.mock, method)(payload)
-        result["_fallback_provider"] = "mock"
-        return result
+    async def start_login(self, login_type: str = "chatgpt") -> dict[str, Any]:
+        if login_type not in {"chatgpt", "chatgptDeviceCode"}:
+            raise CodexAppServerError("invalid_login_type", "ChatGPTログイン方式だけを利用できます。")
+        async with self._client() as rpc:
+            await self._initialize(rpc)
+            params: dict[str, Any] = {"type": login_type}
+            if login_type == "chatgpt":
+                params["codexStreamlinedLogin"] = True
+            return await rpc.call("account/login/start", params)
+
+    async def cancel_login(self, login_id: str) -> dict[str, Any]:
+        async with self._client() as rpc:
+            await self._initialize(rpc)
+            return await rpc.call("account/login/cancel", {"loginId": login_id})
+
+    async def logout(self) -> dict[str, Any]:
+        async with self._client() as rpc:
+            await self._initialize(rpc)
+            return await rpc.call("account/logout")
 
     async def diagnose_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return await self._fallback("diagnose_answer", payload)
+        schema = {
+            "type": "object",
+            "properties": {
+                "is_correct": {"type": "boolean"},
+                "diagnosed_status": {"type": "string", "enum": ["misconception", "unknown", "unstable_correct", "stable_correct", "ambiguous"]},
+                "misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
+                "secondary_misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
+                "diagnosis_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "natural_language_diagnosis": {"type": "string"},
+                "evidence": {"type": "string"},
+                "recommended_initial_scaffolding_level": {"type": "string", "enum": ["L0", "L1", "L2", "L3"]},
+                "recommended_teaching_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
+                "requires_manual_review": {"type": "boolean"},
+            },
+            "required": [
+                "is_correct",
+                "diagnosed_status",
+                "misconception_type",
+                "secondary_misconception_type",
+                "diagnosis_confidence",
+                "natural_language_diagnosis",
+                "evidence",
+                "recommended_initial_scaffolding_level",
+                "recommended_teaching_strategy",
+                "requires_manual_review",
+            ],
+            "additionalProperties": False,
+        }
+        prompt = self._prompt(
+            "pretest_diagnosis",
+            payload,
+            [
+                "選択肢の正誤、回答理由、自信度から理解状態を診断する。",
+                "誤概念タイプは内部研究ラベルとして M1/M2/M3/M4/unknown/null のみを使う。",
+                "natural_language_diagnosis には M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
+                "統制群でも分類は保存してよいが、教授方略に使う推薦は general_explanation にする。",
+                f"recommended_teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。",
+            ],
+        )
+        result = await self._run_structured_turn("diagnose_answer", prompt, schema)
+        if payload.get("group_condition") == "control":
+            result["recommended_teaching_strategy"] = "general_explanation"
+        result["natural_language_diagnosis"] = _strip_internal_labels(result["natural_language_diagnosis"])
+        return result
 
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return await self._fallback("generate_tutoring_turn", payload)
+        group = payload.get("group_condition", "proposed")
+        prompt_payload = payload if group == "proposed" else self._control_tutoring_payload(payload)
+        schema = {
+            "type": "object",
+            "properties": {
+                "tutor_message": {"type": "string"},
+                "teaching_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
+                "scaffolding_level": {"type": "string", "enum": ["L0", "L1", "L2", "L3"]},
+                "requires_learner_response": {"type": "boolean"},
+                "learner_prompt": {"type": "string"},
+                "practice_question": {
+                    "type": "object",
+                    "properties": {
+                        "body": {"type": "string"},
+                        "expected_answer": {"type": "string"},
+                        "question_type": {"type": "string"},
+                    },
+                    "required": ["body", "expected_answer", "question_type"],
+                    "additionalProperties": False,
+                },
+                "forbidden_help_given": {"type": "boolean"},
+            },
+            "required": [
+                "tutor_message",
+                "teaching_strategy",
+                "scaffolding_level",
+                "requires_learner_response",
+                "learner_prompt",
+                "practice_question",
+                "forbidden_help_given",
+            ],
+            "additionalProperties": False,
+        }
+        rules = [
+            "学習セッション用の短い日本語チュータ発話を作る。",
+            "再テスト、L0確認、転移テストの具体的な正解を先取りして出さない。",
+            "tutor_message, learner_prompt, practice_question.body に M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
+        ]
+        if group == "control":
+            rules.append("統制群なので、過去ログ、誤概念タイプ、足場掛け履歴に適応しない通常AIチューターとして説明する。teaching_strategy は general_explanation に固定する。")
+        else:
+            rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
+        rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
+        result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)
+        result["tutor_message"] = _strip_internal_labels(result["tutor_message"])
+        result["learner_prompt"] = _strip_internal_labels(result["learner_prompt"])
+        result["practice_question"]["body"] = _strip_internal_labels(result["practice_question"]["body"])
+        if group == "control":
+            result["teaching_strategy"] = "general_explanation"
+        return result
 
     async def grade_response(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return await self._fallback("grade_response", payload)
+        schema = {
+            "type": "object",
+            "properties": {
+                "is_correct": {"type": "boolean"},
+                "score": {"type": "number", "minimum": 0, "maximum": 1},
+                "misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
+                "secondary_misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
+                "diagnosed_status": {"type": "string", "enum": ["misconception", "unknown", "unstable_correct", "stable_correct", "ambiguous"]},
+                "recurrence_flag": {"type": "boolean"},
+                "l0_success": {"type": ["boolean", "null"]},
+                "transfer_success": {"type": ["boolean", "null"]},
+                "feedback_for_log": {"type": "string"},
+                "evidence": {"type": "string"},
+                "requires_manual_review": {"type": "boolean"},
+            },
+            "required": [
+                "is_correct",
+                "score",
+                "misconception_type",
+                "secondary_misconception_type",
+                "diagnosed_status",
+                "recurrence_flag",
+                "l0_success",
+                "transfer_success",
+                "feedback_for_log",
+                "evidence",
+                "requires_manual_review",
+            ],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "grade_response",
+            self._prompt(
+                "phase_grading",
+                payload,
+                [
+                    "再テスト、L0確認、転移テストの回答を採点する。",
+                    "学習者には即時正解やヒントを出さない前提なので、feedback_for_log は管理・分析ログ用に短く書く。",
+                    "転移テストで文脈適用に失敗している場合は misconception_type を M4 にする。",
+                ],
+            ),
+            schema,
+        )
+        result["feedback_for_log"] = _strip_internal_labels(result["feedback_for_log"])
+        return result
 
     async def generate_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return await self._fallback("generate_feedback", payload)
+        schema = {
+            "type": "object",
+            "properties": {
+                "feedback": {"type": "string"},
+                "next_action": {"type": "string", "enum": ["continue", "move_next"]},
+                "next_scaffolding_level": {"type": "string", "enum": ["L0", "L1", "L2", "L3"]},
+                "strategy_changed": {"type": "boolean"},
+                "state_update_reason": {"type": "string"},
+            },
+            "required": ["feedback", "next_action", "next_scaffolding_level", "strategy_changed", "state_update_reason"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_feedback",
+            self._prompt(
+                "learning_feedback",
+                payload,
+                [
+                    "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
+                    "M1/M2/M3/M4 という内部ラベルを学習者向け文面に絶対に書かない。",
+                    "理解が十分なら move_next、不十分なら continue にする。",
+                ],
+            ),
+            schema,
+        )
+        result["feedback"] = _strip_internal_labels(result["feedback"])
+        result["state_update_reason"] = _strip_internal_labels(result["state_update_reason"])
+        return result
 
     async def summarize_learner_state(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return await self._fallback("summarize_learner_state", payload)
+        schema = {
+            "type": "object",
+            "properties": {
+                "summary_for_admin": {"type": "string"},
+                "summary_for_learner": {"type": "string"},
+                "risk_flags": {"type": "array", "items": {"type": "string"}},
+                "recommended_next_focus": {"type": "string"},
+            },
+            "required": ["summary_for_admin", "summary_for_learner", "risk_flags", "recommended_next_focus"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "summarize_learner_state",
+            self._prompt(
+                "learner_state_summary",
+                payload,
+                [
+                    "管理者用と学習者用の短い状態要約を作る。",
+                    "学習者用要約には M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
+                ],
+            ),
+            schema,
+        )
+        result["summary_for_learner"] = _strip_internal_labels(result["summary_for_learner"])
+        return result
+
+    def _client(self) -> _CodexRpcClient:
+        return _CodexRpcClient(
+            self.settings.codex_app_server_url,
+            self.settings.codex_ws_token_file,
+            self.settings.codex_turn_timeout_sec,
+        )
+
+    async def _initialize(self, rpc: _CodexRpcClient) -> None:
+        await rpc.call(
+            "initialize",
+            {
+                "clientInfo": {
+                    "name": "learning_log_ai_tutor",
+                    "title": "Learning Log AI Tutor",
+                    "version": "0.1.0",
+                },
+                "capabilities": {},
+            },
+        )
+
+    async def _ensure_logged_in(self, rpc: _CodexRpcClient) -> dict[str, Any]:
+        account_result = await rpc.call("account/read", {"refreshToken": False})
+        account = account_result.get("account") if isinstance(account_result, dict) else None
+        if not account:
+            raise CodexAppServerError("not_logged_in", "Codex app-serverでChatGPT/Codexログインが確認できません。")
+        return account
+
+    async def _run_structured_turn(self, purpose: str, prompt: str, output_schema: dict[str, Any]) -> dict[str, Any]:
+        text_chunks: list[str] = []
+        completed_texts: list[str] = []
+        turn_id: str | None = None
+
+        def on_event(message: dict[str, Any]) -> None:
+            method = message.get("method")
+            params = message.get("params") or {}
+            event_turn_id = params.get("turnId") or (params.get("turn") or {}).get("id")
+            if turn_id and event_turn_id and event_turn_id != turn_id:
+                return
+            if method in {"item/agentMessage/delta", "agent/message/delta"}:
+                text_chunks.append(params.get("delta", ""))
+            if method == "item/completed":
+                item = params.get("item") or {}
+                if item.get("type") == "agentMessage" and item.get("text"):
+                    completed_texts.append(item["text"])
+            if method == "error":
+                raise CodexAppServerError("turn_failed", "Codex app-serverからエラー通知が返りました。", json.dumps(params, ensure_ascii=False))
+
+        try:
+            async with self._client() as rpc:
+                await self._initialize(rpc)
+                await self._ensure_logged_in(rpc)
+                thread = await rpc.call(
+                    "thread/start",
+                    {
+                        "ephemeral": True,
+                        "cwd": self.settings.codex_app_server_cwd,
+                        "approvalPolicy": "never",
+                        "sandbox": "read-only",
+                        "baseInstructions": _BASE_INSTRUCTIONS,
+                        "model": self.settings.codex_model or None,
+                    },
+                    notification_handler=on_event,
+                )
+                thread_id = thread["thread"]["id"]
+                turn = await rpc.call(
+                    "turn/start",
+                    {
+                        "threadId": thread_id,
+                        "input": [{"type": "text", "text": prompt}],
+                        "outputSchema": output_schema,
+                        "approvalPolicy": "never",
+                        "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
+                        "model": self.settings.codex_model or None,
+                        "effort": self.settings.codex_reasoning_effort,
+                    },
+                    notification_handler=on_event,
+                )
+                turn_id = turn["turn"]["id"]
+                while True:
+                    message = await rpc.recv(on_event)
+                    if message.get("method") != "turn/completed":
+                        continue
+                    completed_turn = (message.get("params") or {}).get("turn") or {}
+                    if completed_turn.get("id") != turn_id:
+                        continue
+                    if completed_turn.get("status") == "failed":
+                        raise CodexAppServerError("turn_failed", "Codex app-serverのAI応答生成が失敗しました。", json.dumps(completed_turn.get("error"), ensure_ascii=False))
+                    break
+        except asyncio.TimeoutError as exc:
+            raise CodexAppServerError("timeout", "Codex app-serverのAI応答がタイムアウトしました。", purpose) from exc
+        except OSError as exc:
+            raise CodexAppServerError("app_server_unreachable", "Codex app-serverに接続できません。", str(exc)) from exc
+
+        raw_text = (completed_texts[-1] if completed_texts else "".join(text_chunks)).strip()
+        if not raw_text:
+            raise CodexAppServerError("empty_response", "Codex app-serverから空のAI応答が返りました。")
+        return _parse_json_object(raw_text)
+
+    def _prompt(self, purpose: str, payload: dict[str, Any], rules: list[str]) -> str:
+        return "\n".join(
+            [
+                f"目的: {purpose}",
+                "",
+                "出力は指定JSON Schemaに一致するJSONオブジェクトのみ。Markdown、説明文、コードブロックは禁止。",
+                "個人情報、APIキー、アクセストークン、認証情報を要求・保存・推測しない。",
+                "被験者に見える文面では内部研究ラベル M1/M2/M3/M4 を使わない。",
+                "",
+                "追加ルール:",
+                *[f"- {rule}" for rule in rules],
+                "",
+                "入力JSON:",
+                json.dumps(payload, ensure_ascii=False, indent=2),
+            ]
+        )
+
+    def _control_tutoring_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        term = payload.get("term") or {}
+        return {
+            "participant_id": payload.get("participant_id"),
+            "group_condition": "control",
+            "term": term,
+            "learner_state": {
+                "current_status": (payload.get("learner_state") or {}).get("current_status"),
+                "scaffolding_level": (payload.get("learner_state") or {}).get("scaffolding_level"),
+                "teaching_strategy": "general_explanation",
+            },
+        }
+
+    def _account_label(self, account: dict[str, Any] | None) -> str:
+        if not account:
+            return "未ログイン"
+        if account.get("type") == "chatgpt":
+            plan = account.get("planType") or "unknown"
+            return f"ChatGPTログイン済み ({plan})"
+        return f"{account.get('type', 'unknown')} account"
+
+
+_BASE_INSTRUCTIONS = """
+You are the AI engine for a Japanese research prototype called Learning Log AI Tutor.
+You must act only as a structured-output educational diagnosis and tutoring assistant.
+Never modify files, run tools, browse, ask for API keys, or request authentication secrets.
+Return only the JSON object requested by the caller's output schema.
+""".strip()
+
+_TEACHING_STRATEGIES = [
+    "general_explanation",
+    "category_reorientation",
+    "boundary_comparison",
+    "deep_structure_focus",
+    "context_transfer_training",
+    "foundational_explanation",
+    "self_explanation_check",
+]
+
+
+def _parse_json_object(raw_text: str) -> dict[str, Any]:
+    try:
+        value = json.loads(raw_text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw_text, flags=re.DOTALL)
+        if not match:
+            raise CodexAppServerError("schema_validation_failed", "AI出力からJSONオブジェクトを抽出できませんでした。", raw_text)
+        value = json.loads(match.group(0))
+    if not isinstance(value, dict):
+        raise CodexAppServerError("schema_validation_failed", "AI出力がJSONオブジェクトではありません。", raw_text)
+    return value
+
+
+def _strip_internal_labels(text: str) -> str:
+    return re.sub(r"\bM[1-4]\b", "内部分類", text or "")

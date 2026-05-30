@@ -8,7 +8,7 @@
 
 ## ローカルCLI確認メモ
 
-2026-05-27時点でローカルの `codex app-server --help` では以下が確認できた。
+2026-05-28時点でローカルの `codex-cli 0.131.0` と `codex app-server generate-json-schema --experimental` では以下が確認できた。
 
 - `--listen <URL>` は `stdio://`, `unix://`, `ws://IP:PORT`, `off` を受け付ける
 - `--ws-auth` は `capability-token` と `signed-bearer-token` を受け付ける
@@ -16,8 +16,10 @@
 - `generate-json-schema --out <DIR>` でプロトコルJSON Schemaを生成できる
 - v2 schemaには `thread/start`, `turn/start`, `account/read`, `account/login/start`, `account/login/cancel` が含まれる
 - `turn/start` は `outputSchema` を受け付ける
+- `item/agentMessage/delta`, `item/completed`, `turn/completed` で最終JSONを取得できる
+- `account/read` でChatGPTログイン済みアカウントとplanTypeを確認できる
 
-実装時はローカルの `codex app-server generate-json-schema --experimental --out <tmpdir>` を再実行し、その時点のschemaに合わせる。
+app-serverは実験用LLM APIではなくCodex rich client向けプロトコルなので、将来更新時は `codex app-server generate-json-schema --experimental --out <tmpdir>` を再実行し、その時点のschemaに合わせる。
 
 ## 認証方針
 
@@ -149,8 +151,9 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
   "id": 10,
   "params": {
     "model": null,
-    "cwd": "/workspace",
+    "cwd": "/tmp",
     "approvalPolicy": "never",
+    "sandbox": "read-only",
     "baseInstructions": "You are a structured-output educational diagnosis assistant.",
     "ephemeral": true
   }
@@ -158,6 +161,8 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 ```
 
 モデル名はCodex環境に依存するため、固定文字列をハードコードしない。`.env` の `CODEX_MODEL` が空ならCodex側の既定値を使う。
+
+`cwd` は既定で `/tmp` にする。アプリが研究仕様リポジトリ配下の `AGENTS.md` をAIタスクへ混入させないためである。
 
 ## turn/start 例
 
@@ -173,6 +178,9 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
         "text": "以下の回答を診断し、指定JSONスキーマだけを返してください..."
       }
     ],
+    "approvalPolicy": "never",
+    "sandboxPolicy": { "type": "readOnly", "networkAccess": false },
+    "effort": "low",
     "outputSchema": {
       "type": "object",
       "properties": {
@@ -190,9 +198,11 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 
 `outputSchema` が使えない、または不安定な場合は、プロンプトでJSONのみ返すようにし、backendでJSON抽出・検証・再試行する。
 
+`effort=minimal` はapp-server側のツール定義と衝突する場合があるため、既定は `low` とする。
+
 ## ストリーミング処理
 
-app-serverからは `turn/started`, `item/started`, `agent/message/delta`, `turn/completed`, `error` などの通知が来る可能性がある。実装では通知をすべてログ可能にしつつ、AIBackendの戻り値は最終JSONだけに正規化する。
+app-serverからは `turn/started`, `item/started`, `item/agentMessage/delta`, `item/completed`, `turn/completed`, `error` などの通知が来る可能性がある。実装では通知を処理しつつ、AIBackendの戻り値は最終JSONだけに正規化する。
 
 MVPではフロントエンドにAI生成途中のストリームを見せなくてよい。バックエンド内部で完了まで待つ。
 
@@ -207,20 +217,20 @@ MVPではフロントエンドにAI生成途中のストリームを見せなく
 5. turn/start
 6. turn completedまで通知を読む
 7. 最終assistant messageからJSON抽出
-8. Pydantic schemaで検証
-9. `ai_call_logs` にrequest/response/raw/errorを保存
+8. JSONオブジェクトとして抽出し、app-serverの `outputSchema` 制約に合う出力だけを受け付ける
+9. `ai_call_logs` にrequest/response/errorを保存
 10. `DiagnosisResult` などの内部型へ変換
 
 ## 失敗時の扱い
 
-AI呼び出しに失敗した場合、実験を止めずに以下のいずれかを行う。
+AI呼び出しに失敗した場合、通常実行ではMockへ自動フォールバックしない。
 
-1. `AI_BACKEND=mock` ならMock結果を返す
-2. `AI_BACKEND=codex_app_server` で失敗した場合は `ai_call_logs.status = failed` とする
-3. 管理者画面に「AI診断保留」と表示する
-4. 研究フローを継続できない診断だけ、管理者の手動確認待ちにする
+1. `AI_BACKEND=codex_app_server` で失敗した場合は `ai_call_logs.status = failed` とする
+2. APIは503と日本語エラーを返す
+3. 管理画面にapp-server接続状態とログイン状態を表示する
+4. `AI_BACKEND=mock` はテスト・切り分け用途として明示指定した場合だけ使う
 
-自動でMockへフォールバックする場合は、`ai_call_logs.provider = codex_app_server`, `fallback_provider = mock` のように記録し、分析時に除外可能にする。
+実験データにMock由来のAI判断が混入しないよう、`codex_app_server` モードでは `fallback_provider=mock` を作らない。
 
 ## エラー分類
 

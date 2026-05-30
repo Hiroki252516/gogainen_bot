@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.ai.codex_app_server_backend import CodexAppServerError
 from app.ai.backend import lower_level, raise_level, strategy_for
 from app.ai.factory import get_ai_backend
 from app.core.config import get_settings
@@ -186,6 +187,28 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
         )
         db.commit()
         return result
+    except CodexAppServerError as exc:
+        latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
+        db.add(
+            AICallLog(
+                provider=getattr(backend, "provider", "unknown"),
+                purpose=purpose,
+                request_payload=payload,
+                status="failed",
+                error_code=exc.code,
+                error_message=exc.detail,
+                latency_ms=latency,
+            )
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": exc.code,
+                "message": exc.user_message,
+                "hint": "ホストで `codex app-server --listen ws://127.0.0.1:4500` を起動し、Codex/ChatGPTログイン状態を確認してください。",
+            },
+        ) from exc
     except Exception as exc:
         db.add(AICallLog(provider=getattr(backend, "provider", "unknown"), purpose=purpose, request_payload=payload, status="failed", error_code="ai_call_failed", error_message=str(exc)))
         db.commit()
@@ -360,19 +383,42 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     session = db.get(TutorSession, turn.tutor_session_id)
     state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one()
     response = payload.get("learner_response") or ""
-    correct = len(response.strip()) >= 10 and not any(bad in response for bad in ["わからない", "不明"])
-    next_level = lower_level(state.scaffolding_level) if correct else state.scaffolding_level
+    participant = get_participant(db, session.participant_id)
+    term = db.get(Term, session.term_id)
+    feedback_payload = {
+        "participant_id": participant.id,
+        "group_condition": participant.group_condition,
+        "term": {"slug": term.slug, "label": term.label, "description": term.description},
+        "learner_state": {
+            "current_status": state.current_status,
+            "primary_misconception": state.primary_misconception if participant.group_condition == "proposed" else None,
+            "scaffolding_level": state.scaffolding_level,
+            "teaching_strategy": state.teaching_strategy,
+            "recurrence_count": state.recurrence_count,
+        },
+        "tutor_turn": {
+            "turn_index": turn.turn_index,
+            "tutor_message": turn.tutor_message,
+            "learner_prompt": turn.learner_prompt,
+            "practice_question": turn.practice_question_json,
+        },
+        "learner_response": response,
+        "confidence": payload.get("confidence"),
+    }
+    result = await _ai_call(db, "generate_feedback", feedback_payload)
+    correct = result["next_action"] == "move_next"
+    next_level = result["next_scaffolding_level"] if result.get("next_scaffolding_level") else (lower_level(state.scaffolding_level) if correct else state.scaffolding_level)
     turn.learner_response = response
     turn.learner_confidence = payload.get("confidence")
     turn.next_scaffolding_level = next_level
-    turn.ai_feedback = "説明の理由まで書けています。" if correct else "もう一度、判断基準を自分の言葉で説明してください。"
+    turn.ai_feedback = result["feedback"]
     state.scaffolding_level = next_level
     state.stable_correct_count += 1 if correct else 0
     state.current_status = "stable_correct" if correct else state.current_status
-    state.updated_reason = "learning turn response"
+    state.updated_reason = result["state_update_reason"]
     state.last_tutor_turn_id = turn.id
     db.commit()
-    return {"feedback": turn.ai_feedback, "next_action": "move_next" if correct else "continue", "session_completed": turn.turn_index >= get_settings().max_turns_per_term or correct}
+    return {"feedback": turn.ai_feedback, "next_action": result["next_action"], "session_completed": turn.turn_index >= get_settings().max_turns_per_term or correct}
 
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:

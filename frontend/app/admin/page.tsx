@@ -10,12 +10,30 @@ export default function AdminPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [ai, setAi] = useState<any>(null);
+  const [login, setLogin] = useState<any>(null);
+  const [loginError, setLoginError] = useState("");
 
   useEffect(() => {
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants));
     api("/api/admin/evaluation-summary").then(setSummary);
     api("/api/admin/ai/status").then(setAi);
   }, []);
+
+  async function startLogin(type: "chatgpt" | "chatgptDeviceCode") {
+    setLoginError("");
+    try {
+      const result = await api("/api/admin/ai/login/start", {
+        method: "POST",
+        body: JSON.stringify({ type })
+      });
+      setLogin(result);
+      if ((result as any).authUrl) {
+        window.open((result as any).authUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   return (
     <AppShell step="管理画面">
@@ -26,6 +44,28 @@ export default function AdminPage() {
             <div className="notice">
               <strong>AI Backend</strong>
               <p>{ai ? `${ai.ai_backend} / ${ai.account_label}` : "確認中"}</p>
+              {ai?.app_server_reachable === false ? <p className="danger">Codex app-serverに接続できません。</p> : null}
+              {ai?.last_error ? <p className="muted">{ai.last_error}</p> : null}
+              {ai?.logged_in === false ? (
+                <div className="actions">
+                  <button className="secondary" onClick={() => startLogin("chatgpt")}>
+                    ChatGPTログイン
+                  </button>
+                  <button className="secondary" onClick={() => startLogin("chatgptDeviceCode")}>
+                    デバイスコード
+                  </button>
+                </div>
+              ) : null}
+              {login?.verificationUrl ? (
+                <p>
+                  <a href={login.verificationUrl} target="_blank" rel="noreferrer">
+                    認証ページ
+                  </a>
+                  {" / code: "}
+                  <strong>{login.userCode}</strong>
+                </p>
+              ) : null}
+              {loginError ? <p className="danger">{loginError}</p> : null}
             </div>
             {summary?.groups?.map((group: any) => (
               <div className="notice" key={group.group_condition}>

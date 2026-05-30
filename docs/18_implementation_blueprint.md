@@ -1,20 +1,20 @@
 # 18. Implementation Blueprint
 
-この文書は、将来Codexが実装を開始するときの青写真である。現段階ではコードを作らない。
+この文書は、現在の実装構成と、今後拡張するときの青写真をまとめる。
 
 ## Build Order
 
 1. backendとDBを先に作る
 2. seed questionsを入れる
-3. MockAIBackendで診断・学習・評価を通す
+3. AIBackend抽象を作り、CodexAppServerBackendを通常実行にする
 4. frontendを研究フロー順に接続する
 5. CSV exportとadminを作る
-6. Codex app-serverを最後に接続する
+6. MockAIBackendはテスト・切り分け用に維持する
 
 理由:
 
-- 研究ロジックはAI接続より重要
-- Mockで再現性を確保できる
+- 研究ロジックはAI接続から分離する
+- 自動テストはMockで再現性を確保できる
 - app-server仕様変更の影響を隔離できる
 
 ## Backend Package Layout
@@ -231,8 +231,8 @@ The final implemented README should include:
 - docker compose start
 - migration
 - seed
-- running with MockAIBackend
 - running with Codex app-server
+- MockAIBackend is test-only
 - admin URL
 - CSV export location
 - troubleshooting
@@ -244,7 +244,5 @@ If implementation is split, the first PR should stop at:
 - Docker backend/db/frontend boots
 - DB migrations
 - seed
-- MockAIBackend
+- Codex app-server status check
 - pretest -> diagnosis -> learner_states
-
-Do not start app-server integration before this works.

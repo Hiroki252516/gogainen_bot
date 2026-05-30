@@ -23,8 +23,8 @@ Application Services
 PostgreSQL
   ↓
 AIBackend Interface
-  ├─ MockAIBackend
-  └─ CodexAppServerBackend
+  ├─ CodexAppServerBackend（通常実行）
+  └─ MockAIBackend（テスト・切り分け専用）
   ↓
 Codex app-server
   ↓
@@ -116,8 +116,8 @@ class AIBackend(Protocol):
 
 実装:
 
-- `MockAIBackend`: テスト・CI用。決定論的に返す。
-- `CodexAppServerBackend`: Codex app-serverを使う。
+- `CodexAppServerBackend`: 通常実行用。Codex app-serverを使い、ChatGPT/CodexログインでAI応答を生成する。
+- `MockAIBackend`: テスト・CI・障害切り分け用。決定論的に返す。
 
 OpenAI APIキーを直接使う実装は作らない。
 
@@ -191,9 +191,12 @@ MVPではキューを導入しない。AI診断やCSV出力は同期APIでよい
 |---|---|---|
 | `APP_ENV` | `development` | 実行環境 |
 | `DATABASE_URL` | `postgresql+psycopg://app:app@db:5432/ai_tutor` | DB接続 |
-| `AI_BACKEND` | `mock` or `codex_app_server` | AI実装選択 |
+| `AI_BACKEND` | `codex_app_server` | 通常実行のAI実装。`mock` はテスト時のみ明示指定 |
 | `CODEX_APP_SERVER_URL` | `ws://host.docker.internal:4500` | app-server接続先 |
 | `CODEX_WS_TOKEN_FILE` | `/run/secrets/codex_ws_token` | capability token |
+| `CODEX_APP_SERVER_CWD` | `/tmp` | app-server threadの作業ディレクトリ |
+| `CODEX_TURN_TIMEOUT_SEC` | `120` | AI応答タイムアウト |
+| `CODEX_REASONING_EFFORT` | `low` | turn/startのreasoning effort |
 | `MAX_LEARNING_TARGETS` | `4` | 1参加者の重点用語数 |
 | `MAX_TURNS_PER_TERM` | `3` | 1用語あたり最大ターン数 |
 | `RANDOM_SEED` | `20260525` | 再現性のあるランダム化 |

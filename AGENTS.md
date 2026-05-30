@@ -22,17 +22,18 @@
 - OpenAI APIキーを要求しない。
 - OpenAI SDKで通常APIを直接呼ばない。
 - AI呼び出しは必ず `AIBackend` インターフェース経由にする。
-- `MockAIBackend` を先に完成させ、Codex app-serverなしで全研究フローとテストを動かす。
-- `CodexAppServerBackend` は差し替え可能なアダプタとして後から接続する。
+- 通常実行では `CodexAppServerBackend` を使い、ユーザーのChatGPT/Codexログイン済みapp-serverへ接続する。
+- `MockAIBackend` は自動テスト・障害切り分け専用にし、通常実験データへ混ぜない。
+- `AI_BACKEND=codex_app_server` ではMockへ自動フォールバックしない。
 - ChatGPT/Codex認証情報、アクセストークン、APIキーをDBに保存しない。
 
 ## Implementation Priorities
 
 1. 研究ログの完全性
-2. MockAIBackendでの再現性
+2. Codex app-server経由の実AI応答
 3. 実験フローの正確性
 4. 評価指標とCSV出力
-5. Codex app-serverアダプタの隔離
+5. MockAIBackendでのテスト再現性
 6. UIの見た目
 
 ## Editing Policy

@@ -5,12 +5,12 @@
 ## Before Experiment
 
 1. Docker Desktopを起動する
-2. `docker compose up --build` を実行する
-3. DB migrationを適用する
-4. seed questionsを投入する
-5. `/admin` でAI backendを確認する
-6. まず `AI_BACKEND=mock` で動作確認する
-7. Codex app-serverを使う場合はホストで起動し、`/admin` で接続確認する
+2. ホストで `codex app-server --listen ws://127.0.0.1:4500` を起動する
+3. `codex` または管理画面のログイン導線でChatGPT/Codexログインを確認する
+4. `docker compose up --build` を実行する
+5. seed questionsはbackend起動時に自動投入される
+6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する
+7. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
 
 ## Participant Setup
 
@@ -45,10 +45,6 @@
 
 ## If AI Fails
 
-### MockAIBackend
-
-Mockで失敗する場合は実装バグとして扱う。テストを中断し、ログを確認する。
-
 ### CodexAppServerBackend
 
 1. `/admin/ai/status` を確認
@@ -56,9 +52,11 @@ Mockで失敗する場合は実装バグとして扱う。テストを中断し�
 3. ChatGPTログイン状態を確認
 4. token設定を確認
 5. 失敗したAI call logを確認
-6. 必要なら `AI_BACKEND=mock` へ切り替えて実験フローを続ける
+6. 実験データを採る前に復旧する。Mockへ切り替えたデータは本実験データに混ぜない
 
-Mockへ切り替えた場合は、分析時に分かるよう `fallback_provider` をCSVへ出す。
+### MockAIBackend
+
+Mockは自動テスト・障害切り分け用であり、本実験運用では使わない。Mockで動作確認したログは本分析から除外する。
 
 ## Manual Review
 

@@ -17,15 +17,15 @@ AI・情報系専門用語の概念理解支援を目的とした、誤概念タ
 - db: PostgreSQL
 - AI backend: OpenAI APIキーは使わない
 - AI backendは Codex app-server 経由で接続する
-- ただし最初は `MockAIBackend` で全フローを完成させる
+- `MockAIBackend` は自動テスト・障害切り分け専用に残す
 
 ## 必ず守ること
 
 1. OpenAI APIキーを要求しない
 2. OpenAI SDKで通常APIを直接呼ばない
 3. AI呼び出しは必ず `AIBackend` インターフェース経由にする
-4. `MockAIBackend` を必ず実装し、Codex app-serverなしでも全テストが通るようにする
-5. `CodexAppServerBackend` を実装し、ユーザーのChatGPT/Codexログイン済みapp-serverへ接続できるようにする
+4. 通常実行では `CodexAppServerBackend` を使い、ユーザーのChatGPT/Codexログイン済みapp-serverへ接続する
+5. `MockAIBackend` は `AI_BACKEND=mock` を明示した自動テスト・障害切り分け用途だけで使う
 6. ChatGPT/Codex認証情報をDBに保存しない
 7. M1〜M4の内部ラベルを被験者画面に直接出さない
 8. 研究ログとして、回答、理由、自信度、AI診断、AI応答、足場掛けレベル更新をすべて保存する
@@ -116,7 +116,7 @@ MVPでは以下を優先してください。
 - Macホスト上で `codex app-server --listen ws://127.0.0.1:4500` を起動
 - backendコンテナから `ws://host.docker.internal:4500` に接続
 - WebSocket auth tokenが設定されている場合はそれもサポート
-- app-server接続に失敗しても、MockAIBackendで研究システム本体は動作可能
+- app-server接続に失敗した通常実行はMockへ自動フォールバックせず、`ai_call_logs` に失敗を保存して管理画面に表示する
 
 ## 実装順序
 
@@ -126,9 +126,9 @@ MVPでは以下を優先してください。
 4. seed data
 5. backend API
 6. frontend flow
-7. MockAIBackendで実験フロー完成
+7. Codex app-server client
 8. 評価指標とCSV export
-9. Codex app-server client
+9. MockAIBackendによる自動テスト
 10. テスト
 11. README整備
 
@@ -137,7 +137,8 @@ MVPでは以下を優先してください。
 - `docker compose up --build` で起動できる
 - frontendが `http://localhost:3000` で開ける
 - backendが `http://localhost:8000/api/health` で応答する
-- `AI_BACKEND=mock` で、事前テスト、診断、学習、再テスト、L0、転移、CSV出力まで動く
+- `AI_BACKEND=codex_app_server` で、事前テスト、診断、学習、再テスト、L0、転移、CSV出力まで動く
+- `AI_BACKEND=mock` は自動テストで同じ研究フローを検証できる
 - proposed群では、M1〜M4に応じて教授方略が変わる
 - proposed群では、正答でLが下がり、誤答でLが維持または上がる
 - 同じ誤概念が再発した場合 `recurrence_flag = true` になる
@@ -150,7 +151,7 @@ MVPでは以下を優先してください。
 以下を優先してください。
 
 1. 実験ログが残ること
-2. 再現性があること
-3. MockAIBackendで動くこと
-4. Codex app-server連携を差し替え可能にすること
+2. Codex app-server経由で実AI応答を使うこと
+3. 再現性があること
+4. MockAIBackendはテスト用途に閉じること
 5. UIの豪華さより研究フローの正確さ

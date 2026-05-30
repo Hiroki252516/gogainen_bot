@@ -8,7 +8,8 @@
 - 群条件が混ざらないこと
 - ログが欠けないこと
 - 評価指標が再計算可能であること
-- MockAIBackendで決定論的に動くこと
+- 通常実行でCodex app-server経由のAI呼び出しが動くこと
+- 自動テストではMockAIBackendを明示指定して決定論的に動くこと
 
 ## Unit Tests
 
@@ -52,9 +53,19 @@
 - generate evaluation summary
 - export CSV
 
+## AIBackend Acceptance
+
+通常実行では `AI_BACKEND=codex_app_server` を使う。
+
+- `account/read` でChatGPT/Codexログイン状態を確認できる
+- `thread/start` と `turn/start` を使って構造化JSONを生成できる
+- `outputSchema` で診断・教授・採点・フィードバックの戻り値を制約する
+- `codex_app_server` モードではMockへ自動フォールバックしない
+- app-server未接続・未ログイン・timeout・schema失敗は `ai_call_logs.status=failed` に残す
+
 ## MockAIBackend Acceptance
 
-必ず実装する。Codex app-serverなしでもテストが通るようにする。
+テスト・CI・障害切り分け用として実装する。`AI_BACKEND=mock` を明示した場合だけ使う。
 
 Mock rules:
 
@@ -121,8 +132,9 @@ Mock rules:
 
 ### F. AIバックエンド
 
-- `AI_BACKEND=mock` で完全に動く
 - `AI_BACKEND=codex_app_server` でCodex app-serverに接続できる
+- app-server経由で診断、学習ターン、学習フィードバック、再テスト/L0/転移採点を実行できる
+- `AI_BACKEND=mock` はテスト時に完全に動く
 - app-server未接続時は分かりやすいエラーを出す
 - ChatGPT未ログイン時はログイン案内を出す
 - AI出力schema validationに失敗したらai_call_logsに残る
@@ -160,4 +172,4 @@ Mock rules:
 - frontend tests pass
 - E2E happy path pass
 - CSV exports open in spreadsheet software
-- READMEに起動、seed、Mock、app-server接続手順がある
+- READMEにCodex app-server起動、ChatGPT/Codexログイン確認、Mockテスト用途が書かれている

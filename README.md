@@ -19,8 +19,8 @@
 - OpenAI APIキーは使わない
 - OpenAI SDKで通常APIを直接呼ばない
 - AI呼び出しは `AIBackend` 抽象インターフェース経由にする
-- まず `MockAIBackend` で研究フローを完成させる
-- Codex app-server連携は後段で `CodexAppServerBackend` として差し替える
+- 通常実行では `CodexAppServerBackend` を使い、ユーザーのChatGPT/CodexログインでAIを呼び出す
+- `MockAIBackend` は自動テスト・CI・app-server切り分け専用に残す
 - ChatGPT/Codex認証情報をDBへ保存しない
 - 被験者画面に `M1` から `M4` の内部ラベルを直接表示しない
 - 回答、理由、自信度、AI診断、AI応答、足場掛け更新を研究ログとして保存する
@@ -65,6 +65,14 @@
 
 ### Docker Compose
 
+先にMacホストでCodex app-serverを起動します。
+
+```bash
+codex app-server --listen ws://127.0.0.1:4500
+```
+
+その後、アプリを起動します。
+
 ```bash
 docker compose up --build
 ```
@@ -106,22 +114,21 @@ cd frontend && npm run build
 
 ## AIバックエンド
 
-既定では `AI_BACKEND=mock` です。MockAIBackendだけで、事前テスト、診断、学習、再テスト、L0確認、転移テスト、CSV出力まで動きます。
-
-Codex app-serverを使う場合:
+通常実行の既定は `AI_BACKEND=codex_app_server` です。OpenAI APIキーは使わず、ホスト側のCodex app-serverが保持するChatGPT/Codexログインを使います。
 
 ```bash
 codex app-server --listen ws://127.0.0.1:4500
 ```
 
-その後、backend環境変数を以下に変更します。
+Docker Composeではbackendコンテナからホストへ接続するため、以下を使います。
 
 ```env
 AI_BACKEND=codex_app_server
 CODEX_APP_SERVER_URL=ws://host.docker.internal:4500
+CODEX_APP_SERVER_CWD=/tmp
 ```
 
-app-server連携は `AIBackend` アダプタとして隔離しており、接続できない場合もMockで研究フローを検証できます。
+ローカルでbackendを直接起動する場合は `CODEX_APP_SERVER_URL=ws://127.0.0.1:4500` を使います。`MockAIBackend` は `AI_BACKEND=mock` を明示したテスト用途に限ります。app-serverが未起動または未ログインの場合、AI呼び出しはMockへ自動フォールバックせず、`ai_call_logs` に失敗として記録されます。
 
 ## CSV出力
 

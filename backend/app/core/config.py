@@ -7,10 +7,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = "sqlite:///./.local/app.db"
-    ai_backend: str = "mock"
-    codex_app_server_url: str = "ws://host.docker.internal:4500"
+    ai_backend: str = "codex_app_server"
+    codex_app_server_url: str = "ws://127.0.0.1:4500"
     codex_ws_token_file: str | None = None
     codex_model: str | None = None
+    codex_app_server_cwd: str = "/tmp"
+    codex_turn_timeout_sec: int = 120
+    codex_reasoning_effort: str = "low"
     max_learning_targets: int = 4
     max_turns_per_term: int = 3
     random_seed: str = "20260525"

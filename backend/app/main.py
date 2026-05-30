@@ -93,6 +93,14 @@ class TutorTurnRespond(BaseModel):
     confidence: int | None = None
 
 
+class AILoginStart(BaseModel):
+    type: str = "chatgpt"
+
+
+class AILoginCancel(BaseModel):
+    login_id: str
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -253,20 +261,20 @@ def api_export_csv(name: str, db: Session = Depends(get_db)):
 async def api_ai_status() -> dict:
     if settings.ai_backend == "codex_app_server":
         status = await CodexAppServerBackend().status()
-        return {"ai_backend": settings.ai_backend, "account_label": "Codex app-server", **status}
-    return {"ai_backend": "mock", "app_server_reachable": None, "logged_in": None, "account_label": "MockAIBackend", "last_error": None}
+        return {"ai_backend": settings.ai_backend, **status}
+    return {"ai_backend": "mock", "app_server_reachable": None, "logged_in": None, "account_label": "MockAIBackend (test only)", "last_error": None}
 
 
 @app.post("/api/admin/ai/login/start")
-def api_ai_login_start() -> dict:
-    return {"status": "not_required_for_mock", "message": "Codex app-server login is handled by the local Codex app-server."}
+async def api_ai_login_start(payload: AILoginStart) -> dict:
+    return await CodexAppServerBackend().start_login(payload.type)
 
 
 @app.post("/api/admin/ai/login/cancel")
-def api_ai_login_cancel() -> dict:
-    return {"status": "ok"}
+async def api_ai_login_cancel(payload: AILoginCancel) -> dict:
+    return await CodexAppServerBackend().cancel_login(payload.login_id)
 
 
 @app.post("/api/admin/ai/logout")
-def api_ai_logout() -> dict:
-    return {"status": "ok"}
+async def api_ai_logout() -> dict:
+    return await CodexAppServerBackend().logout()
