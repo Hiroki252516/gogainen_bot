@@ -90,7 +90,7 @@ Response:
 
 ### GET /api/experiment/{participant_id}/l0-check
 
-L0確認問題を返す。チャットやヒント表示はfrontendで無効化する。
+確認テスト問題を返す。チャットやヒント表示はfrontendで無効化する。
 
 ## Attempts
 
@@ -161,7 +161,7 @@ Response:
 }
 ```
 
-`current_scaffolding_level_for_display` は内部L0〜L3を直接出さず、自然言語化する。
+`current_scaffolding_level_for_display` は内部L1〜L3を直接出さず、自然言語化する。
 
 ## Tutor Sessions
 
@@ -245,7 +245,7 @@ Response:
 
 ### POST /api/participants/{id}/score-l0-check
 
-L0確認回答を採点し、`l0_success` を保存する。
+確認テスト回答を採点し、`l0_success` を保存する。
 
 各API response:
 

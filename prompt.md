@@ -28,11 +28,11 @@ AI・情報系専門用語の概念理解支援を目的とした、誤概念タ
 5. `MockAIBackend` は `AI_BACKEND=mock` を明示した自動テスト・障害切り分け用途だけで使う
 6. ChatGPT/Codex認証情報をDBに保存しない
 7. M1〜M4の内部ラベルを被験者画面に直接出さない
-8. 研究ログとして、回答、AI診断、AI応答、足場掛けレベル更新を保存する。再テスト、L0確認では理由記述も保存する
+8. 研究ログとして、回答、AI診断、AI応答、足場掛けレベル更新を保存する。再テスト、確認テストでは理由記述も保存する
 9. CSVエクスポートを実装する
 10. Docker Composeで一発起動できるようにする
-11. 事前、学習、再テスト、L0で同じ問題文をそのまま使い回さない
-12. 再テスト、L0ではチャット、ヒント、即時正解表示を禁止する
+11. 事前、学習、再テスト、確認テストで同じ問題文をそのまま使い回さない
+12. 再テスト、確認テストではチャット、ヒント、即時正解表示を禁止する
 
 ## Frontend
 
@@ -61,7 +61,7 @@ UIは研究実験用であり、派手さよりも誤操作防止、ログ完全
 - learner state API
 - tutor session API
 - retest API
-- L0 check API
+- confirmation check API
 - evaluation summary API
 - CSV export API
 - Codex app-server status/login API
@@ -131,7 +131,7 @@ MVPでは以下を優先してください。
 - `docker compose up --build` で起動できる
 - frontendが `http://localhost:3000` で開ける
 - backendが `http://localhost:8000/api/health` で応答する
-- `AI_BACKEND=codex_app_server` で、事前テスト、診断、学習、再テスト、L0、CSV出力まで動く
+- `AI_BACKEND=codex_app_server` で、事前テスト、診断、学習、再テスト、確認テスト、CSV出力まで動く
 - `AI_BACKEND=mock` は自動テストで同じ研究フローを検証できる
 - proposed群では、M1〜M4に応じて教授方略が変わる
 - proposed群では、正答でLが下がり、誤答でLが維持または上がる

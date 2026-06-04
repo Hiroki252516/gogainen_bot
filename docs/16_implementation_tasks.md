@@ -69,14 +69,14 @@
 - [ ] max turns per term
 - [ ] control group general_explanation behavior
 
-## Milestone 7: Retest / L0 / Transfer
+## Milestone 7: Retest / Confirmation
 
 - [ ] retest flow
 - [ ] recurrence calculation
 - [ ] recurrence_events
 - [ ] state update after retest
 - [ ] second learning session trigger
-- [ ] L0 check flow
+- [ ] confirmation check flow
 - [ ] l0_success calculation
 - [ ] M4 detection
 

@@ -12,7 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.ai.codex_app_server_backend import CodexAppServerError
-from app.ai.backend import lower_level, raise_level, strategy_for
+from app.ai.backend import lower_level, normalize_level, raise_level, strategy_for
 from app.ai.factory import get_ai_backend
 from app.core.config import get_settings
 from app.models import (
@@ -34,7 +34,7 @@ from app.models import (
 )
 
 
-PUBLIC_LEVEL = {"L3": "しっかり確認", "L2": "観点を確認", "L1": "自分で整理", "L0": "ヒントなし"}
+PUBLIC_LEVEL = {"L3": "しっかり確認", "L2": "観点を確認", "L1": "自分で整理"}
 PRETEST_TERM_ORDER = {"overfitting": 0, "generalization": 1, "attention": 2, "embedding": 3}
 PRETEST_TERM_SLUGS = set(PRETEST_TERM_ORDER)
 
@@ -313,7 +313,7 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
             "term_slug": term.slug,
             "term_label": term.label,
             "summary_for_learner": _public_summary(state.state_summary),
-            "current_scaffolding_level_for_display": PUBLIC_LEVEL.get(state.scaffolding_level, "確認"),
+            "current_scaffolding_level_for_display": PUBLIC_LEVEL.get(normalize_level(state.scaffolding_level), "確認"),
         }
         for _, term, state in rows
     ]
@@ -350,7 +350,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "learner_state": {
             "current_status": state.current_status,
             "primary_misconception": state.primary_misconception,
-            "scaffolding_level": state.scaffolding_level,
+            "scaffolding_level": normalize_level(state.scaffolding_level),
             "teaching_strategy": state.teaching_strategy,
             "recurrence_count": state.recurrence_count,
         },
@@ -361,7 +361,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     turn = TutorTurn(
         tutor_session_id=session.id,
         turn_index=turn_count + 1,
-        scaffolding_level=result["scaffolding_level"],
+        scaffolding_level=normalize_level(result["scaffolding_level"]),
         teaching_strategy=result["teaching_strategy"],
         previous_teaching_strategy=state.previous_teaching_strategy,
         strategy_changed=False,
@@ -392,7 +392,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "learner_state": {
             "current_status": state.current_status,
             "primary_misconception": state.primary_misconception if participant.group_condition == "proposed" else None,
-            "scaffolding_level": state.scaffolding_level,
+            "scaffolding_level": normalize_level(state.scaffolding_level),
             "teaching_strategy": state.teaching_strategy,
             "recurrence_count": state.recurrence_count,
         },
@@ -406,7 +406,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     }
     result = await _ai_call(db, "generate_feedback", feedback_payload)
     correct = result["next_action"] == "move_next"
-    next_level = result["next_scaffolding_level"] if result.get("next_scaffolding_level") else (lower_level(state.scaffolding_level) if correct else state.scaffolding_level)
+    next_level = normalize_level(result["next_scaffolding_level"] if result.get("next_scaffolding_level") else (lower_level(state.scaffolding_level) if correct else state.scaffolding_level))
     turn.learner_response = response
     turn.learner_confidence = None
     turn.next_scaffolding_level = next_level
@@ -417,7 +417,14 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     state.updated_reason = result["state_update_reason"]
     state.last_tutor_turn_id = turn.id
     db.commit()
-    return {"feedback": turn.ai_feedback, "next_action": result["next_action"], "session_completed": turn.turn_index >= get_settings().max_turns_per_term or correct}
+    return {
+        "feedback": turn.ai_feedback,
+        "next_action": result["next_action"],
+        "session_completed": turn.turn_index >= get_settings().max_turns_per_term or correct,
+        "next_scaffolding_level": next_level,
+        "turn_index": turn.turn_index,
+        "max_turns": get_settings().max_turns_per_term,
+    }
 
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
@@ -457,7 +464,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
             state.scaffolding_level = lower_level(state.scaffolding_level) if attempt.is_correct else state.scaffolding_level
         if phase == "l0_check":
             state.l0_success_count += 1 if attempt.is_correct else 0
-            state.scaffolding_level = "L0" if attempt.is_correct else raise_level("L0")
+            state.scaffolding_level = "L1" if attempt.is_correct else raise_level("L1")
         state.current_status = "stable_correct" if attempt.is_correct else "misconception"
         state.last_attempt_id = attempt.id
     participant.current_step = {"retest": "l0_check", "l0_check": "finish"}.get(phase, participant.current_step)

@@ -23,7 +23,7 @@
   ↓
 [Learning Session 2]
   ↓
-[L0 Check]
+[Confirmation Check]
   ↓
 [Finish]
   ↓
@@ -82,7 +82,7 @@
 | misconception | 誤概念あり |
 | unstable_correct | 正答だが理由が不十分 |
 | stable_correct | 正答かつ理由も妥当 |
-| transfer_ready | L0確認に進める |
+| transfer_ready | 確認テストに進める |
 | ambiguous | 選択肢と理由が矛盾し判定困難 |
 
 ## Phase 4: Learning Target Selection
@@ -95,7 +95,7 @@
 2. M3の誤答
 3. unknown
 4. unstable_correct
-5. stable_correctだがL0確認が必要なもの
+5. stable_correctだが確認テストが必要なもの
 
 同順位の場合は、回答時間が短すぎるものを優先する。それでも同順位なら固定seedでランダム選択する。
 
@@ -147,9 +147,7 @@
 | 誤答 | 同じMで誤答 | 足場掛け維持 + 教授方略変更 |
 | 正答 | 正答 | 足場掛けレベルを1段階下げる |
 | 正答 | 誤答 | 足場掛けレベルを1段階上げる |
-| L0 | 正答 | L0維持、支援なし理解として記録 |
-| L0 | 誤答 | L1またはL2へ戻す |
-
+| 
 再発は、同一参加者、同一用語、前回の主要誤概念タイプと今回の主要誤概念タイプが一致する場合に true とする。`unknown` は誤概念再発に含めないが、知識不足継続として別集計する。
 
 ## Phase 8: Learning Session 2
@@ -162,7 +160,7 @@ Phase 7で更新された状態に基づき、2回目の学習セッションを
 - M2再発: 比較表だけでなく、境界判断問題を出す
 - M3再発: キーワードに頼らず判断基準を説明させる
 
-## Phase 9: L0 Check
+## Phase 9: Confirmation Check
 
 足場掛けなしで自力解答できるかを確認する。
 
@@ -171,9 +169,9 @@ Phase 7で更新された状態に基づき、2回目の学習セッションを
 - 例示不可
 - 即時正誤フィードバック不可
 - 自由記述または理由記述必須
-- L0正答なら `l0_success = true`
+- 確認テスト正答なら `l0_success = true`
 
-L0チェックの目的は「支援を外した状態の自力解答」を測ることであり、学習を続ける場ではない。
+確認テストの目的は「支援を外した状態の自力解答」を測ることであり、学習を続ける場ではない。
 
 ## Phase 12: Export & Analysis
 

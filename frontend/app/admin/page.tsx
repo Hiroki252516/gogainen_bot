@@ -71,7 +71,7 @@ export default function AdminPage() {
               <div className="notice" key={group.group_condition}>
                 <strong>{group.group_condition}</strong>
                 <p>参加者: {group.participant_count}</p>
-                <p>L0正答率: {formatRate(group.l0_correct_rate)}</p>
+                <p>確認テスト正答率: {formatRate(group.l0_correct_rate)}</p>
               </div>
             ))}
           </div>

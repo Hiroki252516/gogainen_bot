@@ -31,7 +31,7 @@
 - pretest form
 - no confidence input in pretest and learning session
 - learning session page
-- L0 page without chat
+- confirmation page without chat
 - admin dashboard rendering
 - submit button double-click prevention
 
@@ -46,7 +46,7 @@
 - run learning session
 - submit retest
 - compute recurrence
-- run L0 check
+- run confirmation check
 - generate evaluation summary
 - export CSV
 
@@ -84,13 +84,13 @@ Mock rules:
 - 学習対象用語が最大4件選ばれる
 - 学習セッションが開始できる
 - 再テストが実施できる
-- L0確認が実施できる
+- 確認テストが実施できる
 - 評価サマリーが生成される
 
 ### B. 提案群の動作
 
 - 誤概念タイプに応じて教授方略が変わる
-- L3〜L0が保存される
+- L3〜L1が保存される
 - 正答時にレベルが下がる
 - 誤答時にレベルが維持または上がる
 - 同じMが再発したら recurrence_flag = true
@@ -109,7 +109,7 @@ Mock rules:
 
 - pretestで正誤を表示しない
 - retestでヒントを出さない
-- L0 checkでチャット欄がない
+- confirmation checkでチャット欄がない
 - 同じ問題文をpretest/retestで使い回さない
 
 ### E. データ出力
@@ -125,7 +125,7 @@ Mock rules:
 ### F. AIバックエンド
 
 - `AI_BACKEND=codex_app_server` でCodex app-serverに接続できる
-- app-server経由で診断、学習ターン、学習フィードバック、再テスト/L0採点を実行できる
+- app-server経由で診断、学習ターン、学習フィードバック、再テスト/確認テスト採点を実行できる
 - `AI_BACKEND=mock` はテスト時に完全に動く
 - app-server未接続時は分かりやすいエラーを出す
 - ChatGPT未ログイン時はログイン案内を出す
@@ -142,7 +142,7 @@ Mock rules:
 5. Attentionの初期LはL3
 6. 学習後retestでAttentionが同じM1ならrecurrence_flag true
 7. 次のturnでstrategy_changed true
-8. L0 checkで正答ならl0_success true
+8. confirmation checkで正答ならl0_success true
 10. evaluation_summaryに指標が反映される
 
 ### control participant

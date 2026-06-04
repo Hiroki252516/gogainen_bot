@@ -101,7 +101,7 @@ frontend/components/
 ### ScaffoldingLevel
 
 ```text
-L3 > L2 > L1 > L0
+L3 > L2 > L1
 ```
 
 Utility:
@@ -143,7 +143,7 @@ Priority:
 2. M3 misconception
 3. unknown
 4. unstable_correct
-5. stable_correct that still needs L0 confirmation
+5. stable_correct that still needs confirmation test
 
 Output:
 

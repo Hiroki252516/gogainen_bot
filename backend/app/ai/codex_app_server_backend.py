@@ -154,7 +154,7 @@ class CodexAppServerBackend:
                 "diagnosis_confidence": {"type": "number", "minimum": 0, "maximum": 1},
                 "natural_language_diagnosis": {"type": "string"},
                 "evidence": {"type": "string"},
-                "recommended_initial_scaffolding_level": {"type": "string", "enum": ["L0", "L1", "L2", "L3"]},
+                "recommended_initial_scaffolding_level": {"type": "string", "enum": ["L1", "L2", "L3"]},
                 "recommended_teaching_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
                 "requires_manual_review": {"type": "boolean"},
             },
@@ -198,7 +198,7 @@ class CodexAppServerBackend:
             "properties": {
                 "tutor_message": {"type": "string"},
                 "teaching_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
-                "scaffolding_level": {"type": "string", "enum": ["L0", "L1", "L2", "L3"]},
+                "scaffolding_level": {"type": "string", "enum": ["L1", "L2", "L3"]},
                 "requires_learner_response": {"type": "boolean"},
                 "learner_prompt": {"type": "string"},
                 "practice_question": {
@@ -226,7 +226,13 @@ class CodexAppServerBackend:
         }
         rules = [
             "学習セッション用の短い日本語チュータ発話を作る。",
-            "再テスト、L0確認の具体的な正解を先取りして出さない。",
+            "足場掛けレベルは L3/L2/L1 のみを使い、指定外のレベルは使わない。",
+            "共通問題例は『ある画像分類AIモデルは、訓練データでは99%の正答率を示した。しかし、新しく用意した未知データでは55%しか正答できなかった。この状態を過学習の観点から説明してください。』。",
+            "L3では訓練データ、未知データ、過学習の意味を説明し、質問は『過学習を判断するときに見るべき2つのデータは何ですか？』にする。期待回答は『訓練データと未知データ』。",
+            "L2では訓練データでは高く未知データでは低い差が判断根拠になることを説明し、質問は『訓練データ99%と未知データ55%を比べると、どちらの性能に問題がありますか？』にする。期待回答は『未知データで性能が下がっている』。",
+            "L1では答えを直接教えず判断根拠を組み立てさせ、質問は『このモデルが過学習だと言える理由を、訓練データと未知データの差に触れて一文で説明してください。』にする。期待回答は『訓練データにはよく合っているが、未知データで性能が低いから』。",
+            "practice_question.body には質問文を1つだけ入れる。",
+            "再テスト、確認テストの具体的な正解を先取りして出さない。",
             "tutor_message, learner_prompt, practice_question.body に M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
         ]
         if group == "control":
@@ -277,7 +283,7 @@ class CodexAppServerBackend:
                 "phase_grading",
                 payload,
                 [
-                    "再テスト、L0確認の回答を採点する。",
+                    "再テスト、確認テストの回答を採点する。",
                     "学習者には即時正解やヒントを出さない前提なので、feedback_for_log は管理・分析ログ用に短く書く。",
                 ],
             ),
@@ -292,7 +298,7 @@ class CodexAppServerBackend:
             "properties": {
                 "feedback": {"type": "string"},
                 "next_action": {"type": "string", "enum": ["continue", "move_next"]},
-                "next_scaffolding_level": {"type": "string", "enum": ["L0", "L1", "L2", "L3"]},
+                "next_scaffolding_level": {"type": "string", "enum": ["L1", "L2", "L3"]},
                 "strategy_changed": {"type": "boolean"},
                 "state_update_reason": {"type": "string"},
             },
@@ -308,6 +314,7 @@ class CodexAppServerBackend:
                     "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
                     "M1/M2/M3/M4 という内部ラベルを学習者向け文面に絶対に書かない。",
                     "理解が十分なら move_next、不十分なら continue にする。",
+                    "next_scaffolding_level は L3/L2/L1 のいずれかにし、指定外のレベルは使わない。",
                 ],
             ),
             schema,

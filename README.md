@@ -12,7 +12,7 @@
 
 1. 同種誤答再発率
 2. 足場掛けなし自力解答率
-3. L0自力解答率
+3. 確認テスト自力解答率
 
 ## 実装で守る前提
 
@@ -23,7 +23,7 @@
 - `MockAIBackend` は自動テスト・CI・app-server切り分け専用に残す
 - ChatGPT/Codex認証情報をDBへ保存しない
 - 被験者画面に `M1` から `M4` の内部ラベルを直接表示しない
-- 回答、AI診断、AI応答、足場掛け更新を研究ログとして保存する。再テスト、L0確認では理由記述を保存する
+- 回答、AI診断、AI応答、足場掛け更新を研究ログとして保存する。再テスト、確認テストでは理由記述を保存する
 - 実験分析に必要なCSVを出力できるようにする
 
 ## 推奨構成
@@ -50,7 +50,7 @@
 | `docs/08_backend_api_spec.md` | REST API仕様 |
 | `docs/09_frontend_ux_flow.md` | 画面遷移、UI要件、禁止表示 |
 | `docs/10_ai_prompt_contracts.md` | AI入出力スキーマとプロンプト契約 |
-| `docs/11_seed_questions.md` | 初期問題、選択肢、再テスト/L0問題在庫 |
+| `docs/11_seed_questions.md` | 初期問題、選択肢、再テスト/確認テスト問題在庫 |
 | `docs/12_evaluation_metrics.md` | 評価指標、CSV、分析仕様 |
 | `docs/13_docker_development.md` | Docker開発環境 |
 | `docs/14_testing_acceptance.md` | テスト・受け入れ条件 |

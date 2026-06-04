@@ -96,7 +96,7 @@ ChatGPT/Codex Login
 | DiagnosisService | 選択肢・理由記述・AIによる診断の統合 |
 | LearnerStateService | 用語別状態、誤概念、足場掛け、再発情報の管理 |
 | TutoringService | 学習セッションとチューターターン生成 |
-| ScaffoldingService | L3〜L0更新、方略変更、研究条件の決定論的制御 |
+| ScaffoldingService | L3〜L1更新、方略変更、研究条件の決定論的制御 |
 | EvaluationService | 評価指標、群別集計、用語別集計の計算 |
 | ExportService | CSV作成、エクスポート履歴管理 |
 | AiBackendService | AIBackend実装の選択、AI呼び出しログ保存 |

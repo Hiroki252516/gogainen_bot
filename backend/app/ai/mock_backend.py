@@ -60,39 +60,38 @@ class MockAIBackend:
         term = payload["term"]
         state = payload["learner_state"]
         group = payload.get("group_condition", "proposed")
-        level = state.get("scaffolding_level") or "L2"
+        level = state.get("scaffolding_level") if state.get("scaffolding_level") in {"L3", "L2", "L1"} else "L2"
         strategy = state.get("teaching_strategy") or strategy_for(state.get("primary_misconception"), state.get("current_status"), group)
 
         if group == "control":
-            message = f"{term['label']}は、専門分野で決まった意味を持つ用語です。定義を確認し、例とあわせて理解しましょう。"
-            prompt = f"{term['label']}を自分の言葉で一文で説明してください。"
+            message = f"{term['label']}は、専門分野で決まった意味を持つ用語です。例とあわせて確認しましょう。"
+        elif level == "L3":
+            message = "訓練データはモデルが学習に使ったデータ、未知データは学習に使っていない新しいデータです。過学習は、訓練データにはよく合う一方で、未知データへの性能が下がる状態です。"
+        elif level == "L2":
+            message = "過学習かどうかは、訓練データでの性能だけでは判断できません。訓練データでは高く、未知データでは低いという差が重要です。"
         else:
-            m = state.get("primary_misconception")
-            if m == "M1":
-                message = f"{term['label']}を別の種類のものとして捉えないように、まず「何の種類の概念か」を整理します。"
-                prompt = f"{term['label']}は何ではなく、何のための概念ですか。"
-            elif m == "M2":
-                message = f"{term['label']}は似ている概念との境界が重要です。役割や使う場面の違いに注目します。"
-                prompt = f"{term['label']}と混同しやすい概念の違いを1つ説明してください。"
-            elif m == "M3":
-                message = f"{term['label']}は単語の印象だけで判断せず、仕組みと判断基準に注目します。"
-                prompt = "問題文の表面的な言葉ではなく、どの関係や条件を見るべきですか。"
-            elif m == "M4":
-                message = f"{term['label']}を別の文脈でも使えるよう、共通する構造を取り出します。"
-                prompt = "学習時と別文脈で共通している判断基準を説明してください。"
-            else:
-                message = f"{term['label']}の基本定義を確認し、自分の言葉で説明できるようにします。"
-                prompt = f"{term['label']}を、例に頼らず自分の言葉で説明してください。"
+            message = "判断の中心は、訓練データと未知データの性能差です。答えを丸暗記せず、その差を根拠として説明しましょう。"
+
+        questions = {
+            "L3": "過学習を判断するときに見るべき2つのデータは何ですか？",
+            "L2": "訓練データ99%と未知データ55%を比べると、どちらの性能に問題がありますか？",
+            "L1": "このモデルが過学習だと言える理由を、訓練データと未知データの差に触れて一文で説明してください。",
+        }
+        expected = {
+            "L3": "訓練データと未知データ",
+            "L2": "未知データで性能が下がっている",
+            "L1": "訓練データにはよく合っているが、未知データで性能が低いから",
+        }
 
         return {
             "tutor_message": message,
             "teaching_strategy": strategy,
             "scaffolding_level": level,
             "requires_learner_response": True,
-            "learner_prompt": prompt,
+            "learner_prompt": questions[level],
             "practice_question": {
-                "body": f"{term['label']}を使う場面を1つ挙げ、なぜその概念が関係するか説明してください。",
-                "expected_answer": term.get("description", ""),
+                "body": questions[level],
+                "expected_answer": expected[level],
                 "question_type": "practice",
             },
             "forbidden_help_given": False,
@@ -130,11 +129,14 @@ class MockAIBackend:
         }
 
     async def generate_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
-        correct = bool(payload.get("is_correct"))
+        response = payload.get("learner_response") or ""
+        current_level = payload.get("learner_state", {}).get("scaffolding_level") or "L2"
+        correct = any(word in response for word in ["訓練", "未知", "性能", "下が"])
+        next_by_level = {"L3": "L2", "L2": "L1", "L1": "L1"}
         return {
-            "feedback": "説明の中で判断基準に触れられています。" if correct else "もう一度、表面的な言葉ではなく判断基準に注目してください。",
-            "next_action": "move_next" if correct else "continue",
-            "next_scaffolding_level": payload.get("next_scaffolding_level") or "L2",
+            "feedback": "説明の中で判断基準に触れられています。" if correct else "もう一度、訓練データと未知データの差に注目してください。",
+            "next_action": "move_next" if correct and current_level == "L1" else "continue",
+            "next_scaffolding_level": next_by_level.get(current_level, "L2"),
             "strategy_changed": bool(payload.get("strategy_changed")),
             "state_update_reason": "MockAIBackend feedback",
         }

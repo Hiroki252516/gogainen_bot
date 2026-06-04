@@ -12,7 +12,7 @@
 | AIを使うかではなくログで支援を変えるかを比較 | `01_research_requirements.md` | group_condition control/proposed |
 | 学習ログは次の支援を決める診断材料 | `05_system_architecture.md`, `07_data_model.md` | learner_states, tutor_turns |
 | 誤概念タイプで支援を変える | `03_misconception_taxonomy.md`, `04_scaffolding_and_tutoring.md` | teaching_strategy |
-| 足場掛けは支えるだけでなく減らす | `04_scaffolding_and_tutoring.md` | scaffolding_level L3-L0 |
+| 足場掛けは支えるだけでなく減らす | `04_scaffolding_and_tutoring.md` | scaffolding_level L3-L1 |
 | 同じ誤概念が再発したら方略変更 | `02_experiment_flow.md`, `04_scaffolding_and_tutoring.md` | recurrence_events, strategy_changed |
 | 問題をそのまま使い回さない | `11_seed_questions.md` | construct_key, variant_key |
 | 遅延再テストも可能 | `02_experiment_flow.md`, `07_data_model.md` | delayed_retest phase |

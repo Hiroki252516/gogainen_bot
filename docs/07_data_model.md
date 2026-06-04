@@ -54,7 +54,6 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 - `L3`
 - `L2`
 - `L1`
-- `L0`
 - `null`
 
 ## Tables
