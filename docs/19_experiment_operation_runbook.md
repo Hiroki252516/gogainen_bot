@@ -24,16 +24,13 @@
 
 被験者の流れ:
 
-1. 事前アンケート
-2. 事前テスト
+1. 事前テスト
 3. 診断待ち
 4. 学習対象確認
 5. 学習セッション
 6. 即時再テスト
 7. 必要なら2回目学習
 8. L0確認
-9. 転移テスト
-10. 事後アンケート
 11. 終了
 
 研究者が見るもの:
@@ -66,7 +63,6 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 - 選択肢と理由が矛盾する
 - AI出力schema validationに失敗した
 - forbidden_help_given = true
-- transfer問題のM4判定が曖昧
 
 手動修正時:
 
@@ -115,7 +111,7 @@ MVPでは必須ではない。
 - phaseが含まれる
 - misconception_typeが含まれる
 - recurrence_flagが含まれる
-- l0_successとtransfer_successが含まれる
+- l0_successが含まれる
 
 ## Research Notes During Operation
 

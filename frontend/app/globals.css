@@ -191,3 +191,32 @@ button:disabled {
   gap: 10px;
   align-items: center;
 }
+
+.learning-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.learning-block {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.material-block {
+  background: #f8fbff;
+}
+
+.problem-block {
+  background: #fffdf7;
+}
+
+@media (max-width: 760px) {
+  .learning-layout {
+    grid-template-columns: 1fr;
+  }
+}

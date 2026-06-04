@@ -16,16 +16,15 @@ M4は主に転移問題で検出する。事前テストではM4選択肢を基�
 - `construct_key` は同じでも `variant_key` は分ける
 - 選択肢文も可能な範囲で言い換える
 - 転移問題は学習時と異なる文脈にする
-- 理由記述を必須にする
+- 事前テストは理由記述を出さない。再テスト、L0確認では理由記述を必須にする
 - 「わからない」選択肢を必ず入れる
 
 ## Seed Terms
 
-1. Attention
-2. Embedding
-3. Token
-4. 過学習
-5. 汎化
+1. 過学習
+2. 汎化
+3. Attention
+4. Embedding
 6. Fine-tuning
 7. Prompt
 8. RAG

@@ -96,7 +96,6 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 | Research Object | DB Table | Backend Service | Frontend Page |
 |---|---|---|---|
 | 被験者 | participants | ExperimentService | /start |
-| 事前背景 | participant_surveys | ExperimentService | /survey/pre |
 | 問題 | questions, question_options | QuestionService | /pretest, /retest |
 | 回答 | attempts | ExperimentService | all test pages |
 | AI診断 | attempts, ai_call_logs | DiagnosisService | /diagnosing, /admin |

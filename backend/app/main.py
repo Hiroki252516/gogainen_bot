@@ -23,7 +23,6 @@ from app.services.experiment import (
     question_payloads,
     recalculate_evaluation,
     respond_tutor_turn,
-    save_survey,
     score_phase,
     submit_attempt,
 )
@@ -59,19 +58,6 @@ class ParticipantCreate(BaseModel):
     consent_checked: bool = True
 
 
-class SurveyPayload(BaseModel):
-    phase: str = "pre_survey"
-    ai_experience_level: int | None = None
-    programming_experience_level: int | None = None
-    llm_usage_level: int | None = None
-    self_rated_ai_knowledge: int | None = None
-    term_confidences: dict | None = None
-    usability_rating: int | None = None
-    helpfulness_rating: int | None = None
-    perceived_hint_amount: int | None = None
-    free_comment: str | None = None
-
-
 class AttemptPayload(BaseModel):
     participant_id: str
     question_id: str
@@ -79,7 +65,6 @@ class AttemptPayload(BaseModel):
     selected_option_id: str | None = None
     free_text_answer: str | None = None
     reason_text: str | None = None
-    confidence: int | None = None
     response_time_sec: float | None = None
 
 
@@ -90,7 +75,6 @@ class TutorSessionCreate(BaseModel):
 
 class TutorTurnRespond(BaseModel):
     learner_response: str
-    confidence: int | None = None
 
 
 class AILoginStart(BaseModel):
@@ -129,21 +113,12 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
 
     participant = get_participant(db, participant_id)
     mapping = {
-        "pre_survey": "/survey/pre",
         "pretest": "/pretest",
         "learning_targets": "/learning-targets",
         "l0_check": "/l0-check",
-        "transfer": "/transfer-test",
-        "post_survey": "/survey/post",
         "finish": "/finish",
     }
     return {"step": participant.current_step, "next_url": mapping.get(participant.current_step, "/start")}
-
-
-@app.post("/api/participants/{participant_id}/survey")
-def api_save_survey(participant_id: str, payload: SurveyPayload, db: Session = Depends(get_db)) -> dict:
-    save_survey(db, participant_id, payload.model_dump())
-    return {"saved": True, "next_step": "pretest" if payload.phase == "pre_survey" else "finish"}
 
 
 @app.get("/api/experiment/{participant_id}/pretest")
@@ -159,11 +134,6 @@ def get_retest(participant_id: str, db: Session = Depends(get_db)) -> dict:
 @app.get("/api/experiment/{participant_id}/l0-check")
 def get_l0(participant_id: str, db: Session = Depends(get_db)) -> dict:
     return {"phase": "l0_check", "questions": question_payloads(db, participant_id, "l0_check")}
-
-
-@app.get("/api/experiment/{participant_id}/transfer-test")
-def get_transfer(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return {"phase": "transfer", "questions": question_payloads(db, participant_id, "transfer")}
 
 
 @app.post("/api/attempts")
@@ -214,11 +184,6 @@ async def api_score_retest(participant_id: str, db: Session = Depends(get_db)) -
 @app.post("/api/participants/{participant_id}/score-l0-check")
 async def api_score_l0(participant_id: str, db: Session = Depends(get_db)) -> dict:
     return await score_phase(db, participant_id, "l0_check")
-
-
-@app.post("/api/participants/{participant_id}/score-transfer-test")
-async def api_score_transfer(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return await score_phase(db, participant_id, "transfer")
 
 
 @app.post("/api/participants/{participant_id}/evaluation-summary/recalculate")

@@ -14,21 +14,12 @@ def test_full_mock_experiment_flow():
     participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
     pid = participant["participant_id"]
     assert participant["group_condition"] == "proposed"
-
-    survey = client.post(
-        f"/api/participants/{pid}/survey",
-        json={
-            "phase": "pre_survey",
-            "ai_experience_level": 2,
-            "programming_experience_level": 2,
-            "llm_usage_level": 3,
-            "self_rated_ai_knowledge": 2,
-        },
-    )
-    assert survey.status_code == 200
+    assert participant["current_step"] == "pretest"
 
     pretest = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
-    assert len(pretest) == 8
+    assert len(pretest) == 4
+    assert [question["term_slug"] for question in pretest] == ["overfitting", "generalization", "attention", "embedding"]
+    assert all(question["requires_reason"] is False for question in pretest)
     for question in pretest:
         wrong = next(option for option in question["options"] if "わからない" not in option["body"])
         response = client.post(
@@ -38,8 +29,6 @@ def test_full_mock_experiment_flow():
                 "question_id": question["question_id"],
                 "phase": "pretest",
                 "selected_option_id": wrong["option_id"],
-                "reason_text": "言葉の印象で選びました",
-                "confidence": 4,
             },
         )
         assert response.status_code == 200
@@ -58,14 +47,13 @@ def test_full_mock_experiment_flow():
     assert turn["requires_learner_response"] is True
     feedback = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={"learner_response": "判断基準を自分の言葉で説明します", "confidence": 4},
+        json={"learner_response": "判断基準を自分の言葉で説明します"},
     )
     assert feedback.status_code == 200
 
     for phase, get_path, score_path in [
         ("retest", f"/api/experiment/{pid}/retest", f"/api/participants/{pid}/score-retest"),
         ("l0_check", f"/api/experiment/{pid}/l0-check", f"/api/participants/{pid}/score-l0-check"),
-        ("transfer", f"/api/experiment/{pid}/transfer-test", f"/api/participants/{pid}/score-transfer-test"),
     ]:
         questions = client.get(get_path).json()["questions"]
         assert questions
@@ -75,7 +63,6 @@ def test_full_mock_experiment_flow():
                 "question_id": question["question_id"],
                 "phase": phase,
                 "reason_text": "関係 重み 重要度 などの判断基準で説明します",
-                "confidence": 4,
             }
             if question["options"]:
                 payload["selected_option_id"] = question["options"][0]["option_id"]
@@ -84,10 +71,6 @@ def test_full_mock_experiment_flow():
             assert client.post("/api/attempts", json=payload).status_code == 200
         assert client.post(score_path).status_code == 200
 
-    client.post(
-        f"/api/participants/{pid}/survey",
-        json={"phase": "post_survey", "usability_rating": 4, "helpfulness_rating": 4, "perceived_hint_amount": 3},
-    )
     summary = client.post(f"/api/participants/{pid}/evaluation-summary/recalculate")
     assert summary.status_code == 200
 
@@ -108,8 +91,6 @@ def test_control_group_uses_general_strategy():
             "question_id": question["question_id"],
             "phase": "pretest",
             "selected_option_id": option["option_id"],
-            "reason_text": "言葉で判断しました",
-            "confidence": 4,
         },
     )
     client.post(f"/api/participants/{pid}/diagnose-pretest")

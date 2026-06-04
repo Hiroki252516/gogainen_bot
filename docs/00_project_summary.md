@@ -72,15 +72,13 @@ AI・情報系専門用語は、日常語としても使われる語や、近い
 
 ## 初期実装スコープ
 
-初期実装では、8語を対象にする。
+初期実装の事前テストでは、4語を対象にする。
 
-1. Attention
-2. Embedding
-3. Token
-4. 過学習
-5. 汎化
-6. Fine-tuning
-7. Prompt
-8. RAG
+1. 過学習
+2. 汎化
+3. Attention
+4. Embedding
+
+Token、Fine-tuning、Prompt、RAGはseedとデータモデルで拡張可能な追加候補として残す。
 
 追加候補はLoss、ハルシネーション、正則化である。追加候補はデータモデルとseedで拡張可能にしておくが、MVPの必須対象にはしない。

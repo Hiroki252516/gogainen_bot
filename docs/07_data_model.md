@@ -11,14 +11,12 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 
 ### phase
 
-- `pre_survey`
 - `pretest`
 - `diagnosis`
 - `learning`
 - `retest`
 - `l0_check`
 - `transfer`
-- `post_survey`
 - `delayed_retest`
 
 ### question_type
@@ -75,31 +73,6 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 - updated_at TIMESTAMP NOT NULL
 
 `display_code` は `P001` のような画面表示用ID。個人名やメールアドレスは保存しない。
-
-### participant_surveys
-
-- id UUID PRIMARY KEY
-- participant_id UUID REFERENCES participants(id)
-- phase TEXT NOT NULL
-- ai_experience_level INT
-- programming_experience_level INT
-- llm_usage_level INT
-- self_rated_ai_knowledge INT
-- confidence_attention INT NULL
-- confidence_embedding INT NULL
-- confidence_token INT NULL
-- confidence_overfitting INT NULL
-- confidence_generalization INT NULL
-- confidence_fine_tuning INT NULL
-- confidence_prompt INT NULL
-- confidence_rag INT NULL
-- usability_rating INT NULL
-- helpfulness_rating INT NULL
-- perceived_hint_amount INT NULL
-- free_comment TEXT NULL
-- created_at TIMESTAMP NOT NULL
-
-`phase` は `pre_survey` または `post_survey`。
 
 ### terms
 
@@ -184,8 +157,8 @@ misconception_type values:
 - attempt_index INT NOT NULL DEFAULT 1
 - selected_option_id UUID NULL REFERENCES question_options(id)
 - free_text_answer TEXT NULL
-- reason_text TEXT NULL
-- confidence INT NULL
+- reason_text TEXT NULL  # pretestでは常にNULL
+- confidence INT NULL  # legacy nullable; pretestとlearningでは収集しない
 - response_time_sec FLOAT NULL
 - is_correct BOOLEAN NULL
 - score FLOAT NULL
@@ -252,7 +225,7 @@ Unique:
 - learner_prompt TEXT NULL
 - practice_question_json JSONB NULL
 - learner_response TEXT NULL
-- learner_confidence INT NULL
+- learner_confidence INT NULL  # legacy nullable; learningでは収集しない
 - ai_feedback TEXT NULL
 - diagnosis_json JSONB NULL
 - grading_json JSONB NULL

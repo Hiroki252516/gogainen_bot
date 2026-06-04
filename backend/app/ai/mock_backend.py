@@ -11,7 +11,7 @@ class MockAIBackend:
     async def diagnose_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
         selected = payload.get("selected_option") or {}
         reason = (payload.get("learner_response") or {}).get("reason_text") or ""
-        confidence = (payload.get("learner_response") or {}).get("confidence")
+        confidence = None
         initial_m = selected.get("initial_misconception_type")
         is_correct = bool(selected.get("is_correct"))
 
@@ -41,8 +41,8 @@ class MockAIBackend:
             "M2": "似ている概念との違いを確認する必要があります。",
             "M3": "言葉の表面ではなく、仕組みや判断基準に注目する必要があります。",
             "unknown": "まず基本的な意味から確認します。",
-            None: "理由も含めておおむね理解できています。",
-        }.get(mtype, "回答理由をもう少し確認する必要があります。")
+            None: "選択内容からはおおむね理解できています。",
+        }.get(mtype, "選択内容から理解状態をもう少し確認する必要があります。")
         return {
             "is_correct": is_correct,
             "diagnosed_status": status,
@@ -114,7 +114,7 @@ class MockAIBackend:
         else:
             hit_count = sum(1 for keyword in keywords if keyword and keyword in answer)
             is_correct = hit_count >= max(1, min(2, len(keywords)))
-            mtype = None if is_correct else ("M4" if question.get("phase") == "transfer" else "M3")
+            mtype = None if is_correct else "M3"
         status = "stable_correct" if is_correct else "misconception"
         return {
             "is_correct": is_correct,
@@ -124,7 +124,6 @@ class MockAIBackend:
             "diagnosed_status": status,
             "recurrence_flag": False,
             "l0_success": is_correct if question.get("phase") == "l0_check" else None,
-            "transfer_success": is_correct if question.get("phase") == "transfer" else None,
             "feedback_for_log": "MockAIBackendによる決定論的採点です。",
             "evidence": answer or selected.get("body") or "",
             "requires_manual_review": False,

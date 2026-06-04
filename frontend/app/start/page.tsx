@@ -24,14 +24,14 @@ export default function StartPage() {
     localStorage.setItem("participant_id", data.participant_id);
     localStorage.setItem("display_code", data.display_code);
     localStorage.setItem("group_condition", data.group_condition);
-    router.push("/survey/pre");
+    router.push("/pretest");
   }
 
   return (
     <AppShell step="開始">
       <section className="panel stack">
         <h1>専門用語理解の実験を開始します</h1>
-        <p className="muted">個人名やメールアドレスは収集しません。回答、理由、自信度、学習ログを研究用に保存します。</p>
+        <p className="muted">個人名やメールアドレスは収集しません。回答、理由記述が必要なテスト、AI応答、学習ログを研究用に保存します。</p>
         <label>
           実験条件
           <select value={group} onChange={(event) => setGroup(event.target.value)}>

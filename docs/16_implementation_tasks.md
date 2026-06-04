@@ -20,7 +20,7 @@
 - [ ] terms seed
 - [ ] questions seed
 - [ ] question_options seed
-- [ ] pretest/retest/transfer variants seed
+- [ ] pretest/retest variants seed
 - [ ] seed command
 - [ ] question_display_orders実装
 
@@ -28,12 +28,9 @@
 
 - [ ] participant create
 - [ ] current step API
-- [ ] pre survey save
-- [ ] post survey save
 - [ ] pretest questions fetch
 - [ ] retest questions fetch
 - [ ] l0 questions fetch
-- [ ] transfer questions fetch
 - [ ] attempt submit
 - [ ] idempotency handling
 - [ ] admin participant list
@@ -81,9 +78,7 @@
 - [ ] second learning session trigger
 - [ ] L0 check flow
 - [ ] l0_success calculation
-- [ ] transfer test flow
 - [ ] M4 detection
-- [ ] transfer_success calculation
 
 ## Milestone 8: Evaluation & Export
 
@@ -112,15 +107,12 @@
 ## Milestone 10: Frontend Completion
 
 - [ ] /start
-- [ ] /survey/pre
 - [ ] /pretest
 - [ ] /diagnosing
 - [ ] /learning-targets
 - [ ] /learning/[termSlug]
 - [ ] /retest
 - [ ] /l0-check
-- [ ] /transfer-test
-- [ ] /survey/post
 - [ ] /finish
 - [ ] /admin
 - [ ] internal label hiding

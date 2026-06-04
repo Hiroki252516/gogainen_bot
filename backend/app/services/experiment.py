@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import random
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,6 @@ from app.models import (
     ExportJob,
     LearnerState,
     Participant,
-    ParticipantSurvey,
     Question,
     QuestionDisplayOrder,
     QuestionOption,
@@ -35,6 +35,8 @@ from app.models import (
 
 
 PUBLIC_LEVEL = {"L3": "しっかり確認", "L2": "観点を確認", "L1": "自分で整理", "L0": "ヒントなし"}
+PRETEST_TERM_ORDER = {"overfitting": 0, "generalization": 1, "attention": 2, "embedding": 3}
+PRETEST_TERM_SLUGS = set(PRETEST_TERM_ORDER)
 
 
 def get_participant(db: Session, participant_id: str) -> Participant:
@@ -58,7 +60,7 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
         group_condition=group_condition,
         assignment_method=assignment_method,
         consent_checked=consent_checked,
-        current_step="pre_survey",
+        current_step="pretest",
         started_at=now(),
     )
     db.add(participant)
@@ -67,32 +69,12 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
     return participant
 
 
-def save_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> None:
-    participant = get_participant(db, participant_id)
-    phase = payload.get("phase", "pre_survey")
-    survey = ParticipantSurvey(
-        participant_id=participant_id,
-        phase=phase,
-        ai_experience_level=payload.get("ai_experience_level"),
-        programming_experience_level=payload.get("programming_experience_level"),
-        llm_usage_level=payload.get("llm_usage_level"),
-        self_rated_ai_knowledge=payload.get("self_rated_ai_knowledge"),
-        term_confidences=payload.get("term_confidences"),
-        usability_rating=payload.get("usability_rating"),
-        helpfulness_rating=payload.get("helpfulness_rating"),
-        perceived_hint_amount=payload.get("perceived_hint_amount"),
-        free_comment=payload.get("free_comment"),
-    )
-    db.add(survey)
-    participant.current_step = "pretest" if phase == "pre_survey" else "finish"
-    if phase == "post_survey":
-        participant.completed_at = now()
-    db.commit()
-
 
 def _question_query_for_phase(db: Session, participant: Participant, phase: str):
     query = db.query(Question).join(Term, Question.term_id == Term.id).filter(Question.phase == phase, Question.is_active.is_(True), Term.is_active.is_(True))
-    if phase in {"retest", "l0_check", "transfer"}:
+    if phase == "pretest":
+        query = query.filter(Term.slug.in_(PRETEST_TERM_SLUGS))
+    if phase in {"retest", "l0_check"}:
         target_term_ids = [
             row.term_id
             for row in db.query(TermAssignment)
@@ -107,6 +89,8 @@ def _question_query_for_phase(db: Session, participant: Participant, phase: str)
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
     participant = get_participant(db, participant_id)
     questions = _question_query_for_phase(db, participant, phase).all()
+    if phase == "pretest":
+        questions = sorted(questions, key=lambda question: PRETEST_TERM_ORDER.get(db.get(Term, question.term_id).slug, 99))
     out = []
     for question in questions:
         term = db.get(Term, question.term_id)
@@ -134,8 +118,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "body": question.body,
                 "question_type": question.question_type,
                 "options": public_options,
-                "requires_reason": True,
-                "requires_confidence": True,
+                "requires_reason": phase != "pretest",
             }
         )
     return out
@@ -150,15 +133,17 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         existing = db.query(Attempt).filter_by(participant_id=participant.id, idempotency_key=idempotency_key).one_or_none()
         if existing:
             return existing
+    phase = payload.get("phase") or question.phase
+    is_pretest = phase == "pretest"
     attempt = Attempt(
         participant_id=participant.id,
         term_id=question.term_id,
         question_id=question.id,
-        phase=payload.get("phase") or question.phase,
+        phase=phase,
         selected_option_id=payload.get("selected_option_id"),
-        free_text_answer=payload.get("free_text_answer"),
-        reason_text=payload.get("reason_text"),
-        confidence=payload.get("confidence"),
+        free_text_answer=None if is_pretest else payload.get("free_text_answer"),
+        reason_text=None if is_pretest else payload.get("reason_text"),
+        confidence=None,
         response_time_sec=payload.get("response_time_sec"),
         idempotency_key=idempotency_key,
     )
@@ -223,7 +208,7 @@ def _diagnosis_payload(db: Session, participant: Participant, attempt: Attempt) 
     question = db.get(Question, attempt.question_id)
     term = db.get(Term, attempt.term_id)
     option = _selected_option(db, attempt)
-    return {
+    payload = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "term": {"slug": term.slug, "label": term.label, "definition": term.description},
@@ -231,24 +216,39 @@ def _diagnosis_payload(db: Session, participant: Participant, attempt: Attempt) 
         "selected_option": None
         if not option
         else {"id": option.id, "body": option.body, "is_correct": option.is_correct, "initial_misconception_type": option.misconception_type},
-        "learner_response": {"reason_text": attempt.reason_text, "free_text_answer": attempt.free_text_answer, "confidence": attempt.confidence},
         "history": {"previous_attempts": []},
     }
+    if question.phase != "pretest":
+        payload["learner_response"] = {"reason_text": attempt.reason_text, "free_text_answer": attempt.free_text_answer}
+    return payload
+
+
+def _public_summary(text: str | None) -> str:
+    cleaned = text or "この用語を重点的に確認します。"
+    cleaned = re.sub(r"理由記述(や自信度)?(も)?ないため、?", "", cleaned)
+    cleaned = re.sub(r"理由記述(や自信度)?(も)?ないので、?", "", cleaned)
+    cleaned = re.sub(r"理由記述や自信度", "回答内容", cleaned)
+    cleaned = re.sub(r"理由記述", "回答内容", cleaned)
+    cleaned = re.sub(r"自信度", "", cleaned)
+    cleaned = re.sub(r"、{2,}", "、", cleaned)
+    cleaned = re.sub(r"。{2,}", "。", cleaned)
+    return cleaned.strip("、 ") or "この用語を重点的に確認します。"
 
 
 def _priority(attempt: Attempt) -> tuple[float, str]:
+    term_order_bonus = 0
     if attempt.diagnosed_status == "misconception":
-        score = 70 + (attempt.confidence or 0) * 3
+        score = 70 + term_order_bonus
         if attempt.misconception_type in {"M1", "M2"}:
             score += 20
         elif attempt.misconception_type == "M3":
             score += 10
         return score, f"{attempt.misconception_type}を重点確認"
     if attempt.diagnosed_status == "unknown":
-        return 55, "基礎理解を確認"
+        return 55 + term_order_bonus, "基礎理解を確認"
     if attempt.diagnosed_status == "unstable_correct":
-        return 45, "理由説明を確認"
-    return 10, "転移準備"
+        return 45 + term_order_bonus, "理解を確認"
+    return 10 + term_order_bonus, "転移準備"
 
 
 async def diagnose_pretest(db: Session, participant_id: str) -> int:
@@ -312,7 +312,7 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
         {
             "term_slug": term.slug,
             "term_label": term.label,
-            "summary_for_learner": state.state_summary or "この用語を重点的に確認します。",
+            "summary_for_learner": _public_summary(state.state_summary),
             "current_scaffolding_level_for_display": PUBLIC_LEVEL.get(state.scaffolding_level, "確認"),
         }
         for _, term, state in rows
@@ -403,13 +403,12 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
             "practice_question": turn.practice_question_json,
         },
         "learner_response": response,
-        "confidence": payload.get("confidence"),
     }
     result = await _ai_call(db, "generate_feedback", feedback_payload)
     correct = result["next_action"] == "move_next"
     next_level = result["next_scaffolding_level"] if result.get("next_scaffolding_level") else (lower_level(state.scaffolding_level) if correct else state.scaffolding_level)
     turn.learner_response = response
-    turn.learner_confidence = payload.get("confidence")
+    turn.learner_confidence = None
     turn.next_scaffolding_level = next_level
     turn.ai_feedback = result["feedback"]
     state.scaffolding_level = next_level
@@ -444,7 +443,6 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         attempt.misconception_type = result["misconception_type"]
         attempt.secondary_misconception_type = result["secondary_misconception_type"]
         attempt.l0_success = result["l0_success"]
-        attempt.transfer_success = result["transfer_success"]
         state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
         if not state:
             continue
@@ -460,13 +458,11 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         if phase == "l0_check":
             state.l0_success_count += 1 if attempt.is_correct else 0
             state.scaffolding_level = "L0" if attempt.is_correct else raise_level("L0")
-        if phase == "transfer":
-            state.transfer_success_count += 1 if attempt.is_correct else 0
-            if not attempt.is_correct:
-                attempt.misconception_type = "M4"
         state.current_status = "stable_correct" if attempt.is_correct else "misconception"
         state.last_attempt_id = attempt.id
-    participant.current_step = {"retest": "l0_check", "l0_check": "transfer", "transfer": "post_survey"}.get(phase, participant.current_step)
+    participant.current_step = {"retest": "l0_check", "l0_check": "finish"}.get(phase, participant.current_step)
+    if phase == "l0_check":
+        participant.completed_at = now()
     db.commit()
     return {"status": "completed", "next_step": participant.current_step}
 
@@ -480,7 +476,7 @@ def _rate(items: list[Attempt], predicate) -> float | None:
 def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummary:
     participant = get_participant(db, participant_id)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id).all()
-    by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in ["pretest", "retest", "l0_check", "transfer"]}
+    by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in ["pretest", "retest", "l0_check"]}
     initial_m = [a for a in by_phase["pretest"] if a.misconception_type in {"M1", "M2", "M3"}]
     same_rec = [a for a in by_phase["retest"] if a.recurrence_flag]
     def m_rate(m: str) -> float | None:
@@ -496,12 +492,12 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         pretest_score=_rate(by_phase["pretest"], lambda a: bool(a.is_correct)),
         retest_score=_rate(by_phase["retest"], lambda a: bool(a.is_correct)),
         l0_correct_rate=_rate(by_phase["l0_check"], lambda a: bool(a.l0_success)),
-        transfer_correct_rate=_rate(by_phase["transfer"], lambda a: bool(a.transfer_success)),
+        transfer_correct_rate=None,
         same_misconception_recurrence_rate=(len(same_rec) / len(initial_m)) if initial_m else None,
         m1_recurrence_rate=m_rate("M1"),
         m2_recurrence_rate=m_rate("M2"),
         m3_recurrence_rate=m_rate("M3"),
-        m4_failure_rate=_rate(by_phase["transfer"], lambda a: a.misconception_type == "M4"),
+        m4_failure_rate=None,
         unknown_persistence_rate=None,
         learning_target_count=db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0,
         completed=participant.completed_at is not None,
@@ -531,7 +527,6 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 "participant_count": len(group_participants),
                 "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
                 "l0_correct_rate": avg("l0_correct_rate"),
-                "transfer_correct_rate": avg("transfer_correct_rate"),
             }
         )
     return {"groups": rows}
@@ -539,14 +534,13 @@ def admin_summary(db: Session) -> dict[str, Any]:
 
 EXPORTS = {
     "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at"]),
-    "participant_surveys": (ParticipantSurvey, ["id", "participant_id", "phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "term_confidences", "free_comment"]),
-    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "reason_text", "free_text_answer", "confidence", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "transfer_success", "requires_manual_review", "created_at"]),
-    "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "transfer_success_count", "updated_at"]),
+    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "reason_text", "free_text_answer", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
+    "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at"]),
     "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "created_at"]),
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
-    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "transfer_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "m4_failure_rate", "learning_target_count", "completed", "created_at"]),
+    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "completed", "created_at"]),
 }
 
 

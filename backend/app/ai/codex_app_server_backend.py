@@ -176,7 +176,8 @@ class CodexAppServerBackend:
             "pretest_diagnosis",
             payload,
             [
-                "選択肢の正誤、回答理由、自信度から理解状態を診断する。",
+                "事前テスト診断では選択肢の正誤と誤答選択肢の初期ラベルだけから理解状態を診断する。",
+                "natural_language_diagnosis では、入力欄の有無や未入力であることに絶対に触れず、選択内容から見える理解状態だけを書く。",
                 "誤概念タイプは内部研究ラベルとして M1/M2/M3/M4/unknown/null のみを使う。",
                 "natural_language_diagnosis には M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
                 "統制群でも分類は保存してよいが、教授方略に使う推薦は general_explanation にする。",
@@ -186,7 +187,7 @@ class CodexAppServerBackend:
         result = await self._run_structured_turn("diagnose_answer", prompt, schema)
         if payload.get("group_condition") == "control":
             result["recommended_teaching_strategy"] = "general_explanation"
-        result["natural_language_diagnosis"] = _strip_internal_labels(result["natural_language_diagnosis"])
+        result["natural_language_diagnosis"] = _strip_pretest_input_mentions(_strip_internal_labels(result["natural_language_diagnosis"]))
         return result
 
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -225,7 +226,7 @@ class CodexAppServerBackend:
         }
         rules = [
             "学習セッション用の短い日本語チュータ発話を作る。",
-            "再テスト、L0確認、転移テストの具体的な正解を先取りして出さない。",
+            "再テスト、L0確認の具体的な正解を先取りして出さない。",
             "tutor_message, learner_prompt, practice_question.body に M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
         ]
         if group == "control":
@@ -252,7 +253,6 @@ class CodexAppServerBackend:
                 "diagnosed_status": {"type": "string", "enum": ["misconception", "unknown", "unstable_correct", "stable_correct", "ambiguous"]},
                 "recurrence_flag": {"type": "boolean"},
                 "l0_success": {"type": ["boolean", "null"]},
-                "transfer_success": {"type": ["boolean", "null"]},
                 "feedback_for_log": {"type": "string"},
                 "evidence": {"type": "string"},
                 "requires_manual_review": {"type": "boolean"},
@@ -265,7 +265,6 @@ class CodexAppServerBackend:
                 "diagnosed_status",
                 "recurrence_flag",
                 "l0_success",
-                "transfer_success",
                 "feedback_for_log",
                 "evidence",
                 "requires_manual_review",
@@ -515,3 +514,14 @@ def _parse_json_object(raw_text: str) -> dict[str, Any]:
 
 def _strip_internal_labels(text: str) -> str:
     return re.sub(r"\bM[1-4]\b", "内部分類", text or "")
+
+
+def _strip_pretest_input_mentions(text: str) -> str:
+    cleaned = text or ""
+    cleaned = re.sub(r"理由記述(や自信度)?(も)?ないため、?", "", cleaned)
+    cleaned = re.sub(r"理由記述(や自信度)?(も)?ないので、?", "", cleaned)
+    cleaned = re.sub(r"理由記述や自信度", "回答内容", cleaned)
+    cleaned = re.sub(r"理由記述", "回答内容", cleaned)
+    cleaned = re.sub(r"自信度", "", cleaned)
+    cleaned = re.sub(r"、{2,}", "、", cleaned)
+    return cleaned.strip("、 ")

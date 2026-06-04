@@ -93,10 +93,10 @@ unknown_in_retest_count / initial_unknown_count
 
 これは誤概念再発ではなく、知識不足が残った割合として扱う。
 
-### 自信度変化
+### 主観理解度変化
 
 ```text
-confidence_delta = post_confidence - pre_confidence
+understanding_delta = post_understanding - pre_understanding
 ```
 
 用語別にも全体平均でも出せるようにする。
@@ -176,7 +176,6 @@ Columns:
 - selected_option_body
 - reason_text
 - free_text_answer
-- confidence
 - response_time_sec
 - is_correct
 - score
@@ -206,7 +205,6 @@ Columns:
 - strategy_changed
 - tutor_message
 - learner_response
-- learner_confidence
 - ai_feedback
 - next_scaffolding_level
 - forbidden_help_given

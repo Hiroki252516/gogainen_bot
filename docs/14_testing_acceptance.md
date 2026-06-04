@@ -29,16 +29,15 @@
 ### frontend
 
 - pretest form
-- confidence input
+- no confidence input in pretest and learning session
 - learning session page
-- L0/transfer pages without chat
+- L0 page without chat
 - admin dashboard rendering
 - submit button double-click prevention
 
 ## Integration Tests
 
 - create participant
-- save pre survey
 - fetch pretest questions
 - submit pretest attempts
 - run diagnosis with MockAIBackend
@@ -48,8 +47,6 @@
 - submit retest
 - compute recurrence
 - run L0 check
-- run transfer test
-- save post survey
 - generate evaluation summary
 - export CSV
 
@@ -82,7 +79,6 @@ Mock rules:
 ### A. 基本実験フロー
 
 - 被験者を作成できる
-- 事前アンケートを保存できる
 - 事前テストを完了できる
 - AI診断が実行される
 - learner_states が作成される
@@ -90,8 +86,6 @@ Mock rules:
 - 学習セッションが開始できる
 - 再テストが実施できる
 - L0確認が実施できる
-- 転移テストが実施できる
-- 事後アンケートが保存できる
 - 評価サマリーが生成される
 
 ### B. 提案群の動作
@@ -117,7 +111,6 @@ Mock rules:
 - pretestで正誤を表示しない
 - retestでヒントを出さない
 - L0 checkでチャット欄がない
-- transfer testでチャット欄がない
 - 同じ問題文をpretest/retestで使い回さない
 
 ### E. データ出力
@@ -133,7 +126,7 @@ Mock rules:
 ### F. AIバックエンド
 
 - `AI_BACKEND=codex_app_server` でCodex app-serverに接続できる
-- app-server経由で診断、学習ターン、学習フィードバック、再テスト/L0/転移採点を実行できる
+- app-server経由で診断、学習ターン、学習フィードバック、再テスト/L0採点を実行できる
 - `AI_BACKEND=mock` はテスト時に完全に動く
 - app-server未接続時は分かりやすいエラーを出す
 - ChatGPT未ログイン時はログイン案内を出す
@@ -144,14 +137,13 @@ Mock rules:
 ### proposed participant
 
 1. Participant P001をproposedで作成
-2. AttentionでM1誤答、自信度5
+2. AttentionでM1誤答
 3. EmbeddingでM2誤答
 4. Diagnosis後、AttentionとEmbeddingがlearning targetになる
 5. Attentionの初期LはL3
 6. 学習後retestでAttentionが同じM1ならrecurrence_flag true
 7. 次のturnでstrategy_changed true
 8. L0 checkで正答ならl0_success true
-9. Transferで別文脈に適用できればtransfer_success true
 10. evaluation_summaryに指標が反映される
 
 ### control participant

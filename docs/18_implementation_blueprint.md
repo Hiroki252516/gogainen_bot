@@ -31,7 +31,6 @@ backend/app/
 │   └── base.py
 ├── models/
 │   ├── participant.py
-│   ├── survey.py
 │   ├── question.py
 │   ├── attempt.py
 │   ├── learner_state.py
@@ -60,7 +59,6 @@ backend/app/
 │   └── prompts.py
 ├── api/
 │   ├── participants.py
-│   ├── surveys.py
 │   ├── questions.py
 │   ├── attempts.py
 │   ├── diagnosis.py
@@ -79,15 +77,12 @@ backend/app/
 ```text
 frontend/app/
 ├── start/page.tsx
-├── survey/pre/page.tsx
 ├── pretest/page.tsx
 ├── diagnosing/page.tsx
 ├── learning-targets/page.tsx
 ├── learning/[termSlug]/page.tsx
 ├── retest/page.tsx
 ├── l0-check/page.tsx
-├── transfer-test/page.tsx
-├── survey/post/page.tsx
 ├── finish/page.tsx
 └── admin/page.tsx
 
@@ -138,17 +133,17 @@ Input:
 
 - pretest attempts
 - diagnosis result
-- confidence
+- pretest does not collect reason_text or confidence
+- learning session does not collect confidence
 - response time
 
 Priority:
 
-1. misconception with confidence >= 4
-2. M1 or M2
-3. M3
-4. unknown
-5. unstable_correct
-6. stable_correct with low confidence
+1. M1 or M2 misconception
+2. M3 misconception
+3. unknown
+4. unstable_correct
+5. stable_correct that still needs L0 confirmation
 
 Output:
 
@@ -158,10 +153,9 @@ Output:
 ### Diagnosis Merge
 
 1. Start from selected option label
-2. Apply reason_text AI diagnosis
-3. If selected option correct but reason wrong, mark unstable or misconception
-4. If confidence low and reason weak, avoid stable_correct
-5. If conflict is strong, mark ambiguous
+2. Do not send reason_text or confidence in pretest diagnosis
+3. If selected option correct but available evidence is weak, mark unstable_correct
+4. If conflict is strong, mark ambiguous
 
 ### Recurrence
 
@@ -182,7 +176,6 @@ Use deterministic service logic from `04_scaffolding_and_tutoring.md`. AI recomm
 
 ```text
 POST /participants
-  -> POST /survey
   -> GET /pretest
   -> POST /attempts
   -> POST /diagnose-pretest
@@ -194,9 +187,6 @@ POST /participants
   -> POST /score-retest
   -> GET /l0-check
   -> POST /score-l0-check
-  -> GET /transfer-test
-  -> POST /score-transfer-test
-  -> POST /survey post
   -> POST /evaluation-summary/recalculate
   -> GET /admin/export/evaluation_summary.csv
 ```
@@ -218,7 +208,6 @@ MVP seed must include:
 - 8 terms
 - pretest question per term
 - retest variant per term
-- transfer question per term
 - option labels correct/M1/M2/M3/unknown
 
 Learning practice questions can be smaller but must exist for at least all 8 terms.

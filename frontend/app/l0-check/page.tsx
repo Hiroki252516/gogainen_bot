@@ -11,7 +11,7 @@ export default function L0CheckPage() {
         title="ヒントなし確認"
         sourcePath={(id) => `/api/experiment/${id}/l0-check`}
         scorePath={(id) => `/api/participants/${id}/score-l0-check`}
-        nextPath="/transfer-test"
+        nextPath="/finish"
       />
     </AppShell>
   );

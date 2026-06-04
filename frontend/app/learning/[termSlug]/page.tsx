@@ -14,7 +14,7 @@ export default function LearningPage() {
   const [turn, setTurn] = useState<Turn | null>(null);
   const [response, setResponse] = useState("");
   const [feedback, setFeedback] = useState("");
-  const [confidence, setConfidence] = useState("3");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const nextHref = useMemo(() => {
@@ -41,12 +41,20 @@ export default function LearningPage() {
   }, [termSlug]);
 
   async function submit() {
-    if (!turn) return;
-    const data = await api<{ feedback: string }>(`/api/tutor-turns/${turn.turn_id}/respond`, {
-      method: "POST",
-      body: JSON.stringify({ learner_response: response, confidence: Number(confidence) })
-    });
-    setFeedback(data.feedback);
+    if (!turn || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const data = await api<{ feedback: string }>(`/api/tutor-turns/${turn.turn_id}/respond`, {
+        method: "POST",
+        body: JSON.stringify({ learner_response: response })
+      });
+      setFeedback(data.feedback);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -56,27 +64,24 @@ export default function LearningPage() {
         {error ? <div className="danger">{error}</div> : null}
         {turn ? (
           <>
-            <div className="notice">
-              <p>{turn.tutor_message}</p>
-              <strong>{turn.learner_prompt}</strong>
+            <div className="learning-layout">
+              <section className="learning-block material-block" aria-labelledby="material-title">
+                <h2 id="material-title">教材</h2>
+                <p>{turn.tutor_message}</p>
+              </section>
+              <section className="learning-block problem-block" aria-labelledby="problem-title">
+                <h2 id="problem-title">問題</h2>
+                <p>{turn.practice_question?.body || turn.learner_prompt}</p>
+                <label>
+                  あなたの回答・自己説明
+                  <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
+                </label>
+              </section>
             </div>
-            <p className="muted">{turn.practice_question?.body}</p>
-            <label>
-              あなたの回答・自己説明
-              <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
-            </label>
-            <label>
-              自信度
-              <select value={confidence} onChange={(event) => setConfidence(event.target.value)}>
-                {[1, 2, 3, 4, 5].map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </label>
             <div className="actions">
-              <button onClick={submit}>回答を確認</button>
+              <button onClick={submit} disabled={submitting}>
+                {submitting ? "回答を確認中..." : "回答を確認"}
+              </button>
               {feedback ? (
                 <button className="secondary" onClick={() => router.push(nextHref)}>
                   次へ

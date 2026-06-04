@@ -9,7 +9,7 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
 - M1〜M4の定義に従う
 - 被験者に直接見せる文章と内部ラベルを分ける
 - `unknown` と誤概念を混同しない
-- 正答選択肢でも理由が不十分なら `unstable_correct`
+- 事前テストは選択肢だけで診断する
 - テスト問題の正解を直接教えない
 - L0ではヒント、例、解説を出さない
 
@@ -37,11 +37,6 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
     "is_correct": false,
     "initial_misconception_type": "M3"
   },
-  "learner_response": {
-    "reason_text": "...",
-    "free_text_answer": null,
-    "confidence": 4
-  },
   "history": {
     "previous_attempts": []
   }
@@ -57,8 +52,8 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
   "misconception_type": null,
   "secondary_misconception_type": null,
   "diagnosis_confidence": 0.92,
-  "natural_language_diagnosis": "この回答では...",
-  "evidence": "学習者は理由欄で...",
+  "natural_language_diagnosis": "この選択では...",
+  "evidence": "選択肢の内容...",
   "recommended_initial_scaffolding_level": "L1",
   "recommended_teaching_strategy": "self_explanation_check",
   "requires_manual_review": false
@@ -69,15 +64,15 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
 
 ```text
 あなたは教育実験用AIチューターの診断モジュールです。
-学習者の回答を、正誤だけでなく誤概念タイプに基づいて診断してください。
+学習者の選択肢回答を、正誤だけでなく誤概念タイプに基づいて診断してください。
 
 重要:
 - 出力は指定JSONのみ。
 - 被験者に直接見せる文章と内部ラベルを分ける。
 - M1〜M4の定義に厳密に従う。
 - 「わからない」「空欄」は誤概念ではなく unknown とする。
-- 正答選択肢を選んでいても、理由が誤っていれば unstable_correct または misconception とする。
-- M4は原則として転移問題で判定する。
+- 診断文や evidence では、入力欄の有無や未入力であることに触れない。
+- 事前テストでは選択肢の正誤と誤答選択肢の初期ラベルで判定する。
 
 M1: カテゴリー誤分類型
 M2: 類似概念境界混同型
@@ -147,7 +142,7 @@ ambiguous: 判定困難
 - 最終的にL0で自力解答できる状態へ移行させる
 
 制約:
-- 再テスト、L0確認、転移テストの答えを直接教えない
+- 再テスト、L0確認の答えを直接教えない
 - L0ではヒント・例・解説を出さない
 - 被験者にM1/M2/M3/M4という内部ラベルを直接見せない
 - 統制群では過去ログや誤概念タイプに応じた支援をしない
@@ -227,10 +222,9 @@ backendはAI出力をPydanticで検証する。
 - correct optionなら `stable_correct`
 - known M optionならそのMを返す
 - unknown optionなら `unknown`
-- reason_textに「同じ」「同一」「混同」があればM2寄せ
-- reason_textに「言葉」「字」「単語」「名前」があればM3寄せ
-- reason_textが空または10文字未満なら `unstable_correct` または `unknown`
-- transfer phaseで基本説明は正しいが別文脈の適用理由がない場合はM4
+- pretestではreason_textを使わず、選択肢ラベルだけで診断する
+- retest/l0_check/transferではreason_textに「同じ」「同一」「混同」があればM2寄せ
+- retest/l0_check/transferではreason_textに「言葉」「字」「単語」「名前」があればM3寄せ
 - recurrence判定はAIではなくbackendが行う
 
 ## Control Group Prompt Differences

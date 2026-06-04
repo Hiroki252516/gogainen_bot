@@ -42,7 +42,7 @@ Response:
   "participant_id": "uuid",
   "display_code": "P001",
   "group_condition": "proposed",
-  "current_step": "pre_survey"
+  "current_step": "pretest"
 }
 ```
 
@@ -52,36 +52,8 @@ Response:
 {
   "step": "pretest",
   "next_url": "/pretest",
-  "completed_steps": ["start", "pre_survey"]
+  "completed_steps": ["start"]
 }
-```
-
-## Surveys
-
-### POST /api/participants/{id}/survey
-
-Request:
-
-```json
-{
-  "phase": "pre_survey",
-  "ai_experience_level": 2,
-  "programming_experience_level": 3,
-  "llm_usage_level": 4,
-  "self_rated_ai_knowledge": 2,
-  "term_confidences": {
-    "attention": 2,
-    "embedding": 1,
-    "token": 3
-  },
-  "free_comment": ""
-}
-```
-
-Response:
-
-```json
-{ "saved": true, "next_step": "pretest" }
 ```
 
 ## Questions
@@ -104,8 +76,7 @@ Response:
       "options": [
         { "option_id": "uuid", "label": "A", "body": "..." }
       ],
-      "requires_reason": true,
-      "requires_confidence": true
+      "requires_reason": false
     }
   ]
 }
@@ -120,10 +91,6 @@ Response:
 ### GET /api/experiment/{participant_id}/l0-check
 
 L0確認問題を返す。チャットやヒント表示はfrontendで無効化する。
-
-### GET /api/experiment/{participant_id}/transfer-test
-
-転移問題を返す。全問L0扱い。
 
 ## Attempts
 
@@ -140,8 +107,7 @@ Request:
   "phase": "pretest",
   "selected_option_id": "uuid",
   "free_text_answer": null,
-  "reason_text": "Attentionは重要な単語を見つけることだと思ったため。",
-  "confidence": 3,
+  "reason_text": null,
   "response_time_sec": 18.3
 }
 ```
@@ -257,8 +223,7 @@ Request:
 
 ```json
 {
-  "learner_response": "未知データで性能が下がることが重要だと思います。",
-  "confidence": 4
+  "learner_response": "未知データで性能が下がることが重要だと思います。"
 }
 ```
 
@@ -315,7 +280,6 @@ L0確認回答を採点し、`l0_success` を保存する。
       "participant_count": 10,
       "same_misconception_recurrence_rate": 0.22,
       "l0_correct_rate": 0.71,
-      "transfer_correct_rate": 0.64
     }
   ]
 }
@@ -340,7 +304,6 @@ L0確認回答を採点し、`l0_success` を保存する。
 Allowed CSV names:
 
 - participants
-- participant_surveys
 - term_assignments
 - questions
 - attempts
