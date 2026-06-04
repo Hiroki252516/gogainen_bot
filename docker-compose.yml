@@ -10,13 +10,12 @@ services:
 
   backend:
     build: ./backend
-    ports:
-      - "8000:8000"
+    network_mode: host
     environment:
       APP_ENV: development
-      DATABASE_URL: postgresql+psycopg://app:app@db:5432/ai_tutor
+      DATABASE_URL: postgresql+psycopg://app:app@127.0.0.1:5432/ai_tutor
       AI_BACKEND: codex_app_server
-      CODEX_APP_SERVER_URL: ws://host.docker.internal:4500
+      CODEX_APP_SERVER_URL: ws://127.0.0.1:4500
       CODEX_APP_SERVER_CWD: /tmp
       CODEX_TURN_TIMEOUT_SEC: "120"
       CODEX_REASONING_EFFORT: low
