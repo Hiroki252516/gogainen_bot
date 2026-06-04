@@ -80,7 +80,7 @@ M3「表層特徴・キーワード反応型」の根拠として使用。
 - Bransford, J. D., & Schwartz, D. L. (1999). Rethinking Transfer: A Simple Proposal With Multiple Implications. Review of Research in Education, 24(1), 61-100.
 - 白水始. (2012). 認知科学と学習科学における知識の転移. 人工知能, 27(4), 347-358.
 
-M4「文脈転移失敗型」と転移テストの根拠として使用。
+M4「文脈転移失敗型」の理論的背景として使用。
 
 ### AI tutoring / scaffolding / learning analytics
 

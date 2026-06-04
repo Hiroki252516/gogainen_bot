@@ -277,9 +277,8 @@ class CodexAppServerBackend:
                 "phase_grading",
                 payload,
                 [
-                    "再テスト、L0確認、転移テストの回答を採点する。",
+                    "再テスト、L0確認の回答を採点する。",
                     "学習者には即時正解やヒントを出さない前提なので、feedback_for_log は管理・分析ログ用に短く書く。",
-                    "転移テストで文脈適用に失敗している場合は misconception_type を M4 にする。",
                 ],
             ),
             schema,

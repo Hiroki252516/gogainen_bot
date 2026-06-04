@@ -71,7 +71,6 @@ Mock rules:
 - unknown optionなら unknown
 - reason_textに「同じ」「同一」「混同」があればM2寄せ
 - reason_textに「言葉」「字」「単語」「名前」があればM3寄せ
-- transfer phaseで別文脈適用の説明がない場合はM4
 - recurrence_flagはbackendで判定
 
 ## Acceptance Criteria

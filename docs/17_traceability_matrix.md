@@ -7,7 +7,7 @@
 | PPTX上の要点 | 仕様への反映 | 実装要素 |
 |---|---|---|
 | 専門用語は「知っているつもり」でも誤って理解する | `00_project_summary.md`, `03_misconception_taxonomy.md` | diagnosis, misconception_type |
-| その場の正解だけでは不十分 | `02_experiment_flow.md`, `12_evaluation_metrics.md` | retest, l0_check, transfer |
+| その場の正解だけでは不十分 | `02_experiment_flow.md`, `12_evaluation_metrics.md` | retest, l0_check |
 | 評価は正答率だけでなく再発と自力解答を見る | `12_evaluation_metrics.md` | evaluation_summaries |
 | AIを使うかではなくログで支援を変えるかを比較 | `01_research_requirements.md` | group_condition control/proposed |
 | 学習ログは次の支援を決める診断材料 | `05_system_architecture.md`, `07_data_model.md` | learner_states, tutor_turns |
@@ -15,7 +15,6 @@
 | 足場掛けは支えるだけでなく減らす | `04_scaffolding_and_tutoring.md` | scaffolding_level L3-L0 |
 | 同じ誤概念が再発したら方略変更 | `02_experiment_flow.md`, `04_scaffolding_and_tutoring.md` | recurrence_events, strategy_changed |
 | 問題をそのまま使い回さない | `11_seed_questions.md` | construct_key, variant_key |
-| 転移問題で別文脈への適用を見る | `02_experiment_flow.md`, `11_seed_questions.md` | transfer phase, M4 |
 | 遅延再テストも可能 | `02_experiment_flow.md`, `07_data_model.md` | delayed_retest phase |
 | ログDBとCSVで分析する | `07_data_model.md`, `12_evaluation_metrics.md` | export endpoints |
 
@@ -83,7 +82,6 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 - term_slug
 - misconception_type
 - recurrence_flag
-- transfer_success
 
 主要出力:
 

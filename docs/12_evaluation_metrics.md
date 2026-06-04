@@ -41,23 +41,6 @@ l0_correct_rate = l0_correct_count / l0_question_count
 - `l0_success = true`
 - `is_correct = true`
 
-### 3. 足場掛けなし転移率
-
-転移問題で、ヒントなしに正答できた割合。
-
-```text
-l0_transfer_rate = transfer_correct_count / transfer_question_count
-```
-
-分母:
-
-- transfer phaseで出題された問題数
-
-分子:
-
-- `transfer_success = true`
-- `is_correct = true`
-
 ## 補助指標
 
 ### 正答率
@@ -82,7 +65,7 @@ m3_recurrence_rate = m3_recurrence_count / initial_m3_count
 m4_failure_rate = transfer_m4_failure_count / transfer_question_count
 ```
 
-M4は転移失敗として主にtransfer phaseで集計する。
+M4は再テストやL0確認で文脈適用の失敗が明確な場合に内部集計する。
 
 ### Unknown継続率
 
@@ -124,7 +107,6 @@ MVPでは管理画面に記述統計を表示する。
 - 平均retest_score
 - 平均same_misconception_recurrence_rate
 - 平均l0_correct_rate
-- 平均transfer_correct_rate
 
 小規模な卒研では統計検定より、参加者別・用語別の変化を説明できるCSVを重視する。必要なら外部分析で以下を行う。
 
@@ -138,7 +120,6 @@ MVPでは管理画面に記述統計を表示する。
 - 群別 pretest vs retest 正答率
 - 群別同種誤答再発率
 - 群別L0正答率
-- 群別転移率
 - Mタイプ別出現数
 - Mタイプ別再発率
 - 用語別誤概念分布
@@ -185,7 +166,6 @@ Columns:
 - misconception_confidence
 - recurrence_flag
 - l0_success
-- transfer_success
 - requires_manual_review
 - created_at
 
@@ -224,7 +204,6 @@ Columns:
 - stable_correct_count
 - recurrence_count
 - l0_success_count
-- transfer_success_count
 - updated_at
 
 ### evaluation_summary.csv
@@ -237,7 +216,6 @@ Columns:
 - pretest_score
 - retest_score
 - l0_correct_rate
-- transfer_correct_rate
 - same_misconception_recurrence_rate
 - m1_recurrence_rate
 - m2_recurrence_rate

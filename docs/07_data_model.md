@@ -169,7 +169,6 @@ misconception_type values:
 - natural_language_diagnosis TEXT NULL
 - recurrence_flag BOOLEAN NOT NULL DEFAULT false
 - l0_success BOOLEAN NULL
-- transfer_success BOOLEAN NULL
 - requires_manual_review BOOLEAN NOT NULL DEFAULT false
 - idempotency_key TEXT NULL
 - created_at TIMESTAMP NOT NULL
@@ -189,7 +188,6 @@ misconception_type values:
 - stable_correct_count INT DEFAULT 0
 - recurrence_count INT DEFAULT 0
 - l0_success_count INT DEFAULT 0
-- transfer_success_count INT DEFAULT 0
 - last_attempt_id UUID NULL REFERENCES attempts(id)
 - last_tutor_turn_id UUID NULL REFERENCES tutor_turns(id)
 - state_summary TEXT NULL
@@ -290,7 +288,6 @@ status values:
 - pretest_score FLOAT NULL
 - retest_score FLOAT NULL
 - l0_correct_rate FLOAT NULL
-- transfer_correct_rate FLOAT NULL
 - same_misconception_recurrence_rate FLOAT NULL
 - m1_recurrence_rate FLOAT NULL
 - m2_recurrence_rate FLOAT NULL

@@ -247,16 +247,12 @@ Response:
 
 L0確認回答を採点し、`l0_success` を保存する。
 
-### POST /api/participants/{id}/score-transfer-test
-
-転移回答を採点し、M4判定と `transfer_success` を保存する。
-
 各API response:
 
 ```json
 {
   "status": "completed",
-  "next_step": "transfer_test"
+  "next_step": "finish"
 }
 ```
 

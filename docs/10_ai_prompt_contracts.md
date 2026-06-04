@@ -172,7 +172,6 @@ L0: 問題提示のみ
   "diagnosed_status": "stable_correct",
   "recurrence_flag": false,
   "l0_success": true,
-  "transfer_success": true,
   "feedback_for_log": "string",
   "evidence": "string",
   "requires_manual_review": false
@@ -223,8 +222,8 @@ backendはAI出力をPydanticで検証する。
 - known M optionならそのMを返す
 - unknown optionなら `unknown`
 - pretestではreason_textを使わず、選択肢ラベルだけで診断する
-- retest/l0_check/transferではreason_textに「同じ」「同一」「混同」があればM2寄せ
-- retest/l0_check/transferではreason_textに「言葉」「字」「単語」「名前」があればM3寄せ
+- retest/l0_checkではreason_textに「同じ」「同一」「混同」があればM2寄せ
+- retest/l0_checkではreason_textに「言葉」「字」「単語」「名前」があればM3寄せ
 - recurrence判定はAIではなくbackendが行う
 
 ## Control Group Prompt Differences
