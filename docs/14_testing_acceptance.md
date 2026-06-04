@@ -29,7 +29,6 @@
 ### frontend
 
 - pretest form
-- confidence input
 - learning session page
 - L0/transfer pages without chat
 - admin dashboard rendering
@@ -38,7 +37,6 @@
 ## Integration Tests
 
 - create participant
-- save pre survey
 - fetch pretest questions
 - submit pretest attempts
 - run diagnosis with MockAIBackend
@@ -82,7 +80,6 @@ Mock rules:
 ### A. 基本実験フロー
 
 - 被験者を作成できる
-- 事前アンケートを保存できる
 - 事前テストを完了できる
 - AI診断が実行される
 - learner_states が作成される
@@ -144,7 +141,7 @@ Mock rules:
 ### proposed participant
 
 1. Participant P001をproposedで作成
-2. AttentionでM1誤答、自信度5
+2. AttentionでM1誤答
 3. EmbeddingでM2誤答
 4. Diagnosis後、AttentionとEmbeddingがlearning targetになる
 5. Attentionの初期LはL3

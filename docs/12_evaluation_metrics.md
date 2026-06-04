@@ -93,13 +93,9 @@ unknown_in_retest_count / initial_unknown_count
 
 これは誤概念再発ではなく、知識不足が残った割合として扱う。
 
-### 自信度変化
+### 主観評価
 
-```text
-confidence_delta = post_confidence - pre_confidence
-```
-
-用語別にも全体平均でも出せるようにする。
+事後アンケートの使いやすさ、分かりやすさ、ヒント量の適切さを補助指標として扱う。事前アンケートと事前自信度は実施しないため、MVPでは自信度変化を主評価指標に含めない。
 
 ### 支援減少量
 
@@ -190,6 +186,8 @@ Columns:
 - requires_manual_review
 - created_at
 
+`confidence` は旧実験設計との互換列として残す。現行MVPでは事前テスト、再テスト、L0、転移テストで自信度入力を行わないため、原則NULLになる。
+
 ### tutor_turns.csv
 
 Columns:
@@ -211,6 +209,8 @@ Columns:
 - next_scaffolding_level
 - forbidden_help_given
 - created_at
+
+`learner_confidence` は旧実験設計との互換列として残す。現行MVPの学習セッションでは自信度入力を行わないため、原則NULLになる。
 
 ### learner_states.csv
 

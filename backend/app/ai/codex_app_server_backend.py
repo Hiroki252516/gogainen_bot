@@ -176,7 +176,7 @@ class CodexAppServerBackend:
             "pretest_diagnosis",
             payload,
             [
-                "選択肢の正誤、回答理由、自信度から理解状態を診断する。",
+                "事前テストでは選択肢の正誤と内部選択肢ラベルから理解状態を診断する。reason_text と confidence が null の場合は欠損ではなく仕様通りとして扱う。",
                 "誤概念タイプは内部研究ラベルとして M1/M2/M3/M4/unknown/null のみを使う。",
                 "natural_language_diagnosis には M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
                 "統制群でも分類は保存してよいが、教授方略に使う推薦は general_explanation にする。",

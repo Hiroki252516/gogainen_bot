@@ -38,9 +38,9 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
     "initial_misconception_type": "M3"
   },
   "learner_response": {
-    "reason_text": "...",
+    "reason_text": null,
     "free_text_answer": null,
-    "confidence": 4
+    "confidence": null
   },
   "history": {
     "previous_attempts": []

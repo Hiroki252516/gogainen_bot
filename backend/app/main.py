@@ -60,7 +60,7 @@ class ParticipantCreate(BaseModel):
 
 
 class SurveyPayload(BaseModel):
-    phase: str = "pre_survey"
+    phase: str = "post_survey"
     ai_experience_level: int | None = None
     programming_experience_level: int | None = None
     llm_usage_level: int | None = None
@@ -90,7 +90,6 @@ class TutorSessionCreate(BaseModel):
 
 class TutorTurnRespond(BaseModel):
     learner_response: str
-    confidence: int | None = None
 
 
 class AILoginStart(BaseModel):
@@ -129,7 +128,6 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
 
     participant = get_participant(db, participant_id)
     mapping = {
-        "pre_survey": "/survey/pre",
         "pretest": "/pretest",
         "learning_targets": "/learning-targets",
         "l0_check": "/l0-check",
@@ -143,7 +141,7 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
 @app.post("/api/participants/{participant_id}/survey")
 def api_save_survey(participant_id: str, payload: SurveyPayload, db: Session = Depends(get_db)) -> dict:
     save_survey(db, participant_id, payload.model_dump())
-    return {"saved": True, "next_step": "pretest" if payload.phase == "pre_survey" else "finish"}
+    return {"saved": True, "next_step": "finish" if payload.phase == "post_survey" else "pretest"}
 
 
 @app.get("/api/experiment/{participant_id}/pretest")

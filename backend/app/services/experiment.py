@@ -58,7 +58,7 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
         group_condition=group_condition,
         assignment_method=assignment_method,
         consent_checked=consent_checked,
-        current_step="pre_survey",
+        current_step="pretest",
         started_at=now(),
     )
     db.add(participant)
@@ -69,7 +69,7 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
 
 def save_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> None:
     participant = get_participant(db, participant_id)
-    phase = payload.get("phase", "pre_survey")
+    phase = payload.get("phase", "post_survey")
     survey = ParticipantSurvey(
         participant_id=participant_id,
         phase=phase,
@@ -84,7 +84,7 @@ def save_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> No
         free_comment=payload.get("free_comment"),
     )
     db.add(survey)
-    participant.current_step = "pretest" if phase == "pre_survey" else "finish"
+    participant.current_step = "finish" if phase == "post_survey" else "pretest"
     if phase == "post_survey":
         participant.completed_at = now()
     db.commit()
@@ -134,8 +134,8 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "body": question.body,
                 "question_type": question.question_type,
                 "options": public_options,
-                "requires_reason": True,
-                "requires_confidence": True,
+                "requires_reason": phase != "pretest",
+                "requires_confidence": False,
             }
         )
     return out
@@ -238,7 +238,7 @@ def _diagnosis_payload(db: Session, participant: Participant, attempt: Attempt) 
 
 def _priority(attempt: Attempt) -> tuple[float, str]:
     if attempt.diagnosed_status == "misconception":
-        score = 70 + (attempt.confidence or 0) * 3
+        score = 70
         if attempt.misconception_type in {"M1", "M2"}:
             score += 20
         elif attempt.misconception_type == "M3":
@@ -403,13 +403,12 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
             "practice_question": turn.practice_question_json,
         },
         "learner_response": response,
-        "confidence": payload.get("confidence"),
     }
     result = await _ai_call(db, "generate_feedback", feedback_payload)
     correct = result["next_action"] == "move_next"
     next_level = result["next_scaffolding_level"] if result.get("next_scaffolding_level") else (lower_level(state.scaffolding_level) if correct else state.scaffolding_level)
     turn.learner_response = response
-    turn.learner_confidence = payload.get("confidence")
+    turn.learner_confidence = None
     turn.next_scaffolding_level = next_level
     turn.ai_feedback = result["feedback"]
     state.scaffolding_level = next_level

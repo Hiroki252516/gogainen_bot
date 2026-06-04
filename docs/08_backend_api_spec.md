@@ -42,7 +42,7 @@ Response:
   "participant_id": "uuid",
   "display_code": "P001",
   "group_condition": "proposed",
-  "current_step": "pre_survey"
+  "current_step": "pretest"
 }
 ```
 
@@ -52,7 +52,7 @@ Response:
 {
   "step": "pretest",
   "next_url": "/pretest",
-  "completed_steps": ["start", "pre_survey"]
+  "completed_steps": ["start"]
 }
 ```
 
@@ -60,20 +60,16 @@ Response:
 
 ### POST /api/participants/{id}/survey
 
+事後アンケートを保存する。事前アンケートはMVPでは実施しない。
+
 Request:
 
 ```json
 {
-  "phase": "pre_survey",
-  "ai_experience_level": 2,
-  "programming_experience_level": 3,
-  "llm_usage_level": 4,
-  "self_rated_ai_knowledge": 2,
-  "term_confidences": {
-    "attention": 2,
-    "embedding": 1,
-    "token": 3
-  },
+  "phase": "post_survey",
+  "usability_rating": 4,
+  "helpfulness_rating": 4,
+  "perceived_hint_amount": 3,
   "free_comment": ""
 }
 ```
@@ -81,7 +77,7 @@ Request:
 Response:
 
 ```json
-{ "saved": true, "next_step": "pretest" }
+{ "saved": true, "next_step": "finish" }
 ```
 
 ## Questions
@@ -104,8 +100,8 @@ Response:
       "options": [
         { "option_id": "uuid", "label": "A", "body": "..." }
       ],
-      "requires_reason": true,
-      "requires_confidence": true
+      "requires_reason": false,
+      "requires_confidence": false
     }
   ]
 }
@@ -140,8 +136,8 @@ Request:
   "phase": "pretest",
   "selected_option_id": "uuid",
   "free_text_answer": null,
-  "reason_text": "Attentionは重要な単語を見つけることだと思ったため。",
-  "confidence": 3,
+  "reason_text": null,
+  "confidence": null,
   "response_time_sec": 18.3
 }
 ```
@@ -257,8 +253,7 @@ Request:
 
 ```json
 {
-  "learner_response": "未知データで性能が下がることが重要だと思います。",
-  "confidence": 4
+  "learner_response": "未知データで性能が下がることが重要だと思います。"
 }
 ```
 

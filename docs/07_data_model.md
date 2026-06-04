@@ -11,7 +11,6 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 
 ### phase
 
-- `pre_survey`
 - `pretest`
 - `diagnosis`
 - `learning`
@@ -99,7 +98,7 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 - free_comment TEXT NULL
 - created_at TIMESTAMP NOT NULL
 
-`phase` は `pre_survey` または `post_survey`。
+`phase` は当面 `post_survey` を使う。事前アンケートは実施しないため、旧実験データ互換以外では `pre_survey` を作成しない。
 
 ### terms
 

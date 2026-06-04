@@ -138,17 +138,15 @@ Input:
 
 - pretest attempts
 - diagnosis result
-- confidence
 - response time
 
 Priority:
 
-1. misconception with confidence >= 4
-2. M1 or M2
-3. M3
-4. unknown
-5. unstable_correct
-6. stable_correct with low confidence
+1. M1 or M2
+2. M3
+3. unknown
+4. unstable_correct
+5. stable_correct needing transfer preparation
 
 Output:
 
@@ -158,10 +156,9 @@ Output:
 ### Diagnosis Merge
 
 1. Start from selected option label
-2. Apply reason_text AI diagnosis
-3. If selected option correct but reason wrong, mark unstable or misconception
-4. If confidence low and reason weak, avoid stable_correct
-5. If conflict is strong, mark ambiguous
+2. Use reason_text only for phases that collect it
+3. In pretest, classify from selected option because reason_text and confidence are not collected
+4. If conflict is strong in later phases, mark ambiguous
 
 ### Recurrence
 
@@ -182,7 +179,6 @@ Use deterministic service logic from `04_scaffolding_and_tutoring.md`. AI recomm
 
 ```text
 POST /participants
-  -> POST /survey
   -> GET /pretest
   -> POST /attempts
   -> POST /diagnose-pretest

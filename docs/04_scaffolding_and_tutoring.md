@@ -66,7 +66,6 @@
 
 - 問題提示
 - 回答欄
-- 自信度入力
 
 禁止:
 
@@ -79,17 +78,15 @@
 
 ## 初期レベル決定
 
-| 状態 | 自信度 | 初期レベル |
-|---|---:|---|
-| unknown | 任意 | L3 |
-| misconception | 4-5 | L3 |
-| misconception | 1-3 | L2 |
-| unstable_correct | 任意 | L2 |
-| stable_correct | 1-3 | L1 |
-| stable_correct | 4-5 | L0候補 |
-| transfer_ready | 任意 | L0 |
+| 状態 | 初期レベル |
+|---|---|
+| unknown | L3 |
+| misconception | L3 |
+| unstable_correct | L2 |
+| stable_correct | L1 |
+| transfer_ready | L0 |
 
-`stable_correct` でも理由が短すぎる場合はL1にする。いきなりL0へ進めるのは、選択肢、理由、自信度が一貫している場合だけにする。
+事前テストは選択式のみのため、正答でも初期学習対象から完全には除外しない。いきなりL0へ進めるのは、後続のL0確認や転移テストで安定して正答できた場合に限る。
 
 ## 更新ルール
 

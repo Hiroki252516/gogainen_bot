@@ -39,11 +39,11 @@ def initial_level(status: str, misconception_type: str | None, confidence: int |
     if status == "unknown":
         return "L3"
     if status == "misconception":
-        return "L3" if (confidence or 0) >= 4 else "L2"
+        return "L3"
     if status == "unstable_correct":
         return "L2"
     if status == "stable_correct":
-        return "L0" if (confidence or 0) >= 4 else "L1"
+        return "L1"
     if status == "transfer_ready":
         return "L0"
     return "L2"

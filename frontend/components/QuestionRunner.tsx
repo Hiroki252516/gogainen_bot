@@ -12,6 +12,8 @@ type Question = {
   body: string;
   question_type: string;
   options: Option[];
+  requires_reason?: boolean;
+  requires_confidence?: boolean;
 };
 
 export function QuestionRunner({
@@ -19,13 +21,17 @@ export function QuestionRunner({
   title,
   sourcePath,
   scorePath,
-  nextPath
+  nextPath,
+  collectReason = true,
+  collectConfidence = false
 }: {
   phase: string;
   title: string;
   sourcePath: (participantId: string) => string;
   scorePath?: (participantId: string) => string;
   nextPath: string;
+  collectReason?: boolean;
+  collectConfidence?: boolean;
 }) {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -54,7 +60,8 @@ export function QuestionRunner({
       setError("選択肢を選んでください。");
       return;
     }
-    if (!reason.trim()) {
+    const requiresReason = collectReason || current.requires_reason || current.options.length === 0;
+    if (requiresReason && !reason.trim()) {
       setError("理由を入力してください。");
       return;
     }
@@ -68,9 +75,9 @@ export function QuestionRunner({
         question_id: current.question_id,
         phase,
         selected_option_id: selected || null,
-        free_text_answer: current.options.length ? null : reason,
-        reason_text: reason,
-        confidence: Number(confidence),
+        free_text_answer: current.options.length ? null : reason || null,
+        reason_text: requiresReason ? reason : null,
+        confidence: collectConfidence || current.requires_confidence ? Number(confidence) : null,
         response_time_sec: 10
       })
     });
@@ -114,20 +121,24 @@ export function QuestionRunner({
           ))}
         </div>
       ) : null}
-      <label>
-        理由・回答
-        <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="自分の言葉で理由を書いてください。" />
-      </label>
-      <label>
-        自信度 1〜5
-        <select value={confidence} onChange={(event) => setConfidence(event.target.value)}>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </label>
+      {collectReason || current.requires_reason || current.options.length === 0 ? (
+        <label>
+          理由・回答
+          <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="自分の言葉で理由を書いてください。" />
+        </label>
+      ) : null}
+      {collectConfidence || current.requires_confidence ? (
+        <label>
+          自信度 1〜5
+          <select value={confidence} onChange={(event) => setConfidence(event.target.value)}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       {error ? <div className="danger">{error}</div> : null}
       <div className="actions">
         <button onClick={submit} disabled={saving}>
