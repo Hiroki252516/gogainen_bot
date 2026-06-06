@@ -9,6 +9,8 @@ def seed_database(db: Session) -> None:
     active_slugs = {item["slug"] for item in SEED_TERMS}
     for term in db.query(Term).all():
         term.is_active = term.slug in active_slugs
+        if not term.is_active:
+            db.query(Question).filter(Question.term_id == term.id).update({Question.is_active: False}, synchronize_session=False)
 
     for index, item in enumerate(SEED_TERMS, start=1):
         term = db.query(Term).filter(Term.slug == item["slug"]).one_or_none()
@@ -30,7 +32,13 @@ def seed_database(db: Session) -> None:
         for phase in ("pretest", "retest"):
             qd = item["questions"][phase]
             construct_key = f"{item['slug']}_definition"
-            variant_key = "pretest_v1" if phase == "pretest" else "retest_temporary_v1"
+            variant_key = "pretest_v1" if phase == "pretest" else "retest_v1"
+            if phase == "retest":
+                db.query(Question).filter(
+                    Question.term_id == term.id,
+                    Question.phase == "retest",
+                    Question.variant_key != variant_key,
+                ).update({Question.is_active: False}, synchronize_session=False)
             question = (
                 db.query(Question)
                 .filter(

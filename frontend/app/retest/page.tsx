@@ -12,6 +12,7 @@ export default function RetestPage() {
         sourcePath={(id) => `/api/experiment/${id}/retest`}
         scorePath={(id) => `/api/participants/${id}/score-retest`}
         nextPath="/l0-check"
+        collectReason={false}
       />
     </AppShell>
   );

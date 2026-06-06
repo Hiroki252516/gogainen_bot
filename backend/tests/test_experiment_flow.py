@@ -2,33 +2,34 @@ from fastapi.testclient import TestClient
 
 from app.db.session import SessionLocal
 from app.main import app
-from app.models import AICallLog
+from app.models import AICallLog, Attempt, Question, QuestionOption
 from app.rag import retrieve_rag_context
 
 
 client = TestClient(app)
 
 
-CORRECT_MARKERS = [
-    "AttentionレイヤーとFFNレイヤー",
-    "入力中のトークン同士の関係の強さ",
-    "各トークンが他のトークンとの関係の強さ",
-    "事前学習、インストラクションチューニング、事後学習",
-    "大規模で多様なテキストデータなどから",
-    "人間の価値観や安全性・有用性により合うよう",
-]
+def option_with_internal_label(question: dict, misconception_type: str | None) -> dict:
+    db = SessionLocal()
+    try:
+        option_ids = [option["option_id"] for option in question["options"]]
+        options = db.query(QuestionOption).filter(QuestionOption.id.in_(option_ids)).all()
+        option_by_id = {option.id: option for option in options}
+        for public_option in question["options"]:
+            option = option_by_id[public_option["option_id"]]
+            if option.misconception_type == misconception_type:
+                return public_option
+    finally:
+        db.close()
+    raise AssertionError(f"option with misconception_type={misconception_type!r} not found")
 
 
 def unknown_option(question: dict) -> dict:
-    return next(option for option in question["options"] if "わからない" in option["body"])
+    return option_with_internal_label(question, "unknown")
 
 
 def correct_option(question: dict) -> dict:
-    return next(
-        option
-        for option in question["options"]
-        if any(marker in option["body"] for marker in CORRECT_MARKERS)
-    )
+    return option_with_internal_label(question, None)
 
 
 def test_full_mock_experiment_flow():
@@ -99,12 +100,32 @@ def test_full_mock_experiment_flow():
     ]:
         questions = client.get(get_path).json()["questions"]
         assert questions
+        if phase == "retest":
+            assert len(questions) == 5
+            assert {question["requires_reason"] for question in questions} == {False}
+            assert {question["requires_confidence"] for question in questions} == {False}
+            db = SessionLocal()
+            try:
+                db_questions = db.query(Question).filter(Question.id.in_([question["question_id"] for question in questions])).all()
+                assert {question.variant_key for question in db_questions} == {"retest_v1"}
+                assert all(question.is_active for question in db_questions)
+                assert not db.query(Question).filter(
+                    Question.phase == "retest",
+                    Question.variant_key == "retest_temporary_v1",
+                    Question.is_active.is_(True),
+                ).first()
+                for db_question in db_questions:
+                    options = db.query(QuestionOption).filter(QuestionOption.question_id == db_question.id).all()
+                    assert sum(1 for option in options if option.is_correct) == 1
+                    assert {option.misconception_type for option in options if not option.is_correct} == {"M1", "M2", "M3", "unknown"}
+            finally:
+                db.close()
         for question in questions:
             payload = {
                 "participant_id": pid,
                 "question_id": question["question_id"],
                 "phase": phase,
-                "reason_text": "関係 重み 重要度 などの判断基準で説明します",
+                "reason_text": None if phase == "retest" else "関係 重み 重要度 などの判断基準で説明します",
             }
             if question["options"]:
                 payload["selected_option_id"] = question["options"][0]["option_id"]
@@ -180,3 +201,51 @@ def test_rag_retriever_returns_local_chunks():
         assert context["source"] == "rag_ready_教材"
         assert len(context["chunks"]) == 3
         assert all(chunk["text"] for chunk in context["chunks"])
+
+
+def test_retest_same_misconception_sets_recurrence_flag():
+    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    pretest = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    attention_pretest = next(question for question in pretest if question["term_slug"] == "attention")
+    pretest_m1 = option_with_internal_label(attention_pretest, "M1")
+    assert client.post(
+        "/api/attempts",
+        json={
+            "participant_id": pid,
+            "question_id": attention_pretest["question_id"],
+            "phase": "pretest",
+            "selected_option_id": pretest_m1["option_id"],
+            "reason_text": None,
+            "confidence": None,
+        },
+    ).status_code == 200
+
+    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
+    retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+    assert len(retest) == 1
+    attention_retest = retest[0]
+    assert attention_retest["term_slug"] == "attention"
+    assert attention_retest["requires_reason"] is False
+    assert attention_retest["requires_confidence"] is False
+    retest_m1 = option_with_internal_label(attention_retest, "M1")
+    assert client.post(
+        "/api/attempts",
+        json={
+            "participant_id": pid,
+            "question_id": attention_retest["question_id"],
+            "phase": "retest",
+            "selected_option_id": retest_m1["option_id"],
+            "reason_text": None,
+            "confidence": None,
+        },
+    ).status_code == 200
+    assert client.post(f"/api/participants/{pid}/score-retest").status_code == 200
+
+    db = SessionLocal()
+    try:
+        attempt = db.query(Attempt).filter(Attempt.participant_id == pid, Attempt.phase == "retest").one()
+        assert attempt.misconception_type == "M1"
+        assert attempt.recurrence_flag is True
+    finally:
+        db.close()

@@ -111,7 +111,7 @@ Response:
 
 ### GET /api/experiment/{participant_id}/retest
 
-学習対象用語の再テスト問題を返す。同じ `construct_key` の別 `variant_key` を選ぶ。正式な再テスト問題が届くまでは `retest_temporary_v1` を使う。
+学習対象用語の正式再テスト問題を返す。同じ `construct_key` の別 `variant_key = retest_v1` を選ぶ。再テストは選択式のみで、`requires_reason` と `requires_confidence` は false を返す。
 
 ### GET /api/experiment/{participant_id}/l0-check
 

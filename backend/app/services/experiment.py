@@ -139,7 +139,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "body": question.body,
                 "question_type": question.question_type,
                 "options": public_options,
-                "requires_reason": phase != "pretest",
+                "requires_reason": phase not in {"pretest", "retest"},
                 "requires_confidence": False,
             }
         )

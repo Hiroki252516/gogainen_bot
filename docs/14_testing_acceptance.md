@@ -45,6 +45,7 @@
 - run learning session
 - retrieve `rag_ready_教材` context and include it in AI request payload
 - submit retest
+- confirm retest uses formal `retest_v1` questions without reason/confidence inputs
 - compute recurrence
 - run L0 check
 - run transfer test
@@ -88,6 +89,7 @@ Mock rules:
 - `stable_correct` 以外の学習対象用語が全件選ばれる
 - 学習セッションが開始できる
 - 再テストが実施できる
+- 再テストが正式 `retest_v1` で実施され、理由欄と自信度欄が表示されない
 - L0確認が実施できる
 - 転移テストが実施できる
 - 事後アンケートが保存できる
