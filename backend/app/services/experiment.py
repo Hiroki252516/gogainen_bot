@@ -340,6 +340,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     term = db.get(Term, session.term_id)
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one()
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
+    previous_turn = db.get(TutorTurn, state.last_tutor_turn_id) if state.last_tutor_turn_id else None
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
     if turn_count >= get_settings().max_turns_per_term:
         raise HTTPException(status_code=400, detail="max turns reached")
@@ -356,6 +357,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         },
         "previous_answer": previous_attempt.reason_text if previous_attempt else "",
         "previous_diagnosis_for_learner": state.state_summary,
+        "previous_feedback_for_learner": previous_turn.ai_feedback if previous_turn else "",
     }
     result = await _ai_call(db, "generate_tutoring_turn", payload)
     turn = TutorTurn(
@@ -405,22 +407,23 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "learner_response": response,
     }
     result = await _ai_call(db, "generate_feedback", feedback_payload)
-    correct = result["next_action"] == "move_next"
-    next_level = normalize_level(result["next_scaffolding_level"] if result.get("next_scaffolding_level") else (lower_level(state.scaffolding_level) if correct else state.scaffolding_level))
+    is_sufficient = bool(result.get("is_sufficient"))
+    next_level = normalize_level(lower_level(state.scaffolding_level) if is_sufficient else raise_level(state.scaffolding_level))
     turn.learner_response = response
     turn.learner_confidence = None
     turn.next_scaffolding_level = next_level
     turn.ai_feedback = result["feedback"]
     state.scaffolding_level = next_level
-    state.stable_correct_count += 1 if correct else 0
-    state.current_status = "stable_correct" if correct else state.current_status
+    state.stable_correct_count += 1 if is_sufficient else 0
+    state.current_status = "stable_correct" if is_sufficient else "needs_review"
     state.updated_reason = result["state_update_reason"]
     state.last_tutor_turn_id = turn.id
     db.commit()
     return {
         "feedback": turn.ai_feedback,
         "next_action": result["next_action"],
-        "session_completed": turn.turn_index >= get_settings().max_turns_per_term or correct,
+        "is_sufficient": is_sufficient,
+        "session_completed": turn.turn_index >= get_settings().max_turns_per_term or is_sufficient,
         "next_scaffolding_level": next_level,
         "turn_index": turn.turn_index,
         "max_turns": get_settings().max_turns_per_term,

@@ -98,3 +98,115 @@ def test_control_group_uses_general_strategy():
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     assert "一般" in turn["tutor_message"] or "定義" in turn["tutor_message"]
+
+from app.db.session import SessionLocal
+from app.models import LearnerState, Term
+
+
+def _create_diagnosed_participant_with_all_targets():
+    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    wrong_markers = {
+        "overfitting": "疲れ",
+        "generalization": "一般常識",
+        "attention": "集中",
+        "embedding": "保存場所",
+    }
+    for question in client.get(f"/api/experiment/{pid}/pretest").json()["questions"]:
+        marker = wrong_markers[question["term_slug"]]
+        option = next(option for option in question["options"] if marker in option["body"])
+        response = client.post(
+            "/api/attempts",
+            json={
+                "participant_id": pid,
+                "question_id": question["question_id"],
+                "phase": "pretest",
+                "selected_option_id": option["option_id"],
+            },
+        )
+        assert response.status_code == 200
+    diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
+    assert diagnosis.status_code == 200
+    return pid
+
+
+def _set_scaffolding_level(participant_id: str, term_slug: str, level: str) -> None:
+    db = SessionLocal()
+    try:
+        term = db.query(Term).filter_by(slug=term_slug).one()
+        state = db.query(LearnerState).filter_by(participant_id=participant_id, term_id=term.id).one()
+        state.scaffolding_level = level
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_learning_response_sufficiency_controls_scaffolding_level():
+    pid = _create_diagnosed_participant_with_all_targets()
+    _set_scaffolding_level(pid, "attention", "L1")
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "attention"}).json()
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    insufficient = client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json={"learner_response": "まだよくわかりません"}).json()
+    assert insufficient["is_sufficient"] is False
+    assert insufficient["next_scaffolding_level"] == "L2"
+
+    _set_scaffolding_level(pid, "embedding", "L3")
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "embedding"}).json()
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    sufficient = client.post(
+        f"/api/tutor-turns/{turn['turn_id']}/respond",
+        json={"learner_response": "単語や文を数値ベクトルにして意味の近さを扱います"},
+    ).json()
+    assert sufficient["is_sufficient"] is True
+    assert sufficient["next_scaffolding_level"] == "L2"
+
+
+def test_move_next_does_not_lower_level_when_response_is_insufficient(monkeypatch):
+    pid = _create_diagnosed_participant_with_all_targets()
+    _set_scaffolding_level(pid, "attention", "L1")
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "attention"}).json()
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+
+    async def fake_feedback(db, purpose, payload):
+        assert purpose == "generate_feedback"
+        return {
+            "feedback": "まだ判断基準が足りません。",
+            "is_sufficient": False,
+            "next_action": "move_next",
+            "next_scaffolding_level": "L1",
+            "strategy_changed": False,
+            "state_update_reason": "forced test feedback",
+        }
+
+    monkeypatch.setattr("app.services.experiment._ai_call", fake_feedback)
+    response = client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json={"learner_response": "不十分"}).json()
+    assert response["next_action"] == "move_next"
+    assert response["is_sufficient"] is False
+    assert response["next_scaffolding_level"] == "L2"
+    assert response["session_completed"] is False
+
+
+def test_tutoring_turns_match_current_term_and_hide_internal_labels():
+    pid = _create_diagnosed_participant_with_all_targets()
+    expected_markers = {
+        "attention": ["Attention", "関係", "重み"],
+        "embedding": ["Embedding", "数値", "ベクトル"],
+        "overfitting": ["過学習", "訓練", "未知"],
+        "generalization": ["汎化", "未知", "適用"],
+    }
+    forbidden_by_term = {
+        "attention": ["過学習", "Embeddingは"],
+        "embedding": ["過学習", "Attentionは"],
+        "overfitting": ["Embedding", "Attention"],
+        "generalization": ["Embedding", "Attention"],
+    }
+    for term_slug, markers in expected_markers.items():
+        session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": term_slug}).json()
+        turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+        combined = f"{turn['tutor_message']} {turn['learner_prompt']} {turn['practice_question']['body']}"
+        assert any(marker in combined for marker in markers)
+        assert all(marker not in combined for marker in forbidden_by_term[term_slug])
+        assert all(label not in combined for label in ["M1", "M2", "M3", "M4"])
+        assert turn["misconception_type"] in {"M1", "M2", "M3", "M4", "unknown", None}
+        assert turn["scaffolding_level"] in {"L1", "L2", "L3"}
+        assert turn["teaching_strategy"]

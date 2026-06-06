@@ -224,14 +224,18 @@ class CodexAppServerBackend:
             ],
             "additionalProperties": False,
         }
+        term_label = (payload.get("term") or {}).get("label", "この用語")
         rules = [
             "学習セッション用の短い日本語チュータ発話を作る。",
             "足場掛けレベルは L3/L2/L1 のみを使い、指定外のレベルは使わない。",
-            "共通問題例は『ある画像分類AIモデルは、訓練データでは99%の正答率を示した。しかし、新しく用意した未知データでは55%しか正答できなかった。この状態を過学習の観点から説明してください。』。",
-            "L3では訓練データ、未知データ、過学習の意味を説明し、質問は『過学習を判断するときに見るべき2つのデータは何ですか？』にする。期待回答は『訓練データと未知データ』。",
-            "L2では訓練データでは高く未知データでは低い差が判断根拠になることを説明し、質問は『訓練データ99%と未知データ55%を比べると、どちらの性能に問題がありますか？』にする。期待回答は『未知データで性能が下がっている』。",
-            "L1では答えを直接教えず判断根拠を組み立てさせ、質問は『このモデルが過学習だと言える理由を、訓練データと未知データの差に触れて一文で説明してください。』にする。期待回答は『訓練データにはよく合っているが、未知データで性能が低いから』。",
-            "practice_question.body には質問文を1つだけ入れる。",
+            f"教材、問い返し、practice_question は必ず現在の用語『{term_label}』だけを主題にする。",
+            "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
+            "previous_feedback_for_learner が空でなければ、tutor_message の冒頭に『前の回答を踏まえて、... 今回は...』という短い振り返りを自然に入れる。",
+            "L3では現在の用語の定義、誤りやすい捉え方との違い、短い例を示してから問い返す。",
+            "L2では現在の用語を判断する観点を1〜2個に絞って示し、理由説明を求める。",
+            "L1では詳しい説明を避け、現在の用語を説明するための着目点だけを示す。",
+            "practice_question.body には現在の用語に関する質問文を1つだけ入れる。",
+            "practice_question.expected_answer は現在の用語の期待回答にする。",
             "再テスト、確認テストの具体的な正解を先取りして出さない。",
             "tutor_message, learner_prompt, practice_question.body に M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
         ]
@@ -297,12 +301,13 @@ class CodexAppServerBackend:
             "type": "object",
             "properties": {
                 "feedback": {"type": "string"},
+                "is_sufficient": {"type": "boolean"},
                 "next_action": {"type": "string", "enum": ["continue", "move_next"]},
                 "next_scaffolding_level": {"type": "string", "enum": ["L1", "L2", "L3"]},
                 "strategy_changed": {"type": "boolean"},
                 "state_update_reason": {"type": "string"},
             },
-            "required": ["feedback", "next_action", "next_scaffolding_level", "strategy_changed", "state_update_reason"],
+            "required": ["feedback", "is_sufficient", "next_action", "next_scaffolding_level", "strategy_changed", "state_update_reason"],
             "additionalProperties": False,
         }
         result = await self._run_structured_turn(
@@ -313,8 +318,9 @@ class CodexAppServerBackend:
                 [
                     "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
                     "M1/M2/M3/M4 という内部ラベルを学習者向け文面に絶対に書かない。",
+                    "is_sufficient は、学習者回答が現在の用語の判断基準を十分に含む場合だけ true にする。",
                     "理解が十分なら move_next、不十分なら continue にする。",
-                    "next_scaffolding_level は L3/L2/L1 のいずれかにし、指定外のレベルは使わない。",
+                    "next_scaffolding_level は参考値として L3/L2/L1 のいずれかにし、指定外のレベルは使わない。最終更新はbackendが決める。",
                 ],
             ),
             schema,
