@@ -17,8 +17,8 @@ def test_full_mock_experiment_flow():
     assert participant["current_step"] == "pretest"
 
     pretest = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
-    assert len(pretest) == 4
-    assert [question["term_slug"] for question in pretest] == ["overfitting", "generalization", "attention", "embedding"]
+    assert len(pretest) == 5
+    assert [question["term_slug"] for question in pretest] == ["transformer", "attention", "llm_training_process", "pretraining", "post_training"]
     assert all(question["requires_reason"] is False for question in pretest)
     for question in pretest:
         wrong = next(option for option in question["options"] if "わからない" not in option["body"])
@@ -97,7 +97,7 @@ def test_control_group_uses_general_strategy():
     target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    assert "一般" in turn["tutor_message"] or "定義" in turn["tutor_message"]
+    assert turn["teaching_strategy"] == "general_explanation"
 
 from app.db.session import SessionLocal
 from app.models import LearnerState, Term
@@ -107,10 +107,11 @@ def _create_diagnosed_participant_with_all_targets():
     participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
     pid = participant["participant_id"]
     wrong_markers = {
-        "overfitting": "疲れ",
-        "generalization": "一般常識",
+        "transformer": "意識",
         "attention": "集中",
-        "embedding": "保存場所",
+        "llm_training_process": "人間の学習段階",
+        "pretraining": "性格",
+        "post_training": "反省",
     }
     for question in client.get(f"/api/experiment/{pid}/pretest").json()["questions"]:
         marker = wrong_markers[question["term_slug"]]
@@ -150,12 +151,12 @@ def test_learning_response_sufficiency_controls_scaffolding_level():
     assert insufficient["is_sufficient"] is False
     assert insufficient["next_scaffolding_level"] == "L2"
 
-    _set_scaffolding_level(pid, "embedding", "L3")
-    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "embedding"}).json()
+    _set_scaffolding_level(pid, "pretraining", "L3")
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "pretraining"}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     sufficient = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={"learner_response": "単語や文を数値ベクトルにして意味の近さを扱います"},
+        json={"learner_response": "大規模で多様なデータから基盤能力を獲得します"},
     ).json()
     assert sufficient["is_sufficient"] is True
     assert sufficient["next_scaffolding_level"] == "L2"
@@ -189,16 +190,18 @@ def test_move_next_does_not_lower_level_when_response_is_insufficient(monkeypatc
 def test_tutoring_turns_match_current_term_and_hide_internal_labels():
     pid = _create_diagnosed_participant_with_all_targets()
     expected_markers = {
-        "attention": ["Attention", "関係", "重み"],
-        "embedding": ["Embedding", "数値", "ベクトル"],
-        "overfitting": ["過学習", "訓練", "未知"],
-        "generalization": ["汎化", "未知", "適用"],
+        "transformer": ["Transformer", "Attention", "FFN"],
+        "attention": ["Attention", "トークン", "重み"],
+        "llm_training_process": ["事前学習", "インストラクション", "事後学習"],
+        "pretraining": ["事前学習", "大規模", "基盤"],
+        "post_training": ["事後学習", "人間評価", "安全"],
     }
     forbidden_by_term = {
-        "attention": ["過学習", "Embeddingは"],
-        "embedding": ["過学習", "Attentionは"],
-        "overfitting": ["Embedding", "Attention"],
-        "generalization": ["Embedding", "Attention"],
+        "transformer": ["過学習", "Embedding"],
+        "attention": ["過学習", "Embedding"],
+        "llm_training_process": ["Embedding", "過学習"],
+        "pretraining": ["Embedding", "過学習"],
+        "post_training": ["Embedding", "過学習"],
     }
     for term_slug, markers in expected_markers.items():
         session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": term_slug}).json()
@@ -241,9 +244,9 @@ def test_tutor_turn_uses_state_scaffolding_level_even_if_ai_returns_different_le
 
 def test_second_turn_material_includes_previous_question_and_response():
     pid = _create_diagnosed_participant_with_all_targets()
-    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "generalization"}).json()
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "pretraining"}).json()
     first = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    answer = "まだ一般常識のことだと思っています"
+    answer = "まだ使う前の注意書きのことだと思っています"
     feedback = client.post(f"/api/tutor-turns/{first['turn_id']}/respond", json={"learner_response": answer}).json()
     assert feedback["is_sufficient"] is False
     second = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
@@ -251,3 +254,61 @@ def test_second_turn_material_includes_previous_question_and_response():
     assert first["practice_question"]["body"] in second["tutor_message"]
     assert "あなたの回答:" in second["tutor_message"]
     assert answer in second["tutor_message"]
+
+
+def test_rag_retriever_returns_chunks():
+    from app.rag.retriever import retrieve_rag_context
+
+    context = retrieve_rag_context("Transformer Attention FFN", top_k=2)
+    assert context["source"] == "rag_ready_教材"
+    assert context["retrieval_method"] == "local_sparse_tfidf"
+    assert context["status"] == "ok"
+    assert len(context["chunks"]) == 2
+    assert all("text" in chunk for chunk in context["chunks"])
+
+
+def test_tutor_and_feedback_payload_include_rag_context(monkeypatch):
+    pid = _create_diagnosed_participant_with_all_targets()
+    _set_scaffolding_level(pid, "transformer", "L2")
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "transformer"}).json()
+
+    async def fake_generate(db, purpose, payload):
+        assert purpose == "generate_tutoring_turn"
+        assert payload["rag_context"]["source"] == "rag_ready_教材"
+        assert "chunks" in payload["rag_context"]
+        return {
+            "tutor_message": "Transformerの教材です。",
+            "teaching_strategy": "category_reorientation",
+            "scaffolding_level": "L3",
+            "requires_learner_response": True,
+            "learner_prompt": "Transformerを説明してください。",
+            "practice_question": {
+                "body": "Transformerを説明してください。",
+                "expected_answer": "AttentionとFFNを重ねる構造",
+                "question_type": "practice",
+            },
+            "forbidden_help_given": False,
+        }
+
+    monkeypatch.setattr("app.services.experiment._ai_call", fake_generate)
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+
+    async def fake_feedback(db, purpose, payload):
+        assert purpose == "generate_feedback"
+        assert payload["rag_context"]["source"] == "rag_ready_教材"
+        assert "chunks" in payload["rag_context"]
+        return {
+            "feedback": "十分です。",
+            "is_sufficient": True,
+            "next_action": "move_next",
+            "next_scaffolding_level": "L1",
+            "strategy_changed": False,
+            "state_update_reason": "test",
+        }
+
+    monkeypatch.setattr("app.services.experiment._ai_call", fake_feedback)
+    response = client.post(
+        f"/api/tutor-turns/{turn['turn_id']}/respond",
+        json={"learner_response": "AttentionとFFNで関係と特徴変換を扱います"},
+    ).json()
+    assert response["is_sufficient"] is True

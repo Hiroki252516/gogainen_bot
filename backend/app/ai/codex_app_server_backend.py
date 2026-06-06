@@ -230,6 +230,7 @@ class CodexAppServerBackend:
             "足場掛けレベルは L3/L2/L1 のみを使い、指定外のレベルは使わない。",
             f"教材、問い返し、practice_question は必ず現在の用語『{term_label}』だけを主題にする。",
             "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
+            "rag_context.chunks がある場合は、その教材コンテキストを優先して教材と問題を作る。教材にない内容は推測で断定しない。",
             "previous_practice_question が空でなければ、tutor_message の冒頭に『前の問題: ...』を入れる。",
             "previous_learner_response が空でなければ、tutor_message の冒頭に『あなたの回答: ...』を入れる。",
             "previous_feedback_for_learner が空でなければ、前の問題・回答の後に『前の回答を踏まえて、... 今回は...』という短い振り返りを自然に入れる。",
@@ -319,6 +320,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
+                    "rag_context.chunks がある場合は、その教材コンテキストを優先して判定・フィードバックする。教材にない内容は推測で断定しない。",
                     "M1/M2/M3/M4 という内部ラベルを学習者向け文面に絶対に書かない。",
                     "is_sufficient は、学習者回答が現在の用語の判断基準を十分に含む場合だけ true にする。",
                     "理解が十分なら move_next、不十分なら continue にする。",
@@ -487,6 +489,7 @@ class CodexAppServerBackend:
             "previous_practice_question": payload.get("previous_practice_question"),
             "previous_learner_response": payload.get("previous_learner_response"),
             "previous_feedback_for_learner": payload.get("previous_feedback_for_learner"),
+            "rag_context": payload.get("rag_context"),
         }
 
     def _account_label(self, account: dict[str, Any] | None) -> str:

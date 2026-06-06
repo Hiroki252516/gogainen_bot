@@ -15,6 +15,7 @@ from app.ai.codex_app_server_backend import CodexAppServerError
 from app.ai.backend import lower_level, normalize_level, raise_level, strategy_for
 from app.ai.factory import get_ai_backend
 from app.core.config import get_settings
+from app.rag.retriever import retrieve_rag_context
 from app.models import (
     AICallLog,
     Attempt,
@@ -35,8 +36,16 @@ from app.models import (
 
 
 PUBLIC_LEVEL = {"L3": "しっかり確認", "L2": "観点を確認", "L1": "自分で整理"}
-PRETEST_TERM_ORDER = {"overfitting": 0, "generalization": 1, "attention": 2, "embedding": 3}
+PRETEST_TERM_ORDER = {"transformer": 0, "attention": 1, "llm_training_process": 2, "pretraining": 3, "post_training": 4}
 PRETEST_TERM_SLUGS = set(PRETEST_TERM_ORDER)
+
+
+def _rag_query(*parts: str | None) -> str:
+    return " ".join(part.strip() for part in parts if part and part.strip())
+
+
+def _rag_context(*parts: str | None) -> dict[str, Any]:
+    return retrieve_rag_context(_rag_query(*parts), top_k=3)
 
 
 def get_participant(db: Session, participant_id: str) -> Participant:
@@ -361,6 +370,13 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "previous_practice_question": (previous_turn.practice_question_json or {}).get("body") if previous_turn else "",
         "previous_learner_response": previous_turn.learner_response if previous_turn else "",
         "previous_feedback_for_learner": previous_turn.ai_feedback if previous_turn else "",
+        "rag_context": _rag_context(
+            term.label,
+            term.description,
+            previous_attempt.reason_text if previous_attempt else "",
+            (previous_turn.practice_question_json or {}).get("body") if previous_turn else "",
+            previous_turn.learner_response if previous_turn else "",
+        ),
     }
     result = await _ai_call(db, "generate_tutoring_turn", payload)
     turn = TutorTurn(
@@ -408,6 +424,12 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
             "practice_question": turn.practice_question_json,
         },
         "learner_response": response,
+        "rag_context": _rag_context(
+            term.label,
+            term.description,
+            (turn.practice_question_json or {}).get("body"),
+            response,
+        ),
     }
     result = await _ai_call(db, "generate_feedback", feedback_payload)
     is_sufficient = bool(result.get("is_sufficient"))
