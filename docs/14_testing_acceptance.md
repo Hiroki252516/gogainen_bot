@@ -37,12 +37,13 @@
 ## Integration Tests
 
 - create participant
-- fetch pretest questions
+- fetch 5 pretest questions
 - submit pretest attempts
 - run diagnosis with MockAIBackend
 - create learner states
-- select learning targets
+- select all non-stable-correct learning targets
 - run learning session
+- retrieve `rag_ready_教材` context and include it in AI request payload
 - submit retest
 - compute recurrence
 - run L0 check
@@ -81,9 +82,10 @@ Mock rules:
 
 - 被験者を作成できる
 - 事前テストを完了できる
+- 事前テストが5問、選択肢のみ、理由欄・自信度欄なしで表示される
 - AI診断が実行される
 - learner_states が作成される
-- 学習対象用語が最大4件選ばれる
+- `stable_correct` 以外の学習対象用語が全件選ばれる
 - 学習セッションが開始できる
 - 再テストが実施できる
 - L0確認が実施できる
@@ -108,6 +110,7 @@ Mock rules:
 - 足場掛けレベルは固定またはnull
 - teaching_strategyは general_explanation
 - 過去ログに基づく個別化をしない
+- 提案群と同じ `rag_ready_教材` コンテキストは受け取るが、誤概念・足場掛けに基づく個別化には使わない
 
 ### D. テストフェーズ制御
 
@@ -142,14 +145,15 @@ Mock rules:
 
 1. Participant P001をproposedで作成
 2. AttentionでM1誤答
-3. EmbeddingでM2誤答
-4. Diagnosis後、AttentionとEmbeddingがlearning targetになる
+3. TransformerでM2誤答
+4. Diagnosis後、誤答・unknownの全用語がlearning targetになる
 5. Attentionの初期LはL3
 6. 学習後retestでAttentionが同じM1ならrecurrence_flag true
 7. 次のturnでstrategy_changed true
-8. L0 checkで正答ならl0_success true
-9. Transferで別文脈に適用できればtransfer_success true
-10. evaluation_summaryに指標が反映される
+8. 学習ターンのAI request payloadに `rag_context` が含まれる
+9. L0 checkで正答ならl0_success true
+10. Transferで別文脈に適用できればtransfer_success true
+11. evaluation_summaryに指標が反映される
 
 ### control participant
 

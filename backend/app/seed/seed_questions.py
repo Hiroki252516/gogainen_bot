@@ -6,6 +6,10 @@ from app.seed.data import SEED_TERMS
 
 
 def seed_database(db: Session) -> None:
+    active_slugs = {item["slug"] for item in SEED_TERMS}
+    for term in db.query(Term).all():
+        term.is_active = term.slug in active_slugs
+
     for index, item in enumerate(SEED_TERMS, start=1):
         term = db.query(Term).filter(Term.slug == item["slug"]).one_or_none()
         if not term:
@@ -17,10 +21,16 @@ def seed_database(db: Session) -> None:
             )
             db.add(term)
             db.flush()
+        else:
+            term.label = item["label"]
+            term.description = item["description"]
+            term.display_order = index
+            term.is_active = True
+
         for phase in ("pretest", "retest"):
             qd = item["questions"][phase]
             construct_key = f"{item['slug']}_definition"
-            variant_key = f"{phase}_v1"
+            variant_key = "pretest_v1" if phase == "pretest" else "retest_temporary_v1"
             question = (
                 db.query(Question)
                 .filter(
@@ -43,7 +53,21 @@ def seed_database(db: Session) -> None:
                 )
                 db.add(question)
                 db.flush()
-                for order, (label, body, is_correct, misconception_type) in enumerate(qd["options"], start=1):
+            else:
+                question.question_type = "definition" if phase == "pretest" else "retest_same_construct"
+                question.body = qd["body"]
+                question.expected_answer = qd["expected"]
+                question.expected_keywords = item["keywords"]
+                question.construct_key = construct_key
+                question.variant_key = variant_key
+                question.is_active = True
+            existing_options = {
+                option.option_label: option
+                for option in db.query(QuestionOption).filter(QuestionOption.question_id == question.id).all()
+            }
+            for order, (label, body, is_correct, misconception_type) in enumerate(qd["options"], start=1):
+                option = existing_options.get(label)
+                if not option:
                     db.add(
                         QuestionOption(
                             question_id=question.id,
@@ -54,18 +78,33 @@ def seed_database(db: Session) -> None:
                             default_order=order,
                         )
                     )
+                else:
+                    option.body = body
+                    option.is_correct = is_correct
+                    option.misconception_type = misconception_type
+                    option.default_order = order
+
+            valid_labels = {label for label, *_ in qd["options"]}
+            for label, option in existing_options.items():
+                if label not in valid_labels:
+                    option.body = f"[inactive seed option] {option.body}"
+                    option.is_correct = False
+                    option.misconception_type = "unknown"
+                    option.default_order = 999
+
         for phase, qtype in (("l0_check", "l0_free_response"), ("transfer", "transfer")):
+            variant_key = "l0_temporary_v1" if phase == "l0_check" else "transfer_temporary_v1"
             question = (
                 db.query(Question)
                 .filter(
                     Question.term_id == term.id,
                     Question.phase == phase,
-                    Question.variant_key == f"{phase}_v1",
+                    Question.variant_key == variant_key,
                 )
                 .one_or_none()
             )
+            body = item["questions"]["transfer"] if phase == "transfer" else item["questions"]["l0"]
             if not question:
-                body = item["questions"]["transfer"] if phase == "transfer" else f"{item['label']}について、ヒントなしで説明してください。理由も書いてください。"
                 db.add(
                     Question(
                         term_id=term.id,
@@ -75,9 +114,17 @@ def seed_database(db: Session) -> None:
                         expected_answer=item["questions"]["pretest"]["expected"],
                         expected_keywords=item["keywords"],
                         construct_key=f"{item['slug']}_{phase}",
-                        variant_key=f"{phase}_v1",
+                        variant_key=variant_key,
                     )
                 )
+            else:
+                question.question_type = qtype
+                question.body = body
+                question.expected_answer = item["questions"]["pretest"]["expected"]
+                question.expected_keywords = item["keywords"]
+                question.construct_key = f"{item['slug']}_{phase}"
+                question.variant_key = variant_key
+                question.is_active = True
     db.commit()
 
 

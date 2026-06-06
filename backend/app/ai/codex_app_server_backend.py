@@ -177,6 +177,8 @@ class CodexAppServerBackend:
             payload,
             [
                 "事前テストでは選択肢の正誤と内部選択肢ラベルから理解状態を診断する。reason_text と confidence が null の場合は欠損ではなく仕様通りとして扱う。",
+                "正答選択肢なら diagnosed_status は stable_correct、recommended_initial_scaffolding_level は L1 にする。",
+                "誤答または unknown なら recommended_initial_scaffolding_level は L3 にする。L4は使わない。",
                 "誤概念タイプは内部研究ラベルとして M1/M2/M3/M4/unknown/null のみを使う。",
                 "natural_language_diagnosis には M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
                 "統制群でも分類は保存してよいが、教授方略に使う推薦は general_explanation にする。",
@@ -227,6 +229,7 @@ class CodexAppServerBackend:
             "学習セッション用の短い日本語チュータ発話を作る。",
             "再テスト、L0確認、転移テストの具体的な正解を先取りして出さない。",
             "tutor_message, learner_prompt, practice_question.body に M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
+            "rag_context がある場合は教材コンテキストを優先し、教材にない内容は推測で断定しない。",
         ]
         if group == "control":
             rules.append("統制群なので、過去ログ、誤概念タイプ、足場掛け履歴に適応しない通常AIチューターとして説明する。teaching_strategy は general_explanation に固定する。")
@@ -308,6 +311,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
+                    "rag_context がある場合は教材コンテキストを優先し、教材にない内容は推測で断定しない。",
                     "M1/M2/M3/M4 という内部ラベルを学習者向け文面に絶対に書かない。",
                     "理解が十分なら move_next、不十分なら continue にする。",
                 ],
@@ -471,6 +475,7 @@ class CodexAppServerBackend:
                 "scaffolding_level": (payload.get("learner_state") or {}).get("scaffolding_level"),
                 "teaching_strategy": "general_explanation",
             },
+            "rag_context": payload.get("rag_context"),
         }
 
     def _account_label(self, account: dict[str, Any] | None) -> str:

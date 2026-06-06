@@ -146,11 +146,11 @@ Priority:
 2. M3
 3. unknown
 4. unstable_correct
-5. stable_correct needing transfer preparation
+5. stable_correct is excluded from learning targets in the current 5-question version
 
 Output:
 
-- up to `MAX_LEARNING_TARGETS`
+- all non-stable-correct terms
 - term_assignments with `is_learning_target = true`
 
 ### Diagnosis Merge
@@ -211,13 +211,14 @@ POST /participants
 
 MVP seed must include:
 
-- 8 terms
+- 5 active terms
 - pretest question per term
 - retest variant per term
+- l0 temporary question per term
 - transfer question per term
 - option labels correct/M1/M2/M3/unknown
 
-Learning practice questions can be smaller but must exist for at least all 8 terms.
+Learning practice questions can be generated from learner state and `rag_ready_教材` context for all active terms.
 
 ## README to Generate During Implementation
 

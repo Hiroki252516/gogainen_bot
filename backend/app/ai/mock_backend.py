@@ -24,11 +24,8 @@ class MockAIBackend:
             status = "unknown"
             mtype = "unknown"
             is_correct = False
-        elif is_correct and len(reason.strip()) >= 10:
-            status = "stable_correct"
-            mtype = None
         elif is_correct:
-            status = "unstable_correct"
+            status = "stable_correct"
             mtype = None
         else:
             status = "misconception"

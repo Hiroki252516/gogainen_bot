@@ -9,9 +9,11 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
 - M1〜M4の定義に従う
 - 被験者に直接見せる文章と内部ラベルを分ける
 - `unknown` と誤概念を混同しない
-- 正答選択肢でも理由が不十分なら `unstable_correct`
+- 事前テストでは理由欄を収集しないため、正答選択肢は `stable_correct` とする
+- 添付問題内の `L4` は `L3` として扱い、AI出力にも `L4` を出さない
 - テスト問題の正解を直接教えない
 - L0ではヒント、例、解説を出さない
+- `rag_context` がある場合は教材コンテキストを優先し、教材にない内容を推測で断定しない
 
 ## Diagnosis Payload
 
@@ -113,7 +115,20 @@ ambiguous: 判定困難
   "previous_answer": "...",
   "previous_diagnosis_for_learner": "言葉の表面ではなく、訓練データと未知データの性能差に注目します。",
   "allowed_help": ["hint", "question_prompt", "self_explanation"],
-  "forbidden_help": ["direct_answer", "test_answer", "option_elimination"]
+  "forbidden_help": ["direct_answer", "test_answer", "option_elimination"],
+  "rag_context": {
+    "source": "rag_ready_教材",
+    "retrieval_method": "local_sparse_tfidf",
+    "chunks": [
+      {
+        "chunk_id": "chunk-001",
+        "source_file": "教材(1)_normalized.txt",
+        "section": "Transformer",
+        "score": 0.42,
+        "text": "..."
+      }
+    ]
+  }
 }
 ```
 
@@ -151,6 +166,7 @@ ambiguous: 判定困難
 - L0ではヒント・例・解説を出さない
 - 被験者にM1/M2/M3/M4という内部ラベルを直接見せない
 - 統制群では過去ログや誤概念タイプに応じた支援をしない
+- rag_contextがある場合は教材コンテキストを優先し、教材にない内容を推測で断定しない
 - 出力は指定JSONのみ
 
 足場掛けレベル:

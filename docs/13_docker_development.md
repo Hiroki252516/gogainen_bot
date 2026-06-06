@@ -32,11 +32,12 @@ services:
       CODEX_APP_SERVER_CWD: /tmp
       CODEX_TURN_TIMEOUT_SEC: "120"
       CODEX_REASONING_EFFORT: low
-      MAX_LEARNING_TARGETS: "4"
+      MAX_LEARNING_TARGETS: "5"
       MAX_TURNS_PER_TERM: "3"
       RANDOM_SEED: "20260525"
     volumes:
       - ./exports:/app/exports
+      - ./rag_ready_教材:/rag_ready_教材:ro
       - ./.local/codex-ws-token:/run/secrets/codex_ws_token:ro
     depends_on:
       - db
@@ -99,7 +100,7 @@ CODEX_MODEL=
 CODEX_APP_SERVER_CWD=/tmp
 CODEX_TURN_TIMEOUT_SEC=120
 CODEX_REASONING_EFFORT=low
-MAX_LEARNING_TARGETS=4
+MAX_LEARNING_TARGETS=5
 MAX_TURNS_PER_TERM=3
 RANDOM_SEED=20260525
 EXPORT_DIR=/app/exports

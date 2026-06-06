@@ -32,9 +32,14 @@ from app.models import (
     TutorTurn,
     now,
 )
+from app.rag import retrieve_rag_context
 
 
 PUBLIC_LEVEL = {"L3": "しっかり確認", "L2": "観点を確認", "L1": "自分で整理", "L0": "ヒントなし"}
+
+
+def _rag_query(*parts: object) -> str:
+    return " ".join(str(part) for part in parts if part)
 
 
 def get_participant(db: Session, participant_id: str) -> Participant:
@@ -291,8 +296,10 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
         .order_by(TermAssignment.priority_score.desc())
         .all()
     )
-    for index, assignment in enumerate(assignments):
-        assignment.is_learning_target = index < get_settings().max_learning_targets
+    attempt_by_term_id = {attempt.term_id: attempt for attempt in scored_attempts}
+    for assignment in assignments:
+        attempt = attempt_by_term_id.get(assignment.term_id)
+        assignment.is_learning_target = bool(attempt and attempt.diagnosed_status != "stable_correct")
     participant.current_step = "learning_targets"
     db.commit()
     return sum(1 for assignment in assignments if assignment.is_learning_target)
@@ -357,6 +364,16 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "previous_answer": previous_attempt.reason_text if previous_attempt else "",
         "previous_diagnosis_for_learner": state.state_summary,
     }
+    payload["rag_context"] = retrieve_rag_context(
+        _rag_query(
+            term.label,
+            term.description,
+            state.current_status,
+            state.primary_misconception,
+            state.teaching_strategy,
+            state.state_summary,
+        )
+    )
     result = await _ai_call(db, "generate_tutoring_turn", payload)
     turn = TutorTurn(
         tutor_session_id=session.id,
@@ -404,6 +421,18 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         },
         "learner_response": response,
     }
+    feedback_payload["rag_context"] = retrieve_rag_context(
+        _rag_query(
+            term.label,
+            term.description,
+            state.current_status,
+            state.primary_misconception,
+            state.teaching_strategy,
+            turn.learner_prompt,
+            turn.practice_question_json,
+            response,
+        )
+    )
     result = await _ai_call(db, "generate_feedback", feedback_payload)
     correct = result["next_action"] == "move_next"
     next_level = result["next_scaffolding_level"] if result.get("next_scaffolding_level") else (lower_level(state.scaffolding_level) if correct else state.scaffolding_level)

@@ -124,7 +124,7 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 - Attention example is used in `11_seed_questions.md`
 - Problem phase separation from 5月25日 slide 22/23 is reflected in `02_experiment_flow.md`
 - "same problem should not be reused" is implemented through `construct_key` and `variant_key`
-- The slide note problem examples for Embedding, Token, Overfitting, Generalization, Fine-tuning, Prompt, RAG are represented in seed questions
+- The current attached `問題 (1).md` examples for Transformer, Attention, LLMの学習段階, 事前学習, 事後学習 are represented in seed questions
 - "足場掛けはどうやってやるのか" is answered in `04_scaffolding_and_tutoring.md`
 
 ## Remaining Research Decisions

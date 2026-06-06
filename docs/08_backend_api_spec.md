@@ -84,7 +84,7 @@ Response:
 
 ### GET /api/experiment/{participant_id}/pretest
 
-事前テスト問題を返す。選択肢は参加者ごとにランダム化し、表示順をDBに保存する。
+事前テスト問題を返す。現行seedでは添付 `問題 (1).md` の5問を返す。選択肢は参加者ごとにランダム化し、表示順をDBに保存する。
 
 Response:
 
@@ -111,15 +111,15 @@ Response:
 
 ### GET /api/experiment/{participant_id}/retest
 
-学習対象用語の再テスト問題を返す。同じ `construct_key` の別 `variant_key` を選ぶ。
+学習対象用語の再テスト問題を返す。同じ `construct_key` の別 `variant_key` を選ぶ。正式な再テスト問題が届くまでは `retest_temporary_v1` を使う。
 
 ### GET /api/experiment/{participant_id}/l0-check
 
-L0確認問題を返す。チャットやヒント表示はfrontendで無効化する。
+L0確認問題を返す。チャットやヒント表示はfrontendで無効化する。正式問題が届くまでは `l0_temporary_v1` を使う。
 
 ### GET /api/experiment/{participant_id}/transfer-test
 
-転移問題を返す。全問L0扱い。
+転移問題を返す。全問L0扱い。正式問題が届くまでは `transfer_temporary_v1` を使う。
 
 ## Attempts
 
@@ -165,12 +165,14 @@ Response:
 ```json
 {
   "status": "completed",
-  "learning_target_count": 4,
+  "learning_target_count": 5,
   "next_step": "learning_targets"
 }
 ```
 
 被験者向けresponseにはMラベルを含めない。管理者向けログには含める。
+
+`stable_correct` は学習対象外にし、`misconception`、`unknown`、`unstable_correct` は全件学習対象にする。固定上限では切らない。
 
 ## Learning Targets
 
@@ -244,6 +246,8 @@ Response:
 ```
 
 被験者向けresponseには内部Mラベルを含めない。
+
+内部AI payloadには `rag_context` を含める。`rag_context` は `rag_ready_教材` から取得したローカルTF-IDF検索結果で、被験者向けresponseにはそのまま返さない。
 
 ### POST /api/tutor-turns/{turn_id}/respond
 

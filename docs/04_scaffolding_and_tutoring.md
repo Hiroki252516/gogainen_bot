@@ -86,7 +86,9 @@
 | stable_correct | L1 |
 | transfer_ready | L0 |
 
-事前テストは選択式のみのため、正答でも初期学習対象から完全には除外しない。いきなりL0へ進めるのは、後続のL0確認や転移テストで安定して正答できた場合に限る。
+添付問題に含まれる `L4` 表記は、本システムの最強支援 `L3` として正規化する。システム、DB、AI schemaには `L4` を追加しない。
+
+現行5問版では、事前テストで `stable_correct` と診断された用語は学習対象から除外する。`misconception`、`unknown`、`unstable_correct` は全件学習対象にする。
 
 ## 更新ルール
 
@@ -118,6 +120,8 @@
 | unknown | foundational_explanation | 基礎説明から始める |
 | unstable_correct | self_explanation_check | 自己説明で確認する |
 | control | general_explanation | 一般的な解説に留める |
+
+学習セッションでは、両群とも `rag_ready_教材` のローカルRAG検索結果を教材根拠としてAI payloadへ渡す。提案群はその教材根拠に加えて誤概念タイプ、過去ログ、足場掛けレベルを使う。統制群は同じ教材根拠を受け取るが、誤概念タイプや過去ログによる個別化は禁止する。
 
 ## 誤概念タイプ x 足場掛けの出し分け
 
