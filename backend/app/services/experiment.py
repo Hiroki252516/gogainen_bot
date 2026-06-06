@@ -344,6 +344,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
     if turn_count >= get_settings().max_turns_per_term:
         raise HTTPException(status_code=400, detail="max turns reached")
+    current_level = normalize_level(state.scaffolding_level)
     payload = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
@@ -351,19 +352,21 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "learner_state": {
             "current_status": state.current_status,
             "primary_misconception": state.primary_misconception,
-            "scaffolding_level": normalize_level(state.scaffolding_level),
+            "scaffolding_level": current_level,
             "teaching_strategy": state.teaching_strategy,
             "recurrence_count": state.recurrence_count,
         },
         "previous_answer": previous_attempt.reason_text if previous_attempt else "",
         "previous_diagnosis_for_learner": state.state_summary,
+        "previous_practice_question": (previous_turn.practice_question_json or {}).get("body") if previous_turn else "",
+        "previous_learner_response": previous_turn.learner_response if previous_turn else "",
         "previous_feedback_for_learner": previous_turn.ai_feedback if previous_turn else "",
     }
     result = await _ai_call(db, "generate_tutoring_turn", payload)
     turn = TutorTurn(
         tutor_session_id=session.id,
         turn_index=turn_count + 1,
-        scaffolding_level=normalize_level(result["scaffolding_level"]),
+        scaffolding_level=current_level,
         teaching_strategy=result["teaching_strategy"],
         previous_teaching_strategy=state.previous_teaching_strategy,
         strategy_changed=False,

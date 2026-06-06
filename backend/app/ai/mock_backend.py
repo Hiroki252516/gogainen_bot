@@ -64,6 +64,8 @@ class MockAIBackend:
         strategy = state.get("teaching_strategy") or strategy_for(state.get("primary_misconception"), state.get("current_status"), group)
         slug = term.get("slug", "")
         spec = _TERM_TUTORING.get(slug, _generic_tutoring_spec(term))
+        previous_question = (payload.get("previous_practice_question") or "").strip()
+        previous_response = (payload.get("previous_learner_response") or "").strip()
         previous_feedback = (payload.get("previous_feedback_for_learner") or "").strip()
 
         if group == "control":
@@ -71,8 +73,15 @@ class MockAIBackend:
             strategy = "general_explanation"
         else:
             message = spec["messages"][level]
+        previous_parts = []
+        if previous_question:
+            previous_parts.append(f"前の問題: {previous_question}")
+        if previous_response:
+            previous_parts.append(f"あなたの回答: {previous_response}")
         if previous_feedback:
-            message = f"前の回答を踏まえて、{previous_feedback} 今回は{spec['focus']}を確認します。\n\n{message}"
+            previous_parts.append(f"前の回答を踏まえて、{previous_feedback} 今回は{spec['focus']}を確認します。")
+        if previous_parts:
+            message = "\n".join(previous_parts) + f"\n\n{message}"
 
         return {
             "tutor_message": message,

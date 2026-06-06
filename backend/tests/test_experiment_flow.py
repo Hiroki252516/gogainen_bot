@@ -210,3 +210,44 @@ def test_tutoring_turns_match_current_term_and_hide_internal_labels():
         assert turn["misconception_type"] in {"M1", "M2", "M3", "M4", "unknown", None}
         assert turn["scaffolding_level"] in {"L1", "L2", "L3"}
         assert turn["teaching_strategy"]
+
+
+def test_tutor_turn_uses_state_scaffolding_level_even_if_ai_returns_different_level(monkeypatch):
+    pid = _create_diagnosed_participant_with_all_targets()
+    _set_scaffolding_level(pid, "attention", "L2")
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "attention"}).json()
+
+    async def fake_generate(db, purpose, payload):
+        assert purpose == "generate_tutoring_turn"
+        assert payload["learner_state"]["scaffolding_level"] == "L2"
+        return {
+            "tutor_message": "Attentionの教材です。",
+            "teaching_strategy": "category_reorientation",
+            "scaffolding_level": "L3",
+            "requires_learner_response": True,
+            "learner_prompt": "Attentionを説明してください。",
+            "practice_question": {
+                "body": "Attentionを説明してください。",
+                "expected_answer": "関係を重み付けする仕組み",
+                "question_type": "practice",
+            },
+            "forbidden_help_given": False,
+        }
+
+    monkeypatch.setattr("app.services.experiment._ai_call", fake_generate)
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert turn["scaffolding_level"] == "L2"
+
+
+def test_second_turn_material_includes_previous_question_and_response():
+    pid = _create_diagnosed_participant_with_all_targets()
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "generalization"}).json()
+    first = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    answer = "まだ一般常識のことだと思っています"
+    feedback = client.post(f"/api/tutor-turns/{first['turn_id']}/respond", json={"learner_response": answer}).json()
+    assert feedback["is_sufficient"] is False
+    second = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert "前の問題:" in second["tutor_message"]
+    assert first["practice_question"]["body"] in second["tutor_message"]
+    assert "あなたの回答:" in second["tutor_message"]
+    assert answer in second["tutor_message"]

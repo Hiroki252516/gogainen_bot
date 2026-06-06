@@ -230,7 +230,9 @@ class CodexAppServerBackend:
             "足場掛けレベルは L3/L2/L1 のみを使い、指定外のレベルは使わない。",
             f"教材、問い返し、practice_question は必ず現在の用語『{term_label}』だけを主題にする。",
             "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
-            "previous_feedback_for_learner が空でなければ、tutor_message の冒頭に『前の回答を踏まえて、... 今回は...』という短い振り返りを自然に入れる。",
+            "previous_practice_question が空でなければ、tutor_message の冒頭に『前の問題: ...』を入れる。",
+            "previous_learner_response が空でなければ、tutor_message の冒頭に『あなたの回答: ...』を入れる。",
+            "previous_feedback_for_learner が空でなければ、前の問題・回答の後に『前の回答を踏まえて、... 今回は...』という短い振り返りを自然に入れる。",
             "L3では現在の用語の定義、誤りやすい捉え方との違い、短い例を示してから問い返す。",
             "L2では現在の用語を判断する観点を1〜2個に絞って示し、理由説明を求める。",
             "L1では詳しい説明を避け、現在の用語を説明するための着目点だけを示す。",
@@ -482,6 +484,9 @@ class CodexAppServerBackend:
                 "scaffolding_level": (payload.get("learner_state") or {}).get("scaffolding_level"),
                 "teaching_strategy": "general_explanation",
             },
+            "previous_practice_question": payload.get("previous_practice_question"),
+            "previous_learner_response": payload.get("previous_learner_response"),
+            "previous_feedback_for_learner": payload.get("previous_feedback_for_learner"),
         }
 
     def _account_label(self, account: dict[str, Any] | None) -> str:
