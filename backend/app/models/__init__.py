@@ -176,6 +176,82 @@ class LearnerState(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class LearningSession(Base):
+    __tablename__ = "learning_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
+    group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
+    session_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(64), default="not_started", nullable=False)
+    current_prerequisite_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    term_pass_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    concept_attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    concept_material: Mapped[str | None] = mapped_column(Text)
+    concept_prompt: Mapped[str | None] = mapped_column(Text)
+    concept_expected_answer: Mapped[str | None] = mapped_column(Text)
+    last_feedback: Mapped[str | None] = mapped_column(Text)
+    blocked_reason: Mapped[str | None] = mapped_column(Text)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class PrerequisiteTerm(Base):
+    __tablename__ = "prerequisite_terms"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learning_session_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_sessions.id"), nullable=False)
+    term_label: Mapped[str] = mapped_column(String(160), nullable=False)
+    material: Mapped[str] = mapped_column(Text, nullable=False)
+    check_question: Mapped[str] = mapped_column(Text, nullable=False)
+    expected_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(64), default="not_started", nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_feedback: Mapped[str | None] = mapped_column(Text)
+    remediation_material: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class TermUnderstandingAttempt(Base):
+    __tablename__ = "term_understanding_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    prerequisite_term_id: Mapped[str] = mapped_column(String(36), ForeignKey("prerequisite_terms.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    learning_session_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_sessions.id"), nullable=False)
+    attempt_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    learner_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    is_passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    score: Mapped[float | None] = mapped_column(Float)
+    feedback: Mapped[str] = mapped_column(Text, nullable=False)
+    remediation_material: Mapped[str | None] = mapped_column(Text)
+    grading_json: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class ConceptUnderstandingAttempt(Base):
+    __tablename__ = "concept_understanding_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learning_session_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_sessions.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    attempt_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    concept_material: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    learner_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    is_passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    score: Mapped[float | None] = mapped_column(Float)
+    feedback: Mapped[str] = mapped_column(Text, nullable=False)
+    missing_prerequisite_ids: Mapped[list | None] = mapped_column(JSON)
+    review_prerequisite_ids: Mapped[list | None] = mapped_column(JSON)
+    grading_json: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class TutorSession(Base):
     __tablename__ = "tutor_sessions"
 
@@ -263,6 +339,8 @@ class EvaluationSummary(Base):
     m3_recurrence_rate: Mapped[float | None] = mapped_column(Float)
     m4_failure_rate: Mapped[float | None] = mapped_column(Float)
     unknown_persistence_rate: Mapped[float | None] = mapped_column(Float)
+    prerequisite_pass_rate: Mapped[float | None] = mapped_column(Float)
+    concept_pass_rate: Mapped[float | None] = mapped_column(Float)
     learning_target_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

@@ -1,134 +1,43 @@
 # 18. Implementation Blueprint
 
-この文書は、現在の実装構成と、今後拡張するときの青写真をまとめる。
+この文書は、現在の実装構成と、今回の新フローを実装するときの青写真をまとめる。
 
 ## Build Order
 
-1. backendとDBを先に作る
-2. seed questionsを入れる
-3. AIBackend抽象を作り、CodexAppServerBackendを通常実行にする
-4. frontendを研究フロー順に接続する
-5. CSV exportとadminを作る
-6. MockAIBackendはテスト・切り分け用に維持する
-
-理由:
-
-- 研究ロジックはAI接続から分離する
-- 自動テストはMockで再現性を確保できる
-- app-server仕様変更の影響を隔離できる
+1. docsとseed方針を揃える
+2. DBモデルを追加する
+3. AIBackend契約を拡張し、Mockを先に通す
+4. backend APIを前提用語ゲート型へ接続する
+5. frontend学習画面をgroup_conditionで分岐する
+6. 評価指標とCSVを更新する
+7. Codex app-server実行を確認する
 
 ## Backend Package Layout
 
-```text
-backend/app/
-├── main.py
-├── core/
-│   ├── config.py
-│   ├── errors.py
-│   └── logging.py
-├── db/
-│   ├── session.py
-│   └── base.py
-├── models/
-│   ├── participant.py
-│   ├── survey.py
-│   ├── question.py
-│   ├── attempt.py
-│   ├── learner_state.py
-│   ├── tutor.py
-│   ├── recurrence.py
-│   ├── ai_call_log.py
-│   └── evaluation.py
-├── schemas/
-│   ├── api.py
-│   ├── ai.py
-│   └── export.py
-├── services/
-│   ├── experiment_service.py
-│   ├── question_service.py
-│   ├── diagnosis_service.py
-│   ├── learner_state_service.py
-│   ├── scaffolding_service.py
-│   ├── tutoring_service.py
-│   ├── evaluation_service.py
-│   └── export_service.py
-├── ai/
-│   ├── backend.py
-│   ├── mock_backend.py
-│   ├── codex_app_server_backend.py
-│   ├── codex_client.py
-│   └── prompts.py
-├── api/
-│   ├── participants.py
-│   ├── surveys.py
-│   ├── questions.py
-│   ├── attempts.py
-│   ├── diagnosis.py
-│   ├── tutoring.py
-│   ├── scoring.py
-│   ├── admin.py
-│   └── ai_status.py
-├── seed/
-│   └── seed_questions.py
-└── exports/
-    └── csv_exporter.py
-```
+現行実装では単一 `experiment.py` に寄せてよいが、責務は以下に分けて考える。
 
-## Frontend Package Layout
+- ExperimentService: 参加者、pretest、diagnosis、retest
+- LearningSessionService: proposed/control learning session
+- EvaluationService: recurrence, gate metrics
+- ExportService: CSV
+- AIBackendService: AI call logging and backend selection
+
+## Frontend Pages
 
 ```text
 frontend/app/
 ├── start/page.tsx
-├── survey/pre/page.tsx
 ├── pretest/page.tsx
 ├── diagnosing/page.tsx
 ├── learning-targets/page.tsx
 ├── learning/[termSlug]/page.tsx
 ├── retest/page.tsx
-├── l0-check/page.tsx
-├── transfer-test/page.tsx
 ├── survey/post/page.tsx
 ├── finish/page.tsx
 └── admin/page.tsx
-
-frontend/components/
-├── QuestionCard.tsx
-├── ConfidenceScale.tsx
-├── ReasonTextarea.tsx
-├── ProgressHeader.tsx
-├── TutorPanel.tsx
-├── AdminMetricCards.tsx
-└── CsvExportButtons.tsx
 ```
 
-## Core Domain Types
-
-### ScaffoldingLevel
-
-```text
-L3 > L2 > L1 > L0
-```
-
-Utility:
-
-- `lower_level(level)`
-- `raise_level(level)`
-- `level_to_numeric(level)`
-
-### TeachingStrategy
-
-- general_explanation
-- foundational_explanation
-- category_reorientation
-- boundary_comparison
-- deep_structure_focus
-- context_transfer_training
-- self_explanation_check
-- contrastive_example
-- discrimination_practice
-- counterexample_prompt
-- common_structure_extraction
-- guided_self_correction
+`survey/pre`, `l0-check`, `transfer-test` は通常導線から外す。
 
 ## Critical Algorithms
 
@@ -138,42 +47,39 @@ Input:
 
 - pretest attempts
 - diagnosis result
-- response time
-
-Priority:
-
-1. M1 or M2
-2. M3
-3. unknown
-4. unstable_correct
-5. stable_correct is excluded from learning targets in the current 5-question version
 
 Output:
 
 - all non-stable-correct terms
 - term_assignments with `is_learning_target = true`
 
-### Diagnosis Merge
+### Proposed Prerequisite Gate
 
-1. Start from selected option label
-2. Use reason_text only for phases that collect it
-3. In pretest, classify from selected option because reason_text and confidence are not collected
-4. If conflict is strong in later phases, mark ambiguous
+1. Create learning_session
+2. Generate 3 prerequisite_terms with RAG + pretest diagnosis
+3. Grade each term answer, max 2 attempts
+4. If all pass, generate concept material
+5. Grade concept answer, max 4 attempts
+6. Fail returns missing prerequisite + previous related term for review
+7. Completed/blocked/failed session is saved
+
+### Control Learning
+
+1. Create learning_session and tutor_session
+2. Generate general RAG explanation without pretest diagnosis
+3. Save self explanation and general feedback
+4. Mark session completed
 
 ### Recurrence
 
 ```text
 recurrence_flag =
-  previous phase has primary misconception M1-M3
-  and current phase has same primary misconception
+  pretest has primary misconception M1-M3
+  and retest has same primary misconception
   and term_id is same
 ```
 
 Unknown is not recurrence.
-
-### Scaffolding Update
-
-Use deterministic service logic from `04_scaffolding_and_tutoring.md`. AI recommendations are advisory.
 
 ## MVP API Dependency Graph
 
@@ -183,15 +89,14 @@ POST /participants
   -> POST /attempts
   -> POST /diagnose-pretest
   -> GET /learning-targets
-  -> POST /tutor-sessions
-  -> POST /tutor-sessions/{id}/turns
-  -> POST /tutor-turns/{id}/respond
+  -> POST /learning-sessions
+  -> GET /learning-sessions/{id}
+  -> POST /learning-sessions/{id}/prerequisites/{pid}/attempts
+  -> POST /learning-sessions/{id}/concept-attempts
+  -> POST /learning-sessions/{id}/control-turn
+  -> POST /learning-sessions/{id}/control-answer
   -> GET /retest
   -> POST /score-retest
-  -> GET /l0-check
-  -> POST /score-l0-check
-  -> GET /transfer-test
-  -> POST /score-transfer-test
   -> POST /survey post
   -> POST /evaluation-summary/recalculate
   -> GET /admin/export/evaluation_summary.csv
@@ -202,44 +107,15 @@ POST /participants
 - Do not implement an OpenAI API key path
 - Do not leak internal labels to participant pages
 - Do not let AI decide final metrics
-- Do not let app-server failure block MockAIBackend testing
+- Do not let app-server failure auto-fallback to Mock in normal mode
+- Do not send proposed-only diagnosis/log information to control group
 - Do not skip CSV export
-- Do not hardcode model names
 - Do not store auth tokens
 
 ## Minimum Seed Data
 
-MVP seed must include:
-
 - 5 active terms
 - pretest question per term
-- retest variant per term
-- l0 temporary question per term
-- transfer question per term
+- formal `retest_v1` per term
 - option labels correct/M1/M2/M3/unknown
-
-Learning practice questions can be generated from learner state and `rag_ready_教材` context for all active terms.
-
-## README to Generate During Implementation
-
-The final implemented README should include:
-
-- prerequisites
-- docker compose start
-- migration
-- seed
-- running with Codex app-server
-- MockAIBackend is test-only
-- admin URL
-- CSV export location
-- troubleshooting
-
-## First Implementation PR Scope
-
-If implementation is split, the first PR should stop at:
-
-- Docker backend/db/frontend boots
-- DB migrations
-- seed
-- Codex app-server status check
-- pretest -> diagnosis -> learner_states
+- L0/transfer questions inactive or omitted in current flow

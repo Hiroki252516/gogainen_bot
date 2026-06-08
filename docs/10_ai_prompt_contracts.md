@@ -1,56 +1,23 @@
 # 10. AI Prompt Contracts
 
-AIには必ず構造化出力を要求する。できれば app-server の `outputSchema` を使う。使えない場合は「JSONのみ」を返すようにプロンプトし、backendで検証する。
+AIには必ず構造化出力を要求する。通常実行は `AIBackend` 経由でCodex app-serverへ接続し、テスト時のみ `MockAIBackend` を使う。
 
 ## 共通制約
 
 - 出力は指定JSONのみ
 - 余計なMarkdownや説明文を返さない
-- M1〜M4の定義に従う
 - 被験者に直接見せる文章と内部ラベルを分ける
-- `unknown` と誤概念を混同しない
-- 事前テストでは理由欄を収集しないため、正答選択肢は `stable_correct` とする
-- 添付問題内の `L4` は `L3` として扱い、AI出力にも `L4` を出さない
+- M1〜M4を学習者向け文面に出さない
+- 事前テストと再テストでは理由欄・自信度欄がない前提で採点する
 - テスト問題の正解を直接教えない
-- L0ではヒント、例、解説を出さない
 - `rag_context` がある場合は教材コンテキストを優先し、教材にない内容を推測で断定しない
+- 統制群では誤概念タイプ、過去ログ、前提用語ゲート情報を教授に使わない
 
-## Diagnosis Payload
+## Diagnosis
 
-```json
-{
-  "participant_id": "uuid",
-  "group_condition": "proposed",
-  "term": {
-    "slug": "attention",
-    "label": "Attention",
-    "definition": "..."
-  },
-  "question": {
-    "id": "uuid",
-    "phase": "pretest",
-    "question_type": "definition",
-    "body": "...",
-    "expected_answer": "..."
-  },
-  "selected_option": {
-    "id": "uuid",
-    "body": "...",
-    "is_correct": false,
-    "initial_misconception_type": "M3"
-  },
-  "learner_response": {
-    "reason_text": null,
-    "free_text_answer": null,
-    "confidence": null
-  },
-  "history": {
-    "previous_attempts": []
-  }
-}
-```
+事前テスト診断。選択肢メタデータに基づき、正答なら `stable_correct`、M1〜M3誤答なら `misconception`、わからないなら `unknown` を返す。現行pretestでは理由欄がnullであることを欠損扱いしない。
 
-## Diagnosis Result
+Result:
 
 ```json
 {
@@ -60,207 +27,174 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
   "secondary_misconception_type": null,
   "diagnosis_confidence": 0.92,
   "natural_language_diagnosis": "この回答では...",
-  "evidence": "学習者は理由欄で...",
+  "evidence": "...",
   "recommended_initial_scaffolding_level": "L1",
   "recommended_teaching_strategy": "self_explanation_check",
   "requires_manual_review": false
 }
 ```
 
-### Diagnosis Prompt Template
+`recommended_initial_scaffolding_level` と `recommended_teaching_strategy` は旧互換列として返すが、提案群の新学習セッション制御には使わない。
 
-```text
-あなたは教育実験用AIチューターの診断モジュールです。
-学習者の回答を、正誤だけでなく誤概念タイプに基づいて診断してください。
+## Proposed: generate_prerequisite_plan
 
-重要:
-- 出力は指定JSONのみ。
-- 被験者に直接見せる文章と内部ラベルを分ける。
-- M1〜M4の定義に厳密に従う。
-- 「わからない」「空欄」は誤概念ではなく unknown とする。
-- 正答選択肢を選んでいても、理由が誤っていれば unstable_correct または misconception とする。
-- M4は原則として転移問題で判定する。
+対象概念ごとの前提用語計画を生成する。
 
-M1: カテゴリー誤分類型
-M2: 類似概念境界混同型
-M3: 表層特徴・キーワード反応型
-M4: 文脈転移失敗型
-unknown: 知識不足
-ambiguous: 判定困難
-
-入力:
-{payload_json}
-
-指定JSONスキーマ:
-{schema_json}
-```
-
-## Tutoring Turn Payload
+Payload:
 
 ```json
 {
   "participant_id": "uuid",
   "group_condition": "proposed",
-  "term": {
-    "slug": "overfitting",
-    "label": "過学習"
+  "target_term": {
+    "slug": "attention",
+    "label": "Attention",
+    "description": "..."
   },
-  "learner_state": {
-    "current_status": "misconception",
-    "primary_misconception": "M3",
-    "scaffolding_level": "L2",
-    "teaching_strategy": "deep_structure_focus",
-    "recurrence_count": 1
+  "pretest_diagnosis": {
+    "diagnosed_status": "misconception",
+    "misconception_type": "M1",
+    "natural_language_diagnosis": "..."
   },
-  "previous_answer": "...",
-  "previous_diagnosis_for_learner": "言葉の表面ではなく、訓練データと未知データの性能差に注目します。",
-  "allowed_help": ["hint", "question_prompt", "self_explanation"],
-  "forbidden_help": ["direct_answer", "test_answer", "option_elimination"],
-  "rag_context": {
-    "source": "rag_ready_教材",
-    "retrieval_method": "local_sparse_tfidf",
-    "chunks": [
-      {
-        "chunk_id": "chunk-001",
-        "source_file": "教材(1)_normalized.txt",
-        "section": "Transformer",
-        "score": 0.42,
-        "text": "..."
-      }
-    ]
-  }
+  "selected_option_body": "...",
+  "selection_reason": "...",
+  "rag_context": { "source": "rag_ready_教材", "chunks": [] }
 }
 ```
 
-## Tutoring Turn Result
+Result:
 
 ```json
 {
-  "tutor_message": "string",
-  "teaching_strategy": "category_reorientation",
-  "scaffolding_level": "L3",
-  "requires_learner_response": true,
-  "learner_prompt": "string",
+  "prerequisites": [
+    {
+      "term_label": "トークン",
+      "material": "...",
+      "check_question": "...",
+      "expected_answer": "..."
+    }
+  ],
+  "plan_rationale": "..."
+}
+```
+
+前提用語は原則3件。多すぎる場合は、対象概念を理解するために不可欠なものへ絞る。
+
+## Proposed: grade_prerequisite_answer
+
+前提用語理解チェックを採点する。
+
+Result:
+
+```json
+{
+  "is_passed": true,
+  "score": 0.8,
+  "feedback": "...",
+  "remediation_material": null,
+  "core_elements_covered": ["..."],
+  "major_errors": []
+}
+```
+
+pass基準は中程度。中核要素が含まれ、重大な誤りがなければpass。
+
+## Proposed: generate_concept_material
+
+全前提用語pass後に、対象概念教材と説明promptを生成する。
+
+Result:
+
+```json
+{
+  "concept_material": "...",
+  "concept_prompt": "上の前提用語を使って、Attentionを説明してください。",
+  "expected_answer": "..."
+}
+```
+
+## Proposed: grade_concept_answer
+
+対象概念理解チェックを採点する。
+
+Result:
+
+```json
+{
+  "is_passed": false,
+  "score": 0.45,
+  "feedback": "...",
+  "missing_prerequisite_labels": ["トークン"],
+  "review_prerequisite_labels": ["重み付け"],
+  "core_elements_covered": ["..."],
+  "major_errors": ["..."]
+}
+```
+
+fail時は、不足用語とその直前の関連用語を返す。backendは最大4回の上限を管理する。
+
+## Control: generate_control_learning_turn
+
+統制群の通常AI説明を生成する。
+
+Payloadには以下だけを含める。
+
+- participant_id
+- group_condition
+- target_term
+- rag_context
+
+Payloadに含めない。
+
+- pretest_diagnosis
+- misconception_type
+- previous_answer
+- learner_state
+- prerequisite_terms
+
+Result:
+
+```json
+{
+  "tutor_message": "...",
+  "learner_prompt": "自分の言葉で説明してください。",
   "practice_question": {
-    "body": "string",
-    "expected_answer": "string",
-    "question_type": "practice"
+    "body": "...",
+    "expected_answer": "..."
   },
   "forbidden_help_given": false
 }
 ```
 
-### Tutoring Turn Prompt Template
+## Control: grade_control_learning_answer
 
-```text
-あなたは教育実験用AIチューターです。
-この実験では、正解をすぐに教えるだけではなく、誤概念タイプと足場掛けレベルに応じて学習支援を行います。
+統制群の自己説明に一般的フィードバックを返す。
 
-目的:
-- 誤概念を修正する
-- 自己説明を促す
-- 最終的にL0で自力解答できる状態へ移行させる
-
-制約:
-- 再テスト、L0確認、転移テストの答えを直接教えない
-- L0ではヒント・例・解説を出さない
-- 被験者にM1/M2/M3/M4という内部ラベルを直接見せない
-- 統制群では過去ログや誤概念タイプに応じた支援をしない
-- rag_contextがある場合は教材コンテキストを優先し、教材にない内容を推測で断定しない
-- 出力は指定JSONのみ
-
-足場掛けレベル:
-L3: 詳しい説明、例、反例、比較表、穴埋めが可能
-L2: 観点提示、部分ヒントのみ
-L1: 着目点のみ
-L0: 問題提示のみ
-
-入力:
-{payload_json}
-
-指定JSONスキーマ:
-{schema_json}
-```
-
-## Grading Result
+Result:
 
 ```json
 {
-  "is_correct": true,
-  "score": 1.0,
-  "misconception_type": null,
-  "secondary_misconception_type": null,
-  "diagnosed_status": "stable_correct",
-  "recurrence_flag": false,
-  "l0_success": true,
-  "transfer_success": true,
-  "feedback_for_log": "string",
-  "evidence": "string",
-  "requires_manual_review": false
+  "feedback": "...",
+  "is_complete": true,
+  "forbidden_help_given": false
 }
 ```
 
-## Feedback Result
+## Retest Grading
 
-```json
-{
-  "feedback": "string",
-  "next_action": "continue",
-  "next_scaffolding_level": "L2",
-  "strategy_changed": false,
-  "state_update_reason": "string"
-}
-```
-
-## State Summary Result
-
-```json
-{
-  "summary_for_admin": "string",
-  "summary_for_learner": "string",
-  "risk_flags": ["same_misconception_recurred"],
-  "recommended_next_focus": "string"
-}
-```
-
-## JSON Schema Validation
-
-backendはAI出力をPydanticで検証する。
-
-検証失敗時:
-
-1. raw_textを `ai_call_logs` に保存
-2. JSON抽出を試す
-3. 1回だけ修復依頼を出す
-4. それでも失敗したら `requires_manual_review = true`
+再テスト採点は `grade_response` を使う。選択肢メタデータに基づき、正答、M1〜M3、unknownを保存する。再発判定はAIではなくbackendが行う。
 
 ## MockAIBackend Rules
 
-必ず実装する。Codex app-serverなしでもテストが通るようにする。
-
-決定論的ルール:
+テスト用に決定論的に実装する。
 
 - correct optionなら `stable_correct`
 - known M optionならそのMを返す
 - unknown optionなら `unknown`
-- reason_textに「同じ」「同一」「混同」があればM2寄せ
-- reason_textに「言葉」「字」「単語」「名前」があればM3寄せ
-- reason_textが空または10文字未満なら `unstable_correct` または `unknown`
-- transfer phaseで基本説明は正しいが別文脈の適用理由がない場合はM4
-- recurrence判定はAIではなくbackendが行う
-
-## Control Group Prompt Differences
-
-統制群では、AIに誤概念タイプ別支援をさせない。
-
-追加制約:
-
-```text
-この参加者は統制群です。
-一般的な解説のみを提示してください。
-過去ログ、誤概念タイプ、足場掛けレベルに基づく個別化は行わないでください。
-ただし分析用の内部診断JSONは返してください。
-```
+- 前提用語計画は常に3件返す
+- 前提用語回答は「pass」「十分」「関係」「重み」「事前」「事後」などの語を含む場合にpassしやすくする
+- 2回failや4回failの境界をテストできるよう、短い回答はfailにする
+- 統制群payloadに誤概念情報が混入した場合はテストで検出する
 
 ## Forbidden Help Detection
 
@@ -276,5 +210,5 @@ AIは `forbidden_help_given` を返す。backendも簡易検査を行う。
 検出時:
 
 - 管理画面で警告
-- tutor_turns.forbidden_help_given = true
+- ログに `forbidden_help_given = true`
 - 研究データから除外できるようCSVへ出す

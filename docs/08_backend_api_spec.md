@@ -1,182 +1,66 @@
 # 08. Backend API Spec
 
-FastAPIでREST APIを実装する。実験中のAI応答ストリーミングが必要な場合のみSSEを使う。MVPでは同期APIでよい。
+FastAPIでREST APIを実装する。MVPでは同期APIでよい。
 
 ## 共通ルール
 
 - JSON request/response
 - idはUUID文字列
 - 作成・回答保存系APIは `Idempotency-Key` headerを受け付ける
-- エラーは `error_code`, `message`, `details` を返す
 - 被験者向けAPIは内部Mラベルを返さない
 - 管理者向けAPIは内部Mラベルを返してよい
-
-## Health
-
-### GET /api/health
-
-```json
-{ "status": "ok" }
-```
+- 両群のAI payloadにはRAG教材を含める
+- 提案群だけ、pretest診断、誤概念、学習履歴をAI payloadに含める
 
 ## Participants
 
 ### POST /api/participants
 
-Request:
-
-```json
-{
-  "group_condition": "proposed",
-  "assignment_method": "manual",
-  "consent_checked": true
-}
-```
-
-`group_condition` が未指定ならランダム割当する。
-
-Response:
-
-```json
-{
-  "participant_id": "uuid",
-  "display_code": "P001",
-  "group_condition": "proposed",
-  "current_step": "pretest"
-}
-```
+`group_condition` が未指定なら `control | proposed` をランダム割当する。responseの `current_step` は `pretest`。
 
 ### GET /api/participants/{id}/current-step
 
-```json
-{
-  "step": "pretest",
-  "next_url": "/pretest",
-  "completed_steps": ["start"]
-}
-```
+`pretest`, `learning_targets`, `retest`, `post_survey`, `finish` を現行導線として返す。`l0_check` と `transfer` は現行導線から外す。
 
 ## Surveys
 
 ### POST /api/participants/{id}/survey
 
-事後アンケートを保存する。事前アンケートはMVPでは実施しない。
-
-Request:
-
-```json
-{
-  "phase": "post_survey",
-  "usability_rating": 4,
-  "helpfulness_rating": 4,
-  "perceived_hint_amount": 3,
-  "free_comment": ""
-}
-```
-
-Response:
-
-```json
-{ "saved": true, "next_step": "finish" }
-```
+事後アンケートだけを保存する。事前アンケートは実施しない。
 
 ## Questions
 
 ### GET /api/experiment/{participant_id}/pretest
 
-事前テスト問題を返す。現行seedでは添付 `問題 (1).md` の5問を返す。選択肢は参加者ごとにランダム化し、表示順をDBに保存する。
-
-Response:
-
-```json
-{
-  "phase": "pretest",
-  "questions": [
-    {
-      "question_id": "uuid",
-      "term_slug": "attention",
-      "term_label": "Attention",
-      "body": "TransformerにおけるAttentionの説明として、最も適切なものはどれか。",
-      "options": [
-        { "option_id": "uuid", "label": "A", "body": "..." }
-      ],
-      "requires_reason": false,
-      "requires_confidence": false
-    }
-  ]
-}
-```
-
-内部の `misconception_type` は返さない。
+現行5概念の事前テスト問題を返す。選択肢は参加者ごとにランダム化し、表示順を保存する。`requires_reason=false`, `requires_confidence=false`。
 
 ### GET /api/experiment/{participant_id}/retest
 
-学習対象用語の正式再テスト問題を返す。同じ `construct_key` の別 `variant_key = retest_v1` を選ぶ。再テストは選択式のみで、`requires_reason` と `requires_confidence` は false を返す。
+学習対象用語の正式再テスト問題を返す。`variant_key = retest_v1` のみactive出題する。`requires_reason=false`, `requires_confidence=false`。
 
 ### GET /api/experiment/{participant_id}/l0-check
 
-L0確認問題を返す。チャットやヒント表示はfrontendで無効化する。正式問題が届くまでは `l0_temporary_v1` を使う。
+旧互換API。現行参加者フローでは使わず、active問題は返さない。
 
 ### GET /api/experiment/{participant_id}/transfer-test
 
-転移問題を返す。全問L0扱い。正式問題が届くまでは `transfer_temporary_v1` を使う。
+旧互換API。現行参加者フローでは使わず、active問題は返さない。
 
-## Attempts
+## Attempts and Diagnosis
 
 ### POST /api/attempts
 
-回答を保存する。
-
-Request:
-
-```json
-{
-  "participant_id": "uuid",
-  "question_id": "uuid",
-  "phase": "pretest",
-  "selected_option_id": "uuid",
-  "free_text_answer": null,
-  "reason_text": null,
-  "confidence": null,
-  "response_time_sec": 18.3
-}
-```
-
-Response:
-
-```json
-{
-  "attempt_id": "uuid",
-  "saved": true,
-  "is_complete_for_question": true
-}
-```
-
-テストフェーズでは正誤を返さない。
-
-## Diagnosis
+テスト回答を保存する。テストフェーズでは正誤を返さない。
 
 ### POST /api/participants/{id}/diagnose-pretest
 
-AI診断を実行し、learner_statesを初期化する。
-
-Response:
-
-```json
-{
-  "status": "completed",
-  "learning_target_count": 5,
-  "next_step": "learning_targets"
-}
-```
-
-被験者向けresponseにはMラベルを含めない。管理者向けログには含める。
-
-`stable_correct` は学習対象外にし、`misconception`、`unknown`、`unstable_correct` は全件学習対象にする。固定上限では切らない。
+事前テスト回答を診断し、`learner_states` と `term_assignments` を作成する。`stable_correct` は学習対象外、その他は全件学習対象にする。
 
 ## Learning Targets
 
 ### GET /api/participants/{id}/learning-targets
+
+学習対象一覧を返す。被験者向けresponseにはMラベルを含めない。
 
 Response:
 
@@ -187,17 +71,17 @@ Response:
       "term_slug": "attention",
       "term_label": "Attention",
       "summary_for_learner": "人間の注意ではなく、モデル内部の重み付けとして確認します。",
-      "current_scaffolding_level_for_display": "しっかり確認"
+      "learning_mode": "proposed_gate"
     }
   ]
 }
 ```
 
-`current_scaffolding_level_for_display` は内部L0〜L3を直接出さず、自然言語化する。
+## Proposed Learning APIs
 
-## Tutor Sessions
+### POST /api/learning-sessions
 
-### POST /api/tutor-sessions
+対象概念の学習セッションを開始する。提案群では前提用語計画を生成し、統制群では通常チューター用セッションを作る。
 
 Request:
 
@@ -212,191 +96,117 @@ Response:
 
 ```json
 {
-  "tutor_session_id": "uuid",
-  "session_index": 1,
-  "max_turns": 3
+  "learning_session_id": "uuid",
+  "group_condition": "proposed",
+  "status": "term_understanding",
+  "term_label": "Attention"
 }
 ```
 
-### POST /api/tutor-sessions/{session_id}/turns
+### GET /api/learning-sessions/{session_id}
 
-チューター発話を生成する。
+現在の学習状態を返す。提案群では前提用語一覧、現在の用語、概念教材、attempt上限を返す。統制群では通常説明ターンを返す。
+
+### POST /api/learning-sessions/{session_id}/prerequisites/{prerequisite_id}/attempts
+
+提案群の用語理解回答を採点する。
 
 Request:
 
 ```json
-{
-  "requested_action": "start_or_continue"
-}
+{ "learner_answer": "..." }
 ```
 
 Response:
 
 ```json
 {
-  "turn_id": "uuid",
-  "tutor_message": "...",
-  "learner_prompt": "...",
-  "practice_question": {
-    "body": "...",
-    "requires_response": true
-  },
-  "requires_learner_response": true
-}
-```
-
-被験者向けresponseには内部Mラベルを含めない。
-
-内部AI payloadには `rag_context` を含める。`rag_context` は `rag_ready_教材` から取得したローカルTF-IDF検索結果で、被験者向けresponseにはそのまま返さない。
-
-### POST /api/tutor-turns/{turn_id}/respond
-
-学習者回答を保存し、AIフィードバックと次レベルを返す。
-
-Request:
-
-```json
-{
-  "learner_response": "未知データで性能が下がることが重要だと思います。"
-}
-```
-
-Response:
-
-```json
-{
+  "is_passed": true,
   "feedback": "...",
-  "next_action": "move_next",
-  "session_completed": false
+  "remediation_material": null,
+  "next_stage": "term_understanding",
+  "session_status": "term_understanding"
 }
 ```
+
+2回fail時は `session_status=blocked` を返す。
+
+### POST /api/learning-sessions/{session_id}/concept-attempts
+
+提案群の概念理解回答を採点する。
+
+Request:
+
+```json
+{ "learner_answer": "..." }
+```
+
+Response:
+
+```json
+{
+  "is_passed": false,
+  "feedback": "...",
+  "missing_prerequisite_ids": ["uuid"],
+  "review_prerequisite_ids": ["uuid"],
+  "next_stage": "term_understanding",
+  "session_status": "term_understanding"
+}
+```
+
+pass時は `session_status=completed` を返す。4回fail時は `session_status=failed` を返す。
+
+## Control Learning APIs
+
+### POST /api/learning-sessions/{session_id}/control-turn
+
+統制群の通常AI説明と自己説明promptを返す。AI payloadにはRAG教材だけを含め、誤概念タイプや過去ログは含めない。
+
+### POST /api/learning-sessions/{session_id}/control-answer
+
+統制群の自己説明を保存し、一般的フィードバックを返す。
 
 ## Scoring APIs
 
 ### POST /api/participants/{id}/score-retest
 
-再テスト回答を採点し、再発判定とlearner_states更新を行う。
+再テスト回答を採点し、再発判定を保存する。完了後 `next_step=post_survey` を返す。
 
 ### POST /api/participants/{id}/score-l0-check
 
-L0確認回答を採点し、`l0_success` を保存する。
+旧互換API。現行フローでは呼び出さない。
 
 ### POST /api/participants/{id}/score-transfer-test
 
-転移回答を採点し、M4判定と `transfer_success` を保存する。
+旧互換API。現行フローでは呼び出さない。
 
-各API response:
+## Evaluation and Admin
 
-```json
-{
-  "status": "completed",
-  "next_step": "transfer_test"
-}
-```
-
-テストフェーズ中は個別の正誤を被験者に返さない。
-
-## Evaluation
-
-### POST /api/participants/{id}/evaluation-summary/recalculate
-
-参加者単位で評価指標を再計算する。
-
-### GET /api/admin/evaluation-summary
-
-管理画面用に群別集計を返す。
-
-```json
-{
-  "groups": [
-    {
-      "group_condition": "proposed",
-      "participant_count": 10,
-      "same_misconception_recurrence_rate": 0.22,
-      "l0_correct_rate": 0.71,
-      "transfer_correct_rate": 0.64
-    }
-  ]
-}
-```
-
-## Admin
-
+- POST /api/participants/{id}/evaluation-summary/recalculate
+- GET /api/admin/evaluation-summary
 - GET /api/admin/participants
-- GET /api/admin/participants/{id}
-- GET /api/admin/participants/{id}/logs
-- GET /api/admin/participants/{id}/learner-states
-- PATCH /api/admin/attempts/{attempt_id}/diagnosis
-- DELETE /api/admin/participants/{id}
-- DELETE /api/admin/experiment-data
+- GET /api/admin/export/{name}.csv
+- GET /api/admin/ai/status
+- POST /api/admin/ai/login/start
+- POST /api/admin/ai/login/cancel
+- POST /api/admin/ai/logout
 
-手動修正APIは `audit_events` に必ず保存する。
-
-## CSV Export
-
-### GET /api/admin/export/{name}.csv
-
-Allowed CSV names:
+Allowed CSV names include:
 
 - participants
 - participant_surveys
 - term_assignments
-- questions
 - attempts
 - learner_states
+- learning_sessions
+- prerequisite_terms
+- term_understanding_attempts
+- concept_understanding_attempts
 - tutor_sessions
 - tutor_turns
 - recurrence_events
 - ai_call_logs
 - evaluation_summary
-
-## Codex app-server
-
-### GET /api/admin/ai/status
-
-```json
-{
-  "ai_backend": "codex_app_server",
-  "app_server_reachable": true,
-  "logged_in": true,
-  "account_label": "ChatGPT",
-  "last_error": null
-}
-```
-
-### POST /api/admin/ai/login/start
-
-```json
-{
-  "flow": "chatgptDeviceCode"
-}
-```
-
-Response:
-
-```json
-{
-  "login_id": "...",
-  "verification_url": "https://...",
-  "user_code": "ABCD-EFGH"
-}
-```
-
-### POST /api/admin/ai/login/cancel
-
-### POST /api/admin/ai/logout
-
-## Error Response
-
-```json
-{
-  "error_code": "schema_validation_failed",
-  "message": "AI出力を検証できませんでした。",
-  "details": {
-    "ai_call_log_id": "uuid"
-  }
-}
-```
 
 ## APIで返してはいけないもの
 
@@ -404,10 +214,9 @@ Response:
 
 - `misconception_type`
 - `diagnosis_confidence`
-- `teaching_strategy`
-- `scaffolding_level`
 - `recurrence_flag`
 - `is_correct` in test phases
 - AI raw JSON
+- 統制群向け学習response内のpretest診断情報
 
 管理者向けAPIでは返してよい。

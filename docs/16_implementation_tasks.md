@@ -1,151 +1,76 @@
 # 16. Implementation Tasks
 
-## Milestone 1: Project Bootstrap
+## Milestone 1: Docs and Seed Alignment
 
-- [ ] Monorepo作成
-- [ ] frontend/ Next.js
-- [ ] backend/ FastAPI
-- [ ] docker-compose.yml
-- [ ] PostgreSQL接続
-- [ ] Alembic設定
-- [ ] Makefile
-- [ ] .env.example
-- [ ] README更新
+- [x] `revised_experiment_flow_term_concept_stages_FINAL.md` を根拠としてdocsを更新
+- [x] 5概念pretest/retestを維持
+- [x] L0/transferをactive出題から外す
+- [x] 事前アンケート導線を外す
 
-## Milestone 2: Database & Seed
+## Milestone 2: Data Model
 
-- [ ] SQLAlchemy models
-- [ ] Alembic migration
-- [ ] enum定義
-- [ ] terms seed
-- [ ] questions seed
-- [ ] question_options seed
-- [ ] pretest/retest/transfer variants seed
-- [ ] seed command
-- [ ] question_display_orders実装
+- [x] `learning_sessions`
+- [x] `prerequisite_terms`
+- [x] `term_understanding_attempts`
+- [x] `concept_understanding_attempts`
+- [x] evaluation_summariesにgate指標列
+- [x] CSV export対象追加
 
-## Milestone 3: Core Experiment API
+## Milestone 3: AI Backend
 
-- [ ] participant create
-- [ ] current step API
-- [ ] pre survey save
-- [ ] post survey save
-- [ ] pretest questions fetch
-- [ ] retest questions fetch
-- [ ] l0 questions fetch
-- [ ] transfer questions fetch
-- [ ] attempt submit
-- [ ] idempotency handling
-- [ ] admin participant list
+- [x] `generate_prerequisite_plan`
+- [x] `grade_prerequisite_answer`
+- [x] `generate_concept_material`
+- [x] `grade_concept_answer`
+- [x] `generate_control_learning_turn`
+- [x] `grade_control_learning_answer`
+- [x] MockAIBackendの決定論実装
+- [x] CodexAppServerBackendのschema実装
 
-## Milestone 4: AI Backend Abstraction
+## Milestone 4: Backend Flow
 
-- [ ] AIBackend protocol
-- [ ] payload/result schemas
-- [ ] MockAIBackend
-- [ ] ai_call_logs
-- [ ] JSON validation/retry utility
-- [ ] CodexAppServer client skeleton
-- [ ] app-server health/account read
-- [ ] app-server login start/cancel
+- [x] participant create/current-step
+- [x] pretest/retest questions
+- [x] pretest diagnosis
+- [x] learning target selection
+- [x] proposed learning session create
+- [x] prerequisite attempts, max 2
+- [x] concept attempts, max 4
+- [x] control learning session
+- [x] retest score -> post_survey
+- [x] evaluation summary
 
-## Milestone 5: Diagnosis & Learner State
+## Milestone 5: Frontend
 
-- [ ] choice-based initial diagnosis
-- [ ] AI reason-text diagnosis
-- [ ] diagnosis merge rules
-- [ ] ambiguous/manual review handling
-- [ ] initial scaffolding decision
-- [ ] learner_state creation
-- [ ] learning target selection
-- [ ] participant progress update
+- [x] /start
+- [x] /pretest
+- [x] /diagnosing
+- [x] /learning-targets
+- [x] /learning/[termSlug] group split
+- [x] proposed gate UI
+- [x] control general tutor UI
+- [x] /retest -> /survey/post
+- [x] /survey/post
+- [x] /finish
+- [x] /admin
 
-## Milestone 6: Tutoring Session
+`/survey/pre`, `/l0-check`, `/transfer-test` は通常導線から外す。
 
-- [ ] tutor session create
-- [ ] tutor turn generation
-- [ ] learner response submit
-- [ ] feedback generation
-- [ ] forbidden help detection
-- [ ] level update
-- [ ] strategy change on recurrence
-- [ ] max turns per term
-- [ ] control group general_explanation behavior
+## Milestone 6: Tests
 
-## Milestone 7: Retest / L0 / Transfer
+- [x] backend proposed gate happy path
+- [x] backend proposed gate fail limits
+- [x] backend control payload isolation
+- [x] backend retest recurrence
+- [x] frontend pretest/retest no reason/confidence
+- [x] frontend proposed/control learning split
+- [x] CSV export smoke
+- [x] docker compose build
 
-- [ ] retest flow
-- [ ] recurrence calculation
-- [ ] recurrence_events
-- [ ] state update after retest
-- [ ] second learning session trigger
-- [ ] L0 check flow
-- [ ] l0_success calculation
-- [ ] transfer test flow
-- [ ] M4 detection
-- [ ] transfer_success calculation
+## Guardrails
 
-## Milestone 8: Evaluation & Export
-
-- [ ] evaluation summary calculation
-- [ ] group-level aggregate
-- [ ] CSV export endpoints
-- [ ] export_jobs
-- [ ] admin dashboard metrics
-- [ ] simple charts
-- [ ] manual recalculation API
-
-## Milestone 9: Codex app-server Productionization
-
-- [ ] WebSocket JSON-RPC client
-- [ ] initialize
-- [ ] account/read
-- [ ] login browser/device flow UI
-- [ ] thread/start
-- [ ] turn/start
-- [ ] streaming notification parser
-- [ ] outputSchema validation
-- [ ] timeout/retry/error handling
-- [ ] capability token support
-- [ ] no-Mock-fallback failure logging
-
-## Milestone 10: Frontend Completion
-
-- [ ] /start
-- [ ] /survey/pre
-- [ ] /pretest
-- [ ] /diagnosing
-- [ ] /learning-targets
-- [ ] /learning/[termSlug]
-- [ ] /retest
-- [ ] /l0-check
-- [ ] /transfer-test
-- [ ] /survey/post
-- [ ] /finish
-- [ ] /admin
-- [ ] internal label hiding
-- [ ] test phase chat disabling
-
-## Milestone 11: Tests & Documentation
-
-- [ ] backend unit tests
-- [ ] backend integration tests
-- [ ] frontend unit tests
-- [ ] E2E happy path
-- [ ] proposed/control comparison tests
-- [ ] CSV snapshot tests
-- [ ] README setup instructions
-- [ ] troubleshooting docs
-
-## Implementation Order
-
-必ず以下の順で進める。
-
-1. Codex app-serverを通常実行のAIバックエンドにする
-2. ChatGPT/Codexログイン、`account/read`、`thread/start`、`turn/start` を確認する
-3. MockAIBackendは自動テスト・障害切り分け用に明示指定した場合だけ使う
-4. app-server接続失敗時はMockへ自動フォールバックせず、失敗ログと管理画面エラーを出す
-
-## Do Not Implement Before Requested
-
-このリポジトリには実装コードも含まれる。仕様整理だけを依頼された場合はMarkdownのみを編集し、実装依頼時だけfrontend/backendコードを変更する。
+- OpenAI APIキー経路を作らない
+- app-server失敗時にMockへ自動フォールバックしない
+- 被験者画面にMラベルを出さない
+- 統制群に誤概念・ログ・前提用語ゲート情報を渡さない
+- 仕様整理だけの依頼ではMarkdownのみを編集する

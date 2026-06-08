@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { api, requireParticipant } from "@/lib/api";
 
-type Target = { term_slug: string; term_label: string; summary_for_learner: string; current_scaffolding_level_for_display: string };
+type Target = { term_slug: string; term_label: string; summary_for_learner: string; current_scaffolding_level_for_display: string; learning_mode?: string };
 
 export default function LearningTargetsPage() {
   const [targets, setTargets] = useState<Target[]>([]);
@@ -32,7 +32,7 @@ export default function LearningTargetsPage() {
                 {i + 1}. {target.term_label}
               </strong>
               <p>{target.summary_for_learner}</p>
-              <span className="muted">{target.current_scaffolding_level_for_display}</span>
+              <span className="muted">{target.learning_mode === "proposed_gate" ? "前提用語から確認" : "通常説明で確認"}</span>
             </div>
           ))}
         </div>
@@ -41,7 +41,9 @@ export default function LearningTargetsPage() {
             学習を開始
           </Link>
         ) : (
-          <span>対象を読み込み中...</span>
+          <Link className="button" href="/survey/post">
+            事後アンケートへ
+          </Link>
         )}
       </section>
     </AppShell>

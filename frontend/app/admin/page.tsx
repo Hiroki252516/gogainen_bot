@@ -71,13 +71,30 @@ export default function AdminPage() {
               <div className="notice" key={group.group_condition}>
                 <strong>{group.group_condition}</strong>
                 <p>参加者: {group.participant_count}</p>
-                <p>L0正答率: {formatRate(group.l0_correct_rate)}</p>
-                <p>転移率: {formatRate(group.transfer_correct_rate)}</p>
+                <p>再テスト正答率: {formatRate(group.retest_score)}</p>
+                <p>同種誤答再発率: {formatRate(group.same_misconception_recurrence_rate)}</p>
+                <p>前提用語通過率: {formatRate(group.prerequisite_pass_rate)}</p>
+                <p>概念理解通過率: {formatRate(group.concept_pass_rate)}</p>
               </div>
             ))}
           </div>
           <div className="actions">
-            {["participants", "attempts", "learner_states", "tutor_turns", "recurrence_events", "ai_call_logs", "evaluation_summary"].map((name) => (
+            {[
+              "participants",
+              "participant_surveys",
+              "term_assignments",
+              "attempts",
+              "learner_states",
+              "learning_sessions",
+              "prerequisite_terms",
+              "term_understanding_attempts",
+              "concept_understanding_attempts",
+              "tutor_sessions",
+              "tutor_turns",
+              "recurrence_events",
+              "ai_call_logs",
+              "evaluation_summary"
+            ].map((name) => (
               <a className="button secondary" href={`${API_BASE}/api/admin/export/${name}.csv`} key={name}>
                 {name}.csv
               </a>

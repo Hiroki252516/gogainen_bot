@@ -244,6 +244,212 @@ class CodexAppServerBackend:
             result["teaching_strategy"] = "general_explanation"
         return result
 
+    async def generate_prerequisite_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "prerequisites": {
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "term_label": {"type": "string"},
+                            "material": {"type": "string"},
+                            "check_question": {"type": "string"},
+                            "expected_answer": {"type": "string"},
+                        },
+                        "required": ["term_label", "material", "check_question", "expected_answer"],
+                        "additionalProperties": False,
+                    },
+                },
+                "plan_rationale": {"type": "string"},
+            },
+            "required": ["prerequisites", "plan_rationale"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_prerequisite_plan",
+            self._prompt(
+                "prerequisite_plan",
+                payload,
+                [
+                    "対象概念を理解するための前提用語をちょうど3件作る。",
+                    "各前提用語について、短い教材、記述式確認質問、期待回答を日本語で作る。",
+                    "pretest診断は提案群の支援方針にだけ使う。M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
+                    "rag_context を優先し、教材にない内容は断定しない。",
+                ],
+            ),
+            schema,
+        )
+        for item in result["prerequisites"]:
+            item["material"] = _strip_internal_labels(item["material"])
+            item["check_question"] = _strip_internal_labels(item["check_question"])
+            item["expected_answer"] = _strip_internal_labels(item["expected_answer"])
+        result["plan_rationale"] = _strip_internal_labels(result["plan_rationale"])
+        return result
+
+    async def grade_prerequisite_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "is_passed": {"type": "boolean"},
+                "score": {"type": "number", "minimum": 0, "maximum": 1},
+                "feedback": {"type": "string"},
+                "remediation_material": {"type": ["string", "null"]},
+                "core_elements_covered": {"type": "array", "items": {"type": "string"}},
+                "major_errors": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["is_passed", "score", "feedback", "remediation_material", "core_elements_covered", "major_errors"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "grade_prerequisite_answer",
+            self._prompt(
+                "prerequisite_grading",
+                payload,
+                [
+                    "前提用語理解の記述回答を採点する。",
+                    "中核要素が含まれ重大な誤りがなければpassにする。",
+                    "failなら、より簡単な再説明と具体例を remediation_material に書く。",
+                    "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
+                    "rag_context を優先し、教材にない内容は断定しない。",
+                ],
+            ),
+            schema,
+        )
+        result["feedback"] = _strip_internal_labels(result["feedback"])
+        if result.get("remediation_material"):
+            result["remediation_material"] = _strip_internal_labels(result["remediation_material"])
+        return result
+
+    async def generate_concept_material(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "concept_material": {"type": "string"},
+                "concept_prompt": {"type": "string"},
+                "expected_answer": {"type": "string"},
+            },
+            "required": ["concept_material", "concept_prompt", "expected_answer"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_concept_material",
+            self._prompt(
+                "concept_material",
+                payload,
+                [
+                    "通過済み前提用語を使って対象概念教材を作る。",
+                    "学習者に前提用語を使って対象概念を説明させるpromptを作る。",
+                    "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
+                    "rag_context を優先し、教材にない内容は断定しない。",
+                ],
+            ),
+            schema,
+        )
+        return {key: _strip_internal_labels(value) for key, value in result.items()}
+
+    async def grade_concept_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "is_passed": {"type": "boolean"},
+                "score": {"type": "number", "minimum": 0, "maximum": 1},
+                "feedback": {"type": "string"},
+                "missing_prerequisite_labels": {"type": "array", "items": {"type": "string"}},
+                "review_prerequisite_labels": {"type": "array", "items": {"type": "string"}},
+                "core_elements_covered": {"type": "array", "items": {"type": "string"}},
+                "major_errors": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["is_passed", "score", "feedback", "missing_prerequisite_labels", "review_prerequisite_labels", "core_elements_covered", "major_errors"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "grade_concept_answer",
+            self._prompt(
+                "concept_grading",
+                payload,
+                [
+                    "対象概念理解の記述回答を採点する。",
+                    "前提用語を使って対象概念の役割や仕組みを説明できていればpassにする。",
+                    "failなら不足している前提用語と、直前に確認すべき関連用語を返す。",
+                    "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
+                    "rag_context を優先し、教材にない内容は断定しない。",
+                ],
+            ),
+            schema,
+        )
+        result["feedback"] = _strip_internal_labels(result["feedback"])
+        return result
+
+    async def generate_control_learning_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "tutor_message": {"type": "string"},
+                "learner_prompt": {"type": "string"},
+                "practice_question": {
+                    "type": "object",
+                    "properties": {
+                        "body": {"type": "string"},
+                        "expected_answer": {"type": "string"},
+                    },
+                    "required": ["body", "expected_answer"],
+                    "additionalProperties": False,
+                },
+                "forbidden_help_given": {"type": "boolean"},
+            },
+            "required": ["tutor_message", "learner_prompt", "practice_question", "forbidden_help_given"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_control_learning_turn",
+            self._prompt(
+                "control_learning_turn",
+                self._control_learning_payload(payload),
+                [
+                    "統制群用の通常AIチューターとして、一般的な説明と自己説明promptを作る。",
+                    "過去ログ、誤概念タイプ、前提用語ゲートに基づく個別化は行わない。",
+                    "rag_context を優先し、教材にない内容は断定しない。",
+                    "再テストの正解や選択肢を直接教えない。",
+                ],
+            ),
+            schema,
+        )
+        result["tutor_message"] = _strip_internal_labels(result["tutor_message"])
+        result["learner_prompt"] = _strip_internal_labels(result["learner_prompt"])
+        result["practice_question"]["body"] = _strip_internal_labels(result["practice_question"]["body"])
+        return result
+
+    async def grade_control_learning_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "feedback": {"type": "string"},
+                "is_complete": {"type": "boolean"},
+                "forbidden_help_given": {"type": "boolean"},
+            },
+            "required": ["feedback", "is_complete", "forbidden_help_given"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "grade_control_learning_answer",
+            self._prompt(
+                "control_learning_feedback",
+                self._control_learning_payload(payload),
+                [
+                    "統制群の自己説明に一般的なフィードバックを返す。",
+                    "誤概念タイプや過去ログに基づく個別化は行わない。",
+                    "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
+                ],
+            ),
+            schema,
+        )
+        result["feedback"] = _strip_internal_labels(result["feedback"])
+        return result
+
     async def grade_response(self, payload: dict[str, Any]) -> dict[str, Any]:
         schema = {
             "type": "object",
@@ -475,6 +681,16 @@ class CodexAppServerBackend:
                 "scaffolding_level": (payload.get("learner_state") or {}).get("scaffolding_level"),
                 "teaching_strategy": "general_explanation",
             },
+            "rag_context": payload.get("rag_context"),
+        }
+
+    def _control_learning_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "participant_id": payload.get("participant_id"),
+            "group_condition": "control",
+            "target_term": payload.get("target_term"),
+            "tutor_turn": payload.get("tutor_turn"),
+            "learner_response": payload.get("learner_response"),
             "rag_context": payload.get("rag_context"),
         }
 

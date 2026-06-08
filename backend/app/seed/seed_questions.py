@@ -100,39 +100,10 @@ def seed_database(db: Session) -> None:
                     option.misconception_type = "unknown"
                     option.default_order = 999
 
-        for phase, qtype in (("l0_check", "l0_free_response"), ("transfer", "transfer")):
-            variant_key = "l0_temporary_v1" if phase == "l0_check" else "transfer_temporary_v1"
-            question = (
-                db.query(Question)
-                .filter(
-                    Question.term_id == term.id,
-                    Question.phase == phase,
-                    Question.variant_key == variant_key,
-                )
-                .one_or_none()
-            )
-            body = item["questions"]["transfer"] if phase == "transfer" else item["questions"]["l0"]
-            if not question:
-                db.add(
-                    Question(
-                        term_id=term.id,
-                        phase=phase,
-                        question_type=qtype,
-                        body=body,
-                        expected_answer=item["questions"]["pretest"]["expected"],
-                        expected_keywords=item["keywords"],
-                        construct_key=f"{item['slug']}_{phase}",
-                        variant_key=variant_key,
-                    )
-                )
-            else:
-                question.question_type = qtype
-                question.body = body
-                question.expected_answer = item["questions"]["pretest"]["expected"]
-                question.expected_keywords = item["keywords"]
-                question.construct_key = f"{item['slug']}_{phase}"
-                question.variant_key = variant_key
-                question.is_active = True
+        db.query(Question).filter(
+            Question.term_id == term.id,
+            Question.phase.in_(("l0_check", "transfer")),
+        ).update({Question.is_active: False}, synchronize_session=False)
     db.commit()
 
 

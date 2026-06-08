@@ -12,9 +12,9 @@
 - M3 option
 - unknown option
 
-添付問題の `L4` は、本システムの最強支援 `L3` として正規化する。システム、DB、AI schemaには `L4` を追加しない。
+添付問題の `L4` は旧設計の最強支援表記として記録するが、現行の前提用語ゲート型学習ではL3/L2/L1を使わない。システム、DB、AI schemaには `L4` を追加しない。
 
-再テストは正式問題を `retest_v1` としてseedする。L0確認、転移テスト問題は後で差し替えるため、MVPではアプリを完走できるよう、5概念それぞれに仮問題を `l0_temporary_v1`, `transfer_temporary_v1` としてseedする。
+再テストは正式問題を `retest_v1` としてseedする。L0確認、転移テストは現行参加者フローから外すため、`l0_temporary_v1`, `transfer_temporary_v1` はseedしないか、既存DBに残る場合は非active化する。
 
 ## Seed Terms
 
@@ -150,14 +150,9 @@ Labels: A correct / B M1 / C M2 / D M3 / E unknown
 
 正式再テストの `variant_key` は `retest_v1` とする。旧 `retest_temporary_v1` は出題対象にしない。
 
-## Temporary L0 / Transfer
+## L0 / Transfer
 
-正式問題が提供されるまで、以下の仮問題をseedする。
-
-- L0: 各概念をヒントなしで自由記述説明させる。
-- Transfer: 教材と異なる短い応用場面で概念を説明させる。
-
-仮問題の `variant_key` は `l0_temporary_v1`, `transfer_temporary_v1` とし、正式問題と区別できるようにする。
+現行参加者フローではL0確認と転移テストを実施しない。旧DBや旧seedで `l0_temporary_v1`, `transfer_temporary_v1` が存在する場合は、出題対象にしない。
 
 ## RAG Reference
 

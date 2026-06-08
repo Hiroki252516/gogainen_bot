@@ -53,6 +53,94 @@ class MockAIBackend:
             "requires_manual_review": False,
         }
 
+    async def generate_prerequisite_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        term = payload["target_term"]
+        label = term["label"]
+        defaults = {
+            "Transformer": ["トークン間の関係", "Attention", "FFN"],
+            "Attention": ["トークン", "関係の重み", "文脈情報"],
+            "LLMの学習段階": ["事前学習", "インストラクションチューニング", "事後学習"],
+            "事前学習": ["大規模データ", "次単語予測", "基盤能力"],
+            "事後学習": ["人間評価", "報酬モデル", "安全性と有用性"],
+        }
+        terms = defaults.get(label, [f"{label}の基本", f"{label}の役割", f"{label}の使い方"])
+        return {
+            "prerequisites": [
+                {
+                    "term_label": prereq,
+                    "material": f"{prereq}は、{label}を理解するための前提です。教材の内容に沿って、役割と関係を確認します。",
+                    "check_question": f"{prereq}が{label}の理解にどう関係するか、自分の言葉で説明してください。",
+                    "expected_answer": f"{prereq}の役割と、{label}との関係を説明できている。",
+                }
+                for prereq in terms[:3]
+            ],
+            "plan_rationale": f"{label}の理解に必要な前提をMockAIBackendが3件選びました。",
+        }
+
+    async def grade_prerequisite_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        answer = payload.get("learner_answer", "")
+        positive_markers = ["pass", "十分", "関係", "役割", "重み", "事前", "事後", "学習", "評価", "安全", "基盤", "トークン", "Attention", "FFN"]
+        is_passed = len(answer.strip()) >= 12 and any(marker in answer for marker in positive_markers)
+        return {
+            "is_passed": is_passed,
+            "score": 0.8 if is_passed else 0.3,
+            "feedback": "中核となる関係を説明できています。" if is_passed else "前提用語の役割と対象概念との関係をもう少し具体化してください。",
+            "remediation_material": None if is_passed else "より簡単に言うと、この前提用語が何を表し、対象概念のどの部分に関係するかを一文で整理します。例も使ってかまいません。",
+            "core_elements_covered": ["役割", "関係"] if is_passed else [],
+            "major_errors": [] if is_passed else ["説明が短い、または関係が不明確"],
+        }
+
+    async def generate_concept_material(self, payload: dict[str, Any]) -> dict[str, Any]:
+        term = payload["target_term"]
+        prereq_labels = [item["term_label"] for item in payload.get("prerequisites", [])]
+        joined = "、".join(prereq_labels)
+        return {
+            "concept_material": f"{term['label']}は、{joined}を組み合わせて理解します。各前提用語がどの役割を持つかをつなげて説明しましょう。",
+            "concept_prompt": f"{joined}を使って、{term['label']}を自分の言葉で説明してください。",
+            "expected_answer": f"{joined}を使い、{term['label']}の役割を説明できている。",
+        }
+
+    async def grade_concept_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        answer = payload.get("learner_answer", "")
+        prereq_labels = [item["term_label"] for item in payload.get("prerequisites", [])]
+        used = [label for label in prereq_labels if label in answer]
+        is_passed = len(answer.strip()) >= 20 and len(used) >= max(1, min(2, len(prereq_labels)))
+        missing = [label for label in prereq_labels if label not in used]
+        review = missing[:1]
+        if len(prereq_labels) > 1 and missing:
+            idx = prereq_labels.index(missing[0])
+            if idx > 0:
+                review.append(prereq_labels[idx - 1])
+        return {
+            "is_passed": is_passed,
+            "score": 0.85 if is_passed else 0.4,
+            "feedback": "前提用語を使って対象概念を説明できています。" if is_passed else "前提用語とのつながりが不足しています。関連する前提用語を確認しましょう。",
+            "missing_prerequisite_labels": [] if is_passed else missing[:1],
+            "review_prerequisite_labels": [] if is_passed else review[:2],
+            "core_elements_covered": used,
+            "major_errors": [] if is_passed else ["前提用語の利用不足"],
+        }
+
+    async def generate_control_learning_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
+        term = payload["target_term"]
+        return {
+            "tutor_message": f"{term['label']}について、教材に基づく一般的な説明を確認します。{term.get('description') or ''}",
+            "learner_prompt": f"{term['label']}を自分の言葉で説明してください。",
+            "practice_question": {
+                "body": f"{term['label']}の役割を一文で説明してください。",
+                "expected_answer": term.get("description") or "",
+            },
+            "forbidden_help_given": False,
+        }
+
+    async def grade_control_learning_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        answer = payload.get("learner_response", "")
+        return {
+            "feedback": "説明として必要な要素が含まれています。" if len(answer.strip()) >= 12 else "もう少し具体的に、何のための概念かを書いてください。",
+            "is_complete": len(answer.strip()) >= 12,
+            "forbidden_help_given": False,
+        }
+
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
         term = payload["term"]
         state = payload["learner_state"]

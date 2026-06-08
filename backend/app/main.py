@@ -15,16 +15,22 @@ from app.seed.seed_questions import seed_database
 from app.services.experiment import (
     admin_summary,
     create_participant,
+    create_learning_session,
     create_tutor_session,
     diagnose_pretest,
     export_csv,
+    generate_control_learning_turn,
     generate_tutor_turn,
+    learning_session_state,
     learning_targets,
     question_payloads,
     recalculate_evaluation,
+    respond_control_learning_answer,
     respond_tutor_turn,
     save_survey,
     score_phase,
+    submit_concept_attempt,
+    submit_prerequisite_attempt,
     submit_attempt,
 )
 
@@ -88,7 +94,21 @@ class TutorSessionCreate(BaseModel):
     term_slug: str
 
 
+class LearningSessionCreate(BaseModel):
+    participant_id: str
+    term_slug: str
+
+
 class TutorTurnRespond(BaseModel):
+    learner_response: str
+
+
+class LearningAnswerPayload(BaseModel):
+    learner_answer: str
+
+
+class ControlAnswerPayload(BaseModel):
+    turn_id: str
     learner_response: str
 
 
@@ -130,8 +150,7 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
     mapping = {
         "pretest": "/pretest",
         "learning_targets": "/learning-targets",
-        "l0_check": "/l0-check",
-        "transfer": "/transfer-test",
+        "retest": "/retest",
         "post_survey": "/survey/post",
         "finish": "/finish",
     }
@@ -179,6 +198,37 @@ async def api_diagnose_pretest(participant_id: str, db: Session = Depends(get_db
 @app.get("/api/participants/{participant_id}/learning-targets")
 def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> dict:
     return {"targets": learning_targets(db, participant_id)}
+
+
+@app.post("/api/learning-sessions")
+async def api_create_learning_session(payload: LearningSessionCreate, db: Session = Depends(get_db)) -> dict:
+    session = await create_learning_session(db, payload.participant_id, payload.term_slug)
+    return learning_session_state(db, session.id)
+
+
+@app.get("/api/learning-sessions/{session_id}")
+def api_learning_session_state(session_id: str, db: Session = Depends(get_db)) -> dict:
+    return learning_session_state(db, session_id)
+
+
+@app.post("/api/learning-sessions/{session_id}/prerequisites/{prerequisite_id}/attempts")
+async def api_submit_prerequisite_attempt(session_id: str, prerequisite_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
+    return await submit_prerequisite_attempt(db, session_id, prerequisite_id, payload.learner_answer)
+
+
+@app.post("/api/learning-sessions/{session_id}/concept-attempts")
+async def api_submit_concept_attempt(session_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
+    return await submit_concept_attempt(db, session_id, payload.learner_answer)
+
+
+@app.post("/api/learning-sessions/{session_id}/control-turn")
+async def api_generate_control_learning_turn(session_id: str, db: Session = Depends(get_db)) -> dict:
+    return await generate_control_learning_turn(db, session_id)
+
+
+@app.post("/api/learning-sessions/{session_id}/control-answer")
+async def api_respond_control_learning_answer(session_id: str, payload: ControlAnswerPayload, db: Session = Depends(get_db)) -> dict:
+    return await respond_control_learning_answer(db, session_id, payload.turn_id, payload.learner_response)
 
 
 @app.post("/api/tutor-sessions")

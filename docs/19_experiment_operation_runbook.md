@@ -6,7 +6,7 @@
 
 1. Docker Desktopを起動する
 2. ホストで `codex app-server --listen ws://127.0.0.1:4500` を起動する
-3. `codex` または管理画面のログイン導線でChatGPT/Codexログインを確認する
+3. Codex/ChatGPTログイン状態を確認する
 4. `docker compose up --build` を実行する
 5. seed questionsはbackend起動時に自動投入される
 6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する
@@ -28,19 +28,13 @@
 2. 診断待ち
 3. 学習対象確認
 4. 学習セッション
+   - proposed: 前提用語理解、概念理解
+   - control: 通常AI説明、自己説明確認
 5. 即時再テスト
-6. 必要なら2回目学習
-7. L0確認
-8. 転移テスト
-9. 事後アンケート
-10. 終了
+6. 事後アンケート
+7. 終了
 
-研究者が見るもの:
-
-- `/admin` の進捗
-- AI診断失敗
-- manual review
-- app-server接続状態
+事前アンケート、L0確認、転移テストは現行運用では実施しない。
 
 ## If AI Fails
 
@@ -62,10 +56,10 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 以下の場合は管理者確認対象。
 
 - AI診断信頼度が低い
-- 後続テストで選択肢と理由が矛盾する
 - AI出力schema validationに失敗した
 - forbidden_help_given = true
-- transfer問題のM4判定が曖昧
+- 前提用語計画が教材範囲から外れている
+- 概念理解fail理由が明らかに不適切
 
 手動修正時:
 
@@ -81,18 +75,6 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 4. exportsフォルダを研究分析用に保管する
 5. 必要なら被験者データを削除する
 
-## Delayed Retest Optional Operation
-
-遅延再テストを行う場合:
-
-1. 実験終了後、別日に同じ被験者コードで再開する
-2. `delayed_retest` phaseの問題を出す
-3. Q1/Q2/Q4の別バージョンを使う
-4. 学習セッションやヒントは出さない
-5. delayed_retest_scoreとdelayed recurrenceを別集計する
-
-MVPでは必須ではない。
-
 ## Data Export Checklist
 
 必須CSV:
@@ -100,6 +82,10 @@ MVPでは必須ではない。
 - participants.csv
 - attempts.csv
 - learner_states.csv
+- learning_sessions.csv
+- prerequisite_terms.csv
+- term_understanding_attempts.csv
+- concept_understanding_attempts.csv
 - tutor_turns.csv
 - recurrence_events.csv
 - ai_call_logs.csv
@@ -114,7 +100,7 @@ MVPでは必須ではない。
 - phaseが含まれる
 - misconception_typeが含まれる
 - recurrence_flagが含まれる
-- l0_successとtransfer_successが含まれる
+- proposedの前提用語pass/failが含まれる
 
 ## Research Notes During Operation
 
