@@ -11,9 +11,9 @@
 - `component_total`
 - `component_terms`
 
-`learning_stage = term_understanding` では、AIは `component_term` だけを今回の主題にし、その構成用語の意味と対象概念内での役割を確認する。
+`learning_stage = term_understanding` では、AIは `component_term` だけを今回の主題にし、その構成用語の意味、対象概念内での役割、よくある誤解との違い、判断基準を最初から説明する。
 
-`learning_stage = concept_understanding` では、AIは `component_terms` を使って対象概念全体を説明させる。
+`learning_stage = concept_understanding` では、AIは `component_terms` を使って対象概念全体を最初から説明し、その後に学習者へ自分の言葉で再説明させる。
 
 `generate_feedback.is_sufficient` は現在ステージに対する十分性であり、backendが決定論的に次ステージを決める。AIの `next_action` は最終進行判定には使わない。
 
@@ -162,7 +162,7 @@ ambiguous: 判定困難
 
 ```text
 あなたは教育実験用AIチューターです。
-この実験では、正解をすぐに教えるだけではなく、誤概念タイプと足場掛けレベルに応じて学習支援を行います。
+この実験では、正解を丸写しさせるのではなく、誤概念タイプと学習ステージに応じて、必要な説明を先に提示したうえで自己説明を促します。
 
 目的:
 - 誤概念を修正する
@@ -176,10 +176,10 @@ ambiguous: 判定困難
 - 統制群では過去ログや誤概念タイプに応じた支援をしない
 - 出力は指定JSONのみ
 
-足場掛けレベル:
-L3: 詳しい説明、例、反例、比較表、穴埋めが可能
-L2: 観点提示、部分ヒントのみ
-L1: 着目点のみ
+教材提示方針:
+- scaffolding_level に関係なく、教材本文では現在の主題について最初から十分に説明する。
+- 教材本文には、定義、対象概念の中での役割、よくある誤解との違い、短い具体例または判断基準を含める。
+- 問題文は、教材で説明した内容を学習者が自分の言葉で再説明する記述問題にする。
 
 入力:
 {payload_json}
@@ -218,7 +218,7 @@ L1: 着目点のみ
 }
 ```
 
-`is_sufficient` は、学習者回答が現在の用語の判断基準を十分に含む場合だけ true にする。backendは `is_sufficient` に基づいて最終的な足場掛けレベルを決める。AIの `next_scaffolding_level` は参考値であり、最終決定には使わない。チューターターン生成時のAI `scaffolding_level` も参考値であり、保存・表示にはbackend状態を使う。ターン2以降では入力JSONの `previous_practice_question`, `previous_learner_response`, `previous_feedback_for_learner` を教材冒頭に自然文で反映する。
+`is_sufficient` は、学習者回答が現在ステージの判断基準を十分に含む場合だけ true にする。backendは `is_sufficient` に基づいて最終的な学習ステージ、構成用語インデックス、セッション完了を決める。AIの `next_action` と `next_scaffolding_level` は参考値であり、最終決定には使わない。チューターターン生成時のAI `scaffolding_level` も参考値であり、保存・表示にはbackend状態を使う。ターン2以降では入力JSONの `previous_practice_question`, `previous_learner_response`, `previous_feedback_for_learner` を教材冒頭に自然文で反映する。
 
 ## State Summary Result
 
@@ -265,7 +265,7 @@ backendはAI出力をPydanticで検証する。
 ```text
 この参加者は統制群です。
 一般的な解説のみを提示してください。
-過去ログ、誤概念タイプ、足場掛けレベルに基づく個別化は行わないでください。
+過去ログ、誤概念タイプ、学習ステージ履歴に基づく個別化は行わないでください。
 ただし分析用の内部診断JSONは返してください。
 ```
 

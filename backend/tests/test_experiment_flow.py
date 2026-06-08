@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -384,3 +386,24 @@ def test_concept_insufficient_returns_to_term_understanding():
     restart = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     assert restart["learning_stage"] == "term_understanding"
     assert restart["component_term"] == "トークン"
+
+
+
+def test_tutoring_prompt_no_longer_reduces_explanation_by_scaffolding_level():
+    prompt_source = Path(__file__).resolve().parents[1] / "app" / "ai" / "codex_app_server_backend.py"
+    text = prompt_source.read_text()
+    assert "L2では現在の用語を判断する観点を1〜2個に絞って示し" not in text
+    assert "L1では詳しい説明を避け" not in text
+    assert "説明量を L1/L2/L3 で減らさない" in text
+    assert "定義、対象概念の中での役割、よくある誤解との違い" in text
+
+
+def test_initial_component_material_is_complete_explanation():
+    pid = _create_diagnosed_participant_with_all_targets()
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "post_training"}).json()
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert turn["learning_stage"] == "term_understanding"
+    assert turn["component_term"] == "人間評価"
+    material = turn["tutor_message"]
+    for expected in ["人間評価とは", "役割", "よくある誤解", "判断基準", "人間", "安全性", "有用性"]:
+        assert expected in material

@@ -168,9 +168,9 @@ recurrence_flag =
 
 Unknown is not recurrence.
 
-### Scaffolding Update
+### Stage-Based Learning Update
 
-Use deterministic service logic from `04_scaffolding_and_tutoring.md`. In learning turns, backend uses AI feedback `is_sufficient` as the update signal: sufficient answers lower scaffolding by one level, insufficient answers raise it by one level, within L1-L3 bounds. AI `next_action` controls navigation only, and AI `next_scaffolding_level` is advisory. Tutor turn generation also treats AI `scaffolding_level` as advisory; persisted/displayed level comes from `LearnerState.scaffolding_level`. Turn 2+ material includes previous practice question, learner response, and feedback.
+Use deterministic service logic from `04_scaffolding_and_tutoring.md`. In learning turns, backend uses AI feedback `is_sufficient` as the update signal for stage progression. In `term_understanding`, sufficient answers move to the next component term, and the last component term moves to `concept_understanding`. Insufficient answers repeat the same component term. In `concept_understanding`, sufficient answers complete the session and move to `final_feedback`; insufficient answers return to the first component term. AI `next_action`, `next_scaffolding_level`, and generated `scaffolding_level` are advisory or compatibility fields and do not control navigation. Continued material includes previous practice question, learner response, and feedback. Initial material always includes a full explanation: definition, role in the target concept, common misconception contrast, and criterion/example.
 
 ## MVP API Dependency Graph
 

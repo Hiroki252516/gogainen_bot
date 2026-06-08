@@ -73,9 +73,9 @@ class MockAIBackend:
         component_total = int(payload.get("component_total") or 0)
 
         if learning_stage == "term_understanding" and component_term:
-            message = _component_message(term["label"], component_term)
-            question = f"{component_term}とは何かを、{term['label']}との関係が分かるように説明してください。"
             expected = _component_expected(term.get("slug", ""), component_term)
+            message = _component_message(term["label"], term.get("slug", ""), component_term)
+            question = f"{component_term}とは何かを、{term['label']}との関係が分かるように説明してください。"
             if previous_question:
                 message = f"前の問題: {previous_question}\nあなたの回答: {previous_response}\n前の回答を踏まえて、{previous_feedback} 今回は{component_term}を確認します。\n\n{message}"
             return {
@@ -321,6 +321,127 @@ def _generic_tutoring_spec(term: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_COMPONENT_EXPLANATIONS = {
+    "transformer": {
+        "Attention": {
+            "definition": "入力中のトークン同士の関係の強さを計算し、重要な情報を重み付けして利用する仕組み",
+            "role": "トークン間の関係性を扱い、文脈上どの情報を参照するかを決める",
+            "misconception": "人間の注意や集中そのもの、または重要語を探すだけの処理",
+            "criterion": "トークン同士の関係を計算して重み付けするか",
+        },
+        "FFN": {
+            "definition": "各トークンの表現を個別に非線形変換する層",
+            "role": "Attentionで関係情報を取り込んだ後、各トークンごとの特徴を変換する",
+            "misconception": "Attentionと同じようにトークン間の関係を計算する層",
+            "criterion": "トークン間ではなくトークンごとの特徴変換を扱うか",
+        },
+        "トークン間の関係性": {
+            "definition": "文中の各トークンが他のトークンとどの程度関係するかという情報",
+            "role": "Transformerが離れた語同士のつながりも扱える土台になる",
+            "misconception": "単語を順番に読むだけ、または単語単体の意味だけを見ること",
+            "criterion": "複数トークンのつながりを同時に見るか",
+        },
+    },
+    "attention": {
+        "トークン": {
+            "definition": "モデルが入力文を処理するために分けた単位",
+            "role": "Attentionで関係や重み付けを計算する対象になる",
+            "misconception": "必ず人間にとっての単語そのものと一致するもの",
+            "criterion": "モデル内部で処理される入力単位として見ているか",
+        },
+        "関係": {
+            "definition": "あるトークンが他のトークンとどの程度結びついているか",
+            "role": "Attentionがどの情報を参照するかを決める手がかりになる",
+            "misconception": "単に近くにある単語や目立つ単語だけを見ること",
+            "criterion": "トークン同士の結びつきとして説明できるか",
+        },
+        "重み付け": {
+            "definition": "関係の強さに応じて参照する情報の影響度を変えること",
+            "role": "重要な情報をより強く、関係の弱い情報を弱く利用する",
+            "misconception": "重要そうな単語に印を付けるだけの処理",
+            "criterion": "情報の利用量を数値的に変える仕組みとして見ているか",
+        },
+        "重要度": {
+            "definition": "各情報をどの程度利用するかを表す強さ",
+            "role": "Attentionの重みに反映され、出力表現に影響する",
+            "misconception": "人間が主観的に大事だと思う単語だけを選ぶこと",
+            "criterion": "関係計算に基づく利用の強さとして説明できるか",
+        },
+    },
+    "llm_training_process": {
+        "事前学習": {
+            "definition": "大規模で多様なデータから言語理解や生成の基盤能力を獲得する段階",
+            "role": "LLMの土台となる能力を作る",
+            "misconception": "利用前にユーザが入力する注意書き",
+            "criterion": "モデル開発時の訓練段階として説明しているか",
+        },
+        "インストラクションチューニング": {
+            "definition": "指示と望ましい応答の例から、指示に従う応答を学ばせる段階",
+            "role": "基盤モデルをユーザの指示に答えやすくする",
+            "misconception": "事前学習や事後学習と同じもの",
+            "criterion": "指示応答を学ぶ段階として区別しているか",
+        },
+        "事後学習": {
+            "definition": "人間評価や報酬モデルなどを用いて、安全性や有用性に合うよう出力を調整する段階",
+            "role": "LLMの出力を人間にとって望ましいものへ近づける",
+            "misconception": "AIが回答後に自分で反省したり感情を整えたりすること",
+            "criterion": "人間評価や安全性・有用性の調整として説明しているか",
+        },
+    },
+    "pretraining": {
+        "大規模データ": {
+            "definition": "大量のテキストやコードなど、幅広い訓練データ",
+            "role": "モデルが一般的な言語能力や知識の土台を獲得する材料になる",
+            "misconception": "少数の正解例や利用時の入力文だけ",
+            "criterion": "大量の訓練データとして説明しているか",
+        },
+        "多様なデータ": {
+            "definition": "ジャンルや内容が偏りすぎない幅広いデータ",
+            "role": "さまざまな文脈に対応する基盤能力を支える",
+            "misconception": "単一分野の暗記だけで十分だと考えること",
+            "criterion": "幅広い文脈から学ぶ点に触れているか",
+        },
+        "次単語予測": {
+            "definition": "文脈から次に来る語を予測する訓練課題",
+            "role": "言語のパターンや知識を獲得するための基本的な学習信号になる",
+            "misconception": "人間が明示的に全ての知識を教え込むこと",
+            "criterion": "予測課題を通じた訓練として説明しているか",
+        },
+        "基盤能力": {
+            "definition": "言語理解・生成や一般的知識など、後続調整の土台となる能力",
+            "role": "インストラクションチューニングや事後学習の前提になる",
+            "misconception": "安全性や価値観だけを最後に整えた能力",
+            "criterion": "後続段階の土台として説明しているか",
+        },
+    },
+    "post_training": {
+        "人間評価": {
+            "definition": "LLMの出力が人間の価値観・安全性・有用性に合っているかを人間が判断すること",
+            "role": "どの出力が望ましいかを事後学習に与える基準になる",
+            "misconception": "AI自身が出力後に内省したり感情を整えたりすること",
+            "criterion": "人間が出力を評価し、その評価を調整に使う点を説明しているか",
+        },
+        "報酬モデル": {
+            "definition": "人間評価などをもとに、出力の望ましさを点数化・予測するモデル",
+            "role": "LLMの出力をより望ましい方向へ調整する信号を与える",
+            "misconception": "AIが自分の回答を反省する心のような仕組み",
+            "criterion": "人間評価から学んだ評価器として説明しているか",
+        },
+        "安全性": {
+            "definition": "有害・危険・不適切な出力を抑える性質",
+            "role": "事後学習で出力を社会的に扱いやすいものへ調整する目標になる",
+            "misconception": "AIの気分や道徳心が自然に良くなること",
+            "criterion": "出力を調整する評価基準として説明しているか",
+        },
+        "有用性": {
+            "definition": "ユーザの目的に対して役に立つ回答をする性質",
+            "role": "安全性と並んで、事後学習で高めたい出力品質になる",
+            "misconception": "回答後にログを保存するだけで高まるもの",
+            "criterion": "人間にとって役立つ出力へ調整する目標として説明しているか",
+        },
+    },
+}
+
 _COMPONENT_KEYWORDS = {
     "transformer": {
         "Attention": ["Attention", "関係"],
@@ -361,8 +482,20 @@ def _component_expected(slug: str, component_term: str) -> str:
     return "、".join(_component_keywords(slug, component_term))
 
 
-def _component_message(term_label: str, component_term: str) -> str:
-    return f"今回は{term_label}を理解するための構成用語として、{component_term}を確認します。用語単体の意味だけでなく、{term_label}の説明でどの役割を持つかに注目してください。"
+def _component_message(term_label: str, slug: str, component_term: str) -> str:
+    detail = _COMPONENT_EXPLANATIONS.get(slug, {}).get(component_term)
+    if detail:
+        return (
+            f"今回は{term_label}を理解するための構成用語として、{component_term}を確認します。"
+            f"{component_term}とは、{detail['definition']}です。"
+            f"{term_label}の中では、{detail['role']}という役割があります。"
+            f"よくある誤解は、{detail['misconception']}と捉えてしまうことです。"
+            f"判断基準として、{detail['criterion']}に注目してください。"
+        )
+    return (
+        f"今回は{term_label}を理解するための構成用語として、{component_term}を確認します。"
+        f"{component_term}の定義、{term_label}の中での役割、よくある誤解との違い、判断基準を先に整理してから、自分の言葉で説明してください。"
+    )
 
 
 def _concept_question(slug: str, term_label: str, component_terms: list[str]) -> str:

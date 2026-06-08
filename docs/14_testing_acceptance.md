@@ -101,15 +101,16 @@ Mock rules:
 ### B. 提案群の動作
 
 - 誤概念タイプに応じて教授方略が変わる
-- L3〜L1が保存される
-- 学習ターンで `is_sufficient = true` のときレベルが1段下がる
-- 学習ターンで `is_sufficient = false` のときレベルが1段上がる
-- `next_action = move_next` でも `is_sufficient = false` ならレベルは下がらない
+- `learning_stage`, `component_term`, `component_index`, `component_total` が保存・返却される
+- 用語理解段階で `is_sufficient = true` のとき次の構成用語へ進む
+- 全構成用語が十分なら概念理解段階へ進む
+- 概念理解段階で `is_sufficient = true` のときだけセッション完了になる
+- `next_action = move_next` でも `is_sufficient = false` ならセッション完了にしない
 - 同じMが再発したら recurrence_flag = true
 - 同じMが再発したら teaching_strategy が変更される
-- 学習セッションの通常画面にデバッグ用の誤概念タイプ判定、足場掛けレベル、回答判定、`teaching_strategy` が表示される
-- 回答後のデバッグ欄は更新後の `next_scaffolding_level` を表示する
-- ターン2以降の教材に前の問題とあなたの回答が表示される
+- 学習セッションの通常画面にデバッグ用の誤概念タイプ判定、`learning_stage`、回答判定、`teaching_strategy` が表示される
+- 回答後のデバッグ欄は更新後の `next_learning_stage` を表示する
+- 継続時の教材に前の問題とあなたの回答が表示される
 - セッション完了時は問題・回答欄を表示せず、教材フィードバックと次へボタンだけを表示する
 - 教材本文やAIフィードバック本文にはM1〜M4などの内部ラベルが混ざらない
 
@@ -117,7 +118,7 @@ Mock rules:
 
 - 一般解説のみ
 - 誤概念分類は保存されるが教授に使われない
-- 足場掛けレベルは固定またはnull
+- 学習ステージ履歴や誤概念タイプによる個別化はしない
 - teaching_strategyは general_explanation
 - 過去ログに基づく個別化をしない
 

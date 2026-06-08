@@ -94,9 +94,9 @@ ChatGPT/Codex Login
 | ExperimentService | 参加者作成、進捗管理、群割当、フェーズ遷移 |
 | QuestionService | 問題取得、選択肢ランダム化、問題バリアント選定 |
 | DiagnosisService | 選択肢・理由記述・AIによる診断の統合 |
-| LearnerStateService | 用語別状態、誤概念、足場掛け、再発情報の管理 |
+| LearnerStateService | 用語別状態、誤概念、学習ステージ互換情報、再発情報の管理 |
 | TutoringService | 学習セッションとチューターターン生成 |
-| ScaffoldingService | L3〜L1更新、方略変更、研究条件の決定論的制御 |
+| LearningStageService | 用語理解・概念理解の進行、方略変更、研究条件の決定論的制御 |
 | EvaluationService | 評価指標、群別集計、用語別集計の計算 |
 | ExportService | CSV作成、エクスポート履歴管理 |
 | AiBackendService | AIBackend実装の選択、AI呼び出しログ保存 |
@@ -207,7 +207,7 @@ AIは診断・説明案・フィードバック案を出すが、以下はbacken
 
 - 群条件の適用
 - 問題の出し分け
-- 足場掛けレベルの最終更新
+- 学習ステージ、構成用語インデックス、互換scaffolding_levelの最終更新
 - recurrence_flag
 - 評価指標
 - CSV出力値

@@ -185,7 +185,7 @@ Response:
 }
 ```
 
-`current_scaffolding_level_for_display` は内部L1〜L3を直接出さず、自然言語化する。
+`current_scaffolding_level_for_display` は互換表示用に残す。学習セッション画面の進行表示は `learning_stage` と構成用語進捗を正とする。
 
 ## Tutor Sessions
 
@@ -236,13 +236,19 @@ Response:
   "requires_learner_response": true,
   "turn_index": 1,
   "max_turns": 3,
+  "learning_stage": "term_understanding",
+  "learning_stage_label": "用語理解",
+  "component_term": "Attention",
+  "component_index": 0,
+  "component_total": 3,
+  "stage_completed": false,
   "misconception_type": "M1",
   "scaffolding_level": "L3",
   "teaching_strategy": "category_reorientation"
 }
 ```
 
-学習セッションではデバッグ用に `misconception_type`, `scaffolding_level`, `teaching_strategy` を通常レスポンスへ含める。`scaffolding_level` はAI返却値ではなくbackendの `LearnerState.scaffolding_level` を正とする。教材本文やAIフィードバック本文には内部Mラベルを混ぜない。
+学習セッションではデバッグ用に `misconception_type`, `learning_stage`, `teaching_strategy` を通常レスポンスへ含める。`scaffolding_level` は互換ログ用に返すが、被験者画面の進行表示や教材説明量の制御には使わない。教材本文やAIフィードバック本文には内部Mラベルを混ぜない。
 
 ### POST /api/tutor-turns/{turn_id}/respond
 
@@ -264,13 +270,20 @@ Response:
   "next_action": "continue",
   "is_sufficient": false,
   "session_completed": false,
+  "learning_stage": "term_understanding",
+  "stage_completed": false,
+  "next_learning_stage": "term_understanding",
+  "component_term": "Attention",
+  "component_index": 0,
+  "component_total": 3,
+  "next_component_index": 1,
   "next_scaffolding_level": "L2",
   "turn_index": 1,
   "max_turns": 3
 }
 ```
 
-`feedback` はログ保存、次ターン教材への統合、セッション完了時の教材フィードバック画面に使う。ターン継続時は回答直後に単独表示しない。セッション完了時は問題を出さず、`feedback` と次へボタンだけを表示する。`next_scaffolding_level` はAI提案ではなくbackendの決定論的更新結果であり、回答後のデバッグ欄へ即時反映する。
+`feedback` はログ保存、次ステージ教材への統合、セッション完了時の教材フィードバック画面に使う。ターン継続時は回答直後に単独表示しない。セッション完了時は問題を出さず、`feedback` と次へボタンだけを表示する。`next_learning_stage` と `next_component_index` はbackendの決定論的更新結果であり、画面進行に使う。`next_scaffolding_level` は互換ログ用に返す。
 
 ## Scoring APIs
 
