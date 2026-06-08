@@ -7,6 +7,8 @@ import { api, requireParticipant } from "@/lib/api";
 
 type Turn = {
   turn_id: string;
+  term_slug?: string;
+  term_label?: string;
   tutor_message: string;
   learner_prompt: string;
   practice_question: { body: string };
@@ -119,6 +121,7 @@ export default function LearningPage() {
           <>
             <div className="notice">
               <strong>今回の学習</strong>
+              <p>対象概念: {turn.term_label || termSlug}</p>
               <p>段階: {turn.learning_stage_label || "用語理解"}</p>
               {turn.learning_stage === "term_understanding" ? (
                 <p>用語: {turn.component_term} {typeof turn.component_index === "number" && typeof turn.component_total === "number" ? `${turn.component_index + 1} / ${turn.component_total}` : ""}</p>

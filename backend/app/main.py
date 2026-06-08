@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.models import LearnerState, TutorSession
+from app.models import LearnerState, Term, TutorSession
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.core.config import get_settings
@@ -165,10 +165,13 @@ def api_create_tutor_session(payload: TutorSessionCreate, db: Session = Depends(
 async def api_generate_tutor_turn(session_id: str, db: Session = Depends(get_db)) -> dict:
     turn = await generate_tutor_turn(db, session_id)
     session = db.get(TutorSession, session_id)
+    term = db.get(Term, session.term_id) if session else None
     state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one() if session else None
     stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
     return {
         "turn_id": turn.id,
+        "term_slug": term.slug if term else None,
+        "term_label": term.label if term else None,
         "tutor_message": turn.tutor_message,
         "learner_prompt": turn.learner_prompt,
         "practice_question": turn.practice_question_json,

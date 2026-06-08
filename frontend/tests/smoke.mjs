@@ -35,7 +35,7 @@ if (learningPage.includes("足場掛けレベル:")) {
 if (learningPage.includes("ターン: {turn.turn_index}")) {
   throw new Error("learning page must not show fixed turn progress in stage-based UI");
 }
-for (const expectedText of ["回答判定:", "教材フィードバック", "judgementLabel(feedback)"]) {
+for (const expectedText of ["対象概念:", "回答判定:", "教材フィードバック", "judgementLabel(feedback)"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing final feedback/debug update behavior: ${expectedText}`);
   }

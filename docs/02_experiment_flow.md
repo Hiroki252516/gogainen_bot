@@ -151,11 +151,11 @@
 | 用語理解段階 | `is_sufficient = false` | 同じ構成用語を再提示する |
 | 概念理解段階 | `is_sufficient = true` | `final_feedback` へ進み、セッション完了 |
 | 概念理解段階 | `is_sufficient = false` | 用語理解段階の先頭へ戻る |
-| 再テスト | 誤答 | 足場掛けレベルを維持する |
-| 再テスト | 同じMで誤答 | 足場掛け維持 + 教授方略変更 |
-| 再テスト | 正答 | 足場掛けレベルを1段階下げる |
-| 確認テスト | 正答 | L1を維持し `l0_success = true` を保存する |
-| 確認テスト | 誤答 | L2相当へ上げる |
+| 再テスト | 誤答 | learner_stateをneeds_review相当に更新する |
+| 再テスト | 同じMで誤答 | recurrence_flagを立て、教授方略を変更する |
+| 再テスト | 正答 | learner_stateをstable_correct相当に更新する |
+| 確認テスト | 正答 | `l0_success = true` を保存する |
+| 確認テスト | 誤答 | needs_review相当に更新する |
 
 学習ターンではAIの `next_action` を正誤判定やステージ遷移の根拠にしない。`next_action` は補助情報として扱い、次ステージ、構成用語インデックス、セッション完了はbackendの決定論的ルールで決める。`scaffolding_level` は既存ログ互換のため保存するが、被験者画面の進行表示や教材説明量の制御には使わない。
 

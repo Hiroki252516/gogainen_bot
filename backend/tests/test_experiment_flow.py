@@ -322,6 +322,7 @@ def test_stage_based_learning_progresses_terms_then_concept():
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "transformer"}).json()
 
     first = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert first["term_label"] == "Transformer"
     assert first["learning_stage"] == "term_understanding"
     assert first["component_term"] == "Attention"
     first_feedback = client.post(
