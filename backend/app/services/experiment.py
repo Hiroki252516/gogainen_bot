@@ -38,6 +38,83 @@ from app.models import (
 PUBLIC_LEVEL = {"L3": "しっかり確認", "L2": "観点を確認", "L1": "自分で整理"}
 PRETEST_TERM_ORDER = {"transformer": 0, "attention": 1, "llm_training_process": 2, "pretraining": 3, "post_training": 4}
 PRETEST_TERM_SLUGS = set(PRETEST_TERM_ORDER)
+LEARNING_STAGE_LABELS = {
+    "term_understanding": "用語理解",
+    "concept_understanding": "概念理解",
+    "final_feedback": "教材フィードバック",
+}
+COMPONENT_TERMS = {
+    "transformer": ["Attention", "FFN", "トークン間の関係性"],
+    "attention": ["トークン", "関係", "重み付け", "重要度"],
+    "llm_training_process": ["事前学習", "インストラクションチューニング", "事後学習"],
+    "pretraining": ["大規模データ", "多様なデータ", "次単語予測", "基盤能力"],
+    "post_training": ["人間評価", "報酬モデル", "安全性", "有用性"],
+}
+
+
+def _component_terms(term_slug: str, term_label: str) -> list[str]:
+    return COMPONENT_TERMS.get(term_slug, [term_label])
+
+
+def _practice_meta(turn: TutorTurn | None) -> dict[str, Any]:
+    if not turn or not isinstance(turn.practice_question_json, dict):
+        return {}
+    return turn.practice_question_json.get("stage_meta") or {}
+
+
+def _learning_position(db: Session, session: TutorSession, term: Term) -> dict[str, Any]:
+    components = _component_terms(term.slug, term.label)
+    turns = (
+        db.query(TutorTurn)
+        .filter_by(tutor_session_id=session.id)
+        .order_by(TutorTurn.turn_index)
+        .all()
+    )
+    stage = "term_understanding"
+    component_index = 0
+    for turn in turns:
+        if not turn.learner_response:
+            continue
+        meta = _practice_meta(turn)
+        turn_stage = meta.get("learning_stage") or "term_understanding"
+        turn_component_index = int(meta.get("component_index") or 0)
+        is_sufficient = bool((turn.grading_json or {}).get("is_sufficient"))
+        if turn_stage == "term_understanding":
+            if is_sufficient and turn_component_index + 1 >= len(components):
+                stage = "concept_understanding"
+                component_index = len(components)
+            elif is_sufficient:
+                stage = "term_understanding"
+                component_index = turn_component_index + 1
+            else:
+                stage = "term_understanding"
+                component_index = min(turn_component_index, len(components) - 1)
+        elif turn_stage == "concept_understanding":
+            if is_sufficient:
+                stage = "final_feedback"
+                component_index = len(components)
+            else:
+                stage = "term_understanding"
+                component_index = 0
+    return {
+        "learning_stage": stage,
+        "learning_stage_label": LEARNING_STAGE_LABELS[stage],
+        "component_term": components[component_index] if stage == "term_understanding" else None,
+        "component_index": component_index if stage == "term_understanding" else len(components),
+        "component_total": len(components),
+    }
+
+
+def _merge_stage_meta(practice_question: dict[str, Any], position: dict[str, Any]) -> dict[str, Any]:
+    practice_question = dict(practice_question or {})
+    practice_question["stage_meta"] = {
+        "learning_stage": position["learning_stage"],
+        "learning_stage_label": position["learning_stage_label"],
+        "component_term": position["component_term"],
+        "component_index": position["component_index"],
+        "component_total": position["component_total"],
+    }
+    return practice_question
 
 
 def _rag_query(*parts: str | None) -> str:
@@ -351,13 +428,20 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
     previous_turn = db.get(TutorTurn, state.last_tutor_turn_id) if state.last_tutor_turn_id else None
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
-    if turn_count >= get_settings().max_turns_per_term:
-        raise HTTPException(status_code=400, detail="max turns reached")
+    position = _learning_position(db, session, term)
+    if position["learning_stage"] == "final_feedback":
+        raise HTTPException(status_code=400, detail="learning session already completed")
     current_level = normalize_level(state.scaffolding_level)
     payload = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "term": {"slug": term.slug, "label": term.label, "description": term.description},
+        "learning_stage": position["learning_stage"],
+        "learning_stage_label": position["learning_stage_label"],
+        "component_term": position["component_term"],
+        "component_index": position["component_index"],
+        "component_total": position["component_total"],
+        "component_terms": _component_terms(term.slug, term.label),
         "learner_state": {
             "current_status": state.current_status,
             "primary_misconception": state.primary_misconception,
@@ -373,6 +457,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "rag_context": _rag_context(
             term.label,
             term.description,
+            position["component_term"],
             previous_attempt.reason_text if previous_attempt else "",
             (previous_turn.practice_question_json or {}).get("body") if previous_turn else "",
             previous_turn.learner_response if previous_turn else "",
@@ -388,14 +473,13 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         strategy_changed=False,
         tutor_message=result["tutor_message"],
         learner_prompt=result["learner_prompt"],
-        practice_question_json=result["practice_question"],
+        practice_question_json=_merge_stage_meta(result["practice_question"], position),
         forbidden_help_given=result["forbidden_help_given"],
     )
     db.add(turn)
     db.commit()
     db.refresh(turn)
     return turn
-
 
 async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     turn = db.get(TutorTurn, turn_id)
@@ -406,10 +490,21 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     response = payload.get("learner_response") or ""
     participant = get_participant(db, session.participant_id)
     term = db.get(Term, session.term_id)
+    meta = _practice_meta(turn)
+    learning_stage = meta.get("learning_stage") or "term_understanding"
+    component_index = int(meta.get("component_index") or 0)
+    component_total = int(meta.get("component_total") or len(_component_terms(term.slug, term.label)))
+    component_term = meta.get("component_term")
     feedback_payload = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "term": {"slug": term.slug, "label": term.label, "description": term.description},
+        "learning_stage": learning_stage,
+        "learning_stage_label": meta.get("learning_stage_label") or LEARNING_STAGE_LABELS.get(learning_stage, "用語理解"),
+        "component_term": component_term,
+        "component_index": component_index,
+        "component_total": component_total,
+        "component_terms": _component_terms(term.slug, term.label),
         "learner_state": {
             "current_status": state.current_status,
             "primary_misconception": state.primary_misconception if participant.group_condition == "proposed" else None,
@@ -427,6 +522,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "rag_context": _rag_context(
             term.label,
             term.description,
+            component_term,
             (turn.practice_question_json or {}).get("body"),
             response,
         ),
@@ -434,26 +530,63 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     result = await _ai_call(db, "generate_feedback", feedback_payload)
     is_sufficient = bool(result.get("is_sufficient"))
     next_level = normalize_level(lower_level(state.scaffolding_level) if is_sufficient else raise_level(state.scaffolding_level))
+    if learning_stage == "term_understanding":
+        stage_completed = is_sufficient and component_index + 1 >= component_total
+        next_learning_stage = "concept_understanding" if stage_completed else "term_understanding"
+        next_component_index = component_total if stage_completed else (component_index + 1 if is_sufficient else component_index)
+        session_completed = False
+        next_action = "continue"
+    elif learning_stage == "concept_understanding":
+        stage_completed = is_sufficient
+        next_learning_stage = "final_feedback" if is_sufficient else "term_understanding"
+        next_component_index = component_total if is_sufficient else 0
+        session_completed = is_sufficient
+        next_action = "move_next" if is_sufficient else "continue"
+    else:
+        stage_completed = True
+        next_learning_stage = "final_feedback"
+        next_component_index = component_total
+        session_completed = True
+        next_action = "move_next"
     turn.learner_response = response
     turn.learner_confidence = None
     turn.next_scaffolding_level = next_level
     turn.ai_feedback = result["feedback"]
+    turn.grading_json = {
+        "is_sufficient": is_sufficient,
+        "learning_stage": learning_stage,
+        "component_term": component_term,
+        "component_index": component_index,
+        "component_total": component_total,
+        "stage_completed": stage_completed,
+        "next_learning_stage": next_learning_stage,
+        "next_component_index": next_component_index,
+        "ai_next_action": result.get("next_action"),
+    }
     state.scaffolding_level = next_level
     state.stable_correct_count += 1 if is_sufficient else 0
-    state.current_status = "stable_correct" if is_sufficient else "needs_review"
+    state.current_status = "stable_correct" if session_completed else ("learning_in_progress" if is_sufficient else "needs_review")
     state.updated_reason = result["state_update_reason"]
     state.last_tutor_turn_id = turn.id
+    if session_completed:
+        session.ended_at = now()
     db.commit()
     return {
         "feedback": turn.ai_feedback,
-        "next_action": result["next_action"],
+        "next_action": next_action,
         "is_sufficient": is_sufficient,
-        "session_completed": turn.turn_index >= get_settings().max_turns_per_term or is_sufficient,
+        "session_completed": session_completed,
+        "learning_stage": learning_stage,
+        "stage_completed": stage_completed,
+        "next_learning_stage": next_learning_stage,
+        "component_term": component_term,
+        "component_index": component_index,
+        "component_total": component_total,
+        "next_component_index": next_component_index,
         "next_scaffolding_level": next_level,
         "turn_index": turn.turn_index,
         "max_turns": get_settings().max_turns_per_term,
     }
-
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
     participant = get_participant(db, participant_id)

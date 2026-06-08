@@ -67,6 +67,37 @@ class MockAIBackend:
         previous_question = (payload.get("previous_practice_question") or "").strip()
         previous_response = (payload.get("previous_learner_response") or "").strip()
         previous_feedback = (payload.get("previous_feedback_for_learner") or "").strip()
+        learning_stage = payload.get("learning_stage") or "concept_understanding"
+        component_term = payload.get("component_term")
+        component_index = int(payload.get("component_index") or 0)
+        component_total = int(payload.get("component_total") or 0)
+
+        if learning_stage == "term_understanding" and component_term:
+            message = _component_message(term["label"], component_term)
+            question = f"{component_term}とは何かを、{term['label']}との関係が分かるように説明してください。"
+            expected = _component_expected(term.get("slug", ""), component_term)
+            if previous_question:
+                message = f"前の問題: {previous_question}\nあなたの回答: {previous_response}\n前の回答を踏まえて、{previous_feedback} 今回は{component_term}を確認します。\n\n{message}"
+            return {
+                "tutor_message": message,
+                "teaching_strategy": "general_explanation" if group == "control" else strategy,
+                "scaffolding_level": level,
+                "requires_learner_response": True,
+                "learner_prompt": question,
+                "practice_question": {
+                    "body": question,
+                    "expected_answer": expected,
+                    "question_type": "component_term",
+                },
+                "forbidden_help_given": False,
+            }
+
+        if learning_stage == "concept_understanding":
+            spec = dict(spec)
+            spec["questions"] = dict(spec["questions"])
+            spec["expected"] = dict(spec["expected"])
+            spec["questions"][level] = _concept_question(term.get("slug", ""), term["label"], payload.get("component_terms") or [])
+            spec["expected"][level] = spec["core"]
 
         if group == "control":
             message = f"{term['label']}は、専門分野で決まった意味を持つ用語です。{spec['core']}"
@@ -132,7 +163,10 @@ class MockAIBackend:
         response = payload.get("learner_response") or ""
         term = payload.get("term") or {}
         slug = term.get("slug", "")
-        keywords = _SUFFICIENCY_KEYWORDS.get(slug, [word for word in (term.get("description") or "").split() if word])
+        if payload.get("learning_stage") == "term_understanding" and payload.get("component_term"):
+            keywords = _component_keywords(slug, payload["component_term"])
+        else:
+            keywords = _SUFFICIENCY_KEYWORDS.get(slug, [word for word in (term.get("description") or "").split() if word])
         hit_count = sum(1 for keyword in keywords if keyword and keyword in response)
         is_sufficient = hit_count >= max(1, min(2, len(keywords)))
         current_level = payload.get("learner_state", {}).get("scaffolding_level") or "L2"
@@ -285,3 +319,59 @@ def _generic_tutoring_spec(term: dict[str, Any]) -> dict[str, Any]:
             "L1": description,
         },
     }
+
+
+_COMPONENT_KEYWORDS = {
+    "transformer": {
+        "Attention": ["Attention", "関係"],
+        "FFN": ["FFN", "特徴", "変換"],
+        "トークン間の関係性": ["トークン", "関係"],
+    },
+    "attention": {
+        "トークン": ["トークン"],
+        "関係": ["関係"],
+        "重み付け": ["重み"],
+        "重要度": ["重要", "重み"],
+    },
+    "llm_training_process": {
+        "事前学習": ["事前学習", "基盤"],
+        "インストラクションチューニング": ["インストラクション", "指示"],
+        "事後学習": ["事後学習", "安全", "有用"],
+    },
+    "pretraining": {
+        "大規模データ": ["大規模", "データ"],
+        "多様なデータ": ["多様", "データ"],
+        "次単語予測": ["次", "予測"],
+        "基盤能力": ["基盤", "能力"],
+    },
+    "post_training": {
+        "人間評価": ["人間", "評価"],
+        "報酬モデル": ["報酬", "モデル"],
+        "安全性": ["安全"],
+        "有用性": ["有用"],
+    },
+}
+
+
+def _component_keywords(slug: str, component_term: str) -> list[str]:
+    return _COMPONENT_KEYWORDS.get(slug, {}).get(component_term, [component_term])
+
+
+def _component_expected(slug: str, component_term: str) -> str:
+    return "、".join(_component_keywords(slug, component_term))
+
+
+def _component_message(term_label: str, component_term: str) -> str:
+    return f"今回は{term_label}を理解するための構成用語として、{component_term}を確認します。用語単体の意味だけでなく、{term_label}の説明でどの役割を持つかに注目してください。"
+
+
+def _concept_question(slug: str, term_label: str, component_terms: list[str]) -> str:
+    joined = "、".join(component_terms) if component_terms else term_label
+    questions = {
+        "transformer": "Attention、FFN、トークン間の関係性を用いてTransformerの構造を説明してください。",
+        "attention": "トークン同士の関係、重み付け、重要度に触れてAttentionの役割を説明してください。",
+        "llm_training_process": "事前学習、インストラクションチューニング、事後学習の3段階でLLMの学習プロセスを説明してください。",
+        "pretraining": "大規模で多様なデータ、次単語予測、基盤能力に触れて事前学習の目的を説明してください。",
+        "post_training": "人間評価、報酬モデル、安全性、有用性に触れて事後学習の目的を説明してください。",
+    }
+    return questions.get(slug, f"{joined}を用いて{term_label}を説明してください。")

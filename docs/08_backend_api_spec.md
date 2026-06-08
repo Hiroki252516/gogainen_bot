@@ -1,5 +1,29 @@
 # 08. Backend API Spec
 
+## 2026-06 Stage-Based Learning API Update
+
+`POST /api/tutor-sessions/{session_id}/turns` は、既存フィールドに加えて以下を返す。
+
+- `learning_stage`: `term_understanding` または `concept_understanding`
+- `learning_stage_label`: 被験者向け段階名
+- `component_term`: 用語理解段階で確認中の構成用語
+- `component_index`: 0始まりの構成用語インデックス
+- `component_total`: 構成用語数
+- `stage_completed`: 生成直後は `false`
+
+`POST /api/tutor-turns/{turn_id}/respond` は、既存フィールドに加えて以下を返す。
+
+- `learning_stage`
+- `stage_completed`
+- `next_learning_stage`
+- `component_term`
+- `component_index`
+- `component_total`
+- `next_component_index`
+
+`session_completed` は、`concept_understanding` の回答が十分だった場合だけ `true` になる。用語理解段階で `is_sufficient = true` になっても、次の構成用語または概念理解段階へ進むだけでセッションは終了しない。
+
+
 FastAPIでREST APIを実装する。実験中のAI応答ストリーミングが必要な場合のみSSEを使う。MVPでは同期APIでよい。
 
 ## 共通ルール
@@ -209,15 +233,20 @@ Response:
     "body": "...",
     "requires_response": true
   },
-  "requires_learner_response": true
+  "requires_learner_response": true,
+  "turn_index": 1,
+  "max_turns": 3,
+  "misconception_type": "M1",
+  "scaffolding_level": "L3",
+  "teaching_strategy": "category_reorientation"
 }
 ```
 
-被験者向けresponseには内部Mラベルを含めない。
+学習セッションではデバッグ用に `misconception_type`, `scaffolding_level`, `teaching_strategy` を通常レスポンスへ含める。`scaffolding_level` はAI返却値ではなくbackendの `LearnerState.scaffolding_level` を正とする。教材本文やAIフィードバック本文には内部Mラベルを混ぜない。
 
 ### POST /api/tutor-turns/{turn_id}/respond
 
-学習者回答を保存し、AIフィードバックと次レベルを返す。
+学習者回答を保存し、AIフィードバック、回答十分性、backend決定後の次レベルを返す。
 
 Request:
 
@@ -232,10 +261,16 @@ Response:
 ```json
 {
   "feedback": "...",
-  "next_action": "move_next",
-  "session_completed": false
+  "next_action": "continue",
+  "is_sufficient": false,
+  "session_completed": false,
+  "next_scaffolding_level": "L2",
+  "turn_index": 1,
+  "max_turns": 3
 }
 ```
+
+`feedback` はログ保存、次ターン教材への統合、セッション完了時の教材フィードバック画面に使う。ターン継続時は回答直後に単独表示しない。セッション完了時は問題を出さず、`feedback` と次へボタンだけを表示する。`next_scaffolding_level` はAI提案ではなくbackendの決定論的更新結果であり、回答後のデバッグ欄へ即時反映する。
 
 ## Scoring APIs
 
@@ -371,3 +406,7 @@ Response:
 - AI raw JSON
 
 管理者向けAPIでは返してよい。
+
+## RAG教材参照
+
+学習ターン生成と学習回答フィードバックでは、`rag_ready_教材` のローカルTF-IDF検索結果を `rag_context` としてAIBackend payloadへ渡す。OpenAI APIキーや外部vector storeは通常実行に使わない。RAG資産が見つからない場合は空のcontextとして扱い、実験フローを停止しない。

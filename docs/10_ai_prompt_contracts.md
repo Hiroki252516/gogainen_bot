@@ -1,5 +1,23 @@
 # 10. AI Prompt Contracts
 
+## 2026-06 Stage-Based Tutoring Payload Update
+
+`generate_tutoring_turn` と `generate_feedback` の payload には、学習ステージ制のため以下を含める。
+
+- `learning_stage`
+- `learning_stage_label`
+- `component_term`
+- `component_index`
+- `component_total`
+- `component_terms`
+
+`learning_stage = term_understanding` では、AIは `component_term` だけを今回の主題にし、その構成用語の意味と対象概念内での役割を確認する。
+
+`learning_stage = concept_understanding` では、AIは `component_terms` を使って対象概念全体を説明させる。
+
+`generate_feedback.is_sufficient` は現在ステージに対する十分性であり、backendが決定論的に次ステージを決める。AIの `next_action` は最終進行判定には使わない。
+
+
 AIには必ず構造化出力を要求する。できれば app-server の `outputSchema` を使う。使えない場合は「JSONのみ」を返すようにプロンプトし、backendで検証する。
 
 ## 共通制約
@@ -95,8 +113,9 @@ ambiguous: 判定困難
   "participant_id": "uuid",
   "group_condition": "proposed",
   "term": {
-    "slug": "overfitting",
-    "label": "過学習"
+    "slug": "transformer",
+    "label": "Transformer",
+    "description": "AttentionレイヤーとFFNレイヤーを重ね、トークン間の関係性とトークンごとの特徴変換を繰り返す構造。"
   },
   "learner_state": {
     "current_status": "misconception",
@@ -106,6 +125,15 @@ ambiguous: 判定困難
     "recurrence_count": 1
   },
   "previous_answer": "...",
+  "previous_practice_question": "...",
+  "previous_learner_response": "...",
+  "previous_feedback_for_learner": "...",
+  "rag_context": {
+    "source": "rag_ready_教材",
+    "retrieval_method": "local_sparse_tfidf",
+    "status": "ok",
+    "chunks": []
+  },
   "previous_diagnosis_for_learner": "言葉の表面ではなく、訓練データと未知データの性能差に注目します。",
   "allowed_help": ["hint", "question_prompt", "self_explanation"],
   "forbidden_help": ["direct_answer", "test_answer", "option_elimination"]
@@ -182,12 +210,15 @@ L1: 着目点のみ
 ```json
 {
   "feedback": "string",
+  "is_sufficient": false,
   "next_action": "continue",
   "next_scaffolding_level": "L2",
   "strategy_changed": false,
   "state_update_reason": "string"
 }
 ```
+
+`is_sufficient` は、学習者回答が現在の用語の判断基準を十分に含む場合だけ true にする。backendは `is_sufficient` に基づいて最終的な足場掛けレベルを決める。AIの `next_scaffolding_level` は参考値であり、最終決定には使わない。チューターターン生成時のAI `scaffolding_level` も参考値であり、保存・表示にはbackend状態を使う。ターン2以降では入力JSONの `previous_practice_question`, `previous_learner_response`, `previous_feedback_for_learner` を教材冒頭に自然文で反映する。
 
 ## State Summary Result
 

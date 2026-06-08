@@ -1,5 +1,16 @@
 # 04. Scaffolding and Tutoring
 
+## 2026-06 Stage-Based Learning Update
+
+学習セッションの画面進行は、固定3ターンのL1/L2/L3足場掛け制ではなく、次のステージ制を正とする。
+
+1. `term_understanding`: 対象概念に必要な構成用語を1つずつ確認する。十分回答なら次の構成用語へ進み、不十分なら同じ構成用語を再提示する。
+2. `concept_understanding`: 構成用語を用いて対象概念全体を説明させる。十分回答なら `final_feedback` へ進み、不十分なら `term_understanding` の先頭へ戻る。
+3. `final_feedback`: 問題・回答欄を出さず、教材フィードバックと次へボタンだけを表示する。
+
+`scaffolding_level` と `next_scaffolding_level` は既存ログ・CSV互換のため保持するが、セッション完了判定や被験者画面の進行表示には使わない。`is_sufficient = true` だけでセッション完了にはしない。完了するのは `concept_understanding` で十分回答した場合のみである。
+
+
 ## 足場掛けレベル
 
 | レベル | 名称 | 内容 |
@@ -90,20 +101,27 @@
 
 ## 更新ルール
 
-| 前回状態 | 今回結果 | 次回レベル | 追加処理 |
+学習セッション内の足場掛け更新は、AIの `next_action` ではなく、回答が十分かどうかを示す `is_sufficient` に基づいてbackendが決定論的に決める。
+
+| 場面 | 今回結果 | 次回レベル | 追加処理 |
 |---|---|---|---|
-| 誤答 | 正答 | 1段階下げる | stable_correct_count加算 |
-| 誤答 | 誤答 | 維持 | needs_review |
-| 誤答 | 同じMで誤答 | 維持 | strategy_changed=true |
-| 正答 | 正答 | 1段階下げる | L1到達を目指す |
-| 正答 | 誤答 | 1段階上げる | primary_misconception更新 |
+| 学習ターン | `is_sufficient = true` | 1段階下げる | stable_correct_count加算 |
+| 学習ターン | `is_sufficient = false` | 1段階上げる | needs_review |
+| 再テスト | 誤答 | 維持 | needs_review |
+| 再テスト | 同じMで誤答 | 維持 | strategy_changed=true |
+| 再テスト | 正答 | 1段階下げる | L1到達を目指す |
+| 確認テスト | 正答 | L1を維持 | l0_success_count加算 |
+| 確認テスト | 誤答 | L2相当へ上げる | needs_review |
 
 レベル境界:
 
 - L3より上へは上げない
 - L1より下へは下げない
 - 1回の更新で2段階以上変えない
-- AIが提案しても、サービス層の決定論的ルールで最終決定する
+- AIが `next_scaffolding_level` を返しても参考値に留め、サービス層の決定論的ルールで最終決定する
+- AIがチューターターン生成で `scaffolding_level` を返しても採用せず、`LearnerState.scaffolding_level` を `tutor_turns.scaffolding_level` とデバッグ表示の正とする
+- `next_action` は画面遷移補助に使い、正誤や足場掛け更新の根拠にしない
+- 回答後のデバッグ欄は `next_scaffolding_level` を反映し、回答判定を「十分/不十分」で表示する
 
 ## 教授方略
 
@@ -144,8 +162,10 @@
 【あなたの回答】
 {learner_input}
 
-【フィードバック】
-{feedback}
+【次ターン冒頭の前ターン情報】
+前の問題: {previous_practice_question}
+あなたの回答: {previous_learner_response}
+前の回答を踏まえて: {previous_feedback_for_learner}
 
 【確認問題】
 {practice_question}
@@ -154,7 +174,9 @@
 {self_explanation_prompt}
 ```
 
-被験者画面では内部ラベルを出さない。たとえばM1の場合は「この説明では、概念を少し別の種類のものとして捉えている可能性があります」のように自然言語へ変換する。
+学習セッションでは、デバッグ用に誤概念タイプ判定、足場掛けレベル、教授方略を通常の被験者画面にも表示する。教材・フィードバック本文では、たとえばM1の場合は「この説明では、概念を少し別の種類のものとして捉えている可能性があります」のように自然言語へ変換し、内部ラベルを説明文へ混ぜない。
+
+ターン継続時は回答確認後の単独フィードバック枠を表示しない。継続ターンがある場合は、保存した前の問題、学習者回答、`ai_feedback` を次ターン教材の冒頭に統合する。セッション完了時は問題を出さず、教材フィードバックだけを表示してから次へ進む。
 
 ## 再発時の方略変更
 
@@ -222,3 +244,7 @@ AIは次レベルや方略を提案してよい。ただし最終決定はbacken
 - 研究条件を決定論的に保つ
 - app-serverのAI出力が揺れても評価指標の定義を保つ
 - AI出力の揺れで評価指標が変わらないようにする
+
+## RAG教材参照
+
+学習ターン生成と学習回答フィードバックでは、`rag_ready_教材` のローカルTF-IDF検索結果を `rag_context` としてAIBackend payloadへ渡す。OpenAI APIキーや外部vector storeは通常実行に使わない。RAG資産が見つからない場合は空のcontextとして扱い、実験フローを停止しない。

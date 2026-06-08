@@ -181,7 +181,7 @@ def test_move_next_does_not_lower_level_when_response_is_insufficient(monkeypatc
 
     monkeypatch.setattr("app.services.experiment._ai_call", fake_feedback)
     response = client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json={"learner_response": "不十分"}).json()
-    assert response["next_action"] == "move_next"
+    assert response["next_action"] == "continue"
     assert response["is_sufficient"] is False
     assert response["next_scaffolding_level"] == "L2"
     assert response["session_completed"] is False
@@ -312,3 +312,75 @@ def test_tutor_and_feedback_payload_include_rag_context(monkeypatch):
         json={"learner_response": "AttentionとFFNで関係と特徴変換を扱います"},
     ).json()
     assert response["is_sufficient"] is True
+
+
+
+def test_stage_based_learning_progresses_terms_then_concept():
+    pid = _create_diagnosed_participant_with_all_targets()
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "transformer"}).json()
+
+    first = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert first["learning_stage"] == "term_understanding"
+    assert first["component_term"] == "Attention"
+    first_feedback = client.post(
+        f"/api/tutor-turns/{first['turn_id']}/respond",
+        json={"learner_response": "Attentionはトークン間の関係を扱います"},
+    ).json()
+    assert first_feedback["is_sufficient"] is True
+    assert first_feedback["session_completed"] is False
+    assert first_feedback["next_learning_stage"] == "term_understanding"
+    assert first_feedback["next_component_index"] == 1
+
+    second = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert second["component_term"] == "FFN"
+    second_feedback = client.post(
+        f"/api/tutor-turns/{second['turn_id']}/respond",
+        json={"learner_response": "FFNは各トークンの特徴を変換します"},
+    ).json()
+    assert second_feedback["session_completed"] is False
+    assert second_feedback["next_component_index"] == 2
+
+    third = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert third["component_term"] == "トークン間の関係性"
+    third_feedback = client.post(
+        f"/api/tutor-turns/{third['turn_id']}/respond",
+        json={"learner_response": "トークン間の関係性は語同士の関係を表します"},
+    ).json()
+    assert third_feedback["session_completed"] is False
+    assert third_feedback["stage_completed"] is True
+    assert third_feedback["next_learning_stage"] == "concept_understanding"
+
+    concept = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert concept["learning_stage"] == "concept_understanding"
+    assert concept["component_term"] is None
+    final_feedback = client.post(
+        f"/api/tutor-turns/{concept['turn_id']}/respond",
+        json={"learner_response": "TransformerはAttentionとFFNを重ね、トークン間の関係と特徴変換を扱う構造です"},
+    ).json()
+    assert final_feedback["is_sufficient"] is True
+    assert final_feedback["session_completed"] is True
+    assert final_feedback["next_learning_stage"] == "final_feedback"
+
+
+def test_concept_insufficient_returns_to_term_understanding():
+    pid = _create_diagnosed_participant_with_all_targets()
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "attention"}).json()
+    for answer in [
+        "トークンは入力を分けた単位です",
+        "関係はトークン同士の関係です",
+        "重み付けは関係に重みをつけることです",
+        "重要度は重みによってどれを重要に扱うかです",
+    ]:
+        turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+        feedback = client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json={"learner_response": answer}).json()
+        assert feedback["session_completed"] is False
+    concept = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert concept["learning_stage"] == "concept_understanding"
+    insufficient = client.post(f"/api/tutor-turns/{concept['turn_id']}/respond", json={"learner_response": "重要な単語を探します"}).json()
+    assert insufficient["is_sufficient"] is False
+    assert insufficient["session_completed"] is False
+    assert insufficient["next_learning_stage"] == "term_understanding"
+    assert insufficient["next_component_index"] == 0
+    restart = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert restart["learning_stage"] == "term_understanding"
+    assert restart["component_term"] == "トークン"

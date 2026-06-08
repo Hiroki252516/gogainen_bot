@@ -166,6 +166,7 @@ async def api_generate_tutor_turn(session_id: str, db: Session = Depends(get_db)
     turn = await generate_tutor_turn(db, session_id)
     session = db.get(TutorSession, session_id)
     state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one() if session else None
+    stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
     return {
         "turn_id": turn.id,
         "tutor_message": turn.tutor_message,
@@ -174,6 +175,12 @@ async def api_generate_tutor_turn(session_id: str, db: Session = Depends(get_db)
         "requires_learner_response": True,
         "turn_index": turn.turn_index,
         "max_turns": settings.max_turns_per_term,
+        "learning_stage": stage_meta.get("learning_stage"),
+        "learning_stage_label": stage_meta.get("learning_stage_label"),
+        "component_term": stage_meta.get("component_term"),
+        "component_index": stage_meta.get("component_index"),
+        "component_total": stage_meta.get("component_total"),
+        "stage_completed": False,
         "scaffolding_level": turn.scaffolding_level,
         "misconception_type": state.primary_misconception if state else None,
         "teaching_strategy": turn.teaching_strategy,

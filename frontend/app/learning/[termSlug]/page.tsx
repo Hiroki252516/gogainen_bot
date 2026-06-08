@@ -12,12 +12,37 @@ type Turn = {
   practice_question: { body: string };
   turn_index: number;
   max_turns: number;
-  scaffolding_level: string;
-  misconception_type: string | null;
-  teaching_strategy: string;
+  learning_stage?: string;
+  learning_stage_label?: string;
+  component_term?: string | null;
+  component_index?: number;
+  component_total?: number;
+  scaffolding_level?: string;
+  misconception_type?: string | null;
+  teaching_strategy?: string;
 };
 
-type Feedback = { feedback: string; next_action: string; session_completed: boolean; next_scaffolding_level: string; turn_index: number; max_turns: number };
+type Feedback = {
+  feedback: string;
+  next_action: string;
+  is_sufficient: boolean;
+  session_completed: boolean;
+  learning_stage?: string;
+  stage_completed?: boolean;
+  next_learning_stage?: string;
+  component_term?: string | null;
+  component_index?: number;
+  component_total?: number;
+  next_component_index?: number;
+  next_scaffolding_level: string;
+  turn_index: number;
+  max_turns: number;
+};
+
+function judgementLabel(feedback: Feedback | null) {
+  if (!feedback) return "未判定";
+  return feedback.is_sufficient ? "十分" : "不十分";
+}
 
 export default function LearningPage() {
   const router = useRouter();
@@ -63,32 +88,27 @@ export default function LearningPage() {
         method: "POST",
         body: JSON.stringify({ learner_response: response })
       });
-      setFeedback(data);
+      const updatedTurn = {
+        ...turn,
+        scaffolding_level: data.next_scaffolding_level,
+        learning_stage: data.next_learning_stage || turn.learning_stage,
+        component_index: data.next_component_index ?? turn.component_index
+      };
+      if (!data.session_completed && sessionId) {
+        const next = await api<Turn>(`/api/tutor-sessions/${sessionId}/turns`, { method: "POST", body: JSON.stringify({}) });
+        setTurn(next);
+        setResponse("");
+        setFeedback(null);
+      } else {
+        setTurn(updatedTurn);
+        setFeedback(data);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
   }
-
-
-  async function nextTurn() {
-    if (!sessionId || submitting) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      const data = await api<Turn>(`/api/tutor-sessions/${sessionId}/turns`, { method: "POST", body: JSON.stringify({}) });
-      setTurn(data);
-      setResponse("");
-      setFeedback(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const canContinueTurn = feedback && !feedback.session_completed && turn && turn.turn_index < turn.max_turns;
 
   return (
     <AppShell step="学習セッション">
@@ -98,39 +118,56 @@ export default function LearningPage() {
         {turn ? (
           <>
             <div className="notice">
+              <strong>今回の学習</strong>
+              <p>段階: {turn.learning_stage_label || "用語理解"}</p>
+              {turn.learning_stage === "term_understanding" ? (
+                <p>用語: {turn.component_term} {typeof turn.component_index === "number" && typeof turn.component_total === "number" ? `${turn.component_index + 1} / ${turn.component_total}` : ""}</p>
+              ) : (
+                <p>対象概念全体を説明します</p>
+              )}
+            </div>
+            <div className="notice">
               <strong>デバッグ</strong>
-              <p>誤概念タイプ: {turn.misconception_type || "none"} / 足場掛けレベル: {turn.scaffolding_level} / ターン: {turn.turn_index} / {turn.max_turns}</p>
-              <p className="muted">teaching_strategy: {turn.teaching_strategy}</p>
+              <p>誤概念タイプ判定: {turn.misconception_type || "none"}</p>
+              <p>learning_stage: {feedback?.next_learning_stage || turn.learning_stage || "none"}</p>
+              <p>回答判定: {judgementLabel(feedback)}</p>
+              <p className="muted">teaching_strategy: {turn.teaching_strategy || "none"}</p>
             </div>
-            <div className="learning-layout">
-              <section className="learning-block material-block" aria-labelledby="material-title">
-                <h2 id="material-title">教材</h2>
-                <p>{turn.tutor_message}</p>
-              </section>
-              <section className="learning-block problem-block" aria-labelledby="problem-title">
-                <h2 id="problem-title">問題</h2>
-                <p>{turn.practice_question?.body || turn.learner_prompt}</p>
-                <label>
-                  あなたの回答・自己説明
-                  <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
-                </label>
-              </section>
-            </div>
-            <div className="actions">
-              <button onClick={submit} disabled={submitting || Boolean(feedback)}>
-                {submitting ? "回答を確認中..." : "回答を確認"}
-              </button>
-              {canContinueTurn ? (
-                <button className="secondary" onClick={nextTurn} disabled={submitting}>
-                  {submitting ? "次のターンを準備中..." : "次のターン"}
-                </button>
-              ) : feedback ? (
-                <button className="secondary" onClick={() => router.push(nextHref)}>
-                  次へ
-                </button>
-              ) : null}
-            </div>
-            {feedback ? <div className="notice">{feedback.feedback}</div> : null}
+            {feedback ? (
+              <>
+                <section className="learning-block material-block" aria-labelledby="feedback-title">
+                  <h2 id="feedback-title">教材フィードバック</h2>
+                  <p>{feedback.feedback}</p>
+                </section>
+                <div className="actions">
+                  <button className="secondary" onClick={() => router.push(nextHref)}>
+                    次へ
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="learning-layout">
+                  <section className="learning-block material-block" aria-labelledby="material-title">
+                    <h2 id="material-title">教材</h2>
+                    <p>{turn.tutor_message}</p>
+                  </section>
+                  <section className="learning-block problem-block" aria-labelledby="problem-title">
+                    <h2 id="problem-title">問題</h2>
+                    <p>{turn.practice_question?.body || turn.learner_prompt}</p>
+                    <label>
+                      あなたの回答・自己説明
+                      <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
+                    </label>
+                  </section>
+                </div>
+                <div className="actions">
+                  <button onClick={submit} disabled={submitting}>
+                    {submitting ? "回答を確認中..." : "回答を確認"}
+                  </button>
+                </div>
+              </>
+            )}
           </>
         ) : (
           <p>読み込み中...</p>

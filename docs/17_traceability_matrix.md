@@ -118,10 +118,10 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 
 ## PPTX Details Captured
 
-- Attention example is used in `11_seed_questions.md`
+- Transformer、Attention、LLM学習段階、事前学習、事後学習の問題例は `11_seed_questions.md` に反映する
 - Problem phase separation from 5月25日 slide 22/23 is reflected in `02_experiment_flow.md`
 - "same problem should not be reused" is implemented through `construct_key` and `variant_key`
-- The slide note problem examples for Embedding, Token, Overfitting, Generalization, Fine-tuning, Prompt, RAG are represented in seed questions
+- 教材参照は `rag_ready_教材` のローカルTF-IDF RAG資産として実装する
 - "足場掛けはどうやってやるのか" is answered in `04_scaffolding_and_tutoring.md`
 
 ## Remaining Research Decisions

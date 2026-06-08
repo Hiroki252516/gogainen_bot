@@ -170,7 +170,7 @@ Unknown is not recurrence.
 
 ### Scaffolding Update
 
-Use deterministic service logic from `04_scaffolding_and_tutoring.md`. AI recommendations are advisory.
+Use deterministic service logic from `04_scaffolding_and_tutoring.md`. In learning turns, backend uses AI feedback `is_sufficient` as the update signal: sufficient answers lower scaffolding by one level, insufficient answers raise it by one level, within L1-L3 bounds. AI `next_action` controls navigation only, and AI `next_scaffolding_level` is advisory. Tutor turn generation also treats AI `scaffolding_level` as advisory; persisted/displayed level comes from `LearnerState.scaffolding_level`. Turn 2+ material includes previous practice question, learner response, and feedback.
 
 ## MVP API Dependency Graph
 
@@ -235,3 +235,7 @@ If implementation is split, the first PR should stop at:
 - seed
 - Codex app-server status check
 - pretest -> diagnosis -> learner_states
+
+## RAG教材参照
+
+学習ターン生成と学習回答フィードバックでは、`rag_ready_教材` のローカルTF-IDF検索結果を `rag_context` としてAIBackend payloadへ渡す。OpenAI APIキーや外部vector storeは通常実行に使わない。RAG資産が見つからない場合は空のcontextとして扱い、実験フローを停止しない。
