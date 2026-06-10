@@ -24,7 +24,7 @@ if (learningPage.includes("{feedback ? <div className=\"notice\">{feedback.feedb
 if (!learningPage.includes("<strong>デバッグ</strong>")) {
   throw new Error("learning page must show debug panel in the normal participant view");
 }
-for (const expectedText of ["誤概念タイプ判定:", "learning_stage:", "teaching_strategy:"]) {
+for (const expectedText of ["事前テスト由来の誤概念:", "学習内の現在判定:", "learning_stage:", "teaching_strategy:"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing debug text: ${expectedText}`);
   }
@@ -35,7 +35,7 @@ if (learningPage.includes("足場掛けレベル:")) {
 if (learningPage.includes("ターン: {turn.turn_index}")) {
   throw new Error("learning page must not show fixed turn progress in stage-based UI");
 }
-for (const expectedText of ["対象概念:", "回答判定:", "教材フィードバック", "judgementLabel(feedback)"]) {
+for (const expectedText of ["対象概念:", "学習内判定履歴:", "回答判定:", "教材フィードバック", "judgementLabel(feedback)"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing final feedback/debug update behavior: ${expectedText}`);
   }

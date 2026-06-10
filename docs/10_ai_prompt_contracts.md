@@ -1,5 +1,16 @@
 # 10. AI Prompt Contracts
 
+## 2026-06 Learning Feedback Misconception Contract Update
+
+`generate_feedback` は回答十分性に加えて、今回の学習セッション回答だけに対する内部判定を返す。
+
+- `learning_misconception_type`: `M1 | M2 | M3 | M4 | unknown | null`
+- `learning_misconception_confidence`: 0〜1またはnull
+- `learning_misconception_reason`: 研究ログ用の短い理由
+
+この判定は事前テスト由来の `primary_misconception` を上書きしない。提案群では次の教材生成payloadに `previous_learning_misconception` と `session_misconception_history` として渡し、教授方略へ反映する。統制群では保存してよいが教材生成には使わない。
+
+
 ## 2026-06 Stage-Based Tutoring Payload Update
 
 `generate_tutoring_turn` と `generate_feedback` の payload には、学習ステージ制のため以下を含める。

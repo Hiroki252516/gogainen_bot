@@ -1,5 +1,23 @@
 # 08. Backend API Spec
 
+## 2026-06 Learning-Session Misconception API Update
+
+学習セッション内の誤概念判定は、事前テスト由来の `misconception_type` とは別に扱う。`POST /api/tutor-sessions/{session_id}/turns` は以下を追加で返す。
+
+- `initial_misconception_type`: 事前テスト由来の誤概念タイプ
+- `latest_learning_misconception_type`: 同一学習セッション内の直近回答に対する誤概念タイプ
+- `latest_learning_misconception_reason`: 直近の学習内判定理由
+- `session_misconception_history`: 構成用語または概念理解ごとの学習内判定履歴
+
+`POST /api/tutor-turns/{turn_id}/respond` は以下を追加で返す。
+
+- `learning_misconception_type`
+- `learning_misconception_confidence`
+- `learning_misconception_reason`
+
+保存先は `tutor_turns.grading_json` とする。既存DBカラムは追加しない。
+
+
 ## 2026-06 Stage-Based Learning API Update
 
 `POST /api/tutor-sessions/{session_id}/turns` は、既存フィールドに加えて以下を返す。

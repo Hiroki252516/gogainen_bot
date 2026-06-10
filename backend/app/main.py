@@ -21,11 +21,13 @@ from app.services.experiment import (
     diagnose_pretest,
     export_csv,
     generate_tutor_turn,
+    latest_learning_misconception,
     learning_targets,
     question_payloads,
     recalculate_evaluation,
     respond_tutor_turn,
     score_phase,
+    session_misconception_history,
     submit_attempt,
 )
 
@@ -168,6 +170,8 @@ async def api_generate_tutor_turn(session_id: str, db: Session = Depends(get_db)
     term = db.get(Term, session.term_id) if session else None
     state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one() if session else None
     stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
+    history = session_misconception_history(db, session_id)
+    latest_learning = latest_learning_misconception(db, session_id)
     return {
         "turn_id": turn.id,
         "term_slug": term.slug if term else None,
@@ -185,7 +189,11 @@ async def api_generate_tutor_turn(session_id: str, db: Session = Depends(get_db)
         "component_total": stage_meta.get("component_total"),
         "stage_completed": False,
         "scaffolding_level": turn.scaffolding_level,
+        "initial_misconception_type": state.primary_misconception if state else None,
         "misconception_type": state.primary_misconception if state else None,
+        "latest_learning_misconception_type": latest_learning.get("misconception_type") if latest_learning else None,
+        "latest_learning_misconception_reason": latest_learning.get("reason") if latest_learning else None,
+        "session_misconception_history": history,
         "teaching_strategy": turn.teaching_strategy,
     }
 

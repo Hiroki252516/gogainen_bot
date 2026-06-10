@@ -102,7 +102,7 @@ def test_control_group_uses_general_strategy():
     assert turn["teaching_strategy"] == "general_explanation"
 
 from app.db.session import SessionLocal
-from app.models import LearnerState, Term
+from app.models import LearnerState, Term, TutorTurn
 
 
 def _create_diagnosed_participant_with_all_targets():
@@ -408,3 +408,48 @@ def test_initial_component_material_is_complete_explanation():
     material = turn["tutor_message"]
     for expected in ["人間評価とは", "役割", "よくある誤解", "判断基準", "人間", "安全性", "有用性"]:
         assert expected in material
+
+
+
+def test_learning_session_misconception_is_saved_and_returned_separately():
+    pid = _create_diagnosed_participant_with_all_targets()
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "post_training"}).json()
+    first = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert first["initial_misconception_type"] == "M1"
+    assert first["latest_learning_misconception_type"] is None
+    response = client.post(f"/api/tutor-turns/{first['turn_id']}/respond", json={"learner_response": "わかんない"}).json()
+    assert response["learning_misconception_type"] == "unknown"
+    assert response["learning_misconception_reason"]
+
+    db = SessionLocal()
+    try:
+        saved_turn = db.get(TutorTurn, first["turn_id"])
+        assert saved_turn.grading_json["learning_misconception_type"] == "unknown"
+        state = db.query(LearnerState).join(Term, LearnerState.term_id == Term.id).filter(LearnerState.participant_id == pid, Term.slug == "post_training").one()
+        assert state.primary_misconception == "M1"
+    finally:
+        db.close()
+
+    second = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert second["initial_misconception_type"] == "M1"
+    assert second["latest_learning_misconception_type"] == "unknown"
+    assert second["session_misconception_history"][0]["label"] == "人間評価"
+    assert second["session_misconception_history"][0]["misconception_type"] == "unknown"
+    assert second["teaching_strategy"] == "foundational_explanation"
+
+
+def test_control_group_keeps_general_strategy_with_learning_misconception():
+    participant = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    question = client.get(f"/api/experiment/{pid}/pretest").json()["questions"][0]
+    option = next(o for o in question["options"] if "わからない" not in o["body"])
+    client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "phase": "pretest", "selected_option_id": option["option_id"]})
+    client.post(f"/api/participants/{pid}/diagnose-pretest")
+    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
+    first = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    response = client.post(f"/api/tutor-turns/{first['turn_id']}/respond", json={"learner_response": "わかんない"}).json()
+    assert response["learning_misconception_type"] == "unknown"
+    second = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert second["latest_learning_misconception_type"] == "unknown"
+    assert second["teaching_strategy"] == "general_explanation"

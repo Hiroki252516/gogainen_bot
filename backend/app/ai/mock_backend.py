@@ -172,11 +172,15 @@ class MockAIBackend:
         current_level = payload.get("learner_state", {}).get("scaffolding_level") or "L2"
         next_by_level = {"L3": "L2", "L2": "L1", "L1": "L1"} if is_sufficient else {"L3": "L3", "L2": "L3", "L1": "L2"}
         label = term.get("label", "この用語")
+        learning_mtype, learning_reason, learning_confidence = _learning_misconception_for_response(response, is_sufficient)
         return {
             "feedback": f"{label}について、判断基準を使って説明できています。" if is_sufficient else f"{label}について、説明に必要な判断基準がまだ足りません。",
             "is_sufficient": is_sufficient,
             "next_action": "move_next" if is_sufficient and current_level == "L1" else "continue",
             "next_scaffolding_level": next_by_level.get(current_level, "L2"),
+            "learning_misconception_type": learning_mtype,
+            "learning_misconception_confidence": learning_confidence,
+            "learning_misconception_reason": learning_reason,
             "strategy_changed": bool(payload.get("strategy_changed")),
             "state_update_reason": "MockAIBackend feedback",
         }
@@ -508,3 +512,19 @@ def _concept_question(slug: str, term_label: str, component_terms: list[str]) ->
         "post_training": "人間評価、報酬モデル、安全性、有用性に触れて事後学習の目的を説明してください。",
     }
     return questions.get(slug, f"{joined}を用いて{term_label}を説明してください。")
+
+
+
+def _learning_misconception_for_response(response: str, is_sufficient: bool) -> tuple[str | None, str, float | None]:
+    cleaned = response.strip()
+    if is_sufficient:
+        return None, "現在の学習問題に対する説明は十分です。", 0.9
+    if not cleaned or any(word in cleaned for word in ["わからない", "わかんない", "不明", "知らない"]):
+        return "unknown", "回答からは知識不足または未理解が示されています。", 0.85
+    if any(word in cleaned for word in ["同じ", "同一", "混同", "FFN", "事前学習", "事後学習"]):
+        return "M2", "関連する別概念との境界が混ざっている可能性があります。", 0.8
+    if any(word in cleaned for word in ["言葉", "字", "単語", "名前", "重要な単語", "印"]):
+        return "M3", "表面的な語やキーワードに寄った説明になっています。", 0.8
+    if any(word in cleaned for word in ["人間", "感情", "反省", "気持ち", "意識", "集中"]):
+        return "M1", "概念を人間の心理や別カテゴリーとして捉えている可能性があります。", 0.8
+    return "M1", "対象概念を本来とは異なる種類のものとして捉えている可能性があります。", 0.65

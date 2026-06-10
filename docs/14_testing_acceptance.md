@@ -1,5 +1,15 @@
 # 14. Testing and Acceptance Criteria
 
+## 2026-06 Learning-Session Misconception Acceptance
+
+- 用語理解回答後に `learning_misconception_type` が `tutor_turns.grading_json` に保存される。
+- 概念理解回答後にも別の学習内誤概念判定が保存される。
+- 次ターン生成時に直近判定と同一セッション内履歴がpayloadへ入る。
+- 提案群では学習内誤概念が次教材の `teaching_strategy` に反映される。
+- 統制群では分類は保存されるが `teaching_strategy` は `general_explanation` のまま。
+- frontendでは事前テスト由来Mと学習内Mを別々に表示する。
+
+
 ## 2026-06 Stage-Based Learning Acceptance
 
 ステージ制学習の受け入れ条件:

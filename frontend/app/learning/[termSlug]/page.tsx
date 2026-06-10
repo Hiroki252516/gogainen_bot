@@ -5,6 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { api, requireParticipant } from "@/lib/api";
 
+type SessionMisconception = {
+  label: string;
+  misconception_type?: string | null;
+  reason?: string | null;
+};
+
 type Turn = {
   turn_id: string;
   term_slug?: string;
@@ -20,7 +26,11 @@ type Turn = {
   component_index?: number;
   component_total?: number;
   scaffolding_level?: string;
+  initial_misconception_type?: string | null;
   misconception_type?: string | null;
+  latest_learning_misconception_type?: string | null;
+  latest_learning_misconception_reason?: string | null;
+  session_misconception_history?: SessionMisconception[];
   teaching_strategy?: string;
 };
 
@@ -36,6 +46,9 @@ type Feedback = {
   component_index?: number;
   component_total?: number;
   next_component_index?: number;
+  learning_misconception_type?: string | null;
+  learning_misconception_confidence?: number | null;
+  learning_misconception_reason?: string | null;
   next_scaffolding_level: string;
   turn_index: number;
   max_turns: number;
@@ -94,7 +107,9 @@ export default function LearningPage() {
         ...turn,
         scaffolding_level: data.next_scaffolding_level,
         learning_stage: data.next_learning_stage || turn.learning_stage,
-        component_index: data.next_component_index ?? turn.component_index
+        component_index: data.next_component_index ?? turn.component_index,
+        latest_learning_misconception_type: data.learning_misconception_type ?? turn.latest_learning_misconception_type,
+        latest_learning_misconception_reason: data.learning_misconception_reason ?? turn.latest_learning_misconception_reason
       };
       if (!data.session_completed && sessionId) {
         const next = await api<Turn>(`/api/tutor-sessions/${sessionId}/turns`, { method: "POST", body: JSON.stringify({}) });
@@ -131,10 +146,17 @@ export default function LearningPage() {
             </div>
             <div className="notice">
               <strong>デバッグ</strong>
-              <p>誤概念タイプ判定: {turn.misconception_type || "none"}</p>
+              <p>事前テスト由来の誤概念: {turn.initial_misconception_type || turn.misconception_type || "none"}</p>
+              <p>学習内の現在判定: {feedback?.learning_misconception_type || turn.latest_learning_misconception_type || "未判定"}</p>
               <p>learning_stage: {feedback?.next_learning_stage || turn.learning_stage || "none"}</p>
               <p>回答判定: {judgementLabel(feedback)}</p>
               <p className="muted">teaching_strategy: {turn.teaching_strategy || "none"}</p>
+              {turn.session_misconception_history?.length ? (
+                <p className="muted">
+                  学習内判定履歴: {turn.session_misconception_history.map((item) => `${item.label} ${item.misconception_type || "none"}`).join(" / ")}
+                </p>
+              ) : null}
+              {feedback?.learning_misconception_reason ? <p className="muted">学習内判定理由: {feedback.learning_misconception_reason}</p> : null}
             </div>
             {feedback ? (
               <>

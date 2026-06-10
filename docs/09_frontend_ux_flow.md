@@ -1,5 +1,16 @@
 # 09. Frontend UX Flow
 
+## 2026-06 Learning-Session Misconception UI Update
+
+学習画面のデバッグ欄では、事前テスト由来の誤概念と学習セッション内の誤概念を分けて表示する。
+
+- `事前テスト由来の誤概念`: `initial_misconception_type`
+- `学習内の現在判定`: 直近回答の `learning_misconception_type` または次ターンの `latest_learning_misconception_type`
+- `学習内判定履歴`: `session_misconception_history` を `人間評価 unknown / 報酬モデル M2` のように表示
+
+教材本文やフィードバック本文には、引き続きM1〜M4などの内部ラベルを直接出さない。
+
+
 ## 2026-06 Stage-Based Learning UI Update
 
 `/learning/[termSlug]` では、固定の「ターン: x / 3」と被験者画面の「足場掛けレベル: Lx」を表示しない。代わりに以下を表示する。

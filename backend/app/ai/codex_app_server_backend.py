@@ -309,10 +309,13 @@ class CodexAppServerBackend:
                 "is_sufficient": {"type": "boolean"},
                 "next_action": {"type": "string", "enum": ["continue", "move_next"]},
                 "next_scaffolding_level": {"type": "string", "enum": ["L1", "L2", "L3"]},
+                "learning_misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
+                "learning_misconception_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+                "learning_misconception_reason": {"type": "string"},
                 "strategy_changed": {"type": "boolean"},
                 "state_update_reason": {"type": "string"},
             },
-            "required": ["feedback", "is_sufficient", "next_action", "next_scaffolding_level", "strategy_changed", "state_update_reason"],
+            "required": ["feedback", "is_sufficient", "next_action", "next_scaffolding_level", "learning_misconception_type", "learning_misconception_confidence", "learning_misconception_reason", "strategy_changed", "state_update_reason"],
             "additionalProperties": False,
         }
         result = await self._run_structured_turn(
@@ -324,6 +327,9 @@ class CodexAppServerBackend:
                     "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
                     "rag_context.chunks がある場合は、その教材コンテキストを優先して判定・フィードバックする。教材にない内容は推測で断定しない。",
                     "M1/M2/M3/M4 という内部ラベルを学習者向け文面に絶対に書かない。",
+                    "learning_misconception_type は、この学習セッション内の今回回答だけに対する内部診断として M1/M2/M3/M4/unknown/null から選ぶ。事前テスト由来の primary_misconception を上書きしない。",
+                    "十分回答なら learning_misconception_type は null にしてよい。不十分な場合は、カテゴリー誤分類はM1、類似概念境界混同はM2、表層語反応はM3、文脈適用失敗はM4、知識不足はunknownにする。",
+                    "learning_misconception_reason は研究者向けログ用に短く書き、学習者向けfeedbackには内部ラベルを書かない。",
                     "learning_stage が term_understanding の場合、is_sufficient は component_term の意味と対象概念内での役割が十分に説明されている場合だけ true にする。",
                     "learning_stage が concept_understanding の場合、is_sufficient は component_terms を使って対象概念全体を十分に説明できている場合だけ true にする。",
                     "理解が十分なら move_next、不十分なら continue にする。",
@@ -333,6 +339,7 @@ class CodexAppServerBackend:
             schema,
         )
         result["feedback"] = _strip_internal_labels(result["feedback"])
+        result["learning_misconception_reason"] = _strip_internal_labels(result["learning_misconception_reason"])
         result["state_update_reason"] = _strip_internal_labels(result["state_update_reason"])
         return result
 

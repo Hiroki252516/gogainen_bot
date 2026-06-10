@@ -117,6 +117,43 @@ def _merge_stage_meta(practice_question: dict[str, Any], position: dict[str, Any
     return practice_question
 
 
+def session_misconception_history(db: Session, session_id: str) -> list[dict[str, Any]]:
+    turns = (
+        db.query(TutorTurn)
+        .filter_by(tutor_session_id=session_id)
+        .order_by(TutorTurn.turn_index)
+        .all()
+    )
+    history: list[dict[str, Any]] = []
+    for turn in turns:
+        grading = turn.grading_json or {}
+        if not grading or "learning_misconception_type" not in grading:
+            continue
+        meta = _practice_meta(turn)
+        stage = grading.get("learning_stage") or meta.get("learning_stage") or "term_understanding"
+        label = grading.get("component_term") or meta.get("component_term") or ("概念理解" if stage == "concept_understanding" else "用語理解")
+        history.append(
+            {
+                "turn_id": turn.id,
+                "turn_index": turn.turn_index,
+                "learning_stage": stage,
+                "label": label,
+                "component_term": grading.get("component_term") or meta.get("component_term"),
+                "component_index": grading.get("component_index", meta.get("component_index")),
+                "misconception_type": grading.get("learning_misconception_type"),
+                "confidence": grading.get("learning_misconception_confidence"),
+                "reason": grading.get("learning_misconception_reason"),
+                "is_sufficient": grading.get("is_sufficient"),
+            }
+        )
+    return history
+
+
+def latest_learning_misconception(db: Session, session_id: str) -> dict[str, Any] | None:
+    history = session_misconception_history(db, session_id)
+    return history[-1] if history else None
+
+
 def _rag_query(*parts: str | None) -> str:
     return " ".join(part.strip() for part in parts if part and part.strip())
 
@@ -432,6 +469,11 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if position["learning_stage"] == "final_feedback":
         raise HTTPException(status_code=400, detail="learning session already completed")
     current_level = normalize_level(state.scaffolding_level)
+    misconception_history = session_misconception_history(db, session.id)
+    previous_learning_misconception = misconception_history[-1] if misconception_history else None
+    effective_misconception = (previous_learning_misconception or {}).get("misconception_type") or state.primary_misconception
+    effective_status = "unknown" if effective_misconception == "unknown" else ("misconception" if effective_misconception else state.current_status)
+    effective_strategy = strategy_for(effective_misconception, effective_status, participant.group_condition)
     payload = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
@@ -446,7 +488,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "current_status": state.current_status,
             "primary_misconception": state.primary_misconception,
             "scaffolding_level": current_level,
-            "teaching_strategy": state.teaching_strategy,
+            "teaching_strategy": effective_strategy,
             "recurrence_count": state.recurrence_count,
         },
         "previous_answer": previous_attempt.reason_text if previous_attempt else "",
@@ -454,6 +496,8 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "previous_practice_question": (previous_turn.practice_question_json or {}).get("body") if previous_turn else "",
         "previous_learner_response": previous_turn.learner_response if previous_turn else "",
         "previous_feedback_for_learner": previous_turn.ai_feedback if previous_turn else "",
+        "previous_learning_misconception": previous_learning_misconception if participant.group_condition == "proposed" else None,
+        "session_misconception_history": misconception_history if participant.group_condition == "proposed" else [],
         "rag_context": _rag_context(
             term.label,
             term.description,
@@ -468,7 +512,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         tutor_session_id=session.id,
         turn_index=turn_count + 1,
         scaffolding_level=current_level,
-        teaching_strategy=result["teaching_strategy"],
+        teaching_strategy=("general_explanation" if participant.group_condition == "control" else result["teaching_strategy"]),
         previous_teaching_strategy=state.previous_teaching_strategy,
         strategy_changed=False,
         tutor_message=result["tutor_message"],
@@ -529,6 +573,11 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     }
     result = await _ai_call(db, "generate_feedback", feedback_payload)
     is_sufficient = bool(result.get("is_sufficient"))
+    learning_misconception_type = result.get("learning_misconception_type")
+    if learning_misconception_type not in {"M1", "M2", "M3", "M4", "unknown", None}:
+        learning_misconception_type = "unknown"
+    learning_misconception_confidence = result.get("learning_misconception_confidence")
+    learning_misconception_reason = result.get("learning_misconception_reason") or result.get("state_update_reason") or ""
     next_level = normalize_level(lower_level(state.scaffolding_level) if is_sufficient else raise_level(state.scaffolding_level))
     if learning_stage == "term_understanding":
         stage_completed = is_sufficient and component_index + 1 >= component_total
@@ -561,6 +610,9 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "stage_completed": stage_completed,
         "next_learning_stage": next_learning_stage,
         "next_component_index": next_component_index,
+        "learning_misconception_type": learning_misconception_type,
+        "learning_misconception_confidence": learning_misconception_confidence,
+        "learning_misconception_reason": learning_misconception_reason,
         "ai_next_action": result.get("next_action"),
     }
     state.scaffolding_level = next_level
@@ -583,6 +635,9 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "component_index": component_index,
         "component_total": component_total,
         "next_component_index": next_component_index,
+        "learning_misconception_type": learning_misconception_type,
+        "learning_misconception_confidence": learning_misconception_confidence,
+        "learning_misconception_reason": learning_misconception_reason,
         "next_scaffolding_level": next_level,
         "turn_index": turn.turn_index,
         "max_turns": get_settings().max_turns_per_term,
