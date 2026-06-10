@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     codex_app_server_cwd: str = "/tmp"
     codex_turn_timeout_sec: int = 120
     codex_reasoning_effort: str = "low"
-    max_learning_targets: int = 4
+    max_learning_targets: int = 5
     max_turns_per_term: int = 3
     random_seed: str = "20260525"
     export_dir: str = "./exports"

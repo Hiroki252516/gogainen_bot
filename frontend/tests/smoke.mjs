@@ -43,3 +43,6 @@ for (const expectedText of ["対象概念:", "学習内判定履歴:", "回答�
 if (!learningPage.includes("learning_stage: data.next_learning_stage")) {
   throw new Error("learning page must update stage from next_learning_stage after response");
 }
+if (!learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") || !learningPage.includes("className=\"preserve-lines\">{feedback.feedback}")) {
+  throw new Error("learning page must preserve line breaks in material and feedback text");
+}

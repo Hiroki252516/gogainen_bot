@@ -162,7 +162,7 @@ export default function LearningPage() {
               <>
                 <section className="learning-block material-block" aria-labelledby="feedback-title">
                   <h2 id="feedback-title">教材フィードバック</h2>
-                  <p>{feedback.feedback}</p>
+                  <p className="preserve-lines">{feedback.feedback}</p>
                 </section>
                 <div className="actions">
                   <button className="secondary" onClick={() => router.push(nextHref)}>
@@ -175,7 +175,7 @@ export default function LearningPage() {
                 <div className="learning-layout">
                   <section className="learning-block material-block" aria-labelledby="material-title">
                     <h2 id="material-title">教材</h2>
-                    <p>{turn.tutor_message}</p>
+                    <p className="preserve-lines">{turn.tutor_message}</p>
                   </section>
                   <section className="learning-block problem-block" aria-labelledby="problem-title">
                     <h2 id="problem-title">問題</h2>

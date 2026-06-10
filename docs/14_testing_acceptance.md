@@ -102,7 +102,7 @@ Mock rules:
 - 事前テストを完了できる
 - AI診断が実行される
 - learner_states が作成される
-- 学習対象用語が最大4件選ばれる
+- 事前テストで扱った5用語すべてが学習対象として選ばれる
 - 学習セッションが開始できる
 - 再テストが実施できる
 - 確認テストが実施できる
@@ -165,7 +165,7 @@ Mock rules:
 1. Participant P001をproposedで作成
 2. TransformerまたはAttentionでM1誤答
 3. 事前学習または事後学習でM2/M3誤答
-4. Diagnosis後、優先度上位4件がlearning targetになる
+4. Diagnosis後、事前テストで扱った5件すべてがlearning targetになる
 5. 学習ターン生成時のLはbackendのLearnerStateを正とする
 6. 学習後retestで同じ誤概念ならrecurrence_flag true
 7. 次のturnでstrategy_changed true

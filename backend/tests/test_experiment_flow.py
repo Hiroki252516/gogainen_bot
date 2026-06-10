@@ -37,10 +37,10 @@ def test_full_mock_experiment_flow():
 
     diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
     assert diagnosis.status_code == 200
-    assert diagnosis.json()["learning_target_count"] == 4
+    assert diagnosis.json()["learning_target_count"] == 5
 
     targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
-    assert len(targets) == 4
+    assert len(targets) == 5
     assert "term_slug" in targets[0]
     assert "M1" not in targets[0]["summary_for_learner"]
 

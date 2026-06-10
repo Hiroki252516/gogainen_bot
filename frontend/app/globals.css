@@ -83,6 +83,10 @@ p {
   line-height: 1.7;
 }
 
+.preserve-lines {
+  white-space: pre-wrap;
+}
+
 label {
   display: grid;
   gap: 6px;
