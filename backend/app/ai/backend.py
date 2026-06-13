@@ -27,7 +27,7 @@ def strategy_for(misconception_type: str | None, status: str | None, group_condi
     if misconception_type == "M3":
         return "deep_structure_focus"
     if misconception_type == "M4":
-        return "context_transfer_training"
+        return "self_explanation_check"
     if status == "unknown":
         return "foundational_explanation"
     if status == "unstable_correct":

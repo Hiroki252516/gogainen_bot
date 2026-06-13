@@ -23,7 +23,7 @@ export default function LearningTargetsPage() {
   return (
     <AppShell step="学習対象">
       <section className="panel stack">
-        <h1>今回重点的に確認する内容</h1>
+        <h1>今回残っている確認項目</h1>
         {error ? <div className="danger">{error}</div> : null}
         <div className="stack">
           {targets.map((target, i) => (
@@ -41,7 +41,9 @@ export default function LearningTargetsPage() {
             学習を開始
           </Link>
         ) : (
-          <span>対象を読み込み中...</span>
+          <Link className="button" href="/final-test">
+            最終テストへ
+          </Link>
         )}
       </section>
     </AppShell>

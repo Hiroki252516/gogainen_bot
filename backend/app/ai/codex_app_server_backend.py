@@ -328,7 +328,7 @@ class CodexAppServerBackend:
                     "rag_context.chunks がある場合は、その教材コンテキストを優先して判定・フィードバックする。教材にない内容は推測で断定しない。",
                     "M1/M2/M3/M4 という内部ラベルを学習者向け文面に絶対に書かない。",
                     "learning_misconception_type は、この学習セッション内の今回回答だけに対する内部診断として M1/M2/M3/M4/unknown/null から選ぶ。事前テスト由来の primary_misconception を上書きしない。",
-                    "十分回答なら learning_misconception_type は null にしてよい。不十分な場合は、カテゴリー誤分類はM1、類似概念境界混同はM2、表層語反応はM3、文脈適用失敗はM4、知識不足はunknownにする。",
+                    "十分回答なら learning_misconception_type は null にしてよい。不十分な場合は、カテゴリー誤分類はM1、類似概念境界混同はM2、表層語反応はM3、知識不足はunknownにする。M4は今回の学習セッション教材方略では使わない。",
                     "learning_misconception_reason は研究者向けログ用に短く書き、学習者向けfeedbackには内部ラベルを書かない。",
                     "learning_stage が term_understanding の場合、is_sufficient は component_term の意味と対象概念内での役割が十分に説明されている場合だけ true にする。",
                     "learning_stage が concept_understanding の場合、is_sufficient は component_terms を使って対象概念全体を十分に説明できている場合だけ true にする。",

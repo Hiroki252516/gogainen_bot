@@ -82,7 +82,9 @@ export function QuestionRunner({
       return;
     }
     if (scorePath) {
-      await api(scorePath(id), { method: "POST" });
+      const result = await api<{ next_url?: string }>(scorePath(id), { method: "POST" });
+      router.push(result.next_url || nextPath);
+      return;
     }
     router.push(nextPath);
   }

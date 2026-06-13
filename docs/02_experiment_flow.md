@@ -1,5 +1,12 @@
 # 02. Experiment Flow
 
+## 2026-06 Iterative Test-Learning Flow Update
+
+現行フローは、固定の事前テスト・学習・再テストではなく、反復型の `テスト → 未達項目だけ学習 → 再テスト` を正とする。正解した用語は次周回のテスト・学習対象から除外し、不正解・`unknown`・誤概念選択肢の用語だけを残す。残り対象が0件になったら、5用語すべてを対象にした `final_test` へ進み、その後アンケート遷移画面へ進む。
+
+学習セッション内は引き続き `term_understanding → concept_understanding → final_feedback` のステージ制を使う。`unknown` とM1〜M3の誤概念に対して、L3用語理解からL2概念理解へ進める。M4は今回の教材方略から外す。
+
+
 ## 全体フロー
 
 ```text

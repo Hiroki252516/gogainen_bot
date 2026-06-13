@@ -1,5 +1,12 @@
 # 08. Backend API Spec
 
+## 2026-06 Iterative Flow API Update
+
+反復型フローでは、`GET /api/experiment/{participant_id}/retest` は現在 `TermAssignment.is_learning_target = true` の未達用語だけを返す。`POST /api/participants/{participant_id}/score-retest` は正解済み用語を次周回対象から除外し、未達が残れば `next_url=/learning-targets`、残り0件なら `next_url=/final-test` を返す。
+
+`GET /api/experiment/{participant_id}/final-test` と `POST /api/participants/{participant_id}/score-final-test` を追加する。最終テストは途中で除外された用語も含め、5用語すべてを出題する。採点後は `next_url=/survey` を返す。
+
+
 ## 2026-06 Learning-Session Misconception API Update
 
 学習セッション内の誤概念判定は、事前テスト由来の `misconception_type` とは別に扱う。`POST /api/tutor-sessions/{session_id}/turns` は以下を追加で返す。

@@ -43,6 +43,7 @@ LEARNING_STAGE_LABELS = {
     "concept_understanding": "概念理解",
     "final_feedback": "教材フィードバック",
 }
+TEST_PHASES = {"pretest", "retest", "final_test"}
 COMPONENT_TERMS = {
     "transformer": ["Attention", "FFN", "トークン間の関係性"],
     "attention": ["トークン", "関係", "重み付け", "重要度"],
@@ -193,19 +194,25 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
 
 
 
+def _source_question_phase(phase: str) -> str:
+    if phase == "final_test":
+        return "l0_check"
+    return phase
+
+
 def _question_query_for_phase(db: Session, participant: Participant, phase: str):
-    query = db.query(Question).join(Term, Question.term_id == Term.id).filter(Question.phase == phase, Question.is_active.is_(True), Term.is_active.is_(True))
+    source_phase = _source_question_phase(phase)
+    query = db.query(Question).join(Term, Question.term_id == Term.id).filter(Question.phase == source_phase, Question.is_active.is_(True), Term.is_active.is_(True))
     if phase == "pretest":
         query = query.filter(Term.slug.in_(PRETEST_TERM_SLUGS))
-    if phase in {"retest", "l0_check"}:
+    if phase == "retest":
         target_term_ids = [
             row.term_id
             for row in db.query(TermAssignment)
             .filter(TermAssignment.participant_id == participant.id, TermAssignment.is_learning_target.is_(True))
             .all()
         ]
-        if target_term_ids:
-            query = query.filter(Question.term_id.in_(target_term_ids))
+        query = query.filter(Question.term_id.in_(target_term_ids or ["__none__"]))
     return query.order_by(Term.display_order, Question.variant_key)
 
 
@@ -238,13 +245,31 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "question_id": question.id,
                 "term_slug": term.slug,
                 "term_label": term.label,
-                "body": question.body,
+                "body": _variant_body_for_round(db, participant.id, question, phase),
                 "question_type": question.question_type,
                 "options": public_options,
                 "requires_reason": phase != "pretest",
             }
         )
     return out
+
+
+def _variant_body_for_round(db: Session, participant_id: str, question: Question, phase: str) -> str:
+    if phase != "retest":
+        return question.body
+    previous_count = (
+        db.query(func.count(Attempt.id))
+        .filter_by(participant_id=participant_id, question_id=question.id, phase="retest")
+        .scalar()
+        or 0
+    )
+    variants = [
+        question.body,
+        f"別の言い方で確認します。{question.body}",
+        f"もう一度、同じ考え方を使って判断してください。{question.body}",
+        f"理解が残っているか確認します。{question.body}",
+    ]
+    return variants[min(previous_count, len(variants) - 1)]
 
 
 def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | None = None) -> Attempt:
@@ -258,11 +283,18 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
             return existing
     phase = payload.get("phase") or question.phase
     is_pretest = phase == "pretest"
+    attempt_index = (
+        db.query(func.count(Attempt.id))
+        .filter_by(participant_id=participant.id, question_id=question.id, phase=phase)
+        .scalar()
+        or 0
+    ) + 1
     attempt = Attempt(
         participant_id=participant.id,
         term_id=question.term_id,
         question_id=question.id,
         phase=phase,
+        attempt_index=attempt_index,
         selected_option_id=payload.get("selected_option_id"),
         free_text_answer=None if is_pretest else payload.get("free_text_answer"),
         reason_text=None if is_pretest else payload.get("reason_text"),
@@ -414,11 +446,14 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
         .order_by(TermAssignment.priority_score.desc())
         .all()
     )
+    latest_attempt_by_term = {attempt.term_id: attempt for attempt in scored_attempts}
     for index, assignment in enumerate(assignments):
-        assignment.is_learning_target = index < get_settings().max_learning_targets
-    participant.current_step = "learning_targets"
+        latest_attempt = latest_attempt_by_term.get(assignment.term_id)
+        assignment.is_learning_target = bool(latest_attempt and not latest_attempt.is_correct and index < get_settings().max_learning_targets)
+    remaining = sum(1 for assignment in assignments if assignment.is_learning_target)
+    participant.current_step = "learning_targets" if remaining else "final_test"
     db.commit()
-    return sum(1 for assignment in assignments if assignment.is_learning_target)
+    return remaining
 
 
 def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
@@ -645,7 +680,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
     participant = get_participant(db, participant_id)
-    attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase).all()
+    attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase, is_correct=None).all()
     if not attempts:
         raise HTTPException(status_code=400, detail=f"{phase} attempts not found")
     for attempt in attempts:
@@ -665,7 +700,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         attempt.diagnosed_status = result["diagnosed_status"]
         attempt.misconception_type = result["misconception_type"]
         attempt.secondary_misconception_type = result["secondary_misconception_type"]
-        attempt.l0_success = result["l0_success"]
+        attempt.l0_success = result["l0_success"] if result.get("l0_success") is not None else (result["is_correct"] if phase == "final_test" else None)
         state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
         if not state:
             continue
@@ -678,16 +713,40 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
                 state.teaching_strategy = strategy_for(attempt.misconception_type, "misconception", participant.group_condition)
                 db.add(RecurrenceEvent(participant_id=participant.id, term_id=attempt.term_id, previous_attempt_id=previous.id, current_attempt_id=attempt.id, previous_misconception_type=previous.misconception_type, current_misconception_type=attempt.misconception_type, is_same_type=True, phase=phase))
             state.scaffolding_level = lower_level(state.scaffolding_level) if attempt.is_correct else state.scaffolding_level
-        if phase == "l0_check":
+            assignment = db.query(TermAssignment).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
+            if assignment:
+                assignment.is_learning_target = not bool(attempt.is_correct)
+                if attempt.is_correct:
+                    assignment.priority_score = 0
+                    assignment.selection_reason = "正解したため次周回から除外"
+                else:
+                    assignment.priority_score, assignment.selection_reason = _priority(attempt)
+        if phase in {"l0_check", "final_test"}:
             state.l0_success_count += 1 if attempt.is_correct else 0
             state.scaffolding_level = "L1" if attempt.is_correct else raise_level("L1")
         state.current_status = "stable_correct" if attempt.is_correct else "misconception"
         state.last_attempt_id = attempt.id
-    participant.current_step = {"retest": "l0_check", "l0_check": "finish"}.get(phase, participant.current_step)
-    if phase == "l0_check":
+    if phase == "retest":
+        db.flush()
+        remaining = db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0
+        participant.current_step = "learning_targets" if remaining else "final_test"
+    elif phase == "l0_check":
+        participant.current_step = "finish"
         participant.completed_at = now()
+    elif phase == "final_test":
+        participant.current_step = "survey"
     db.commit()
-    return {"status": "completed", "next_step": participant.current_step}
+    return {"status": "completed", "next_step": participant.current_step, "next_url": _next_url(participant.current_step)}
+
+
+def _next_url(step: str) -> str:
+    return {
+        "pretest": "/pretest",
+        "learning_targets": "/learning-targets",
+        "final_test": "/final-test",
+        "survey": "/survey",
+        "finish": "/finish",
+    }.get(step, "/start")
 
 
 def _rate(items: list[Attempt], predicate) -> float | None:
@@ -699,7 +758,8 @@ def _rate(items: list[Attempt], predicate) -> float | None:
 def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummary:
     participant = get_participant(db, participant_id)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id).all()
-    by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in ["pretest", "retest", "l0_check"]}
+    by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in ["pretest", "retest", "l0_check", "final_test"]}
+    final_items = by_phase["final_test"] or by_phase["l0_check"]
     initial_m = [a for a in by_phase["pretest"] if a.misconception_type in {"M1", "M2", "M3"}]
     same_rec = [a for a in by_phase["retest"] if a.recurrence_flag]
     def m_rate(m: str) -> float | None:
@@ -714,7 +774,7 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         group_condition=participant.group_condition,
         pretest_score=_rate(by_phase["pretest"], lambda a: bool(a.is_correct)),
         retest_score=_rate(by_phase["retest"], lambda a: bool(a.is_correct)),
-        l0_correct_rate=_rate(by_phase["l0_check"], lambda a: bool(a.l0_success)),
+        l0_correct_rate=_rate(final_items, lambda a: bool(a.l0_success)),
         transfer_correct_rate=None,
         same_misconception_recurrence_rate=(len(same_rec) / len(initial_m)) if initial_m else None,
         m1_recurrence_rate=m_rate("M1"),

@@ -1,5 +1,10 @@
 # 14. Testing and Acceptance Criteria
 
+## 2026-06 Iterative Acceptance Update
+
+反復型フローの受け入れ条件として、初回テストで正解済み用語が学習対象から除外されること、再テストで正解した用語が次周回から消えること、未達が0件になったら5用語すべての最終テストへ進むこと、M4が教材方略として使われないことを確認する。
+
+
 ## 2026-06 Learning-Session Misconception Acceptance
 
 - 用語理解回答後に `learning_misconception_type` が `tutor_turns.grading_json` に保存される。

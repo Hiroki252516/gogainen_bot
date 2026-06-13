@@ -119,6 +119,8 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
     mapping = {
         "pretest": "/pretest",
         "learning_targets": "/learning-targets",
+        "final_test": "/final-test",
+        "survey": "/survey",
         "l0_check": "/l0-check",
         "finish": "/finish",
     }
@@ -140,6 +142,11 @@ def get_l0(participant_id: str, db: Session = Depends(get_db)) -> dict:
     return {"phase": "l0_check", "questions": question_payloads(db, participant_id, "l0_check")}
 
 
+@app.get("/api/experiment/{participant_id}/final-test")
+def get_final_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return {"phase": "final_test", "questions": question_payloads(db, participant_id, "final_test")}
+
+
 @app.post("/api/attempts")
 def api_submit_attempt(payload: AttemptPayload, idempotency_key: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
     attempt = submit_attempt(db, payload.model_dump(), idempotency_key)
@@ -149,7 +156,8 @@ def api_submit_attempt(payload: AttemptPayload, idempotency_key: str | None = He
 @app.post("/api/participants/{participant_id}/diagnose-pretest")
 async def api_diagnose_pretest(participant_id: str, db: Session = Depends(get_db)) -> dict:
     count = await diagnose_pretest(db, participant_id)
-    return {"status": "completed", "learning_target_count": count, "next_step": "learning_targets"}
+    next_step = "learning_targets" if count else "final_test"
+    return {"status": "completed", "learning_target_count": count, "next_step": next_step, "next_url": "/learning-targets" if count else "/final-test"}
 
 
 @app.get("/api/participants/{participant_id}/learning-targets")
@@ -211,6 +219,11 @@ async def api_score_retest(participant_id: str, db: Session = Depends(get_db)) -
 @app.post("/api/participants/{participant_id}/score-l0-check")
 async def api_score_l0(participant_id: str, db: Session = Depends(get_db)) -> dict:
     return await score_phase(db, participant_id, "l0_check")
+
+
+@app.post("/api/participants/{participant_id}/score-final-test")
+async def api_score_final_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return await score_phase(db, participant_id, "final_test")
 
 
 @app.post("/api/participants/{participant_id}/evaluation-summary/recalculate")

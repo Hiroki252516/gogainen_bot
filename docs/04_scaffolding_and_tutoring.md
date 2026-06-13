@@ -1,5 +1,12 @@
 # 04. Scaffolding and Tutoring
 
+## 2026-06 Iterative Flow Scaffolding Update
+
+学習セッション自体を足場掛けとして扱う。実験全体では、テストで残った未達項目だけを学習し、正解済み用語は次周回から除外する。学習セッション内は現行の `term_understanding → concept_understanding` を維持し、`unknown` とM1〜M3のいずれも `L3用語理解 → L2概念理解` の流れで支援する。
+
+教材方略は `unknown`, M1, M2, M3 を対象にする。M4の文脈転移方略は今回の教材出し分けから外し、M4が検出された場合も専用の `context_transfer_training` へは進めない。
+
+
 ## 2026-06 Stage-Based Learning Update
 
 学習セッションの画面進行は、固定3ターンのL1/L2/L3足場掛け制ではなく、次のステージ制を正とする。
@@ -86,7 +93,7 @@
 | M1 | category_reorientation | 概念のカテゴリーを修正する |
 | M2 | boundary_comparison | 類似概念との差分を比較する |
 | M3 | deep_structure_focus | 表層語ではなく判断基準に注目させる |
-| M4 | context_transfer_training | 別文脈で共通構造を使わせる |
+| M4 | self_explanation_check | 今回の教材方略では専用出し分けしない |
 | unknown | foundational_explanation | 基礎説明から始める |
 | unstable_correct | self_explanation_check | 自己説明で確認する |
 | control | general_explanation | 一般的な解説に留める |
@@ -98,7 +105,7 @@
 | M1 | 誤カテゴリーと正カテゴリーを明示し、例と反例を出す | 「何の種類の概念か」を問い返す | 上位カテゴリーだけ示す |
 | M2 | 比較表で入力・処理・出力・用途を対比する | 比較軸を1〜2個示す | 区別すべき相手概念だけ示す |
 | M3 | 表層判断の反例を示し、判断基準を説明する | 表面語ではなく見るべき関係を示す | 着目する関係を1つだけ示す |
-| M4 | 学習文脈と別文脈の共通構造を説明する | 共通点と相違点を問い返す | 共通構造という観点だけ示す |
+| M4 | 今回は専用方略なし | 今回は専用方略なし | 今回は専用方略なし |
 
 ## 学習セッションテンプレート
 
@@ -142,7 +149,7 @@
 | category_reorientation | contrastive_example |
 | boundary_comparison | discrimination_practice |
 | deep_structure_focus | counterexample_prompt |
-| context_transfer_training | common_structure_extraction |
+| context_transfer_training | 今回の教材方略では使用しない |
 | self_explanation_check | guided_self_correction |
 
 再発時は同じ説明文の再送を禁止する。`tutor_turns.strategy_changed` を true にし、変更前後の方略を保存する。

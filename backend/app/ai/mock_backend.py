@@ -153,7 +153,7 @@ class MockAIBackend:
             "secondary_misconception_type": None,
             "diagnosed_status": status,
             "recurrence_flag": False,
-            "l0_success": is_correct if question.get("phase") == "l0_check" else None,
+            "l0_success": is_correct if question.get("phase") in {"l0_check", "final_test"} else None,
             "feedback_for_log": "MockAIBackendによる決定論的採点です。",
             "evidence": answer or selected.get("body") or "",
             "requires_manual_review": False,

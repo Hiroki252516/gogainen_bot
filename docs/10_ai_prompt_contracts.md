@@ -1,5 +1,10 @@
 # 10. AI Prompt Contracts
 
+## 2026-06 M4 Strategy Exclusion Update
+
+今回の学習セッション教材方略では、M4の文脈転移方略を使わない。教材出し分けは `unknown`, M1, M2, M3 を対象にし、M4が検出されても `context_transfer_training` を選ばない。
+
+
 ## 2026-06 Learning Feedback Misconception Contract Update
 
 `generate_feedback` は回答十分性に加えて、今回の学習セッション回答だけに対する内部判定を返す。

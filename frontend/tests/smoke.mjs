@@ -4,6 +4,8 @@ const required = [
   "app/start/page.tsx",
   "app/pretest/page.tsx",
   "app/learning/[termSlug]/page.tsx",
+  "app/final-test/page.tsx",
+  "app/survey/page.tsx",
   "app/admin/page.tsx",
   "components/QuestionRunner.tsx"
 ];
@@ -45,4 +47,15 @@ if (!learningPage.includes("learning_stage: data.next_learning_stage")) {
 }
 if (!learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") || !learningPage.includes("className=\"preserve-lines\">{feedback.feedback}")) {
   throw new Error("learning page must preserve line breaks in material and feedback text");
+}
+
+const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
+if (!questionRunner.includes("result.next_url || nextPath")) {
+  throw new Error("QuestionRunner must follow backend next_url after scoring");
+}
+const finalTestPage = fs.readFileSync(new URL("../app/final-test/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ['phase="final_test"', '/api/experiment/${id}/final-test', '/api/participants/${id}/score-final-test', 'nextPath="/survey"']) {
+  if (!finalTestPage.includes(expectedText)) {
+    throw new Error(`final test page missing: ${expectedText}`);
+  }
 }

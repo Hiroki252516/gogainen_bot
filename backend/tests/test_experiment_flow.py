@@ -22,8 +22,15 @@ def test_full_mock_experiment_flow():
     assert len(pretest) == 5
     assert [question["term_slug"] for question in pretest] == ["transformer", "attention", "llm_training_process", "pretraining", "post_training"]
     assert all(question["requires_reason"] is False for question in pretest)
+    wrong_markers = {
+        "transformer": "意識",
+        "attention": "集中",
+        "llm_training_process": "人間の学習段階",
+        "pretraining": "性格",
+        "post_training": "反省",
+    }
     for question in pretest:
-        wrong = next(option for option in question["options"] if "わからない" not in option["body"])
+        wrong = next(option for option in question["options"] if wrong_markers[question["term_slug"]] in option["body"])
         response = client.post(
             "/api/attempts",
             json={
@@ -85,7 +92,7 @@ def test_control_group_uses_general_strategy():
     participant = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
     pid = participant["participant_id"]
     question = client.get(f"/api/experiment/{pid}/pretest").json()["questions"][0]
-    option = next(o for o in question["options"] if "わからない" not in o["body"])
+    option = next(o for o in question["options"] if "意識" in o["body"])
     client.post(
         "/api/attempts",
         json={
@@ -442,7 +449,7 @@ def test_control_group_keeps_general_strategy_with_learning_misconception():
     participant = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
     pid = participant["participant_id"]
     question = client.get(f"/api/experiment/{pid}/pretest").json()["questions"][0]
-    option = next(o for o in question["options"] if "わからない" not in o["body"])
+    option = next(o for o in question["options"] if "意識" in o["body"])
     client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "phase": "pretest", "selected_option_id": option["option_id"]})
     client.post(f"/api/participants/{pid}/diagnose-pretest")
     target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
@@ -453,3 +460,72 @@ def test_control_group_keeps_general_strategy_with_learning_misconception():
     second = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     assert second["latest_learning_misconception_type"] == "unknown"
     assert second["teaching_strategy"] == "general_explanation"
+
+
+def _option_containing(question: dict, marker: str) -> dict:
+    return next(option for option in question["options"] if marker in option["body"])
+
+
+def test_iterative_retest_removes_correct_terms_and_routes_to_final_test():
+    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    pretest_answers = {
+        "transformer": "Attentionレイヤー",
+        "attention": "入力中のトークン",
+        "llm_training_process": "人間の学習段階",
+        "pretraining": "わからない",
+        "post_training": "事前学習と同じ",
+    }
+    for question in client.get(f"/api/experiment/{pid}/pretest").json()["questions"]:
+        option = _option_containing(question, pretest_answers[question["term_slug"]])
+        assert client.post(
+            "/api/attempts",
+            json={"participant_id": pid, "question_id": question["question_id"], "phase": "pretest", "selected_option_id": option["option_id"]},
+        ).status_code == 200
+
+    diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest").json()
+    assert diagnosis["learning_target_count"] == 3
+    assert diagnosis["next_url"] == "/learning-targets"
+    targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
+    assert {target["term_slug"] for target in targets} == {"llm_training_process", "post_training", "pretraining"}
+
+    retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+    assert [question["term_slug"] for question in retest] == ["llm_training_process", "pretraining", "post_training"]
+    retest_answers = {
+        "llm_training_process": "事前学習で基盤能力",
+        "pretraining": "わからない",
+        "post_training": "人間評価や報酬モデル",
+    }
+    for question in retest:
+        option = _option_containing(question, retest_answers[question["term_slug"]])
+        assert client.post(
+            "/api/attempts",
+            json={"participant_id": pid, "question_id": question["question_id"], "phase": "retest", "selected_option_id": option["option_id"], "reason_text": "確認"},
+        ).status_code == 200
+    score = client.post(f"/api/participants/{pid}/score-retest").json()
+    assert score["next_url"] == "/learning-targets"
+
+    targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
+    assert [target["term_slug"] for target in targets] == ["pretraining"]
+    second_retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+    assert len(second_retest) == 1
+    assert second_retest[0]["term_slug"] == "pretraining"
+    assert second_retest[0]["body"].startswith("別の言い方で確認します。")
+    option = _option_containing(second_retest[0], "大規模で多様なデータ")
+    assert client.post(
+        "/api/attempts",
+        json={"participant_id": pid, "question_id": second_retest[0]["question_id"], "phase": "retest", "selected_option_id": option["option_id"], "reason_text": "大規模で多様なデータから基盤能力を得る"},
+    ).status_code == 200
+    score = client.post(f"/api/participants/{pid}/score-retest").json()
+    assert score["next_url"] == "/final-test"
+    assert client.get(f"/api/participants/{pid}/learning-targets").json()["targets"] == []
+
+    final_questions = client.get(f"/api/experiment/{pid}/final-test").json()["questions"]
+    assert len(final_questions) == 5
+
+
+def test_m4_does_not_select_context_transfer_strategy():
+    from app.ai.backend import strategy_for
+
+    assert strategy_for("M4", "misconception", "proposed") != "context_transfer_training"
+    assert strategy_for("M4", "misconception", "control") == "general_explanation"

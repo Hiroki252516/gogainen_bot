@@ -117,7 +117,7 @@ Utility:
 - category_reorientation
 - boundary_comparison
 - deep_structure_focus
-- context_transfer_training
+- context_transfer_training (今回の教材方略では使用しない)
 - self_explanation_check
 - contrastive_example
 - discrimination_practice
@@ -147,7 +147,7 @@ Priority:
 
 Output:
 
-- up to `MAX_LEARNING_TARGETS`
+- up to `MAX_LEARNING_TARGETS` (default 5)
 - term_assignments with `is_learning_target = true`
 
 ### Diagnosis Merge
