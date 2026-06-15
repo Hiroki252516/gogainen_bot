@@ -114,6 +114,22 @@ def seed_database(db: Session) -> None:
             construct_key=f"{item['slug']}_l0_check",
             variant_key="l0_check_v1",
         )
+
+        final_q = item["questions"].get("final_test")
+        if final_q:
+            _upsert_question(
+                db,
+                term,
+                phase="final_test",
+                question_type="final_choice",
+                body=final_q["body"],
+                expected_answer=final_q["expected"],
+                expected_keywords=item["keywords"],
+                construct_key=f"{item['slug']}_final_test",
+                variant_key="final_test_v1",
+                options=final_q["options"],
+            )
+
         _upsert_question(
             db,
             term,

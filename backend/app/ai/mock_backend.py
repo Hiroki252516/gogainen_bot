@@ -72,6 +72,49 @@ class MockAIBackend:
         component_index = int(payload.get("component_index") or 0)
         component_total = int(payload.get("component_total") or 0)
 
+        if group == "control":
+            message = f"{spec['messages']['L3']}\n\n{spec['messages']['L2']}"
+            previous_parts = []
+            if previous_question:
+                previous_parts.append(f"前の問題: {previous_question}")
+            if previous_response:
+                previous_parts.append(f"あなたの回答: {previous_response}")
+            if previous_feedback:
+                previous_parts.append(f"前の回答を踏まえて、{previous_feedback} 今回は{spec['focus']}を確認します。")
+            if previous_parts:
+                message = "\n".join(previous_parts) + f"\n\n{message}"
+            return {
+                "tutor_message": message,
+                "teaching_strategy": "general_explanation",
+                "scaffolding_level": level,
+                "requires_learner_response": True,
+                "learner_prompt": spec["questions"]["L2"],
+                "practice_question": {
+                    "body": spec["questions"]["L2"],
+                    "expected_answer": spec["expected"]["L2"],
+                    "question_type": "control_l2_check",
+                },
+                "forbidden_help_given": False,
+            }
+
+        if learning_stage == "term_understanding" and component_term == "L3基礎確認":
+            message = spec["messages"]["L3"]
+            if previous_question:
+                message = f"前の問題: {previous_question}\nあなたの回答: {previous_response}\n前の回答を踏まえて、{previous_feedback} 今回はL3基礎確認を続けます。\n\n{message}"
+            return {
+                "tutor_message": message,
+                "teaching_strategy": strategy,
+                "scaffolding_level": "L3",
+                "requires_learner_response": True,
+                "learner_prompt": spec["questions"]["L3"],
+                "practice_question": {
+                    "body": spec["questions"]["L3"],
+                    "expected_answer": spec["expected"]["L3"],
+                    "question_type": "proposed_l3_check",
+                },
+                "forbidden_help_given": False,
+            }
+
         if learning_stage == "term_understanding" and component_term:
             expected = _component_expected(term.get("slug", ""), component_term)
             message = _component_message(term["label"], term.get("slug", ""), component_term)
@@ -91,13 +134,6 @@ class MockAIBackend:
                 },
                 "forbidden_help_given": False,
             }
-
-        if learning_stage == "concept_understanding":
-            spec = dict(spec)
-            spec["questions"] = dict(spec["questions"])
-            spec["expected"] = dict(spec["expected"])
-            spec["questions"][level] = _concept_question(term.get("slug", ""), term["label"], payload.get("component_terms") or [])
-            spec["expected"][level] = spec["core"]
 
         if group == "control":
             message = f"{term['label']}は、専門分野で決まった意味を持つ用語です。{spec['core']}"
@@ -195,6 +231,25 @@ class MockAIBackend:
         }
 
 _TERM_TUTORING = {
+    "transfer_learning": {
+        "core": "転移学習は、学習済みモデルや特徴を関連する別タスクに活用し、少ないデータでも効率よく適応しやすくする方法として確認します。",
+        "focus": "学習済みモデルを別タスクへ活用すること",
+        "messages": {
+            "L3": "転移学習は、あるデータやタスクで学習済みのモデルや特徴を、別の関連タスクの学習に活用する方法です。データを移動することや翻訳機能ではなく、すでに得た特徴や重みを新しいタスクの出発点にする点が重要です。",
+            "L2": "転移学習を見るときは、学習済みモデルを使うこと、関連する別タスクへ適応すること、少ないデータでも効率化しやすいことに注目します。",
+            "L1": "着目点は、学習済みモデルを関連する別タスクへ活用することです。",
+        },
+        "questions": {
+            "L3": "転移学習とは何かを、学習済みモデルと別タスクへの活用に触れて説明してください。",
+            "L2": "転移学習を単なるデータ移動やゼロからの事前学習と説明すると、どの点が不足しますか？",
+            "L1": "転移学習の基本を一文で説明してください。",
+        },
+        "expected": {
+            "L3": "学習済みモデルや特徴を関連する別タスクに活用する方法",
+            "L2": "学習済みモデルを別タスクへ活用する点が不足している",
+            "L1": "学習済みモデルを関連する別タスクへ活用する方法",
+        },
+    },
     "transformer": {
         "core": "AttentionレイヤーとFFNレイヤーを重ね、トークン間の関係性と特徴変換を繰り返す構造として確認します。",
         "focus": "AttentionとFFNの役割",
@@ -295,6 +350,7 @@ _TERM_TUTORING = {
 _SUFFICIENCY_KEYWORDS = {
     "transformer": ["Attention", "FFN", "関係"],
     "attention": ["トークン", "関係", "重み"],
+    "transfer_learning": ["学習済み", "別タスク", "活用"],
     "llm_training_process": ["事前学習", "インストラクション", "事後学習"],
     "pretraining": ["大規模", "多様", "基盤"],
     "post_training": ["人間評価", "安全", "有用"],
@@ -447,6 +503,12 @@ _COMPONENT_EXPLANATIONS = {
 }
 
 _COMPONENT_KEYWORDS = {
+    "transfer_learning": {
+        "L3基礎確認": ["学習済み", "別タスク", "活用"],
+    },
+    "llm_training_process": {
+        "L3基礎確認": ["事前学習", "インストラクション", "事後学習"],
+    },
     "transformer": {
         "Attention": ["Attention", "関係"],
         "FFN": ["FFN", "特徴", "変換"],
@@ -457,11 +519,6 @@ _COMPONENT_KEYWORDS = {
         "関係": ["関係"],
         "重み付け": ["重み"],
         "重要度": ["重要", "重み"],
-    },
-    "llm_training_process": {
-        "事前学習": ["事前学習", "基盤"],
-        "インストラクションチューニング": ["インストラクション", "指示"],
-        "事後学習": ["事後学習", "安全", "有用"],
     },
     "pretraining": {
         "大規模データ": ["大規模", "データ"],
@@ -507,6 +564,7 @@ def _concept_question(slug: str, term_label: str, component_terms: list[str]) ->
     questions = {
         "transformer": "Attention、FFN、トークン間の関係性を用いてTransformerの構造を説明してください。",
         "attention": "トークン同士の関係、重み付け、重要度に触れてAttentionの役割を説明してください。",
+        "transfer_learning": "学習済みモデルを関連する別タスクへ活用する点に触れて転移学習を説明してください。",
         "llm_training_process": "事前学習、インストラクションチューニング、事後学習の3段階でLLMの学習プロセスを説明してください。",
         "pretraining": "大規模で多様なデータ、次単語予測、基盤能力に触れて事前学習の目的を説明してください。",
         "post_training": "人間評価、報酬モデル、安全性、有用性に触れて事後学習の目的を説明してください。",

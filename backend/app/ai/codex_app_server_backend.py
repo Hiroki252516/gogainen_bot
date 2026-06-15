@@ -236,9 +236,9 @@ class CodexAppServerBackend:
             "previous_practice_question が空でなければ、tutor_message の冒頭に『前の問題: ...』を入れる。",
             "previous_learner_response が空でなければ、tutor_message の冒頭に『あなたの回答: ...』を入れる。",
             "previous_feedback_for_learner が空でなければ、前の問題・回答の後に『前の回答を踏まえて、... 今回は...』という短い振り返りを自然に入れる。",
-            "scaffolding_level に関係なく、教材本文では現在の主題について最初から十分に説明する。説明量を L1/L2/L3 で減らさない。",
-            "教材本文には、現在の構成用語または対象概念の定義、対象概念の中での役割、よくある誤解との違い、短い具体例または判断基準を必ず含める。",
+            "教材本文には、現在の主題の定義、役割、よくある誤解との違い、短い具体例または判断基準を必ず含める。",
             "問題文は、教材で説明した内容を学習者が自分の言葉で再説明する記述問題にする。答えだけの丸写しではなく、役割や判断基準を含めて説明させる。",
+            "通常群と提案群で教材量の差が主効果にならないよう、指定されたL3/L2教材量の条件を守る。",
             "practice_question.body には現在の用語に関する質問文を1つだけ入れる。",
             "practice_question.expected_answer は現在の用語の期待回答にする。",
             "再テスト、確認テストの具体的な正解を先取りして出さない。",
@@ -246,8 +246,10 @@ class CodexAppServerBackend:
         ]
         if group == "control":
             rules.append("統制群なので、過去ログ、誤概念タイプ、足場掛け履歴に適応しない通常AIチューターとして説明する。teaching_strategy は general_explanation に固定する。")
+            rules.append("統制群では、L3相当の基礎教材とL2相当の観点教材を両方tutor_messageに含める。ただし質問はL2相当の1問だけにし、L3質問は出さない。")
         else:
             rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
+            rules.append("提案群では、term_understandingをL3教材+L3質問、concept_understandingをL2教材+L2質問として段階的に提示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)
         result["tutor_message"] = _strip_internal_labels(result["tutor_message"])
@@ -496,6 +498,9 @@ class CodexAppServerBackend:
                 "scaffolding_level": (payload.get("learner_state") or {}).get("scaffolding_level"),
                 "teaching_strategy": "general_explanation",
             },
+            "learning_stage": payload.get("learning_stage"),
+            "learning_stage_label": payload.get("learning_stage_label"),
+            "component_terms": payload.get("component_terms"),
             "previous_practice_question": payload.get("previous_practice_question"),
             "previous_learner_response": payload.get("previous_learner_response"),
             "previous_feedback_for_learner": payload.get("previous_feedback_for_learner"),

@@ -36,7 +36,7 @@ from app.models import (
 
 
 PUBLIC_LEVEL = {"L3": "しっかり確認", "L2": "観点を確認", "L1": "自分で整理"}
-PRETEST_TERM_ORDER = {"transformer": 0, "attention": 1, "llm_training_process": 2, "pretraining": 3, "post_training": 4}
+PRETEST_TERM_ORDER = {"transfer_learning": 0, "llm_training_process": 1}
 PRETEST_TERM_SLUGS = set(PRETEST_TERM_ORDER)
 LEARNING_STAGE_LABELS = {
     "term_understanding": "用語理解",
@@ -45,11 +45,8 @@ LEARNING_STAGE_LABELS = {
 }
 TEST_PHASES = {"pretest", "retest", "final_test"}
 COMPONENT_TERMS = {
-    "transformer": ["Attention", "FFN", "トークン間の関係性"],
-    "attention": ["トークン", "関係", "重み付け", "重要度"],
-    "llm_training_process": ["事前学習", "インストラクションチューニング", "事後学習"],
-    "pretraining": ["大規模データ", "多様なデータ", "次単語予測", "基盤能力"],
-    "post_training": ["人間評価", "報酬モデル", "安全性", "有用性"],
+    "transfer_learning": ["L3基礎確認"],
+    "llm_training_process": ["L3基礎確認"],
 }
 
 
@@ -63,7 +60,7 @@ def _practice_meta(turn: TutorTurn | None) -> dict[str, Any]:
     return turn.practice_question_json.get("stage_meta") or {}
 
 
-def _learning_position(db: Session, session: TutorSession, term: Term) -> dict[str, Any]:
+def _learning_position(db: Session, session: TutorSession, term: Term, participant: Participant) -> dict[str, Any]:
     components = _component_terms(term.slug, term.label)
     turns = (
         db.query(TutorTurn)
@@ -71,6 +68,23 @@ def _learning_position(db: Session, session: TutorSession, term: Term) -> dict[s
         .order_by(TutorTurn.turn_index)
         .all()
     )
+    if participant.group_condition == "control":
+        for turn in turns:
+            if turn.learner_response and bool((turn.grading_json or {}).get("is_sufficient")):
+                return {
+                    "learning_stage": "final_feedback",
+                    "learning_stage_label": LEARNING_STAGE_LABELS["final_feedback"],
+                    "component_term": None,
+                    "component_index": 1,
+                    "component_total": 1,
+                }
+        return {
+            "learning_stage": "concept_understanding",
+            "learning_stage_label": LEARNING_STAGE_LABELS["concept_understanding"],
+            "component_term": None,
+            "component_index": 1,
+            "component_total": 1,
+        }
     stage = "term_understanding"
     component_index = 0
     for turn in turns:
@@ -195,8 +209,6 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
 
 
 def _source_question_phase(phase: str) -> str:
-    if phase == "final_test":
-        return "l0_check"
     return phase
 
 
@@ -248,7 +260,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "body": _variant_body_for_round(db, participant.id, question, phase),
                 "question_type": question.question_type,
                 "options": public_options,
-                "requires_reason": phase != "pretest",
+                "requires_reason": phase not in {"pretest", "final_test"},
             }
         )
     return out
@@ -500,7 +512,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
     previous_turn = db.get(TutorTurn, state.last_tutor_turn_id) if state.last_tutor_turn_id else None
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
-    position = _learning_position(db, session, term)
+    position = _learning_position(db, session, term, participant)
     if position["learning_stage"] == "final_feedback":
         raise HTTPException(status_code=400, detail="learning session already completed")
     current_level = normalize_level(state.scaffolding_level)
@@ -622,8 +634,8 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         next_action = "continue"
     elif learning_stage == "concept_understanding":
         stage_completed = is_sufficient
-        next_learning_stage = "final_feedback" if is_sufficient else "term_understanding"
-        next_component_index = component_total if is_sufficient else 0
+        next_learning_stage = "final_feedback" if is_sufficient else ("concept_understanding" if participant.group_condition == "control" else "term_understanding")
+        next_component_index = component_total if is_sufficient else (component_total if participant.group_condition == "control" else 0)
         session_completed = is_sufficient
         next_action = "move_next" if is_sufficient else "continue"
     else:
@@ -694,7 +706,17 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
             "free_text_answer": attempt.free_text_answer,
             "reason_text": attempt.reason_text,
         }
-        result = await _ai_call(db, "grade_response", payload)
+        if phase == "final_test" and option:
+            result = {
+                "is_correct": bool(option.is_correct),
+                "score": 1.0 if option.is_correct else 0.0,
+                "diagnosed_status": "stable_correct" if option.is_correct else ("unknown" if option.misconception_type == "unknown" else "misconception"),
+                "misconception_type": None if option.is_correct else option.misconception_type,
+                "secondary_misconception_type": None,
+                "l0_success": bool(option.is_correct),
+            }
+        else:
+            result = await _ai_call(db, "grade_response", payload)
         attempt.is_correct = result["is_correct"]
         attempt.score = result["score"]
         attempt.diagnosed_status = result["diagnosed_status"]
