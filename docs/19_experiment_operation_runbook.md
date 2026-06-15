@@ -77,9 +77,10 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 
 1. `/admin` で参加者がcompletedになっているか確認
 2. evaluation summaryを再計算する
-3. CSVを出力する
-4. exportsフォルダを研究分析用に保管する
-5. 必要なら被験者データを削除する
+3. 管理画面で全体ログと被験者別ログを確認する
+4. 必要に応じて全体ログCSVまたは被験者別ログCSVを出力する
+5. exportsフォルダを研究分析用に保管する
+6. 必要なら被験者データを削除する
 
 ## Delayed Retest Optional Operation
 
@@ -95,15 +96,10 @@ MVPでは必須ではない。
 
 ## Data Export Checklist
 
-必須CSV:
+主に使うCSV:
 
-- participants.csv
-- attempts.csv
-- learner_states.csv
-- tutor_turns.csv
-- recurrence_events.csv
-- ai_call_logs.csv
-- evaluation_summary.csv
+- overview.csv
+- 被験者別ログCSV
 
 確認:
 
@@ -112,11 +108,9 @@ MVPでは必須ではない。
 - group_conditionが含まれる
 - term_slugが含まれる
 - phaseが含まれる
-- misconception_typeが含まれる
-- recurrence_flagが含まれる
-- l0_successが含まれる
+- `value_json` に詳細ログが含まれる
 
-現行のCSV出力は管理画面のボタンから、participants、attempts、learner_states、tutor_turns、recurrence_events、ai_call_logs、evaluation_summaryを取得できる。
+既存のテーブル別CSV APIは互換用に残してよいが、管理画面の主導線では全体ログCSVと被験者別ログCSVを使う。
 
 ## Research Notes During Operation
 

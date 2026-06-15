@@ -190,7 +190,10 @@ POST /participants
   -> GET /l0-check
   -> POST /score-l0-check
   -> POST /evaluation-summary/recalculate
-  -> GET /admin/export/evaluation_summary.csv
+  -> GET /admin/logs/overview
+  -> GET /admin/participants/{id}/logs
+  -> GET /admin/logs/overview.csv
+  -> GET /admin/participants/{id}/logs.csv
 ```
 
 ## Development Guardrails

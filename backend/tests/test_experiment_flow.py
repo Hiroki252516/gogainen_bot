@@ -144,6 +144,7 @@ def test_retest_removes_correct_terms_and_final_test_stays_two_items():
     pid = _create_participant_with_pretest(group="proposed")
     retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
     assert [question["term_slug"] for question in retest] == ["transfer_learning", "llm_training_process"]
+    assert all(question["requires_reason"] is False for question in retest)
 
     answers = {
         "transfer_learning": "関連するタスクで学習済み",
@@ -158,7 +159,6 @@ def test_retest_removes_correct_terms_and_final_test_stays_two_items():
                 "question_id": question["question_id"],
                 "phase": "retest",
                 "selected_option_id": option["option_id"],
-                "reason_text": "確認",
             },
         ).status_code == 200
 
@@ -170,6 +170,35 @@ def test_retest_removes_correct_terms_and_final_test_stays_two_items():
     final_questions = client.get(f"/api/experiment/{pid}/final-test").json()["questions"]
     assert len(final_questions) == 2
     assert all(question["requires_reason"] is False for question in final_questions)
+
+
+def test_admin_overview_and_participant_logs_have_json_and_csv():
+    pid = _create_participant_with_pretest(group="proposed")
+
+    overview = client.get("/api/admin/logs/overview")
+    assert overview.status_code == 200
+    overview_json = overview.json()
+    assert "participants" in overview_json
+    assert "recent_attempts" in overview_json
+    assert any(row["participant_id"] == pid for row in overview_json["participants"])
+
+    participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
+    assert participant_logs.status_code == 200
+    logs_json = participant_logs.json()
+    assert logs_json["participant"]["participant_id"] == pid
+    assert len(logs_json["attempts"]) == 2
+    assert "learner_states" in logs_json
+    assert "ai_call_logs" in logs_json
+
+    overview_csv = client.get("/api/admin/logs/overview.csv")
+    assert overview_csv.status_code == 200
+    assert "record_type,participant_id,display_code,phase,term_slug,event_time,summary,value_json" in overview_csv.text
+    assert "attempt" in overview_csv.text
+
+    participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
+    assert participant_csv.status_code == 200
+    assert "record_type,participant_id,display_code,phase,term_slug,event_time,summary,value_json" in participant_csv.text
+    assert "attempt" in participant_csv.text
 
 
 def test_tutoring_prompt_contract_mentions_new_group_design():

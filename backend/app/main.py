@@ -16,13 +16,17 @@ from app.db.session import get_db, init_db
 from app.seed.seed_questions import seed_database
 from app.services.experiment import (
     admin_summary,
+    admin_logs_overview,
     create_participant,
     create_tutor_session,
+    export_overview_logs_csv,
+    export_participant_logs_csv,
     diagnose_pretest,
     export_csv,
     generate_tutor_turn,
     latest_learning_misconception,
     learning_targets,
+    participant_logs,
     question_payloads,
     recalculate_evaluation,
     respond_tutor_turn,
@@ -254,6 +258,28 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
             for row in rows
         ]
     }
+
+
+@app.get("/api/admin/logs/overview")
+def api_admin_logs_overview(db: Session = Depends(get_db)) -> dict:
+    return admin_logs_overview(db)
+
+
+@app.get("/api/admin/logs/overview.csv")
+def api_admin_logs_overview_csv(db: Session = Depends(get_db)):
+    path = export_overview_logs_csv(db)
+    return FileResponse(path, media_type="text/csv", filename=path.name)
+
+
+@app.get("/api/admin/participants/{participant_id}/logs")
+def api_admin_participant_logs(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return participant_logs(db, participant_id)
+
+
+@app.get("/api/admin/participants/{participant_id}/logs.csv")
+def api_admin_participant_logs_csv(participant_id: str, db: Session = Depends(get_db)):
+    path = export_participant_logs_csv(db, participant_id)
+    return FileResponse(path, media_type="text/csv", filename=path.name)
 
 
 @app.get("/api/admin/export/{name}.csv")

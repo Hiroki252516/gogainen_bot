@@ -59,3 +59,15 @@ for (const expectedText of ['phase="final_test"', '/api/experiment/${id}/final-t
     throw new Error(`final test page missing: ${expectedText}`);
   }
 }
+
+const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ["全体ログ", "全体ログCSV", "被験者ログを見る", "被験者ログCSV", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/logs.csv"]) {
+  if (!adminPage.includes(expectedText)) {
+    throw new Error(`admin page missing log UI: ${expectedText}`);
+  }
+}
+for (const removedText of ["participants.csv", "attempts.csv", "learner_states.csv", "tutor_turns.csv", "recurrence_events.csv", "ai_call_logs.csv", "evaluation_summary.csv"]) {
+  if (adminPage.includes(removedText)) {
+    throw new Error(`admin page must not show legacy CSV link: ${removedText}`);
+  }
+}

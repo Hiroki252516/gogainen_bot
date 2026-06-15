@@ -137,7 +137,7 @@ Response:
 
 学習対象用語の再テスト問題を返す。同じ `construct_key` の別 `variant_key` を選ぶ。
 
-現行実装では、`TermAssignment.is_learning_target = true` の未達用語だけを返す。再テストを複数回行う場合は、同一questionでも表示本文に簡単な確認文を前置して再提示する。
+現行実装では、`TermAssignment.is_learning_target = true` の未達用語だけを返す。再テストは選択式で、理由記述を要求しない。問題はAI生成せず、seed済みの `retest` 問題を使う。再テストを複数回行う場合は、同一questionでも表示本文に簡単な確認文を前置して再提示する。
 
 ### GET /api/experiment/{participant_id}/final-test
 
@@ -322,6 +322,8 @@ Response:
 
 再テスト回答を採点し、再発判定とlearner_states更新を行う。
 
+現行実装では、再テストは選択肢の `is_correct` と `misconception_type` だけで決定論的に採点する。理由記述やAI採点は使わない。
+
 ### POST /api/participants/{id}/score-l0-check
 
 確認テスト回答を採点し、`l0_success` を保存する。
@@ -369,31 +371,33 @@ Response:
 - GET /api/admin/participants
 - GET /api/admin/participants/{id}
 - GET /api/admin/participants/{id}/logs
+- GET /api/admin/participants/{id}/logs.csv
+- GET /api/admin/logs/overview
+- GET /api/admin/logs/overview.csv
 - GET /api/admin/participants/{id}/learner-states
 - PATCH /api/admin/attempts/{attempt_id}/diagnosis
 - DELETE /api/admin/participants/{id}
 - DELETE /api/admin/experiment-data
 
-現行UIでは参加者一覧、群別概要、AI status、CSV出力が実装済み。詳細ログ閲覧、手動修正、削除UIは拡張対象である。
+現行UIでは参加者一覧、群別概要、AI status、全体ログ、被験者別ログ、全体ログCSV、被験者別ログCSVが実装対象である。既存のテーブル別CSVリンクは管理画面の主導線から外す。
+
+### GET /api/admin/logs/overview
+
+管理画面の全体ログ用に、全参加者の進捗、最近の回答、最近の学習ターン、AI呼び出し、再発イベント、評価サマリーを返す。
+
+### GET /api/admin/logs/overview.csv
+
+全体ログを1つのCSVで返す。行ごとに `record_type` を持たせ、attempt、learner_state、tutor_turn、ai_call、recurrence、evaluation_summaryなどを区別する。
+
+### GET /api/admin/participants/{id}/logs
+
+1人の被験者について、回答履歴、学習状態、学習セッション、学習ターン、AI呼び出し、再発イベント、評価サマリーをJSONで返す。
+
+### GET /api/admin/participants/{id}/logs.csv
+
+被験者別ログを1つのCSVで返す。CSV列は `record_type, participant_id, display_code, phase, term_slug, event_time, summary, value_json` とする。
 
 手動修正APIは `audit_events` に必ず保存する。
-
-## CSV Export
-
-### GET /api/admin/export/{name}.csv
-
-Allowed CSV names:
-
-- participants
-- term_assignments
-- questions
-- attempts
-- learner_states
-- tutor_sessions
-- tutor_turns
-- recurrence_events
-- ai_call_logs
-- evaluation_summary
 
 ## Codex app-server
 

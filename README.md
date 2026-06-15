@@ -130,18 +130,15 @@ CODEX_APP_SERVER_CWD=/tmp
 
 ローカルでbackendを直接起動する場合も `CODEX_APP_SERVER_URL=ws://127.0.0.1:4500` を使います。`MockAIBackend` は `AI_BACKEND=mock` を明示したテスト用途に限ります。app-serverが未起動または未ログインの場合、AI呼び出しはMockへ自動フォールバックせず、`ai_call_logs` に失敗として記録されます。
 
-## CSV出力
+## 管理画面ログとCSV
 
-管理画面または以下のAPIから出力できます。
+管理画面では、ログを全体ログと被験者別ログに分けて確認できます。
 
 ```text
-GET /api/admin/export/participants.csv
-GET /api/admin/export/attempts.csv
-GET /api/admin/export/learner_states.csv
-GET /api/admin/export/tutor_turns.csv
-GET /api/admin/export/recurrence_events.csv
-GET /api/admin/export/ai_call_logs.csv
-GET /api/admin/export/evaluation_summary.csv
+GET /api/admin/logs/overview
+GET /api/admin/logs/overview.csv
+GET /api/admin/participants/{participant_id}/logs
+GET /api/admin/participants/{participant_id}/logs.csv
 ```
 
-出力先は `exports/` です。
+CSVは `record_type, participant_id, display_code, phase, term_slug, event_time, summary, value_json` の形式で、回答・学習状態・学習ターン・AIログなどを1ファイルにまとめます。出力先は `exports/` です。

@@ -199,17 +199,14 @@ Phase 7で更新された状態に基づき、2回目の学習セッションを
 
 ## Phase 12: Export & Analysis
 
+現行の管理画面では、全体ログと被験者別ログを確認し、それぞれCSVとして出力できる。
+
 出力:
 
-- participants.csv
-- term_assignments.csv
-- attempts.csv
-- tutor_sessions.csv
-- tutor_turns.csv
-- learner_states.csv
-- recurrence_events.csv
-- ai_call_logs.csv
-- evaluation_summary.csv
+- overview.csv
+- 被験者別ログCSV
+
+CSVは `record_type` で回答、学習状態、学習ターン、AI呼び出し、再発イベント、評価サマリーを区別する。既存のテーブル別CSV APIは互換用に残してよいが、管理画面の主導線からは外す。
 
 ## 中断・再開
 

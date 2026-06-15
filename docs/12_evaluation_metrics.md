@@ -131,107 +131,22 @@ MVPでは管理画面に記述統計を表示する。
 - 用語別誤概念分布
 - AI診断信頼度の分布
 
-## CSV出力
+## 管理画面ログとCSV
 
-### participants.csv
+現行の管理画面では、テーブル別CSVを主導線にしない。代わりに以下を使う。
 
-Columns:
+- 全体ログ: 全参加者の進捗、最近の回答、AI呼び出し、再発イベント、評価サマリーを見る
+- 全体ログCSV: `overview.csv`
+- 被験者別ログ: 1人の回答、学習状態、学習ターン、AI呼び出し、再発イベントを見る
+- 被験者別ログCSV: 1人分のログCSV
 
-- participant_id
-- display_code
-- group_condition
-- assignment_method
-- current_step
-- started_at
-- completed_at
+ログCSVは1ファイルにまとめ、行ごとに `record_type` を持たせる。
 
-### attempts.csv
+```text
+record_type, participant_id, display_code, phase, term_slug, event_time, summary, value_json
+```
 
-Columns:
-
-- attempt_id
-- participant_id
-- display_code
-- group_condition
-- term_slug
-- term_label
-- phase
-- question_id
-- construct_key
-- variant_key
-- selected_option_id
-- selected_option_body
-- reason_text
-- free_text_answer
-- response_time_sec
-- is_correct
-- score
-- diagnosed_status
-- misconception_type
-- secondary_misconception_type
-- misconception_confidence
-- recurrence_flag
-- l0_success
-- requires_manual_review
-- created_at
-
-### tutor_turns.csv
-
-Columns:
-
-- tutor_turn_id
-- participant_id
-- term_slug
-- session_index
-- turn_index
-- group_condition
-- scaffolding_level
-- teaching_strategy
-- previous_teaching_strategy
-- strategy_changed
-- tutor_message
-- learner_response
-- ai_feedback
-- next_scaffolding_level
-- forbidden_help_given
-- created_at
-
-### learner_states.csv
-
-Columns:
-
-- participant_id
-- term_slug
-- current_status
-- primary_misconception
-- secondary_misconception
-- scaffolding_level
-- teaching_strategy
-- stable_correct_count
-- recurrence_count
-- l0_success_count
-- updated_at
-
-### evaluation_summary.csv
-
-Columns:
-
-- participant_id
-- display_code
-- group_condition
-- pretest_score
-- retest_score
-- confirmation_correct_rate
-- transfer_correct_rate
-- same_misconception_recurrence_rate
-- m1_recurrence_rate
-- m2_recurrence_rate
-- m3_recurrence_rate
-- m4_failure_rate
-- unknown_persistence_rate
-- learning_target_count
-- completed
-- created_at
+`record_type` には `attempt`, `learner_state`, `tutor_session`, `tutor_turn`, `ai_call`, `recurrence`, `evaluation_summary` などが入る。
 
 ## 欠損値の扱い
 

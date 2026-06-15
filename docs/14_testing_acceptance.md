@@ -142,18 +142,18 @@ Mock rules:
 
 - pretestで正誤を表示しない
 - retestでヒントを出さない
+- retestで理由欄を出さない
+- retestは既存seedの選択式問題を使い、AI生成しない
 - confirmation checkでチャット欄がない
 - 同じ問題文をpretest/retestで使い回さない
 
 ### E. データ出力
 
-- participants.csv が出力できる
-- attempts.csv が出力できる
-- learner_states.csv が出力できる
-- tutor_turns.csv が出力できる
-- recurrence_events.csv が出力できる
-- ai_call_logs.csv が出力できる
-- evaluation_summary.csv が出力できる
+- 管理画面で全体ログを表示できる
+- 管理画面で被験者別ログを表示できる
+- 全体ログCSVを出力できる
+- 被験者別ログCSVを出力できる
+- 既存のテーブル別CSVリンク群は管理画面の主導線から外れている
 
 ### F. AIバックエンド
 
