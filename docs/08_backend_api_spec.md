@@ -4,7 +4,7 @@
 
 反復型フローでは、`GET /api/experiment/{participant_id}/retest` は現在 `TermAssignment.is_learning_target = true` の未達用語だけを返す。`POST /api/participants/{participant_id}/score-retest` は正解済み用語を次周回対象から除外し、未達が残れば `next_url=/learning-targets`、残り0件なら `next_url=/final-test` を返す。
 
-`GET /api/experiment/{participant_id}/final-test` と `POST /api/participants/{participant_id}/score-final-test` を追加する。最終テストは途中で除外された用語も含め、5用語すべてを出題する。採点後は `next_url=/survey` を返す。
+`GET /api/experiment/{participant_id}/final-test` と `POST /api/participants/{participant_id}/score-final-test` を追加する。最終テストは途中で除外された用語も含め、現行seedの2用語すべてを選択式・理由なしで出題する。採点後は `next_url=/survey` を返す。
 
 
 ## 2026-06 Learning-Session Misconception API Update
@@ -119,9 +119,9 @@ Response:
   "questions": [
     {
       "question_id": "uuid",
-      "term_slug": "attention",
-      "term_label": "Attention",
-      "body": "TransformerにおけるAttentionの説明として、最も適切なものはどれか。",
+      "term_slug": "transfer_learning",
+      "term_label": "転移学習",
+      "body": "転移学習の説明として、最も適切なものはどれか。",
       "options": [
         { "option_id": "uuid", "label": "A", "body": "..." }
       ],
@@ -136,6 +136,12 @@ Response:
 ### GET /api/experiment/{participant_id}/retest
 
 学習対象用語の再テスト問題を返す。同じ `construct_key` の別 `variant_key` を選ぶ。
+
+現行実装では、`TermAssignment.is_learning_target = true` の未達用語だけを返す。再テストを複数回行う場合は、同一questionでも表示本文に簡単な確認文を前置して再提示する。
+
+### GET /api/experiment/{participant_id}/final-test
+
+現行seedの2用語すべての最終テスト問題を返す。選択式で、理由記述は要求しない。
 
 ### GET /api/experiment/{participant_id}/l0-check
 
@@ -201,8 +207,8 @@ Response:
 {
   "targets": [
     {
-      "term_slug": "attention",
-      "term_label": "Attention",
+      "term_slug": "transfer_learning",
+      "term_label": "転移学習",
       "summary_for_learner": "人間の注意ではなく、モデル内部の重み付けとして確認します。",
       "current_scaffolding_level_for_display": "しっかり確認"
     }
@@ -263,9 +269,9 @@ Response:
   "max_turns": 3,
   "learning_stage": "term_understanding",
   "learning_stage_label": "用語理解",
-  "component_term": "Attention",
+  "component_term": "L3基礎確認",
   "component_index": 0,
-  "component_total": 3,
+  "component_total": 1,
   "stage_completed": false,
   "misconception_type": "M1",
   "scaffolding_level": "L3",
@@ -298,9 +304,9 @@ Response:
   "learning_stage": "term_understanding",
   "stage_completed": false,
   "next_learning_stage": "term_understanding",
-  "component_term": "Attention",
+  "component_term": "L3基礎確認",
   "component_index": 0,
-  "component_total": 3,
+  "component_total": 1,
   "next_component_index": 1,
   "next_scaffolding_level": "L2",
   "turn_index": 1,
@@ -319,6 +325,10 @@ Response:
 ### POST /api/participants/{id}/score-l0-check
 
 確認テスト回答を採点し、`l0_success` を保存する。
+
+### POST /api/participants/{id}/score-final-test
+
+最終テスト回答を採点する。現行実装では選択肢の正誤で同期的に採点し、AI採点は使わない。`l0_success` 互換値も保存し、完了後は `next_step=survey`, `next_url=/survey` を返す。
 
 各API response:
 
@@ -363,6 +373,8 @@ Response:
 - PATCH /api/admin/attempts/{attempt_id}/diagnosis
 - DELETE /api/admin/participants/{id}
 - DELETE /api/admin/experiment-data
+
+現行UIでは参加者一覧、群別概要、AI status、CSV出力が実装済み。詳細ログ閲覧、手動修正、削除UIは拡張対象である。
 
 手動修正APIは `audit_events` に必ず保存する。
 

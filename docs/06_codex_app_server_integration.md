@@ -28,7 +28,7 @@ app-serverは実験用LLM APIではなくCodex rich client向けプロトコル�
 1. MacホストにCodex CLIをインストールする
 2. `codex` または `codex login` で ChatGPT にログインする
 3. ホスト上で `codex app-server --listen ws://127.0.0.1:4500` を起動する
-4. backendコンテナから `ws://host.docker.internal:4500` に接続する
+4. 現行Docker Composeではbackendをhost networkで起動し、backendから `ws://127.0.0.1:4500` に接続する
 
 ### セキュリティ
 
@@ -57,7 +57,7 @@ codex app-server \
   --ws-token-file "$(pwd)/.local/codex-ws-token"
 ```
 
-backendコンテナには同じtokenファイルをread-only mountする。
+capability tokenを使う場合は、backendコンテナに同じtokenファイルをread-only mountする。
 
 ## JSON-RPC初期化
 

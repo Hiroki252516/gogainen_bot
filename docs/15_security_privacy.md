@@ -26,7 +26,7 @@ MVPでは個人名・メールアドレスを収集しない。被験者IDのみ
 - `0.0.0.0` で公開しない
 - 可能なら capability token を使う
 - 非ローカル公開はしない
-- Dockerコンテナからは `host.docker.internal` 経由で接続する
+- 現行Docker Composeではbackendをhost networkで起動し、Docker側からも `127.0.0.1:4500` へ接続する
 
 ## 実験データ
 

@@ -4,6 +4,8 @@
 
 反復型フローでは、途中の再テストは未達項目を減らすための形成的テストとして扱う。主な到達評価は、全用語を対象にした `final_test` の正答率と、各周回で未達項目数が減ったかで見る。正解済み用語は次周回から除外されるため、周回ごとの負担減少も分析対象にできる。
 
+現行MVPの `final_test` は、転移学習とLLMの学習段階の2用語すべてを対象にした選択式テストである。理由記述は要求しない。
+
 
 ## 主評価指標
 
@@ -220,6 +222,7 @@ Columns:
 - pretest_score
 - retest_score
 - confirmation_correct_rate
+- transfer_correct_rate
 - same_misconception_recurrence_rate
 - m1_recurrence_rate
 - m2_recurrence_rate

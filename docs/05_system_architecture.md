@@ -168,7 +168,7 @@ sequenceDiagram
 
 ### 方式A: host Codex app-server
 
-Macホスト上でCodexをログイン・起動する。backendコンテナから `host.docker.internal` 経由で接続する。MVPではこの方式を優先する。
+Macホスト上でCodexをログイン・起動する。現行Docker Composeではbackendを `network_mode: host` で動かし、backendから `ws://127.0.0.1:4500` へ接続する。MVPではこの方式を優先する。
 
 ### 方式B: codex sidecar container
 
@@ -190,14 +190,14 @@ MVPではキューを導入しない。AI診断やCSV出力は同期APIでよい
 | Key | 例 | 説明 |
 |---|---|---|
 | `APP_ENV` | `development` | 実行環境 |
-| `DATABASE_URL` | `postgresql+psycopg://app:app@db:5432/ai_tutor` | DB接続 |
+| `DATABASE_URL` | `sqlite:///./.local/app.db` | ローカル既定DB接続。Docker ComposeではPostgreSQLを指定する |
 | `AI_BACKEND` | `codex_app_server` | 通常実行のAI実装。`mock` はテスト時のみ明示指定 |
-| `CODEX_APP_SERVER_URL` | `ws://host.docker.internal:4500` | app-server接続先 |
+| `CODEX_APP_SERVER_URL` | `ws://127.0.0.1:4500` | app-server接続先。現行Docker Composeはbackendをhost networkで動かす |
 | `CODEX_WS_TOKEN_FILE` | `/run/secrets/codex_ws_token` | capability token |
 | `CODEX_APP_SERVER_CWD` | `/tmp` | app-server threadの作業ディレクトリ |
 | `CODEX_TURN_TIMEOUT_SEC` | `120` | AI応答タイムアウト |
 | `CODEX_REASONING_EFFORT` | `low` | turn/startのreasoning effort |
-| `MAX_LEARNING_TARGETS` | `5` | 事前テスト5用語すべてを扱える上限 |
+| `MAX_LEARNING_TARGETS` | `5` | 学習対象数の上限。現行seedは2用語 |
 | `MAX_TURNS_PER_TERM` | `3` | 1用語あたり最大ターン数 |
 | `RANDOM_SEED` | `20260525` | 再現性のあるランダム化 |
 

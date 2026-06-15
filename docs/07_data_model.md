@@ -16,6 +16,7 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 - `learning`
 - `retest`
 - `l0_check`
+- `final_test`
 - `transfer`
 - `delayed_retest`
 
@@ -72,6 +73,24 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 - updated_at TIMESTAMP NOT NULL
 
 `display_code` は `P001` のような画面表示用ID。個人名やメールアドレスは保存しない。
+
+### participant_surveys
+
+アンケート接続用の現行モデル。`/survey` 画面は暫定表示だが、DBモデルは用意されている。
+
+- id UUID PRIMARY KEY
+- participant_id UUID REFERENCES participants(id)
+- phase TEXT NOT NULL
+- ai_experience_level INT NULL
+- programming_experience_level INT NULL
+- llm_usage_level INT NULL
+- self_rated_ai_knowledge INT NULL
+- term_confidences JSONB NULL
+- usability_rating INT NULL
+- helpfulness_rating INT NULL
+- perceived_hint_amount INT NULL
+- free_comment TEXT NULL
+- created_at TIMESTAMP NOT NULL
 
 ### terms
 
@@ -168,6 +187,7 @@ misconception_type values:
 - natural_language_diagnosis TEXT NULL
 - recurrence_flag BOOLEAN NOT NULL DEFAULT false
 - l0_success BOOLEAN NULL
+- transfer_success BOOLEAN NULL
 - requires_manual_review BOOLEAN NOT NULL DEFAULT false
 - idempotency_key TEXT NULL
 - created_at TIMESTAMP NOT NULL
@@ -187,6 +207,7 @@ misconception_type values:
 - stable_correct_count INT DEFAULT 0
 - recurrence_count INT DEFAULT 0
 - l0_success_count INT DEFAULT 0
+- transfer_success_count INT DEFAULT 0
 - last_attempt_id UUID NULL REFERENCES attempts(id)
 - last_tutor_turn_id UUID NULL REFERENCES tutor_turns(id)
 - state_summary TEXT NULL
@@ -287,6 +308,7 @@ status values:
 - pretest_score FLOAT NULL
 - retest_score FLOAT NULL
 - l0_correct_rate FLOAT NULL
+- transfer_correct_rate FLOAT NULL
 - same_misconception_recurrence_rate FLOAT NULL
 - m1_recurrence_rate FLOAT NULL
 - m2_recurrence_rate FLOAT NULL

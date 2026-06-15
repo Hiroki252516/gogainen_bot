@@ -31,8 +31,9 @@ AI・情報系専門用語の概念理解支援を目的とした、誤概念タ
 8. 研究ログとして、回答、AI診断、AI応答、学習ステージ更新を保存する。再テスト、確認テストでは理由記述も保存する
 9. CSVエクスポートを実装する
 10. Docker Composeで一発起動できるようにする
-11. 事前、学習、再テスト、確認テストで同じ問題文をそのまま使い回さない
-12. 再テスト、確認テストではチャット、ヒント、即時正解表示を禁止する
+11. 現行MVP対象用語は `transfer_learning`（転移学習）と `llm_training_process`（LLMの学習段階）の2語とする
+12. 事前、学習、再テスト、確認テスト、最終テストで同じ問題文をそのまま使い回さない
+13. 再テスト、確認テストではチャット、ヒント、即時正解表示を禁止する
 
 ## Frontend
 
@@ -44,6 +45,8 @@ AI・情報系専門用語の概念理解支援を目的とした、誤概念タ
 - `/learning-targets`
 - `/learning/[termSlug]`
 - `/retest`
+- `/final-test`
+- `/survey`
 - `/l0-check`
 - `/finish`
 - `/admin`
@@ -61,6 +64,7 @@ UIは研究実験用であり、派手さよりも誤操作防止、ログ完全
 - learner state API
 - tutor session API
 - retest API
+- final test API
 - confirmation check API
 - evaluation summary API
 - CSV export API
@@ -108,7 +112,7 @@ Codex app-server連携は `docs/06_codex_app_server_integration.md` に従って
 MVPでは以下を優先してください。
 
 - Macホスト上で `codex app-server --listen ws://127.0.0.1:4500` を起動
-- backendコンテナから `ws://host.docker.internal:4500` に接続
+- 現行Docker Composeではbackendをhost networkで起動し、backendから `ws://127.0.0.1:4500` に接続
 - WebSocket auth tokenが設定されている場合はそれもサポート
 - app-server接続に失敗した通常実行はMockへ自動フォールバックせず、`ai_call_logs` に失敗を保存して管理画面に表示する
 
@@ -131,11 +135,12 @@ MVPでは以下を優先してください。
 - `docker compose up --build` で起動できる
 - frontendが `http://localhost:3000` で開ける
 - backendが `http://localhost:8000/api/health` で応答する
-- `AI_BACKEND=codex_app_server` で、事前テスト、診断、学習、再テスト、確認テスト、CSV出力まで動く
+- `AI_BACKEND=codex_app_server` で、事前テスト、診断、学習、再テスト、最終テスト、確認テスト、CSV出力まで動く
 - `AI_BACKEND=mock` は自動テストで同じ研究フローを検証できる
 - proposed群では、M1〜M4に応じて教授方略が変わる
 - proposed群では、正答でLが下がり、誤答でLが維持または上がる
 - 同じ誤概念が再発した場合 `recurrence_flag = true` になる
+- 未達0件になったら、2用語すべてを対象にした選択式・理由なしの `/final-test` へ進み、採点後 `/survey` へ進む
 - control群では一般解説のみになる
 - app-server未接続時は分かりやすいエラーが出る
 - READMEにセットアップ手順が書かれている

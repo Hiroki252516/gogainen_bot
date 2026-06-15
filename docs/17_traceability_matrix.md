@@ -118,7 +118,8 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 
 ## PPTX Details Captured
 
-- Transformer、Attention、LLM学習段階、事前学習、事後学習の問題例は `11_seed_questions.md` に反映する
+- 現行MVPの転移学習、LLM学習段階の問題例は `11_seed_questions.md` に反映する
+- Transformer、Attention、事前学習、事後学習は過去仕様・拡張候補として扱う
 - Problem phase separation from 5月25日 slide 22/23 is reflected in `02_experiment_flow.md`
 - "same problem should not be reused" is implemented through `construct_key` and `variant_key`
 - 教材参照は `rag_ready_教材` のローカルTF-IDF RAG資産として実装する

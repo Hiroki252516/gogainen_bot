@@ -2,7 +2,7 @@
 
 このリポジトリは、卒業研究で使う「誤概念タイプと学習ステージに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 
-`docs/` 以下に研究・設計仕様、`backend/` にFastAPIアプリ、`frontend/` にNext.jsアプリがあります。
+`docs/` 以下に研究・設計仕様、`backend/` にFastAPIアプリ、`frontend/` にNext.jsアプリがあります。現行MVPの対象用語は、転移学習とLLMの学習段階の2語です。
 
 ## 研究の要点
 
@@ -81,7 +81,7 @@ docker compose up --build
 - backend health: http://localhost:8000/api/health
 - admin: http://localhost:3000/admin
 
-DockerではPostgreSQLを使用します。初期seedはbackend起動時に自動投入されます。
+DockerではPostgreSQLを使用します。現行composeではbackendをhost networkで動かし、Codex app-serverへ `ws://127.0.0.1:4500` で接続します。初期seedはbackend起動時に自動投入されます。
 
 ### ローカル開発
 
@@ -124,11 +124,11 @@ Docker Composeではbackendコンテナからホストへ接続するため、�
 
 ```env
 AI_BACKEND=codex_app_server
-CODEX_APP_SERVER_URL=ws://host.docker.internal:4500
+CODEX_APP_SERVER_URL=ws://127.0.0.1:4500
 CODEX_APP_SERVER_CWD=/tmp
 ```
 
-ローカルでbackendを直接起動する場合は `CODEX_APP_SERVER_URL=ws://127.0.0.1:4500` を使います。`MockAIBackend` は `AI_BACKEND=mock` を明示したテスト用途に限ります。app-serverが未起動または未ログインの場合、AI呼び出しはMockへ自動フォールバックせず、`ai_call_logs` に失敗として記録されます。
+ローカルでbackendを直接起動する場合も `CODEX_APP_SERVER_URL=ws://127.0.0.1:4500` を使います。`MockAIBackend` は `AI_BACKEND=mock` を明示したテスト用途に限ります。app-serverが未起動または未ログインの場合、AI呼び出しはMockへ自動フォールバックせず、`ai_call_logs` に失敗として記録されます。
 
 ## CSV出力
 

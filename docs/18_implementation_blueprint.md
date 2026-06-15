@@ -149,6 +149,8 @@ Output:
 
 - up to `MAX_LEARNING_TARGETS` (default 5)
 - term_assignments with `is_learning_target = true`
+- 現行seedは2用語なので、実際の最大候補数は2件
+- 診断後、正解済み用語は `is_learning_target = false` とし、未達用語だけを学習対象にする
 
 ### Diagnosis Merge
 
@@ -205,12 +207,15 @@ POST /participants
 
 MVP seed must include:
 
-- 8 terms
-- pretest question per term
-- retest variant per term
+- 2 active terms: `transfer_learning`, `llm_training_process`
+- pretest question per active term
+- retest variant per active term
+- l0_check free-response question per active term
+- final_test choice question per active term
+- transfer question per active term
 - option labels correct/M1/M2/M3/unknown
 
-Learning practice questions can be smaller but must exist for at least all 8 terms.
+過去仕様のTransformer、Attention、事前学習、事後学習は拡張候補であり、現行MVP seedの必須対象ではない。
 
 ## README to Generate During Implementation
 

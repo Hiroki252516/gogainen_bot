@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import random
 import re
 from datetime import UTC, datetime
@@ -260,7 +261,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "body": _variant_body_for_round(db, participant.id, question, phase),
                 "question_type": question.question_type,
                 "options": public_options,
-                "requires_reason": phase not in {"pretest", "final_test"},
+                "requires_reason": phase not in {"pretest", "retest", "final_test"},
             }
         )
     return out
@@ -706,7 +707,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
             "free_text_answer": attempt.free_text_answer,
             "reason_text": attempt.reason_text,
         }
-        if phase == "final_test" and option:
+        if phase in {"retest", "final_test"} and option:
             result = {
                 "is_correct": bool(option.is_correct),
                 "score": 1.0 if option.is_correct else 0.0,
@@ -847,6 +848,331 @@ EXPORTS = {
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
     "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "completed", "created_at"]),
 }
+
+
+def _iso(value: Any) -> str | None:
+    return value.isoformat() if hasattr(value, "isoformat") else value
+
+
+def _term_map(db: Session) -> dict[str, Term]:
+    return {term.id: term for term in db.query(Term).all()}
+
+
+def _participant_map(db: Session) -> dict[str, Participant]:
+    return {participant.id: participant for participant in db.query(Participant).all()}
+
+
+def _option_map(db: Session) -> dict[str, QuestionOption]:
+    return {option.id: option for option in db.query(QuestionOption).all()}
+
+
+def _question_map(db: Session) -> dict[str, Question]:
+    return {question.id: question for question in db.query(Question).all()}
+
+
+def _attempt_log_row(
+    attempt: Attempt,
+    participants: dict[str, Participant],
+    terms: dict[str, Term],
+    questions: dict[str, Question],
+    options: dict[str, QuestionOption],
+) -> dict[str, Any]:
+    participant = participants.get(attempt.participant_id)
+    term = terms.get(attempt.term_id)
+    question = questions.get(attempt.question_id)
+    option = options.get(attempt.selected_option_id or "")
+    return {
+        "attempt_id": attempt.id,
+        "participant_id": attempt.participant_id,
+        "display_code": participant.display_code if participant else None,
+        "group_condition": participant.group_condition if participant else None,
+        "phase": attempt.phase,
+        "term_slug": term.slug if term else None,
+        "term_label": term.label if term else None,
+        "question_body": question.body if question else None,
+        "selected_option_body": option.body if option else None,
+        "free_text_answer": attempt.free_text_answer,
+        "reason_text": attempt.reason_text,
+        "is_correct": attempt.is_correct,
+        "score": attempt.score,
+        "diagnosed_status": attempt.diagnosed_status,
+        "misconception_type": attempt.misconception_type,
+        "recurrence_flag": attempt.recurrence_flag,
+        "l0_success": attempt.l0_success,
+        "requires_manual_review": attempt.requires_manual_review,
+        "created_at": _iso(attempt.created_at),
+    }
+
+
+def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participant | None, term: Term | None) -> dict[str, Any]:
+    return {
+        "tutor_turn_id": turn.id,
+        "tutor_session_id": turn.tutor_session_id,
+        "participant_id": session.participant_id,
+        "display_code": participant.display_code if participant else None,
+        "group_condition": session.group_condition,
+        "term_slug": term.slug if term else None,
+        "term_label": term.label if term else None,
+        "session_index": session.session_index,
+        "turn_index": turn.turn_index,
+        "scaffolding_level": turn.scaffolding_level,
+        "teaching_strategy": turn.teaching_strategy,
+        "strategy_changed": turn.strategy_changed,
+        "tutor_message": turn.tutor_message,
+        "learner_prompt": turn.learner_prompt,
+        "learner_response": turn.learner_response,
+        "ai_feedback": turn.ai_feedback,
+        "practice_question": turn.practice_question_json,
+        "grading_json": turn.grading_json,
+        "forbidden_help_given": turn.forbidden_help_given,
+        "created_at": _iso(turn.created_at),
+    }
+
+
+def _ai_log_belongs_to(log: AICallLog, participant_id: str) -> bool:
+    payload = log.request_payload or {}
+    return payload.get("participant_id") == participant_id
+
+
+def admin_logs_overview(db: Session) -> dict[str, Any]:
+    participants = db.query(Participant).order_by(Participant.created_at.desc()).all()
+    participant_by_id = {participant.id: participant for participant in participants}
+    terms = _term_map(db)
+    questions = _question_map(db)
+    options = _option_map(db)
+    attempts = db.query(Attempt).order_by(Attempt.created_at.desc()).limit(50).all()
+    sessions = {session.id: session for session in db.query(TutorSession).all()}
+    recent_turns = db.query(TutorTurn).order_by(TutorTurn.created_at.desc()).limit(30).all()
+    ai_logs = db.query(AICallLog).order_by(AICallLog.created_at.desc()).limit(50).all()
+    recurrences = db.query(RecurrenceEvent).order_by(RecurrenceEvent.created_at.desc()).limit(30).all()
+    summaries = db.query(EvaluationSummary).order_by(EvaluationSummary.created_at.desc()).limit(30).all()
+    return {
+        "participant_count": len(participants),
+        "groups": admin_summary(db)["groups"],
+        "participants": [
+            {
+                "participant_id": row.id,
+                "display_code": row.display_code,
+                "group_condition": row.group_condition,
+                "current_step": row.current_step,
+                "completed_at": _iso(row.completed_at),
+                "created_at": _iso(row.created_at),
+            }
+            for row in participants
+        ],
+        "recent_attempts": [_attempt_log_row(row, participant_by_id, terms, questions, options) for row in attempts],
+        "recent_tutor_turns": [
+            _turn_log_row(row, sessions[row.tutor_session_id], participant_by_id.get(sessions[row.tutor_session_id].participant_id), terms.get(sessions[row.tutor_session_id].term_id))
+            for row in recent_turns
+            if row.tutor_session_id in sessions
+        ],
+        "recent_ai_call_logs": [
+            {
+                "id": row.id,
+                "provider": row.provider,
+                "purpose": row.purpose,
+                "status": row.status,
+                "error_code": row.error_code,
+                "error_message": row.error_message,
+                "latency_ms": row.latency_ms,
+                "created_at": _iso(row.created_at),
+            }
+            for row in ai_logs
+        ],
+        "recurrence_events": [
+            {
+                "id": row.id,
+                "participant_id": row.participant_id,
+                "display_code": participant_by_id.get(row.participant_id).display_code if participant_by_id.get(row.participant_id) else None,
+                "term_slug": terms.get(row.term_id).slug if terms.get(row.term_id) else None,
+                "previous_misconception_type": row.previous_misconception_type,
+                "current_misconception_type": row.current_misconception_type,
+                "phase": row.phase,
+                "created_at": _iso(row.created_at),
+            }
+            for row in recurrences
+        ],
+        "evaluation_summaries": [
+            {
+                "participant_id": row.participant_id,
+                "display_code": participant_by_id.get(row.participant_id).display_code if participant_by_id.get(row.participant_id) else None,
+                "group_condition": row.group_condition,
+                "pretest_score": row.pretest_score,
+                "retest_score": row.retest_score,
+                "l0_correct_rate": row.l0_correct_rate,
+                "same_misconception_recurrence_rate": row.same_misconception_recurrence_rate,
+                "completed": row.completed,
+                "created_at": _iso(row.created_at),
+            }
+            for row in summaries
+        ],
+    }
+
+
+def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
+    participant = get_participant(db, participant_id)
+    participants = {participant.id: participant}
+    terms = _term_map(db)
+    questions = _question_map(db)
+    options = _option_map(db)
+    attempts = db.query(Attempt).filter_by(participant_id=participant.id).order_by(Attempt.created_at).all()
+    states = db.query(LearnerState).filter_by(participant_id=participant.id).order_by(LearnerState.updated_at).all()
+    assignments = db.query(TermAssignment).filter_by(participant_id=participant.id).all()
+    sessions = db.query(TutorSession).filter_by(participant_id=participant.id).order_by(TutorSession.started_at).all()
+    session_ids = [session.id for session in sessions]
+    turns = db.query(TutorTurn).filter(TutorTurn.tutor_session_id.in_(session_ids or ["__none__"])).order_by(TutorTurn.created_at).all()
+    turns_by_session: dict[str, list[TutorTurn]] = {}
+    for turn in turns:
+        turns_by_session.setdefault(turn.tutor_session_id, []).append(turn)
+    recurrences = db.query(RecurrenceEvent).filter_by(participant_id=participant.id).order_by(RecurrenceEvent.created_at).all()
+    ai_logs = [row for row in db.query(AICallLog).order_by(AICallLog.created_at).all() if _ai_log_belongs_to(row, participant.id)]
+    summary = db.query(EvaluationSummary).filter_by(participant_id=participant.id).order_by(EvaluationSummary.created_at.desc()).first()
+    return {
+        "participant": {
+            "participant_id": participant.id,
+            "display_code": participant.display_code,
+            "group_condition": participant.group_condition,
+            "assignment_method": participant.assignment_method,
+            "current_step": participant.current_step,
+            "started_at": _iso(participant.started_at),
+            "completed_at": _iso(participant.completed_at),
+            "created_at": _iso(participant.created_at),
+        },
+        "attempts": [_attempt_log_row(row, participants, terms, questions, options) for row in attempts],
+        "learner_states": [
+            {
+                "term_slug": terms.get(row.term_id).slug if terms.get(row.term_id) else None,
+                "term_label": terms.get(row.term_id).label if terms.get(row.term_id) else None,
+                "current_status": row.current_status,
+                "primary_misconception": row.primary_misconception,
+                "scaffolding_level": row.scaffolding_level,
+                "teaching_strategy": row.teaching_strategy,
+                "stable_correct_count": row.stable_correct_count,
+                "recurrence_count": row.recurrence_count,
+                "l0_success_count": row.l0_success_count,
+                "state_summary": row.state_summary,
+                "updated_at": _iso(row.updated_at),
+            }
+            for row in states
+        ],
+        "term_assignments": [
+            {
+                "term_slug": terms.get(row.term_id).slug if terms.get(row.term_id) else None,
+                "term_label": terms.get(row.term_id).label if terms.get(row.term_id) else None,
+                "is_learning_target": row.is_learning_target,
+                "selection_reason": row.selection_reason,
+                "priority_score": row.priority_score,
+                "created_at": _iso(row.created_at),
+            }
+            for row in assignments
+        ],
+        "tutor_sessions": [
+            {
+                "tutor_session_id": session.id,
+                "term_slug": terms.get(session.term_id).slug if terms.get(session.term_id) else None,
+                "term_label": terms.get(session.term_id).label if terms.get(session.term_id) else None,
+                "session_index": session.session_index,
+                "group_condition": session.group_condition,
+                "started_at": _iso(session.started_at),
+                "ended_at": _iso(session.ended_at),
+                "turns": [_turn_log_row(turn, session, participant, terms.get(session.term_id)) for turn in turns_by_session.get(session.id, [])],
+            }
+            for session in sessions
+        ],
+        "recurrence_events": [
+            {
+                "id": row.id,
+                "term_slug": terms.get(row.term_id).slug if terms.get(row.term_id) else None,
+                "previous_misconception_type": row.previous_misconception_type,
+                "current_misconception_type": row.current_misconception_type,
+                "is_same_type": row.is_same_type,
+                "phase": row.phase,
+                "created_at": _iso(row.created_at),
+            }
+            for row in recurrences
+        ],
+        "ai_call_logs": [
+            {
+                "id": row.id,
+                "provider": row.provider,
+                "purpose": row.purpose,
+                "status": row.status,
+                "error_code": row.error_code,
+                "error_message": row.error_message,
+                "latency_ms": row.latency_ms,
+                "request_payload": row.request_payload,
+                "response_payload": row.response_payload,
+                "created_at": _iso(row.created_at),
+            }
+            for row in ai_logs
+        ],
+        "latest_evaluation_summary": None
+        if not summary
+        else {
+            "pretest_score": summary.pretest_score,
+            "retest_score": summary.retest_score,
+            "l0_correct_rate": summary.l0_correct_rate,
+            "same_misconception_recurrence_rate": summary.same_misconception_recurrence_rate,
+            "m1_recurrence_rate": summary.m1_recurrence_rate,
+            "m2_recurrence_rate": summary.m2_recurrence_rate,
+            "m3_recurrence_rate": summary.m3_recurrence_rate,
+            "learning_target_count": summary.learning_target_count,
+            "completed": summary.completed,
+            "created_at": _iso(summary.created_at),
+        },
+    }
+
+
+LOG_CSV_COLUMNS = ["record_type", "participant_id", "display_code", "phase", "term_slug", "event_time", "summary", "value_json"]
+
+
+def _csv_value(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, Any]]:
+    participant = logs["participant"]
+    rows: list[dict[str, Any]] = []
+    base = {"participant_id": participant["participant_id"], "display_code": participant["display_code"]}
+    for attempt in logs["attempts"]:
+        rows.append({**base, "record_type": "attempt", "phase": attempt["phase"], "term_slug": attempt["term_slug"], "event_time": attempt["created_at"], "summary": f"{attempt['term_label']} {attempt['phase']} correct={attempt['is_correct']} m={attempt['misconception_type']}", "value_json": _csv_value(attempt)})
+    for state in logs["learner_states"]:
+        rows.append({**base, "record_type": "learner_state", "phase": "state", "term_slug": state["term_slug"], "event_time": state["updated_at"], "summary": f"{state['term_label']} status={state['current_status']} strategy={state['teaching_strategy']}", "value_json": _csv_value(state)})
+    for session in logs["tutor_sessions"]:
+        rows.append({**base, "record_type": "tutor_session", "phase": "learning", "term_slug": session["term_slug"], "event_time": session["started_at"], "summary": f"{session['term_label']} session {session['session_index']}", "value_json": _csv_value({k: v for k, v in session.items() if k != "turns"})})
+        for turn in session["turns"]:
+            rows.append({**base, "record_type": "tutor_turn", "phase": "learning", "term_slug": turn["term_slug"], "event_time": turn["created_at"], "summary": f"{turn['term_label']} turn {turn['turn_index']} strategy={turn['teaching_strategy']}", "value_json": _csv_value(turn)})
+    for event in logs["recurrence_events"]:
+        rows.append({**base, "record_type": "recurrence", "phase": event["phase"], "term_slug": event["term_slug"], "event_time": event["created_at"], "summary": f"{event['previous_misconception_type']} -> {event['current_misconception_type']}", "value_json": _csv_value(event)})
+    for call in logs["ai_call_logs"]:
+        rows.append({**base, "record_type": "ai_call", "phase": "", "term_slug": "", "event_time": call["created_at"], "summary": f"{call['purpose']} {call['status']} {call['error_code'] or ''}".strip(), "value_json": _csv_value(call)})
+    if logs["latest_evaluation_summary"]:
+        rows.append({**base, "record_type": "evaluation_summary", "phase": "summary", "term_slug": "", "event_time": logs["latest_evaluation_summary"]["created_at"], "summary": "latest evaluation summary", "value_json": _csv_value(logs["latest_evaluation_summary"])})
+    return rows
+
+
+def export_participant_logs_csv(db: Session, participant_id: str) -> Path:
+    logs = participant_logs(db, participant_id)
+    participant = logs["participant"]
+    path = Path(get_settings().export_dir) / f"{participant['display_code']}_logs.csv"
+    rows = _log_csv_rows_from_participant_logs(logs)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=LOG_CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
+def export_overview_logs_csv(db: Session) -> Path:
+    path = Path(get_settings().export_dir) / "overview.csv"
+    rows: list[dict[str, Any]] = []
+    for participant in db.query(Participant).order_by(Participant.created_at).all():
+        rows.extend(_log_csv_rows_from_participant_logs(participant_logs(db, participant.id)))
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=LOG_CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
 
 
 def export_csv(db: Session, name: str) -> Path:

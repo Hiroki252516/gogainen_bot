@@ -25,9 +25,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+psycopg://app:app@db:5432/ai_tutor
+      DATABASE_URL: postgresql+psycopg://app:app@127.0.0.1:5432/ai_tutor
       AI_BACKEND: codex_app_server
-      CODEX_APP_SERVER_URL: ws://host.docker.internal:4500
+      CODEX_APP_SERVER_URL: ws://127.0.0.1:4500
       CODEX_WS_TOKEN_FILE: /run/secrets/codex_ws_token
       CODEX_APP_SERVER_CWD: /tmp
       CODEX_TURN_TIMEOUT_SEC: "120"
@@ -35,6 +35,7 @@ services:
       MAX_LEARNING_TARGETS: "5"
       MAX_TURNS_PER_TERM: "3"
       RANDOM_SEED: "20260525"
+    network_mode: host
     volumes:
       - ./exports:/app/exports
       - ./.local/codex-ws-token:/run/secrets/codex_ws_token:ro
@@ -85,15 +86,15 @@ codex app-server \
   --ws-token-file "$(pwd)/.local/codex-ws-token"
 ```
 
-backendからは `host.docker.internal:4500` へ接続する。
+現行Docker Composeではbackendを `network_mode: host` で動かし、backendから `ws://127.0.0.1:4500` へ接続する。
 
 ## .env.example
 
 ```env
 APP_ENV=development
-DATABASE_URL=postgresql+psycopg://app:app@db:5432/ai_tutor
+DATABASE_URL=sqlite:///./.local/app.db
 AI_BACKEND=codex_app_server
-CODEX_APP_SERVER_URL=ws://host.docker.internal:4500
+CODEX_APP_SERVER_URL=ws://127.0.0.1:4500
 CODEX_WS_TOKEN_FILE=/run/secrets/codex_ws_token
 CODEX_MODEL=
 CODEX_APP_SERVER_CWD=/tmp

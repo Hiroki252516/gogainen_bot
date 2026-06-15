@@ -29,9 +29,12 @@
 4. 学習対象確認
 5. 学習セッション
 6. 即時再テスト
-7. 必要なら2回目学習
-8. 確認テスト
-11. 終了
+7. 必要なら2回目以降の学習
+8. 未達0件になったら最終テスト
+9. アンケート遷移画面
+10. 終了
+
+現行MVPの事前テスト・最終テスト対象は、転移学習とLLMの学習段階の2用語である。`/survey` は暫定画面で、アンケート本体は次の実装で接続する。
 
 研究者が見るもの:
 
@@ -112,6 +115,8 @@ MVPでは必須ではない。
 - misconception_typeが含まれる
 - recurrence_flagが含まれる
 - l0_successが含まれる
+
+現行のCSV出力は管理画面のボタンから、participants、attempts、learner_states、tutor_turns、recurrence_events、ai_call_logs、evaluation_summaryを取得できる。
 
 ## Research Notes During Operation
 

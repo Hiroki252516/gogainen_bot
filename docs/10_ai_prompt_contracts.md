@@ -55,7 +55,7 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
   "group_condition": "proposed",
   "term": {
     "slug": "attention",
-    "label": "Attention",
+    "label": "転移学習",
     "definition": "..."
   },
   "question": {
@@ -130,8 +130,8 @@ ambiguous: 判定困難
   "group_condition": "proposed",
   "term": {
     "slug": "transformer",
-    "label": "Transformer",
-    "description": "AttentionレイヤーとFFNレイヤーを重ね、トークン間の関係性とトークンごとの特徴変換を繰り返す構造。"
+    "label": "転移学習",
+    "description": "あるデータやタスクで学習済みのモデルや特徴を、別の関連タスクの学習に活用する方法。"
   },
   "learner_state": {
     "current_status": "misconception",
@@ -275,6 +275,10 @@ backendはAI出力をPydanticで検証する。
 ## Control Group Prompt Differences
 
 統制群では、AIに誤概念タイプ別支援をさせない。
+
+現行実装では、統制群の学習セッションはL3相当の基礎教材とL2相当の観点教材を両方提示するが、質問はL2相当の1問だけにする。`learning_stage` は `concept_understanding` として扱い、十分回答なら `final_feedback` へ進む。
+
+提案群では、`term_understanding` で `L3基礎確認` を扱い、十分回答後に `concept_understanding` へ進む。`concept_understanding` ではL2相当の問いを出し、十分回答なら `final_feedback` へ進む。
 
 追加制約:
 

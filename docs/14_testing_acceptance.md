@@ -2,7 +2,7 @@
 
 ## 2026-06 Iterative Acceptance Update
 
-反復型フローの受け入れ条件として、初回テストで正解済み用語が学習対象から除外されること、再テストで正解した用語が次周回から消えること、未達が0件になったら5用語すべての最終テストへ進むこと、M4が教材方略として使われないことを確認する。
+反復型フローの受け入れ条件として、初回テストで正解済み用語が学習対象から除外されること、再テストで正解した用語が次周回から消えること、未達が0件になったら現行seedの2用語すべての最終テストへ進むこと、M4が教材方略として使われないことを確認する。
 
 
 ## 2026-06 Learning-Session Misconception Acceptance
@@ -107,7 +107,8 @@ Mock rules:
 - 事前テストを完了できる
 - AI診断が実行される
 - learner_states が作成される
-- 事前テストで扱った5用語すべてが学習対象として選ばれる
+- 事前テストで扱った2用語が出題される
+- 正解済み用語は学習対象から除外され、未達用語だけが学習対象として選ばれる
 - 学習セッションが開始できる
 - 再テストが実施できる
 - 確認テストが実施できる
@@ -168,13 +169,14 @@ Mock rules:
 ### proposed participant
 
 1. Participant P001をproposedで作成
-2. TransformerまたはAttentionでM1誤答
-3. 事前学習または事後学習でM2/M3誤答
-4. Diagnosis後、事前テストで扱った5件すべてがlearning targetになる
-5. 学習ターン生成時のLはbackendのLearnerStateを正とする
-6. 学習後retestで同じ誤概念ならrecurrence_flag true
-7. 次のturnでstrategy_changed true
-8. confirmation checkで正答ならl0_success true
+2. 転移学習またはLLMの学習段階でM1/M2/M3誤答
+3. Diagnosis後、未達用語だけがlearning targetになる
+4. 提案群では `term_understanding` の `L3基礎確認` から始まる
+5. L3基礎確認で十分回答なら `concept_understanding` へ進む
+6. concept理解で十分回答なら `final_feedback` へ進む
+7. 学習後retestで同じ誤概念ならrecurrence_flag true
+8. 再テストで未達が0件なら `/final-test` へ進む
+9. final_testは2問選択式・理由なしで、採点後 `/survey` へ進む
 10. evaluation_summaryに指標が反映される
 
 ### control participant
@@ -184,7 +186,7 @@ Mock rules:
 3. Diagnosisは保存される
 4. 学習画面では一般解説のみ
 5. teaching_strategyはgeneral_explanation
-6. scaffolding_levelの動的変更は行われない
+6. L3相当教材とL2相当教材を提示するが、質問はL2相当1問だけ
 
 ## Definition of Done
 
