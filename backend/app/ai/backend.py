@@ -43,25 +43,25 @@ def initial_level(status: str, misconception_type: str | None, confidence: int |
     if status == "unstable_correct":
         return "L2"
     if status == "stable_correct":
-        return "L1"
+        return "L2"
     if status == "transfer_ready":
-        return "L1"
+        return "L2"
     return "L2"
 
 
 def lower_level(level: str | None) -> str:
-    order = ["L1", "L2", "L3"]
+    order = ["L2", "L3"]
     if level not in order:
         return "L2"
     return order[max(0, order.index(level) - 1)]
 
 
 def raise_level(level: str | None) -> str:
-    order = ["L1", "L2", "L3"]
+    order = ["L2", "L3"]
     if level not in order:
         return "L2"
     return order[min(len(order) - 1, order.index(level) + 1)]
 
 
 def normalize_level(level: str | None) -> str:
-    return level if level in {"L1", "L2", "L3"} else "L1"
+    return level if level in {"L2", "L3"} else "L2"

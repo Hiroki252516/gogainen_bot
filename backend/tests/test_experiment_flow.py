@@ -126,6 +126,7 @@ def test_proposed_group_progresses_l3_question_then_l2_question():
     assert first_feedback["is_sufficient"] is True
     assert first_feedback["session_completed"] is False
     assert first_feedback["next_learning_stage"] == "concept_understanding"
+    assert first_feedback["next_scaffolding_level"] == "L2"
 
     second = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     assert second["learning_stage"] == "concept_understanding"
@@ -138,6 +139,7 @@ def test_proposed_group_progresses_l3_question_then_l2_question():
     assert second_feedback["is_sufficient"] is True
     assert second_feedback["session_completed"] is True
     assert second_feedback["next_learning_stage"] == "final_feedback"
+    assert second_feedback["next_scaffolding_level"] == "L2"
 
 
 def test_retest_removes_correct_terms_and_final_test_stays_two_items():
@@ -164,6 +166,8 @@ def test_retest_removes_correct_terms_and_final_test_stays_two_items():
 
     score = client.post(f"/api/participants/{pid}/score-retest").json()
     assert score["next_url"] == "/learning-targets"
+    participant_logs = client.get(f"/api/admin/participants/{pid}/logs").json()
+    assert all(state["scaffolding_level"] in {"L2", "L3"} for state in participant_logs["learner_states"])
     targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
     assert [target["term_slug"] for target in targets] == ["llm_training_process"]
 
@@ -194,11 +198,19 @@ def test_admin_overview_and_participant_logs_have_json_and_csv():
     assert overview_csv.status_code == 200
     assert "record_type,participant_id,display_code,phase,term_slug,event_time,summary,value_json" in overview_csv.text
     assert "attempt" in overview_csv.text
+    overview_excel_csv = client.get("/api/admin/logs/overview_excel.csv")
+    assert overview_excel_csv.status_code == 200
+    assert overview_excel_csv.content.startswith(b"\xef\xbb\xbf")
+    assert "attempt".encode() in overview_excel_csv.content
 
     participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert participant_csv.status_code == 200
     assert "record_type,participant_id,display_code,phase,term_slug,event_time,summary,value_json" in participant_csv.text
     assert "attempt" in participant_csv.text
+    participant_excel_csv = client.get(f"/api/admin/participants/{pid}/logs_excel.csv")
+    assert participant_excel_csv.status_code == 200
+    assert participant_excel_csv.content.startswith(b"\xef\xbb\xbf")
+    assert "attempt".encode() in participant_excel_csv.content
 
 
 def test_tutoring_prompt_contract_mentions_new_group_design():

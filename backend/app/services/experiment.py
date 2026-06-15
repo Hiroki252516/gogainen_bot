@@ -36,7 +36,7 @@ from app.models import (
 )
 
 
-PUBLIC_LEVEL = {"L3": "しっかり確認", "L2": "観点を確認", "L1": "自分で整理"}
+PUBLIC_LEVEL = {"L3": "用語理解から確認", "L2": "概念理解を確認"}
 PRETEST_TERM_ORDER = {"transfer_learning": 0, "llm_training_process": 1}
 PRETEST_TERM_SLUGS = set(PRETEST_TERM_ORDER)
 LEARNING_STAGE_LABELS = {
@@ -484,7 +484,7 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
             "term_slug": term.slug,
             "term_label": term.label,
             "summary_for_learner": _public_summary(state.state_summary),
-            "current_scaffolding_level_for_display": PUBLIC_LEVEL.get(normalize_level(state.scaffolding_level), "確認"),
+            "current_stage_for_display": PUBLIC_LEVEL.get(normalize_level(state.scaffolding_level), "概念理解を確認"),
         }
         for _, term, state in rows
     ]
@@ -746,7 +746,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
                     assignment.priority_score, assignment.selection_reason = _priority(attempt)
         if phase in {"l0_check", "final_test"}:
             state.l0_success_count += 1 if attempt.is_correct else 0
-            state.scaffolding_level = "L1" if attempt.is_correct else raise_level("L1")
+            state.scaffolding_level = "L2" if attempt.is_correct else "L3"
         state.current_status = "stable_correct" if attempt.is_correct else "misconception"
         state.last_attempt_id = attempt.id
     if phase == "retest":
@@ -905,6 +905,8 @@ def _attempt_log_row(
 
 
 def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participant | None, term: Term | None) -> dict[str, Any]:
+    stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
+    grading = turn.grading_json or {}
     return {
         "tutor_turn_id": turn.id,
         "tutor_session_id": turn.tutor_session_id,
@@ -916,6 +918,12 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "session_index": session.session_index,
         "turn_index": turn.turn_index,
         "scaffolding_level": turn.scaffolding_level,
+        "learning_stage": stage_meta.get("learning_stage"),
+        "learning_stage_label": stage_meta.get("learning_stage_label"),
+        "component_term": stage_meta.get("component_term"),
+        "component_index": stage_meta.get("component_index"),
+        "component_total": stage_meta.get("component_total"),
+        "next_learning_stage": grading.get("next_learning_stage"),
         "teaching_strategy": turn.teaching_strategy,
         "strategy_changed": turn.strategy_changed,
         "tutor_message": turn.tutor_message,
@@ -1046,6 +1054,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
                 "current_status": row.current_status,
                 "primary_misconception": row.primary_misconception,
                 "scaffolding_level": row.scaffolding_level,
+                "current_stage_for_display": PUBLIC_LEVEL.get(normalize_level(row.scaffolding_level), "概念理解を確認"),
                 "teaching_strategy": row.teaching_strategy,
                 "stable_correct_count": row.stable_correct_count,
                 "recurrence_count": row.recurrence_count,
@@ -1137,11 +1146,11 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
     for attempt in logs["attempts"]:
         rows.append({**base, "record_type": "attempt", "phase": attempt["phase"], "term_slug": attempt["term_slug"], "event_time": attempt["created_at"], "summary": f"{attempt['term_label']} {attempt['phase']} correct={attempt['is_correct']} m={attempt['misconception_type']}", "value_json": _csv_value(attempt)})
     for state in logs["learner_states"]:
-        rows.append({**base, "record_type": "learner_state", "phase": "state", "term_slug": state["term_slug"], "event_time": state["updated_at"], "summary": f"{state['term_label']} status={state['current_status']} strategy={state['teaching_strategy']}", "value_json": _csv_value(state)})
+        rows.append({**base, "record_type": "learner_state", "phase": "state", "term_slug": state["term_slug"], "event_time": state["updated_at"], "summary": f"{state['term_label']} status={state['current_status']} stage={state['current_stage_for_display']} strategy={state['teaching_strategy']}", "value_json": _csv_value(state)})
     for session in logs["tutor_sessions"]:
         rows.append({**base, "record_type": "tutor_session", "phase": "learning", "term_slug": session["term_slug"], "event_time": session["started_at"], "summary": f"{session['term_label']} session {session['session_index']}", "value_json": _csv_value({k: v for k, v in session.items() if k != "turns"})})
         for turn in session["turns"]:
-            rows.append({**base, "record_type": "tutor_turn", "phase": "learning", "term_slug": turn["term_slug"], "event_time": turn["created_at"], "summary": f"{turn['term_label']} turn {turn['turn_index']} strategy={turn['teaching_strategy']}", "value_json": _csv_value(turn)})
+            rows.append({**base, "record_type": "tutor_turn", "phase": "learning", "term_slug": turn["term_slug"], "event_time": turn["created_at"], "summary": f"{turn['term_label']} turn {turn['turn_index']} stage={turn['learning_stage']} component={turn['component_term']} strategy={turn['teaching_strategy']}", "value_json": _csv_value(turn)})
     for event in logs["recurrence_events"]:
         rows.append({**base, "record_type": "recurrence", "phase": event["phase"], "term_slug": event["term_slug"], "event_time": event["created_at"], "summary": f"{event['previous_misconception_type']} -> {event['current_misconception_type']}", "value_json": _csv_value(event)})
     for call in logs["ai_call_logs"]:
@@ -1151,16 +1160,28 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
     return rows
 
 
+def _write_log_csv(path: Path, rows: list[dict[str, Any]], *, encoding: str) -> Path:
+    with path.open("w", newline="", encoding=encoding) as f:
+        writer = csv.DictWriter(f, fieldnames=LOG_CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
 def export_participant_logs_csv(db: Session, participant_id: str) -> Path:
     logs = participant_logs(db, participant_id)
     participant = logs["participant"]
     path = Path(get_settings().export_dir) / f"{participant['display_code']}_logs.csv"
     rows = _log_csv_rows_from_participant_logs(logs)
-    with path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=LOG_CSV_COLUMNS)
-        writer.writeheader()
-        writer.writerows(rows)
-    return path
+    return _write_log_csv(path, rows, encoding="utf-8")
+
+
+def export_participant_logs_excel_csv(db: Session, participant_id: str) -> Path:
+    logs = participant_logs(db, participant_id)
+    participant = logs["participant"]
+    path = Path(get_settings().export_dir) / f"{participant['display_code']}_logs_excel.csv"
+    rows = _log_csv_rows_from_participant_logs(logs)
+    return _write_log_csv(path, rows, encoding="utf-8-sig")
 
 
 def export_overview_logs_csv(db: Session) -> Path:
@@ -1168,11 +1189,15 @@ def export_overview_logs_csv(db: Session) -> Path:
     rows: list[dict[str, Any]] = []
     for participant in db.query(Participant).order_by(Participant.created_at).all():
         rows.extend(_log_csv_rows_from_participant_logs(participant_logs(db, participant.id)))
-    with path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=LOG_CSV_COLUMNS)
-        writer.writeheader()
-        writer.writerows(rows)
-    return path
+    return _write_log_csv(path, rows, encoding="utf-8")
+
+
+def export_overview_logs_excel_csv(db: Session) -> Path:
+    path = Path(get_settings().export_dir) / "overview_excel.csv"
+    rows: list[dict[str, Any]] = []
+    for participant in db.query(Participant).order_by(Participant.created_at).all():
+        rows.extend(_log_csv_rows_from_participant_logs(participant_logs(db, participant.id)))
+    return _write_log_csv(path, rows, encoding="utf-8-sig")
 
 
 def export_csv(db: Session, name: str) -> Path:

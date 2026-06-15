@@ -33,7 +33,7 @@ same_type_recurrence_count / initial_misconception_count
 
 ### 2. 足場掛けなし自力解答率
 
-確認テスト条件で正答できた割合。
+無支援フェーズで正答できた割合。
 
 ```text
 confirmation_correct_rate = l0_correct_count / l0_question_count
@@ -47,6 +47,8 @@ confirmation_correct_rate = l0_correct_count / l0_question_count
 
 - `l0_success = true`
 - `is_correct = true`
+
+必要に応じて `final_test` についても別指標として同様に集計する。足場掛けなし自力解答の判定は、L1到達ではなく `l0_check` / `final_test` の無支援正答で見る。
 
 ## 補助指標
 
@@ -91,7 +93,7 @@ understanding_delta = post_understanding - pre_understanding
 
 用語別にも全体平均でも出せるようにする。
 
-### 支援減少量
+### 支援段階変化量
 
 ```text
 scaffolding_reduction =
@@ -102,8 +104,8 @@ initial_scaffolding_numeric - final_scaffolding_numeric
 
 - L3 = 3
 - L2 = 2
-- L1 = 1
-- 
+
+現行運用では `scaffolding_level` は `L3/L2` のみを使う。したがって支援段階変化量は `L3 -> L2` の1段階変化までを扱う。
 ## 群別比較
 
 MVPでは管理画面に記述統計を表示する。
@@ -137,8 +139,10 @@ MVPでは管理画面に記述統計を表示する。
 
 - 全体ログ: 全参加者の進捗、最近の回答、AI呼び出し、再発イベント、評価サマリーを見る
 - 全体ログCSV: `overview.csv`
+- 全体ログCSV Excel版: `overview_excel.csv`
 - 被験者別ログ: 1人の回答、学習状態、学習ターン、AI呼び出し、再発イベントを見る
 - 被験者別ログCSV: 1人分のログCSV
+- 被験者別ログCSV Excel版: 1人分のUTF-8 BOM付きログCSV
 
 ログCSVは1ファイルにまとめ、行ごとに `record_type` を持たせる。
 

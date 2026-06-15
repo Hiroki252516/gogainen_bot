@@ -154,7 +154,7 @@ class CodexAppServerBackend:
                 "diagnosis_confidence": {"type": "number", "minimum": 0, "maximum": 1},
                 "natural_language_diagnosis": {"type": "string"},
                 "evidence": {"type": "string"},
-                "recommended_initial_scaffolding_level": {"type": "string", "enum": ["L1", "L2", "L3"]},
+                "recommended_initial_scaffolding_level": {"type": "string", "enum": ["L2", "L3"]},
                 "recommended_teaching_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
                 "requires_manual_review": {"type": "boolean"},
             },
@@ -198,7 +198,7 @@ class CodexAppServerBackend:
             "properties": {
                 "tutor_message": {"type": "string"},
                 "teaching_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
-                "scaffolding_level": {"type": "string", "enum": ["L1", "L2", "L3"]},
+                "scaffolding_level": {"type": "string", "enum": ["L2", "L3"]},
                 "requires_learner_response": {"type": "boolean"},
                 "learner_prompt": {"type": "string"},
                 "practice_question": {
@@ -227,7 +227,7 @@ class CodexAppServerBackend:
         term_label = (payload.get("term") or {}).get("label", "この用語")
         rules = [
             "学習セッション用の短い日本語チュータ発話を作る。",
-            "足場掛けレベルは L3/L2/L1 のみを使い、指定外のレベルは使わない。",
+            "足場掛けレベルは L3/L2 のみを使い、指定外のレベルは使わない。",
             f"教材、問い返し、practice_question は必ず現在の用語『{term_label}』だけを主題にする。",
             "入力JSONの learning_stage が term_understanding の場合は、component_term だけを今回の主題にし、その構成用語を説明させる問題を1つ作る。",
             "入力JSONの learning_stage が concept_understanding の場合は、component_terms を使って対象概念全体を説明させる問題を1つ作る。",
@@ -310,7 +310,7 @@ class CodexAppServerBackend:
                 "feedback": {"type": "string"},
                 "is_sufficient": {"type": "boolean"},
                 "next_action": {"type": "string", "enum": ["continue", "move_next"]},
-                "next_scaffolding_level": {"type": "string", "enum": ["L1", "L2", "L3"]},
+                "next_scaffolding_level": {"type": "string", "enum": ["L2", "L3"]},
                 "learning_misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
                 "learning_misconception_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
                 "learning_misconception_reason": {"type": "string"},
@@ -335,7 +335,7 @@ class CodexAppServerBackend:
                     "learning_stage が term_understanding の場合、is_sufficient は component_term の意味と対象概念内での役割が十分に説明されている場合だけ true にする。",
                     "learning_stage が concept_understanding の場合、is_sufficient は component_terms を使って対象概念全体を十分に説明できている場合だけ true にする。",
                     "理解が十分なら move_next、不十分なら continue にする。",
-                    "next_scaffolding_level は参考値として L3/L2/L1 のいずれかにし、指定外のレベルは使わない。最終更新はbackendが決める。",
+                    "next_scaffolding_level は参考値として L3/L2 のいずれかにし、指定外のレベルは使わない。最終更新はbackendが決める。",
                 ],
             ),
             schema,

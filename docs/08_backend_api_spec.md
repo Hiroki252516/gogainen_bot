@@ -210,13 +210,13 @@ Response:
       "term_slug": "transfer_learning",
       "term_label": "転移学習",
       "summary_for_learner": "人間の注意ではなく、モデル内部の重み付けとして確認します。",
-      "current_scaffolding_level_for_display": "しっかり確認"
+      "current_stage_for_display": "用語理解から確認"
     }
   ]
 }
 ```
 
-`current_scaffolding_level_for_display` は互換表示用に残す。学習セッション画面の進行表示は `learning_stage` と構成用語進捗を正とする。
+`current_stage_for_display` は学習対象一覧の表示用ラベルである。学習セッション画面の進行表示は `learning_stage` と構成用語進捗を正とする。
 
 ## Tutor Sessions
 
@@ -314,7 +314,7 @@ Response:
 }
 ```
 
-`feedback` はログ保存、次ステージ教材への統合、セッション完了時の教材フィードバック画面に使う。ターン継続時は回答直後に単独表示しない。セッション完了時は問題を出さず、`feedback` と次へボタンだけを表示する。`next_learning_stage` と `next_component_index` はbackendの決定論的更新結果であり、画面進行に使う。`next_scaffolding_level` は互換ログ用に返す。
+`feedback` はログ保存、次ステージ教材への統合、セッション完了時の教材フィードバック画面に使う。ターン継続時は回答直後に単独表示しない。セッション完了時は問題を出さず、`feedback` と次へボタンだけを表示する。`next_learning_stage` と `next_component_index` はbackendの決定論的更新結果であり、画面進行に使う。`next_scaffolding_level` は `L3/L2` の互換ログ用に返す。
 
 ## Scoring APIs
 
@@ -372,14 +372,16 @@ Response:
 - GET /api/admin/participants/{id}
 - GET /api/admin/participants/{id}/logs
 - GET /api/admin/participants/{id}/logs.csv
+- GET /api/admin/participants/{id}/logs_excel.csv
 - GET /api/admin/logs/overview
 - GET /api/admin/logs/overview.csv
+- GET /api/admin/logs/overview_excel.csv
 - GET /api/admin/participants/{id}/learner-states
 - PATCH /api/admin/attempts/{attempt_id}/diagnosis
 - DELETE /api/admin/participants/{id}
 - DELETE /api/admin/experiment-data
 
-現行UIでは参加者一覧、群別概要、AI status、全体ログ、被験者別ログ、全体ログCSV、被験者別ログCSVが実装対象である。既存のテーブル別CSVリンクは管理画面の主導線から外す。
+現行UIでは参加者一覧、群別概要、AI status、全体ログ、被験者別ログ、全体ログCSVのUTF-8版/Excel版、被験者別ログCSVのUTF-8版/Excel版が実装対象である。既存のテーブル別CSVリンクは管理画面の主導線から外す。
 
 ### GET /api/admin/logs/overview
 
@@ -389,6 +391,10 @@ Response:
 
 全体ログを1つのCSVで返す。行ごとに `record_type` を持たせ、attempt、learner_state、tutor_turn、ai_call、recurrence、evaluation_summaryなどを区別する。
 
+### GET /api/admin/logs/overview_excel.csv
+
+全体ログをExcelで開きやすいUTF-8 BOM付きCSVで返す。内容と列構成は `overview.csv` と同じ。
+
 ### GET /api/admin/participants/{id}/logs
 
 1人の被験者について、回答履歴、学習状態、学習セッション、学習ターン、AI呼び出し、再発イベント、評価サマリーをJSONで返す。
@@ -396,6 +402,10 @@ Response:
 ### GET /api/admin/participants/{id}/logs.csv
 
 被験者別ログを1つのCSVで返す。CSV列は `record_type, participant_id, display_code, phase, term_slug, event_time, summary, value_json` とする。
+
+### GET /api/admin/participants/{id}/logs_excel.csv
+
+被験者別ログをExcelで開きやすいUTF-8 BOM付きCSVで返す。内容と列構成は `logs.csv` と同じ。
 
 手動修正APIは `audit_events` に必ず保存する。
 

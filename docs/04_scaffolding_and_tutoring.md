@@ -15,7 +15,7 @@
 2. `concept_understanding`: 構成用語を用いて対象概念全体を説明させる。十分回答なら `final_feedback` へ進み、不十分なら `term_understanding` の先頭へ戻る。
 3. `final_feedback`: 問題・回答欄を出さず、教材フィードバックと次へボタンだけを表示する。
 
-`scaffolding_level` と `next_scaffolding_level` は既存ログ・CSV互換のため保持するが、セッション完了判定や被験者画面の進行表示には使わない。`is_sufficient = true` だけでセッション完了にはしない。完了するのは `concept_understanding` で十分回答した場合のみである。
+`scaffolding_level` と `next_scaffolding_level` は `L3` と `L2` の互換ログとして保持するが、セッション完了判定や被験者画面の進行表示には使わない。`is_sufficient = true` だけでセッション完了にはしない。完了するのは `concept_understanding` で十分回答した場合のみである。
 
 
 ## 学習ステージと教材提示
@@ -29,7 +29,7 @@
 
 その後、学習者に自分の言葉で再説明させる記述問題を出す。答えだけを丸写しさせるのではなく、役割や判断基準を含めて説明させる。
 
-`scaffolding_level` / `next_scaffolding_level` は既存ログ、CSV互換、内部分析のために残す。教材生成時にAIが返す `scaffolding_level` は参考値であり、被験者画面には表示しない。
+`scaffolding_level` / `next_scaffolding_level` は既存ログ、CSV互換、内部分析のために `L3/L2` のみ残す。教材生成時にAIが返す `scaffolding_level` は参考値であり、被験者画面には表示しない。
 
 現行実装では、MVP対象の `transfer_learning` と `llm_training_process` は `term_understanding` の構成用語を `L3基礎確認` 1件として扱う。十分回答なら `concept_understanding` へ進み、L2相当の観点確認問題を出す。
 
@@ -57,10 +57,10 @@
 | unknown | L3 |
 | misconception | L3 |
 | unstable_correct | L2 |
-| stable_correct | L1 |
-| transfer_ready | L1 |
+| stable_correct | L2 |
+| transfer_ready | L2 |
 
-`stable_correct` でも根拠が不足する場合はL1にする。いきなりL1へ進めるのは、回答と診断根拠が十分に一貫している場合だけにする。
+`stable_correct` や `transfer_ready` でも、現行運用では互換ログを `L2` に揃える。足場掛けなし自力解答は `l0_check` / `final_test` の無支援正答で判定する。
 
 ## 更新ルール
 
@@ -74,14 +74,14 @@
 | 概念理解段階 | `is_sufficient = false` | 用語理解段階の先頭へ戻る | needs_review |
 | 再テスト | 誤答 | 維持 | needs_review |
 | 再テスト | 同じMで誤答 | 維持 | strategy_changed=true |
-| 再テスト | 正答 | 1段階下げる | L1到達を目指す |
-| 確認テスト | 正答 | L1を維持 | l0_success_count加算 |
-| 確認テスト | 誤答 | L2相当へ上げる | needs_review |
+| 再テスト | 正答 | L2を維持 | 未達対象から外す |
+| 確認テスト | 正答 | L2を維持 | l0_success_count加算 |
+| 確認テスト | 誤答 | L3へ上げる | needs_review |
 
 レベル境界:
 
 - L3より上へは上げない
-- L1より下へは下げない
+- L2より下へは下げない
 - 1回の更新で2段階以上変えない
 - AIが `next_scaffolding_level` を返しても参考値に留め、サービス層の決定論的ルールで最終決定する
 - AIがチューターターン生成で `scaffolding_level` を返しても採用せず、`LearnerState.scaffolding_level` を `tutor_turns.scaffolding_level` とデバッグ表示の正とする
@@ -102,12 +102,12 @@
 
 ## 誤概念タイプ x 教授方略の出し分け
 
-| Mタイプ | L3 | L2 | L1 |
-|---|---|---|---|
-| M1 | 誤カテゴリーと正カテゴリーを明示し、例と反例を出す | 「何の種類の概念か」を問い返す | 上位カテゴリーだけ示す |
-| M2 | 比較表で入力・処理・出力・用途を対比する | 比較軸を1〜2個示す | 区別すべき相手概念だけ示す |
-| M3 | 表層判断の反例を示し、判断基準を説明する | 表面語ではなく見るべき関係を示す | 着目する関係を1つだけ示す |
-| M4 | 今回は専用方略なし | 今回は専用方略なし | 今回は専用方略なし |
+| Mタイプ | L3 | L2 |
+|---|---|---|
+| M1 | 誤カテゴリーと正カテゴリーを明示し、例と反例を出す | 「何の種類の概念か」を問い返す |
+| M2 | 比較表で入力・処理・出力・用途を対比する | 比較軸を1〜2個示す |
+| M3 | 表層判断の反例を示し、判断基準を説明する | 表面語ではなく見るべき関係を示す |
+| M4 | 今回は専用方略なし | 今回は専用方略なし |
 
 ## 学習セッションテンプレート
 

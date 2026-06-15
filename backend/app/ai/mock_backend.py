@@ -60,7 +60,7 @@ class MockAIBackend:
         term = payload["term"]
         state = payload["learner_state"]
         group = payload.get("group_condition", "proposed")
-        level = state.get("scaffolding_level") if state.get("scaffolding_level") in {"L3", "L2", "L1"} else "L2"
+        level = state.get("scaffolding_level") if state.get("scaffolding_level") in {"L3", "L2"} else "L2"
         strategy = state.get("teaching_strategy") or strategy_for(state.get("primary_misconception"), state.get("current_status"), group)
         slug = term.get("slug", "")
         spec = _TERM_TUTORING.get(slug, _generic_tutoring_spec(term))
@@ -206,13 +206,13 @@ class MockAIBackend:
         hit_count = sum(1 for keyword in keywords if keyword and keyword in response)
         is_sufficient = hit_count >= max(1, min(2, len(keywords)))
         current_level = payload.get("learner_state", {}).get("scaffolding_level") or "L2"
-        next_by_level = {"L3": "L2", "L2": "L1", "L1": "L1"} if is_sufficient else {"L3": "L3", "L2": "L3", "L1": "L2"}
+        next_by_level = {"L3": "L2", "L2": "L2"} if is_sufficient else {"L3": "L3", "L2": "L3"}
         label = term.get("label", "この用語")
         learning_mtype, learning_reason, learning_confidence = _learning_misconception_for_response(response, is_sufficient)
         return {
             "feedback": f"{label}について、判断基準を使って説明できています。" if is_sufficient else f"{label}について、説明に必要な判断基準がまだ足りません。",
             "is_sufficient": is_sufficient,
-            "next_action": "move_next" if is_sufficient and current_level == "L1" else "continue",
+            "next_action": "move_next" if is_sufficient else "continue",
             "next_scaffolding_level": next_by_level.get(current_level, "L2"),
             "learning_misconception_type": learning_mtype,
             "learning_misconception_confidence": learning_confidence,

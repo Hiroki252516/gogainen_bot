@@ -61,7 +61,7 @@ for (const expectedText of ['phase="final_test"', '/api/experiment/${id}/final-t
 }
 
 const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["全体ログ", "全体ログCSV", "被験者ログを見る", "被験者ログCSV", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/logs.csv"]) {
+for (const expectedText of ["全体ログ", "全体ログCSV UTF-8", "全体ログCSV Excel", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログCSV Excel", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/logs.csv", "/logs_excel.csv"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }

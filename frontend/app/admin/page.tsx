@@ -91,12 +91,20 @@ export default function AdminPage() {
           </div>
           <div className="actions">
             <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview.csv`}>
-              全体ログCSV
+              全体ログCSV UTF-8
+            </a>
+            <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview_excel.csv`}>
+              全体ログCSV Excel
             </a>
             {participantLog?.participant?.participant_id ? (
-              <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs.csv`}>
-                被験者ログCSV
-              </a>
+              <>
+                <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs.csv`}>
+                  被験者ログCSV UTF-8
+                </a>
+                <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs_excel.csv`}>
+                  被験者ログCSV Excel
+                </a>
+              </>
             ) : null}
           </div>
         </section>
@@ -162,7 +170,7 @@ export default function AdminPage() {
                 </p>
               </div>
               <LogList title="テスト回答履歴" rows={participantLog.attempts} fields={["phase", "term_slug", "is_correct", "misconception_type", "recurrence_flag", "created_at"]} />
-              <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "updated_at"]} />
+              <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
               <LogList title="AI呼び出しログ" rows={participantLog.ai_call_logs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
               <LogList title="再発イベント" rows={participantLog.recurrence_events} fields={["term_slug", "previous_misconception_type", "current_misconception_type", "phase", "created_at"]} />
@@ -229,7 +237,7 @@ function SessionLog({ sessions }: { sessions: any[] }) {
               <strong>
                 {session.term_label} session {session.session_index}
               </strong>
-              <LogList title="学習ターン" rows={session.turns} fields={["turn_index", "teaching_strategy", "scaffolding_level", "strategy_changed", "created_at"]} />
+              <LogList title="学習ターン" rows={session.turns} fields={["turn_index", "learning_stage", "component_term", "next_learning_stage", "teaching_strategy", "created_at"]} />
               {session.turns?.slice(0, 3).map((turn: any) => (
                 <details key={turn.tutor_turn_id}>
                   <summary>turn {turn.turn_index} 詳細</summary>
