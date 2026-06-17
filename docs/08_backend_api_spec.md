@@ -11,6 +11,7 @@ FastAPIでREST APIを実装する。MVPでは同期APIでよい。
 - 管理者向けAPIは内部Mラベルを返してよい
 - 両群のAI payloadにはRAG教材を含める
 - 提案群だけ、pretest診断、誤概念、学習履歴をAI payloadに含める
+- 統制群の学習API payloadには、RAGと対象概念だけを含める
 
 ## Participants
 
@@ -71,7 +72,7 @@ Response:
       "term_slug": "attention",
       "term_label": "Attention",
       "summary_for_learner": "人間の注意ではなく、モデル内部の重み付けとして確認します。",
-      "learning_mode": "proposed_gate"
+      "learning_mode": "proposed_3phase"
     }
   ]
 }
@@ -81,7 +82,7 @@ Response:
 
 ### POST /api/learning-sessions
 
-対象概念の学習セッションを開始する。提案群では前提用語計画を生成し、統制群では通常チューター用セッションを作る。
+対象概念の学習セッションを開始する。両群とも前提小問3件を生成し、初期statusを `prerequisite` にする。
 
 Request:
 
@@ -98,18 +99,18 @@ Response:
 {
   "learning_session_id": "uuid",
   "group_condition": "proposed",
-  "status": "term_understanding",
+  "status": "prerequisite",
   "term_label": "Attention"
 }
 ```
 
 ### GET /api/learning-sessions/{session_id}
 
-現在の学習状態を返す。提案群では前提用語一覧、現在の用語、概念教材、attempt上限を返す。統制群では通常説明ターンを返す。
+現在の学習状態を返す。前提小問一覧、現在の小問、概念フェーズ1教材、概念フェーズ2の軽い条件、attempt上限を返す。統制群にはpretest診断や誤概念情報を返さない。
 
 ### POST /api/learning-sessions/{session_id}/prerequisites/{prerequisite_id}/attempts
 
-提案群の用語理解回答を採点する。
+前提小問の回答を採点する。提案群はfail時に再説明して同じ小問へ戻る。統制群はfailしても次小問へ進む。
 
 Request:
 
@@ -124,16 +125,16 @@ Response:
   "is_passed": true,
   "feedback": "...",
   "remediation_material": null,
-  "next_stage": "term_understanding",
-  "session_status": "term_understanding"
+  "next_stage": "prerequisite",
+  "session_status": "prerequisite"
 }
 ```
 
-2回fail時は `session_status=blocked` を返す。
+提案群で2回fail時は `session_status=blocked` を返す。統制群では1回回答すれば次小問へ進む。
 
-### POST /api/learning-sessions/{session_id}/concept-attempts
+### POST /api/learning-sessions/{session_id}/concept-phase1-attempts
 
-提案群の概念理解回答を採点する。
+概念フェーズ1の教材あり説明回答を採点する。
 
 Request:
 
@@ -149,18 +150,45 @@ Response:
   "feedback": "...",
   "missing_prerequisite_ids": ["uuid"],
   "review_prerequisite_ids": ["uuid"],
-  "next_stage": "term_understanding",
-  "session_status": "term_understanding"
+  "next_stage": "prerequisite",
+  "session_status": "prerequisite"
 }
 ```
 
-pass時は `session_status=completed` を返す。4回fail時は `session_status=failed` を返す。
+提案群ではpass時に `session_status=concept_phase2`、3回fail時に `session_status=failed_phase1` を返す。統制群ではpass/failに関係なく概念フェーズ2へ進む。
 
-## Control Learning APIs
+### POST /api/learning-sessions/{session_id}/concept-phase2-attempts
+
+概念フェーズ2の教材なし・軽い条件付き説明回答を採点する。
+
+Request:
+
+```json
+{ "learner_answer": "..." }
+```
+
+Response:
+
+```json
+{
+  "is_passed": false,
+  "feedback": "...",
+  "return_to_phase1": true,
+  "session_status": "concept_phase1"
+}
+```
+
+提案群ではpass時に `completed`、fail 1〜2回目に `concept_phase1`、3回fail時に `failed_phase2` を返す。統制群ではpass/failに関係なく `completed` にする。
+
+### POST /api/learning-sessions/{session_id}/concept-attempts
+
+旧互換API。参加者フローでは使わない。
+
+## Legacy Control Learning APIs
 
 ### POST /api/learning-sessions/{session_id}/control-turn
 
-統制群の通常AI説明と自己説明promptを返す。AI payloadにはRAG教材だけを含め、誤概念タイプや過去ログは含めない。
+旧統制群の通常AI説明と自己説明promptを返す。現行参加者フローでは使わない。AI payloadにはRAG教材と対象概念だけを含め、誤概念タイプや過去ログは含めない。
 
 ### POST /api/learning-sessions/{session_id}/control-answer
 

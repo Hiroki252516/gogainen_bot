@@ -7,8 +7,8 @@
 1. docsとseed方針を揃える
 2. DBモデルを追加する
 3. AIBackend契約を拡張し、Mockを先に通す
-4. backend APIを前提用語ゲート型へ接続する
-5. frontend学習画面をgroup_conditionで分岐する
+4. backend APIを3段階学習セッションへ接続する
+5. frontend学習画面をgroup_conditionで分岐し、両群3段階UIにする
 6. 評価指標とCSVを更新する
 7. Codex app-server実行を確認する
 
@@ -17,7 +17,7 @@
 現行実装では単一 `experiment.py` に寄せてよいが、責務は以下に分けて考える。
 
 - ExperimentService: 参加者、pretest、diagnosis、retest
-- LearningSessionService: proposed/control learning session
+- LearningSessionService: proposed/control 3-stage learning session
 - EvaluationService: recurrence, gate metrics
 - ExportService: CSV
 - AIBackendService: AI call logging and backend selection
@@ -53,22 +53,27 @@ Output:
 - all non-stable-correct terms
 - term_assignments with `is_learning_target = true`
 
-### Proposed Prerequisite Gate
+### Proposed 3-Stage Learning
 
 1. Create learning_session
 2. Generate 3 prerequisite_terms with RAG + pretest diagnosis
 3. Grade each term answer, max 2 attempts
-4. If all pass, generate concept material
-5. Grade concept answer, max 4 attempts
-6. Fail returns missing prerequisite + previous related term for review
-7. Completed/blocked/failed session is saved
+4. If all pass, generate concept phase1 material
+5. Grade phase1 answer, max 3 attempts
+6. Phase1 fail returns missing prerequisite + previous related term for review or retries phase1
+7. Phase1 pass generates phase2 prompt and light conditions
+8. Grade phase2 answer without showing material, max 3 attempts
+9. Phase2 fail 1-2 returns to phase1; phase2 fail 3 saves `failed_phase2`
+10. Completed/blocked/failed_phase1/failed_phase2 session is saved
 
 ### Control Learning
 
-1. Create learning_session and tutor_session
-2. Generate general RAG explanation without pretest diagnosis
-3. Save self explanation and general feedback
-4. Mark session completed
+1. Create learning_session
+2. Generate 3 general small questions with RAG and target concept only
+3. Save small-question answers; fail does not block progression
+4. Generate phase1 general material and grade once
+5. Generate phase2 prompt and grade once without adaptive return
+6. Mark session completed regardless of phase pass/fail
 
 ### Recurrence
 
@@ -92,9 +97,8 @@ POST /participants
   -> POST /learning-sessions
   -> GET /learning-sessions/{id}
   -> POST /learning-sessions/{id}/prerequisites/{pid}/attempts
-  -> POST /learning-sessions/{id}/concept-attempts
-  -> POST /learning-sessions/{id}/control-turn
-  -> POST /learning-sessions/{id}/control-answer
+  -> POST /learning-sessions/{id}/concept-phase1-attempts
+  -> POST /learning-sessions/{id}/concept-phase2-attempts
   -> GET /retest
   -> POST /score-retest
   -> POST /survey post
@@ -108,7 +112,7 @@ POST /participants
 - Do not leak internal labels to participant pages
 - Do not let AI decide final metrics
 - Do not let app-server failure auto-fallback to Mock in normal mode
-- Do not send proposed-only diagnosis/log information to control group
+- Do not send proposed-only diagnosis/log/return information to control group
 - Do not skip CSV export
 - Do not store auth tokens
 

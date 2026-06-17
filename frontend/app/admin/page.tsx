@@ -75,6 +75,9 @@ export default function AdminPage() {
                 <p>同種誤答再発率: {formatRate(group.same_misconception_recurrence_rate)}</p>
                 <p>前提用語通過率: {formatRate(group.prerequisite_pass_rate)}</p>
                 <p>概念理解通過率: {formatRate(group.concept_pass_rate)}</p>
+                <p>Phase1通過率: {formatRate(group.concept_phase1_pass_rate)}</p>
+                <p>Phase2成功率: {formatRate(group.concept_phase2_success_rate)}</p>
+                <p>Phase2再支援後成功率: {formatRate(group.phase2_after_retry_success_rate)}</p>
               </div>
             ))}
           </div>

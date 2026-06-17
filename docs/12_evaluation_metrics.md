@@ -43,12 +43,28 @@ passed_prerequisite_count / prerequisite_count
 
 ### 4. 概念理解通過率
 
-提案群のみ。
-
 ```text
 concept_pass_rate =
 completed_learning_session_count / learning_target_count
 ```
+
+両群で、最終的に3段階学習セッションが `completed` になった割合として扱う。
+
+### 5. 概念フェーズ1通過率
+
+```text
+concept_phase1_pass_rate =
+phase1_passed_session_count / phase1_attempted_session_count
+```
+
+### 6. 教材なし概念説明成功率
+
+```text
+concept_phase2_success_rate =
+phase2_passed_session_count / phase2_attempted_session_count
+```
+
+概念フェーズ2は主評価ではないが、学習セッション内で教材なしに説明できたかを見る重要な補助指標である。
 
 ## 補助指標
 
@@ -75,6 +91,28 @@ unknown_in_retest_count / initial_unknown_count
 
 事後アンケートの使いやすさ、分かりやすさ、ヒント量の適切さを補助指標として扱う。事前アンケートと事前自信度は実施しない。
 
+### フェーズ2再支援指標
+
+```text
+phase2_after_retry_success_rate =
+phase2_failed_then_later_passed_count / phase2_once_failed_session_count
+```
+
+```text
+phase2_max_retry_rate =
+phase2_third_attempt_session_count / phase2_attempted_session_count
+```
+
+```text
+phase2_pass_retest_correct_rate =
+phase2_pass_and_retest_correct_count / phase2_pass_session_count
+```
+
+```text
+phase2_fail_retest_correct_rate =
+phase2_fail_and_retest_correct_count / phase2_fail_session_count
+```
+
 ## 旧指標の扱い
 
 以下は旧設計・将来拡張用の互換列として残すが、現行参加者フローでは原則nullになる。
@@ -96,6 +134,7 @@ unknown_in_retest_count / initial_unknown_count
 - 平均same_misconception_recurrence_rate
 - 平均prerequisite_pass_rate
 - 平均concept_pass_rate
+- 平均concept_phase2_success_rate
 
 小規模な卒研では統計検定より、参加者別・用語別の変化を説明できるCSVを重視する。
 

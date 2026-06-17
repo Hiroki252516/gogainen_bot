@@ -28,8 +28,8 @@
 2. 診断待ち
 3. 学習対象確認
 4. 学習セッション
-   - proposed: 前提用語理解、概念理解
-   - control: 通常AI説明、自己説明確認
+   - proposed: 前提用語3件、概念フェーズ1教材あり、概念フェーズ2教材なし
+   - control: 一般小問3件、概念フェーズ1一般説明、概念フェーズ2教材なし確認
 5. 即時再テスト
 6. 事後アンケート
 7. 終了
@@ -59,7 +59,8 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 - AI出力schema validationに失敗した
 - forbidden_help_given = true
 - 前提用語計画が教材範囲から外れている
-- 概念理解fail理由が明らかに不適切
+- phase1/phase2のfail理由が明らかに不適切
+- 統制群AI payloadに誤概念・pretest選択肢・学習ログが混入している
 
 手動修正時:
 
@@ -101,6 +102,8 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 - misconception_typeが含まれる
 - recurrence_flagが含まれる
 - proposedの前提用語pass/failが含まれる
+- phase1/phase2のattempt_index、pass/fail、retryが含まれる
+- evaluation_summaryにphase2補助指標が含まれる
 
 ## Research Notes During Operation
 

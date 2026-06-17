@@ -71,10 +71,29 @@ class MockAIBackend:
                     "material": f"{prereq}は、{label}を理解するための前提です。教材の内容に沿って、役割と関係を確認します。",
                     "check_question": f"{prereq}が{label}の理解にどう関係するか、自分の言葉で説明してください。",
                     "expected_answer": f"{prereq}の役割と、{label}との関係を説明できている。",
+                    "generation_reason": f"{label}の説明に必要な基礎要素として選びました。",
                 }
                 for prereq in terms[:3]
             ],
             "plan_rationale": f"{label}の理解に必要な前提をMockAIBackendが3件選びました。",
+        }
+
+    async def generate_control_prerequisite_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        term = payload["target_term"]
+        label = term["label"]
+        items = [f"{label}の基本", f"{label}の役割", f"{label}の注意点"]
+        return {
+            "prerequisites": [
+                {
+                    "term_label": item,
+                    "material": f"{item}について、教材に基づく一般的な確認をします。",
+                    "check_question": f"{item}を自分の言葉で短く説明してください。",
+                    "expected_answer": f"{item}を教材の範囲で説明できている。",
+                    "generation_reason": "統制群のため個別診断を使わず、教材範囲の一般小問として生成しました。",
+                }
+                for item in items
+            ],
+            "plan_rationale": f"{label}について、診断情報を使わず一般小問を3件生成しました。",
         }
 
     async def grade_prerequisite_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -88,9 +107,15 @@ class MockAIBackend:
             "remediation_material": None if is_passed else "より簡単に言うと、この前提用語が何を表し、対象概念のどの部分に関係するかを一文で整理します。例も使ってかまいません。",
             "core_elements_covered": ["役割", "関係"] if is_passed else [],
             "major_errors": [] if is_passed else ["説明が短い、または関係が不明確"],
+            "rubric_scores": {
+                "core_meaning": 0.8 if is_passed else 0.3,
+                "relation_to_target": 0.8 if is_passed else 0.2,
+                "misconception_absence": 0.9 if is_passed else 0.5,
+                "explanation_clarity": 0.8 if is_passed else 0.3,
+            },
         }
 
-    async def generate_concept_material(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def generate_concept_phase1_material(self, payload: dict[str, Any]) -> dict[str, Any]:
         term = payload["target_term"]
         prereq_labels = [item["term_label"] for item in payload.get("prerequisites", [])]
         joined = "、".join(prereq_labels)
@@ -100,7 +125,10 @@ class MockAIBackend:
             "expected_answer": f"{joined}を使い、{term['label']}の役割を説明できている。",
         }
 
-    async def grade_concept_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def generate_concept_material(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.generate_concept_phase1_material(payload)
+
+    async def grade_concept_phase1_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
         answer = payload.get("learner_answer", "")
         prereq_labels = [item["term_label"] for item in payload.get("prerequisites", [])]
         used = [label for label in prereq_labels if label in answer]
@@ -119,6 +147,46 @@ class MockAIBackend:
             "review_prerequisite_labels": [] if is_passed else review[:2],
             "core_elements_covered": used,
             "major_errors": [] if is_passed else ["前提用語の利用不足"],
+            "rubric_scores": {
+                "core_concept": 0.85 if is_passed else 0.4,
+                "prerequisite_use": 0.8 if is_passed else 0.3,
+                "misconception_absence": 0.9 if is_passed else 0.5,
+                "explanation_clarity": 0.8 if is_passed else 0.4,
+            },
+        }
+
+    async def grade_concept_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.grade_concept_phase1_answer(payload)
+
+    async def generate_concept_phase2_prompt(self, payload: dict[str, Any]) -> dict[str, Any]:
+        term = payload["target_term"]
+        prereq_labels = [item["term_label"] for item in payload.get("prerequisites", [])]
+        joined = "、".join(prereq_labels[:3])
+        return {
+            "phase2_prompt": f"教材を見ずに、{term['label']}を自分の言葉で説明してください。",
+            "light_conditions": f"{joined}のうち少なくとも2つを使い、暗記した文ではなく仕組みとして説明してください。",
+            "expected_answer": f"{joined}を使って、{term['label']}の仕組みと役割を説明できている。",
+        }
+
+    async def grade_concept_phase2_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        answer = payload.get("learner_answer", "")
+        prereq_labels = [item["term_label"] for item in payload.get("prerequisites", [])]
+        used = [label for label in prereq_labels if label in answer]
+        explicit_pass = any(marker in answer for marker in ["phase2pass", "独立", "教材なし", "自力"])
+        is_passed = explicit_pass or (len(answer.strip()) >= 24 and len(used) >= max(1, min(2, len(prereq_labels))))
+        return {
+            "is_passed": is_passed,
+            "score": 0.86 if is_passed else 0.38,
+            "feedback": "教材なしでも前提用語を使って説明できています。" if is_passed else "教材なしでは説明のつながりが不足しています。もう一度教材ありの整理に戻ります。",
+            "independent_explanation_success": is_passed,
+            "return_to_phase1": not is_passed,
+            "rubric_scores": {
+                "core_concept": 0.86 if is_passed else 0.38,
+                "independent_reconstruction": 0.85 if is_passed else 0.3,
+                "condition_following": 0.8 if is_passed else 0.35,
+                "misconception_absence": 0.9 if is_passed else 0.5,
+                "explanation_clarity": 0.82 if is_passed else 0.35,
+            },
         }
 
     async def generate_control_learning_turn(self, payload: dict[str, Any]) -> dict[str, Any]:

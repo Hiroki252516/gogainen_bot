@@ -12,7 +12,7 @@
 - M3 option
 - unknown option
 
-添付問題の `L4` は旧設計の最強支援表記として記録するが、現行の前提用語ゲート型学習ではL3/L2/L1を使わない。システム、DB、AI schemaには `L4` を追加しない。
+添付問題の `L4` は旧設計の最強支援表記として記録するが、現行の3段階学習ではL3/L2/L1を使わない。システム、DB、AI schemaには `L4` を追加しない。
 
 再テストは正式問題を `retest_v1` としてseedする。L0確認、転移テストは現行参加者フローから外すため、`l0_temporary_v1`, `transfer_temporary_v1` はseedしないか、既存DBに残る場合は非active化する。
 

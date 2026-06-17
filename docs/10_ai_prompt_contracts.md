@@ -11,7 +11,7 @@ AIには必ず構造化出力を要求する。通常実行は `AIBackend` 経�
 - 事前テストと再テストでは理由欄・自信度欄がない前提で採点する
 - テスト問題の正解を直接教えない
 - `rag_context` がある場合は教材コンテキストを優先し、教材にない内容を推測で断定しない
-- 統制群では誤概念タイプ、過去ログ、前提用語ゲート情報を教授に使わない
+- 統制群では誤概念タイプ、事前テスト選択肢、過去ログ、適応的戻り情報を教授に使わない
 
 ## Diagnosis
 
@@ -71,14 +71,52 @@ Result:
       "term_label": "トークン",
       "material": "...",
       "check_question": "...",
-      "expected_answer": "..."
+      "expected_answer": "...",
+      "generation_reason": "対象概念理解に必要な基礎単位だから"
     }
   ],
   "plan_rationale": "..."
 }
 ```
 
-前提用語は原則3件。多すぎる場合は、対象概念を理解するために不可欠なものへ絞る。
+前提用語は実装上ちょうど3件に固定する。
+
+## Control: generate_control_prerequisite_plan
+
+統制群の小問3件を生成する。これは前提用語gateではなく、RAG教材に基づく一般的な確認小問である。
+
+Payloadには以下だけを含める。
+
+- participant_id
+- group_condition
+- target_term
+- rag_context
+
+Payloadに含めない。
+
+- pretest_diagnosis
+- selected_option_body
+- misconception_type
+- learner_state
+- previous_learning_logs
+- adaptive_return_state
+
+Result:
+
+```json
+{
+  "prerequisites": [
+    {
+      "term_label": "確認1",
+      "material": "...",
+      "check_question": "...",
+      "expected_answer": "...",
+      "generation_reason": "教材に基づく一般確認"
+    }
+  ],
+  "plan_rationale": "統制群のため個別診断は使わず、対象概念の基本説明を確認する。"
+}
+```
 
 ## Proposed: grade_prerequisite_answer
 
@@ -99,9 +137,11 @@ Result:
 
 pass基準は中程度。中核要素が含まれ、重大な誤りがなければpass。
 
-## Proposed: generate_concept_material
+統制群でも同じ採点schemaを使う。ただしfailしても次小問へ進む。
 
-全前提用語pass後に、対象概念教材と説明promptを生成する。
+## Proposed/Control: generate_concept_phase1_material
+
+前提用語/小問3件の後に、対象概念教材と説明promptを生成する。提案群payloadにはRAG、事前テスト診断、選択誤答、学習ログを含める。統制群payloadにはRAGと対象概念だけを含める。
 
 Result:
 
@@ -113,9 +153,9 @@ Result:
 }
 ```
 
-## Proposed: grade_concept_answer
+## Proposed/Control: grade_concept_phase1_answer
 
-対象概念理解チェックを採点する。
+教材あり概念理解チェックを採点する。提案群では最大3回、統制群では1回だけ採点し、pass/failに関係なくフェーズ2へ進む。
 
 Result:
 
@@ -131,11 +171,49 @@ Result:
 }
 ```
 
-fail時は、不足用語とその直前の関連用語を返す。backendは最大4回の上限を管理する。
+提案群のfail時は、不足用語とその直前の関連用語を返す。backendは最大3回の上限を管理する。
 
-## Control: generate_control_learning_turn
+## Proposed/Control: generate_concept_phase2_prompt
 
-統制群の通常AI説明を生成する。
+教材本文なしの確認promptと軽い条件を生成する。提案群ではフェーズ1の成功内容を踏まえてよい。統制群では対象概念とRAGだけを使う。
+
+Result:
+
+```json
+{
+  "phase2_prompt": "教材を見ずに、...を説明してください。",
+  "light_conditions": "前提用語を2つ以上使い、仕組みを中心に説明してください。",
+  "expected_answer": "..."
+}
+```
+
+## Proposed/Control: grade_concept_phase2_answer
+
+教材なし概念説明を採点する。
+
+Result:
+
+```json
+{
+  "is_passed": false,
+  "score": 0.45,
+  "feedback": "...",
+  "independent_explanation_success": false,
+  "return_to_phase1": true,
+  "rubric_scores": {
+    "core_concept": 0.4,
+    "independent_reconstruction": 0.3,
+    "condition_following": 0.6,
+    "misconception_absence": 0.5
+  }
+}
+```
+
+提案群ではpassなら `completed`、fail 1〜2回目はフェーズ1へ戻り、3回目failで `failed_phase2` にする。統制群では1回だけ採点し、pass/failに関係なく `completed` にする。
+
+## Legacy Control: generate_control_learning_turn
+
+旧互換API。現行参加者フローでは、統制群も `generate_control_prerequisite_plan` とconcept phase APIを使う。
 
 Payloadには以下だけを含める。
 
@@ -168,7 +246,7 @@ Result:
 
 ## Control: grade_control_learning_answer
 
-統制群の自己説明に一般的フィードバックを返す。
+旧互換API。統制群の自己説明に一般的フィードバックを返す。
 
 Result:
 
@@ -192,8 +270,9 @@ Result:
 - known M optionならそのMを返す
 - unknown optionなら `unknown`
 - 前提用語計画は常に3件返す
+- 統制群小問計画も常に3件返す
 - 前提用語回答は「pass」「十分」「関係」「重み」「事前」「事後」などの語を含む場合にpassしやすくする
-- 2回failや4回failの境界をテストできるよう、短い回答はfailにする
+- 2回fail、フェーズ1 3回fail、フェーズ2 3回failの境界をテストできるよう、短い回答はfailにする
 - 統制群payloadに誤概念情報が混入した場合はテストで検出する
 
 ## Forbidden Help Detection

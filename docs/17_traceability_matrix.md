@@ -8,8 +8,8 @@
 |---|---|---|
 | 専門用語は「知っているつもり」でも誤って理解する | `00`, `03` | pretest diagnosis, misconception_type |
 | AIを使うかではなく支援設計を比較する | `01`, `02` | group_condition control/proposed |
-| 統制群は通常AI説明 | `04`, `08`, `10` | control learning APIs |
-| 提案群は前提用語ゲート型 | `02`, `04`, `07` | learning_sessions, prerequisite_terms |
+| 統制群は非適応の3段階学習 | `04`, `08`, `10` | control learning APIs, learning_sessions |
+| 提案群は3段階適応型 | `02`, `04`, `07` | learning_sessions, prerequisite_terms, concept_understanding_attempts |
 | 学習中にM再判定やL更新をしない | `04`, `10` | no dynamic scaffolding update |
 | 問題をそのまま使い回さない | `11` | construct_key, variant_key |
 | 再テストを最終テストにする | `02`, `09`, `12` | score-retest -> post_survey |
@@ -35,19 +35,26 @@
 
 ### RQ2
 
-前提用語理解から概念理解へ段階的に支援を減らすことで、支援なし再テストで正答できるか。
+前提用語理解、教材あり概念理解、教材なし概念説明へ段階的に支援を減らすことで、支援なし再テストで正答できるか。
 
 必要データ:
 
 - prerequisite_terms
 - term_understanding_attempts
 - concept_understanding_attempts
+- concept_phase
+- material_shown
+- independent_explanation_success
+- phase2_retry_count
 - retest attempts
 
 主要出力:
 
 - prerequisite_pass_rate
 - concept_pass_rate
+- concept_phase1_pass_rate
+- concept_phase2_success_rate
+- phase2_after_retry_success_rate
 - retest_score
 
 ### RQ3
@@ -75,7 +82,7 @@ AI・情報系専門用語では、どの概念・誤概念タイプが再発し
 | AI診断 | attempts, ai_call_logs | DiagnosisService | /diagnosing, /admin |
 | 学習対象 | term_assignments, learner_states | ExperimentService | /learning-targets |
 | 提案群学習 | learning_sessions, prerequisite_terms, term_understanding_attempts, concept_understanding_attempts | LearningSessionService | /learning/[termSlug] |
-| 統制群学習 | tutor_sessions, tutor_turns | LearningSessionService | /learning/[termSlug] |
+| 統制群学習 | learning_sessions, prerequisite_terms, term_understanding_attempts, concept_understanding_attempts, tutor_sessions/tutor_turns旧互換 | LearningSessionService | /learning/[termSlug] |
 | 再発 | recurrence_events | EvaluationService | /admin |
 | 評価 | evaluation_summaries | EvaluationService | /admin |
 | CSV | export_jobs | ExportService | /admin |
@@ -84,11 +91,12 @@ AI・情報系専門用語では、どの概念・誤概念タイプが再発し
 
 | Behavior | control | proposed |
 |---|---|---|
-| AI explanation | general RAG explanation | prerequisite-gated tutoring |
+| AI explanation | RAG-based small questions + general phase1/phase2 | prerequisite + phase1/phase2 adaptive tutoring |
 | Uses pretest log for tutoring | no | yes |
 | Uses M type for tutoring | no | yes |
-| Generates prerequisite terms | no | yes |
-| Gates concept by prerequisite pass | no | yes |
+| Generates three prerequisite/small-question items | yes, general only | yes, diagnosis-aware |
+| Blocks on prerequisite fail | no | yes |
+| Returns from phase2 to phase1 | no | yes |
 | Stores diagnosis | yes | yes |
 | Stores AI logs | yes | yes |
 | Includes in evaluation | yes | yes |

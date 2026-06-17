@@ -13,8 +13,9 @@ SQLite/PostgreSQL + SQLAlchemyで実装する。すべてのテーブルに `cre
 
 - `pretest`
 - `learning`
-- `term_understanding`
-- `concept_understanding`
+- `prerequisite` 学習セッション内部段階
+- `concept_phase1` 学習セッション内部段階
+- `concept_phase2` 学習セッション内部段階
 - `retest`
 - `post_survey`
 - `l0_check` 旧互換
@@ -24,11 +25,14 @@ SQLite/PostgreSQL + SQLAlchemyで実装する。すべてのテーブルに `cre
 ### learning_session_status
 
 - `not_started`
-- `term_understanding`
-- `concept_understanding`
+- `prerequisite`
+- `concept_phase1`
+- `concept_phase2`
 - `completed`
 - `blocked`
-- `failed`
+- `failed_phase1`
+- `failed_phase2`
+- `failed` 旧互換
 
 ### misconception_type
 
@@ -148,7 +152,7 @@ SQLite/PostgreSQL + SQLAlchemyで実装する。すべてのテーブルに `cre
 
 ### learning_sessions
 
-提案群・統制群の1対象概念あたりの学習セッションを保存する。
+提案群・統制群の1対象概念あたりの学習セッションを保存する。現行v2スコープでは、両群とも `prerequisite -> concept_phase1 -> concept_phase2` を通る。提案群だけが誤概念・事前テスト診断・過去ログを使って戻り制御を行う。
 
 - id UUID PRIMARY KEY
 - participant_id UUID REFERENCES participants(id)
@@ -158,14 +162,25 @@ SQLite/PostgreSQL + SQLAlchemyで実装する。すべてのテーブルに `cre
 - status TEXT NOT NULL
 - current_prerequisite_index INT DEFAULT 0
 - term_pass_count INT DEFAULT 0
-- concept_attempt_count INT DEFAULT 0
+- concept_attempt_count INT DEFAULT 0 旧互換
+- concept_phase1_attempt_count INT DEFAULT 0
+- concept_phase2_attempt_count INT DEFAULT 0
+- phase2_retry_count INT DEFAULT 0
+- concept_material TEXT NULL
+- concept_prompt TEXT NULL
+- concept_expected_answer TEXT NULL
+- phase2_prompt TEXT NULL
+- phase2_light_conditions TEXT NULL
+- phase2_expected_answer TEXT NULL
+- last_feedback TEXT NULL
+- blocked_reason TEXT NULL
 - completed_at TIMESTAMP NULL
 - created_at TIMESTAMP NOT NULL
 - updated_at TIMESTAMP NOT NULL
 
 ### prerequisite_terms
 
-提案群でAIが生成した前提用語を保存する。
+提案群ではAIが生成した前提用語、統制群ではRAG教材に基づく一般小問を保存する。両群とも3件固定。統制群ではpass/failを保存するが、failしても戻り制御には使わない。
 
 - id UUID PRIMARY KEY
 - learning_session_id UUID REFERENCES learning_sessions(id)
@@ -173,6 +188,7 @@ SQLite/PostgreSQL + SQLAlchemyで実装する。すべてのテーブルに `cre
 - material TEXT NOT NULL
 - check_question TEXT NOT NULL
 - expected_answer TEXT NOT NULL
+- generation_reason TEXT NULL
 - display_order INT NOT NULL
 - status TEXT NOT NULL DEFAULT `not_started`
 - attempt_count INT DEFAULT 0
@@ -183,7 +199,7 @@ SQLite/PostgreSQL + SQLAlchemyで実装する。すべてのテーブルに `cre
 
 ### term_understanding_attempts
 
-提案群の前提用語理解チェック回答を保存する。
+前提用語/小問の記述回答を保存する。提案群ではgate判定、統制群ではログ保存として扱う。
 
 - id UUID PRIMARY KEY
 - prerequisite_term_id UUID REFERENCES prerequisite_terms(id)
@@ -200,26 +216,32 @@ SQLite/PostgreSQL + SQLAlchemyで実装する。すべてのテーブルに `cre
 
 ### concept_understanding_attempts
 
-提案群の対象概念理解チェック回答を保存する。
+概念フェーズ1/フェーズ2の記述回答を保存する。フェーズ1は教材あり、フェーズ2は教材本文なしで軽い条件だけを表示する。
 
 - id UUID PRIMARY KEY
 - learning_session_id UUID REFERENCES learning_sessions(id)
 - participant_id UUID REFERENCES participants(id)
 - attempt_index INT NOT NULL
+- concept_phase TEXT NOT NULL DEFAULT `phase1`
 - concept_material TEXT NOT NULL
 - prompt TEXT NOT NULL
+- material_shown BOOLEAN NOT NULL DEFAULT true
+- light_condition_text TEXT NULL
 - learner_answer TEXT NOT NULL
 - is_passed BOOLEAN NOT NULL
 - score FLOAT NULL
 - feedback TEXT NOT NULL
 - missing_prerequisite_ids JSON NULL
 - review_prerequisite_ids JSON NULL
+- independent_explanation_success BOOLEAN NULL
+- return_to_phase1 BOOLEAN NOT NULL DEFAULT false
+- rubric_scores JSON NULL
 - grading_json JSON NULL
 - created_at TIMESTAMP NOT NULL
 
 ### tutor_sessions / tutor_turns
 
-統制群の通常AI説明と自己説明確認、および旧互換ログを保存する。提案群のゲート型学習は `learning_sessions` 系テーブルを主ログにする。
+旧互換ログ。現行参加者フローの統制群も `learning_sessions` 系テーブルを主ログにする。既存CSV互換や旧API切り分けのため残す。
 
 ### recurrence_events
 
@@ -231,9 +253,14 @@ purpose values:
 
 - diagnose_answer
 - generate_prerequisite_plan
+- generate_control_prerequisite_plan
 - grade_prerequisite_answer
-- generate_concept_material
-- grade_concept_answer
+- generate_concept_phase1_material
+- grade_concept_phase1_answer
+- generate_concept_phase2_prompt
+- grade_concept_phase2_answer
+- 旧互換: generate_concept_material
+- 旧互換: grade_concept_answer
 - generate_control_learning_turn
 - grade_control_learning_answer
 - grade_response
@@ -257,6 +284,12 @@ purpose values:
 - unknown_persistence_rate FLOAT NULL
 - prerequisite_pass_rate FLOAT NULL
 - concept_pass_rate FLOAT NULL
+- concept_phase1_pass_rate FLOAT NULL
+- concept_phase2_success_rate FLOAT NULL
+- phase2_after_retry_success_rate FLOAT NULL
+- phase2_max_retry_rate FLOAT NULL
+- phase2_pass_retest_correct_rate FLOAT NULL
+- phase2_fail_retest_correct_rate FLOAT NULL
 - learning_target_count INT NOT NULL DEFAULT 0
 - completed BOOLEAN NOT NULL DEFAULT false
 - created_at TIMESTAMP NOT NULL

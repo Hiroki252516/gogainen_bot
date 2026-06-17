@@ -32,7 +32,7 @@ export default function LearningTargetsPage() {
                 {i + 1}. {target.term_label}
               </strong>
               <p>{target.summary_for_learner}</p>
-              <span className="muted">{target.learning_mode === "proposed_gate" ? "前提用語から確認" : "通常説明で確認"}</span>
+              <span className="muted">{target.learning_mode === "proposed_3phase" ? "3段階で確認" : "通常の3段階確認"}</span>
             </div>
           ))}
         </div>

@@ -40,12 +40,12 @@ Codex app-server
 |---|---|
 | ExperimentService | 参加者作成、進捗管理、群割当、フェーズ遷移 |
 | DiagnosisService | pretest選択肢に基づく初期診断、学習対象選定 |
-| LearningSessionService | control/proposedの学習セッション、前提用語ゲート、統制群通常説明 |
-| EvaluationService | 再テスト採点、再発判定、ゲート指標、群別集計 |
+| LearningSessionService | control/proposedの3段階学習セッション、提案群の適応的戻り、統制群の非適応小問 |
+| EvaluationService | 再テスト採点、再発判定、phase1/phase2指標、群別集計 |
 | ExportService | CSV作成、エクスポート履歴管理 |
 | AIBackendService | AIBackend実装の選択、AI呼び出しログ保存 |
 
-旧 `ScaffoldingService` 相当のL3/L2/L1更新は現行フローでは使わない。足場掛けは、提案群の前提用語理解、概念理解、再テストという段階構造で実装する。
+旧 `ScaffoldingService` 相当のL3/L2/L1更新は現行フローでは使わない。足場掛けは、提案群の前提用語理解、教材あり概念理解、教材なし概念説明、再テストという段階構造で実装する。
 
 ## AIBackend抽象化
 
@@ -55,11 +55,15 @@ AI呼び出しは必ず抽象化する。
 class AIBackend(Protocol):
     async def diagnose_answer(self, payload: dict) -> dict: ...
     async def generate_prerequisite_plan(self, payload: dict) -> dict: ...
+    async def generate_control_prerequisite_plan(self, payload: dict) -> dict: ...
     async def grade_prerequisite_answer(self, payload: dict) -> dict: ...
+    async def generate_concept_phase1_material(self, payload: dict) -> dict: ...
+    async def grade_concept_phase1_answer(self, payload: dict) -> dict: ...
+    async def generate_concept_phase2_prompt(self, payload: dict) -> dict: ...
+    async def grade_concept_phase2_answer(self, payload: dict) -> dict: ...
+    # legacy compatibility
     async def generate_concept_material(self, payload: dict) -> dict: ...
     async def grade_concept_answer(self, payload: dict) -> dict: ...
-    async def generate_control_learning_turn(self, payload: dict) -> dict: ...
-    async def grade_control_learning_answer(self, payload: dict) -> dict: ...
     async def grade_response(self, payload: dict) -> dict: ...
 ```
 
@@ -103,9 +107,12 @@ sequenceDiagram
   F->>B: POST prerequisite attempt
   B->>AI: grade_prerequisite_answer
   B->>DB: term_understanding_attempt
-  F->>B: POST concept attempt
-  B->>AI: grade_concept_answer
-  B->>DB: concept_understanding_attempt
+  F->>B: POST phase1 attempt
+  B->>AI: grade_concept_phase1_answer
+  B->>DB: concept_understanding_attempt phase1
+  F->>B: POST phase2 attempt
+  B->>AI: grade_concept_phase2_answer
+  B->>DB: concept_understanding_attempt phase2
 ```
 
 ### 統制群学習セッション
@@ -117,11 +124,14 @@ sequenceDiagram
   participant DB as DB
   participant AI as AIBackend
   F->>B: POST /api/learning-sessions
-  B->>AI: generate_control_learning_turn(payload + rag_context only)
-  B->>DB: tutor_session, tutor_turn
-  F->>B: POST control answer
-  B->>AI: grade_control_learning_answer
-  B->>DB: tutor_turn feedback
+  B->>AI: generate_control_prerequisite_plan(payload + rag_context only)
+  B->>DB: learning_session, prerequisite_terms
+  F->>B: POST small-question attempts
+  B->>AI: grade_prerequisite_answer
+  B->>DB: term_understanding_attempt
+  F->>B: POST phase1/phase2 attempts
+  B->>AI: grade_concept_phase1_answer / grade_concept_phase2_answer
+  B->>DB: concept_understanding_attempt
 ```
 
 ## 研究ロジックとAIの分離

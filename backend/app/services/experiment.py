@@ -41,7 +41,11 @@ from app.rag import retrieve_rag_context
 
 PUBLIC_LEVEL = {"L3": "しっかり確認", "L2": "観点を確認", "L1": "自分で整理", "L0": "ヒントなし"}
 TERM_ATTEMPT_LIMIT = 2
-CONCEPT_ATTEMPT_LIMIT = 4
+CONTROL_TERM_ATTEMPT_LIMIT = 1
+PHASE1_ATTEMPT_LIMIT = 3
+PHASE2_ATTEMPT_LIMIT = 3
+CONCEPT_ATTEMPT_LIMIT = PHASE1_ATTEMPT_LIMIT
+TERMINAL_LEARNING_STATUSES = {"completed", "blocked", "failed", "failed_phase1", "failed_phase2"}
 
 
 def _rag_query(*parts: object) -> str:
@@ -320,7 +324,7 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
         for session in db.query(LearningSession)
         .filter(
             LearningSession.participant_id == participant.id,
-            LearningSession.status.in_(("completed", "blocked", "failed")),
+            LearningSession.status.in_(tuple(TERMINAL_LEARNING_STATUSES)),
         )
         .all()
     }
@@ -338,7 +342,7 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
             "term_label": term.label,
             "summary_for_learner": state.state_summary or "この用語を重点的に確認します。",
             "current_scaffolding_level_for_display": PUBLIC_LEVEL.get(state.scaffolding_level, "確認"),
-            "learning_mode": "proposed_gate" if participant.group_condition == "proposed" else "control_general",
+            "learning_mode": "proposed_3phase" if participant.group_condition == "proposed" else "control_3phase",
         }
         for _, term, state in rows
         if term.id not in terminal_term_ids
@@ -392,16 +396,17 @@ def _prerequisite_rows(db: Session, session_id: str) -> list[PrerequisiteTerm]:
     )
 
 
-def _public_prerequisite(row: PrerequisiteTerm) -> dict[str, Any]:
+def _public_prerequisite(row: PrerequisiteTerm, group_condition: str) -> dict[str, Any]:
     return {
         "prerequisite_id": row.id,
         "term_label": row.term_label,
         "material": row.material,
         "check_question": row.check_question,
+        "generation_reason": row.generation_reason,
         "display_order": row.display_order,
         "status": row.status,
         "attempt_count": row.attempt_count,
-        "max_attempts": TERM_ATTEMPT_LIMIT,
+        "max_attempts": TERM_ATTEMPT_LIMIT if group_condition == "proposed" else CONTROL_TERM_ATTEMPT_LIMIT,
         "last_feedback": row.last_feedback,
         "remediation_material": row.remediation_material,
     }
@@ -420,13 +425,12 @@ async def create_learning_session(db: Session, participant_id: str, term_slug: s
         return existing
 
     count = db.query(func.count(LearningSession.id)).filter_by(participant_id=participant.id, term_id=term.id).scalar() or 0
-    status = "term_understanding" if participant.group_condition == "proposed" else "control_learning"
     session = LearningSession(
         participant_id=participant.id,
         term_id=term.id,
         group_condition=participant.group_condition,
         session_index=count + 1,
-        status=status,
+        status="prerequisite",
     )
     db.add(session)
     db.commit()
@@ -442,19 +446,29 @@ async def create_learning_session(db: Session, participant_id: str, term_slug: s
             "rag_context": _learning_rag_context(term, context.get("selected_option_body"), context.get("selection_reason")),
         }
         result = await _ai_call(db, "generate_prerequisite_plan", payload)
-        prerequisites = result.get("prerequisites") or []
-        for index, item in enumerate(prerequisites[:3], start=1):
-            db.add(
-                PrerequisiteTerm(
-                    learning_session_id=session.id,
-                    term_label=item["term_label"],
-                    material=item["material"],
-                    check_question=item["check_question"],
-                    expected_answer=item["expected_answer"],
-                    display_order=index,
-                )
+    else:
+        payload = {
+            "participant_id": participant.id,
+            "group_condition": "control",
+            "target_term": {"slug": term.slug, "label": term.label, "description": term.description},
+            "rag_context": _learning_rag_context(term),
+        }
+        result = await _ai_call(db, "generate_control_prerequisite_plan", payload)
+
+    prerequisites = result.get("prerequisites") or []
+    for index, item in enumerate(prerequisites[:3], start=1):
+        db.add(
+            PrerequisiteTerm(
+                learning_session_id=session.id,
+                term_label=item["term_label"],
+                material=item["material"],
+                check_question=item["check_question"],
+                expected_answer=item["expected_answer"],
+                generation_reason=item.get("generation_reason"),
+                display_order=index,
             )
-        db.commit()
+        )
+    db.commit()
     return session
 
 
@@ -465,7 +479,10 @@ def learning_session_state(db: Session, session_id: str) -> dict[str, Any]:
     participant = get_participant(db, session.participant_id)
     term = db.get(Term, session.term_id)
     prerequisites = _prerequisite_rows(db, session.id)
-    current = next((row for row in prerequisites if row.status != "passed"), None)
+    if session.group_condition == "proposed":
+        current = next((row for row in prerequisites if row.status != "passed"), None)
+    else:
+        current = next((row for row in prerequisites if row.status in {"not_started", "review"}), None)
     return {
         "learning_session_id": session.id,
         "participant_id": participant.id,
@@ -474,48 +491,146 @@ def learning_session_state(db: Session, session_id: str) -> dict[str, Any]:
         "term_slug": term.slug,
         "term_label": term.label,
         "term_description": term.description,
-        "prerequisites": [_public_prerequisite(row) for row in prerequisites],
+        "prerequisites": [_public_prerequisite(row, session.group_condition) for row in prerequisites],
         "current_prerequisite_id": current.id if current else None,
         "concept": {
             "material": session.concept_material,
             "prompt": session.concept_prompt,
-            "attempt_count": session.concept_attempt_count,
-            "max_attempts": CONCEPT_ATTEMPT_LIMIT,
+            "attempt_count": session.concept_phase1_attempt_count,
+            "max_attempts": PHASE1_ATTEMPT_LIMIT,
+            "phase1": {
+                "material": session.concept_material,
+                "prompt": session.concept_prompt,
+                "expected_answer": session.concept_expected_answer,
+                "attempt_count": session.concept_phase1_attempt_count,
+                "max_attempts": PHASE1_ATTEMPT_LIMIT if session.group_condition == "proposed" else 1,
+            },
+            "phase2": {
+                "prompt": session.phase2_prompt,
+                "light_conditions": session.phase2_light_conditions,
+                "expected_answer": session.phase2_expected_answer,
+                "attempt_count": session.concept_phase2_attempt_count,
+                "retry_count": session.phase2_retry_count,
+                "max_attempts": PHASE2_ATTEMPT_LIMIT if session.group_condition == "proposed" else 1,
+            },
         }
-        if session.concept_material or session.status == "concept_understanding"
+        if session.concept_material or session.phase2_prompt or session.status in {"concept_phase1", "concept_phase2"}
         else None,
-        "limits": {"term_max_attempts": TERM_ATTEMPT_LIMIT, "concept_max_attempts": CONCEPT_ATTEMPT_LIMIT},
+        "limits": {
+            "term_max_attempts": TERM_ATTEMPT_LIMIT if session.group_condition == "proposed" else CONTROL_TERM_ATTEMPT_LIMIT,
+            "concept_phase1_max_attempts": PHASE1_ATTEMPT_LIMIT if session.group_condition == "proposed" else 1,
+            "concept_phase2_max_attempts": PHASE2_ATTEMPT_LIMIT if session.group_condition == "proposed" else 1,
+        },
         "last_feedback": session.last_feedback,
         "blocked_reason": session.blocked_reason,
     }
 
 
-async def _ensure_concept_material(db: Session, session: LearningSession) -> None:
-    if session.concept_material:
-        session.status = "concept_understanding"
-        db.commit()
-        return
-    term = db.get(Term, session.term_id)
+def _session_prerequisites_payload(prereqs: list[PrerequisiteTerm]) -> list[dict[str, Any]]:
+    return [
+        {"id": row.id, "term_label": row.term_label, "material": row.material, "expected_answer": row.expected_answer}
+        for row in prereqs
+    ]
+
+
+def _learning_history(db: Session, session: LearningSession) -> dict[str, Any]:
+    term_attempts = (
+        db.query(TermUnderstandingAttempt)
+        .filter_by(learning_session_id=session.id)
+        .order_by(TermUnderstandingAttempt.created_at)
+        .all()
+    )
+    concept_attempts = (
+        db.query(ConceptUnderstandingAttempt)
+        .filter_by(learning_session_id=session.id)
+        .order_by(ConceptUnderstandingAttempt.created_at)
+        .all()
+    )
+    return {
+        "prerequisite_attempts": [
+            {
+                "prerequisite_term_id": row.prerequisite_term_id,
+                "attempt_index": row.attempt_index,
+                "is_passed": row.is_passed,
+                "score": row.score,
+                "feedback": row.feedback,
+            }
+            for row in term_attempts[-12:]
+        ],
+        "concept_attempts": [
+            {
+                "concept_phase": row.concept_phase,
+                "attempt_index": row.attempt_index,
+                "is_passed": row.is_passed,
+                "score": row.score,
+                "feedback": row.feedback,
+                "return_to_phase1": row.return_to_phase1,
+            }
+            for row in concept_attempts[-12:]
+        ],
+    }
+
+
+def _learning_payload_base(db: Session, session: LearningSession, *rag_parts: object) -> dict[str, Any]:
     participant = get_participant(db, session.participant_id)
+    term = db.get(Term, session.term_id)
     prereqs = _prerequisite_rows(db, session.id)
-    context = _pretest_context(db, participant, term)
-    payload = {
+    payload: dict[str, Any] = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "target_term": {"slug": term.slug, "label": term.label, "description": term.description},
-        "prerequisites": [
-            {"term_label": row.term_label, "material": row.material, "expected_answer": row.expected_answer}
-            for row in prereqs
-        ],
-        **context,
-        "rag_context": _learning_rag_context(term, *[row.term_label for row in prereqs]),
+        "prerequisites": _session_prerequisites_payload(prereqs),
+        "rag_context": _learning_rag_context(term, *[row.term_label for row in prereqs], *rag_parts),
     }
-    result = await _ai_call(db, "generate_concept_material", payload)
+    if participant.group_condition == "proposed":
+        payload.update(_pretest_context(db, participant, term))
+        payload["learning_history"] = _learning_history(db, session)
+    return payload
+
+
+def _prerequisites_complete(session: LearningSession, prerequisites: list[PrerequisiteTerm]) -> bool:
+    if session.group_condition == "proposed":
+        return bool(prerequisites) and all(row.status == "passed" for row in prerequisites)
+    return bool(prerequisites) and all(row.status in {"passed", "failed"} for row in prerequisites)
+
+
+async def _ensure_concept_phase1_material(db: Session, session: LearningSession) -> None:
+    if session.concept_material:
+        session.status = "concept_phase1"
+        db.commit()
+        return
+    payload = _learning_payload_base(db, session)
+    result = await _ai_call(db, "generate_concept_phase1_material", payload)
     session.concept_material = result["concept_material"]
     session.concept_prompt = result["concept_prompt"]
     session.concept_expected_answer = result["expected_answer"]
-    session.status = "concept_understanding"
+    session.status = "concept_phase1"
     db.commit()
+
+
+async def _ensure_concept_phase2_prompt(db: Session, session: LearningSession) -> None:
+    if session.phase2_prompt:
+        session.status = "concept_phase2"
+        db.commit()
+        return
+    payload = _learning_payload_base(db, session, session.concept_prompt, session.last_feedback)
+    payload.update(
+        {
+            "material": session.concept_material,
+            "prompt": session.concept_prompt,
+            "expected_answer": session.concept_expected_answer,
+        }
+    )
+    result = await _ai_call(db, "generate_concept_phase2_prompt", payload)
+    session.phase2_prompt = result["phase2_prompt"]
+    session.phase2_light_conditions = result["light_conditions"]
+    session.phase2_expected_answer = result["expected_answer"]
+    session.status = "concept_phase2"
+    db.commit()
+
+
+async def _ensure_concept_material(db: Session, session: LearningSession) -> None:
+    await _ensure_concept_phase1_material(db, session)
 
 
 async def submit_prerequisite_attempt(db: Session, session_id: str, prerequisite_id: str, learner_answer: str) -> dict[str, Any]:
@@ -523,14 +638,13 @@ async def submit_prerequisite_attempt(db: Session, session_id: str, prerequisite
     prereq = db.get(PrerequisiteTerm, prerequisite_id)
     if not session or not prereq or prereq.learning_session_id != session_id:
         raise HTTPException(status_code=404, detail="prerequisite not found")
-    if session.group_condition != "proposed":
-        raise HTTPException(status_code=400, detail="not a proposed learning session")
-    if session.status in {"blocked", "failed", "completed"}:
+    if session.status in TERMINAL_LEARNING_STATUSES:
         raise HTTPException(status_code=400, detail=f"session is {session.status}")
 
     participant = get_participant(db, session.participant_id)
     term = db.get(Term, session.term_id)
     attempt_index = prereq.attempt_count + 1
+    max_attempts = TERM_ATTEMPT_LIMIT if session.group_condition == "proposed" else CONTROL_TERM_ATTEMPT_LIMIT
     payload = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
@@ -543,10 +657,12 @@ async def submit_prerequisite_attempt(db: Session, session_id: str, prerequisite
         },
         "learner_answer": learner_answer,
         "attempt_index": attempt_index,
-        "max_attempts": TERM_ATTEMPT_LIMIT,
-        **_pretest_context(db, participant, term),
+        "max_attempts": max_attempts,
         "rag_context": _learning_rag_context(term, prereq.term_label, learner_answer),
     }
+    if session.group_condition == "proposed":
+        payload.update(_pretest_context(db, participant, term))
+        payload["learning_history"] = _learning_history(db, session)
     result = await _ai_call(db, "grade_prerequisite_answer", payload)
     is_passed = bool(result["is_passed"])
     db.add(
@@ -566,18 +682,19 @@ async def submit_prerequisite_attempt(db: Session, session_id: str, prerequisite
     prereq.attempt_count = attempt_index
     prereq.last_feedback = result["feedback"]
     prereq.remediation_material = result.get("remediation_material")
-    prereq.status = "passed" if is_passed else ("failed" if attempt_index >= TERM_ATTEMPT_LIMIT else "review")
+    prereq.status = "passed" if is_passed else ("failed" if attempt_index >= max_attempts else "review")
     session.last_feedback = result["feedback"]
 
-    if not is_passed and attempt_index >= TERM_ATTEMPT_LIMIT:
+    prerequisites = _prerequisite_rows(db, session.id)
+    if session.group_condition == "proposed" and not is_passed and attempt_index >= TERM_ATTEMPT_LIMIT:
         session.status = "blocked"
         session.blocked_reason = f"{prereq.term_label} の理解確認を2回通過できませんでした。"
         session.completed_at = now()
-    elif all(row.status == "passed" for row in _prerequisite_rows(db, session.id) if row.id != prereq.id) and is_passed:
-        session.term_pass_count = len(_prerequisite_rows(db, session.id))
-        await _ensure_concept_material(db, session)
+    elif _prerequisites_complete(session, prerequisites):
+        session.term_pass_count = sum(1 for row in prerequisites if row.status == "passed")
+        await _ensure_concept_phase1_material(db, session)
     else:
-        session.status = "term_understanding"
+        session.status = "prerequisite"
     db.commit()
     return {"is_passed": is_passed, "feedback": result["feedback"], "session": learning_session_state(db, session.id)}
 
@@ -592,75 +709,76 @@ def _ids_for_labels(prereqs: list[PrerequisiteTerm], labels: list[str]) -> list[
     return out
 
 
-async def submit_concept_attempt(db: Session, session_id: str, learner_answer: str) -> dict[str, Any]:
+async def submit_concept_phase1_attempt(db: Session, session_id: str, learner_answer: str) -> dict[str, Any]:
     session = db.get(LearningSession, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="learning session not found")
-    if session.group_condition != "proposed":
-        raise HTTPException(status_code=400, detail="not a proposed learning session")
-    if session.status in {"blocked", "failed", "completed"}:
+    if session.status in TERMINAL_LEARNING_STATUSES:
         raise HTTPException(status_code=400, detail=f"session is {session.status}")
     prereqs = _prerequisite_rows(db, session.id)
-    if not prereqs or any(row.status != "passed" for row in prereqs):
-        raise HTTPException(status_code=400, detail="all prerequisites must pass first")
-    await _ensure_concept_material(db, session)
+    if not _prerequisites_complete(session, prereqs):
+        raise HTTPException(status_code=400, detail="prerequisites must be completed first")
+    await _ensure_concept_phase1_material(db, session)
 
     participant = get_participant(db, session.participant_id)
     term = db.get(Term, session.term_id)
-    attempt_index = session.concept_attempt_count + 1
-    payload = {
-        "participant_id": participant.id,
-        "group_condition": participant.group_condition,
-        "target_term": {"slug": term.slug, "label": term.label, "description": term.description},
-        "prerequisites": [
-            {"term_label": row.term_label, "material": row.material, "expected_answer": row.expected_answer}
-            for row in prereqs
-        ],
-        "concept_material": session.concept_material,
-        "concept_prompt": session.concept_prompt,
-        "expected_answer": session.concept_expected_answer,
-        "learner_answer": learner_answer,
-        "attempt_index": attempt_index,
-        "max_attempts": CONCEPT_ATTEMPT_LIMIT,
-        **_pretest_context(db, participant, term),
-        "rag_context": _learning_rag_context(term, session.concept_prompt, learner_answer),
-    }
-    result = await _ai_call(db, "grade_concept_answer", payload)
+    attempt_index = session.concept_phase1_attempt_count + 1
+    max_attempts = PHASE1_ATTEMPT_LIMIT if session.group_condition == "proposed" else 1
+    payload = _learning_payload_base(db, session, session.concept_prompt, learner_answer)
+    payload.update(
+        {
+            "concept_material": session.concept_material,
+            "concept_prompt": session.concept_prompt,
+            "expected_answer": session.concept_expected_answer,
+            "learner_answer": learner_answer,
+            "attempt_index": attempt_index,
+            "max_attempts": max_attempts,
+        }
+    )
+    result = await _ai_call(db, "grade_concept_phase1_answer", payload)
     missing_ids = _ids_for_labels(prereqs, result.get("missing_prerequisite_labels") or [])
     review_ids = _ids_for_labels(prereqs, result.get("review_prerequisite_labels") or [])
-    for prereq_id in missing_ids + review_ids:
-        row = db.get(PrerequisiteTerm, prereq_id)
-        if row:
-            row.status = "review"
-            row.attempt_count = 0
+    if session.group_condition == "proposed":
+        for prereq_id in missing_ids + review_ids:
+            row = db.get(PrerequisiteTerm, prereq_id)
+            if row:
+                row.status = "review"
+                row.attempt_count = 0
     is_passed = bool(result["is_passed"])
     db.add(
         ConceptUnderstandingAttempt(
             learning_session_id=session.id,
             participant_id=participant.id,
             attempt_index=attempt_index,
+            concept_phase="phase1",
             concept_material=session.concept_material or "",
             prompt=session.concept_prompt or "",
+            material_shown=True,
             learner_answer=learner_answer,
             is_passed=is_passed,
             score=result.get("score"),
             feedback=result["feedback"],
             missing_prerequisite_ids=missing_ids,
             review_prerequisite_ids=review_ids,
+            independent_explanation_success=None,
+            return_to_phase1=False,
+            rubric_scores=result.get("rubric_scores"),
             grading_json=result,
         )
     )
+    session.concept_phase1_attempt_count = attempt_index
     session.concept_attempt_count = attempt_index
     session.last_feedback = result["feedback"]
-    if is_passed:
-        session.status = "completed"
-        session.completed_at = now()
-    elif attempt_index >= CONCEPT_ATTEMPT_LIMIT:
-        session.status = "failed"
-        session.blocked_reason = "概念理解確認を4回通過できませんでした。"
+    if session.group_condition == "control":
+        await _ensure_concept_phase2_prompt(db, session)
+    elif is_passed:
+        await _ensure_concept_phase2_prompt(db, session)
+    elif attempt_index >= PHASE1_ATTEMPT_LIMIT:
+        session.status = "failed_phase1"
+        session.blocked_reason = "概念フェーズ1を3回通過できませんでした。"
         session.completed_at = now()
     else:
-        session.status = "term_understanding" if (missing_ids or review_ids) else "concept_understanding"
+        session.status = "prerequisite" if (missing_ids or review_ids) else "concept_phase1"
     db.commit()
     return {
         "is_passed": is_passed,
@@ -669,6 +787,81 @@ async def submit_concept_attempt(db: Session, session_id: str, learner_answer: s
         "review_prerequisite_ids": review_ids,
         "session": learning_session_state(db, session.id),
     }
+
+
+async def submit_concept_phase2_attempt(db: Session, session_id: str, learner_answer: str) -> dict[str, Any]:
+    session = db.get(LearningSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="learning session not found")
+    if session.status in TERMINAL_LEARNING_STATUSES:
+        raise HTTPException(status_code=400, detail=f"session is {session.status}")
+    if not session.concept_material:
+        raise HTTPException(status_code=400, detail="phase1 material must exist first")
+    await _ensure_concept_phase2_prompt(db, session)
+
+    attempt_index = session.concept_phase2_attempt_count + 1
+    max_attempts = PHASE2_ATTEMPT_LIMIT if session.group_condition == "proposed" else 1
+    payload = _learning_payload_base(db, session, session.phase2_prompt, session.phase2_light_conditions, learner_answer)
+    payload.update(
+        {
+            "phase2_prompt": session.phase2_prompt,
+            "light_conditions": session.phase2_light_conditions,
+            "expected_answer": session.phase2_expected_answer,
+            "learner_answer": learner_answer,
+            "attempt_index": attempt_index,
+            "max_attempts": max_attempts,
+        }
+    )
+    result = await _ai_call(db, "grade_concept_phase2_answer", payload)
+    is_passed = bool(result["is_passed"])
+    db.add(
+        ConceptUnderstandingAttempt(
+            learning_session_id=session.id,
+            participant_id=session.participant_id,
+            attempt_index=attempt_index,
+            concept_phase="phase2",
+            concept_material=session.concept_material or "",
+            prompt=session.phase2_prompt or "",
+            material_shown=False,
+            light_condition_text=session.phase2_light_conditions,
+            learner_answer=learner_answer,
+            is_passed=is_passed,
+            score=result.get("score"),
+            feedback=result["feedback"],
+            missing_prerequisite_ids=[],
+            review_prerequisite_ids=[],
+            independent_explanation_success=result.get("independent_explanation_success"),
+            return_to_phase1=(not is_passed and session.group_condition == "proposed"),
+            rubric_scores=result.get("rubric_scores"),
+            grading_json=result,
+        )
+    )
+    session.concept_phase2_attempt_count = attempt_index
+    session.last_feedback = result["feedback"]
+    if session.group_condition == "control":
+        session.status = "completed"
+        session.completed_at = now()
+    elif is_passed:
+        session.status = "completed"
+        session.completed_at = now()
+    elif attempt_index >= PHASE2_ATTEMPT_LIMIT:
+        session.status = "failed_phase2"
+        session.blocked_reason = "概念フェーズ2を3回通過できませんでした。"
+        session.completed_at = now()
+    else:
+        session.phase2_retry_count += 1
+        session.status = "concept_phase1"
+    db.commit()
+    return {
+        "is_passed": is_passed,
+        "feedback": result["feedback"],
+        "return_to_phase1": session.group_condition == "proposed" and not is_passed,
+        "session": learning_session_state(db, session.id),
+    }
+
+
+async def submit_concept_attempt(db: Session, session_id: str, learner_answer: str) -> dict[str, Any]:
+    return await submit_concept_phase1_attempt(db, session_id, learner_answer)
 
 
 async def generate_control_learning_turn(db: Session, session_id: str) -> dict[str, Any]:
@@ -940,8 +1133,29 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
     learning_sessions = db.query(LearningSession).filter_by(participant_id=participant.id).all()
     session_ids = [session.id for session in learning_sessions]
     prerequisites = db.query(PrerequisiteTerm).filter(PrerequisiteTerm.learning_session_id.in_(session_ids)).all() if session_ids else []
-    proposed_sessions = [session for session in learning_sessions if session.group_condition == "proposed"]
-    completed_proposed = [session for session in proposed_sessions if session.status == "completed"]
+    completed_sessions = [session for session in learning_sessions if session.status == "completed"]
+    concept_attempts = db.query(ConceptUnderstandingAttempt).filter(ConceptUnderstandingAttempt.learning_session_id.in_(session_ids)).all() if session_ids else []
+    phase1_attempts = [attempt for attempt in concept_attempts if attempt.concept_phase == "phase1"]
+    phase2_attempts = [attempt for attempt in concept_attempts if attempt.concept_phase == "phase2"]
+    phase1_attempted_session_ids = {attempt.learning_session_id for attempt in phase1_attempts}
+    phase1_pass_session_ids = {attempt.learning_session_id for attempt in phase1_attempts if attempt.is_passed}
+    phase2_attempted_session_ids = {attempt.learning_session_id for attempt in phase2_attempts}
+    phase2_pass_session_ids = {attempt.learning_session_id for attempt in phase2_attempts if attempt.is_passed}
+    phase2_retry_sessions = [session for session in learning_sessions if session.phase2_retry_count > 0]
+    phase2_max_retry_sessions = [session for session in learning_sessions if session.concept_phase2_attempt_count >= PHASE2_ATTEMPT_LIMIT]
+    retest_by_term_id = {attempt.term_id: attempt for attempt in by_phase["retest"]}
+    phase2_pass_sessions = [session for session in learning_sessions if session.id in phase2_pass_session_ids]
+    phase2_fail_sessions = [session for session in learning_sessions if session.status == "failed_phase2"]
+
+    def retest_correct_for_sessions(sessions: list[LearningSession]) -> float | None:
+        if not sessions:
+            return None
+        correct_count = 0
+        for session in sessions:
+            retest_attempt = retest_by_term_id.get(session.term_id)
+            if retest_attempt and retest_attempt.is_correct:
+                correct_count += 1
+        return correct_count / len(sessions)
 
     summary = EvaluationSummary(
         participant_id=participant.id,
@@ -957,7 +1171,13 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         m4_failure_rate=_rate(by_phase["transfer"], lambda a: a.misconception_type == "M4"),
         unknown_persistence_rate=None,
         prerequisite_pass_rate=_rate(prerequisites, lambda p: p.status == "passed"),
-        concept_pass_rate=(len(completed_proposed) / len(proposed_sessions)) if proposed_sessions else None,
+        concept_pass_rate=(len(completed_sessions) / len(learning_sessions)) if learning_sessions else None,
+        concept_phase1_pass_rate=(len(phase1_pass_session_ids) / len(phase1_attempted_session_ids)) if phase1_attempted_session_ids else None,
+        concept_phase2_success_rate=(len(phase2_pass_session_ids) / len(phase2_attempted_session_ids)) if phase2_attempted_session_ids else None,
+        phase2_after_retry_success_rate=(sum(1 for session in phase2_retry_sessions if session.status == "completed") / len(phase2_retry_sessions)) if phase2_retry_sessions else None,
+        phase2_max_retry_rate=(len(phase2_max_retry_sessions) / len(phase2_attempted_session_ids)) if phase2_attempted_session_ids else None,
+        phase2_pass_retest_correct_rate=retest_correct_for_sessions(phase2_pass_sessions),
+        phase2_fail_retest_correct_rate=retest_correct_for_sessions(phase2_fail_sessions),
         learning_target_count=db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0,
         completed=participant.completed_at is not None,
     )
@@ -991,6 +1211,12 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 "transfer_correct_rate": avg("transfer_correct_rate"),
                 "prerequisite_pass_rate": avg("prerequisite_pass_rate"),
                 "concept_pass_rate": avg("concept_pass_rate"),
+                "concept_phase1_pass_rate": avg("concept_phase1_pass_rate"),
+                "concept_phase2_success_rate": avg("concept_phase2_success_rate"),
+                "phase2_after_retry_success_rate": avg("phase2_after_retry_success_rate"),
+                "phase2_max_retry_rate": avg("phase2_max_retry_rate"),
+                "phase2_pass_retest_correct_rate": avg("phase2_pass_retest_correct_rate"),
+                "phase2_fail_retest_correct_rate": avg("phase2_fail_retest_correct_rate"),
             }
         )
     return {"groups": rows}
@@ -999,17 +1225,18 @@ def admin_summary(db: Session) -> dict[str, Any]:
 EXPORTS = {
     "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at"]),
     "participant_surveys": (ParticipantSurvey, ["id", "participant_id", "phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "term_confidences", "free_comment"]),
+    "term_assignments": (TermAssignment, ["id", "participant_id", "term_id", "group_condition", "is_learning_target", "selection_reason", "priority_score", "created_at"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "reason_text", "free_text_answer", "confidence", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "transfer_success", "requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "transfer_success_count", "updated_at"]),
-    "learning_sessions": (LearningSession, ["id", "participant_id", "term_id", "group_condition", "session_index", "status", "term_pass_count", "concept_attempt_count", "blocked_reason", "completed_at", "created_at"]),
-    "prerequisite_terms": (PrerequisiteTerm, ["id", "learning_session_id", "term_label", "display_order", "status", "attempt_count", "last_feedback", "created_at"]),
+    "learning_sessions": (LearningSession, ["id", "participant_id", "term_id", "group_condition", "session_index", "status", "term_pass_count", "concept_attempt_count", "concept_phase1_attempt_count", "concept_phase2_attempt_count", "phase2_retry_count", "blocked_reason", "completed_at", "created_at"]),
+    "prerequisite_terms": (PrerequisiteTerm, ["id", "learning_session_id", "term_label", "generation_reason", "display_order", "status", "attempt_count", "last_feedback", "created_at"]),
     "term_understanding_attempts": (TermUnderstandingAttempt, ["id", "prerequisite_term_id", "participant_id", "learning_session_id", "attempt_index", "learner_answer", "is_passed", "score", "feedback", "created_at"]),
-    "concept_understanding_attempts": (ConceptUnderstandingAttempt, ["id", "learning_session_id", "participant_id", "attempt_index", "learner_answer", "is_passed", "score", "feedback", "missing_prerequisite_ids", "review_prerequisite_ids", "created_at"]),
+    "concept_understanding_attempts": (ConceptUnderstandingAttempt, ["id", "learning_session_id", "participant_id", "attempt_index", "concept_phase", "material_shown", "light_condition_text", "learner_answer", "is_passed", "score", "feedback", "independent_explanation_success", "return_to_phase1", "rubric_scores", "missing_prerequisite_ids", "review_prerequisite_ids", "created_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at"]),
     "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "created_at"]),
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
-    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "transfer_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "m4_failure_rate", "prerequisite_pass_rate", "concept_pass_rate", "learning_target_count", "completed", "created_at"]),
+    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "transfer_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "m4_failure_rate", "prerequisite_pass_rate", "concept_pass_rate", "concept_phase1_pass_rate", "concept_phase2_success_rate", "phase2_after_retry_success_rate", "phase2_max_retry_rate", "phase2_pass_retest_correct_rate", "phase2_fail_retest_correct_rate", "learning_target_count", "completed", "created_at"]),
 }
 
 

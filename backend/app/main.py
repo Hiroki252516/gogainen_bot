@@ -30,6 +30,8 @@ from app.services.experiment import (
     save_survey,
     score_phase,
     submit_concept_attempt,
+    submit_concept_phase1_attempt,
+    submit_concept_phase2_attempt,
     submit_prerequisite_attempt,
     submit_attempt,
 )
@@ -219,6 +221,16 @@ async def api_submit_prerequisite_attempt(session_id: str, prerequisite_id: str,
 @app.post("/api/learning-sessions/{session_id}/concept-attempts")
 async def api_submit_concept_attempt(session_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
     return await submit_concept_attempt(db, session_id, payload.learner_answer)
+
+
+@app.post("/api/learning-sessions/{session_id}/concept-phase1-attempts")
+async def api_submit_concept_phase1_attempt(session_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
+    return await submit_concept_phase1_attempt(db, session_id, payload.learner_answer)
+
+
+@app.post("/api/learning-sessions/{session_id}/concept-phase2-attempts")
+async def api_submit_concept_phase2_attempt(session_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
+    return await submit_concept_phase2_attempt(db, session_id, payload.learner_answer)
 
 
 @app.post("/api/learning-sessions/{session_id}/control-turn")

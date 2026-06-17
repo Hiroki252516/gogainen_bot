@@ -17,21 +17,28 @@
 - pretest全誤答時にlearning targetsが5件になる
 - stable_correctだけの用語はlearning targetsに入らない
 - 提案群セッションで前提用語が3件生成・保存される
-- 提案群の前提用語AI payloadにRAGとpretest診断が入る
-- 用語理解2回failで概念理解へ進まず、sessionがblockedになる
-- 概念理解failで不足用語 + 直前関連用語レビューへ戻る
-- 概念理解4回failでsessionがfailedになる
-- 統制群payloadにはRAGが入り、誤概念・ログ・前提用語ゲート情報が入らない
+- 統制群セッションでも一般小問が3件生成・保存される
+- 提案群のAI payloadにRAG、pretest診断、選択誤答、学習ログが入る
+- 統制群payloadにはRAGと対象概念だけが入り、誤概念・pretest選択肢・ログ・戻り制御情報が入らない
+- 提案群で前提用語2回fail時にsessionがblockedになる
+- 統制群で小問fail時に戻らず次小問またはphase1へ進む
+- 提案群でphase1 pass後にphase2へ進む
+- 提案群でphase1 3回fail時にsessionがfailed_phase1になる
+- 提案群でphase2 fail 1〜2回目はphase1へ戻る
+- 提案群でphase2を3回failするとsessionがfailed_phase2になる
+- 統制群のphase1/phase2は1回だけ採点し、pass/failに関係なく進行・完了する
 - retest後のnext stepがpost_surveyになる
 - L0/transferはactive出題されない
+- phase2補助指標がevaluation_summaryとCSVに出る
 - recurrence_flagは同一termでpretest/retestのM1〜M3が一致した場合だけtrue
 
 ## Frontend Acceptance
 
 - `/pretest` は5問、選択肢のみ
 - `/learning/[termSlug]` はgroup_conditionで分岐する
-- 提案群は前提用語カード、記述確認、概念説明確認を表示する
-- 統制群は通常説明と自己説明欄だけを表示し、前提用語ゲートを表示しない
+- 提案群は前提用語、phase1教材あり、phase2教材なしを順に表示する
+- 提案群phase2 fail後にphase1画面へ戻る
+- 統制群は小問、phase1、phase2を表示するが、適応的戻り処理を表示しない
 - `/retest` は選択肢のみで、理由欄と自信度欄を表示しない
 - `/retest` 完了後 `/survey/post` へ進む
 - `/survey/pre`, `/l0-check`, `/transfer-test` は通常導線に出ない
@@ -43,7 +50,7 @@
 - `codex_app_server` モードではMockへ自動フォールバックしない
 - app-server未接続・未ログイン・timeout・schema失敗は `ai_call_logs.status=failed` に残す
 - `AI_BACKEND=mock` はテスト時に完全に動く
-- 新AI契約の6メソッドがMockとCodexAppServerBackendに実装される
+- 新AI契約の `generate_concept_phase1_material`, `grade_concept_phase1_answer`, `generate_concept_phase2_prompt`, `grade_concept_phase2_answer`, `generate_control_prerequisite_plan` がMockとCodexAppServerBackendに実装される
 
 ## End-to-End Test Scenario
 
@@ -55,19 +62,20 @@
 4. 1対象概念のlearning sessionで前提用語3件が生成される
 5. 1つ目の前提用語を2回failさせ、sessionがblockedになる
 6. 別sessionで前提用語をすべてpassさせる
-7. 概念理解fail時に不足用語レビューへ戻る
-8. 概念理解pass時にsessionがcompletedになる
+7. phase1 pass後にphase2へ進む
+8. phase2 fail時にphase1へ戻り、再支援後のphase2 passでsessionがcompletedになる
 9. retestで同じMを選ぶとrecurrence_flag true
-10. evaluation_summaryにretestとgate指標が反映される
+10. evaluation_summaryにretestとphase1/phase2指標が反映される
 
 ### control participant
 
 1. Participant P002をcontrolで作成
 2. pretest誤答を入力
 3. Diagnosisは保存される
-4. 学習画面では一般解説のみ
-5. AI request payloadにはRAGだけが入り、誤概念やpretest診断が入らない
-6. retest後にpost_surveyへ進む
+4. 学習画面では小問3件、phase1、phase2を行う
+5. 小問やphaseのfailで戻り制御されない
+6. AI request payloadにはRAGと対象概念だけが入り、誤概念やpretest診断が入らない
+7. retest後にpost_surveyへ進む
 
 ## Required Commands
 

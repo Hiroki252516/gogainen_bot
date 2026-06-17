@@ -259,8 +259,9 @@ class CodexAppServerBackend:
                             "material": {"type": "string"},
                             "check_question": {"type": "string"},
                             "expected_answer": {"type": "string"},
+                            "generation_reason": {"type": "string"},
                         },
-                        "required": ["term_label", "material", "check_question", "expected_answer"],
+                        "required": ["term_label", "material", "check_question", "expected_answer", "generation_reason"],
                         "additionalProperties": False,
                     },
                 },
@@ -287,6 +288,56 @@ class CodexAppServerBackend:
             item["material"] = _strip_internal_labels(item["material"])
             item["check_question"] = _strip_internal_labels(item["check_question"])
             item["expected_answer"] = _strip_internal_labels(item["expected_answer"])
+            item["generation_reason"] = _strip_internal_labels(item["generation_reason"])
+        result["plan_rationale"] = _strip_internal_labels(result["plan_rationale"])
+        return result
+
+    async def generate_control_prerequisite_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        control_payload = self._control_learning_payload(payload)
+        schema = {
+            "type": "object",
+            "properties": {
+                "prerequisites": {
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "term_label": {"type": "string"},
+                            "material": {"type": "string"},
+                            "check_question": {"type": "string"},
+                            "expected_answer": {"type": "string"},
+                            "generation_reason": {"type": "string"},
+                        },
+                        "required": ["term_label", "material", "check_question", "expected_answer", "generation_reason"],
+                        "additionalProperties": False,
+                    },
+                },
+                "plan_rationale": {"type": "string"},
+            },
+            "required": ["prerequisites", "plan_rationale"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_control_prerequisite_plan",
+            self._prompt(
+                "control_prerequisite_plan",
+                control_payload,
+                [
+                    "統制群用に、対象概念について一般的な確認小問をちょうど3件作る。",
+                    "pretest診断、誤概念タイプ、過去ログ、戻り制御情報は使わない。",
+                    "rag_context を優先し、教材にない内容は断定しない。",
+                    "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
+                ],
+            ),
+            schema,
+        )
+        for item in result["prerequisites"]:
+            item["material"] = _strip_internal_labels(item["material"])
+            item["check_question"] = _strip_internal_labels(item["check_question"])
+            item["expected_answer"] = _strip_internal_labels(item["expected_answer"])
+            item["generation_reason"] = _strip_internal_labels(item["generation_reason"])
         result["plan_rationale"] = _strip_internal_labels(result["plan_rationale"])
         return result
 
@@ -300,8 +351,12 @@ class CodexAppServerBackend:
                 "remediation_material": {"type": ["string", "null"]},
                 "core_elements_covered": {"type": "array", "items": {"type": "string"}},
                 "major_errors": {"type": "array", "items": {"type": "string"}},
+                "rubric_scores": {
+                    "type": "object",
+                    "additionalProperties": {"type": "number"},
+                },
             },
-            "required": ["is_passed", "score", "feedback", "remediation_material", "core_elements_covered", "major_errors"],
+            "required": ["is_passed", "score", "feedback", "remediation_material", "core_elements_covered", "major_errors", "rubric_scores"],
             "additionalProperties": False,
         }
         result = await self._run_structured_turn(
@@ -324,7 +379,7 @@ class CodexAppServerBackend:
             result["remediation_material"] = _strip_internal_labels(result["remediation_material"])
         return result
 
-    async def generate_concept_material(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def generate_concept_phase1_material(self, payload: dict[str, Any]) -> dict[str, Any]:
         schema = {
             "type": "object",
             "properties": {
@@ -336,13 +391,14 @@ class CodexAppServerBackend:
             "additionalProperties": False,
         }
         result = await self._run_structured_turn(
-            "generate_concept_material",
+            "generate_concept_phase1_material",
             self._prompt(
-                "concept_material",
+                "concept_phase1_material",
                 payload,
                 [
-                    "通過済み前提用語を使って対象概念教材を作る。",
+                    "前提用語または統制群小問を踏まえて、対象概念フェーズ1の教材を作る。",
                     "学習者に前提用語を使って対象概念を説明させるpromptを作る。",
+                    "統制群payloadの場合はpretest診断や誤概念情報を使わず、一般説明にする。",
                     "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
                     "rag_context を優先し、教材にない内容は断定しない。",
                 ],
@@ -351,7 +407,10 @@ class CodexAppServerBackend:
         )
         return {key: _strip_internal_labels(value) for key, value in result.items()}
 
-    async def grade_concept_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def generate_concept_material(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.generate_concept_phase1_material(payload)
+
+    async def grade_concept_phase1_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
         schema = {
             "type": "object",
             "properties": {
@@ -362,19 +421,88 @@ class CodexAppServerBackend:
                 "review_prerequisite_labels": {"type": "array", "items": {"type": "string"}},
                 "core_elements_covered": {"type": "array", "items": {"type": "string"}},
                 "major_errors": {"type": "array", "items": {"type": "string"}},
+                "rubric_scores": {
+                    "type": "object",
+                    "additionalProperties": {"type": "number"},
+                },
             },
-            "required": ["is_passed", "score", "feedback", "missing_prerequisite_labels", "review_prerequisite_labels", "core_elements_covered", "major_errors"],
+            "required": ["is_passed", "score", "feedback", "missing_prerequisite_labels", "review_prerequisite_labels", "core_elements_covered", "major_errors", "rubric_scores"],
             "additionalProperties": False,
         }
         result = await self._run_structured_turn(
-            "grade_concept_answer",
+            "grade_concept_phase1_answer",
             self._prompt(
-                "concept_grading",
+                "concept_phase1_grading",
                 payload,
                 [
-                    "対象概念理解の記述回答を採点する。",
+                    "教材あり概念理解フェーズ1の記述回答を採点する。",
                     "前提用語を使って対象概念の役割や仕組みを説明できていればpassにする。",
-                    "failなら不足している前提用語と、直前に確認すべき関連用語を返す。",
+                    "提案群のfailなら不足している前提用語と、直前に確認すべき関連用語を返す。統制群では不足用語リストは空でもよい。",
+                    "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
+                    "rag_context を優先し、教材にない内容は断定しない。",
+                ],
+            ),
+            schema,
+        )
+        result["feedback"] = _strip_internal_labels(result["feedback"])
+        return result
+
+    async def grade_concept_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.grade_concept_phase1_answer(payload)
+
+    async def generate_concept_phase2_prompt(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "phase2_prompt": {"type": "string"},
+                "light_conditions": {"type": "string"},
+                "expected_answer": {"type": "string"},
+            },
+            "required": ["phase2_prompt", "light_conditions", "expected_answer"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_concept_phase2_prompt",
+            self._prompt(
+                "concept_phase2_prompt",
+                payload,
+                [
+                    "概念フェーズ2用に、教材本文なしで回答させる確認promptを作る。",
+                    "light_conditions は軽い条件だけにし、教材本文や長い説明を含めない。",
+                    "提案群payloadではphase1の結果を踏まえてよい。統制群payloadではRAGと対象概念だけを使う。",
+                    "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
+                ],
+            ),
+            schema,
+        )
+        return {key: _strip_internal_labels(value) for key, value in result.items()}
+
+    async def grade_concept_phase2_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "is_passed": {"type": "boolean"},
+                "score": {"type": "number", "minimum": 0, "maximum": 1},
+                "feedback": {"type": "string"},
+                "independent_explanation_success": {"type": "boolean"},
+                "return_to_phase1": {"type": "boolean"},
+                "rubric_scores": {
+                    "type": "object",
+                    "additionalProperties": {"type": "number"},
+                },
+            },
+            "required": ["is_passed", "score", "feedback", "independent_explanation_success", "return_to_phase1", "rubric_scores"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "grade_concept_phase2_answer",
+            self._prompt(
+                "concept_phase2_grading",
+                payload,
+                [
+                    "教材なし概念説明フェーズ2の回答を採点する。",
+                    "対象概念の中核、前提用語の自然な利用、light_conditionsの充足、重大な誤りの有無で判断する。",
+                    "提案群でfailなら return_to_phase1 を true にする。統制群は戻り制御を使わないが、採点結果としては true/false を返してよい。",
                     "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
                     "rag_context を優先し、教材にない内容は断定しない。",
                 ],

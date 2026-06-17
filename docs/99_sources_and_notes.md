@@ -7,27 +7,30 @@
 - `/Users/hiroki/Downloads/5月18日(テーマ変更) (2) 2.pptx`
 - `/Users/hiroki/Downloads/5月25日進捗報告.pptx`
 - `revised_experiment_flow_term_concept_stages_FINAL.md`
+- `revised_experiment_flow_3phase_learning_session_v2.md`
 
 ## Current Design Summary
 
-研究の中心は、AIチューターを作ること自体ではない。中心は、AI・情報系専門用語の初期誤概念を診断し、提案群では前提用語理解から概念理解へ段階的に支援を減らすことで、支援なし再テストで理解が改善するかを見ることである。
+研究の中心は、AIチューターを作ること自体ではない。中心は、AI・情報系専門用語の初期誤概念を診断し、提案群では前提用語理解、教材あり概念理解、教材なし概念説明へ段階的に支援を減らすことで、支援なし再テストで理解が改善するかを見ることである。
 
 比較対象は「AIを使うかどうか」ではなく、以下である。
 
-- 統制群: RAG教材を根拠にした通常AI説明と自己説明確認
-- 提案群: 事前テスト診断と学習ログに基づく前提用語ゲート型AIチューター
+- 統制群: RAG教材を根拠にした一般小問3件、概念フェーズ1、概念フェーズ2を行う非適応AIチューター
+- 提案群: 事前テスト診断と学習ログに基づく3段階適応型AIチューター
 
 ## Key Decisions
 
 - 対象概念は現行5概念を維持する
+- `revised_experiment_flow_3phase_learning_session_v2.md` は学習セッション内部の3段階化だけを採用する
 - 事前アンケートは実施しない
 - 事前テストと再テストは選択式のみ
 - 事前テストではM1〜M3とunknownを記録する
-- 提案群だけが前提用語ゲート型学習を行う
-- 統制群には誤概念・過去ログ・前提用語ゲート情報を渡さない
+- 提案群だけが誤概念・過去ログ・戻り制御を教授方略に使う
+- 統制群には誤概念・pretest選択肢・過去ログ・戻り制御情報を渡さない
 - L0確認と転移テストは現行参加者フローから外す
 - 再テストを現行フローの最終テストにする
 - 学習セッション中にM1〜M4の再判定やL3/L2/L1の動的更新は行わない
+- 再テストは現行通り学習対象概念のみを出す
 
 ## Final Taxonomy
 
@@ -64,7 +67,7 @@ M4は転移テスト拡張時のために保持する。現行フローでは転
 - Zheng, L. et al. (2022). An exploratory study on fade-in versus fade-out scaffolding.
 - Puech, R., Macina, J., Chatain, J., Sachan, M., & Kapur, M. (2025). Towards the pedagogical steering of large language models for tutoring.
 
-現行設計では、ヒント量レベルを細かく変えるのではなく、前提用語理解、概念理解、支援なし再テストという段階構造をscaffolding/fadingとして扱う。
+現行設計では、ヒント量レベルを細かく変えるのではなく、前提用語理解、教材あり概念理解、教材なし概念説明、支援なし再テストという段階構造をscaffolding/fadingとして扱う。v2原文の事前アンケート、全概念再テスト、転移テスト復活は今回実装しない。
 
 ## Codex app-server Notes
 
