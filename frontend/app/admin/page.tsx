@@ -90,19 +90,19 @@ export default function AdminPage() {
             ))}
           </div>
           <div className="actions">
-            <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview.csv`}>
-              全体ログCSV UTF-8
-            </a>
             <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview_excel.csv`}>
               全体ログCSV Excel
             </a>
+            <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview.csv`}>
+              全体ログCSV UTF-8
+            </a>
             {participantLog?.participant?.participant_id ? (
               <>
-                <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs.csv`}>
-                  被験者ログCSV UTF-8
-                </a>
                 <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs_excel.csv`}>
                   被験者ログCSV Excel
+                </a>
+                <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs.csv`}>
+                  被験者ログCSV UTF-8
                 </a>
               </>
             ) : null}

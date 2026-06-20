@@ -210,7 +210,7 @@ POST /participants
 
 MVP seed must include:
 
-- 2 active terms: `transfer_learning`, `llm_training_process`
+- 2 active terms: `llm_training_process`, `transformer`
 - pretest question per active term
 - retest variant per active term
 - l0_check free-response question per active term
@@ -218,7 +218,7 @@ MVP seed must include:
 - transfer question per active term
 - option labels correct/M1/M2/M3/unknown
 
-過去仕様のTransformer、Attention、事前学習、事後学習は拡張候補であり、現行MVP seedの必須対象ではない。
+現行MVP seedでは、`llm_training_process` と `transformer` を必須対象にする。用語理解段階では教材に基づき、LLMの学習段階は `事前学習`, `インストラクションチューニング`, `事後学習`、Transformerは `Attentionレイヤー`, `FFNレイヤー`, `トークン間の関係性` を順に扱う。
 
 ## README to Generate During Implementation
 

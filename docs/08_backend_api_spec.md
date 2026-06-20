@@ -120,7 +120,7 @@ Response:
     {
       "question_id": "uuid",
       "term_slug": "transfer_learning",
-      "term_label": "転移学習",
+      "term_label": "transfer",
       "body": "転移学習の説明として、最も適切なものはどれか。",
       "options": [
         { "option_id": "uuid", "label": "A", "body": "..." }
@@ -208,7 +208,7 @@ Response:
   "targets": [
     {
       "term_slug": "transfer_learning",
-      "term_label": "転移学習",
+      "term_label": "transfer",
       "summary_for_learner": "人間の注意ではなく、モデル内部の重み付けとして確認します。",
       "current_stage_for_display": "用語理解から確認"
     }

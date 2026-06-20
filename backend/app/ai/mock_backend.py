@@ -383,13 +383,13 @@ def _generic_tutoring_spec(term: dict[str, Any]) -> dict[str, Any]:
 
 _COMPONENT_EXPLANATIONS = {
     "transformer": {
-        "Attention": {
+        "Attentionレイヤー": {
             "definition": "入力中のトークン同士の関係の強さを計算し、重要な情報を重み付けして利用する仕組み",
             "role": "トークン間の関係性を扱い、文脈上どの情報を参照するかを決める",
             "misconception": "人間の注意や集中そのもの、または重要語を探すだけの処理",
             "criterion": "トークン同士の関係を計算して重み付けするか",
         },
-        "FFN": {
+        "FFNレイヤー": {
             "definition": "各トークンの表現を個別に非線形変換する層",
             "role": "Attentionで関係情報を取り込んだ後、各トークンごとの特徴を変換する",
             "misconception": "Attentionと同じようにトークン間の関係を計算する層",
@@ -507,11 +507,13 @@ _COMPONENT_KEYWORDS = {
         "L3基礎確認": ["学習済み", "別タスク", "活用"],
     },
     "llm_training_process": {
-        "L3基礎確認": ["事前学習", "インストラクション", "事後学習"],
+        "事前学習": ["事前学習", "基盤", "大規模"],
+        "インストラクションチューニング": ["インストラクション", "指示", "応答"],
+        "事後学習": ["事後学習", "安全", "有用"],
     },
     "transformer": {
-        "Attention": ["Attention", "関係"],
-        "FFN": ["FFN", "特徴", "変換"],
+        "Attentionレイヤー": ["Attention", "関係"],
+        "FFNレイヤー": ["FFN", "特徴", "変換"],
         "トークン間の関係性": ["トークン", "関係"],
     },
     "attention": {

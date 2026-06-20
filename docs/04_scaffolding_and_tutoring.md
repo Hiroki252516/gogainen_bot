@@ -2,7 +2,7 @@
 
 ## 2026-06 Iterative Flow Scaffolding Update
 
-学習セッション自体を足場掛けとして扱う。実験全体では、テストで残った未達項目だけを学習し、正解済み用語は次周回から除外する。学習セッション内は現行の `term_understanding → concept_understanding` を維持し、`unknown` とM1〜M3のいずれも `L3基礎確認 → L2相当の概念理解` の流れで支援する。
+学習セッション自体を足場掛けとして扱う。実験全体では、テストで残った未達項目だけを学習し、正解済み用語は次周回から除外する。学習セッション内は現行の `term_understanding → concept_understanding` を維持し、`unknown` とM1〜M3のいずれも、教材に基づく構成用語確認からL2相当の概念理解へ進める。
 
 教材方略は `unknown`, M1, M2, M3 を対象にする。M4の文脈転移方略は今回の教材出し分けから外し、M4が検出された場合も専用の `context_transfer_training` へは進めない。
 
@@ -31,7 +31,7 @@
 
 `scaffolding_level` / `next_scaffolding_level` は既存ログ、CSV互換、内部分析のために `L3/L2` のみ残す。教材生成時にAIが返す `scaffolding_level` は参考値であり、被験者画面には表示しない。
 
-現行実装では、MVP対象の `transfer_learning` と `llm_training_process` は `term_understanding` の構成用語を `L3基礎確認` 1件として扱う。十分回答なら `concept_understanding` へ進み、L2相当の観点確認問題を出す。
+現行実装では、MVP対象を `llm_training_process` と `transformer` とし、`term_understanding` では教材に基づく構成用語を順番に確認する。`llm_training_process` は `事前学習 → インストラクションチューニング → 事後学習`、`transformer` は `Attentionレイヤー → FFNレイヤー → トークン間の関係性` を扱う。最後の構成用語で十分回答なら `concept_understanding` へ進み、L2相当の観点確認問題を出す。
 
 ### 確認テスト
 

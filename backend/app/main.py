@@ -84,7 +84,8 @@ class TutorSessionCreate(BaseModel):
 
 
 class TutorTurnRespond(BaseModel):
-    learner_response: str
+    learner_response: str = ""
+    selected_option_id: str | None = None
 
 
 class AILoginStart(BaseModel):

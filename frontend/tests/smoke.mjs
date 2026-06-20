@@ -66,6 +66,12 @@ for (const expectedText of ["全体ログ", "全体ログCSV UTF-8", "全体ロ�
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }
 }
+if (adminPage.indexOf("/api/admin/logs/overview_excel.csv") > adminPage.indexOf("/api/admin/logs/overview.csv")) {
+  throw new Error("admin page must prioritize Excel overview CSV before UTF-8 CSV");
+}
+if (adminPage.indexOf("/logs_excel.csv") > adminPage.indexOf("/logs.csv")) {
+  throw new Error("admin page must prioritize Excel participant CSV before UTF-8 CSV");
+}
 for (const removedText of ["participants.csv", "attempts.csv", "learner_states.csv", "tutor_turns.csv", "recurrence_events.csv", "ai_call_logs.csv", "evaluation_summary.csv"]) {
   if (adminPage.includes(removedText)) {
     throw new Error(`admin page must not show legacy CSV link: ${removedText}`);

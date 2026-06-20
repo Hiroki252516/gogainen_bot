@@ -55,7 +55,7 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
   "group_condition": "proposed",
   "term": {
     "slug": "attention",
-    "label": "転移学習",
+    "label": "transfer",
     "definition": "..."
   },
   "question": {
@@ -130,7 +130,7 @@ ambiguous: 判定困難
   "group_condition": "proposed",
   "term": {
     "slug": "transformer",
-    "label": "転移学習",
+    "label": "transfer",
     "description": "あるデータやタスクで学習済みのモデルや特徴を、別の関連タスクの学習に活用する方法。"
   },
   "learner_state": {

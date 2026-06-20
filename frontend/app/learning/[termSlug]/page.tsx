@@ -11,13 +11,15 @@ type SessionMisconception = {
   reason?: string | null;
 };
 
+type Option = { option_id: string; label: string; body: string };
+
 type Turn = {
   turn_id: string;
   term_slug?: string;
   term_label?: string;
   tutor_message: string;
   learner_prompt: string;
-  practice_question: { body: string };
+  practice_question: { body: string; options?: Option[] };
   turn_index: number;
   max_turns: number;
   learning_stage?: string;
@@ -66,6 +68,7 @@ export default function LearningPage() {
   const [sessionId, setSessionId] = useState("");
   const [turn, setTurn] = useState<Turn | null>(null);
   const [response, setResponse] = useState("");
+  const [selectedOptionId, setSelectedOptionId] = useState("");
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -96,12 +99,18 @@ export default function LearningPage() {
 
   async function submit() {
     if (!turn || submitting) return;
+    const options = turn.practice_question?.options || [];
+    if (options.length && !selectedOptionId) {
+      setError("選択肢を選んでください。");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
+      const selectedOption = options.find((option) => option.option_id === selectedOptionId);
       const data = await api<Feedback>(`/api/tutor-turns/${turn.turn_id}/respond`, {
         method: "POST",
-        body: JSON.stringify({ learner_response: response })
+        body: JSON.stringify({ selected_option_id: selectedOptionId || null, learner_response: selectedOption?.body || response })
       });
       const updatedTurn = {
         ...turn,
@@ -115,6 +124,7 @@ export default function LearningPage() {
         const next = await api<Turn>(`/api/tutor-sessions/${sessionId}/turns`, { method: "POST", body: JSON.stringify({}) });
         setTurn(next);
         setResponse("");
+        setSelectedOptionId("");
         setFeedback(null);
       } else {
         setTurn(updatedTurn);
@@ -180,10 +190,29 @@ export default function LearningPage() {
                   <section className="learning-block problem-block" aria-labelledby="problem-title">
                     <h2 id="problem-title">問題</h2>
                     <p>{turn.practice_question?.body || turn.learner_prompt}</p>
-                    <label>
-                      あなたの回答・自己説明
-                      <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
-                    </label>
+                    {turn.practice_question?.options?.length ? (
+                      <div className="options">
+                        {turn.practice_question.options.map((option) => (
+                          <label className="option" key={option.option_id}>
+                            <input
+                              type="radio"
+                              name="learning-option"
+                              value={option.option_id}
+                              checked={selectedOptionId === option.option_id}
+                              onChange={() => setSelectedOptionId(option.option_id)}
+                            />
+                            <span>
+                              <strong>{option.label}.</strong> {option.body}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <label>
+                        あなたの回答・自己説明
+                        <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
+                      </label>
+                    )}
                   </section>
                 </div>
                 <div className="actions">
