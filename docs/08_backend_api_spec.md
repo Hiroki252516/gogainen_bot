@@ -33,7 +33,7 @@ FastAPIでREST APIを実装する。MVPでは同期APIでよい。
 
 ### GET /api/experiment/{participant_id}/pretest
 
-現行5概念の事前テスト問題を返す。選択肢は参加者ごとにランダム化し、表示順を保存する。`requires_reason=false`, `requires_confidence=false`。
+現行5概念の `pretest_v2` を返す。旧 `pretest_v1` は既存回答参照のため保持するがactive出題しない。選択肢は参加者ごとにランダム化し、表示順を保存する。`requires_reason=false`, `requires_confidence=false`。
 
 ### GET /api/experiment/{participant_id}/retest
 

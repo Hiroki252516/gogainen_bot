@@ -119,7 +119,8 @@ POST /participants
 ## Minimum Seed Data
 
 - 5 active terms
-- pretest question per term
+- `pretest_v2` question per term。旧pretest版は非activeで保持
 - formal `retest_v1` per term
 - option labels correct/M1/M2/M3/unknown
+- pretestのM1〜M3 option rationale
 - L0/transfer questions inactive or omitted in current flow

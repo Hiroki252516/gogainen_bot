@@ -2,8 +2,9 @@ from fastapi.testclient import TestClient
 
 from app.db.session import SessionLocal
 from app.main import app
-from app.models import AICallLog, Attempt, Question, QuestionOption
+from app.models import AICallLog, Attempt, Question, QuestionDisplayOrder, QuestionOption, Term
 from app.rag import retrieve_rag_context
+from app.seed.seed_questions import seed_database
 
 
 client = TestClient(app)
@@ -39,6 +40,12 @@ def create_participant(group: str = "proposed") -> tuple[str, list[dict]]:
     assert len(pretest) == 5
     assert {question["requires_reason"] for question in pretest} == {False}
     assert {question["requires_confidence"] for question in pretest} == {False}
+    db = SessionLocal()
+    try:
+        db_questions = db.query(Question).filter(Question.id.in_([question["question_id"] for question in pretest])).all()
+        assert {question.variant_key for question in db_questions} == {"pretest_v2"}
+    finally:
+        db.close()
     return pid, pretest
 
 
@@ -198,6 +205,88 @@ def test_proposed_3phase_flow_and_final_retest():
     concept_export = client.get("/api/admin/export/concept_understanding_attempts.csv")
     assert "concept_phase" in concept_export.text
     assert "return_to_phase1" in concept_export.text
+
+
+def test_pretest_v2_content_labels_rationales_and_display_order():
+    pid, pretest = create_participant("proposed")
+    expected_bodies = {
+        "transformer": "Transformerの計算構造を最も適切に説明しているものはどれか。",
+        "attention": "Transformer層におけるAttentionの処理を最も適切に説明しているものはどれか。",
+        "llm_training_process": "本研究で扱うLLMの学習過程の説明として、最も適切なものはどれか。",
+        "pretraining": "LLMの事前学習を最も適切に説明しているものはどれか。",
+        "post_training": "LLMの事後学習を最も適切に説明しているものはどれか。",
+    }
+    assert {question["term_slug"]: question["body"] for question in pretest} == expected_bodies
+
+    first_orders = {
+        question["question_id"]: [option["option_id"] for option in question["options"]]
+        for question in pretest
+    }
+    repeated = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    assert {
+        question["question_id"]: [option["option_id"] for option in question["options"]]
+        for question in repeated
+    } == first_orders
+
+    db = SessionLocal()
+    try:
+        question_ids = list(first_orders)
+        db_questions = db.query(Question).filter(Question.id.in_(question_ids)).all()
+        assert {question.variant_key for question in db_questions} == {"pretest_v2"}
+        assert db.query(QuestionDisplayOrder).filter(
+            QuestionDisplayOrder.participant_id == pid,
+            QuestionDisplayOrder.question_id.in_(question_ids),
+        ).count() == 5
+        for question in db_questions:
+            options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id).all()
+            assert len(options) == 5
+            assert sum(option.is_correct for option in options) == 1
+            assert {option.misconception_type for option in options} == {None, "M1", "M2", "M3", "unknown"}
+            assert all(option.rationale for option in options if option.misconception_type in {"M1", "M2", "M3"})
+            assert all(option.misconception_type == "unknown" for option in options if option.body == "わからない。")
+            substantive_options = [option for option in options if option.misconception_type != "unknown"]
+            lengths = [len(option.body) for option in substantive_options]
+            assert max(lengths) - min(lengths) <= 10
+            assert not any(
+                cue in option.body
+                for option in substantive_options
+                for cue in ("人間のよう", "名前に", "単に", "だけを指す")
+            )
+    finally:
+        db.close()
+
+
+def test_seed_deactivates_legacy_pretest_variants_without_deleting_them():
+    db = SessionLocal()
+    try:
+        term = db.query(Term).filter(Term.slug == "transformer").one()
+        legacy = Question(
+            term_id=term.id,
+            phase="pretest",
+            question_type="definition",
+            body="legacy pretest",
+            expected_answer="legacy",
+            expected_keywords=[],
+            construct_key="transformer_definition",
+            variant_key="pretest_v1",
+            is_active=True,
+        )
+        db.add(legacy)
+        db.commit()
+        legacy_id = legacy.id
+
+        seed_database(db)
+
+        assert db.get(Question, legacy_id) is not None
+        assert db.get(Question, legacy_id).is_active is False
+        active = db.query(Question).filter(
+            Question.term_id == term.id,
+            Question.phase == "pretest",
+            Question.is_active.is_(True),
+        ).all()
+        assert {question.variant_key for question in active} == {"pretest_v2"}
+    finally:
+        db.close()
 
 
 def test_proposed_phase2_third_fail_sets_failed_phase2():

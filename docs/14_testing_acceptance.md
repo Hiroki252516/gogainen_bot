@@ -14,6 +14,10 @@
 ## Backend Acceptance
 
 - pretestは5問、選択肢のみ、理由欄/自信度なし
+- activeなpretestは `pretest_v2` だけで、旧 `pretest_v1` は非active
+- pretest各問にcorrect/M1/M2/M3/unknownが1件ずつ保存される
+- pretestのM1〜M3選択肢に診断意図が内部メタデータとして保存される
+- 同一参加者・同一問題への再取得で、保存済みの選択肢表示順が維持される
 - pretest全誤答時にlearning targetsが5件になる
 - stable_correctだけの用語はlearning targetsに入らない
 - 提案群セッションで前提用語が3件生成・保存される

@@ -12,6 +12,7 @@
 | 提案群は3段階適応型 | `02`, `04`, `07` | learning_sessions, prerequisite_terms, concept_understanding_attempts |
 | 学習中にM再判定やL更新をしない | `04`, `10` | no dynamic scaffolding update |
 | 問題をそのまま使い回さない | `11` | construct_key, variant_key |
+| 選択肢表現から正答を推測しにくくする | `02`, `11`, `14` | pretest_v2, option rationale, randomized display order |
 | 再テストを最終テストにする | `02`, `09`, `12` | score-retest -> post_survey |
 | ログDBとCSVで分析する | `07`, `12` | export endpoints |
 

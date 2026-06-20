@@ -4,6 +4,8 @@
 
 - [x] `revised_experiment_flow_3phase_learning_session_v2.md` を学習セッション内部v2化の根拠としてdocsを更新
 - [x] 5概念pretest/retestを維持
+- [x] 正答推測手掛かりを減らした `pretest_v2` と診断意図メタデータを追加
+- [x] 旧 `pretest_v1` を削除せず非active化
 - [x] L0/transferをactive出題から外す
 - [x] 事前アンケート導線を外す
 - [x] v2原文との差分として、事前アンケートなし・転移テストなし・再テストは学習対象のみ・学習対象最大5を明記

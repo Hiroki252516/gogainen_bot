@@ -114,7 +114,9 @@ SQLite/PostgreSQL + SQLAlchemyで実装する。すべてのテーブルに `cre
 
 事前テストと再テストの選択式問題を保存する。現行active phaseは `pretest` と `retest`。`l0_check` と `transfer` は旧互換・将来拡張用として非active化してよい。
 
-`question_options.misconception_type` は正答でnull、誤答でM1/M2/M3、わからないでunknownを保存する。
+`question_options.misconception_type` は正答でnull、誤答でM1/M2/M3、わからないでunknownを保存する。`question_options.rationale` にはM1〜M3選択肢の診断意図を保存し、被験者向けAPIには返さない。
+
+activeな事前テストは `pretest_v2` とする。旧 `pretest_v1` は既存attemptとの参照整合性を保つため削除せず、`is_active=false` にする。
 
 ### attempts
 

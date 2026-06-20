@@ -11,6 +11,7 @@
 5. seed questionsはbackend起動時に自動投入される
 6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する
 7. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
+8. 本実験前に `pretest_v2` の専門家確認と対象者に近い参加者による認知インタビューが完了していることを確認する
 
 ## Participant Setup
 

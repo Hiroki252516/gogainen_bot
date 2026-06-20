@@ -32,13 +32,12 @@ def seed_database(db: Session) -> None:
         for phase in ("pretest", "retest"):
             qd = item["questions"][phase]
             construct_key = f"{item['slug']}_definition"
-            variant_key = "pretest_v1" if phase == "pretest" else "retest_v1"
-            if phase == "retest":
-                db.query(Question).filter(
-                    Question.term_id == term.id,
-                    Question.phase == "retest",
-                    Question.variant_key != variant_key,
-                ).update({Question.is_active: False}, synchronize_session=False)
+            variant_key = "pretest_v2" if phase == "pretest" else "retest_v1"
+            db.query(Question).filter(
+                Question.term_id == term.id,
+                Question.phase == phase,
+                Question.variant_key != variant_key,
+            ).update({Question.is_active: False}, synchronize_session=False)
             question = (
                 db.query(Question)
                 .filter(
@@ -73,7 +72,9 @@ def seed_database(db: Session) -> None:
                 option.option_label: option
                 for option in db.query(QuestionOption).filter(QuestionOption.question_id == question.id).all()
             }
+            diagnostic_intents = qd.get("diagnostic_intents", {})
             for order, (label, body, is_correct, misconception_type) in enumerate(qd["options"], start=1):
+                rationale = diagnostic_intents.get(misconception_type)
                 option = existing_options.get(label)
                 if not option:
                     db.add(
@@ -83,6 +84,7 @@ def seed_database(db: Session) -> None:
                             body=body,
                             is_correct=is_correct,
                             misconception_type=misconception_type,
+                            rationale=rationale,
                             default_order=order,
                         )
                     )
@@ -90,6 +92,7 @@ def seed_database(db: Session) -> None:
                     option.body = body
                     option.is_correct = is_correct
                     option.misconception_type = misconception_type
+                    option.rationale = rationale
                     option.default_order = order
 
             valid_labels = {label for label, *_ in qd["options"]}
