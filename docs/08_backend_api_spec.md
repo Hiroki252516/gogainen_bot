@@ -115,7 +115,11 @@ Response:
 Request:
 
 ```json
-{ "learner_answer": "..." }
+{
+  "learner_answer": "...",
+  "attempt_kind": "normal",
+  "clarification_parent_attempt_id": null
+}
 ```
 
 Response:
@@ -124,7 +128,9 @@ Response:
 {
   "is_passed": true,
   "feedback": "...",
-  "remediation_material": null,
+  "supplemental_material": null,
+  "next_check_question": null,
+  "requires_clarification": false,
   "next_stage": "prerequisite",
   "session_status": "prerequisite"
 }
@@ -180,6 +186,12 @@ Response:
 
 提案群ではpass時に `completed`、fail 1〜2回目に `concept_phase1`、3回fail時に `failed_phase2` を返す。統制群ではpass/failに関係なく `completed` にする。
 
+提案群の全回答APIでは、診断確定後に別AI呼び出しで支援を生成する。支援生成だけ失敗した場合はattemptと診断を重複作成せず、以下で再生成する。
+
+### POST /api/learning-sessions/{session_id}/support-events/{observation_id}/retry
+
+保存済み診断から適応支援だけを再生成する。
+
 ### POST /api/learning-sessions/{session_id}/concept-attempts
 
 旧互換API。参加者フローでは使わない。
@@ -218,6 +230,10 @@ Response:
 - POST /api/admin/ai/login/start
 - POST /api/admin/ai/login/cancel
 - POST /api/admin/ai/logout
+- GET /api/admin/diagnoses
+- POST /api/admin/diagnoses/{observation_id}/override
+
+手動修正は完了参加者だけに許可し、元診断を変更せずoverride observationとaudit eventを追加する。
 
 Allowed CSV names include:
 

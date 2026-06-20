@@ -2,7 +2,19 @@ from fastapi.testclient import TestClient
 
 from app.db.session import SessionLocal
 from app.main import app
-from app.models import AICallLog, Attempt, Question, QuestionDisplayOrder, QuestionOption, Term
+from app.models import (
+    AdaptiveSupportEvent,
+    AICallLog,
+    Attempt,
+    AuditEvent,
+    ConceptUnderstandingAttempt,
+    MisconceptionObservation,
+    Question,
+    QuestionDisplayOrder,
+    QuestionOption,
+    Term,
+    TermUnderstandingAttempt,
+)
 from app.rag import retrieve_rag_context
 from app.seed.seed_questions import seed_database
 
@@ -433,5 +445,163 @@ def test_retest_same_misconception_sets_recurrence_flag():
         attempt = db.query(Attempt).filter(Attempt.participant_id == pid, Attempt.phase == "retest").one()
         assert attempt.misconception_type == "M1"
         assert attempt.recurrence_flag is True
+    finally:
+        db.close()
+
+
+def test_proposed_learning_answer_creates_observation_and_support():
+    pid, pretest = create_participant("proposed")
+    submit_pretest(pid, pretest[:1], "unknown")
+    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
+    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
+    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
+    prereq = session["prerequisites"][0]
+    response = client.post(
+        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
+        json={"learner_answer": "M1 心理的な能力として説明します。"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["is_passed"] is False
+    assert "M1" not in body["feedback"]
+
+    db = SessionLocal()
+    try:
+        observation = (
+            db.query(MisconceptionObservation)
+            .filter_by(learning_session_id=session["learning_session_id"], source_phase="prerequisite")
+            .one()
+        )
+        assert observation.primary_misconception_type == "M1"
+        assert observation.applied_strategy == "category_reorientation"
+        observation_id = observation.id
+        support = db.query(AdaptiveSupportEvent).filter_by(misconception_observation_id=observation.id).one()
+        db.delete(support)
+        db.commit()
+    finally:
+        db.close()
+
+    retry = client.post(
+        f"/api/learning-sessions/{session['learning_session_id']}/support-events/{observation_id}/retry"
+    )
+    assert retry.status_code == 200
+    db = SessionLocal()
+    try:
+        assert db.query(MisconceptionObservation).filter_by(id=observation_id).count() == 1
+        assert db.query(TermUnderstandingAttempt).filter_by(prerequisite_term_id=prereq["prerequisite_id"]).count() == 1
+        assert db.query(AdaptiveSupportEvent).filter_by(misconception_observation_id=observation_id).count() == 1
+    finally:
+        db.close()
+
+
+def test_ambiguous_clarification_does_not_consume_extra_attempt():
+    pid, pretest = create_participant("proposed")
+    submit_pretest(pid, pretest[:1], "unknown")
+    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
+    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
+    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
+    prereq = session["prerequisites"][0]
+    first = client.post(
+        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
+        json={"learner_answer": "ambiguous 曖昧な説明です。"},
+    ).json()
+    assert first["requires_clarification"] is True
+    assert first["session"]["pending_clarification"] is not None
+
+    second = client.post(
+        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
+        json={
+            "learner_answer": f"{prereq['term_label']} の役割と対象概念との関係を十分に説明します。pass",
+            "attempt_kind": "clarification",
+            "clarification_parent_attempt_id": first["clarification_parent_attempt_id"],
+        },
+    ).json()
+    assert second["requires_clarification"] is False
+    assert second["session"]["pending_clarification"] is None
+    db = SessionLocal()
+    try:
+        attempts = db.query(TermUnderstandingAttempt).filter_by(prerequisite_term_id=prereq["prerequisite_id"]).all()
+        assert len(attempts) == 2
+        assert sum(1 for attempt in attempts if attempt.counts_toward_limit) == 1
+    finally:
+        db.close()
+
+
+def test_control_learning_does_not_create_learning_observations():
+    pid, pretest = create_participant("control")
+    submit_pretest(pid, pretest[:1], "M1")
+    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
+    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
+    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
+    prereq = session["prerequisites"][0]
+    assert client.post(
+        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
+        json={"learner_answer": "短い"},
+    ).status_code == 200
+    db = SessionLocal()
+    try:
+        assert (
+            db.query(MisconceptionObservation)
+            .filter_by(learning_session_id=session["learning_session_id"])
+            .count()
+            == 0
+        )
+        log = db.query(AICallLog).filter_by(purpose="grade_prerequisite_answer").order_by(AICallLog.created_at.desc()).first()
+        assert "diagnosed_status" not in (log.response_payload or {})
+    finally:
+        db.close()
+
+
+def test_phase2_fail_starts_new_phase1_cycle():
+    pid, pretest = create_participant("proposed")
+    submit_pretest(pid, pretest[:1], "unknown")
+    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
+    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
+    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
+    session = pass_all_prerequisites(session)
+    labels = [item["term_label"] for item in session["prerequisites"][:2]]
+    phase1 = client.post(
+        f"/api/learning-sessions/{session['learning_session_id']}/concept-phase1-attempts",
+        json={"learner_answer": f"{labels[0]} と {labels[1]} の関係を十分に説明します。pass"},
+    ).json()
+    assert phase1["session"]["status"] == "concept_phase2"
+    phase2 = client.post(
+        f"/api/learning-sessions/{session['learning_session_id']}/concept-phase2-attempts",
+        json={"learner_answer": "M1 心理的能力です。"},
+    ).json()
+    assert phase2["session"]["status"] == "concept_phase1"
+    assert phase2["session"]["concept"]["phase1"]["cycle_index"] == 2
+    assert phase2["session"]["concept"]["phase1"]["attempt_count"] == 0
+
+
+def test_manual_override_requires_completion_and_keeps_audit_history():
+    pid, pretest = create_participant("proposed")
+    submit_pretest(pid, pretest[:1], "M1")
+    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
+    db = SessionLocal()
+    try:
+        original = db.query(MisconceptionObservation).filter_by(participant_id=pid, source_phase="pretest").one()
+        original_id = original.id
+    finally:
+        db.close()
+
+    denied = client.post(
+        f"/api/admin/diagnoses/{original_id}/override",
+        json={"diagnosed_status": "resolved", "reason": "研究者確認"},
+    )
+    assert denied.status_code == 409
+    assert client.post(f"/api/participants/{pid}/survey", json={"phase": "post_survey"}).status_code == 200
+    accepted = client.post(
+        f"/api/admin/diagnoses/{original_id}/override",
+        json={"diagnosed_status": "resolved", "reason": "研究者確認"},
+    )
+    assert accepted.status_code == 200
+    db = SessionLocal()
+    try:
+        override = db.get(MisconceptionObservation, accepted.json()["observation_id"])
+        assert override is not None
+        assert override.is_manual_override is True
+        assert override.overrides_observation_id == original_id
+        assert db.query(AuditEvent).filter_by(entity_id=override.id, action="override_diagnosis").count() == 1
     finally:
         db.close()

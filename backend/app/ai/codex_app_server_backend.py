@@ -342,6 +342,7 @@ class CodexAppServerBackend:
         return result
 
     async def grade_prerequisite_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        proposed = payload.get("group_condition") == "proposed"
         schema = {
             "type": "object",
             "properties": {
@@ -359,6 +360,9 @@ class CodexAppServerBackend:
             "required": ["is_passed", "score", "feedback", "remediation_material", "core_elements_covered", "major_errors", "rubric_scores"],
             "additionalProperties": False,
         }
+        if proposed:
+            schema["properties"].update(_learning_diagnosis_properties())
+            schema["required"].extend(_learning_diagnosis_required())
         result = await self._run_structured_turn(
             "grade_prerequisite_answer",
             self._prompt(
@@ -368,6 +372,7 @@ class CodexAppServerBackend:
                     "前提用語理解の記述回答を採点する。",
                     "中核要素が含まれ重大な誤りがなければpassにする。",
                     "failなら、より簡単な再説明と具体例を remediation_material に書く。",
+                    "提案群では回答対象の前提用語についてM1/M2/M3/unknown/ambiguous/resolvedを判定する。重大な誤概念があればpassにしない。",
                     "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
                     "rag_context を優先し、教材にない内容は断定しない。",
                 ],
@@ -411,6 +416,7 @@ class CodexAppServerBackend:
         return await self.generate_concept_phase1_material(payload)
 
     async def grade_concept_phase1_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        proposed = payload.get("group_condition") == "proposed"
         schema = {
             "type": "object",
             "properties": {
@@ -425,10 +431,14 @@ class CodexAppServerBackend:
                     "type": "object",
                     "additionalProperties": {"type": "number"},
                 },
+                "confirmed_prerequisite_labels": {"type": "array", "items": {"type": "string"}},
             },
-            "required": ["is_passed", "score", "feedback", "missing_prerequisite_labels", "review_prerequisite_labels", "core_elements_covered", "major_errors", "rubric_scores"],
+            "required": ["is_passed", "score", "feedback", "missing_prerequisite_labels", "review_prerequisite_labels", "core_elements_covered", "major_errors", "rubric_scores", "confirmed_prerequisite_labels"],
             "additionalProperties": False,
         }
+        if proposed:
+            schema["properties"].update(_learning_diagnosis_properties())
+            schema["required"].extend(_learning_diagnosis_required())
         result = await self._run_structured_turn(
             "grade_concept_phase1_answer",
             self._prompt(
@@ -438,6 +448,8 @@ class CodexAppServerBackend:
                     "教材あり概念理解フェーズ1の記述回答を採点する。",
                     "前提用語を使って対象概念の役割や仕組みを説明できていればpassにする。",
                     "提案群のfailなら不足している前提用語と、直前に確認すべき関連用語を返す。統制群では不足用語リストは空でもよい。",
+                    "confirmed_prerequisite_labelsには回答中で意味のある形で正しく使われた前提用語だけを入れる。",
+                    "提案群ではM1/M2/M3/unknown/ambiguous/resolvedを判定し、重大な誤概念があればpassにしない。",
                     "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
                     "rag_context を優先し、教材にない内容は断定しない。",
                 ],
@@ -478,6 +490,7 @@ class CodexAppServerBackend:
         return {key: _strip_internal_labels(value) for key, value in result.items()}
 
     async def grade_concept_phase2_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        proposed = payload.get("group_condition") == "proposed"
         schema = {
             "type": "object",
             "properties": {
@@ -494,6 +507,9 @@ class CodexAppServerBackend:
             "required": ["is_passed", "score", "feedback", "independent_explanation_success", "return_to_phase1", "rubric_scores"],
             "additionalProperties": False,
         }
+        if proposed:
+            schema["properties"].update(_learning_diagnosis_properties())
+            schema["required"].extend(_learning_diagnosis_required())
         result = await self._run_structured_turn(
             "grade_concept_phase2_answer",
             self._prompt(
@@ -503,6 +519,7 @@ class CodexAppServerBackend:
                     "教材なし概念説明フェーズ2の回答を採点する。",
                     "対象概念の中核、前提用語の自然な利用、light_conditionsの充足、重大な誤りの有無で判断する。",
                     "提案群でfailなら return_to_phase1 を true にする。統制群は戻り制御を使わないが、採点結果としては true/false を返してよい。",
+                    "提案群ではM1/M2/M3/unknown/ambiguous/resolvedを判定し、重大な誤概念があればpassにしない。",
                     "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
                     "rag_context を優先し、教材にない内容は断定しない。",
                 ],
@@ -510,6 +527,59 @@ class CodexAppServerBackend:
             schema,
         )
         result["feedback"] = _strip_internal_labels(result["feedback"])
+        return result
+
+    async def generate_adaptive_support(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "mode": {"type": "string", "enum": ["remediation", "clarification"]},
+                "feedback": {"type": "string"},
+                "supplemental_material": {"type": ["string", "null"]},
+                "next_check_question": {"type": "string"},
+                "diagnostic_focus": {
+                    "type": "object",
+                    "properties": {
+                        "core_elements": {"type": "array", "items": {"type": "string"}},
+                        "M1_features": {"type": "array", "items": {"type": "string"}},
+                        "M2_features": {"type": "array", "items": {"type": "string"}},
+                        "M3_features": {"type": "array", "items": {"type": "string"}},
+                        "unknown_criteria": {"type": "string"},
+                    },
+                    "required": ["core_elements", "M1_features", "M2_features", "M3_features", "unknown_criteria"],
+                    "additionalProperties": False,
+                },
+                "rag_sources": {"type": "array", "items": {"type": "string"}},
+                "general_knowledge_supplement": {"type": ["string", "null"]},
+            },
+            "required": [
+                "mode",
+                "feedback",
+                "supplemental_material",
+                "next_check_question",
+                "diagnostic_focus",
+                "rag_sources",
+                "general_knowledge_supplement",
+            ],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_adaptive_support",
+            self._prompt(
+                "adaptive_support",
+                payload,
+                [
+                    "確定済みの誤概念診断と更新後状態に基づき、フィードバック、補助教材、別文面の次の確認質問を作る。",
+                    "完成回答やそのまま提出できる模範回答は禁止する。観点、部分例、比較、反例だけを示す。",
+                    "rag_contextを優先する。一般知識を補足した場合はgeneral_knowledge_supplementに分離する。",
+                    "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
+                ],
+            ),
+            schema,
+        )
+        for key in ["feedback", "supplemental_material", "next_check_question", "general_knowledge_supplement"]:
+            if result.get(key):
+                result[key] = _strip_internal_labels(result[key])
         return result
 
     async def generate_control_learning_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -846,7 +916,46 @@ _TEACHING_STRATEGIES = [
     "context_transfer_training",
     "foundational_explanation",
     "self_explanation_check",
+    "diagnostic_clarification",
+    "fading",
 ]
+
+
+def _learning_diagnosis_properties() -> dict[str, Any]:
+    return {
+        "diagnosed_status": {
+            "type": "string",
+            "enum": ["misconception", "unknown", "ambiguous", "resolved"],
+        },
+        "primary_misconception_type": {
+            "type": ["string", "null"],
+            "enum": ["M1", "M2", "M3", "unknown", None],
+        },
+        "secondary_misconception_type": {
+            "type": ["string", "null"],
+            "enum": ["M1", "M2", "M3", None],
+        },
+        "diagnosis_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "diagnosis_evidence": {"type": "string"},
+        "recommended_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
+        "strategy_override": {"type": "boolean"},
+        "strategy_override_reason": {"type": ["string", "null"]},
+        "requires_manual_review": {"type": "boolean"},
+    }
+
+
+def _learning_diagnosis_required() -> list[str]:
+    return [
+        "diagnosed_status",
+        "primary_misconception_type",
+        "secondary_misconception_type",
+        "diagnosis_confidence",
+        "diagnosis_evidence",
+        "recommended_strategy",
+        "strategy_override",
+        "strategy_override_reason",
+        "requires_manual_review",
+    ]
 
 
 def _parse_json_object(raw_text: str) -> dict[str, Any]:

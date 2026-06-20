@@ -57,14 +57,15 @@ Output:
 
 1. Create learning_session
 2. Generate 3 prerequisite_terms with RAG + pretest diagnosis
-3. Grade each term answer, max 2 attempts
+3. Grade and diagnose each term answer, update term state, generate adaptive support, max 2 normal attempts
 4. If all pass, generate concept phase1 material
-5. Grade phase1 answer, max 3 attempts
+5. Grade and diagnose phase1 answer, update concept state, generate adaptive support, max 3 attempts per cycle
 6. Phase1 fail returns missing prerequisite + previous related term for review or retries phase1
 7. Phase1 pass generates phase2 prompt and light conditions
-8. Grade phase2 answer without showing material, max 3 attempts
-9. Phase2 fail 1-2 returns to phase1; phase2 fail 3 saves `failed_phase2`
-10. Completed/blocked/failed_phase1/failed_phase2 session is saved
+8. Grade and diagnose phase2 answer without showing material, max 3 attempts
+9. Phase2 fail starts a new phase1 cycle with up to 3 attempts
+10. Phase2 fail 3 saves `failed_phase2`
+11. Completed/blocked/failed_phase1/failed_phase2 session is saved
 
 ### Control Learning
 

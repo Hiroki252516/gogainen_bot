@@ -177,6 +177,15 @@ button:disabled {
   border-collapse: collapse;
 }
 
+.table-wrap {
+  overflow-x: auto;
+}
+
+.stack.compact {
+  gap: 6px;
+  min-width: 150px;
+}
+
 .table th,
 .table td {
   border-bottom: 1px solid var(--line);

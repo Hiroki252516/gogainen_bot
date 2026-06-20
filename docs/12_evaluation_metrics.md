@@ -68,6 +68,17 @@ phase2_passed_session_count / phase2_attempted_session_count
 
 ## 補助指標
 
+### 提案群の学習中誤概念指標
+
+- 同種誤概念継続率
+- M1/M2/M3別解消率
+- 誤概念タイプ遷移率
+- 教授方略別次回答成功率
+- フェーズ1解消後フェーズ2再発率
+- 学習内最終状態別再テスト正答率
+
+これらは提案群だけで算出し、群間主要比較には使用しない。
+
 ### pretest_score
 
 事前テスト正答率。
@@ -155,6 +166,8 @@ phase2_fail_and_retest_correct_count / phase2_fail_session_count
 - tutor_turns.csv
 - recurrence_events.csv
 - ai_call_logs.csv
+- misconception_observations.csv
+- adaptive_support_events.csv
 - evaluation_summary.csv
 
 ## 欠損値の扱い

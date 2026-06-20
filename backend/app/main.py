@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.db.session import get_db, init_db
 from app.seed.seed_questions import seed_database
 from app.services.experiment import (
+    admin_diagnoses,
     admin_summary,
     create_participant,
     create_learning_session,
@@ -23,10 +24,12 @@ from app.services.experiment import (
     generate_tutor_turn,
     learning_session_state,
     learning_targets,
+    override_diagnosis,
     question_payloads,
     recalculate_evaluation,
     respond_control_learning_answer,
     respond_tutor_turn,
+    retry_adaptive_support,
     save_survey,
     score_phase,
     submit_concept_attempt,
@@ -107,6 +110,18 @@ class TutorTurnRespond(BaseModel):
 
 class LearningAnswerPayload(BaseModel):
     learner_answer: str
+    attempt_kind: str = "normal"
+    clarification_parent_attempt_id: str | None = None
+
+
+class DiagnosisOverridePayload(BaseModel):
+    diagnosed_status: str
+    primary_misconception_type: str | None = None
+    secondary_misconception_type: str | None = None
+    resolution_stage: str | None = None
+    diagnosis_evidence: str | None = None
+    reason: str
+    actor: str = "researcher"
 
 
 class ControlAnswerPayload(BaseModel):
@@ -215,7 +230,14 @@ def api_learning_session_state(session_id: str, db: Session = Depends(get_db)) -
 
 @app.post("/api/learning-sessions/{session_id}/prerequisites/{prerequisite_id}/attempts")
 async def api_submit_prerequisite_attempt(session_id: str, prerequisite_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
-    return await submit_prerequisite_attempt(db, session_id, prerequisite_id, payload.learner_answer)
+    return await submit_prerequisite_attempt(
+        db,
+        session_id,
+        prerequisite_id,
+        payload.learner_answer,
+        payload.attempt_kind,
+        payload.clarification_parent_attempt_id,
+    )
 
 
 @app.post("/api/learning-sessions/{session_id}/concept-attempts")
@@ -225,12 +247,29 @@ async def api_submit_concept_attempt(session_id: str, payload: LearningAnswerPay
 
 @app.post("/api/learning-sessions/{session_id}/concept-phase1-attempts")
 async def api_submit_concept_phase1_attempt(session_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
-    return await submit_concept_phase1_attempt(db, session_id, payload.learner_answer)
+    return await submit_concept_phase1_attempt(
+        db,
+        session_id,
+        payload.learner_answer,
+        payload.attempt_kind,
+        payload.clarification_parent_attempt_id,
+    )
 
 
 @app.post("/api/learning-sessions/{session_id}/concept-phase2-attempts")
 async def api_submit_concept_phase2_attempt(session_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
-    return await submit_concept_phase2_attempt(db, session_id, payload.learner_answer)
+    return await submit_concept_phase2_attempt(
+        db,
+        session_id,
+        payload.learner_answer,
+        payload.attempt_kind,
+        payload.clarification_parent_attempt_id,
+    )
+
+
+@app.post("/api/learning-sessions/{session_id}/support-events/{observation_id}/retry")
+async def api_retry_adaptive_support(session_id: str, observation_id: str, db: Session = Depends(get_db)) -> dict:
+    return await retry_adaptive_support(db, session_id, observation_id)
 
 
 @app.post("/api/learning-sessions/{session_id}/control-turn")
@@ -309,6 +348,17 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
             for row in rows
         ]
     }
+
+
+@app.get("/api/admin/diagnoses")
+def api_admin_diagnoses(db: Session = Depends(get_db)) -> dict:
+    return admin_diagnoses(db)
+
+
+@app.post("/api/admin/diagnoses/{observation_id}/override")
+def api_override_diagnosis(observation_id: str, payload: DiagnosisOverridePayload, db: Session = Depends(get_db)) -> dict:
+    observation = override_diagnosis(db, observation_id, payload.model_dump())
+    return {"status": "completed", "observation_id": observation.id}
 
 
 @app.get("/api/admin/export/{name}.csv")

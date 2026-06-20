@@ -22,6 +22,8 @@ class AIBackend(Protocol):
 
     async def grade_concept_phase2_answer(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
+    async def generate_adaptive_support(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
     async def generate_concept_material(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
     async def grade_concept_answer(self, payload: dict[str, Any]) -> dict[str, Any]: ...
@@ -52,6 +54,10 @@ def strategy_for(misconception_type: str | None, status: str | None, group_condi
         return "context_transfer_training"
     if status == "unknown":
         return "foundational_explanation"
+    if status == "ambiguous":
+        return "diagnostic_clarification"
+    if status == "resolved":
+        return "fading"
     if status == "unstable_correct":
         return "self_explanation_check"
     return "self_explanation_check"

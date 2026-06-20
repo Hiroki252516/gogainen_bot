@@ -15,13 +15,16 @@ from app.ai.backend import lower_level, raise_level, strategy_for
 from app.ai.factory import get_ai_backend
 from app.core.config import get_settings
 from app.models import (
+    AdaptiveSupportEvent,
     AICallLog,
     Attempt,
+    AuditEvent,
     ConceptUnderstandingAttempt,
     EvaluationSummary,
     ExportJob,
     LearnerState,
     LearningSession,
+    MisconceptionObservation,
     Participant,
     ParticipantSurvey,
     PrerequisiteTerm,
@@ -46,6 +49,15 @@ PHASE1_ATTEMPT_LIMIT = 3
 PHASE2_ATTEMPT_LIMIT = 3
 CONCEPT_ATTEMPT_LIMIT = PHASE1_ATTEMPT_LIMIT
 TERMINAL_LEARNING_STATUSES = {"completed", "blocked", "failed", "failed_phase1", "failed_phase2"}
+ALLOWED_ADAPTIVE_STRATEGIES = {
+    "category_reorientation",
+    "boundary_comparison",
+    "deep_structure_focus",
+    "foundational_explanation",
+    "diagnostic_clarification",
+    "fading",
+    "self_explanation_check",
+}
 
 
 def _rag_query(*parts: object) -> str:
@@ -191,8 +203,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
     try:
         result = await getattr(backend, purpose)(payload)
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
-        db.add(
-            AICallLog(
+        log = AICallLog(
                 provider=backend.provider,
                 fallback_provider=result.pop("_fallback_provider", None),
                 purpose=purpose,
@@ -201,9 +212,10 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
                 status="success",
                 latency_ms=latency,
             )
-        )
+        db.add(log)
         db.commit()
-        return result
+        db.refresh(log)
+        return {**result, "_ai_call_log_id": log.id}
     except CodexAppServerError as exc:
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
         db.add(
@@ -289,6 +301,32 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
         if not state:
             state = LearnerState(participant_id=participant.id, term_id=attempt.term_id, current_status=result["diagnosed_status"], primary_misconception=result["misconception_type"], secondary_misconception=result["secondary_misconception_type"], scaffolding_level=result["recommended_initial_scaffolding_level"], teaching_strategy=result["recommended_teaching_strategy"], last_attempt_id=attempt.id, state_summary=result["natural_language_diagnosis"])
             db.add(state)
+            db.flush()
+        existing_observation = db.query(MisconceptionObservation).filter_by(
+            source_phase="pretest",
+            source_attempt_id=attempt.id,
+        ).one_or_none()
+        if not existing_observation:
+            observation = MisconceptionObservation(
+                participant_id=participant.id,
+                term_id=attempt.term_id,
+                source_phase="pretest",
+                source_attempt_type="test",
+                source_attempt_id=attempt.id,
+                diagnosed_status=result["diagnosed_status"],
+                primary_misconception_type=result["misconception_type"],
+                secondary_misconception_type=result["secondary_misconception_type"],
+                diagnosis_confidence=result["diagnosis_confidence"],
+                diagnosis_evidence=result.get("evidence"),
+                resolution_stage="none",
+                transition_type="initial",
+                standard_strategy=result["recommended_teaching_strategy"],
+                applied_strategy=result["recommended_teaching_strategy"],
+                requires_manual_review=result["requires_manual_review"],
+            )
+            db.add(observation)
+            db.flush()
+            state.latest_observation_id = observation.id
         scored_attempts.append(attempt)
     db.commit()
 
@@ -502,7 +540,9 @@ def learning_session_state(db: Session, session_id: str) -> dict[str, Any]:
                 "material": session.concept_material,
                 "prompt": session.concept_prompt,
                 "expected_answer": session.concept_expected_answer,
-                "attempt_count": session.concept_phase1_attempt_count,
+                "attempt_count": session.phase1_cycle_attempt_count,
+                "total_attempt_count": session.concept_phase1_attempt_count,
+                "cycle_index": session.phase1_cycle_index,
                 "max_attempts": PHASE1_ATTEMPT_LIMIT if session.group_condition == "proposed" else 1,
             },
             "phase2": {
@@ -523,6 +563,13 @@ def learning_session_state(db: Session, session_id: str) -> dict[str, Any]:
         },
         "last_feedback": session.last_feedback,
         "blocked_reason": session.blocked_reason,
+        "pending_clarification": None
+        if not session.pending_clarification
+        else {
+            "source_attempt_type": session.pending_clarification.get("source_attempt_type"),
+            "source_attempt_id": session.pending_clarification.get("source_attempt_id"),
+            "question": session.pending_clarification.get("question"),
+        },
     }
 
 
@@ -554,6 +601,8 @@ def _learning_history(db: Session, session: LearningSession) -> dict[str, Any]:
                 "is_passed": row.is_passed,
                 "score": row.score,
                 "feedback": row.feedback,
+                "primary_misconception_type": row.primary_misconception_type,
+                "secondary_misconception_type": row.secondary_misconception_type,
             }
             for row in term_attempts[-12:]
         ],
@@ -565,6 +614,8 @@ def _learning_history(db: Session, session: LearningSession) -> dict[str, Any]:
                 "score": row.score,
                 "feedback": row.feedback,
                 "return_to_phase1": row.return_to_phase1,
+                "primary_misconception_type": row.primary_misconception_type,
+                "secondary_misconception_type": row.secondary_misconception_type,
             }
             for row in concept_attempts[-12:]
         ],
@@ -586,6 +637,210 @@ def _learning_payload_base(db: Session, session: LearningSession, *rag_parts: ob
         payload.update(_pretest_context(db, participant, term))
         payload["learning_history"] = _learning_history(db, session)
     return payload
+
+
+def _effective_learning_diagnosis(result: dict[str, Any]) -> dict[str, Any]:
+    confidence = float(result.get("diagnosis_confidence") or 0)
+    status = result.get("diagnosed_status") or "ambiguous"
+    primary = result.get("primary_misconception_type")
+    if confidence < 0.75 or status == "ambiguous":
+        status = "ambiguous"
+        primary = None
+    if status == "resolved":
+        primary = None
+    if status == "unknown":
+        primary = "unknown"
+    is_passed = bool(result.get("is_passed")) and status == "resolved"
+    standard = strategy_for(primary, status, "proposed")
+    recommended = result.get("recommended_strategy")
+    override_reason = result.get("strategy_override_reason")
+    use_override = bool(result.get("strategy_override")) and recommended in ALLOWED_ADAPTIVE_STRATEGIES and bool(override_reason)
+    return {
+        **result,
+        "is_passed": is_passed,
+        "diagnosed_status": status,
+        "primary_misconception_type": primary,
+        "diagnosis_confidence": confidence,
+        "standard_strategy": standard,
+        "applied_strategy": recommended if use_override else standard,
+        "strategy_override_reason": override_reason if use_override else None,
+        "requires_manual_review": bool(result.get("requires_manual_review")) or confidence < 0.5,
+    }
+
+
+def _latest_observation(
+    db: Session,
+    participant_id: str,
+    term_id: str,
+    prerequisite_term_id: str | None,
+) -> MisconceptionObservation | None:
+    query = db.query(MisconceptionObservation).filter_by(participant_id=participant_id, term_id=term_id)
+    if prerequisite_term_id:
+        query = query.filter_by(prerequisite_term_id=prerequisite_term_id)
+    else:
+        query = query.filter(MisconceptionObservation.prerequisite_term_id.is_(None))
+    return query.order_by(MisconceptionObservation.created_at.desc()).first()
+
+
+def _record_learning_observation(
+    db: Session,
+    *,
+    session: LearningSession,
+    source_phase: str,
+    source_attempt_type: str,
+    source_attempt_id: str,
+    diagnosis: dict[str, Any],
+    prerequisite: PrerequisiteTerm | None = None,
+) -> MisconceptionObservation:
+    previous = _latest_observation(db, session.participant_id, session.term_id, prerequisite.id if prerequisite else None)
+    previous_status = (
+        previous.diagnosed_status
+        if previous
+        else (prerequisite.current_status if prerequisite else db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one().current_status)
+    )
+    previous_type = (
+        previous.primary_misconception_type
+        if previous
+        else (prerequisite.primary_misconception_type if prerequisite else db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one().primary_misconception)
+    )
+    status = diagnosis["diagnosed_status"]
+    current_type = diagnosis.get("primary_misconception_type")
+    persistence = bool(current_type and current_type == previous_type and status == "misconception")
+    prior_resolved = (
+        db.query(MisconceptionObservation)
+        .filter_by(
+            participant_id=session.participant_id,
+            term_id=session.term_id,
+            prerequisite_term_id=prerequisite.id if prerequisite else None,
+            diagnosed_status="resolved",
+        )
+        .first()
+    )
+    prior_same = (
+        db.query(MisconceptionObservation)
+        .filter_by(
+            participant_id=session.participant_id,
+            term_id=session.term_id,
+            prerequisite_term_id=prerequisite.id if prerequisite else None,
+            primary_misconception_type=current_type,
+        )
+        .first()
+        if current_type
+        else None
+    )
+    recurrence = bool(current_type and prior_resolved and prior_same)
+    if status == "resolved":
+        resolution_stage = "confirmed_in_learning" if source_phase == "concept_phase2" else "provisional"
+        transition_type = "resolution"
+    elif persistence:
+        resolution_stage = "none"
+        transition_type = "persistence"
+    elif recurrence:
+        resolution_stage = "none"
+        transition_type = "recurrence"
+    elif previous_type and current_type and previous_type != current_type:
+        resolution_stage = "none"
+        transition_type = f"{previous_type}_to_{current_type}"
+    else:
+        resolution_stage = "none"
+        transition_type = "initial" if not previous else "status_change"
+    observation = MisconceptionObservation(
+        participant_id=session.participant_id,
+        term_id=session.term_id,
+        learning_session_id=session.id,
+        prerequisite_term_id=prerequisite.id if prerequisite else None,
+        source_phase=source_phase,
+        source_attempt_type=source_attempt_type,
+        source_attempt_id=source_attempt_id,
+        diagnosed_status=status,
+        primary_misconception_type=current_type,
+        secondary_misconception_type=diagnosis.get("secondary_misconception_type"),
+        diagnosis_confidence=diagnosis.get("diagnosis_confidence"),
+        diagnosis_evidence=diagnosis.get("diagnosis_evidence"),
+        previous_status=previous_status,
+        previous_misconception_type=previous_type,
+        resolution_stage=resolution_stage,
+        transition_type=transition_type,
+        is_persistence=persistence,
+        is_recurrence=recurrence,
+        standard_strategy=diagnosis.get("standard_strategy"),
+        applied_strategy=diagnosis.get("applied_strategy"),
+        strategy_override_reason=diagnosis.get("strategy_override_reason"),
+        requires_manual_review=bool(diagnosis.get("requires_manual_review")),
+    )
+    db.add(observation)
+    db.flush()
+    return observation
+
+
+def _apply_observation_state(
+    db: Session,
+    session: LearningSession,
+    observation: MisconceptionObservation,
+    prerequisite: PrerequisiteTerm | None = None,
+) -> None:
+    if observation.diagnosed_status == "ambiguous":
+        return
+    if prerequisite:
+        prerequisite.current_status = observation.diagnosed_status
+        prerequisite.primary_misconception_type = observation.primary_misconception_type
+        prerequisite.secondary_misconception_type = observation.secondary_misconception_type
+        prerequisite.resolution_stage = observation.resolution_stage
+        prerequisite.teaching_strategy = observation.applied_strategy
+        prerequisite.latest_observation_id = observation.id
+        return
+    state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one()
+    state.current_status = observation.diagnosed_status
+    state.primary_misconception = observation.primary_misconception_type
+    state.secondary_misconception = observation.secondary_misconception_type
+    state.previous_teaching_strategy = state.teaching_strategy
+    state.teaching_strategy = observation.applied_strategy
+    state.resolution_stage = observation.resolution_stage
+    state.latest_observation_id = observation.id
+    state.updated_reason = observation.transition_type
+
+
+async def _generate_and_store_support(
+    db: Session,
+    session: LearningSession,
+    observation: MisconceptionObservation,
+    *,
+    mode: str,
+) -> AdaptiveSupportEvent:
+    term = db.get(Term, session.term_id)
+    payload = _learning_payload_base(db, session, observation.diagnosis_evidence)
+    payload.update(
+        {
+            "mode": mode,
+            "observation": {
+                "diagnosed_status": observation.diagnosed_status,
+                "primary_misconception_type": observation.primary_misconception_type,
+                "secondary_misconception_type": observation.secondary_misconception_type,
+                "diagnosis_evidence": observation.diagnosis_evidence,
+                "resolution_stage": observation.resolution_stage,
+                "standard_strategy": observation.standard_strategy,
+                "applied_strategy": observation.applied_strategy,
+            },
+            "rag_context": _learning_rag_context(term, observation.diagnosis_evidence, observation.applied_strategy),
+        }
+    )
+    result = await _ai_call(db, "generate_adaptive_support", payload)
+    event = AdaptiveSupportEvent(
+        misconception_observation_id=observation.id,
+        learning_session_id=session.id,
+        mode=mode,
+        feedback=result["feedback"],
+        supplemental_material=result.get("supplemental_material"),
+        next_check_question=result.get("next_check_question"),
+        diagnostic_focus=result.get("diagnostic_focus"),
+        rag_sources=result.get("rag_sources"),
+        general_knowledge_supplement=result.get("general_knowledge_supplement"),
+        ai_call_log_id=result.get("_ai_call_log_id"),
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event
 
 
 def _prerequisites_complete(session: LearningSession, prerequisites: list[PrerequisiteTerm]) -> bool:
@@ -633,7 +888,14 @@ async def _ensure_concept_material(db: Session, session: LearningSession) -> Non
     await _ensure_concept_phase1_material(db, session)
 
 
-async def submit_prerequisite_attempt(db: Session, session_id: str, prerequisite_id: str, learner_answer: str) -> dict[str, Any]:
+async def submit_prerequisite_attempt(
+    db: Session,
+    session_id: str,
+    prerequisite_id: str,
+    learner_answer: str,
+    attempt_kind: str = "normal",
+    clarification_parent_attempt_id: str | None = None,
+) -> dict[str, Any]:
     session = db.get(LearningSession, session_id)
     prereq = db.get(PrerequisiteTerm, prerequisite_id)
     if not session or not prereq or prereq.learning_session_id != session_id:
@@ -643,7 +905,15 @@ async def submit_prerequisite_attempt(db: Session, session_id: str, prerequisite
 
     participant = get_participant(db, session.participant_id)
     term = db.get(Term, session.term_id)
-    attempt_index = prereq.attempt_count + 1
+    is_clarification = attempt_kind == "clarification"
+    if is_clarification:
+        pending = session.pending_clarification or {}
+        if pending.get("source_attempt_type") != "prerequisite" or pending.get("prerequisite_id") != prereq.id:
+            raise HTTPException(status_code=400, detail="clarification is not pending")
+        clarification_parent_attempt_id = clarification_parent_attempt_id or pending.get("source_attempt_id")
+    attempt_index = (
+        db.query(func.count(TermUnderstandingAttempt.id)).filter_by(prerequisite_term_id=prereq.id).scalar() or 0
+    ) + 1
     max_attempts = TERM_ATTEMPT_LIMIT if session.group_condition == "proposed" else CONTROL_TERM_ATTEMPT_LIMIT
     payload = {
         "participant_id": participant.id,
@@ -658,35 +928,104 @@ async def submit_prerequisite_attempt(db: Session, session_id: str, prerequisite
         "learner_answer": learner_answer,
         "attempt_index": attempt_index,
         "max_attempts": max_attempts,
+        "attempt_kind": attempt_kind,
         "rag_context": _learning_rag_context(term, prereq.term_label, learner_answer),
     }
+    if is_clarification:
+        payload["prerequisite"]["check_question"] = (session.pending_clarification or {}).get("question") or prereq.check_question
     if session.group_condition == "proposed":
         payload.update(_pretest_context(db, participant, term))
         payload["learning_history"] = _learning_history(db, session)
-    result = await _ai_call(db, "grade_prerequisite_answer", payload)
-    is_passed = bool(result["is_passed"])
-    db.add(
-        TermUnderstandingAttempt(
-            prerequisite_term_id=prereq.id,
-            participant_id=participant.id,
-            learning_session_id=session.id,
-            attempt_index=attempt_index,
-            learner_answer=learner_answer,
-            is_passed=is_passed,
-            score=result.get("score"),
-            feedback=result["feedback"],
-            remediation_material=result.get("remediation_material"),
-            grading_json=result,
-        )
+    attempt = TermUnderstandingAttempt(
+        prerequisite_term_id=prereq.id,
+        participant_id=participant.id,
+        learning_session_id=session.id,
+        attempt_index=attempt_index,
+        learner_answer=learner_answer,
+        is_passed=False,
+        feedback="診断中",
+        attempt_kind=attempt_kind,
+        counts_toward_limit=not is_clarification,
+        clarification_parent_attempt_id=clarification_parent_attempt_id,
+        presented_question=(session.pending_clarification or {}).get("question") if is_clarification else prereq.check_question,
+        diagnostic_focus=(session.pending_clarification or {}).get("diagnostic_focus") if is_clarification else prereq.diagnostic_focus,
     )
-    prereq.attempt_count = attempt_index
-    prereq.last_feedback = result["feedback"]
-    prereq.remediation_material = result.get("remediation_material")
-    prereq.status = "passed" if is_passed else ("failed" if attempt_index >= max_attempts else "review")
-    session.last_feedback = result["feedback"]
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+
+    result = await _ai_call(db, "grade_prerequisite_answer", payload)
+    support: AdaptiveSupportEvent | None = None
+    if session.group_condition == "proposed":
+        diagnosis = _effective_learning_diagnosis(result)
+        observation = _record_learning_observation(
+            db,
+            session=session,
+            source_phase="prerequisite",
+            source_attempt_type=attempt_kind,
+            source_attempt_id=attempt.id,
+            diagnosis=diagnosis,
+            prerequisite=prereq,
+        )
+        attempt.diagnosis_observation_id = observation.id
+        attempt.primary_misconception_type = observation.primary_misconception_type
+        attempt.secondary_misconception_type = observation.secondary_misconception_type
+        attempt.is_passed = bool(diagnosis["is_passed"])
+        attempt.score = result.get("score")
+        attempt.grading_json = result
+        attempt.feedback = result.get("feedback") or ""
+        if not is_clarification:
+            prereq.attempt_count += 1
+        _apply_observation_state(db, session, observation, prereq)
+        db.commit()
+        mode = "clarification" if observation.diagnosed_status == "ambiguous" else "remediation"
+        support = await _generate_and_store_support(db, session, observation, mode=mode)
+        attempt.feedback = support.feedback
+        attempt.remediation_material = support.supplemental_material
+        attempt.diagnostic_focus = support.diagnostic_focus
+        if observation.diagnosed_status == "ambiguous" and not is_clarification:
+            session.pending_clarification = {
+                "source_attempt_type": "prerequisite",
+                "source_attempt_id": attempt.id,
+                "observation_id": observation.id,
+                "prerequisite_id": prereq.id,
+                "question": support.next_check_question,
+                "diagnostic_focus": support.diagnostic_focus,
+            }
+            prereq.status = "review"
+            session.last_feedback = support.feedback
+            db.commit()
+            return {
+                "is_passed": False,
+                "feedback": support.feedback,
+                "supplemental_material": support.supplemental_material,
+                "next_check_question": support.next_check_question,
+                "requires_clarification": True,
+                "clarification_parent_attempt_id": attempt.id,
+                "session": learning_session_state(db, session.id),
+            }
+        session.pending_clarification = None
+        is_passed = attempt.is_passed
+    else:
+        is_passed = bool(result["is_passed"])
+        attempt.is_passed = is_passed
+        attempt.score = result.get("score")
+        attempt.feedback = result["feedback"]
+        attempt.remediation_material = result.get("remediation_material")
+        attempt.grading_json = result
+        if not is_clarification:
+            prereq.attempt_count += 1
+
+    prereq.last_feedback = support.feedback if support else result["feedback"]
+    prereq.remediation_material = support.supplemental_material if support else result.get("remediation_material")
+    if support and support.next_check_question and not is_passed:
+        prereq.check_question = support.next_check_question
+        prereq.diagnostic_focus = support.diagnostic_focus
+    prereq.status = "passed" if is_passed else ("failed" if prereq.attempt_count >= max_attempts else "review")
+    session.last_feedback = prereq.last_feedback
 
     prerequisites = _prerequisite_rows(db, session.id)
-    if session.group_condition == "proposed" and not is_passed and attempt_index >= TERM_ATTEMPT_LIMIT:
+    if session.group_condition == "proposed" and not is_passed and prereq.attempt_count >= TERM_ATTEMPT_LIMIT:
         session.status = "blocked"
         session.blocked_reason = f"{prereq.term_label} の理解確認を2回通過できませんでした。"
         session.completed_at = now()
@@ -696,7 +1035,14 @@ async def submit_prerequisite_attempt(db: Session, session_id: str, prerequisite
     else:
         session.status = "prerequisite"
     db.commit()
-    return {"is_passed": is_passed, "feedback": result["feedback"], "session": learning_session_state(db, session.id)}
+    return {
+        "is_passed": is_passed,
+        "feedback": prereq.last_feedback,
+        "supplemental_material": prereq.remediation_material,
+        "next_check_question": support.next_check_question if support and not is_passed else None,
+        "requires_clarification": False,
+        "session": learning_session_state(db, session.id),
+    }
 
 
 def _ids_for_labels(prereqs: list[PrerequisiteTerm], labels: list[str]) -> list[str]:
@@ -709,7 +1055,13 @@ def _ids_for_labels(prereqs: list[PrerequisiteTerm], labels: list[str]) -> list[
     return out
 
 
-async def submit_concept_phase1_attempt(db: Session, session_id: str, learner_answer: str) -> dict[str, Any]:
+async def submit_concept_phase1_attempt(
+    db: Session,
+    session_id: str,
+    learner_answer: str,
+    attempt_kind: str = "normal",
+    clarification_parent_attempt_id: str | None = None,
+) -> dict[str, Any]:
     session = db.get(LearningSession, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="learning session not found")
@@ -722,7 +1074,18 @@ async def submit_concept_phase1_attempt(db: Session, session_id: str, learner_an
 
     participant = get_participant(db, session.participant_id)
     term = db.get(Term, session.term_id)
-    attempt_index = session.concept_phase1_attempt_count + 1
+    is_clarification = attempt_kind == "clarification"
+    if is_clarification:
+        pending = session.pending_clarification or {}
+        if pending.get("source_attempt_type") != "concept_phase1":
+            raise HTTPException(status_code=400, detail="clarification is not pending")
+        clarification_parent_attempt_id = clarification_parent_attempt_id or pending.get("source_attempt_id")
+    attempt_index = (
+        db.query(func.count(ConceptUnderstandingAttempt.id))
+        .filter_by(learning_session_id=session.id, concept_phase="phase1")
+        .scalar()
+        or 0
+    ) + 1
     max_attempts = PHASE1_ATTEMPT_LIMIT if session.group_condition == "proposed" else 1
     payload = _learning_payload_base(db, session, session.concept_prompt, learner_answer)
     payload.update(
@@ -733,63 +1096,154 @@ async def submit_concept_phase1_attempt(db: Session, session_id: str, learner_an
             "learner_answer": learner_answer,
             "attempt_index": attempt_index,
             "max_attempts": max_attempts,
+            "attempt_kind": attempt_kind,
         }
     )
+    if is_clarification:
+        payload["concept_prompt"] = (session.pending_clarification or {}).get("question") or session.concept_prompt
+    attempt = ConceptUnderstandingAttempt(
+        learning_session_id=session.id,
+        participant_id=participant.id,
+        attempt_index=attempt_index,
+        concept_phase="phase1",
+        concept_material=session.concept_material or "",
+        prompt=(session.pending_clarification or {}).get("question") if is_clarification else (session.concept_prompt or ""),
+        material_shown=True,
+        learner_answer=learner_answer,
+        is_passed=False,
+        feedback="診断中",
+        missing_prerequisite_ids=[],
+        review_prerequisite_ids=[],
+        independent_explanation_success=None,
+        return_to_phase1=False,
+        phase1_cycle_index=session.phase1_cycle_index,
+        attempt_kind=attempt_kind,
+        counts_toward_limit=not is_clarification,
+        clarification_parent_attempt_id=clarification_parent_attempt_id,
+        presented_question=(session.pending_clarification or {}).get("question") if is_clarification else session.concept_prompt,
+        diagnostic_focus=(session.pending_clarification or {}).get("diagnostic_focus") if is_clarification else None,
+    )
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
     result = await _ai_call(db, "grade_concept_phase1_answer", payload)
     missing_ids = _ids_for_labels(prereqs, result.get("missing_prerequisite_labels") or [])
     review_ids = _ids_for_labels(prereqs, result.get("review_prerequisite_labels") or [])
+    support: AdaptiveSupportEvent | None = None
     if session.group_condition == "proposed":
+        diagnosis = _effective_learning_diagnosis(result)
+        observation = _record_learning_observation(
+            db,
+            session=session,
+            source_phase="concept_phase1",
+            source_attempt_type=attempt_kind,
+            source_attempt_id=attempt.id,
+            diagnosis=diagnosis,
+        )
+        attempt.diagnosis_observation_id = observation.id
+        attempt.primary_misconception_type = observation.primary_misconception_type
+        attempt.secondary_misconception_type = observation.secondary_misconception_type
+        attempt.is_passed = bool(diagnosis["is_passed"])
+        attempt.score = result.get("score")
+        attempt.feedback = result.get("feedback") or ""
+        attempt.missing_prerequisite_ids = missing_ids
+        attempt.review_prerequisite_ids = review_ids
+        attempt.rubric_scores = result.get("rubric_scores")
+        attempt.grading_json = result
+        if not is_clarification:
+            session.concept_phase1_attempt_count += 1
+            session.phase1_cycle_attempt_count += 1
+            session.concept_attempt_count = session.concept_phase1_attempt_count
+        _apply_observation_state(db, session, observation)
+        db.commit()
+        mode = "clarification" if observation.diagnosed_status == "ambiguous" else "remediation"
+        support = await _generate_and_store_support(db, session, observation, mode=mode)
+        if observation.diagnosed_status == "ambiguous" and not is_clarification:
+            session.pending_clarification = {
+                "source_attempt_type": "concept_phase1",
+                "source_attempt_id": attempt.id,
+                "observation_id": observation.id,
+                "question": support.next_check_question,
+                "diagnostic_focus": support.diagnostic_focus,
+            }
+            attempt.feedback = support.feedback
+            attempt.diagnostic_focus = support.diagnostic_focus
+            db.commit()
+            return {
+                "is_passed": False,
+                "feedback": support.feedback,
+                "supplemental_material": support.supplemental_material,
+                "next_check_question": support.next_check_question,
+                "requires_clarification": True,
+                "clarification_parent_attempt_id": attempt.id,
+                "missing_prerequisite_ids": [],
+                "review_prerequisite_ids": [],
+                "session": learning_session_state(db, session.id),
+            }
+        session.pending_clarification = None
+        is_passed = attempt.is_passed
+    else:
+        is_passed = bool(result["is_passed"])
+        attempt.is_passed = is_passed
+
+    attempt.score = result.get("score")
+    attempt.feedback = support.feedback if support else result["feedback"]
+    attempt.missing_prerequisite_ids = missing_ids
+    attempt.review_prerequisite_ids = review_ids
+    attempt.rubric_scores = result.get("rubric_scores")
+    attempt.grading_json = result
+    if support:
+        attempt.diagnostic_focus = support.diagnostic_focus
+    if session.group_condition == "control" and not is_clarification:
+        session.concept_phase1_attempt_count += 1
+        session.phase1_cycle_attempt_count += 1
+        session.concept_attempt_count = session.concept_phase1_attempt_count
+    session.last_feedback = attempt.feedback
+
+    if session.group_condition == "proposed":
+        for label in result.get("confirmed_prerequisite_labels") or []:
+            row = next((item for item in prereqs if item.term_label == label), None)
+            if row:
+                row.current_status = "resolved"
+                row.resolution_stage = "confirmed_in_learning"
         for prereq_id in missing_ids + review_ids:
             row = db.get(PrerequisiteTerm, prereq_id)
             if row:
                 row.status = "review"
                 row.attempt_count = 0
-    is_passed = bool(result["is_passed"])
-    db.add(
-        ConceptUnderstandingAttempt(
-            learning_session_id=session.id,
-            participant_id=participant.id,
-            attempt_index=attempt_index,
-            concept_phase="phase1",
-            concept_material=session.concept_material or "",
-            prompt=session.concept_prompt or "",
-            material_shown=True,
-            learner_answer=learner_answer,
-            is_passed=is_passed,
-            score=result.get("score"),
-            feedback=result["feedback"],
-            missing_prerequisite_ids=missing_ids,
-            review_prerequisite_ids=review_ids,
-            independent_explanation_success=None,
-            return_to_phase1=False,
-            rubric_scores=result.get("rubric_scores"),
-            grading_json=result,
-        )
-    )
-    session.concept_phase1_attempt_count = attempt_index
-    session.concept_attempt_count = attempt_index
-    session.last_feedback = result["feedback"]
     if session.group_condition == "control":
         await _ensure_concept_phase2_prompt(db, session)
     elif is_passed:
         await _ensure_concept_phase2_prompt(db, session)
-    elif attempt_index >= PHASE1_ATTEMPT_LIMIT:
+    elif session.phase1_cycle_attempt_count >= PHASE1_ATTEMPT_LIMIT:
         session.status = "failed_phase1"
         session.blocked_reason = "概念フェーズ1を3回通過できませんでした。"
         session.completed_at = now()
     else:
         session.status = "prerequisite" if (missing_ids or review_ids) else "concept_phase1"
+        if support and not (missing_ids or review_ids):
+            session.concept_material = support.supplemental_material or session.concept_material
+            session.concept_prompt = support.next_check_question or session.concept_prompt
     db.commit()
     return {
         "is_passed": is_passed,
-        "feedback": result["feedback"],
+        "feedback": attempt.feedback,
+        "supplemental_material": support.supplemental_material if support else None,
+        "next_check_question": support.next_check_question if support and not is_passed else None,
+        "requires_clarification": False,
         "missing_prerequisite_ids": missing_ids,
         "review_prerequisite_ids": review_ids,
         "session": learning_session_state(db, session.id),
     }
 
 
-async def submit_concept_phase2_attempt(db: Session, session_id: str, learner_answer: str) -> dict[str, Any]:
+async def submit_concept_phase2_attempt(
+    db: Session,
+    session_id: str,
+    learner_answer: str,
+    attempt_kind: str = "normal",
+    clarification_parent_attempt_id: str | None = None,
+) -> dict[str, Any]:
     session = db.get(LearningSession, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="learning session not found")
@@ -799,7 +1253,18 @@ async def submit_concept_phase2_attempt(db: Session, session_id: str, learner_an
         raise HTTPException(status_code=400, detail="phase1 material must exist first")
     await _ensure_concept_phase2_prompt(db, session)
 
-    attempt_index = session.concept_phase2_attempt_count + 1
+    is_clarification = attempt_kind == "clarification"
+    if is_clarification:
+        pending = session.pending_clarification or {}
+        if pending.get("source_attempt_type") != "concept_phase2":
+            raise HTTPException(status_code=400, detail="clarification is not pending")
+        clarification_parent_attempt_id = clarification_parent_attempt_id or pending.get("source_attempt_id")
+    attempt_index = (
+        db.query(func.count(ConceptUnderstandingAttempt.id))
+        .filter_by(learning_session_id=session.id, concept_phase="phase2")
+        .scalar()
+        or 0
+    ) + 1
     max_attempts = PHASE2_ATTEMPT_LIMIT if session.group_condition == "proposed" else 1
     payload = _learning_payload_base(db, session, session.phase2_prompt, session.phase2_light_conditions, learner_answer)
     payload.update(
@@ -810,51 +1275,129 @@ async def submit_concept_phase2_attempt(db: Session, session_id: str, learner_an
             "learner_answer": learner_answer,
             "attempt_index": attempt_index,
             "max_attempts": max_attempts,
+            "attempt_kind": attempt_kind,
         }
     )
-    result = await _ai_call(db, "grade_concept_phase2_answer", payload)
-    is_passed = bool(result["is_passed"])
-    db.add(
-        ConceptUnderstandingAttempt(
-            learning_session_id=session.id,
-            participant_id=session.participant_id,
-            attempt_index=attempt_index,
-            concept_phase="phase2",
-            concept_material=session.concept_material or "",
-            prompt=session.phase2_prompt or "",
-            material_shown=False,
-            light_condition_text=session.phase2_light_conditions,
-            learner_answer=learner_answer,
-            is_passed=is_passed,
-            score=result.get("score"),
-            feedback=result["feedback"],
-            missing_prerequisite_ids=[],
-            review_prerequisite_ids=[],
-            independent_explanation_success=result.get("independent_explanation_success"),
-            return_to_phase1=(not is_passed and session.group_condition == "proposed"),
-            rubric_scores=result.get("rubric_scores"),
-            grading_json=result,
-        )
+    if is_clarification:
+        payload["phase2_prompt"] = (session.pending_clarification or {}).get("question") or session.phase2_prompt
+    attempt = ConceptUnderstandingAttempt(
+        learning_session_id=session.id,
+        participant_id=session.participant_id,
+        attempt_index=attempt_index,
+        concept_phase="phase2",
+        concept_material=session.concept_material or "",
+        prompt=(session.pending_clarification or {}).get("question") if is_clarification else (session.phase2_prompt or ""),
+        material_shown=False,
+        light_condition_text=session.phase2_light_conditions,
+        learner_answer=learner_answer,
+        is_passed=False,
+        feedback="診断中",
+        missing_prerequisite_ids=[],
+        review_prerequisite_ids=[],
+        return_to_phase1=False,
+        phase1_cycle_index=session.phase1_cycle_index,
+        attempt_kind=attempt_kind,
+        counts_toward_limit=not is_clarification,
+        clarification_parent_attempt_id=clarification_parent_attempt_id,
+        presented_question=(session.pending_clarification or {}).get("question") if is_clarification else session.phase2_prompt,
+        diagnostic_focus=(session.pending_clarification or {}).get("diagnostic_focus") if is_clarification else None,
     )
-    session.concept_phase2_attempt_count = attempt_index
-    session.last_feedback = result["feedback"]
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+    result = await _ai_call(db, "grade_concept_phase2_answer", payload)
+    support: AdaptiveSupportEvent | None = None
+    if session.group_condition == "proposed":
+        diagnosis = _effective_learning_diagnosis(result)
+        observation = _record_learning_observation(
+            db,
+            session=session,
+            source_phase="concept_phase2",
+            source_attempt_type=attempt_kind,
+            source_attempt_id=attempt.id,
+            diagnosis=diagnosis,
+        )
+        attempt.diagnosis_observation_id = observation.id
+        attempt.primary_misconception_type = observation.primary_misconception_type
+        attempt.secondary_misconception_type = observation.secondary_misconception_type
+        attempt.is_passed = bool(diagnosis["is_passed"])
+        attempt.score = result.get("score")
+        attempt.feedback = result.get("feedback") or ""
+        attempt.independent_explanation_success = result.get("independent_explanation_success")
+        attempt.return_to_phase1 = not attempt.is_passed
+        attempt.rubric_scores = result.get("rubric_scores")
+        attempt.grading_json = result
+        if not is_clarification:
+            session.concept_phase2_attempt_count += 1
+        _apply_observation_state(db, session, observation)
+        db.commit()
+        mode = "clarification" if observation.diagnosed_status == "ambiguous" else "remediation"
+        support = await _generate_and_store_support(db, session, observation, mode=mode)
+        if observation.diagnosed_status == "ambiguous" and not is_clarification:
+            session.pending_clarification = {
+                "source_attempt_type": "concept_phase2",
+                "source_attempt_id": attempt.id,
+                "observation_id": observation.id,
+                "question": support.next_check_question,
+                "diagnostic_focus": support.diagnostic_focus,
+            }
+            attempt.feedback = support.feedback
+            attempt.diagnostic_focus = support.diagnostic_focus
+            db.commit()
+            return {
+                "is_passed": False,
+                "feedback": support.feedback,
+                "supplemental_material": support.supplemental_material,
+                "next_check_question": support.next_check_question,
+                "requires_clarification": True,
+                "clarification_parent_attempt_id": attempt.id,
+                "return_to_phase1": False,
+                "session": learning_session_state(db, session.id),
+            }
+        session.pending_clarification = None
+        is_passed = attempt.is_passed
+    else:
+        is_passed = bool(result["is_passed"])
+        attempt.is_passed = is_passed
+
+    attempt.score = result.get("score")
+    attempt.feedback = support.feedback if support else result["feedback"]
+    attempt.independent_explanation_success = result.get("independent_explanation_success")
+    attempt.return_to_phase1 = not is_passed and session.group_condition == "proposed"
+    attempt.rubric_scores = result.get("rubric_scores")
+    attempt.grading_json = result
+    if support:
+        attempt.diagnostic_focus = support.diagnostic_focus
+    if session.group_condition == "control" and not is_clarification:
+        session.concept_phase2_attempt_count += 1
+    session.last_feedback = attempt.feedback
     if session.group_condition == "control":
         session.status = "completed"
         session.completed_at = now()
     elif is_passed:
         session.status = "completed"
         session.completed_at = now()
-    elif attempt_index >= PHASE2_ATTEMPT_LIMIT:
+    elif session.concept_phase2_attempt_count >= PHASE2_ATTEMPT_LIMIT:
         session.status = "failed_phase2"
         session.blocked_reason = "概念フェーズ2を3回通過できませんでした。"
         session.completed_at = now()
     else:
         session.phase2_retry_count += 1
+        session.phase1_cycle_index += 1
+        session.phase1_cycle_attempt_count = 0
+        session.concept_material = support.supplemental_material if support and support.supplemental_material else session.concept_material
+        session.concept_prompt = support.next_check_question if support and support.next_check_question else session.concept_prompt
+        session.phase2_prompt = None
+        session.phase2_light_conditions = None
+        session.phase2_expected_answer = None
         session.status = "concept_phase1"
     db.commit()
     return {
         "is_passed": is_passed,
-        "feedback": result["feedback"],
+        "feedback": attempt.feedback,
+        "supplemental_material": support.supplemental_material if support else None,
+        "next_check_question": support.next_check_question if support and not is_passed else None,
+        "requires_clarification": False,
         "return_to_phase1": session.group_condition == "proposed" and not is_passed,
         "session": learning_session_state(db, session.id),
     }
@@ -862,6 +1405,110 @@ async def submit_concept_phase2_attempt(db: Session, session_id: str, learner_an
 
 async def submit_concept_attempt(db: Session, session_id: str, learner_answer: str) -> dict[str, Any]:
     return await submit_concept_phase1_attempt(db, session_id, learner_answer)
+
+
+async def retry_adaptive_support(
+    db: Session,
+    session_id: str,
+    observation_id: str,
+) -> dict[str, Any]:
+    session = db.get(LearningSession, session_id)
+    observation = db.get(MisconceptionObservation, observation_id)
+    if not session or not observation or observation.learning_session_id != session.id:
+        raise HTTPException(status_code=404, detail="diagnosis observation not found")
+    if session.group_condition != "proposed":
+        raise HTTPException(status_code=400, detail="adaptive support is proposed-only")
+    existing = (
+        db.query(AdaptiveSupportEvent)
+        .filter_by(misconception_observation_id=observation.id)
+        .order_by(AdaptiveSupportEvent.created_at.desc())
+        .first()
+    )
+    if existing:
+        return {
+            "feedback": existing.feedback,
+            "supplemental_material": existing.supplemental_material,
+            "next_check_question": existing.next_check_question,
+            "requires_clarification": existing.mode == "clarification",
+            "session": learning_session_state(db, session.id),
+        }
+    mode = "clarification" if observation.diagnosed_status == "ambiguous" else "remediation"
+    support = await _generate_and_store_support(db, session, observation, mode=mode)
+    session.last_feedback = support.feedback
+    if mode == "clarification":
+        session.pending_clarification = {
+            "source_attempt_type": observation.source_phase,
+            "source_attempt_id": observation.source_attempt_id,
+            "observation_id": observation.id,
+            "prerequisite_id": observation.prerequisite_term_id,
+            "question": support.next_check_question,
+            "diagnostic_focus": support.diagnostic_focus,
+        }
+    elif observation.source_phase == "prerequisite" and observation.prerequisite_term_id:
+        prereq = db.get(PrerequisiteTerm, observation.prerequisite_term_id)
+        attempt = db.get(TermUnderstandingAttempt, observation.source_attempt_id)
+        if prereq and attempt:
+            attempt.feedback = support.feedback
+            attempt.remediation_material = support.supplemental_material
+            attempt.diagnostic_focus = support.diagnostic_focus
+            prereq.last_feedback = support.feedback
+            prereq.remediation_material = support.supplemental_material
+            if support.next_check_question and not attempt.is_passed:
+                prereq.check_question = support.next_check_question
+            prereq.status = "passed" if attempt.is_passed else ("failed" if prereq.attempt_count >= TERM_ATTEMPT_LIMIT else "review")
+            prerequisites = _prerequisite_rows(db, session.id)
+            if not attempt.is_passed and prereq.attempt_count >= TERM_ATTEMPT_LIMIT:
+                session.status = "blocked"
+                session.completed_at = now()
+            elif _prerequisites_complete(session, prerequisites):
+                await _ensure_concept_phase1_material(db, session)
+            else:
+                session.status = "prerequisite"
+    elif observation.source_phase == "concept_phase1":
+        attempt = db.get(ConceptUnderstandingAttempt, observation.source_attempt_id)
+        if attempt:
+            attempt.feedback = support.feedback
+            attempt.diagnostic_focus = support.diagnostic_focus
+            if attempt.is_passed:
+                await _ensure_concept_phase2_prompt(db, session)
+            elif session.phase1_cycle_attempt_count >= PHASE1_ATTEMPT_LIMIT:
+                session.status = "failed_phase1"
+                session.completed_at = now()
+            elif attempt.missing_prerequisite_ids or attempt.review_prerequisite_ids:
+                session.status = "prerequisite"
+            else:
+                session.concept_material = support.supplemental_material or session.concept_material
+                session.concept_prompt = support.next_check_question or session.concept_prompt
+                session.status = "concept_phase1"
+    elif observation.source_phase == "concept_phase2":
+        attempt = db.get(ConceptUnderstandingAttempt, observation.source_attempt_id)
+        if attempt:
+            attempt.feedback = support.feedback
+            attempt.diagnostic_focus = support.diagnostic_focus
+            if attempt.is_passed:
+                session.status = "completed"
+                session.completed_at = now()
+            elif session.concept_phase2_attempt_count >= PHASE2_ATTEMPT_LIMIT:
+                session.status = "failed_phase2"
+                session.completed_at = now()
+            else:
+                session.phase2_retry_count += 1
+                session.phase1_cycle_index += 1
+                session.phase1_cycle_attempt_count = 0
+                session.concept_material = support.supplemental_material or session.concept_material
+                session.concept_prompt = support.next_check_question or session.concept_prompt
+                session.phase2_prompt = None
+                session.phase2_light_conditions = None
+                session.phase2_expected_answer = None
+                session.status = "concept_phase1"
+    db.commit()
+    return {
+        "feedback": support.feedback,
+        "supplemental_material": support.supplemental_material,
+        "next_check_question": support.next_check_question,
+        "requires_clarification": mode == "clarification",
+        "session": learning_session_state(db, session.id),
+    }
 
 
 async def generate_control_learning_turn(db: Session, session_id: str) -> dict[str, Any]:
@@ -1097,6 +1744,31 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
                 state.teaching_strategy = strategy_for(attempt.misconception_type, "misconception", participant.group_condition)
                 db.add(RecurrenceEvent(participant_id=participant.id, term_id=attempt.term_id, previous_attempt_id=previous.id, current_attempt_id=attempt.id, previous_misconception_type=previous.misconception_type, current_misconception_type=attempt.misconception_type, is_same_type=True, phase=phase))
             state.scaffolding_level = lower_level(state.scaffolding_level) if attempt.is_correct else state.scaffolding_level
+            previous_observation = _latest_observation(db, participant.id, attempt.term_id, None)
+            retest_status = "resolved" if attempt.is_correct else ("unknown" if attempt.misconception_type == "unknown" else "misconception")
+            observation = MisconceptionObservation(
+                participant_id=participant.id,
+                term_id=attempt.term_id,
+                source_phase="retest",
+                source_attempt_type="test",
+                source_attempt_id=attempt.id,
+                diagnosed_status=retest_status,
+                primary_misconception_type=None if attempt.is_correct else attempt.misconception_type,
+                secondary_misconception_type=attempt.secondary_misconception_type,
+                diagnosis_confidence=1.0,
+                diagnosis_evidence=option.body if option else attempt.free_text_answer,
+                previous_status=previous_observation.diagnosed_status if previous_observation else state.current_status,
+                previous_misconception_type=previous_observation.primary_misconception_type if previous_observation else state.primary_misconception,
+                resolution_stage="confirmed_by_retest" if attempt.is_correct else "none",
+                transition_type="resolution" if attempt.is_correct else ("recurrence" if attempt.recurrence_flag else "retest_change"),
+                is_recurrence=attempt.recurrence_flag,
+                standard_strategy=strategy_for(attempt.misconception_type, retest_status, participant.group_condition),
+                applied_strategy=strategy_for(attempt.misconception_type, retest_status, participant.group_condition),
+            )
+            db.add(observation)
+            db.flush()
+            state.resolution_stage = observation.resolution_stage
+            state.latest_observation_id = observation.id
         if phase == "l0_check":
             state.l0_success_count += 1 if attempt.is_correct else 0
             state.scaffolding_level = "L0" if attempt.is_correct else raise_level("L0")
@@ -1104,7 +1776,8 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
             state.transfer_success_count += 1 if attempt.is_correct else 0
             if not attempt.is_correct:
                 attempt.misconception_type = "M4"
-        state.current_status = "stable_correct" if attempt.is_correct else "misconception"
+        state.current_status = "resolved" if phase == "retest" and attempt.is_correct else ("stable_correct" if attempt.is_correct else "misconception")
+        state.primary_misconception = None if attempt.is_correct else attempt.misconception_type
         state.last_attempt_id = attempt.id
     participant.current_step = {"retest": "post_survey", "l0_check": "post_survey", "transfer": "post_survey"}.get(phase, participant.current_step)
     db.commit()
@@ -1146,6 +1819,60 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
     retest_by_term_id = {attempt.term_id: attempt for attempt in by_phase["retest"]}
     phase2_pass_sessions = [session for session in learning_sessions if session.id in phase2_pass_session_ids]
     phase2_fail_sessions = [session for session in learning_sessions if session.status == "failed_phase2"]
+    learning_observations = (
+        db.query(MisconceptionObservation)
+        .filter(
+            MisconceptionObservation.participant_id == participant.id,
+            MisconceptionObservation.source_phase.in_(["prerequisite", "concept_phase1", "concept_phase2"]),
+            MisconceptionObservation.is_manual_override.is_(False),
+        )
+        .order_by(MisconceptionObservation.created_at)
+        .all()
+    )
+    misconception_observations = [item for item in learning_observations if item.primary_misconception_type in {"M1", "M2", "M3"}]
+
+    def learning_resolution_rate(mtype: str) -> float | None:
+        affected_terms = {item.term_id for item in misconception_observations if item.primary_misconception_type == mtype}
+        if not affected_terms:
+            return None
+        resolved_terms = {
+            item.term_id
+            for item in learning_observations
+            if item.term_id in affected_terms and item.diagnosed_status == "resolved"
+        }
+        return len(resolved_terms) / len(affected_terms)
+
+    support_events = (
+        db.query(AdaptiveSupportEvent)
+        .filter(AdaptiveSupportEvent.learning_session_id.in_(session_ids))
+        .order_by(AdaptiveSupportEvent.created_at)
+        .all()
+        if session_ids
+        else []
+    )
+    support_successes = 0
+    for support in support_events:
+        source = db.get(MisconceptionObservation, support.misconception_observation_id)
+        if not source:
+            continue
+        next_observation = (
+            db.query(MisconceptionObservation)
+            .filter(
+                MisconceptionObservation.learning_session_id == source.learning_session_id,
+                MisconceptionObservation.prerequisite_term_id == source.prerequisite_term_id,
+                MisconceptionObservation.created_at > source.created_at,
+            )
+            .order_by(MisconceptionObservation.created_at)
+            .first()
+        )
+        if next_observation and next_observation.diagnosed_status == "resolved":
+            support_successes += 1
+    phase2_recurrences = [item for item in learning_observations if item.source_phase == "concept_phase2" and item.is_recurrence]
+    phase2_misconception_observations = [
+        item for item in learning_observations if item.source_phase == "concept_phase2" and item.primary_misconception_type in {"M1", "M2", "M3"}
+    ]
+    resolved_phase2_terms = {item.term_id for item in learning_observations if item.source_phase == "concept_phase2" and item.diagnosed_status == "resolved"}
+    resolved_retest_attempts = [retest_by_term_id[term_id] for term_id in resolved_phase2_terms if term_id in retest_by_term_id]
 
     def retest_correct_for_sessions(sessions: list[LearningSession]) -> float | None:
         if not sessions:
@@ -1178,6 +1905,21 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         phase2_max_retry_rate=(len(phase2_max_retry_sessions) / len(phase2_attempted_session_ids)) if phase2_attempted_session_ids else None,
         phase2_pass_retest_correct_rate=retest_correct_for_sessions(phase2_pass_sessions),
         phase2_fail_retest_correct_rate=retest_correct_for_sessions(phase2_fail_sessions),
+        learning_misconception_persistence_rate=(
+            sum(1 for item in misconception_observations if item.is_persistence) / len(misconception_observations)
+            if misconception_observations
+            else None
+        ),
+        m1_resolution_rate=learning_resolution_rate("M1"),
+        m2_resolution_rate=learning_resolution_rate("M2"),
+        m3_resolution_rate=learning_resolution_rate("M3"),
+        strategy_next_response_success_rate=(support_successes / len(support_events)) if support_events else None,
+        phase2_misconception_recurrence_rate=(
+            len(phase2_recurrences) / len(phase2_misconception_observations)
+            if phase2_misconception_observations
+            else None
+        ),
+        learning_resolved_retest_correct_rate=_rate(resolved_retest_attempts, lambda item: bool(item.is_correct)),
         learning_target_count=db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0,
         completed=participant.completed_at is not None,
     )
@@ -1217,9 +1959,149 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 "phase2_max_retry_rate": avg("phase2_max_retry_rate"),
                 "phase2_pass_retest_correct_rate": avg("phase2_pass_retest_correct_rate"),
                 "phase2_fail_retest_correct_rate": avg("phase2_fail_retest_correct_rate"),
+                "learning_misconception_persistence_rate": avg("learning_misconception_persistence_rate"),
+                "strategy_next_response_success_rate": avg("strategy_next_response_success_rate"),
+                "phase2_misconception_recurrence_rate": avg("phase2_misconception_recurrence_rate"),
             }
         )
     return {"groups": rows}
+
+
+def admin_diagnoses(db: Session) -> dict[str, Any]:
+    rows = (
+        db.query(MisconceptionObservation, Participant, Term)
+        .join(Participant, MisconceptionObservation.participant_id == Participant.id)
+        .join(Term, MisconceptionObservation.term_id == Term.id)
+        .order_by(MisconceptionObservation.created_at.desc())
+        .limit(500)
+        .all()
+    )
+    return {
+        "diagnoses": [
+            {
+                "observation_id": observation.id,
+                "participant_id": participant.id,
+                "display_code": participant.display_code,
+                "participant_completed": participant.completed_at is not None,
+                "term_label": term.label,
+                "source_phase": observation.source_phase,
+                "diagnosed_status": observation.diagnosed_status,
+                "primary_misconception_type": observation.primary_misconception_type,
+                "secondary_misconception_type": observation.secondary_misconception_type,
+                "diagnosis_confidence": observation.diagnosis_confidence,
+                "diagnosis_evidence": observation.diagnosis_evidence,
+                "transition_type": observation.transition_type,
+                "applied_strategy": observation.applied_strategy,
+                "requires_manual_review": observation.requires_manual_review,
+                "is_manual_override": observation.is_manual_override,
+                "created_at": observation.created_at.isoformat(),
+            }
+            for observation, participant, term in rows
+        ]
+    }
+
+
+def override_diagnosis(
+    db: Session,
+    observation_id: str,
+    payload: dict[str, Any],
+) -> MisconceptionObservation:
+    original = db.get(MisconceptionObservation, observation_id)
+    if not original:
+        raise HTTPException(status_code=404, detail="diagnosis observation not found")
+    participant = get_participant(db, original.participant_id)
+    if participant.completed_at is None:
+        raise HTTPException(status_code=409, detail="manual override is allowed only after experiment completion")
+    status = payload["diagnosed_status"]
+    primary = payload.get("primary_misconception_type")
+    if status == "resolved":
+        primary = None
+    if status == "unknown":
+        primary = "unknown"
+    standard = strategy_for(primary, status, "proposed")
+    override = MisconceptionObservation(
+        participant_id=original.participant_id,
+        term_id=original.term_id,
+        learning_session_id=original.learning_session_id,
+        prerequisite_term_id=original.prerequisite_term_id,
+        source_phase=original.source_phase,
+        source_attempt_type="manual_override",
+        source_attempt_id=original.source_attempt_id,
+        diagnosed_status=status,
+        primary_misconception_type=primary,
+        secondary_misconception_type=payload.get("secondary_misconception_type"),
+        diagnosis_confidence=1.0,
+        diagnosis_evidence=payload.get("diagnosis_evidence") or original.diagnosis_evidence,
+        previous_status=original.diagnosed_status,
+        previous_misconception_type=original.primary_misconception_type,
+        resolution_stage=payload.get("resolution_stage") or ("confirmed_by_retest" if status == "resolved" else "none"),
+        transition_type="manual_override",
+        standard_strategy=standard,
+        applied_strategy=standard,
+        requires_manual_review=False,
+        is_manual_override=True,
+        overrides_observation_id=original.id,
+    )
+    db.add(override)
+    db.flush()
+    if original.source_attempt_id and original.source_phase in {"pretest", "retest"}:
+        attempt = db.get(Attempt, original.source_attempt_id)
+        if attempt:
+            attempt.diagnosed_status = "stable_correct" if status == "resolved" else status
+            attempt.misconception_type = primary
+            attempt.secondary_misconception_type = payload.get("secondary_misconception_type")
+            attempt.misconception_confidence = 1.0
+            attempt.natural_language_diagnosis = payload.get("diagnosis_evidence") or original.diagnosis_evidence
+            attempt.is_correct = status == "resolved"
+            attempt.score = 1.0 if status == "resolved" else 0.0
+    if original.prerequisite_term_id:
+        prereq = db.get(PrerequisiteTerm, original.prerequisite_term_id)
+        if prereq:
+            prereq.current_status = override.diagnosed_status
+            prereq.primary_misconception_type = override.primary_misconception_type
+            prereq.secondary_misconception_type = override.secondary_misconception_type
+            prereq.resolution_stage = override.resolution_stage
+            prereq.latest_observation_id = override.id
+    else:
+        state = db.query(LearnerState).filter_by(participant_id=original.participant_id, term_id=original.term_id).one_or_none()
+        if state:
+            state.current_status = override.diagnosed_status
+            state.primary_misconception = override.primary_misconception_type
+            state.secondary_misconception = override.secondary_misconception_type
+            state.resolution_stage = override.resolution_stage
+            state.latest_observation_id = override.id
+    db.add(
+        AuditEvent(
+            actor=payload.get("actor") or "researcher",
+            action="override_diagnosis",
+            entity_type="misconception_observation",
+            entity_id=override.id,
+            before_json={
+                "observation_id": original.id,
+                "diagnosed_status": original.diagnosed_status,
+                "primary_misconception_type": original.primary_misconception_type,
+            },
+            after_json={
+                "diagnosed_status": override.diagnosed_status,
+                "primary_misconception_type": override.primary_misconception_type,
+                "reason": payload["reason"],
+            },
+        )
+    )
+    pretest_by_term = {
+        item.term_id: item
+        for item in db.query(Attempt).filter_by(participant_id=participant.id, phase="pretest").all()
+    }
+    for retest_attempt in db.query(Attempt).filter_by(participant_id=participant.id, phase="retest").all():
+        pretest_attempt = pretest_by_term.get(retest_attempt.term_id)
+        retest_attempt.recurrence_flag = bool(
+            pretest_attempt
+            and pretest_attempt.misconception_type in {"M1", "M2", "M3"}
+            and pretest_attempt.misconception_type == retest_attempt.misconception_type
+        )
+    db.commit()
+    recalculate_evaluation(db, participant.id)
+    return override
 
 
 EXPORTS = {
@@ -1227,16 +2109,18 @@ EXPORTS = {
     "participant_surveys": (ParticipantSurvey, ["id", "participant_id", "phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "term_confidences", "free_comment"]),
     "term_assignments": (TermAssignment, ["id", "participant_id", "term_id", "group_condition", "is_learning_target", "selection_reason", "priority_score", "created_at"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "reason_text", "free_text_answer", "confidence", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "transfer_success", "requires_manual_review", "created_at"]),
-    "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "transfer_success_count", "updated_at"]),
-    "learning_sessions": (LearningSession, ["id", "participant_id", "term_id", "group_condition", "session_index", "status", "term_pass_count", "concept_attempt_count", "concept_phase1_attempt_count", "concept_phase2_attempt_count", "phase2_retry_count", "blocked_reason", "completed_at", "created_at"]),
-    "prerequisite_terms": (PrerequisiteTerm, ["id", "learning_session_id", "term_label", "generation_reason", "display_order", "status", "attempt_count", "last_feedback", "created_at"]),
-    "term_understanding_attempts": (TermUnderstandingAttempt, ["id", "prerequisite_term_id", "participant_id", "learning_session_id", "attempt_index", "learner_answer", "is_passed", "score", "feedback", "created_at"]),
-    "concept_understanding_attempts": (ConceptUnderstandingAttempt, ["id", "learning_session_id", "participant_id", "attempt_index", "concept_phase", "material_shown", "light_condition_text", "learner_answer", "is_passed", "score", "feedback", "independent_explanation_success", "return_to_phase1", "rubric_scores", "missing_prerequisite_ids", "review_prerequisite_ids", "created_at"]),
+    "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "secondary_misconception", "resolution_stage", "latest_observation_id", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "transfer_success_count", "updated_at"]),
+    "learning_sessions": (LearningSession, ["id", "participant_id", "term_id", "group_condition", "session_index", "status", "term_pass_count", "concept_attempt_count", "concept_phase1_attempt_count", "phase1_cycle_index", "phase1_cycle_attempt_count", "concept_phase2_attempt_count", "phase2_retry_count", "blocked_reason", "completed_at", "created_at"]),
+    "prerequisite_terms": (PrerequisiteTerm, ["id", "learning_session_id", "term_label", "generation_reason", "display_order", "status", "attempt_count", "current_status", "primary_misconception_type", "secondary_misconception_type", "resolution_stage", "teaching_strategy", "latest_observation_id", "last_feedback", "created_at"]),
+    "term_understanding_attempts": (TermUnderstandingAttempt, ["id", "prerequisite_term_id", "participant_id", "learning_session_id", "attempt_index", "attempt_kind", "counts_toward_limit", "clarification_parent_attempt_id", "presented_question", "learner_answer", "is_passed", "score", "primary_misconception_type", "secondary_misconception_type", "diagnosis_observation_id", "feedback", "created_at"]),
+    "concept_understanding_attempts": (ConceptUnderstandingAttempt, ["id", "learning_session_id", "participant_id", "attempt_index", "concept_phase", "phase1_cycle_index", "attempt_kind", "counts_toward_limit", "clarification_parent_attempt_id", "presented_question", "material_shown", "light_condition_text", "learner_answer", "is_passed", "score", "primary_misconception_type", "secondary_misconception_type", "diagnosis_observation_id", "feedback", "independent_explanation_success", "return_to_phase1", "rubric_scores", "missing_prerequisite_ids", "review_prerequisite_ids", "created_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at"]),
     "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "created_at"]),
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
-    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "transfer_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "m4_failure_rate", "prerequisite_pass_rate", "concept_pass_rate", "concept_phase1_pass_rate", "concept_phase2_success_rate", "phase2_after_retry_success_rate", "phase2_max_retry_rate", "phase2_pass_retest_correct_rate", "phase2_fail_retest_correct_rate", "learning_target_count", "completed", "created_at"]),
+    "misconception_observations": (MisconceptionObservation, ["id", "participant_id", "term_id", "learning_session_id", "prerequisite_term_id", "source_phase", "source_attempt_type", "source_attempt_id", "diagnosed_status", "primary_misconception_type", "secondary_misconception_type", "diagnosis_confidence", "diagnosis_evidence", "previous_status", "previous_misconception_type", "resolution_stage", "transition_type", "is_persistence", "is_recurrence", "standard_strategy", "applied_strategy", "strategy_override_reason", "requires_manual_review", "is_manual_override", "overrides_observation_id", "created_at"]),
+    "adaptive_support_events": (AdaptiveSupportEvent, ["id", "misconception_observation_id", "learning_session_id", "mode", "feedback", "supplemental_material", "next_check_question", "diagnostic_focus", "rag_sources", "general_knowledge_supplement", "ai_call_log_id", "created_at"]),
+    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "transfer_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "m4_failure_rate", "prerequisite_pass_rate", "concept_pass_rate", "concept_phase1_pass_rate", "concept_phase2_success_rate", "phase2_after_retry_success_rate", "phase2_max_retry_rate", "phase2_pass_retest_correct_rate", "phase2_fail_retest_correct_rate", "learning_misconception_persistence_rate", "m1_resolution_rate", "m2_resolution_rate", "m3_resolution_rate", "strategy_next_response_success_rate", "phase2_misconception_recurrence_rate", "learning_resolved_retest_correct_rate", "learning_target_count", "completed", "created_at"]),
 }
 
 

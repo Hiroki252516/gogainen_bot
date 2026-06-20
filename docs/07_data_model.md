@@ -51,6 +51,7 @@ SQLite/PostgreSQL + SQLAlchemyで実装する。すべてのテーブルに `cre
 - `unstable_correct`
 - `stable_correct`
 - `ambiguous`
+- `resolved` 学習中の記述回答で重大な誤概念なし
 
 ## Tables
 
@@ -168,6 +169,9 @@ activeな事前テストは `pretest_v2` とする。旧 `pretest_v1` は既存a
 - concept_phase1_attempt_count INT DEFAULT 0
 - concept_phase2_attempt_count INT DEFAULT 0
 - phase2_retry_count INT DEFAULT 0
+- phase1_cycle_index INT DEFAULT 1
+- phase1_cycle_attempt_count INT DEFAULT 0
+- pending_clarification JSON NULL
 - concept_material TEXT NULL
 - concept_prompt TEXT NULL
 - concept_expected_answer TEXT NULL
@@ -214,6 +218,14 @@ activeな事前テストは `pretest_v2` とする。旧 `pretest_v1` は既存a
 - feedback TEXT NOT NULL
 - remediation_material TEXT NULL
 - grading_json JSON NULL
+- diagnosis_observation_id UUID NULL
+- attempt_kind TEXT NOT NULL DEFAULT `normal`
+- counts_toward_limit BOOLEAN NOT NULL DEFAULT true
+- clarification_parent_attempt_id UUID NULL
+- presented_question TEXT NULL
+- diagnostic_focus JSON NULL
+- primary_misconception_type TEXT NULL
+- secondary_misconception_type TEXT NULL
 - created_at TIMESTAMP NOT NULL
 
 ### concept_understanding_attempts
@@ -239,6 +251,15 @@ activeな事前テストは `pretest_v2` とする。旧 `pretest_v1` は既存a
 - return_to_phase1 BOOLEAN NOT NULL DEFAULT false
 - rubric_scores JSON NULL
 - grading_json JSON NULL
+- diagnosis_observation_id UUID NULL
+- phase1_cycle_index INT DEFAULT 1
+- attempt_kind TEXT NOT NULL DEFAULT `normal`
+- counts_toward_limit BOOLEAN NOT NULL DEFAULT true
+- clarification_parent_attempt_id UUID NULL
+- presented_question TEXT NULL
+- diagnostic_focus JSON NULL
+- primary_misconception_type TEXT NULL
+- secondary_misconception_type TEXT NULL
 - created_at TIMESTAMP NOT NULL
 
 ### tutor_sessions / tutor_turns
@@ -261,6 +282,7 @@ purpose values:
 - grade_concept_phase1_answer
 - generate_concept_phase2_prompt
 - grade_concept_phase2_answer
+- generate_adaptive_support
 - 旧互換: generate_concept_material
 - 旧互換: grade_concept_answer
 - generate_control_learning_turn
@@ -268,6 +290,32 @@ purpose values:
 - grade_response
 - summarize_learner_state
 - 旧互換: generate_tutoring_turn, generate_feedback
+
+### misconception_observations
+
+事前テスト、提案群の学習回答、再テスト、手動修正を同じ時系列で保存する正規の診断履歴。
+
+- participant_id, term_id, learning_session_id
+- prerequisite_term_id
+- source_phase, source_attempt_type, source_attempt_id
+- diagnosed_status, primary/secondary misconception
+- diagnosis_confidence, diagnosis_evidence
+- previous/current statusとmisconception
+- resolution_stage
+- transition_type, is_persistence, is_recurrence
+- standard_strategy, applied_strategy, strategy_override_reason
+- requires_manual_review, is_manual_override, overrides_observation_id
+
+### adaptive_support_events
+
+確定した診断に基づいて生成した支援を保存する。
+
+- misconception_observation_id
+- mode `remediation | clarification`
+- feedback, supplemental_material, next_check_question
+- diagnostic_focus
+- rag_sources, general_knowledge_supplement
+- ai_call_log_id
 
 ### evaluation_summaries
 

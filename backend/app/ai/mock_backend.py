@@ -8,6 +8,41 @@ from app.ai.backend import initial_level, strategy_for
 class MockAIBackend:
     provider = "mock"
 
+    def _learning_diagnosis(self, payload: dict[str, Any], is_passed: bool) -> dict[str, Any]:
+        answer = (payload.get("learner_answer") or "").strip()
+        if payload.get("group_condition") == "control":
+            return {}
+        if "ambiguous" in answer or "曖昧" in answer:
+            status, primary, confidence = "ambiguous", None, 0.6
+        elif len(answer) < 4 or "unknown" in answer or "わからない" in answer:
+            status, primary, confidence = "unknown", "unknown", 0.9
+            is_passed = False
+        elif "M1" in answer or "心理" in answer or "翻訳機能" in answer:
+            status, primary, confidence = "misconception", "M1", 0.9
+            is_passed = False
+        elif "M2" in answer or "同じ処理" in answer or "混同" in answer:
+            status, primary, confidence = "misconception", "M2", 0.9
+            is_passed = False
+        elif "M3" in answer or "名前だけ" in answer or "キーワード" in answer:
+            status, primary, confidence = "misconception", "M3", 0.9
+            is_passed = False
+        elif is_passed:
+            status, primary, confidence = "resolved", None, 0.9
+        else:
+            status, primary, confidence = "unknown", "unknown", 0.8
+        return {
+            "is_passed": is_passed and status == "resolved",
+            "diagnosed_status": status,
+            "primary_misconception_type": primary,
+            "secondary_misconception_type": "M3" if primary == "M2" and "secondary" in answer else None,
+            "diagnosis_confidence": confidence,
+            "diagnosis_evidence": answer or "回答が空です。",
+            "recommended_strategy": strategy_for(primary, status, "proposed"),
+            "strategy_override": False,
+            "strategy_override_reason": None,
+            "requires_manual_review": confidence < 0.5,
+        }
+
     async def diagnose_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
         selected = payload.get("selected_option") or {}
         reason = (payload.get("learner_response") or {}).get("reason_text") or ""
@@ -100,7 +135,7 @@ class MockAIBackend:
         answer = payload.get("learner_answer", "")
         positive_markers = ["pass", "十分", "関係", "役割", "重み", "事前", "事後", "学習", "評価", "安全", "基盤", "トークン", "Attention", "FFN"]
         is_passed = len(answer.strip()) >= 12 and any(marker in answer for marker in positive_markers)
-        return {
+        result = {
             "is_passed": is_passed,
             "score": 0.8 if is_passed else 0.3,
             "feedback": "中核となる関係を説明できています。" if is_passed else "前提用語の役割と対象概念との関係をもう少し具体化してください。",
@@ -114,6 +149,8 @@ class MockAIBackend:
                 "explanation_clarity": 0.8 if is_passed else 0.3,
             },
         }
+        result.update(self._learning_diagnosis(payload, is_passed))
+        return result
 
     async def generate_concept_phase1_material(self, payload: dict[str, Any]) -> dict[str, Any]:
         term = payload["target_term"]
@@ -139,7 +176,7 @@ class MockAIBackend:
             idx = prereq_labels.index(missing[0])
             if idx > 0:
                 review.append(prereq_labels[idx - 1])
-        return {
+        result = {
             "is_passed": is_passed,
             "score": 0.85 if is_passed else 0.4,
             "feedback": "前提用語を使って対象概念を説明できています。" if is_passed else "前提用語とのつながりが不足しています。関連する前提用語を確認しましょう。",
@@ -153,7 +190,10 @@ class MockAIBackend:
                 "misconception_absence": 0.9 if is_passed else 0.5,
                 "explanation_clarity": 0.8 if is_passed else 0.4,
             },
+            "confirmed_prerequisite_labels": used if is_passed else [],
         }
+        result.update(self._learning_diagnosis(payload, is_passed))
+        return result
 
     async def grade_concept_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.grade_concept_phase1_answer(payload)
@@ -174,7 +214,7 @@ class MockAIBackend:
         used = [label for label in prereq_labels if label in answer]
         explicit_pass = any(marker in answer for marker in ["phase2pass", "独立", "教材なし", "自力"])
         is_passed = explicit_pass or (len(answer.strip()) >= 24 and len(used) >= max(1, min(2, len(prereq_labels))))
-        return {
+        result = {
             "is_passed": is_passed,
             "score": 0.86 if is_passed else 0.38,
             "feedback": "教材なしでも前提用語を使って説明できています。" if is_passed else "教材なしでは説明のつながりが不足しています。もう一度教材ありの整理に戻ります。",
@@ -187,6 +227,35 @@ class MockAIBackend:
                 "misconception_absence": 0.9 if is_passed else 0.5,
                 "explanation_clarity": 0.82 if is_passed else 0.35,
             },
+        }
+        result.update(self._learning_diagnosis(payload, is_passed))
+        return result
+
+    async def generate_adaptive_support(self, payload: dict[str, Any]) -> dict[str, Any]:
+        observation = payload.get("observation") or {}
+        mode = payload.get("mode", "remediation")
+        strategy = observation.get("applied_strategy") or "foundational_explanation"
+        label = (payload.get("target_term") or {}).get("label", "この概念")
+        if mode == "clarification":
+            feedback = "回答の意図をもう少し確認します。"
+            material = "似ている考えを区別するため、役割と仕組みのどちらを説明しているか整理してください。"
+        else:
+            feedback = f"{label}の理解を、現在の回答で不足している観点から確認します。"
+            material = f"{strategy}の方針で、完成回答を示さずに例・比較・反例を使って整理します。"
+        return {
+            "mode": mode,
+            "feedback": feedback,
+            "supplemental_material": material,
+            "next_check_question": f"{label}について、先ほどとは別の言い方で役割と仕組みを説明してください。",
+            "diagnostic_focus": {
+                "core_elements": ["役割", "仕組み"],
+                "M1_features": ["別カテゴリーとして説明"],
+                "M2_features": ["類似概念と同一視"],
+                "M3_features": ["名称やキーワードだけで説明"],
+                "unknown_criteria": "空欄または説明材料がない",
+            },
+            "rag_sources": [item.get("chunk_id") for item in (payload.get("rag_context") or {}).get("chunks", [])],
+            "general_knowledge_supplement": None,
         }
 
     async def generate_control_learning_turn(self, payload: dict[str, Any]) -> dict[str, Any]:

@@ -10,7 +10,8 @@
 | AIを使うかではなく支援設計を比較する | `01`, `02` | group_condition control/proposed |
 | 統制群は非適応の3段階学習 | `04`, `08`, `10` | control learning APIs, learning_sessions |
 | 提案群は3段階適応型 | `02`, `04`, `07` | learning_sessions, prerequisite_terms, concept_understanding_attempts |
-| 学習中にM再判定やL更新をしない | `04`, `10` | no dynamic scaffolding update |
+| 提案群は学習中にMタイプを逐次再判定する | `04`, `10` | misconception observations, adaptive support |
+| L3/L2/L1は更新しない | `04`, `10` | phase structure only |
 | 問題をそのまま使い回さない | `11` | construct_key, variant_key |
 | 選択肢表現から正答を推測しにくくする | `02`, `11`, `14` | pretest_v2, option rationale, randomized display order |
 | 再テストを最終テストにする | `02`, `09`, `12` | score-retest -> post_survey |

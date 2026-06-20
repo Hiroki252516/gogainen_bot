@@ -89,3 +89,13 @@
 - 被験者画面にMラベルを出さない
 - 統制群に誤概念・pretest選択肢・ログ・戻り制御情報を渡さない
 - 仕様整理だけの依頼ではMarkdownのみを編集する
+
+## Milestone 7: Dynamic Misconception Adaptation
+
+- [x] misconception_observations / adaptive_support_events
+- [x] 提案群の全記述回答診断
+- [x] 診断と支援生成の2段階AI呼び出し
+- [x] ambiguous追加確認
+- [x] phase1 cycle reset
+- [x] 管理画面の診断履歴・完了後手動修正
+- [x] 学習中誤概念CSV・補助指標

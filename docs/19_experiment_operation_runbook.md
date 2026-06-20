@@ -61,13 +61,17 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 - forbidden_help_given = true
 - 前提用語計画が教材範囲から外れている
 - phase1/phase2のfail理由が明らかに不適切
+- 学習中診断がambiguousまたは低信頼度
 - 統制群AI payloadに誤概念・pretest選択肢・学習ログが混入している
+
+手動修正は参加者の実験完了後だけ行う。
 
 手動修正時:
 
 - 修正理由を入力する
 - audit_eventsへ保存する
 - 修正後にevaluation summaryを再計算する
+- 元診断を削除せずoverride observationを追加する
 
 ## After Experiment
 

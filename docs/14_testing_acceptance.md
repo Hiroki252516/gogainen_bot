@@ -31,6 +31,13 @@
 - 提案群でphase2 fail 1〜2回目はphase1へ戻る
 - 提案群でphase2を3回failするとsessionがfailed_phase2になる
 - 統制群のphase1/phase2は1回だけ採点し、pass/failに関係なく進行・完了する
+- 提案群の全記述回答で診断observationが保存される
+- 統制群では学習中診断AI呼び出しとobservation作成が行われない
+- ambiguous追加確認は元回答につき1回で、通常試行に数えない
+- persistence、transition、recurrenceを区別できる
+- phase2fail後のphase1は新サイクルとして最大3回にリセットされる
+- 支援生成失敗後に支援だけ再試行できる
+- 手動修正は完了参加者だけに許可され、元診断と監査ログが残る
 - retest後のnext stepがpost_surveyになる
 - L0/transferはactive出題されない
 - phase2補助指標がevaluation_summaryとCSVに出る

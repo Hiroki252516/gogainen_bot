@@ -48,6 +48,11 @@ type LearningSession = {
   } | null;
   last_feedback?: string | null;
   blocked_reason?: string | null;
+  pending_clarification?: {
+    source_attempt_type: string;
+    source_attempt_id: string;
+    question: string;
+  } | null;
 };
 
 const TERMINAL_STATUSES = new Set(["completed", "blocked", "failed", "failed_phase1", "failed_phase2"]);
@@ -97,24 +102,29 @@ export default function LearningPage() {
     setError("");
     try {
       let data: { feedback: string; session: LearningSession };
+      const answerBody = JSON.stringify({
+        learner_answer: response,
+        attempt_kind: session.pending_clarification ? "clarification" : "normal",
+        clarification_parent_attempt_id: session.pending_clarification?.source_attempt_id || null
+      });
       if (session.status === "prerequisite") {
         if (!currentPrerequisite) return;
         data = await api<{ feedback: string; session: LearningSession }>(
           `/api/learning-sessions/${session.learning_session_id}/prerequisites/${currentPrerequisite.prerequisite_id}/attempts`,
           {
             method: "POST",
-            body: JSON.stringify({ learner_answer: response })
+            body: answerBody
           }
         );
       } else if (session.status === "concept_phase1") {
         data = await api<{ feedback: string; session: LearningSession }>(`/api/learning-sessions/${session.learning_session_id}/concept-phase1-attempts`, {
           method: "POST",
-          body: JSON.stringify({ learner_answer: response })
+          body: answerBody
         });
       } else if (session.status === "concept_phase2") {
         data = await api<{ feedback: string; session: LearningSession }>(`/api/learning-sessions/${session.learning_session_id}/concept-phase2-attempts`, {
           method: "POST",
-          body: JSON.stringify({ learner_answer: response })
+          body: answerBody
         });
       } else {
         return;
@@ -237,8 +247,9 @@ function PrerequisitePanel({
           {label} {currentPrerequisite.display_order}. {currentPrerequisite.term_label}
         </strong>
         <p>{currentPrerequisite.remediation_material || currentPrerequisite.material}</p>
-        <strong>{currentPrerequisite.check_question}</strong>
+        <strong>{session.pending_clarification?.question || currentPrerequisite.check_question}</strong>
       </div>
+      {session.pending_clarification ? <div className="notice">回答の意図を確認するための追加質問です。この回答は通常の試行回数に含まれません。</div> : null}
       <p className="muted">
         試行 {currentPrerequisite.attempt_count} / {currentPrerequisite.max_attempts}
       </p>
@@ -277,8 +288,9 @@ function Phase1Panel({
       <div className="notice">
         <strong>概念フェーズ1</strong>
         <p>{phase.material}</p>
-        <strong>{phase.prompt}</strong>
+        <strong>{session.pending_clarification?.question || phase.prompt}</strong>
       </div>
+      {session.pending_clarification ? <div className="notice">回答の意図を確認するための追加質問です。この回答は通常の試行回数に含まれません。</div> : null}
       <p className="muted">
         試行 {phase.attempt_count} / {phase.max_attempts}
       </p>
@@ -318,8 +330,9 @@ function Phase2Panel({
         <strong>概念フェーズ2</strong>
         <p className="muted">ここでは教材本文を表示しません。</p>
         {phase.light_conditions ? <p>{phase.light_conditions}</p> : null}
-        <strong>{phase.prompt}</strong>
+        <strong>{session.pending_clarification?.question || phase.prompt}</strong>
       </div>
+      {session.pending_clarification ? <div className="notice">回答の意図を確認するための追加質問です。この回答は通常の試行回数に含まれません。</div> : null}
       <p className="muted">
         試行 {phase.attempt_count} / {phase.max_attempts}
         {session.group_condition === "proposed" && typeof phase.retry_count === "number" ? ` ・再支援 ${phase.retry_count}回` : ""}

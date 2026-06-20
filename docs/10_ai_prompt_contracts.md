@@ -128,16 +128,23 @@ Result:
 {
   "is_passed": true,
   "score": 0.8,
-  "feedback": "...",
-  "remediation_material": null,
+  "diagnosed_status": "resolved",
+  "primary_misconception_type": null,
+  "secondary_misconception_type": null,
+  "diagnosis_confidence": 0.9,
+  "diagnosis_evidence": "...",
+  "recommended_strategy": "fading",
+  "strategy_override": false,
+  "strategy_override_reason": null,
   "core_elements_covered": ["..."],
-  "major_errors": []
+  "major_errors": [],
+  "rubric_scores": {}
 }
 ```
 
 pass基準は中程度。中核要素が含まれ、重大な誤りがなければpass。
 
-統制群でも同じ採点schemaを使う。ただしfailしても次小問へ進む。
+統制群では誤概念診断を含まない専用採点schemaを使い、failしても次小問へ進む。
 
 ## Proposed/Control: generate_concept_phase1_material
 
@@ -210,6 +217,32 @@ Result:
 ```
 
 提案群ではpassなら `completed`、fail 1〜2回目はフェーズ1へ戻り、3回目failで `failed_phase2` にする。統制群では1回だけ採点し、pass/failに関係なく `completed` にする。
+
+提案群のgrade契約は誤概念診断を含む。統制群では診断情報を要求せず、pass/fail、score、一般フィードバック、phase固有情報だけを返す専用schemaを使う。
+
+## Proposed: generate_adaptive_support
+
+確定・保存済みの診断と更新後状態から、次の支援を生成する。
+
+```json
+{
+  "mode": "remediation",
+  "feedback": "...",
+  "supplemental_material": "...",
+  "next_check_question": "...",
+  "diagnostic_focus": {
+    "core_elements": [],
+    "M1_features": [],
+    "M2_features": [],
+    "M3_features": [],
+    "unknown_criteria": "..."
+  },
+  "rag_sources": [],
+  "general_knowledge_supplement": null
+}
+```
+
+完成回答は禁止する。RAG教材を優先し、一般知識を補足した場合は区別して返す。
 
 ## Legacy Control: generate_control_learning_turn
 
