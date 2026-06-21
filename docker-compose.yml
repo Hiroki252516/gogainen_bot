@@ -24,10 +24,12 @@ services:
       MAX_TURNS_PER_TERM: "3"
       RANDOM_SEED: "20260525"
       EXPORT_DIR: /app/exports
+      EXPERIMENT_CONTENT_DIR: /experiment_content
       FRONTEND_ORIGIN: http://localhost:3000
     volumes:
       - ./exports:/app/exports
       - ./rag_ready_教材:/rag_ready_教材:ro
+      - ./experiment_content:/experiment_content:ro
     depends_on:
       - db
 

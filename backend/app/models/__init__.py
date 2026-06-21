@@ -27,6 +27,7 @@ class Participant(Base):
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     assignment_method: Mapped[str] = mapped_column(String(32), default="manual", nullable=False)
     consent_checked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    content_version_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("content_versions.id"))
     current_step: Mapped[str] = mapped_column(String(64), default="start", nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -64,6 +65,21 @@ class Term(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
+class ContentVersion(Base):
+    __tablename__ = "content_versions"
+    __table_args__ = (UniqueConstraint("content_type", "version_key", name="uq_content_version"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    version_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    source_file: Mapped[str] = mapped_column(Text, nullable=False)
+    file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    validation_status: Mapped[str] = mapped_column(String(32), default="provisional", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class TermAssignment(Base):
     __tablename__ = "term_assignments"
     __table_args__ = (UniqueConstraint("participant_id", "term_id", name="uq_term_assignment"),)
@@ -82,6 +98,7 @@ class Question(Base):
     __tablename__ = "questions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    content_version_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("content_versions.id"))
     term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
     phase: Mapped[str] = mapped_column(String(32), nullable=False)
     question_type: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -116,6 +133,88 @@ class QuestionDisplayOrder(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
     question_id: Mapped[str] = mapped_column(String(36), ForeignKey("questions.id"), nullable=False)
+    option_order: Mapped[list] = mapped_column(JSON, nullable=False)
+    random_seed: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class PrerequisiteDefinition(Base):
+    __tablename__ = "prerequisite_definitions"
+    __table_args__ = (
+        UniqueConstraint("target_term_id", "set_version", "prerequisite_key", name="uq_prerequisite_definition"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    content_version_id: Mapped[str] = mapped_column(String(36), ForeignKey("content_versions.id"), nullable=False)
+    target_term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
+    prerequisite_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    set_version: Mapped[str] = mapped_column(String(160), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class LearningQuestionSlot(Base):
+    __tablename__ = "learning_question_slots"
+    __table_args__ = (
+        UniqueConstraint("content_version_id", "target_term_id", "slot_key", name="uq_learning_question_slot"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    content_version_id: Mapped[str] = mapped_column(String(36), ForeignKey("content_versions.id"), nullable=False)
+    target_term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
+    prerequisite_definition_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("prerequisite_definitions.id"))
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    slot_key: Mapped[str] = mapped_column(String(180), nullable=False)
+    required_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    cycle_index: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class LearningQuestion(Base):
+    __tablename__ = "learning_questions"
+    __table_args__ = (
+        UniqueConstraint("slot_id", "variant_key", name="uq_learning_question_variant"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    slot_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_question_slots.id"), nullable=False)
+    learning_session_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("learning_sessions.id"))
+    variant_key: Mapped[str] = mapped_column(String(220), nullable=False)
+    attempt_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(40), default="predefined_codex", nullable=False)
+    validation_status: Mapped[str] = mapped_column(String(32), default="provisional", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class LearningQuestionOption(Base):
+    __tablename__ = "learning_question_options"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learning_question_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_questions.id"), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    misconception_type: Mapped[str | None] = mapped_column(String(32))
+    diagnostic_rationale: Mapped[str | None] = mapped_column(Text)
+    linked_prerequisite_keys: Mapped[list | None] = mapped_column(JSON)
+    remediation_focus: Mapped[str | None] = mapped_column(Text)
+    default_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class LearningQuestionDisplayOrder(Base):
+    __tablename__ = "learning_question_display_orders"
+    __table_args__ = (
+        UniqueConstraint("participant_id", "learning_question_id", name="uq_learning_question_display_order"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    learning_question_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_questions.id"), nullable=False)
     option_order: Mapped[list] = mapped_column(JSON, nullable=False)
     random_seed: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
@@ -187,6 +286,18 @@ class LearningSession(Base):
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     session_index: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(64), default="not_started", nullable=False)
+    content_version_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("content_versions.id"))
+    prerequisite_set_version: Mapped[str | None] = mapped_column(String(160))
+    current_stage: Mapped[str | None] = mapped_column(String(64))
+    current_prerequisite_key: Mapped[str | None] = mapped_column(String(120))
+    current_slot_key: Mapped[str | None] = mapped_column(String(180))
+    current_attempt_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    current_cycle_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    current_material_id: Mapped[str | None] = mapped_column(String(36))
+    review_return_slot_key: Mapped[str | None] = mapped_column(String(180))
+    review_prerequisite_key: Mapped[str | None] = mapped_column(String(120))
+    phase2_forced_completion: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    technical_block_reason: Mapped[str | None] = mapped_column(Text)
     current_prerequisite_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     term_pass_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     concept_attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -207,6 +318,83 @@ class LearningSession(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class LearningSessionPrerequisite(Base):
+    __tablename__ = "learning_session_prerequisites"
+    __table_args__ = (
+        UniqueConstraint("learning_session_id", "prerequisite_definition_id", name="uq_session_prerequisite"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learning_session_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_sessions.id"), nullable=False)
+    prerequisite_definition_id: Mapped[str] = mapped_column(String(36), ForeignKey("prerequisite_definitions.id"), nullable=False)
+    prerequisite_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    completed_slot_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    forced_slot_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    review_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class GeneratedLearningMaterial(Base):
+    __tablename__ = "generated_learning_materials"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    learning_session_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_sessions.id"), nullable=False)
+    target_term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
+    prerequisite_definition_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("prerequisite_definitions.id"))
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    material_mode: Mapped[str] = mapped_column(String(40), nullable=False)
+    cycle_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    slot_key: Mapped[str | None] = mapped_column(String(180))
+    attempt_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
+    diagnosis_snapshot: Mapped[dict | None] = mapped_column(JSON)
+    rag_context: Mapped[dict | None] = mapped_column(JSON)
+    material: Mapped[str] = mapped_column(Text, nullable=False)
+    examples: Mapped[list | None] = mapped_column(JSON)
+    comparisons: Mapped[list | None] = mapped_column(JSON)
+    counterexamples: Mapped[list | None] = mapped_column(JSON)
+    rag_sources: Mapped[list | None] = mapped_column(JSON)
+    general_knowledge_supplement: Mapped[str | None] = mapped_column(Text)
+    answer_leak_detected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    regeneration_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    ai_call_log_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("ai_call_logs.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class LearningChoiceAttempt(Base):
+    __tablename__ = "learning_choice_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    learning_session_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_sessions.id"), nullable=False)
+    target_term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
+    prerequisite_definition_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("prerequisite_definitions.id"))
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    slot_key: Mapped[str] = mapped_column(String(180), nullable=False)
+    question_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_questions.id"), nullable=False)
+    selected_option_id: Mapped[str] = mapped_column(String(36), ForeignKey("learning_question_options.id"), nullable=False)
+    displayed_option_order: Mapped[list] = mapped_column(JSON, nullable=False)
+    cycle_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    attempt_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    misconception_type: Mapped[str | None] = mapped_column(String(32))
+    transition_type: Mapped[str | None] = mapped_column(String(80))
+    is_persistence: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_recurrence: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    result_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    forced_answer_shown: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    response_time_sec: Mapped[float | None] = mapped_column(Float)
+    material_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("generated_learning_materials.id"))
+    feedback_text: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
 class PrerequisiteTerm(Base):
@@ -421,6 +609,10 @@ class EvaluationSummary(Base):
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     pretest_score: Mapped[float | None] = mapped_column(Float)
     retest_score: Mapped[float | None] = mapped_column(Float)
+    pretest_score_all_terms: Mapped[float | None] = mapped_column(Float)
+    retest_score_all_terms: Mapped[float | None] = mapped_column(Float)
+    learning_target_retest_score: Mapped[float | None] = mapped_column(Float)
+    non_target_retest_retention_rate: Mapped[float | None] = mapped_column(Float)
     l0_correct_rate: Mapped[float | None] = mapped_column(Float)
     transfer_correct_rate: Mapped[float | None] = mapped_column(Float)
     same_misconception_recurrence_rate: Mapped[float | None] = mapped_column(Float)
@@ -430,11 +622,19 @@ class EvaluationSummary(Base):
     m4_failure_rate: Mapped[float | None] = mapped_column(Float)
     unknown_persistence_rate: Mapped[float | None] = mapped_column(Float)
     prerequisite_pass_rate: Mapped[float | None] = mapped_column(Float)
+    prerequisite_required_question_accuracy: Mapped[float | None] = mapped_column(Float)
+    prerequisite_first_attempt_accuracy: Mapped[float | None] = mapped_column(Float)
+    prerequisite_retry_recovery_rate: Mapped[float | None] = mapped_column(Float)
+    prerequisite_forced_resolution_rate: Mapped[float | None] = mapped_column(Float)
     concept_pass_rate: Mapped[float | None] = mapped_column(Float)
     concept_phase1_pass_rate: Mapped[float | None] = mapped_column(Float)
+    phase1_all_questions_pass_rate: Mapped[float | None] = mapped_column(Float)
+    phase1_forced_resolution_rate: Mapped[float | None] = mapped_column(Float)
     concept_phase2_success_rate: Mapped[float | None] = mapped_column(Float)
+    no_material_concept_discrimination_accuracy: Mapped[float | None] = mapped_column(Float)
     phase2_after_retry_success_rate: Mapped[float | None] = mapped_column(Float)
     phase2_max_retry_rate: Mapped[float | None] = mapped_column(Float)
+    phase2_forced_completion_rate: Mapped[float | None] = mapped_column(Float)
     phase2_pass_retest_correct_rate: Mapped[float | None] = mapped_column(Float)
     phase2_fail_retest_correct_rate: Mapped[float | None] = mapped_column(Float)
     learning_misconception_persistence_rate: Mapped[float | None] = mapped_column(Float)

@@ -1,104 +1,27 @@
 # 17. Traceability Matrix
 
-この文書は、研究計画と新設計方針が、どの仕様書・実装要素へ落ちているかを示す。
+| Research Requirement | Implementation |
+|---|---|
+| Same content in both groups | content version, prerequisite definitions, fixed question bank |
+| Proposed group uses learning logs | proposed material payload and adaptive review |
+| Control group excludes logs | control payload sanitizer and tests |
+| Fixed prerequisites | YAML definitions and session expansion |
+| Fixed MCQ learning | learning questions/options/display orders |
+| Immediate feedback | distractor explanation and correct summary AI calls |
+| No answer before third failure | forced resolution state machine |
+| Phase2 without material | participant session response omits material |
+| All-five retest | retest_v2 query without target filter |
+| Reproducibility | content hash, session version pin, AI/RAG logs |
+| M transition analysis | learning choice attempts and evaluation summary |
 
-## Research Plan to Spec
+## Group Difference
 
-| 要点 | 仕様への反映 | 実装要素 |
+| Behavior | Control | Proposed |
 |---|---|---|
-| 専門用語は「知っているつもり」でも誤って理解する | `00`, `03` | pretest diagnosis, misconception_type |
-| AIを使うかではなく支援設計を比較する | `01`, `02` | group_condition control/proposed |
-| 統制群は非適応の3段階学習 | `04`, `08`, `10` | control learning APIs, learning_sessions |
-| 提案群は3段階適応型 | `02`, `04`, `07` | learning_sessions, prerequisite_terms, concept_understanding_attempts |
-| 提案群は学習中にMタイプを逐次再判定する | `04`, `10` | misconception observations, adaptive support |
-| L3/L2/L1は更新しない | `04`, `10` | phase structure only |
-| 問題をそのまま使い回さない | `11` | construct_key, variant_key |
-| 選択肢表現から正答を推測しにくくする | `02`, `11`, `14` | pretest_v2, option rationale, randomized display order |
-| 再テストを最終テストにする | `02`, `09`, `12` | score-retest -> post_survey |
-| ログDBとCSVで分析する | `07`, `12` | export endpoints |
-
-## Research Questions to Data
-
-### RQ1
-
-事前テストの誤概念タイプに基づく提案チューターは、通常チューターより同種誤答再発率を下げるか。
-
-必要データ:
-
-- pretest misconception_type
-- retest misconception_type
-- recurrence_flag
-- group_condition
-
-主要出力:
-
-- same_misconception_recurrence_rate
-- m1/m2/m3 recurrence rate
-
-### RQ2
-
-前提用語理解、教材あり概念理解、教材なし概念説明へ段階的に支援を減らすことで、支援なし再テストで正答できるか。
-
-必要データ:
-
-- prerequisite_terms
-- term_understanding_attempts
-- concept_understanding_attempts
-- concept_phase
-- material_shown
-- independent_explanation_success
-- phase2_retry_count
-- retest attempts
-
-主要出力:
-
-- prerequisite_pass_rate
-- concept_pass_rate
-- concept_phase1_pass_rate
-- concept_phase2_success_rate
-- phase2_after_retry_success_rate
-- retest_score
-
-### RQ3
-
-AI・情報系専門用語では、どの概念・誤概念タイプが再発しやすいか。
-
-必要データ:
-
-- term_slug
-- misconception_type
-- recurrence_flag
-
-主要出力:
-
-- term x misconception_type count
-- term x recurrence rate
-
-## Implementation Traceability
-
-| Research Object | DB Table | Backend Service | Frontend Page |
-|---|---|---|---|
-| 被験者 | participants | ExperimentService | /start |
-| 問題 | questions, question_options | QuestionService | /pretest, /retest |
-| 回答 | attempts | ExperimentService | test pages |
-| AI診断 | attempts, ai_call_logs | DiagnosisService | /diagnosing, /admin |
-| 学習対象 | term_assignments, learner_states | ExperimentService | /learning-targets |
-| 提案群学習 | learning_sessions, prerequisite_terms, term_understanding_attempts, concept_understanding_attempts | LearningSessionService | /learning/[termSlug] |
-| 統制群学習 | learning_sessions, prerequisite_terms, term_understanding_attempts, concept_understanding_attempts, tutor_sessions/tutor_turns旧互換 | LearningSessionService | /learning/[termSlug] |
-| 再発 | recurrence_events | EvaluationService | /admin |
-| 評価 | evaluation_summaries | EvaluationService | /admin |
-| CSV | export_jobs | ExportService | /admin |
-
-## Control vs Proposed Traceability
-
-| Behavior | control | proposed |
-|---|---|---|
-| AI explanation | RAG-based small questions + general phase1/phase2 | prerequisite + phase1/phase2 adaptive tutoring |
-| Uses pretest log for tutoring | no | yes |
-| Uses M type for tutoring | no | yes |
-| Generates three prerequisite/small-question items | yes, general only | yes, diagnosis-aware |
-| Blocks on prerequisite fail | no | yes |
-| Returns from phase2 to phase1 | no | yes |
-| Stores diagnosis | yes | yes |
-| Stores AI logs | yes | yes |
-| Includes in evaluation | yes | yes |
+| Fixed prerequisites/questions | same | same |
+| Current-answer feedback | general | misconception-aware |
+| Uses pretest diagnosis | no | yes |
+| Uses cumulative history | no | yes |
+| Phase1 prerequisite review | no | yes |
+| Phase2 return | no | yes |
+| Phase2 attempts | 1 | max 3 |

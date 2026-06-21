@@ -1,0 +1,51 @@
+schema_version: 1
+content_version: transformer_learning_v1
+target_term: transformer
+target_label: Transformer
+target_definition: Attentionでトークン間の関係を扱い、FFNで各トークンの特徴を変換する処理を層状に繰り返すモデル構造。
+target_misconceptions:
+  M1: 文章や知識を保存するデータ形式そのもの。
+  M2: RNNと同じく隠れ状態を位置ごとに順番に受け渡す構造。
+  M3: 翻訳や文章変換という用途だけを表す機能名。
+phase_links:
+  M1: [token]
+  M2: [rnn_sequential]
+  M3: [attention]
+prerequisite_set:
+  version: transformer_prerequisites_v1
+  items:
+    - key: token
+      label: トークン
+      definition: モデルが文章を処理するために分割した入力単位。
+      misconceptions:
+        M1: 文章の意味そのものを保存した知識。
+        M2: 単語を数値ベクトルへ変換した表現。
+        M3: 空白で区切られた単語だけを指す。
+    - key: attention
+      label: Attention
+      definition: トークン間の関連度を計算し、その重みに応じて情報を集約する処理。
+      misconceptions:
+        M1: AIが人間のように集中する心理機能。
+        M2: 各トークンを個別に変換するFFNと同じ処理。
+        M3: 重要単語だけを抽出するランキング処理。
+    - key: ffn
+      label: FFN
+      definition: 各トークン位置の特徴表現を同じネットワークで個別に変換する処理。
+      misconceptions:
+        M1: モデルの知識を外部へ保存する記憶装置。
+        M2: トークン間の関連度を計算するAttentionと同じ処理。
+        M3: 入力を先頭から順番に読むための時系列処理。
+    - key: rnn_sequential
+      label: RNNの逐次処理
+      definition: 前の時刻の隠れ状態を次の時刻へ受け渡しながら入力を順番に処理する方式。
+      misconceptions:
+        M1: 文章全体を一度に保存するデータ構造。
+        M2: すべての位置を同時に処理するTransformerの並列処理。
+        M3: 単語を重要度順に並べ替える処理。
+    - key: parallel_processing
+      label: 並列処理
+      definition: 複数の入力位置に関する計算を順番待ちさせず同時に進められる処理方式。
+      misconceptions:
+        M1: 複数のモデルへ同じ文章を保存する方式。
+        M2: RNNの隠れ状態を一つずつ受け渡す逐次処理。
+        M3: 入力文を複数の言語へ翻訳する機能。

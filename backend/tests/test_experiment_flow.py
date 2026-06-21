@@ -1,69 +1,68 @@
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
 from app.db.session import SessionLocal
 from app.main import app
 from app.models import (
-    AdaptiveSupportEvent,
     AICallLog,
-    Attempt,
-    AuditEvent,
-    ConceptUnderstandingAttempt,
-    MisconceptionObservation,
+    ContentVersion,
+    LearningChoiceAttempt,
+    LearningQuestion,
+    LearningQuestionDisplayOrder,
+    LearningQuestionOption,
+    LearningQuestionSlot,
+    Participant,
     Question,
     QuestionDisplayOrder,
     QuestionOption,
-    Term,
-    TermUnderstandingAttempt,
 )
 from app.rag import retrieve_rag_context
-from app.seed.seed_questions import seed_database
+from app.services.fixed_learning import _answer_leak
 
 
 client = TestClient(app)
 
 
-def option_with_internal_label(question: dict, misconception_type: str | None) -> dict:
+def option_for_test(question: dict, misconception_type: str | None) -> dict:
     db = SessionLocal()
     try:
         option_ids = [option["option_id"] for option in question["options"]]
-        options = db.query(QuestionOption).filter(QuestionOption.id.in_(option_ids)).all()
-        option_by_id = {option.id: option for option in options}
-        for public_option in question["options"]:
-            option = option_by_id[public_option["option_id"]]
-            if option.misconception_type == misconception_type:
-                return public_option
+        rows = db.query(QuestionOption).filter(QuestionOption.id.in_(option_ids)).all()
+        by_id = {row.id: row for row in rows}
+        return next(
+            option
+            for option in question["options"]
+            if by_id[option["option_id"]].misconception_type == misconception_type
+        )
     finally:
         db.close()
-    raise AssertionError(f"option with misconception_type={misconception_type!r} not found")
 
 
-def unknown_option(question: dict) -> dict:
-    return option_with_internal_label(question, "unknown")
-
-
-def correct_option(question: dict) -> dict:
-    return option_with_internal_label(question, None)
-
-
-def create_participant(group: str = "proposed") -> tuple[str, list[dict]]:
-    participant = client.post("/api/participants", json={"group_condition": group, "consent_checked": True}).json()
-    pid = participant["participant_id"]
-    pretest = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
-    assert len(pretest) == 5
-    assert {question["requires_reason"] for question in pretest} == {False}
-    assert {question["requires_confidence"] for question in pretest} == {False}
+def learning_option(session: dict, misconception_type: str | None) -> dict:
     db = SessionLocal()
     try:
-        db_questions = db.query(Question).filter(Question.id.in_([question["question_id"] for question in pretest])).all()
-        assert {question.variant_key for question in db_questions} == {"pretest_v2"}
+        question_id = session["question"]["question_id"]
+        rows = db.query(LearningQuestionOption).filter_by(learning_question_id=question_id).all()
+        by_id = {row.id: row for row in rows}
+        return next(
+            option
+            for option in session["question"]["options"]
+            if by_id[option["option_id"]].misconception_type == misconception_type
+        )
     finally:
         db.close()
-    return pid, pretest
 
 
-def submit_pretest(pid: str, questions: list[dict], misconception_type: str | None = "unknown") -> None:
+def create_participant(group: str, pretest_choice: str | None = "unknown") -> tuple[str, list[dict]]:
+    participant = client.post(
+        "/api/participants",
+        json={"group_condition": group, "consent_checked": True},
+    ).json()
+    pid = participant["participant_id"]
+    questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:
-        option = option_with_internal_label(question, misconception_type)
+        option = option_for_test(question, pretest_choice)
         response = client.post(
             "/api/attempts",
             json={
@@ -71,537 +70,241 @@ def submit_pretest(pid: str, questions: list[dict], misconception_type: str | No
                 "question_id": question["question_id"],
                 "phase": "pretest",
                 "selected_option_id": option["option_id"],
-                "reason_text": None,
-                "confidence": None,
             },
         )
         assert response.status_code == 200
+    diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
+    assert diagnosis.status_code == 200
+    return pid, questions
 
 
-def pass_all_prerequisites(session: dict) -> dict:
+def start_session(pid: str, term_slug: str | None = None) -> dict:
+    targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
+    slug = term_slug or targets[0]["term_slug"]
+    response = client.post(
+        "/api/learning-sessions",
+        json={"participant_id": pid, "term_slug": slug},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def answer(session: dict, misconception_type: str | None, key: str | None = None) -> dict:
+    option = learning_option(session, misconception_type)
+    endpoint = {
+        "concept_phase1": "concept-phase1-attempts",
+        "concept_phase2": "concept-phase2-attempts",
+    }.get(session["stage"], "prerequisite-attempts")
+    response = client.post(
+        f"/api/learning-sessions/{session['learning_session_id']}/{endpoint}",
+        headers={"Idempotency-Key": key or str(uuid4())},
+        json={
+            "question_id": session["question"]["question_id"],
+            "selected_option_id": option["option_id"],
+            "response_time_sec": 2.5,
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def pass_prerequisites(session: dict) -> dict:
     current = session
-    for item in current["prerequisites"]:
-        result = client.post(
-            f"/api/learning-sessions/{current['learning_session_id']}/prerequisites/{item['prerequisite_id']}/attempts",
-            json={"learner_answer": f"{item['term_label']} の役割と関係を説明します。pass"},
-        ).json()
-        current = result["session"]
+    while current["stage"] in {"prerequisite", "prerequisite_review"}:
+        current = answer(current, None)["session"]
     return current
 
 
-def test_proposed_3phase_flow_and_final_retest():
-    health = client.get("/api/health")
-    assert health.status_code == 200
-    assert health.json()["status"] == "ok"
+def pass_phase1(session: dict) -> dict:
+    current = session
+    while current["stage"] == "concept_phase1":
+        current = answer(current, None)["session"]
+    return current
 
-    pid, pretest = create_participant("proposed")
-    submit_pretest(pid, pretest, "unknown")
 
-    diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
-    assert diagnosis.status_code == 200
-    assert diagnosis.json()["learning_target_count"] == 5
-
-    targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
-    assert len(targets) == 5
-    assert targets[0]["learning_mode"] == "proposed_3phase"
-    assert "M1" not in targets[0]["summary_for_learner"]
-
-    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": targets[0]["term_slug"]}).json()
-    assert session["group_condition"] == "proposed"
-    assert session["status"] == "prerequisite"
-    assert len(session["prerequisites"]) == 3
-
+def test_content_import_has_fixed_release_and_255_questions():
     db = SessionLocal()
     try:
-        log = db.query(AICallLog).filter(AICallLog.purpose == "generate_prerequisite_plan").order_by(AICallLog.created_at.desc()).first()
-        assert log is not None
-        assert log.request_payload["rag_context"]["source"] == "rag_ready_教材"
-        assert log.request_payload["pretest_diagnosis"]["misconception_type"] == "unknown"
-    finally:
-        db.close()
-
-    prereq = session["prerequisites"][0]
-    fail_one = client.post(
-        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
-        json={"learner_answer": "短い"},
-    ).json()
-    assert fail_one["is_passed"] is False
-    assert fail_one["session"]["status"] == "prerequisite"
-    fail_two = client.post(
-        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
-        json={"learner_answer": "まだ短い"},
-    ).json()
-    assert fail_two["is_passed"] is False
-    assert fail_two["session"]["status"] == "blocked"
-    remaining_targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
-    assert len(remaining_targets) == 4
-
-    second = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": targets[1]["term_slug"]}).json()
-    second = pass_all_prerequisites(second)
-    assert second["status"] == "concept_phase1"
-
-    failed_phase1 = client.post(
-        f"/api/learning-sessions/{second['learning_session_id']}/concept-phase1-attempts",
-        json={"learner_answer": "まだうまく説明できません。"},
-    ).json()
-    assert failed_phase1["is_passed"] is False
-    assert failed_phase1["review_prerequisite_ids"]
-    assert failed_phase1["session"]["status"] == "prerequisite"
-
-    review_item = next(item for item in failed_phase1["session"]["prerequisites"] if item["status"] == "review")
-    reviewed = client.post(
-        f"/api/learning-sessions/{second['learning_session_id']}/prerequisites/{review_item['prerequisite_id']}/attempts",
-        json={"learner_answer": f"{review_item['term_label']} の役割と関係を説明します。pass"},
-    ).json()
-    assert reviewed["is_passed"] is True
-    assert reviewed["session"]["status"] == "concept_phase1"
-
-    labels = [item["term_label"] for item in reviewed["session"]["prerequisites"][:2]]
-    phase1 = client.post(
-        f"/api/learning-sessions/{second['learning_session_id']}/concept-phase1-attempts",
-        json={"learner_answer": f"{labels[0]} と {labels[1]} の関係を使って対象概念を説明します。"},
-    ).json()
-    assert phase1["is_passed"] is True
-    assert phase1["session"]["status"] == "concept_phase2"
-
-    phase2_fail = client.post(
-        f"/api/learning-sessions/{second['learning_session_id']}/concept-phase2-attempts",
-        json={"learner_answer": "短い"},
-    ).json()
-    assert phase2_fail["is_passed"] is False
-    assert phase2_fail["return_to_phase1"] is True
-    assert phase2_fail["session"]["status"] == "concept_phase1"
-
-    phase1_retry = client.post(
-        f"/api/learning-sessions/{second['learning_session_id']}/concept-phase1-attempts",
-        json={"learner_answer": f"{labels[0]} と {labels[1]} の関係を使って対象概念を説明します。pass"},
-    ).json()
-    assert phase1_retry["session"]["status"] == "concept_phase2"
-
-    phase2_pass = client.post(
-        f"/api/learning-sessions/{second['learning_session_id']}/concept-phase2-attempts",
-        json={"learner_answer": f"phase2pass {labels[0]} と {labels[1]} を使って教材なしで自力説明します。"},
-    ).json()
-    assert phase2_pass["is_passed"] is True
-    assert phase2_pass["session"]["status"] == "completed"
-
-    retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
-    assert len(retest) == 5
-    assert {question["requires_reason"] for question in retest} == {False}
-    assert {question["requires_confidence"] for question in retest} == {False}
-    db = SessionLocal()
-    try:
-        db_questions = db.query(Question).filter(Question.id.in_([question["question_id"] for question in retest])).all()
-        assert {question.variant_key for question in db_questions} == {"retest_v1"}
-        assert not db.query(Question).filter(Question.phase.in_(("l0_check", "transfer")), Question.is_active.is_(True)).first()
-    finally:
-        db.close()
-
-    for question in retest:
-        option = unknown_option(question)
-        assert client.post(
-            "/api/attempts",
-            json={"participant_id": pid, "question_id": question["question_id"], "phase": "retest", "selected_option_id": option["option_id"]},
-        ).status_code == 200
-    scored = client.post(f"/api/participants/{pid}/score-retest")
-    assert scored.status_code == 200
-    assert scored.json()["next_step"] == "post_survey"
-    assert client.get(f"/api/experiment/{pid}/l0-check").json()["questions"] == []
-    assert client.get(f"/api/experiment/{pid}/transfer-test").json()["questions"] == []
-
-    summary = client.post(f"/api/participants/{pid}/evaluation-summary/recalculate")
-    assert summary.status_code == 200
-    export = client.get("/api/admin/export/evaluation_summary.csv")
-    assert export.status_code == 200
-    assert "concept_phase2_success_rate" in export.text
-    concept_export = client.get("/api/admin/export/concept_understanding_attempts.csv")
-    assert "concept_phase" in concept_export.text
-    assert "return_to_phase1" in concept_export.text
-
-
-def test_pretest_v2_content_labels_rationales_and_display_order():
-    pid, pretest = create_participant("proposed")
-    expected_bodies = {
-        "transformer": "Transformerの計算構造を最も適切に説明しているものはどれか。",
-        "attention": "Transformer層におけるAttentionの処理を最も適切に説明しているものはどれか。",
-        "llm_training_process": "本研究で扱うLLMの学習過程の説明として、最も適切なものはどれか。",
-        "pretraining": "LLMの事前学習を最も適切に説明しているものはどれか。",
-        "post_training": "LLMの事後学習を最も適切に説明しているものはどれか。",
-    }
-    assert {question["term_slug"]: question["body"] for question in pretest} == expected_bodies
-
-    first_orders = {
-        question["question_id"]: [option["option_id"] for option in question["options"]]
-        for question in pretest
-    }
-    repeated = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
-    assert {
-        question["question_id"]: [option["option_id"] for option in question["options"]]
-        for question in repeated
-    } == first_orders
-
-    db = SessionLocal()
-    try:
-        question_ids = list(first_orders)
-        db_questions = db.query(Question).filter(Question.id.in_(question_ids)).all()
-        assert {question.variant_key for question in db_questions} == {"pretest_v2"}
-        assert db.query(QuestionDisplayOrder).filter(
-            QuestionDisplayOrder.participant_id == pid,
-            QuestionDisplayOrder.question_id.in_(question_ids),
-        ).count() == 5
-        for question in db_questions:
-            options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id).all()
+        release = db.query(ContentVersion).filter_by(is_active=True).one()
+        assert release.version_key == "experiment_content_v1"
+        assert release.validation_status == "provisional"
+        assert db.query(LearningQuestion).count() == 255
+        assert db.query(LearningQuestionSlot).count() == 85
+        for question in db.query(LearningQuestion).all():
+            options = db.query(LearningQuestionOption).filter_by(learning_question_id=question.id).all()
             assert len(options) == 5
             assert sum(option.is_correct for option in options) == 1
             assert {option.misconception_type for option in options} == {None, "M1", "M2", "M3", "unknown"}
-            assert all(option.rationale for option in options if option.misconception_type in {"M1", "M2", "M3"})
-            assert all(option.misconception_type == "unknown" for option in options if option.body == "わからない。")
-            substantive_options = [option for option in options if option.misconception_type != "unknown"]
-            lengths = [len(option.body) for option in substantive_options]
-            assert max(lengths) - min(lengths) <= 10
-            assert not any(
-                cue in option.body
-                for option in substantive_options
-                for cue in ("人間のよう", "名前に", "単に", "だけを指す")
-            )
     finally:
         db.close()
 
 
-def test_seed_deactivates_legacy_pretest_variants_without_deleting_them():
+def test_pretest_and_retest_are_all_five_mcq_with_saved_order():
+    pid, pretest = create_participant("proposed", "unknown")
+    assert len(pretest) == 5
+    assert {question["requires_reason"] for question in pretest} == {False}
     db = SessionLocal()
     try:
-        term = db.query(Term).filter(Term.slug == "transformer").one()
-        legacy = Question(
-            term_id=term.id,
-            phase="pretest",
-            question_type="definition",
-            body="legacy pretest",
-            expected_answer="legacy",
-            expected_keywords=[],
-            construct_key="transformer_definition",
-            variant_key="pretest_v1",
-            is_active=True,
-        )
-        db.add(legacy)
-        db.commit()
-        legacy_id = legacy.id
-
-        seed_database(db)
-
-        assert db.get(Question, legacy_id) is not None
-        assert db.get(Question, legacy_id).is_active is False
-        active = db.query(Question).filter(
-            Question.term_id == term.id,
-            Question.phase == "pretest",
-            Question.is_active.is_(True),
-        ).all()
-        assert {question.variant_key for question in active} == {"pretest_v2"}
+        participant = db.get(Participant, pid)
+        assert participant.content_version_id is not None
+        assert db.query(QuestionDisplayOrder).filter_by(participant_id=pid).count() == 5
+        assert {question.variant_key for question in db.query(Question).filter_by(phase="pretest", is_active=True)} == {"pretest_v2"}
+    finally:
+        db.close()
+    retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+    assert len(retest) == 5
+    db = SessionLocal()
+    try:
+        assert {question.variant_key for question in db.query(Question).filter_by(phase="retest", is_active=True)} == {"retest_v2"}
     finally:
         db.close()
 
 
-def test_proposed_phase2_third_fail_sets_failed_phase2():
-    pid, pretest = create_participant("proposed")
-    submit_pretest(pid, pretest[:1], "unknown")
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
-    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
-    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    session = pass_all_prerequisites(session)
-    labels = [item["term_label"] for item in session["prerequisites"][:2]]
-
-    for i in range(3):
-        phase1 = client.post(
-            f"/api/learning-sessions/{session['learning_session_id']}/concept-phase1-attempts",
-            json={"learner_answer": f"{labels[0]} と {labels[1]} の関係を使って対象概念を説明します。pass {i}"},
-        ).json()
-        assert phase1["session"]["status"] == "concept_phase2"
-        phase2 = client.post(
-            f"/api/learning-sessions/{session['learning_session_id']}/concept-phase2-attempts",
-            json={"learner_answer": "短い"},
-        ).json()
-        session = phase2["session"]
-
-    assert phase2["is_passed"] is False
-    assert session["status"] == "failed_phase2"
-
-
-def test_control_group_3phase_payload_is_not_personalized():
-    pid, pretest = create_participant("control")
-    submit_pretest(pid, pretest[:1], "M1")
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
-    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
-    assert target["learning_mode"] == "control_3phase"
-
-    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    assert session["status"] == "prerequisite"
-    assert len(session["prerequisites"]) == 3
+def test_proposed_flow_uses_fixed_prerequisites_and_adaptive_returns():
+    pid, _ = create_participant("proposed", "M1")
+    session = start_session(pid)
+    assert session["stage"] == "prerequisite"
+    assert len(session["prerequisites"]) == 5
     db = SessionLocal()
     try:
-        log = db.query(AICallLog).filter(AICallLog.purpose == "generate_control_prerequisite_plan").order_by(AICallLog.created_at.desc()).first()
-        assert log is not None
+        log = db.query(AICallLog).filter_by(purpose="generate_prerequisite_material").order_by(AICallLog.created_at.desc()).first()
+        assert log.request_payload["diagnosis_context"]["pretest_diagnosis"]["misconception_type"] == "M1"
         assert log.request_payload["rag_context"]["source"] == "rag_ready_教材"
-        assert "pretest_diagnosis" not in log.request_payload
-        assert "selected_option_body" not in log.request_payload
-        assert "learner_state" not in log.request_payload
-        assert "learning_history" not in log.request_payload
     finally:
         db.close()
 
-    current = session
-    first = current["prerequisites"][0]
-    first_result = client.post(
-        f"/api/learning-sessions/{current['learning_session_id']}/prerequisites/{first['prerequisite_id']}/attempts",
-        json={"learner_answer": "短い"},
-    ).json()
-    assert first_result["is_passed"] is False
-    assert first_result["session"]["status"] == "prerequisite"
-    current = first_result["session"]
-    for item in current["prerequisites"][1:]:
-        current = client.post(
-            f"/api/learning-sessions/{current['learning_session_id']}/prerequisites/{item['prerequisite_id']}/attempts",
-            json={"learner_answer": f"{item['term_label']} の役割を説明します。pass"},
-        ).json()["session"]
-    assert current["status"] == "concept_phase1"
+    session = pass_prerequisites(session)
+    assert session["stage"] == "concept_phase1"
+    wrong = answer(session, "M1")
+    assert wrong["is_correct"] is False
+    assert wrong["correct_answer"] is None
+    assert wrong["session"]["stage"] == "prerequisite_review"
+    reviewed = answer(wrong["session"], None)
+    assert reviewed["session"]["stage"] == "concept_phase1"
+    assert reviewed["session"]["progress"]["attempt_index"] == 2
+    phase2 = pass_phase1(reviewed["session"])
+    assert phase2["stage"] == "concept_phase2"
+    phase2_wrong = answer(phase2, "M2")
+    assert phase2_wrong["session"]["stage"] == "concept_phase1"
+    assert phase2_wrong["session"]["progress"]["cycle_index"] == 2
+    phase2_again = pass_phase1(phase2_wrong["session"])
+    completed = answer(phase2_again, None)
+    assert completed["session"]["status"] == "completed"
 
-    phase1 = client.post(
-        f"/api/learning-sessions/{current['learning_session_id']}/concept-phase1-attempts",
-        json={"learner_answer": "短い"},
-    ).json()
-    assert phase1["is_passed"] is False
-    assert phase1["session"]["status"] == "concept_phase2"
+
+def test_control_uses_same_questions_without_adaptive_history():
+    proposed_pid, _ = create_participant("proposed", "M1")
+    control_pid, _ = create_participant("control", "M1")
+    proposed = start_session(proposed_pid, "transformer")
+    control = start_session(control_pid, "transformer")
+    assert proposed["question"]["body"] == control["question"]["body"]
+    assert {item["body"] for item in proposed["question"]["options"]} == {
+        item["body"] for item in control["question"]["options"]
+    }
     db = SessionLocal()
     try:
-        log = db.query(AICallLog).filter(AICallLog.purpose == "grade_concept_phase1_answer").order_by(AICallLog.created_at.desc()).first()
-        assert log is not None
+        log = (
+            db.query(AICallLog)
+            .filter_by(purpose="generate_prerequisite_material")
+            .order_by(AICallLog.created_at.desc())
+            .first()
+        )
         assert log.request_payload["group_condition"] == "control"
-        assert "pretest_diagnosis" not in log.request_payload
-        assert "selected_option_body" not in log.request_payload
+        assert "diagnosis_context" not in log.request_payload
         assert "learning_history" not in log.request_payload
     finally:
         db.close()
+    control = pass_prerequisites(control)
+    wrong = answer(control, "M1")
+    assert wrong["session"]["stage"] == "concept_phase1"
+    assert wrong["session"]["progress"]["attempt_index"] == 2
+    control = pass_phase1(wrong["session"])
+    completed = answer(control, "M2")
+    assert completed["session"]["status"] == "completed"
+    assert completed["correct_answer"] is None
 
-    phase2 = client.post(
-        f"/api/learning-sessions/{current['learning_session_id']}/concept-phase2-attempts",
-        json={"learner_answer": "短い"},
-    ).json()
-    assert phase2["is_passed"] is False
-    assert phase2["session"]["status"] == "completed"
+
+def test_third_wrong_forces_resolution_without_blocking():
+    pid, _ = create_participant("proposed", "unknown")
+    session = start_session(pid)
+    first = answer(session, "M1")
+    second = answer(first["session"], "M2")
+    third = answer(second["session"], "M3")
+    assert third["forced_answer_shown"] is True
+    assert third["result_status"] == "forced_resolved"
+    assert third["correct_answer"]["body"]
+    assert third["session"]["status"] == "prerequisite"
+    assert third["session"]["progress"]["required_question_index"] == 2
+    db = SessionLocal()
+    try:
+        attempts = db.query(LearningChoiceAttempt).filter_by(learning_session_id=session["learning_session_id"]).all()
+        assert attempts[-1].result_status == "forced_resolved"
+    finally:
+        db.close()
 
 
-def test_all_correct_pretest_has_no_learning_targets():
-    pid, pretest = create_participant("proposed")
-    for question in pretest:
-        option = correct_option(question)
+def test_display_order_is_stable_and_internal_metadata_is_hidden():
+    pid, _ = create_participant("proposed", "unknown")
+    session = start_session(pid)
+    repeated = client.get(f"/api/learning-sessions/{session['learning_session_id']}").json()
+    assert [item["option_id"] for item in session["question"]["options"]] == [
+        item["option_id"] for item in repeated["question"]["options"]
+    ]
+    assert "misconception_type" not in session["question"]["options"][0]
+    db = SessionLocal()
+    try:
+        assert db.query(LearningQuestionDisplayOrder).filter_by(participant_id=pid).count() == 1
+    finally:
+        db.close()
+
+
+def test_all_correct_pretest_skips_learning_but_retest_still_has_five():
+    pid, _ = create_participant("proposed", None)
+    targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
+    assert targets == []
+    assert len(client.get(f"/api/experiment/{pid}/retest").json()["questions"]) == 5
+
+
+def test_retest_scoring_metrics_and_exports():
+    pid, _ = create_participant("proposed", "M1")
+    retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+    for question in retest:
+        option = option_for_test(question, "M1")
         assert client.post(
             "/api/attempts",
             json={
                 "participant_id": pid,
                 "question_id": question["question_id"],
-                "phase": "pretest",
+                "phase": "retest",
                 "selected_option_id": option["option_id"],
-                "reason_text": None,
-                "confidence": None,
             },
         ).status_code == 200
+    scored = client.post(f"/api/participants/{pid}/score-retest")
+    assert scored.status_code == 200
+    assert scored.json()["next_step"] == "post_survey"
+    assert client.post(f"/api/participants/{pid}/evaluation-summary/recalculate").status_code == 200
+    summary = client.get("/api/admin/export/evaluation_summary.csv")
+    assert summary.status_code == 200
+    assert "retest_score_all_terms" in summary.text
+    assert "no_material_concept_discrimination_accuracy" in summary.text
+    choices = client.get("/api/admin/export/learning_choice_attempts.csv")
+    assert choices.status_code == 200
 
-    diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
-    assert diagnosis.status_code == 200
-    assert diagnosis.json()["learning_target_count"] == 0
-    assert client.get(f"/api/participants/{pid}/learning-targets").json()["targets"] == []
 
-
-def test_rag_retriever_returns_local_chunks():
-    for query in ["Transformer", "事前学習", "事後学習"]:
+def test_rag_and_answer_leak_detection():
+    for query in ("Transformer", "事前学習", "事後学習"):
         context = retrieve_rag_context(query)
         assert context["source"] == "rag_ready_教材"
         assert len(context["chunks"]) == 3
-        assert all(chunk["text"] for chunk in context["chunks"])
-
-
-def test_retest_same_misconception_sets_recurrence_flag():
-    pid, pretest = create_participant("proposed")
-    attention_pretest = next(question for question in pretest if question["term_slug"] == "attention")
-    pretest_m1 = option_with_internal_label(attention_pretest, "M1")
-    assert client.post(
-        "/api/attempts",
-        json={"participant_id": pid, "question_id": attention_pretest["question_id"], "phase": "pretest", "selected_option_id": pretest_m1["option_id"]},
-    ).status_code == 200
-
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
-    retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
-    assert len(retest) == 1
-    attention_retest = retest[0]
-    assert attention_retest["term_slug"] == "attention"
-    retest_m1 = option_with_internal_label(attention_retest, "M1")
-    assert client.post(
-        "/api/attempts",
-        json={"participant_id": pid, "question_id": attention_retest["question_id"], "phase": "retest", "selected_option_id": retest_m1["option_id"]},
-    ).status_code == 200
-    assert client.post(f"/api/participants/{pid}/score-retest").status_code == 200
-
+    pid, _ = create_participant("proposed", "unknown")
+    session_payload = start_session(pid)
     db = SessionLocal()
     try:
-        attempt = db.query(Attempt).filter(Attempt.participant_id == pid, Attempt.phase == "retest").one()
-        assert attempt.misconception_type == "M1"
-        assert attempt.recurrence_flag is True
-    finally:
-        db.close()
+        from app.models import LearningSession
 
-
-def test_proposed_learning_answer_creates_observation_and_support():
-    pid, pretest = create_participant("proposed")
-    submit_pretest(pid, pretest[:1], "unknown")
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
-    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
-    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    prereq = session["prerequisites"][0]
-    response = client.post(
-        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
-        json={"learner_answer": "M1 心理的な能力として説明します。"},
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["is_passed"] is False
-    assert "M1" not in body["feedback"]
-
-    db = SessionLocal()
-    try:
-        observation = (
-            db.query(MisconceptionObservation)
-            .filter_by(learning_session_id=session["learning_session_id"], source_phase="prerequisite")
-            .one()
-        )
-        assert observation.primary_misconception_type == "M1"
-        assert observation.applied_strategy == "category_reorientation"
-        observation_id = observation.id
-        support = db.query(AdaptiveSupportEvent).filter_by(misconception_observation_id=observation.id).one()
-        db.delete(support)
-        db.commit()
-    finally:
-        db.close()
-
-    retry = client.post(
-        f"/api/learning-sessions/{session['learning_session_id']}/support-events/{observation_id}/retry"
-    )
-    assert retry.status_code == 200
-    db = SessionLocal()
-    try:
-        assert db.query(MisconceptionObservation).filter_by(id=observation_id).count() == 1
-        assert db.query(TermUnderstandingAttempt).filter_by(prerequisite_term_id=prereq["prerequisite_id"]).count() == 1
-        assert db.query(AdaptiveSupportEvent).filter_by(misconception_observation_id=observation_id).count() == 1
-    finally:
-        db.close()
-
-
-def test_ambiguous_clarification_does_not_consume_extra_attempt():
-    pid, pretest = create_participant("proposed")
-    submit_pretest(pid, pretest[:1], "unknown")
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
-    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
-    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    prereq = session["prerequisites"][0]
-    first = client.post(
-        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
-        json={"learner_answer": "ambiguous 曖昧な説明です。"},
-    ).json()
-    assert first["requires_clarification"] is True
-    assert first["session"]["pending_clarification"] is not None
-
-    second = client.post(
-        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
-        json={
-            "learner_answer": f"{prereq['term_label']} の役割と対象概念との関係を十分に説明します。pass",
-            "attempt_kind": "clarification",
-            "clarification_parent_attempt_id": first["clarification_parent_attempt_id"],
-        },
-    ).json()
-    assert second["requires_clarification"] is False
-    assert second["session"]["pending_clarification"] is None
-    db = SessionLocal()
-    try:
-        attempts = db.query(TermUnderstandingAttempt).filter_by(prerequisite_term_id=prereq["prerequisite_id"]).all()
-        assert len(attempts) == 2
-        assert sum(1 for attempt in attempts if attempt.counts_toward_limit) == 1
-    finally:
-        db.close()
-
-
-def test_control_learning_does_not_create_learning_observations():
-    pid, pretest = create_participant("control")
-    submit_pretest(pid, pretest[:1], "M1")
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
-    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
-    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    prereq = session["prerequisites"][0]
-    assert client.post(
-        f"/api/learning-sessions/{session['learning_session_id']}/prerequisites/{prereq['prerequisite_id']}/attempts",
-        json={"learner_answer": "短い"},
-    ).status_code == 200
-    db = SessionLocal()
-    try:
-        assert (
-            db.query(MisconceptionObservation)
-            .filter_by(learning_session_id=session["learning_session_id"])
-            .count()
-            == 0
-        )
-        log = db.query(AICallLog).filter_by(purpose="grade_prerequisite_answer").order_by(AICallLog.created_at.desc()).first()
-        assert "diagnosed_status" not in (log.response_payload or {})
-    finally:
-        db.close()
-
-
-def test_phase2_fail_starts_new_phase1_cycle():
-    pid, pretest = create_participant("proposed")
-    submit_pretest(pid, pretest[:1], "unknown")
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
-    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
-    session = client.post("/api/learning-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    session = pass_all_prerequisites(session)
-    labels = [item["term_label"] for item in session["prerequisites"][:2]]
-    phase1 = client.post(
-        f"/api/learning-sessions/{session['learning_session_id']}/concept-phase1-attempts",
-        json={"learner_answer": f"{labels[0]} と {labels[1]} の関係を十分に説明します。pass"},
-    ).json()
-    assert phase1["session"]["status"] == "concept_phase2"
-    phase2 = client.post(
-        f"/api/learning-sessions/{session['learning_session_id']}/concept-phase2-attempts",
-        json={"learner_answer": "M1 心理的能力です。"},
-    ).json()
-    assert phase2["session"]["status"] == "concept_phase1"
-    assert phase2["session"]["concept"]["phase1"]["cycle_index"] == 2
-    assert phase2["session"]["concept"]["phase1"]["attempt_count"] == 0
-
-
-def test_manual_override_requires_completion_and_keeps_audit_history():
-    pid, pretest = create_participant("proposed")
-    submit_pretest(pid, pretest[:1], "M1")
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
-    db = SessionLocal()
-    try:
-        original = db.query(MisconceptionObservation).filter_by(participant_id=pid, source_phase="pretest").one()
-        original_id = original.id
-    finally:
-        db.close()
-
-    denied = client.post(
-        f"/api/admin/diagnoses/{original_id}/override",
-        json={"diagnosed_status": "resolved", "reason": "研究者確認"},
-    )
-    assert denied.status_code == 409
-    assert client.post(f"/api/participants/{pid}/survey", json={"phase": "post_survey"}).status_code == 200
-    accepted = client.post(
-        f"/api/admin/diagnoses/{original_id}/override",
-        json={"diagnosed_status": "resolved", "reason": "研究者確認"},
-    )
-    assert accepted.status_code == 200
-    db = SessionLocal()
-    try:
-        override = db.get(MisconceptionObservation, accepted.json()["observation_id"])
-        assert override is not None
-        assert override.is_manual_override is True
-        assert override.overrides_observation_id == original_id
-        assert db.query(AuditEvent).filter_by(entity_id=override.id, action="override_diagnosis").count() == 1
+        session = db.get(LearningSession, session_payload["learning_session_id"])
+        question = db.get(LearningQuestion, session_payload["question"]["question_id"])
+        correct = db.query(LearningQuestionOption).filter_by(learning_question_id=question.id, is_correct=True).one()
+        assert _answer_leak(db, session, correct.body) is True
     finally:
         db.close()

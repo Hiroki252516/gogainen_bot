@@ -1,0 +1,51 @@
+schema_version: 1
+content_version: attention_learning_v1
+target_term: attention
+target_label: Attention
+target_definition: 各トークンと他のトークンの関連度を求め、その重みに応じて情報を集約する処理。
+target_misconceptions:
+  M1: AIが人間のように注意や集中を向ける心理機能。
+  M2: 各トークンを他の位置と比較せず個別に変換するFFN。
+  M3: 文全体で重要な単語を一度だけ順位付けして抽出する処理。
+phase_links:
+  M1: [weighting]
+  M2: [token_relation]
+  M3: [information_aggregation]
+prerequisite_set:
+  version: attention_prerequisites_v1
+  items:
+    - key: token
+      label: トークン
+      definition: モデルが文章を処理するために分割した入力単位。
+      misconceptions:
+        M1: 文章の意味そのもの。
+        M2: 数値化後のトークン表現と同じもの。
+        M3: 空白で区切られた単語だけ。
+    - key: token_representation
+      label: トークン表現
+      definition: 各トークンをモデル内部で計算できる数値ベクトルとして表したもの。
+      misconceptions:
+        M1: トークンを保存するデータベース。
+        M2: トークンという分割単位そのもの。
+        M3: 単語の重要度を一つの数値で表したもの。
+    - key: token_relation
+      label: トークン間の関係
+      definition: あるトークンを解釈するときに他のトークンの情報がどの程度関係するかという対応。
+      misconceptions:
+        M1: AIが単語へ抱く感情的なつながり。
+        M2: 各トークン内部の特徴変換だけを指す。
+        M3: 文中で隣り合っているかだけで決まる関係。
+    - key: weighting
+      label: 重み付け
+      definition: 関係の強さに応じて、利用する情報の寄与を大小の値で調整すること。
+      misconceptions:
+        M1: 重要な単語を永久に記憶すること。
+        M2: すべての情報を同じ量だけ足し合わせること。
+        M3: 重要語だけを残し他を完全に削除すること。
+    - key: information_aggregation
+      label: 情報の集約
+      definition: 複数トークンの情報を重みに応じて組み合わせ、現在位置の表現を作ること。
+      misconceptions:
+        M1: 文全体を一つの知識として保存すること。
+        M2: 各トークンを他と関係なく個別変換すること。
+        M3: 最重要の単語一つだけを選ぶこと。

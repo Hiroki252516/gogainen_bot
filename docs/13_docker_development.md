@@ -38,6 +38,7 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./rag_ready_教材:/rag_ready_教材:ro
+      - ./experiment_content:/app/experiment_content:ro
       - ./.local/codex-ws-token:/run/secrets/codex_ws_token:ro
     depends_on:
       - db
@@ -138,9 +139,10 @@ export:
 
 1. ホストで `codex app-server --listen ws://127.0.0.1:4500` を起動する
 2. `docker compose up --build`
-3. `http://localhost:3000/admin` でAI statusがログイン済みか確認する
-4. `http://localhost:3000` を開く
-5. `http://localhost:8000/api/health` を確認
+3. backend起動ログで `experiment_content_v1` の検証・同期成功を確認する
+4. `http://localhost:3000/admin` でAI statusがログイン済みか確認する
+5. `http://localhost:3000` を開く
+6. `http://localhost:8000/api/health` を確認
 
 ## app-server接続確認
 

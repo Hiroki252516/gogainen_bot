@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     max_turns_per_term: int = 3
     random_seed: str = "20260525"
     export_dir: str = "./exports"
+    experiment_content_dir: str = "../experiment_content"
     frontend_origin: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(

@@ -32,7 +32,7 @@ export default function LearningTargetsPage() {
                 {i + 1}. {target.term_label}
               </strong>
               <p>{target.summary_for_learner}</p>
-              <span className="muted">{target.learning_mode === "proposed_3phase" ? "3段階で確認" : "通常の3段階確認"}</span>
+              <span className="muted">{target.learning_mode === "proposed_3phase" ? "ログ適応型の固定選択学習" : "通常型の固定選択学習"}</span>
             </div>
           ))}
         </div>
@@ -41,8 +41,8 @@ export default function LearningTargetsPage() {
             学習を開始
           </Link>
         ) : (
-          <Link className="button" href="/survey/post">
-            事後アンケートへ
+          <Link className="button" href="/retest">
+            再テストへ
           </Link>
         )}
       </section>

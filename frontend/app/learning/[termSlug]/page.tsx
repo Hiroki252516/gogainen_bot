@@ -1,137 +1,116 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { api, requireParticipant } from "@/lib/api";
 
-type Prerequisite = {
-  prerequisite_id: string;
-  term_label: string;
-  material: string;
-  check_question: string;
-  generation_reason?: string | null;
-  display_order: number;
-  status: string;
-  attempt_count: number;
-  max_attempts: number;
-  last_feedback?: string | null;
-  remediation_material?: string | null;
+type Option = {
+  option_id: string;
+  label: string;
+  body: string;
 };
 
-type ConceptPhase = {
-  material?: string | null;
-  prompt?: string | null;
-  expected_answer?: string | null;
-  light_conditions?: string | null;
-  attempt_count: number;
-  retry_count?: number;
-  max_attempts: number;
+type PrerequisiteProgress = {
+  key: string;
+  label: string;
+  display_order: number;
+  status: string;
+  completed_slot_count: number;
+  forced_slot_count: number;
+  review_count: number;
 };
 
 type LearningSession = {
   learning_session_id: string;
   group_condition: "control" | "proposed";
   status: string;
+  stage: string;
   term_slug: string;
   term_label: string;
   term_description?: string | null;
-  prerequisites: Prerequisite[];
-  current_prerequisite_id?: string | null;
-  concept?: {
-    material?: string | null;
-    prompt?: string | null;
-    attempt_count: number;
+  content_version: string;
+  progress: {
+    prerequisite_index?: number | null;
+    prerequisite_total: number;
+    required_question_index?: number | null;
+    required_question_total: number;
+    attempt_index: number;
     max_attempts: number;
-    phase1?: ConceptPhase;
-    phase2?: ConceptPhase;
-  } | null;
+    cycle_index: number;
+  };
+  current_prerequisite?: { key: string; label: string } | null;
+  prerequisites: PrerequisiteProgress[];
+  material?: { material_id: string; body: string } | null;
+  question?: { question_id: string; body: string; options: Option[] } | null;
   last_feedback?: string | null;
-  blocked_reason?: string | null;
-  pending_clarification?: {
-    source_attempt_type: string;
-    source_attempt_id: string;
-    question: string;
-  } | null;
+  technical_block_reason?: string | null;
 };
 
-const TERMINAL_STATUSES = new Set(["completed", "blocked", "failed", "failed_phase1", "failed_phase2"]);
+type AnswerResult = {
+  attempt_id: string;
+  is_correct: boolean;
+  result_status: string;
+  feedback: string;
+  forced_answer_shown: boolean;
+  correct_answer?: { body: string; summary: string } | null;
+  session: LearningSession;
+};
 
 export default function LearningPage() {
   const router = useRouter();
   const params = useParams<{ termSlug: string }>();
   const termSlug = params.termSlug;
   const [session, setSession] = useState<LearningSession | null>(null);
-  const [response, setResponse] = useState("");
-  const [feedback, setFeedback] = useState("");
+  const [selected, setSelected] = useState("");
+  const [result, setResult] = useState<AnswerResult | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const startedAt = useRef(Date.now());
 
   const nextHref = useMemo(() => {
     if (typeof window === "undefined") return "/retest";
     const targets = JSON.parse(localStorage.getItem("learning_targets") || "[]") as string[];
-    const idx = targets.indexOf(termSlug);
-    return idx >= 0 && idx + 1 < targets.length ? `/learning/${targets[idx + 1]}` : "/retest";
+    const index = targets.indexOf(termSlug);
+    return index >= 0 && index + 1 < targets.length ? `/learning/${targets[index + 1]}` : "/retest";
   }, [termSlug]);
 
-  const currentPrerequisite = session?.prerequisites.find((item) => item.prerequisite_id === session.current_prerequisite_id);
-  const isTerminal = session ? TERMINAL_STATUSES.has(session.status) : false;
-
   useEffect(() => {
-    async function boot() {
-      try {
-        const data = await api<LearningSession>("/api/learning-sessions", {
-          method: "POST",
-          body: JSON.stringify({ participant_id: requireParticipant(), term_slug: termSlug })
-        });
+    api<LearningSession>("/api/learning-sessions", {
+      method: "POST",
+      body: JSON.stringify({ participant_id: requireParticipant(), term_slug: termSlug })
+    })
+      .then((data) => {
         setSession(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    }
-    boot();
+        startedAt.current = Date.now();
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, [termSlug]);
 
   async function submit() {
-    if (!session) return;
-    if (!response.trim()) {
-      setError("回答を入力してください。");
+    if (!session?.question || !selected) {
+      setError("選択肢を選んでください。");
       return;
     }
     setSaving(true);
     setError("");
+    const endpoint =
+      session.stage === "concept_phase1"
+        ? "concept-phase1-attempts"
+        : session.stage === "concept_phase2"
+          ? "concept-phase2-attempts"
+          : "prerequisite-attempts";
     try {
-      let data: { feedback: string; session: LearningSession };
-      const answerBody = JSON.stringify({
-        learner_answer: response,
-        attempt_kind: session.pending_clarification ? "clarification" : "normal",
-        clarification_parent_attempt_id: session.pending_clarification?.source_attempt_id || null
+      const data = await api<AnswerResult>(`/api/learning-sessions/${session.learning_session_id}/${endpoint}`, {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({
+          question_id: session.question.question_id,
+          selected_option_id: selected,
+          response_time_sec: (Date.now() - startedAt.current) / 1000
+        })
       });
-      if (session.status === "prerequisite") {
-        if (!currentPrerequisite) return;
-        data = await api<{ feedback: string; session: LearningSession }>(
-          `/api/learning-sessions/${session.learning_session_id}/prerequisites/${currentPrerequisite.prerequisite_id}/attempts`,
-          {
-            method: "POST",
-            body: answerBody
-          }
-        );
-      } else if (session.status === "concept_phase1") {
-        data = await api<{ feedback: string; session: LearningSession }>(`/api/learning-sessions/${session.learning_session_id}/concept-phase1-attempts`, {
-          method: "POST",
-          body: answerBody
-        });
-      } else if (session.status === "concept_phase2") {
-        data = await api<{ feedback: string; session: LearningSession }>(`/api/learning-sessions/${session.learning_session_id}/concept-phase2-attempts`, {
-          method: "POST",
-          body: answerBody
-        });
-      } else {
-        return;
-      }
-      setFeedback(data.feedback);
-      setSession(data.session);
-      setResponse("");
+      setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -139,27 +118,61 @@ export default function LearningPage() {
     }
   }
 
-  function goNext() {
-    router.push(nextHref);
+  function continueFlow() {
+    if (!result) return;
+    if (result.session.status === "completed") {
+      router.push(nextHref);
+      return;
+    }
+    setSession(result.session);
+    setResult(null);
+    setSelected("");
+    startedAt.current = Date.now();
+  }
+
+  async function retryMaterial() {
+    if (!session) return;
+    setSaving(true);
+    setError("");
+    try {
+      const data = await api<LearningSession>(`/api/learning-sessions/${session.learning_session_id}/retry-material`, { method: "POST" });
+      setSession(data);
+      startedAt.current = Date.now();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <AppShell step="学習セッション">
       <section className="panel stack">
-        <h1>{session?.term_label || "学習セッション"}</h1>
+        <div className="topbar">
+          <div>
+            <h1>{session?.term_label || "学習セッション"}</h1>
+            {session ? <p className="muted">{stageTitle(session)}</p> : null}
+          </div>
+          {session ? <span className="muted">{session.content_version}</span> : null}
+        </div>
         {error ? <div className="danger">{error}</div> : null}
         {!session ? <p>読み込み中...</p> : null}
-        {session ? (
-          <LearningView
+        {session?.status === "technical_blocked" ? (
+          <div className="stack">
+            <div className="danger">{session.technical_block_reason || "教材生成を再試行してください。"}</div>
+            <button onClick={retryMaterial} disabled={saving}>教材生成を再試行</button>
+          </div>
+        ) : null}
+        {session && session.status !== "technical_blocked" ? (
+          <LearningPanel
             session={session}
-            currentPrerequisite={currentPrerequisite}
-            response={response}
-            setResponse={setResponse}
-            feedback={feedback}
+            selected={selected}
+            setSelected={setSelected}
+            result={result}
             saving={saving}
-            terminal={isTerminal}
             onSubmit={submit}
-            onNext={goNext}
+            onContinue={continueFlow}
+            onNext={() => router.push(nextHref)}
           />
         ) : null}
       </section>
@@ -167,220 +180,121 @@ export default function LearningPage() {
   );
 }
 
-function LearningView({
+function LearningPanel({
   session,
-  currentPrerequisite,
-  response,
-  setResponse,
-  feedback,
+  selected,
+  setSelected,
+  result,
   saving,
-  terminal,
   onSubmit,
+  onContinue,
   onNext
 }: {
   session: LearningSession;
-  currentPrerequisite?: Prerequisite;
-  response: string;
-  setResponse: (value: string) => void;
-  feedback: string;
+  selected: string;
+  setSelected: (value: string) => void;
+  result: AnswerResult | null;
   saving: boolean;
-  terminal: boolean;
   onSubmit: () => void;
+  onContinue: () => void;
   onNext: () => void;
 }) {
-  if (terminal) {
+  if (session.status === "completed") {
     return (
       <div className="stack">
-        <StageList session={session} />
-        <div className={session.status === "completed" ? "notice" : "danger"}>{terminalMessage(session)}</div>
-        {session.last_feedback ? <div className="notice">{session.last_feedback}</div> : null}
+        <Progress session={session} />
+        <div className="notice">この概念の学習を完了しました。</div>
         <button onClick={onNext}>次へ</button>
       </div>
     );
   }
-
-  if (session.status === "concept_phase1") {
-    return <Phase1Panel session={session} response={response} setResponse={setResponse} feedback={feedback} saving={saving} onSubmit={onSubmit} />;
-  }
-
-  if (session.status === "concept_phase2") {
-    return <Phase2Panel session={session} response={response} setResponse={setResponse} feedback={feedback} saving={saving} onSubmit={onSubmit} />;
-  }
-
-  if (!currentPrerequisite) return <p>教材を準備しています...</p>;
-  return (
-    <PrerequisitePanel
-      session={session}
-      currentPrerequisite={currentPrerequisite}
-      response={response}
-      setResponse={setResponse}
-      feedback={feedback}
-      saving={saving}
-      onSubmit={onSubmit}
-    />
-  );
-}
-
-function PrerequisitePanel({
-  session,
-  currentPrerequisite,
-  response,
-  setResponse,
-  feedback,
-  saving,
-  onSubmit
-}: {
-  session: LearningSession;
-  currentPrerequisite: Prerequisite;
-  response: string;
-  setResponse: (value: string) => void;
-  feedback: string;
-  saving: boolean;
-  onSubmit: () => void;
-}) {
-  const label = session.group_condition === "proposed" ? "前提用語" : "確認小問";
+  if (!session.question) return <p>問題を準備しています...</p>;
   return (
     <div className="stack">
-      <StageList session={session} />
+      <Progress session={session} />
+      {session.material ? (
+        <div className="notice">
+          <strong>{session.current_prerequisite?.label || "概念教材"}</strong>
+          <p>{session.material.body}</p>
+        </div>
+      ) : (
+        <div className="notice">
+          <strong>教材なし確認</strong>
+          <p className="muted">この段階では問題文と選択肢だけで判断してください。</p>
+        </div>
+      )}
       <div className="notice">
-        <strong>
-          {label} {currentPrerequisite.display_order}. {currentPrerequisite.term_label}
-        </strong>
-        <p>{currentPrerequisite.remediation_material || currentPrerequisite.material}</p>
-        <strong>{session.pending_clarification?.question || currentPrerequisite.check_question}</strong>
+        <strong>{session.question.body}</strong>
       </div>
-      {session.pending_clarification ? <div className="notice">回答の意図を確認するための追加質問です。この回答は通常の試行回数に含まれません。</div> : null}
-      <p className="muted">
-        試行 {currentPrerequisite.attempt_count} / {currentPrerequisite.max_attempts}
-      </p>
-      <label>
-        あなたの説明
-        <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
-      </label>
-      <button onClick={onSubmit} disabled={saving}>
-        回答を確認
-      </button>
-      {feedback || currentPrerequisite.last_feedback ? <div className="notice">{feedback || currentPrerequisite.last_feedback}</div> : null}
+      <div className="options">
+        {session.question.options.map((option) => (
+          <label className="option" key={option.option_id}>
+            <input
+              type="radio"
+              name="learning-option"
+              value={option.option_id}
+              checked={selected === option.option_id}
+              disabled={Boolean(result)}
+              onChange={() => setSelected(option.option_id)}
+            />
+            <span><strong>{option.label}.</strong> {option.body}</span>
+          </label>
+        ))}
+      </div>
+      {!result ? (
+        <button onClick={onSubmit} disabled={saving || !selected}>回答する</button>
+      ) : (
+        <div className="stack">
+          <div className={result.is_correct ? "notice" : "danger"}>
+            <strong>{result.is_correct ? "正解です。" : "不正解です。"}</strong>
+            <p>{result.feedback}</p>
+            {result.correct_answer ? (
+              <div>
+                <strong>正しい説明</strong>
+                <p>{result.correct_answer.body}</p>
+              </div>
+            ) : null}
+          </div>
+          <button onClick={onContinue}>
+            {result.session.status === "completed" ? "次の概念へ" : "次の問題へ"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function Phase1Panel({
-  session,
-  response,
-  setResponse,
-  feedback,
-  saving,
-  onSubmit
-}: {
-  session: LearningSession;
-  response: string;
-  setResponse: (value: string) => void;
-  feedback: string;
-  saving: boolean;
-  onSubmit: () => void;
-}) {
-  const phase = session.concept?.phase1;
-  if (!phase) return <p>概念教材を準備しています...</p>;
-  return (
-    <div className="stack">
-      <StageList session={session} />
-      <div className="notice">
-        <strong>概念フェーズ1</strong>
-        <p>{phase.material}</p>
-        <strong>{session.pending_clarification?.question || phase.prompt}</strong>
-      </div>
-      {session.pending_clarification ? <div className="notice">回答の意図を確認するための追加質問です。この回答は通常の試行回数に含まれません。</div> : null}
-      <p className="muted">
-        試行 {phase.attempt_count} / {phase.max_attempts}
-      </p>
-      <label>
-        教材を踏まえた説明
-        <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
-      </label>
-      <button onClick={onSubmit} disabled={saving}>
-        回答を確認
-      </button>
-      {feedback ? <div className="notice">{feedback}</div> : null}
-    </div>
-  );
-}
-
-function Phase2Panel({
-  session,
-  response,
-  setResponse,
-  feedback,
-  saving,
-  onSubmit
-}: {
-  session: LearningSession;
-  response: string;
-  setResponse: (value: string) => void;
-  feedback: string;
-  saving: boolean;
-  onSubmit: () => void;
-}) {
-  const phase = session.concept?.phase2;
-  if (!phase) return <p>確認問題を準備しています...</p>;
-  return (
-    <div className="stack">
-      <StageList session={session} />
-      <div className="notice">
-        <strong>概念フェーズ2</strong>
-        <p className="muted">ここでは教材本文を表示しません。</p>
-        {phase.light_conditions ? <p>{phase.light_conditions}</p> : null}
-        <strong>{session.pending_clarification?.question || phase.prompt}</strong>
-      </div>
-      {session.pending_clarification ? <div className="notice">回答の意図を確認するための追加質問です。この回答は通常の試行回数に含まれません。</div> : null}
-      <p className="muted">
-        試行 {phase.attempt_count} / {phase.max_attempts}
-        {session.group_condition === "proposed" && typeof phase.retry_count === "number" ? ` ・再支援 ${phase.retry_count}回` : ""}
-      </p>
-      <label>
-        教材を見ない説明
-        <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
-      </label>
-      <button onClick={onSubmit} disabled={saving}>
-        回答を確認
-      </button>
-      {feedback ? <div className="notice">{feedback}</div> : null}
-    </div>
-  );
-}
-
-function StageList({ session }: { session: LearningSession }) {
-  const prerequisiteTitle = session.group_condition === "proposed" ? "前提用語" : "確認小問";
+function Progress({ session }: { session: LearningSession }) {
+  const progress = session.progress;
   return (
     <div className="grid">
       <div className="notice">
-        <strong>{prerequisiteTitle}</strong>
-        <p className="muted">{session.prerequisites.filter((item) => item.status === "passed").length} / {session.prerequisites.length} 通過</p>
+        <strong>前提用語</strong>
+        <p className="muted">
+          {session.prerequisites.filter((item) => item.status === "completed").length} / {session.prerequisites.length} 完了
+        </p>
       </div>
       <div className="notice">
-        <strong>概念フェーズ1</strong>
-        <p className="muted">{phaseLabel(session, "concept_phase1")}</p>
+        <strong>現在</strong>
+        <p className="muted">{stageTitle(session)}</p>
       </div>
       <div className="notice">
-        <strong>概念フェーズ2</strong>
-        <p className="muted">{phaseLabel(session, "concept_phase2")}</p>
+        <strong>試行</strong>
+        <p className="muted">
+          {progress.attempt_index} / {progress.max_attempts}
+          {session.stage === "concept_phase1" || session.stage === "concept_phase2" ? ` ・サイクル ${progress.cycle_index}` : ""}
+        </p>
       </div>
     </div>
   );
 }
 
-function phaseLabel(session: LearningSession, phase: "concept_phase1" | "concept_phase2") {
-  if (session.status === phase) return "実施中";
-  if (session.status === "completed") return "完了";
-  if (phase === "concept_phase1" && ["concept_phase2", "failed_phase2"].includes(session.status)) return "通過済み";
-  if (phase === "concept_phase1" && session.status === "failed_phase1") return "未通過";
-  if (phase === "concept_phase2" && session.status === "failed_phase2") return "未通過";
-  return "待機中";
-}
-
-function terminalMessage(session: LearningSession) {
-  if (session.status === "completed") return "この概念の学習を完了しました。";
-  if (session.status === "failed_phase1") return session.blocked_reason || "概念フェーズ1をここで終了します。";
-  if (session.status === "failed_phase2") return session.blocked_reason || "概念フェーズ2をここで終了します。";
-  return session.blocked_reason || "この概念の学習をここで終了します。";
+function stageTitle(session: LearningSession) {
+  if (session.stage === "prerequisite_review") return `前提用語レビュー: ${session.current_prerequisite?.label || ""}`;
+  if (session.stage === "prerequisite") {
+    return `前提用語 ${session.progress.prerequisite_index || 1} / ${session.progress.prerequisite_total}: ${session.current_prerequisite?.label || ""}`;
+  }
+  if (session.stage === "concept_phase1") return `概念フェーズ1 教材あり・確認 ${session.progress.required_question_index || 1} / 2`;
+  if (session.stage === "concept_phase2") return "概念フェーズ2 教材なし";
+  return "完了";
 }

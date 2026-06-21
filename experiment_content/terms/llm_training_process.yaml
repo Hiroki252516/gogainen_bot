@@ -1,0 +1,51 @@
+schema_version: 1
+content_version: llm_training_process_learning_v1
+target_term: llm_training_process
+target_label: LLMの学習段階
+target_definition: 事前学習で基盤能力を作り、インストラクションチューニングで指示応答を学び、事後学習で安全性と有用性を調整する流れ。
+target_misconceptions:
+  M1: トークン化から出力までの推論時の内部計算段階。
+  M2: RAG、プロンプト、Function Callingという利用時機能の追加順序。
+  M3: 学習前テストと学習後テストを行う実験手順。
+phase_links:
+  M1: [training_vs_inference]
+  M2: [instruction_tuning]
+  M3: [pretraining]
+prerequisite_set:
+  version: llm_training_process_prerequisites_v1
+  items:
+    - key: training_vs_inference
+      label: 学習と推論の違い
+      definition: 学習はデータからモデルのパラメータを更新する過程で、推論は更新済みモデルから出力を得る過程。
+      misconceptions:
+        M1: 学習も推論も入力へ回答する同じ処理。
+        M2: 学習はRAG検索、推論はプロンプト作成を指す。
+        M3: 学習は試験前、推論は試験後という時間区分。
+    - key: pretraining
+      label: 事前学習
+      definition: 大規模で多様なデータから言語・知識・生成能力の基盤を獲得する学習段階。
+      misconceptions:
+        M1: 利用前のシステム設定。
+        M2: 指示と模範回答だけを学ぶ段階。
+        M3: 小規模な予備実験。
+    - key: next_token_prediction
+      label: 次トークン予測
+      definition: 直前までの文脈から次に続くトークンの確率を学習する課題。
+      misconceptions:
+        M1: 次の利用者質問を予知する機能。
+        M2: 正解ラベルを人間が毎回付ける分類課題。
+        M3: 文中の重要単語だけを当てる課題。
+    - key: instruction_tuning
+      label: インストラクションチューニング
+      definition: 指示と望ましい回答の組を用いて、指示に沿って応答する能力を調整する学習。
+      misconceptions:
+        M1: 利用者がプロンプトを書く作業。
+        M2: 大規模未ラベルデータで基盤能力を作る事前学習。
+        M3: AIの回答後に文章を修正する後処理。
+    - key: post_training
+      label: 事後学習
+      definition: 人間評価などを利用し、出力を安全で有用な方向へ調整する学習段階。
+      misconceptions:
+        M1: 公開後のシステム保守。
+        M2: 大規模テキストで次トークン予測を続ける事前学習。
+        M3: 回答を生成した後の文章修正処理。

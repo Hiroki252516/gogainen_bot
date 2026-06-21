@@ -40,6 +40,14 @@ a {
   margin-bottom: 18px;
 }
 
+.topbar > * {
+  min-width: 0;
+}
+
+.topbar .muted {
+  overflow-wrap: anywhere;
+}
+
 .brand {
   font-size: 20px;
   font-weight: 700;
@@ -199,4 +207,30 @@ button:disabled {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+@media (max-width: 560px) {
+  .shell {
+    width: min(100% - 24px, 1080px);
+    padding-top: 20px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .panel {
+    padding: 18px;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
 }

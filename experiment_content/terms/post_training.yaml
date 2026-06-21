@@ -1,0 +1,51 @@
+schema_version: 1
+content_version: post_training_learning_v1
+target_term: post_training
+target_label: 事後学習
+target_definition: 人間評価や選好を利用し、事前学習済みモデルの応答をより安全で有用な方向へ調整する学習。
+target_misconceptions:
+  M1: 公開後の会話ログ監視やサービス保守。
+  M2: 大規模テキストで次トークン予測を続ける事前学習。
+  M3: 回答生成後にルールで文章を修正する後処理。
+phase_links:
+  M1: [pretrained_model]
+  M2: [human_preference]
+  M3: [safety_usefulness]
+prerequisite_set:
+  version: post_training_prerequisites_v1
+  items:
+    - key: pretrained_model
+      label: 事前学習済みモデル
+      definition: 大規模データで基盤能力を獲得済みで、後続の調整を受けるモデル。
+      misconceptions:
+        M1: 公開運用中のサービスそのもの。
+        M2: 事後学習まで完了した最終モデルだけ。
+        M3: 利用者の回答を生成し終えたモデル。
+    - key: human_preference
+      label: 人間評価・選好
+      definition: 複数の出力の良さや望ましさを人間が評価した情報。
+      misconceptions:
+        M1: AIが人間の感情を直接読み取ること。
+        M2: Webテキストの出現頻度だけを使う評価。
+        M3: 利用者が回答後に押す任意の感想だけ。
+    - key: reward_model
+      label: 報酬モデル
+      definition: 人間の選好を近似し、モデル出力の望ましさを数値化するためのモデル。
+      misconceptions:
+        M1: 良い回答をしたAIへ感情的な褒美を与える仕組み。
+        M2: 次トークン確率を計算する元の言語モデルと同一。
+        M3: 利用者へポイントを配るサービス機能。
+    - key: policy_optimization
+      label: 強化学習・ポリシー最適化
+      definition: 報酬や選好に基づき、より望ましい出力を選びやすいようモデルを更新する方法。
+      misconceptions:
+        M1: AIに罰と褒美を感じさせる心理訓練。
+        M2: 大規模テキストの次トークン予測だけを続ける方法。
+        M3: 出力後に禁止語を削除するルール処理。
+    - key: safety_usefulness
+      label: 安全性・有用性
+      definition: 有害な出力を抑えながら、利用者の目的に役立つ応答を行う性質。
+      misconceptions:
+        M1: AIが人間と同じ倫理感情を持つこと。
+        M2: 一般知識の量だけが増えること。
+        M3: 回答文を丁寧語へ置換することだけ。

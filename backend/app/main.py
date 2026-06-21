@@ -38,6 +38,12 @@ from app.services.experiment import (
     submit_prerequisite_attempt,
     submit_attempt,
 )
+from app.services.fixed_learning import (
+    create_fixed_learning_session,
+    fixed_learning_session_state,
+    retry_fixed_learning_material,
+    submit_fixed_learning_attempt,
+)
 
 
 settings = get_settings()
@@ -112,6 +118,12 @@ class LearningAnswerPayload(BaseModel):
     learner_answer: str
     attempt_kind: str = "normal"
     clarification_parent_attempt_id: str | None = None
+
+
+class LearningChoicePayload(BaseModel):
+    question_id: str
+    selected_option_id: str
+    response_time_sec: float | None = None
 
 
 class DiagnosisOverridePayload(BaseModel):
@@ -219,13 +231,31 @@ def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> 
 
 @app.post("/api/learning-sessions")
 async def api_create_learning_session(payload: LearningSessionCreate, db: Session = Depends(get_db)) -> dict:
-    session = await create_learning_session(db, payload.participant_id, payload.term_slug)
-    return learning_session_state(db, session.id)
+    session = await create_fixed_learning_session(db, payload.participant_id, payload.term_slug)
+    return fixed_learning_session_state(db, session.id)
 
 
 @app.get("/api/learning-sessions/{session_id}")
 def api_learning_session_state(session_id: str, db: Session = Depends(get_db)) -> dict:
-    return learning_session_state(db, session_id)
+    return fixed_learning_session_state(db, session_id)
+
+
+@app.post("/api/learning-sessions/{session_id}/prerequisite-attempts")
+async def api_submit_fixed_prerequisite_attempt(
+    session_id: str,
+    payload: LearningChoicePayload,
+    idempotency_key: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await submit_fixed_learning_attempt(
+        db,
+        session_id,
+        "prerequisite",
+        payload.question_id,
+        payload.selected_option_id,
+        idempotency_key,
+        payload.response_time_sec,
+    )
 
 
 @app.post("/api/learning-sessions/{session_id}/prerequisites/{prerequisite_id}/attempts")
@@ -246,25 +276,44 @@ async def api_submit_concept_attempt(session_id: str, payload: LearningAnswerPay
 
 
 @app.post("/api/learning-sessions/{session_id}/concept-phase1-attempts")
-async def api_submit_concept_phase1_attempt(session_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
-    return await submit_concept_phase1_attempt(
+async def api_submit_concept_phase1_attempt(
+    session_id: str,
+    payload: LearningChoicePayload,
+    idempotency_key: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await submit_fixed_learning_attempt(
         db,
         session_id,
-        payload.learner_answer,
-        payload.attempt_kind,
-        payload.clarification_parent_attempt_id,
+        "concept_phase1",
+        payload.question_id,
+        payload.selected_option_id,
+        idempotency_key,
+        payload.response_time_sec,
     )
 
 
 @app.post("/api/learning-sessions/{session_id}/concept-phase2-attempts")
-async def api_submit_concept_phase2_attempt(session_id: str, payload: LearningAnswerPayload, db: Session = Depends(get_db)) -> dict:
-    return await submit_concept_phase2_attempt(
+async def api_submit_concept_phase2_attempt(
+    session_id: str,
+    payload: LearningChoicePayload,
+    idempotency_key: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await submit_fixed_learning_attempt(
         db,
         session_id,
-        payload.learner_answer,
-        payload.attempt_kind,
-        payload.clarification_parent_attempt_id,
+        "concept_phase2",
+        payload.question_id,
+        payload.selected_option_id,
+        idempotency_key,
+        payload.response_time_sec,
     )
+
+
+@app.post("/api/learning-sessions/{session_id}/retry-material")
+async def api_retry_learning_material(session_id: str, db: Session = Depends(get_db)) -> dict:
+    return await retry_fixed_learning_material(db, session_id)
 
 
 @app.post("/api/learning-sessions/{session_id}/support-events/{observation_id}/retry")

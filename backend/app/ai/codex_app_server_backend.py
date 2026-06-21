@@ -244,6 +244,142 @@ class CodexAppServerBackend:
             result["teaching_strategy"] = "general_explanation"
         return result
 
+    async def generate_prerequisite_material(self, payload: dict[str, Any]) -> dict[str, Any]:
+        group = payload.get("group_condition")
+        prompt_payload = payload if group == "proposed" else self._control_learning_payload(payload)
+        schema = {
+            "type": "object",
+            "properties": {
+                "material": {"type": "string"},
+                "examples": {"type": "array", "items": {"type": "string"}},
+                "comparisons": {"type": "array", "items": {"type": "string"}},
+                "counterexamples": {"type": "array", "items": {"type": "string"}},
+                "rag_sources": {"type": "array", "items": {"type": "string"}},
+                "general_knowledge_supplement": {"type": ["string", "null"]},
+            },
+            "required": ["material", "examples", "comparisons", "counterexamples", "rag_sources", "general_knowledge_supplement"],
+            "additionalProperties": False,
+        }
+        rules = [
+            "固定済みの前提用語について教材だけを生成する。問題文や選択肢は生成しない。",
+            "例、比較、反例を使ってよい。教材の長さは理解に必要な範囲で判断する。",
+            "未出題問題の正答文を推測して再現しない。",
+            "rag_contextを優先し、一般知識を補足した場合はgeneral_knowledge_supplementへ分ける。",
+            "M1/M2/M3/M4という内部ラベルを学習者向け文章に書かない。",
+        ]
+        if group == "control":
+            rules.append("統制群なので事前診断、過去回答、累積誤概念、戻り履歴を利用しない。")
+        else:
+            rules.append("提案群なので、渡された事前診断と累積履歴を教材の焦点へ反映する。")
+        result = await self._run_structured_turn(
+            "generate_prerequisite_material",
+            self._prompt("fixed_prerequisite_material", prompt_payload, rules),
+            schema,
+        )
+        for key in ("material", "general_knowledge_supplement"):
+            if result.get(key):
+                result[key] = _strip_internal_labels(result[key])
+        for key in ("examples", "comparisons", "counterexamples"):
+            result[key] = [_strip_internal_labels(item) for item in result[key]]
+        return result
+
+    async def explain_selected_distractor(self, payload: dict[str, Any]) -> dict[str, Any]:
+        group = payload.get("group_condition")
+        prompt_payload = payload if group == "proposed" else self._control_learning_payload(payload)
+        schema = {
+            "type": "object",
+            "properties": {
+                "feedback": {"type": "string"},
+                "remediation_focus": {"type": "string"},
+                "general_knowledge_supplement": {"type": ["string", "null"]},
+            },
+            "required": ["feedback", "remediation_focus", "general_knowledge_supplement"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "explain_selected_distractor",
+            self._prompt(
+                "selected_distractor_feedback",
+                prompt_payload,
+                [
+                    "選択した説明のどこが対象概念と一致しないかを自然な日本語で説明する。",
+                    "正答選択肢の本文、位置、正答そのものは教えない。",
+                    "次に見直す観点を一つ以上示す。",
+                    "M1/M2/M3/M4という内部ラベルを書かない。",
+                ],
+            ),
+            schema,
+        )
+        return {
+            key: _strip_internal_labels(value) if isinstance(value, str) else value
+            for key, value in result.items()
+        }
+
+    async def generate_correct_answer_summary(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {"summary": {"type": "string"}},
+            "required": ["summary"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_correct_answer_summary",
+            self._prompt(
+                "correct_answer_summary",
+                payload,
+                [
+                    "正答文をそのまま繰り返さず、学習上の要点を短く説明する。",
+                    "M1/M2/M3/M4という内部ラベルを書かない。",
+                ],
+            ),
+            schema,
+        )
+        result["summary"] = _strip_internal_labels(result["summary"])
+        return result
+
+    async def generate_emergency_question_variant(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "body": {"type": "string"},
+                "options": {
+                    "type": "array",
+                    "minItems": 5,
+                    "maxItems": 5,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "body": {"type": "string"},
+                            "is_correct": {"type": "boolean"},
+                            "misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "unknown", None]},
+                        },
+                        "required": ["body", "is_correct", "misconception_type"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["body", "options"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_emergency_question_variant",
+            self._prompt(
+                "emergency_question_variant",
+                payload,
+                [
+                    "固定問題バンクが枯渇した場合だけ使う追加5択問題を作る。",
+                    "正答1件、M1、M2、M3、わからないを各1件にする。",
+                    "既出問題と同じ文面を使わない。",
+                    "選択肢本文へM1/M2/M3/M4という内部ラベルを書かない。",
+                ],
+            ),
+            schema,
+        )
+        result["body"] = _strip_internal_labels(result["body"])
+        for option in result["options"]:
+            option["body"] = _strip_internal_labels(option["body"])
+        return result
+
     async def generate_prerequisite_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
         schema = {
             "type": "object",
@@ -887,6 +1023,16 @@ class CodexAppServerBackend:
             "participant_id": payload.get("participant_id"),
             "group_condition": "control",
             "target_term": payload.get("target_term"),
+            "fixed_prerequisite": payload.get("fixed_prerequisite"),
+            "focus_label": payload.get("focus_label"),
+            "material_mode": payload.get("material_mode"),
+            "cycle_index": payload.get("cycle_index"),
+            "stage": payload.get("stage"),
+            "slot_key": payload.get("slot_key"),
+            "attempt_index": payload.get("attempt_index"),
+            "question_body": payload.get("question_body"),
+            "selected_option_body": payload.get("selected_option_body"),
+            "existing_question_bodies": payload.get("existing_question_bodies"),
             "tutor_turn": payload.get("tutor_turn"),
             "learner_response": payload.get("learner_response"),
             "rag_context": payload.get("rag_context"),

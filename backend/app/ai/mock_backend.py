@@ -88,6 +88,44 @@ class MockAIBackend:
             "requires_manual_review": False,
         }
 
+    async def generate_prerequisite_material(self, payload: dict[str, Any]) -> dict[str, Any]:
+        target = payload["target_term"]["label"]
+        prerequisite = payload["fixed_prerequisite"]["label"]
+        mode = payload.get("material_mode", "initial")
+        return {
+            "material": f"{prerequisite}は{target}を理解するための基礎です。{mode}教材として、役割、関係、具体例を整理します。",
+            "examples": [f"{prerequisite}を使う簡単な例"],
+            "comparisons": [f"{prerequisite}と似た概念の違い"],
+            "counterexamples": [f"{prerequisite}ではない例"],
+            "rag_sources": [item.get("chunk_id") for item in (payload.get("rag_context") or {}).get("chunks", [])],
+            "general_knowledge_supplement": None,
+        }
+
+    async def explain_selected_distractor(self, payload: dict[str, Any]) -> dict[str, Any]:
+        selected = payload.get("selected_option_body", "選択した説明")
+        return {
+            "feedback": f"「{selected}」は、対象概念の役割または処理範囲と一致しません。正答そのものではなく、何を処理し何が変わるかを見直してください。",
+            "remediation_focus": "概念の種類、類似概念との境界、処理の仕組みを確認する。",
+            "general_knowledge_supplement": None,
+        }
+
+    async def generate_correct_answer_summary(self, payload: dict[str, Any]) -> dict[str, Any]:
+        label = payload.get("focus_label") or payload.get("target_term", {}).get("label", "この概念")
+        return {"summary": f"{label}の役割と処理対象を区別できていることが要点です。"}
+
+    async def generate_emergency_question_variant(self, payload: dict[str, Any]) -> dict[str, Any]:
+        label = payload.get("focus_label") or payload.get("target_term", {}).get("label", "対象概念")
+        return {
+            "body": f"{label}について、未使用の観点から最も適切な説明を選んでください。",
+            "options": [
+                {"body": f"{label}の正しい役割と仕組みを説明している。", "is_correct": True, "misconception_type": None},
+                {"body": f"{label}を別の種類のものとして説明している。", "is_correct": False, "misconception_type": "M1"},
+                {"body": f"{label}を似た概念と同一視している。", "is_correct": False, "misconception_type": "M2"},
+                {"body": f"{label}を名称や表面語だけから説明している。", "is_correct": False, "misconception_type": "M3"},
+                {"body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
+            ],
+        }
+
     async def generate_prerequisite_plan(self, payload: dict[str, Any]) -> dict[str, Any]:
         term = payload["target_term"]
         label = term["label"]

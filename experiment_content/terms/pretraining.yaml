@@ -1,0 +1,51 @@
+schema_version: 1
+content_version: pretraining_learning_v1
+target_term: pretraining
+target_label: 事前学習
+target_definition: 大規模で多様なデータを使う次トークン予測などにより、言語・知識・生成能力の基盤を獲得する学習。
+target_misconceptions:
+  M1: 利用開始前にプロンプトや禁止事項を設定する準備。
+  M2: 指示と模範回答のペアだけを学ぶインストラクションチューニング。
+  M3: 本学習前に小規模データで行う予備訓練。
+phase_links:
+  M1: [model_parameters]
+  M2: [next_token_prediction]
+  M3: [large_diverse_data]
+prerequisite_set:
+  version: pretraining_prerequisites_v1
+  items:
+    - key: large_diverse_data
+      label: 大規模・多様なデータ
+      definition: Web文章、コード、数学、科学文書など、量と種類の広い学習データ。
+      misconceptions:
+        M1: 一人の利用者の会話履歴だけを集めたデータ。
+        M2: 指示と理想回答だけで構成された小規模データ。
+        M3: 同じ文章を大量に複製したデータ。
+    - key: next_token_prediction
+      label: 次トークン予測
+      definition: 文脈から次に続くトークンの確率を予測する学習課題。
+      misconceptions:
+        M1: 次の利用者行動を予知する機能。
+        M2: 指示へ模範回答を返す教師あり課題だけを指す。
+        M3: 文章中の重要単語を抽出する課題。
+    - key: self_supervised
+      label: 自己教師あり学習
+      definition: データ自身から予測対象を作り、人手で個別ラベルを付けずに学ぶ方式。
+      misconceptions:
+        M1: AIが自分の意思で勉強内容を選ぶこと。
+        M2: 人間がすべての正解ラベルを付ける教師あり学習。
+        M3: 学習結果をAI自身が採点すること。
+    - key: model_parameters
+      label: モデルパラメータ
+      definition: 学習によって更新され、入力から出力を計算する際に使われる数値。
+      misconceptions:
+        M1: 利用者が入力するプロンプト設定。
+        M2: 学習データそのもの。
+        M3: モデルの画面設定や実行オプションだけ。
+    - key: foundation_capability
+      label: 基盤能力
+      definition: 言語パターン、一般知識、文章生成など、後続調整の土台になる能力。
+      misconceptions:
+        M1: 安全性ルールだけを守る能力。
+        M2: 特定の一つの指示へ答える能力だけ。
+        M3: 学習率などの実験条件を選ぶ能力。

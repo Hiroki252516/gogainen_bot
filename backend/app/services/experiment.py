@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.ai.codex_app_server_backend import CodexAppServerError
-from app.ai.backend import lower_level, raise_level, strategy_for
+from app.ai.backend import initial_level, lower_level, raise_level, strategy_for
 from app.ai.factory import get_ai_backend
 from app.core.config import get_settings
 from app.models import (
@@ -20,14 +20,23 @@ from app.models import (
     Attempt,
     AuditEvent,
     ConceptUnderstandingAttempt,
+    ContentVersion,
     EvaluationSummary,
     ExportJob,
+    GeneratedLearningMaterial,
     LearnerState,
+    LearningChoiceAttempt,
+    LearningQuestion,
+    LearningQuestionDisplayOrder,
+    LearningQuestionOption,
+    LearningQuestionSlot,
     LearningSession,
+    LearningSessionPrerequisite,
     MisconceptionObservation,
     Participant,
     ParticipantSurvey,
     PrerequisiteTerm,
+    PrerequisiteDefinition,
     Question,
     QuestionDisplayOrder,
     QuestionOption,
@@ -80,11 +89,18 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
     if group_condition not in {"control", "proposed"}:
         group_condition = random.choice(["control", "proposed"])
         assignment_method = "random"
+    active_content = (
+        db.query(ContentVersion)
+        .filter_by(content_type="experiment_release", is_active=True)
+        .order_by(ContentVersion.imported_at.desc())
+        .first()
+    )
     participant = Participant(
         display_code=next_display_code(db),
         group_condition=group_condition,
         assignment_method=assignment_method,
         consent_checked=consent_checked,
+        content_version_id=active_content.id if active_content else None,
         current_step="pretest",
         started_at=now(),
     )
@@ -118,10 +134,17 @@ def save_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> No
 
 
 def _question_query_for_phase(db: Session, participant: Participant, phase: str):
-    query = db.query(Question).join(Term, Question.term_id == Term.id).filter(Question.phase == phase, Question.is_active.is_(True), Term.is_active.is_(True))
+    query = db.query(Question).join(Term, Question.term_id == Term.id).filter(
+        Question.phase == phase,
+        Term.is_active.is_(True),
+    )
+    if participant.content_version_id and phase in {"pretest", "retest"}:
+        query = query.filter(Question.content_version_id == participant.content_version_id)
+    else:
+        query = query.filter(Question.is_active.is_(True))
     if phase in {"l0_check", "transfer"}:
         return query.filter(Question.id == "__disabled_current_flow__")
-    if phase in {"retest", "l0_check", "transfer"}:
+    if phase in {"l0_check", "transfer"}:
         target_term_ids = [
             row.term_id
             for row in db.query(TermAssignment)
@@ -135,6 +158,16 @@ def _question_query_for_phase(db: Session, participant: Participant, phase: str)
 
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
     participant = get_participant(db, participant_id)
+    if not participant.content_version_id and phase in {"pretest", "retest"}:
+        release = (
+            db.query(ContentVersion)
+            .filter_by(content_type="experiment_release", is_active=True)
+            .order_by(ContentVersion.imported_at.desc())
+            .first()
+        )
+        if release:
+            participant.content_version_id = release.id
+            db.commit()
     questions = _question_query_for_phase(db, participant, phase).all()
     out = []
     for question in questions:
@@ -288,7 +321,32 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
 
     scored_attempts: list[Attempt] = []
     for attempt in attempts:
-        result = await _ai_call(db, "diagnose_answer", _diagnosis_payload(db, participant, attempt))
+        option = _selected_option(db, attempt)
+        if not option:
+            raise HTTPException(status_code=400, detail="pretest requires a selected option")
+        if option.is_correct:
+            status, misconception, natural = "stable_correct", None, "この概念を正しく弁別できています。"
+        elif option.misconception_type == "unknown":
+            status, misconception, natural = "unknown", "unknown", "まず基本的な意味から確認します。"
+        else:
+            status, misconception = "misconception", option.misconception_type
+            natural = {
+                "M1": "概念を別の種類のものとして捉えている可能性があります。",
+                "M2": "似ている概念との違いを確認します。",
+                "M3": "言葉の表面ではなく、仕組みに注目して確認します。",
+            }.get(misconception, "この概念を重点的に確認します。")
+        result = {
+            "is_correct": option.is_correct,
+            "diagnosed_status": status,
+            "misconception_type": misconception,
+            "secondary_misconception_type": None,
+            "diagnosis_confidence": 1.0,
+            "natural_language_diagnosis": natural,
+            "evidence": option.body,
+            "recommended_initial_scaffolding_level": initial_level(status, misconception, None),
+            "recommended_teaching_strategy": strategy_for(misconception, status, participant.group_condition),
+            "requires_manual_review": False,
+        }
         attempt.is_correct = result["is_correct"]
         attempt.score = 1.0 if result["is_correct"] else 0.0
         attempt.diagnosed_status = result["diagnosed_status"]
@@ -1716,22 +1774,15 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
     for attempt in attempts:
         question = db.get(Question, attempt.question_id)
         option = _selected_option(db, attempt)
-        payload = {
-            "participant_id": participant.id,
-            "group_condition": participant.group_condition,
-            "question": {"id": question.id, "phase": phase, "body": question.body, "expected_answer": question.expected_answer, "expected_keywords": question.expected_keywords},
-            "selected_option": None if not option else {"id": option.id, "body": option.body, "is_correct": option.is_correct, "initial_misconception_type": option.misconception_type},
-            "free_text_answer": attempt.free_text_answer,
-            "reason_text": attempt.reason_text,
-        }
-        result = await _ai_call(db, "grade_response", payload)
-        attempt.is_correct = result["is_correct"]
-        attempt.score = result["score"]
-        attempt.diagnosed_status = result["diagnosed_status"]
-        attempt.misconception_type = result["misconception_type"]
-        attempt.secondary_misconception_type = result["secondary_misconception_type"]
-        attempt.l0_success = result["l0_success"]
-        attempt.transfer_success = result["transfer_success"]
+        if not option:
+            raise HTTPException(status_code=400, detail=f"{phase} requires a selected option")
+        attempt.is_correct = option.is_correct
+        attempt.score = 1.0 if option.is_correct else 0.0
+        attempt.diagnosed_status = "resolved" if option.is_correct else ("unknown" if option.misconception_type == "unknown" else "misconception")
+        attempt.misconception_type = None if option.is_correct else option.misconception_type
+        attempt.secondary_misconception_type = None
+        attempt.l0_success = option.is_correct if phase == "l0_check" else None
+        attempt.transfer_success = option.is_correct if phase == "transfer" else None
         state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
         if not state:
             continue
@@ -1817,6 +1868,47 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
     phase2_retry_sessions = [session for session in learning_sessions if session.phase2_retry_count > 0]
     phase2_max_retry_sessions = [session for session in learning_sessions if session.concept_phase2_attempt_count >= PHASE2_ATTEMPT_LIMIT]
     retest_by_term_id = {attempt.term_id: attempt for attempt in by_phase["retest"]}
+    target_term_ids = {
+        row.term_id
+        for row in db.query(TermAssignment)
+        .filter_by(participant_id=participant.id, is_learning_target=True)
+        .all()
+    }
+    target_retests = [attempt for attempt in by_phase["retest"] if attempt.term_id in target_term_ids]
+    non_target_retests = [attempt for attempt in by_phase["retest"] if attempt.term_id not in target_term_ids]
+    choice_attempts = (
+        db.query(LearningChoiceAttempt)
+        .filter(LearningChoiceAttempt.learning_session_id.in_(session_ids))
+        .order_by(LearningChoiceAttempt.created_at)
+        .all()
+        if session_ids
+        else []
+    )
+    prerequisite_choice_attempts = [row for row in choice_attempts if row.stage == "prerequisite"]
+    phase1_choice_attempts = [row for row in choice_attempts if row.stage == "concept_phase1"]
+    phase2_choice_attempts = [row for row in choice_attempts if row.stage == "concept_phase2"]
+
+    def by_slot(rows: list[LearningChoiceAttempt]) -> dict[tuple[str, str], list[LearningChoiceAttempt]]:
+        grouped: dict[tuple[str, str], list[LearningChoiceAttempt]] = {}
+        for row in rows:
+            grouped.setdefault((row.learning_session_id, row.slot_key), []).append(row)
+        return grouped
+
+    prerequisite_slots = by_slot(prerequisite_choice_attempts)
+    first_wrong_slots = [rows for rows in prerequisite_slots.values() if rows and not rows[0].is_correct]
+    phase1_sessions_with_attempts = {row.learning_session_id for row in phase1_choice_attempts}
+    phase1_sessions_with_forced = {
+        row.learning_session_id for row in phase1_choice_attempts if row.result_status == "forced_resolved"
+    }
+    phase2_session_rows = by_slot(phase2_choice_attempts)
+    phase2_first_wrong_sessions = {
+        session_id for (session_id, _), rows in phase2_session_rows.items() if rows and not rows[0].is_correct
+    }
+    phase2_recovered_sessions = {
+        session_id
+        for (session_id, _), rows in phase2_session_rows.items()
+        if rows and not rows[0].is_correct and any(row.is_correct for row in rows[1:])
+    }
     phase2_pass_sessions = [session for session in learning_sessions if session.id in phase2_pass_session_ids]
     phase2_fail_sessions = [session for session in learning_sessions if session.status == "failed_phase2"]
     learning_observations = (
@@ -1889,6 +1981,10 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         group_condition=participant.group_condition,
         pretest_score=_rate(by_phase["pretest"], lambda a: bool(a.is_correct)),
         retest_score=_rate(by_phase["retest"], lambda a: bool(a.is_correct)),
+        pretest_score_all_terms=_rate(by_phase["pretest"], lambda a: bool(a.is_correct)),
+        retest_score_all_terms=_rate(by_phase["retest"], lambda a: bool(a.is_correct)),
+        learning_target_retest_score=_rate(target_retests, lambda a: bool(a.is_correct)),
+        non_target_retest_retention_rate=_rate(non_target_retests, lambda a: bool(a.is_correct)),
         l0_correct_rate=_rate(by_phase["l0_check"], lambda a: bool(a.l0_success)),
         transfer_correct_rate=_rate(by_phase["transfer"], lambda a: bool(a.transfer_success)),
         same_misconception_recurrence_rate=(len(same_rec) / len(initial_m)) if initial_m else None,
@@ -1897,12 +1993,92 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         m3_recurrence_rate=m_rate("M3"),
         m4_failure_rate=_rate(by_phase["transfer"], lambda a: a.misconception_type == "M4"),
         unknown_persistence_rate=None,
-        prerequisite_pass_rate=_rate(prerequisites, lambda p: p.status == "passed"),
+        prerequisite_pass_rate=(
+            sum(1 for rows in prerequisite_slots.values() if any(row.is_correct for row in rows)) / len(prerequisite_slots)
+            if prerequisite_slots
+            else _rate(prerequisites, lambda p: p.status == "passed")
+        ),
+        prerequisite_required_question_accuracy=(
+            sum(1 for rows in prerequisite_slots.values() if any(row.is_correct for row in rows)) / len(prerequisite_slots)
+            if prerequisite_slots
+            else None
+        ),
+        prerequisite_first_attempt_accuracy=(
+            sum(1 for rows in prerequisite_slots.values() if rows[0].is_correct) / len(prerequisite_slots)
+            if prerequisite_slots
+            else None
+        ),
+        prerequisite_retry_recovery_rate=(
+            sum(1 for rows in first_wrong_slots if any(row.is_correct for row in rows[1:])) / len(first_wrong_slots)
+            if first_wrong_slots
+            else None
+        ),
+        prerequisite_forced_resolution_rate=(
+            sum(1 for rows in prerequisite_slots.values() if any(row.result_status == "forced_resolved" for row in rows))
+            / len(prerequisite_slots)
+            if prerequisite_slots
+            else None
+        ),
         concept_pass_rate=(len(completed_sessions) / len(learning_sessions)) if learning_sessions else None,
-        concept_phase1_pass_rate=(len(phase1_pass_session_ids) / len(phase1_attempted_session_ids)) if phase1_attempted_session_ids else None,
-        concept_phase2_success_rate=(len(phase2_pass_session_ids) / len(phase2_attempted_session_ids)) if phase2_attempted_session_ids else None,
-        phase2_after_retry_success_rate=(sum(1 for session in phase2_retry_sessions if session.status == "completed") / len(phase2_retry_sessions)) if phase2_retry_sessions else None,
-        phase2_max_retry_rate=(len(phase2_max_retry_sessions) / len(phase2_attempted_session_ids)) if phase2_attempted_session_ids else None,
+        concept_phase1_pass_rate=(
+            sum(
+                1
+                for session_id in phase1_sessions_with_attempts
+                if any(row.is_correct for row in phase1_choice_attempts if row.learning_session_id == session_id)
+            )
+            / len(phase1_sessions_with_attempts)
+            if phase1_sessions_with_attempts
+            else None
+        ),
+        phase1_all_questions_pass_rate=(
+            sum(
+                1
+                for session_id in phase1_sessions_with_attempts
+                if session_id not in phase1_sessions_with_forced
+            )
+            / len(phase1_sessions_with_attempts)
+            if phase1_sessions_with_attempts
+            else None
+        ),
+        phase1_forced_resolution_rate=(
+            len(phase1_sessions_with_forced) / len(phase1_sessions_with_attempts)
+            if phase1_sessions_with_attempts
+            else None
+        ),
+        concept_phase2_success_rate=(
+            len({row.learning_session_id for row in phase2_choice_attempts if row.is_correct})
+            / len({row.learning_session_id for row in phase2_choice_attempts})
+            if phase2_choice_attempts
+            else None
+        ),
+        no_material_concept_discrimination_accuracy=(
+            sum(1 for row in phase2_choice_attempts if row.is_correct) / len(phase2_choice_attempts)
+            if phase2_choice_attempts
+            else None
+        ),
+        phase2_after_retry_success_rate=(
+            len(phase2_recovered_sessions) / len(phase2_first_wrong_sessions)
+            if phase2_first_wrong_sessions
+            else None
+        ),
+        phase2_max_retry_rate=(
+            len(
+                {
+                    row.learning_session_id
+                    for row in phase2_choice_attempts
+                    if sum(1 for item in phase2_choice_attempts if item.learning_session_id == row.learning_session_id) >= 3
+                }
+            )
+            / len({row.learning_session_id for row in phase2_choice_attempts})
+            if phase2_choice_attempts
+            else None
+        ),
+        phase2_forced_completion_rate=(
+            sum(1 for session in learning_sessions if session.group_condition == "proposed" and session.phase2_forced_completion)
+            / sum(1 for session in learning_sessions if session.group_condition == "proposed" and session.id in {row.learning_session_id for row in phase2_choice_attempts})
+            if any(session.group_condition == "proposed" and session.id in {row.learning_session_id for row in phase2_choice_attempts} for session in learning_sessions)
+            else None
+        ),
         phase2_pass_retest_correct_rate=retest_correct_for_sessions(phase2_pass_sessions),
         phase2_fail_retest_correct_rate=retest_correct_for_sessions(phase2_fail_sessions),
         learning_misconception_persistence_rate=(
@@ -1948,14 +2124,22 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 "participant_count": len(group_participants),
                 "pretest_score": avg("pretest_score"),
                 "retest_score": avg("retest_score"),
+                "pretest_score_all_terms": avg("pretest_score_all_terms"),
+                "retest_score_all_terms": avg("retest_score_all_terms"),
+                "learning_target_retest_score": avg("learning_target_retest_score"),
+                "non_target_retest_retention_rate": avg("non_target_retest_retention_rate"),
                 "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
                 "l0_correct_rate": avg("l0_correct_rate"),
                 "transfer_correct_rate": avg("transfer_correct_rate"),
                 "prerequisite_pass_rate": avg("prerequisite_pass_rate"),
+                "prerequisite_required_question_accuracy": avg("prerequisite_required_question_accuracy"),
+                "prerequisite_forced_resolution_rate": avg("prerequisite_forced_resolution_rate"),
                 "concept_pass_rate": avg("concept_pass_rate"),
                 "concept_phase1_pass_rate": avg("concept_phase1_pass_rate"),
                 "concept_phase2_success_rate": avg("concept_phase2_success_rate"),
+                "no_material_concept_discrimination_accuracy": avg("no_material_concept_discrimination_accuracy"),
                 "phase2_after_retry_success_rate": avg("phase2_after_retry_success_rate"),
+                "phase2_forced_completion_rate": avg("phase2_forced_completion_rate"),
                 "phase2_max_retry_rate": avg("phase2_max_retry_rate"),
                 "phase2_pass_retest_correct_rate": avg("phase2_pass_retest_correct_rate"),
                 "phase2_fail_retest_correct_rate": avg("phase2_fail_retest_correct_rate"),
@@ -2105,12 +2289,21 @@ def override_diagnosis(
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at"]),
+    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "content_version_id", "current_step", "started_at", "completed_at"]),
+    "content_versions": (ContentVersion, ["id", "content_type", "version_key", "source_file", "file_hash", "validation_status", "is_active", "imported_at"]),
+    "prerequisite_definitions": (PrerequisiteDefinition, ["id", "content_version_id", "target_term_id", "prerequisite_key", "label", "display_order", "set_version", "is_active"]),
+    "learning_question_slots": (LearningQuestionSlot, ["id", "content_version_id", "target_term_id", "prerequisite_definition_id", "stage", "slot_key", "required_order", "cycle_index"]),
+    "learning_questions": (LearningQuestion, ["id", "slot_id", "learning_session_id", "variant_key", "attempt_index", "body", "source_type", "validation_status", "is_active", "generated_at"]),
+    "learning_question_options": (LearningQuestionOption, ["id", "learning_question_id", "body", "is_correct", "misconception_type", "diagnostic_rationale", "linked_prerequisite_keys", "remediation_focus", "default_order"]),
+    "learning_question_display_orders": (LearningQuestionDisplayOrder, ["id", "participant_id", "learning_question_id", "option_order", "random_seed", "created_at"]),
     "participant_surveys": (ParticipantSurvey, ["id", "participant_id", "phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "term_confidences", "free_comment"]),
     "term_assignments": (TermAssignment, ["id", "participant_id", "term_id", "group_condition", "is_learning_target", "selection_reason", "priority_score", "created_at"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "reason_text", "free_text_answer", "confidence", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "transfer_success", "requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "secondary_misconception", "resolution_stage", "latest_observation_id", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "transfer_success_count", "updated_at"]),
-    "learning_sessions": (LearningSession, ["id", "participant_id", "term_id", "group_condition", "session_index", "status", "term_pass_count", "concept_attempt_count", "concept_phase1_attempt_count", "phase1_cycle_index", "phase1_cycle_attempt_count", "concept_phase2_attempt_count", "phase2_retry_count", "blocked_reason", "completed_at", "created_at"]),
+    "learning_sessions": (LearningSession, ["id", "participant_id", "term_id", "group_condition", "session_index", "content_version_id", "prerequisite_set_version", "status", "current_stage", "current_prerequisite_key", "current_slot_key", "current_attempt_index", "current_cycle_index", "phase2_forced_completion", "technical_block_reason", "completed_at", "created_at"]),
+    "learning_session_prerequisites": (LearningSessionPrerequisite, ["id", "learning_session_id", "prerequisite_definition_id", "prerequisite_key", "label", "display_order", "status", "completed_slot_count", "forced_slot_count", "review_count", "created_at"]),
+    "generated_learning_materials": (GeneratedLearningMaterial, ["id", "participant_id", "learning_session_id", "target_term_id", "prerequisite_definition_id", "stage", "material_mode", "cycle_index", "slot_key", "attempt_index", "group_condition", "diagnosis_snapshot", "rag_context", "material", "examples", "comparisons", "counterexamples", "rag_sources", "general_knowledge_supplement", "answer_leak_detected", "regeneration_count", "ai_call_log_id", "created_at"]),
+    "learning_choice_attempts": (LearningChoiceAttempt, ["id", "participant_id", "learning_session_id", "target_term_id", "prerequisite_definition_id", "stage", "slot_key", "question_id", "selected_option_id", "displayed_option_order", "cycle_index", "attempt_index", "is_correct", "misconception_type", "transition_type", "is_persistence", "is_recurrence", "result_status", "forced_answer_shown", "response_time_sec", "material_id", "feedback_text", "idempotency_key", "created_at"]),
     "prerequisite_terms": (PrerequisiteTerm, ["id", "learning_session_id", "term_label", "generation_reason", "display_order", "status", "attempt_count", "current_status", "primary_misconception_type", "secondary_misconception_type", "resolution_stage", "teaching_strategy", "latest_observation_id", "last_feedback", "created_at"]),
     "term_understanding_attempts": (TermUnderstandingAttempt, ["id", "prerequisite_term_id", "participant_id", "learning_session_id", "attempt_index", "attempt_kind", "counts_toward_limit", "clarification_parent_attempt_id", "presented_question", "learner_answer", "is_passed", "score", "primary_misconception_type", "secondary_misconception_type", "diagnosis_observation_id", "feedback", "created_at"]),
     "concept_understanding_attempts": (ConceptUnderstandingAttempt, ["id", "learning_session_id", "participant_id", "attempt_index", "concept_phase", "phase1_cycle_index", "attempt_kind", "counts_toward_limit", "clarification_parent_attempt_id", "presented_question", "material_shown", "light_condition_text", "learner_answer", "is_passed", "score", "primary_misconception_type", "secondary_misconception_type", "diagnosis_observation_id", "feedback", "independent_explanation_success", "return_to_phase1", "rubric_scores", "missing_prerequisite_ids", "review_prerequisite_ids", "created_at"]),
@@ -2120,7 +2313,7 @@ EXPORTS = {
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
     "misconception_observations": (MisconceptionObservation, ["id", "participant_id", "term_id", "learning_session_id", "prerequisite_term_id", "source_phase", "source_attempt_type", "source_attempt_id", "diagnosed_status", "primary_misconception_type", "secondary_misconception_type", "diagnosis_confidence", "diagnosis_evidence", "previous_status", "previous_misconception_type", "resolution_stage", "transition_type", "is_persistence", "is_recurrence", "standard_strategy", "applied_strategy", "strategy_override_reason", "requires_manual_review", "is_manual_override", "overrides_observation_id", "created_at"]),
     "adaptive_support_events": (AdaptiveSupportEvent, ["id", "misconception_observation_id", "learning_session_id", "mode", "feedback", "supplemental_material", "next_check_question", "diagnostic_focus", "rag_sources", "general_knowledge_supplement", "ai_call_log_id", "created_at"]),
-    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "transfer_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "m4_failure_rate", "prerequisite_pass_rate", "concept_pass_rate", "concept_phase1_pass_rate", "concept_phase2_success_rate", "phase2_after_retry_success_rate", "phase2_max_retry_rate", "phase2_pass_retest_correct_rate", "phase2_fail_retest_correct_rate", "learning_misconception_persistence_rate", "m1_resolution_rate", "m2_resolution_rate", "m3_resolution_rate", "strategy_next_response_success_rate", "phase2_misconception_recurrence_rate", "learning_resolved_retest_correct_rate", "learning_target_count", "completed", "created_at"]),
+    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score_all_terms", "retest_score_all_terms", "learning_target_retest_score", "non_target_retest_retention_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "prerequisite_required_question_accuracy", "prerequisite_first_attempt_accuracy", "prerequisite_retry_recovery_rate", "prerequisite_forced_resolution_rate", "phase1_all_questions_pass_rate", "phase1_forced_resolution_rate", "no_material_concept_discrimination_accuracy", "phase2_after_retry_success_rate", "phase2_forced_completion_rate", "learning_target_count", "completed", "created_at"]),
 }
 
 

@@ -119,24 +119,34 @@ export default function AdminPage() {
               <div className="notice" key={group.group_condition}>
                 <strong>{group.group_condition}</strong>
                 <p>参加者: {group.participant_count}</p>
-                <p>再テスト正答率: {formatRate(group.retest_score)}</p>
+                <p>全5概念再テスト正答率: {formatRate(group.retest_score_all_terms)}</p>
+                <p>学習対象再テスト正答率: {formatRate(group.learning_target_retest_score)}</p>
                 <p>同種誤答再発率: {formatRate(group.same_misconception_recurrence_rate)}</p>
-                <p>前提用語通過率: {formatRate(group.prerequisite_pass_rate)}</p>
-                <p>概念理解通過率: {formatRate(group.concept_pass_rate)}</p>
-                <p>Phase1通過率: {formatRate(group.concept_phase1_pass_rate)}</p>
-                <p>Phase2成功率: {formatRate(group.concept_phase2_success_rate)}</p>
+                <p>前提問題正答率: {formatRate(group.prerequisite_required_question_accuracy)}</p>
+                <p>前提問題強制解決率: {formatRate(group.prerequisite_forced_resolution_rate)}</p>
+                <p>教材なし概念弁別正答率: {formatRate(group.no_material_concept_discrimination_accuracy)}</p>
                 <p>Phase2再支援後成功率: {formatRate(group.phase2_after_retry_success_rate)}</p>
+                <p>Phase2強制完了率: {formatRate(group.phase2_forced_completion_rate)}</p>
               </div>
             ))}
           </div>
           <div className="actions">
             {[
               "participants",
+              "content_versions",
+              "prerequisite_definitions",
+              "learning_question_slots",
+              "learning_questions",
+              "learning_question_options",
+              "learning_question_display_orders",
               "participant_surveys",
               "term_assignments",
               "attempts",
               "learner_states",
               "learning_sessions",
+              "learning_session_prerequisites",
+              "generated_learning_materials",
+              "learning_choice_attempts",
               "prerequisite_terms",
               "term_understanding_attempts",
               "concept_understanding_attempts",

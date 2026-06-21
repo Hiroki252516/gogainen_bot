@@ -2,7 +2,7 @@
 
 ## 重要
 
-このシステムでは OpenAI APIキーを使わない。ユーザーの ChatGPT/Codex ログインを使って、Codex app-server経由でAI機能を呼び出す。
+このシステムでは OpenAI APIキーを使わない。ユーザーの ChatGPT/Codex ログインを使って、Codex app-server経由で教材・フィードバック生成を呼び出す。固定問題の採点はbackendが行う。
 
 ただし、Codex app-serverは通常の汎用LLM APIではなく、Codex rich client向けのJSON-RPCプロトコルである。そのため、AI呼び出し部分は `AIBackend` として隔離し、将来の仕様変更に対応できるようにする。
 

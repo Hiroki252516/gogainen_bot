@@ -31,7 +31,7 @@ export default function StartPage() {
     <AppShell step="開始">
       <section className="panel stack">
         <h1>専門用語理解の実験を開始します</h1>
-        <p className="muted">個人名やメールアドレスは収集しません。選択回答、学習中の自己説明、学習ログを研究用に保存します。</p>
+        <p className="muted">個人名やメールアドレスは収集しません。選択回答、教材提示、学習進行のログを研究用に保存します。</p>
         <label>
           実験条件
           <select value={group} onChange={(event) => setGroup(event.target.value)}>
