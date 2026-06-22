@@ -4,10 +4,12 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.db.session import SessionLocal
-from app.models import AICallLog
+from app.models import AICallLog, Attempt, TutorTurn
 
 
 client = TestClient(app)
+QUESTION_SHOWN_AT = "2026-06-22T06:00:00"
+ANSWERED_AT = "2026-06-22T06:00:05"
 
 
 def _ai_call_count(purpose: str) -> int:
@@ -17,6 +19,21 @@ def _ai_call_count(purpose: str) -> int:
     finally:
         db.close()
 
+
+def _latest_ai_call(purpose: str) -> AICallLog | None:
+    db = SessionLocal()
+    try:
+        return db.query(AICallLog).filter_by(purpose=purpose, status="success").order_by(AICallLog.created_at.desc()).first()
+    finally:
+        db.close()
+
+
+def _latest_turn(turn_id: str) -> TutorTurn | None:
+    db = SessionLocal()
+    try:
+        return db.get(TutorTurn, turn_id)
+    finally:
+        db.close()
 
 def _option_containing(question: dict, marker: str) -> dict:
     return next(option for option in question["options"] if marker in option["body"])
@@ -38,6 +55,9 @@ def _create_participant_with_pretest(group: str = "proposed", *, correct: bool =
                 "question_id": question["question_id"],
                 "phase": "pretest",
                 "selected_option_id": option["option_id"],
+                "response_time_sec": 1.25,
+                "question_shown_at": QUESTION_SHOWN_AT,
+                "answered_at": ANSWERED_AT,
             },
         )
         assert response.status_code == 200
@@ -56,6 +76,22 @@ def test_pretest_returns_only_llm_training_process_and_transformer():
     assert all(question["requires_reason"] is False for question in questions)
 
 
+
+def test_attempt_timing_and_question_snapshot_are_stored():
+    pid = _create_participant_with_pretest(group="proposed")
+    db = SessionLocal()
+    try:
+        attempts = db.query(Attempt).filter_by(participant_id=pid, phase="pretest").all()
+        assert attempts
+        assert all(attempt.response_time_sec == 1.25 for attempt in attempts)
+        assert all(attempt.question_shown_at.isoformat() == QUESTION_SHOWN_AT for attempt in attempts)
+        assert all(attempt.answered_at.isoformat() == ANSWERED_AT for attempt in attempts)
+        assert all(attempt.question_body_snapshot for attempt in attempts)
+        assert all(len(attempt.option_order_snapshot) == 5 for attempt in attempts)
+    finally:
+        db.close()
+
+
 def test_final_test_is_choice_only_and_scores_without_reason():
     pid = _create_participant_with_pretest(correct=True)
     final_questions = client.get(f"/api/experiment/{pid}/final-test").json()["questions"]
@@ -69,9 +105,9 @@ def test_final_test_is_choice_only_and_scores_without_reason():
         correct = next(option for option in question["options"] if option["body"] != "わからない。" and option["label"])
         # Pick the actual correct option by stable text markers because option display order is randomized.
         if question["term_slug"] == "llm_training_process":
-            correct = _option_containing(question, "事前学習、インストラクションチューニング、事後学習")
+            correct = _option_containing(question, "大量のテキストで言語パターン")
         else:
-            correct = _option_containing(question, "Transformer。Attentionレイヤー")
+            correct = _option_containing(question, "Attentionレイヤーでトークン間")
         response = client.post(
             "/api/attempts",
             json={
@@ -146,13 +182,24 @@ def _assert_component_sequence(pid: str, term_slug: str, expected_components: li
         assert turn["component_index"] == index
         assert turn["component_total"] == len(expected_components)
         assert len(turn["practice_question"]["options"]) == 5
+        if index == 0:
+            latest_call = _latest_ai_call("generate_tutoring_turn")
+            assert latest_call.request_payload["learner_state"]["primary_misconception"]
+            assert latest_call.request_payload["component_term"] == component
+            assert latest_call.request_payload["misconception_scaffolding_guidance"]
         correct_option = next(option for option in turn["practice_question"]["options"] if option["label"] == "A")
         feedback = client.post(
             f"/api/tutor-turns/{turn['turn_id']}/respond",
-            json={"selected_option_id": correct_option["option_id"]},
+            json={"selected_option_id": correct_option["option_id"], "response_time_sec": 2.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
         ).json()
         assert feedback["is_sufficient"] is True
         assert feedback["session_completed"] is False
+        saved_turn = _latest_turn(turn["turn_id"])
+        assert saved_turn.response_time_sec == 2.5
+        assert saved_turn.question_shown_at.isoformat() == QUESTION_SHOWN_AT
+        assert saved_turn.answered_at.isoformat() == ANSWERED_AT
+        assert saved_turn.grading_json["response_time_sec"] == 2.5
+        assert saved_turn.grading_json["material_source"] == "ai"
         expected_next = "concept_understanding" if index == len(expected_components) - 1 else "term_understanding"
         assert feedback["next_learning_stage"] == expected_next
 
@@ -160,14 +207,23 @@ def _assert_component_sequence(pid: str, term_slug: str, expected_components: li
     assert _ai_call_count("generate_tutoring_turn") == ai_calls_before + len(expected_components) + 1
     assert concept["learning_stage"] == "concept_understanding"
     assert len(concept["practice_question"]["options"]) == 5
+    pretest_question = next(question for question in client.get(f"/api/experiment/{pid}/pretest").json()["questions"] if question["term_slug"] == term_slug)
+    assert concept["practice_question"]["body"] == pretest_question["body"]
+    assert sorted(option["body"] for option in concept["practice_question"]["options"]) == sorted(option["body"] for option in pretest_question["options"])
     concept_correct = next(option for option in concept["practice_question"]["options"] if option["label"] == "A")
     concept_feedback = client.post(
         f"/api/tutor-turns/{concept['turn_id']}/respond",
-        json={"selected_option_id": concept_correct["option_id"]},
+        json={"selected_option_id": concept_correct["option_id"], "response_time_sec": 3.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
     ).json()
     assert concept_feedback["is_sufficient"] is True
     assert concept_feedback["session_completed"] is True
     assert concept_feedback["next_learning_stage"] == "final_feedback"
+    saved_concept = _latest_turn(concept["turn_id"])
+    assert saved_concept.response_time_sec == 3.5
+    assert saved_concept.question_shown_at.isoformat() == QUESTION_SHOWN_AT
+    assert saved_concept.answered_at.isoformat() == ANSWERED_AT
+    assert saved_concept.grading_json["response_time_sec"] == 3.5
+    assert saved_concept.grading_json["material_source"] == "ai"
 
 
 def test_proposed_group_progresses_llm_training_components_then_l2_question():
@@ -215,8 +271,8 @@ def test_retest_removes_correct_terms_and_final_test_stays_two_items():
     assert all(question["requires_reason"] is False for question in retest)
 
     answers = {
-        "llm_training_process": "人間の学習段階",
-        "transformer": "Attentionでトークン間の関係性",
+        "llm_training_process": "入力された文章を理解",
+        "transformer": "Attentionレイヤーでトークン間",
     }
     for question in retest:
         option = _option_containing(question, answers[question["term_slug"]])
@@ -240,17 +296,38 @@ def test_retest_removes_correct_terms_and_final_test_stays_two_items():
     final_questions = client.get(f"/api/experiment/{pid}/final-test").json()["questions"]
     assert len(final_questions) == 2
     assert all(question["requires_reason"] is False for question in final_questions)
+    final_by_term = {question["term_slug"]: question for question in final_questions}
+    for question in retest:
+        final_question = final_by_term[question["term_slug"]]
+        assert question["body"] == final_question["body"]
+        assert sorted(option["body"] for option in question["options"]) == sorted(option["body"] for option in final_question["options"])
 
 
 def test_admin_overview_and_participant_logs_have_json_and_csv():
     pid = _create_participant_with_pretest(group="proposed")
+    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    correct_option = next(option for option in turn["practice_question"]["options"] if option["label"] == "A")
+    turn_response = client.post(
+        f"/api/tutor-turns/{turn['turn_id']}/respond",
+        json={
+            "selected_option_id": correct_option["option_id"],
+            "response_time_sec": 2.5,
+            "question_shown_at": QUESTION_SHOWN_AT,
+            "answered_at": ANSWERED_AT,
+        },
+    )
+    assert turn_response.status_code == 200
 
     overview = client.get("/api/admin/logs/overview")
     assert overview.status_code == 200
     overview_json = overview.json()
     assert "participants" in overview_json
     assert "recent_attempts" in overview_json
+    assert "recent_answer_history" in overview_json
     assert any(row["participant_id"] == pid for row in overview_json["participants"])
+    assert any(row["source_type"] == "learning_turn" for row in overview_json["recent_answer_history"])
 
     participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
     assert participant_logs.status_code == 200
@@ -258,26 +335,38 @@ def test_admin_overview_and_participant_logs_have_json_and_csv():
     assert logs_json["participant"]["participant_id"] == pid
     assert len(logs_json["attempts"]) == 2
     assert any(row["term_slug"] == "transformer" for row in logs_json["attempts"])
+    assert "answer_history" in logs_json
+    assert [row["source_type"] for row in logs_json["answer_history"]].count("test_attempt") == 2
+    assert [row["source_type"] for row in logs_json["answer_history"]].count("learning_turn") == 1
+    learning_answer = next(row for row in logs_json["answer_history"] if row["source_type"] == "learning_turn")
+    assert learning_answer["phase"] == "learning"
+    assert learning_answer["is_sufficient"] is True
+    assert learning_answer["learning_stage"] == "term_understanding"
+    assert learning_answer["response_time_sec"] == 2.5
     assert "learner_states" in logs_json
     assert "ai_call_logs" in logs_json
 
     overview_csv = client.get("/api/admin/logs/overview.csv")
     assert overview_csv.status_code == 200
-    assert "record_type,participant_id,display_code,phase,term_slug,event_time,summary,value_json" in overview_csv.text
-    assert "attempt" in overview_csv.text
+    assert "record_type,source_type,participant_id,display_code,phase,term_slug,event_time,question_shown_at,answered_at,response_time_sec,question_body,selected_option_body,question_body_snapshot,option_order_snapshot,summary,value_json" in overview_csv.text
+    assert "question_body_snapshot" in overview_csv.text
+    assert "answer,test_attempt" in overview_csv.text
+    assert "answer,learning_turn" in overview_csv.text
     overview_excel_csv = client.get("/api/admin/logs/overview_excel.csv")
     assert overview_excel_csv.status_code == 200
     assert overview_excel_csv.content.startswith(b"\xef\xbb\xbf")
-    assert "attempt".encode() in overview_excel_csv.content
+    assert "answer".encode() in overview_excel_csv.content
 
     participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert participant_csv.status_code == 200
-    assert "record_type,participant_id,display_code,phase,term_slug,event_time,summary,value_json" in participant_csv.text
-    assert "attempt" in participant_csv.text
+    assert "record_type,source_type,participant_id,display_code,phase,term_slug,event_time,question_shown_at,answered_at,response_time_sec,question_body,selected_option_body,question_body_snapshot,option_order_snapshot,summary,value_json" in participant_csv.text
+    assert "option_order_snapshot" in participant_csv.text
+    assert "answer,test_attempt" in participant_csv.text
+    assert "answer,learning_turn" in participant_csv.text
     participant_excel_csv = client.get(f"/api/admin/participants/{pid}/logs_excel.csv")
     assert participant_excel_csv.status_code == 200
     assert participant_excel_csv.content.startswith(b"\xef\xbb\xbf")
-    assert "attempt".encode() in participant_excel_csv.content
+    assert "answer".encode() in participant_excel_csv.content
 
 
 def test_tutoring_prompt_contract_mentions_new_group_design():
@@ -285,7 +374,9 @@ def test_tutoring_prompt_contract_mentions_new_group_design():
     text = prompt_source.read_text()
     assert "L3相当の基礎教材とL2相当の観点教材を両方" in text
     assert "質問はL2相当の1問だけ" in text
-    assert "L3教材+L3質問、concept_understandingをL2教材+L2質問" in text
+    assert "term_understandingをL3教材+L3質問、concept_understandingをL2教材+L2質問" in text
+    assert "practice_question.body には現在の用語に関する質問文を1つだけ入れる" in text
+    assert "misconception_scaffolding_guidance" in text
 
 
 def test_m4_does_not_select_context_transfer_strategy():

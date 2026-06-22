@@ -101,6 +101,8 @@ ChatGPT/Codex Login
 | ExportService | CSV作成、エクスポート履歴管理 |
 | AiBackendService | AIBackend実装の選択、AI呼び出しログ保存 |
 
+管理画面とCSVでは、`Attempt` と `TutorTurn` を物理的に統合しない。Experiment/Exportサービス層で `answer_history` を作り、テスト回答を `source_type=test_attempt`、学習ターン回答を `source_type=learning_turn` として同じ回答履歴に並べる。
+
 ## AIBackend抽象化
 
 AI呼び出しは必ず抽象化する。

@@ -1,143 +1,38 @@
 # 16. Implementation Tasks
 
-## Milestone 1: Project Bootstrap
+このファイルは現行プログラムの実装状態を示す。未実装チェックリストではなく、運用時に確認する実装済み機能と残タスクを整理する。
 
-- [ ] Monorepo作成
-- [ ] frontend/ Next.js
-- [ ] backend/ FastAPI
-- [ ] docker-compose.yml
-- [ ] PostgreSQL接続
-- [ ] Alembic設定
-- [ ] Makefile
-- [ ] .env.example
-- [ ] README更新
+## 実装済み
 
-## Milestone 2: Database & Seed
+- Next.js frontend と FastAPI backend のDocker Compose構成
+- PostgreSQL本番相当構成とSQLiteローカル構成
+- SQLAlchemy models と起動時の軽量スキーマ更新
+- active seed: `llm_training_process`, `transformer`
+- 事前テスト、診断、学習対象選択、学習セッション、再テスト、最終テスト、survey遷移
+- 再テストは事前テスト対象の全問を出題
+- L2概念理解問題・再テスト・最終テストの同一問題文/選択肢運用
+- テスト回答と学習ターン回答の `question_shown_at`, `answered_at`, `response_time_sec` 保存
+- `answer_history` によるテスト回答と学習ターン回答の統合ログ
+- 全体ログCSV、被験者別ログCSV、Excel向けUTF-8 BOM付きCSV
+- Codex app-server backend、AI status、ChatGPT/device codeログイン導線
+- `AI_BACKEND=codex_app_server` でMockへ自動フォールバックしない失敗ログ
+- MockAIBackendを使った自動テスト
+- 管理画面で全体ログ、被験者別ログ、AI呼び出し、再発イベント、評価サマリーを確認
 
-- [ ] SQLAlchemy models
-- [ ] Alembic migration
-- [ ] enum定義
-- [ ] terms seed
-- [ ] questions seed
-- [ ] question_options seed
-- [ ] pretest/retest variants seed
-- [ ] seed command
-- [ ] question_display_orders実装
+## 残タスク
 
-## Milestone 3: Core Experiment API
+- アンケート本体の設問拡張
+- 管理画面のグラフ化とフィルタ機能
+- 手動診断修正UIとaudit_eventsの実運用導線
+- export_jobsの実ジョブ履歴化
+- 大人数運用時のCSV出力非同期化
+- 研究本番データ用のバックアップ手順強化
 
-- [ ] participant create
-- [ ] current step API
-- [ ] pretest questions fetch
-- [ ] retest questions fetch
-- [ ] l0 questions fetch
-- [ ] attempt submit
-- [ ] idempotency handling
-- [ ] admin participant list
+## 実装優先順位
 
-## Milestone 4: AI Backend Abstraction
-
-- [ ] AIBackend protocol
-- [ ] payload/result schemas
-- [ ] MockAIBackend
-- [ ] ai_call_logs
-- [ ] JSON validation/retry utility
-- [ ] CodexAppServer client skeleton
-- [ ] app-server health/account read
-- [ ] app-server login start/cancel
-
-## Milestone 5: Diagnosis & Learner State
-
-- [ ] choice-based initial diagnosis
-- [ ] AI reason-text diagnosis
-- [ ] diagnosis merge rules
-- [ ] ambiguous/manual review handling
-- [ ] initial scaffolding decision
-- [ ] learner_state creation
-- [ ] learning target selection
-- [ ] participant progress update
-
-## Milestone 6: Tutoring Session
-
-- [ ] tutor session create
-- [ ] tutor turn generation
-- [ ] learner response submit
-- [ ] feedback generation
-- [ ] forbidden help detection
-- [ ] level update
-- [ ] strategy change on recurrence
-- [ ] max turns per term
-- [ ] control group general_explanation behavior
-
-## Milestone 7: Retest / Confirmation
-
-- [ ] retest flow
-- [ ] recurrence calculation
-- [ ] recurrence_events
-- [ ] state update after retest
-- [ ] second learning session trigger
-- [ ] confirmation check flow
-- [ ] l0_success calculation
-- [ ] M4 detection
-
-## Milestone 8: Evaluation & Export
-
-- [ ] evaluation summary calculation
-- [ ] group-level aggregate
-- [ ] CSV export endpoints
-- [ ] export_jobs
-- [ ] admin dashboard metrics
-- [ ] simple charts
-- [ ] manual recalculation API
-
-## Milestone 9: Codex app-server Productionization
-
-- [ ] WebSocket JSON-RPC client
-- [ ] initialize
-- [ ] account/read
-- [ ] login browser/device flow UI
-- [ ] thread/start
-- [ ] turn/start
-- [ ] streaming notification parser
-- [ ] outputSchema validation
-- [ ] timeout/retry/error handling
-- [ ] capability token support
-- [ ] no-Mock-fallback failure logging
-
-## Milestone 10: Frontend Completion
-
-- [ ] /start
-- [ ] /pretest
-- [ ] /diagnosing
-- [ ] /learning-targets
-- [ ] /learning/[termSlug]
-- [ ] /retest
-- [ ] /l0-check
-- [ ] /finish
-- [ ] /admin
-- [ ] internal label hiding
-- [ ] test phase chat disabling
-
-## Milestone 11: Tests & Documentation
-
-- [ ] backend unit tests
-- [ ] backend integration tests
-- [ ] frontend unit tests
-- [ ] E2E happy path
-- [ ] proposed/control comparison tests
-- [ ] CSV snapshot tests
-- [ ] README setup instructions
-- [ ] troubleshooting docs
-
-## Implementation Order
-
-必ず以下の順で進める。
-
-1. Codex app-serverを通常実行のAIバックエンドにする
-2. ChatGPT/Codexログイン、`account/read`、`thread/start`、`turn/start` を確認する
-3. MockAIBackendは自動テスト・障害切り分け用に明示指定した場合だけ使う
-4. app-server接続失敗時はMockへ自動フォールバックせず、失敗ログと管理画面エラーを出す
-
-## Do Not Implement Before Requested
-
-このリポジトリには実装コードも含まれる。仕様整理だけを依頼された場合はMarkdownのみを編集し、実装依頼時だけfrontend/backendコードを変更する。
+1. 研究ログの完全性
+2. Codex app-server経由の実AI応答
+3. 実験フローの正確性
+4. 評価指標とCSV出力
+5. MockAIBackendでのテスト再現性
+6. UIの見た目

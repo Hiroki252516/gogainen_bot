@@ -69,6 +69,8 @@ export default function LearningPage() {
   const [turn, setTurn] = useState<Turn | null>(null);
   const [response, setResponse] = useState("");
   const [selectedOptionId, setSelectedOptionId] = useState("");
+  const [turnStartedAt, setTurnStartedAt] = useState(() => Date.now());
+  const [turnShownAt, setTurnShownAt] = useState(() => new Date().toISOString());
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -90,6 +92,8 @@ export default function LearningPage() {
         setSessionId(session.tutor_session_id);
         const data = await api<Turn>(`/api/tutor-sessions/${session.tutor_session_id}/turns`, { method: "POST", body: JSON.stringify({}) });
         setTurn(data);
+        setTurnStartedAt(Date.now());
+        setTurnShownAt(new Date().toISOString());
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -108,9 +112,11 @@ export default function LearningPage() {
     setError("");
     try {
       const selectedOption = options.find((option) => option.option_id === selectedOptionId);
+      const answeredAt = new Date().toISOString();
+      const responseTimeSec = Math.max(0.001, (Date.now() - turnStartedAt) / 1000);
       const data = await api<Feedback>(`/api/tutor-turns/${turn.turn_id}/respond`, {
         method: "POST",
-        body: JSON.stringify({ selected_option_id: selectedOptionId || null, learner_response: selectedOption?.body || response })
+        body: JSON.stringify({ selected_option_id: selectedOptionId || null, learner_response: selectedOption?.body || response, response_time_sec: responseTimeSec, question_shown_at: turnShownAt, answered_at: answeredAt })
       });
       const updatedTurn = {
         ...turn,
@@ -123,6 +129,8 @@ export default function LearningPage() {
       if (!data.session_completed && sessionId) {
         const next = await api<Turn>(`/api/tutor-sessions/${sessionId}/turns`, { method: "POST", body: JSON.stringify({}) });
         setTurn(next);
+        setTurnStartedAt(Date.now());
+        setTurnShownAt(new Date().toISOString());
         setResponse("");
         setSelectedOptionId("");
         setFeedback(null);

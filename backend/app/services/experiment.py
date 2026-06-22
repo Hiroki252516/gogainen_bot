@@ -5,6 +5,7 @@ import json
 import random
 import re
 from datetime import UTC, datetime
+from time import perf_counter
 from pathlib import Path
 from typing import Any
 
@@ -92,15 +93,15 @@ LEARNING_CHOICE_BANK = {
             ],
         },
         "__concept__": {
-            "material": "LLMの主な学習プロセスは、事前学習、インストラクションチューニング、事後学習に分けて考えます。事前学習で基盤能力を作り、インストラクションチューニングで指示に従う応答へ調整し、事後学習で出力の望ましさを高めます。",
-            "body": "事前学習、インストラクションチューニング、事後学習の3段階で、LLMの学習プロセスを最も適切に説明しているものはどれか。",
-            "expected_answer": "事前学習で基盤能力を作り、インストラクションチューニングで指示応答を学び、事後学習で安全性や有用性を調整する。",
+            "material": "LLMの主な学習プロセスは、事前学習、インストラクションチューニング、事後学習に分けて考えます。事前学習で言語パターンを学び、インストラクションチューニングで指示に従う応答へ調整し、事後学習で出力の望ましさを高めます。",
+            "body": "対象範囲で説明されているLLMの主な学習プロセスの組み合わせとして、最も適切なものはどれか。",
+            "expected_answer": "大量のテキストで言語パターンを学ぶ事前学習、指示に従う応答へ調整するインストラクションチューニング、出力の望ましさを高める事後学習。",
             "question_type": "concept_choice",
             "options": [
-                {"option_id": "A", "label": "A", "body": "事前学習で基盤能力を作り、インストラクションチューニングで指示応答を学び、事後学習で安全性や有用性を調整する。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "入力、思考、感情、会話という人間の学習段階に分けられる。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "プロンプト、コンテキストウィンドウ、Function Callingの3段階で学習する。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "事前テスト、学習、事後テストだけを指す。", "is_correct": False, "misconception_type": "M3"},
+                {"option_id": "A", "label": "A", "body": "大量のテキストで言語パターンを学ぶ事前学習、指示に従う応答へ調整するインストラクションチューニング、出力の望ましさを高める事後学習。", "is_correct": True, "misconception_type": None},
+                {"option_id": "B", "label": "B", "body": "入力された文章を理解する事前学習、内部で思考するインストラクションチューニング、必要に応じて意図を形成してから会話として出力する事後学習。", "is_correct": False, "misconception_type": "M1"},
+                {"option_id": "C", "label": "C", "body": "ユーザーがプロンプトを入力する事前学習、コンテキストウィンドウに情報を保持するインストラクションチューニング、必要に応じてFunction Callingで外部処理を行う事後学習。", "is_correct": False, "misconception_type": "M2"},
+                {"option_id": "D", "label": "D", "body": "学習前の性能を測定する事前学習、学習後の性能をテストするインストラクションチューニング、前後比較を行う評価手順である事後学習。", "is_correct": False, "misconception_type": "M3"},
                 {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
             ],
         },
@@ -146,15 +147,15 @@ LEARNING_CHOICE_BANK = {
             ],
         },
         "__concept__": {
-            "material": "Transformerは、Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造です。RNNのように前から順番に隠れ状態だけを渡す構造とは異なり、離れたトークン同士の関係も扱いやすい点が重要です。",
-            "body": "Attention、FFN、トークン間の関係性を用いて、Transformerの構造を最も適切に説明しているものはどれか。",
-            "expected_answer": "Attentionでトークン間の関係性を扱い、FFNで各トークンの特徴を変換する構造。",
+            "material": "Transformerは、Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造です。RNNのように前から順番に隠れ状態だけを渡す構造とは異なります。",
+            "body": "Transformerの構造の説明として、最も適切なものはどれか。",
+            "expected_answer": "Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造。",
             "question_type": "concept_choice",
             "options": [
-                {"option_id": "A", "label": "A", "body": "Attentionでトークン間の関係性を扱い、FFNで各トークンの特徴を変換する構造。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "人間の注意力や集中力をそのまま再現した構造。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "RNNと同じように、前の単語から順番に隠れ状態だけを渡す構造。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "Transformerという名前から、翻訳だけを行う機能。", "is_correct": False, "misconception_type": "M3"},
+                {"option_id": "A", "label": "A", "body": "Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造。", "is_correct": True, "misconception_type": None},
+                {"option_id": "B", "label": "B", "body": "Attentionレイヤーが文章全体の意味を理解し、FFNレイヤーが思考して判断を行う構造。", "is_correct": False, "misconception_type": "M1"},
+                {"option_id": "C", "label": "C", "body": "入力文を先頭から順番に処理し、前の単語の隠れ状態を次の単語へ渡しながら文脈を保持する構造。", "is_correct": False, "misconception_type": "M2"},
+                {"option_id": "D", "label": "D", "body": "Attentionレイヤーで単語の意味を検索し、FFNレイヤーで正しい単語に置き換える構造。", "is_correct": False, "misconception_type": "M3"},
                 {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
             ],
         },
@@ -244,6 +245,15 @@ def _previous_turn_prefix(previous_turn: TutorTurn | None) -> str:
     if previous_turn.ai_feedback:
         parts.append(f"前の回答を踏まえて、{previous_turn.ai_feedback}")
     return "\n".join(parts) + ("\n\n" if parts else "")
+
+
+def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
+    return {
+        "M1": "概念を人間の理解・思考など別カテゴリとして捉えないよう、専門用語としてのカテゴリと役割を捉え直させる。",
+        "M2": "似ている概念との境界を比較し、どちらが何を扱うかを短く対比させる。",
+        "M3": "語感や表面的なキーワードではなく、構造・役割・判断基準に注目させる。",
+        "unknown": "基礎定義と構成要素を短く確認し、最小限の判断基準を示す。",
+    }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
 
 
 def _practice_meta(turn: TutorTurn | None) -> dict[str, Any]:
@@ -410,14 +420,29 @@ def _question_query_for_phase(db: Session, participant: Participant, phase: str)
     if phase == "pretest":
         query = query.filter(Term.slug.in_(PRETEST_TERM_SLUGS))
     if phase == "retest":
-        target_term_ids = [
-            row.term_id
-            for row in db.query(TermAssignment)
-            .filter(TermAssignment.participant_id == participant.id, TermAssignment.is_learning_target.is_(True))
-            .all()
-        ]
-        query = query.filter(Question.term_id.in_(target_term_ids or ["__none__"]))
+        query = query.filter(Term.slug.in_(PRETEST_TERM_SLUGS))
     return query.order_by(Term.display_order, Question.variant_key)
+
+
+def _displayed_options(db: Session, participant: Participant, question: Question) -> list[dict[str, str]]:
+    options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id).order_by(QuestionOption.default_order).all()
+    if not options:
+        return []
+    display = db.query(QuestionDisplayOrder).filter_by(participant_id=participant.id, question_id=question.id).one_or_none()
+    if not display:
+        seed = f"{get_settings().random_seed}:{participant.id}:{question.id}"
+        rng = random.Random(seed)
+        option_ids = [option.id for option in options]
+        rng.shuffle(option_ids)
+        display = QuestionDisplayOrder(participant_id=participant.id, question_id=question.id, option_order=option_ids, random_seed=seed)
+        db.add(display)
+        db.commit()
+    option_by_id = {option.id: option for option in options}
+    public_options = []
+    for index, option_id in enumerate(display.option_order):
+        option = option_by_id[option_id]
+        public_options.append({"option_id": option.id, "label": chr(65 + index), "body": option.body})
+    return public_options
 
 
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
@@ -428,22 +453,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
     out = []
     for question in questions:
         term = db.get(Term, question.term_id)
-        options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id).order_by(QuestionOption.default_order).all()
-        public_options = []
-        if options:
-            display = db.query(QuestionDisplayOrder).filter_by(participant_id=participant.id, question_id=question.id).one_or_none()
-            if not display:
-                seed = f"{get_settings().random_seed}:{participant.id}:{question.id}"
-                rng = random.Random(seed)
-                option_ids = [option.id for option in options]
-                rng.shuffle(option_ids)
-                display = QuestionDisplayOrder(participant_id=participant.id, question_id=question.id, option_order=option_ids, random_seed=seed)
-                db.add(display)
-                db.commit()
-            option_by_id = {option.id: option for option in options}
-            for index, option_id in enumerate(display.option_order):
-                option = option_by_id[option_id]
-                public_options.append({"option_id": option.id, "label": chr(65 + index), "body": option.body})
+        public_options = _displayed_options(db, participant, question)
         out.append(
             {
                 "question_id": question.id,
@@ -459,21 +469,15 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
 
 
 def _variant_body_for_round(db: Session, participant_id: str, question: Question, phase: str) -> str:
-    if phase != "retest":
-        return question.body
-    previous_count = (
-        db.query(func.count(Attempt.id))
-        .filter_by(participant_id=participant_id, question_id=question.id, phase="retest")
-        .scalar()
-        or 0
-    )
-    variants = [
-        question.body,
-        f"別の言い方で確認します。{question.body}",
-        f"もう一度、同じ考え方を使って判断してください。{question.body}",
-        f"理解が残っているか確認します。{question.body}",
-    ]
-    return variants[min(previous_count, len(variants) - 1)]
+    return question.body
+
+
+def _naive_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | None = None) -> Attempt:
@@ -504,6 +508,10 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         reason_text=None if is_pretest else payload.get("reason_text"),
         confidence=None,
         response_time_sec=payload.get("response_time_sec"),
+        question_shown_at=_naive_datetime(payload.get("question_shown_at")),
+        answered_at=_naive_datetime(payload.get("answered_at")),
+        question_body_snapshot=_variant_body_for_round(db, participant.id, question, phase),
+        option_order_snapshot=_displayed_options(db, participant, question),
         idempotency_key=idempotency_key,
     )
     db.add(attempt)
@@ -730,6 +738,8 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
 
     tutor_message = _previous_turn_prefix(previous_turn) + spec["material"]
     teaching_strategy = effective_strategy
+    material_source = "fixed"
+    material_generation_ms = None
     if participant.group_condition == "proposed":
         payload = {
             "participant_id": participant.id,
@@ -755,6 +765,12 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "previous_feedback_for_learner": previous_turn.ai_feedback if previous_turn else "",
             "previous_learning_misconception": previous_learning_misconception,
             "session_misconception_history": misconception_history,
+            "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(effective_misconception),
+            "fixed_practice_question": {
+                "body": spec["body"],
+                "expected_answer": spec["expected_answer"],
+                "question_type": question_type,
+            },
             "rag_context": _rag_context(
                 term.label,
                 term.description,
@@ -764,7 +780,10 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
                 previous_turn.learner_response if previous_turn else "",
             ),
         }
+        started = perf_counter()
         result = await _ai_call(db, "generate_tutoring_turn", payload)
+        material_generation_ms = int((perf_counter() - started) * 1000)
+        material_source = "ai"
         tutor_message = result["tutor_message"]
         teaching_strategy = result["teaching_strategy"]
 
@@ -778,6 +797,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         tutor_message=tutor_message,
         learner_prompt=spec["body"],
         practice_question_json=_merge_stage_meta(practice_question, position),
+        diagnosis_json={"material_source": material_source, "material_generation_ms": material_generation_ms},
         forbidden_help_given=False,
     )
     db.add(turn)
@@ -831,10 +851,15 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         next_action = "move_next"
     turn.learner_response = response
     turn.learner_confidence = None
+    turn.question_shown_at = _naive_datetime(payload.get("question_shown_at"))
+    turn.answered_at = _naive_datetime(payload.get("answered_at"))
+    turn.response_time_sec = payload.get("response_time_sec")
     turn.next_scaffolding_level = next_level
     turn.ai_feedback = result["feedback"]
     turn.grading_json = {
         "is_sufficient": is_sufficient,
+        "selected_option_id": option.get("option_id") if option else payload.get("selected_option_id"),
+        "selected_option_body": option.get("body") if option else response,
         "learning_stage": learning_stage,
         "component_term": component_term,
         "component_index": component_index,
@@ -846,6 +871,9 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "learning_misconception_confidence": learning_misconception_confidence,
         "learning_misconception_reason": learning_misconception_reason,
         "ai_next_action": result.get("next_action"),
+        "response_time_sec": payload.get("response_time_sec"),
+        "material_source": (turn.diagnosis_json or {}).get("material_source"),
+        "material_generation_ms": (turn.diagnosis_json or {}).get("material_generation_ms"),
     }
     state.scaffolding_level = next_level
     state.stable_correct_count += 1 if is_sufficient else 0
@@ -1024,10 +1052,10 @@ def admin_summary(db: Session) -> dict[str, Any]:
 
 EXPORTS = {
     "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at"]),
-    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "reason_text", "free_text_answer", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
+    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "reason_text", "free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at"]),
-    "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "created_at"]),
+    "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
     "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "completed", "created_at"]),
@@ -1075,6 +1103,11 @@ def _attempt_log_row(
         "term_label": term.label if term else None,
         "question_body": question.body if question else None,
         "selected_option_body": option.body if option else None,
+        "question_body_snapshot": attempt.question_body_snapshot,
+        "option_order_snapshot": attempt.option_order_snapshot,
+        "response_time_sec": attempt.response_time_sec,
+        "question_shown_at": _iso(attempt.question_shown_at),
+        "answered_at": _iso(attempt.answered_at),
         "free_text_answer": attempt.free_text_answer,
         "reason_text": attempt.reason_text,
         "is_correct": attempt.is_correct,
@@ -1091,6 +1124,7 @@ def _attempt_log_row(
 def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participant | None, term: Term | None) -> dict[str, Any]:
     stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
     grading = turn.grading_json or {}
+    practice_question = turn.practice_question_json or {}
     return {
         "tutor_turn_id": turn.id,
         "tutor_session_id": turn.tutor_session_id,
@@ -1112,13 +1146,65 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "strategy_changed": turn.strategy_changed,
         "tutor_message": turn.tutor_message,
         "learner_prompt": turn.learner_prompt,
+        "question_body": practice_question.get("body"),
+        "selected_option_body": grading.get("selected_option_body"),
         "learner_response": turn.learner_response,
+        "is_sufficient": grading.get("is_sufficient"),
+        "learning_misconception_type": grading.get("learning_misconception_type"),
         "ai_feedback": turn.ai_feedback,
-        "practice_question": turn.practice_question_json,
+        "practice_question": practice_question,
         "grading_json": turn.grading_json,
+        "response_time_sec": turn.response_time_sec if turn.response_time_sec is not None else grading.get("response_time_sec"),
+        "question_shown_at": _iso(turn.question_shown_at),
+        "answered_at": _iso(turn.answered_at),
         "forbidden_help_given": turn.forbidden_help_given,
         "created_at": _iso(turn.created_at),
     }
+
+
+def _answer_event_time(row: dict[str, Any]) -> str:
+    return row.get("answered_at") or row.get("created_at") or ""
+
+
+def _answer_history_attempt_row(attempt_row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **attempt_row,
+        "answer_log_id": f"attempt:{attempt_row['attempt_id']}",
+        "source_type": "test_attempt",
+        "source_id": attempt_row["attempt_id"],
+        "learning_stage": None,
+        "component_term": None,
+        "component_index": None,
+        "component_total": None,
+        "turn_index": None,
+        "is_sufficient": None,
+        "teaching_strategy": None,
+        "learner_response": attempt_row.get("selected_option_body") or attempt_row.get("free_text_answer") or attempt_row.get("reason_text"),
+    }
+
+
+def _answer_history_turn_row(turn_row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **turn_row,
+        "answer_log_id": f"tutor_turn:{turn_row['tutor_turn_id']}",
+        "source_type": "learning_turn",
+        "source_id": turn_row["tutor_turn_id"],
+        "phase": "learning",
+        "is_correct": None,
+        "misconception_type": turn_row.get("learning_misconception_type"),
+        "recurrence_flag": None,
+        "question_body_snapshot": turn_row.get("question_body"),
+        "option_order_snapshot": (turn_row.get("practice_question") or {}).get("options"),
+        "free_text_answer": None,
+        "reason_text": None,
+        "learner_response": turn_row.get("selected_option_body") or turn_row.get("learner_response"),
+    }
+
+
+def _answer_history_rows(attempt_rows: list[dict[str, Any]], turn_rows: list[dict[str, Any]], *, reverse: bool = False, limit: int | None = None) -> list[dict[str, Any]]:
+    rows = [_answer_history_attempt_row(row) for row in attempt_rows] + [_answer_history_turn_row(row) for row in turn_rows]
+    rows.sort(key=_answer_event_time, reverse=reverse)
+    return rows[:limit] if limit is not None else rows
 
 
 def _ai_log_belongs_to(log: AICallLog, participant_id: str) -> bool:
@@ -1138,6 +1224,12 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
     ai_logs = db.query(AICallLog).order_by(AICallLog.created_at.desc()).limit(50).all()
     recurrences = db.query(RecurrenceEvent).order_by(RecurrenceEvent.created_at.desc()).limit(30).all()
     summaries = db.query(EvaluationSummary).order_by(EvaluationSummary.created_at.desc()).limit(30).all()
+    recent_attempt_rows = [_attempt_log_row(row, participant_by_id, terms, questions, options) for row in attempts]
+    recent_turn_rows = [
+        _turn_log_row(row, sessions[row.tutor_session_id], participant_by_id.get(sessions[row.tutor_session_id].participant_id), terms.get(sessions[row.tutor_session_id].term_id))
+        for row in recent_turns
+        if row.tutor_session_id in sessions
+    ]
     return {
         "participant_count": len(participants),
         "groups": admin_summary(db)["groups"],
@@ -1152,12 +1244,9 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
             }
             for row in participants
         ],
-        "recent_attempts": [_attempt_log_row(row, participant_by_id, terms, questions, options) for row in attempts],
-        "recent_tutor_turns": [
-            _turn_log_row(row, sessions[row.tutor_session_id], participant_by_id.get(sessions[row.tutor_session_id].participant_id), terms.get(sessions[row.tutor_session_id].term_id))
-            for row in recent_turns
-            if row.tutor_session_id in sessions
-        ],
+        "recent_attempts": recent_attempt_rows,
+        "recent_tutor_turns": recent_turn_rows,
+        "recent_answer_history": _answer_history_rows(recent_attempt_rows, recent_turn_rows, reverse=True, limit=50),
         "recent_ai_call_logs": [
             {
                 "id": row.id,
@@ -1219,6 +1308,21 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     recurrences = db.query(RecurrenceEvent).filter_by(participant_id=participant.id).order_by(RecurrenceEvent.created_at).all()
     ai_logs = [row for row in db.query(AICallLog).order_by(AICallLog.created_at).all() if _ai_log_belongs_to(row, participant.id)]
     summary = db.query(EvaluationSummary).filter_by(participant_id=participant.id).order_by(EvaluationSummary.created_at.desc()).first()
+    attempt_rows = [_attempt_log_row(row, participants, terms, questions, options) for row in attempts]
+    tutor_sessions = [
+        {
+            "tutor_session_id": session.id,
+            "term_slug": terms.get(session.term_id).slug if terms.get(session.term_id) else None,
+            "term_label": terms.get(session.term_id).label if terms.get(session.term_id) else None,
+            "session_index": session.session_index,
+            "group_condition": session.group_condition,
+            "started_at": _iso(session.started_at),
+            "ended_at": _iso(session.ended_at),
+            "turns": [_turn_log_row(turn, session, participant, terms.get(session.term_id)) for turn in turns_by_session.get(session.id, [])],
+        }
+        for session in sessions
+    ]
+    turn_rows = [turn for session in tutor_sessions for turn in session["turns"]]
     return {
         "participant": {
             "participant_id": participant.id,
@@ -1230,7 +1334,8 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "completed_at": _iso(participant.completed_at),
             "created_at": _iso(participant.created_at),
         },
-        "attempts": [_attempt_log_row(row, participants, terms, questions, options) for row in attempts],
+        "attempts": attempt_rows,
+        "answer_history": _answer_history_rows(attempt_rows, turn_rows),
         "learner_states": [
             {
                 "term_slug": terms.get(row.term_id).slug if terms.get(row.term_id) else None,
@@ -1259,19 +1364,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             }
             for row in assignments
         ],
-        "tutor_sessions": [
-            {
-                "tutor_session_id": session.id,
-                "term_slug": terms.get(session.term_id).slug if terms.get(session.term_id) else None,
-                "term_label": terms.get(session.term_id).label if terms.get(session.term_id) else None,
-                "session_index": session.session_index,
-                "group_condition": session.group_condition,
-                "started_at": _iso(session.started_at),
-                "ended_at": _iso(session.ended_at),
-                "turns": [_turn_log_row(turn, session, participant, terms.get(session.term_id)) for turn in turns_by_session.get(session.id, [])],
-            }
-            for session in sessions
-        ],
+        "tutor_sessions": tutor_sessions,
         "recurrence_events": [
             {
                 "id": row.id,
@@ -1316,7 +1409,24 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     }
 
 
-LOG_CSV_COLUMNS = ["record_type", "participant_id", "display_code", "phase", "term_slug", "event_time", "summary", "value_json"]
+LOG_CSV_COLUMNS = [
+    "record_type",
+    "source_type",
+    "participant_id",
+    "display_code",
+    "phase",
+    "term_slug",
+    "event_time",
+    "question_shown_at",
+    "answered_at",
+    "response_time_sec",
+    "question_body",
+    "selected_option_body",
+    "question_body_snapshot",
+    "option_order_snapshot",
+    "summary",
+    "value_json",
+]
 
 
 def _csv_value(value: Any) -> str:
@@ -1327,14 +1437,16 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
     participant = logs["participant"]
     rows: list[dict[str, Any]] = []
     base = {"participant_id": participant["participant_id"], "display_code": participant["display_code"]}
-    for attempt in logs["attempts"]:
-        rows.append({**base, "record_type": "attempt", "phase": attempt["phase"], "term_slug": attempt["term_slug"], "event_time": attempt["created_at"], "summary": f"{attempt['term_label']} {attempt['phase']} correct={attempt['is_correct']} m={attempt['misconception_type']}", "value_json": _csv_value(attempt)})
+    for answer in logs["answer_history"]:
+        if answer["source_type"] == "test_attempt":
+            summary = f"{answer['term_label']} {answer['phase']} correct={answer['is_correct']} m={answer['misconception_type']}"
+        else:
+            summary = f"{answer['term_label']} learning turn {answer['turn_index']} stage={answer['learning_stage']} component={answer['component_term']} sufficient={answer['is_sufficient']} strategy={answer['teaching_strategy']}"
+        rows.append({**base, "record_type": "answer", "source_type": answer["source_type"], "phase": answer["phase"], "term_slug": answer["term_slug"], "event_time": _answer_event_time(answer), "question_shown_at": answer.get("question_shown_at"), "answered_at": answer.get("answered_at"), "response_time_sec": answer.get("response_time_sec"), "question_body": answer.get("question_body"), "selected_option_body": answer.get("selected_option_body"), "question_body_snapshot": answer.get("question_body_snapshot"), "option_order_snapshot": _csv_value(answer.get("option_order_snapshot")), "summary": summary, "value_json": _csv_value(answer)})
     for state in logs["learner_states"]:
         rows.append({**base, "record_type": "learner_state", "phase": "state", "term_slug": state["term_slug"], "event_time": state["updated_at"], "summary": f"{state['term_label']} status={state['current_status']} stage={state['current_stage_for_display']} strategy={state['teaching_strategy']}", "value_json": _csv_value(state)})
     for session in logs["tutor_sessions"]:
         rows.append({**base, "record_type": "tutor_session", "phase": "learning", "term_slug": session["term_slug"], "event_time": session["started_at"], "summary": f"{session['term_label']} session {session['session_index']}", "value_json": _csv_value({k: v for k, v in session.items() if k != "turns"})})
-        for turn in session["turns"]:
-            rows.append({**base, "record_type": "tutor_turn", "phase": "learning", "term_slug": turn["term_slug"], "event_time": turn["created_at"], "summary": f"{turn['term_label']} turn {turn['turn_index']} stage={turn['learning_stage']} component={turn['component_term']} strategy={turn['teaching_strategy']}", "value_json": _csv_value(turn)})
     for event in logs["recurrence_events"]:
         rows.append({**base, "record_type": "recurrence", "phase": event["phase"], "term_slug": event["term_slug"], "event_time": event["created_at"], "summary": f"{event['previous_misconception_type']} -> {event['current_misconception_type']}", "value_json": _csv_value(event)})
     for call in logs["ai_call_logs"]:

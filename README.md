@@ -2,7 +2,7 @@
 
 このリポジトリは、卒業研究で使う「誤概念タイプと学習ステージに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 
-`docs/` 以下に研究・設計仕様、`backend/` にFastAPIアプリ、`frontend/` にNext.jsアプリがあります。現行MVPの対象用語は、転移学習とLLMの学習段階の2語です。
+`docs/` 以下に研究・設計仕様、`backend/` にFastAPIアプリ、`frontend/` にNext.jsアプリがあります。現行MVPの対象用語は、LLMの学習段階とTransformerの2語です。
 
 ## 研究の要点
 
@@ -12,7 +12,7 @@
 
 1. 同種誤答再発率
 2. 足場掛けなし自力解答率
-3. 確認テスト自力解答率
+3. 最終テスト正答率と回答時間
 
 ## 実装で守る前提
 
@@ -23,7 +23,8 @@
 - `MockAIBackend` は自動テスト・CI・app-server切り分け専用に残す
 - ChatGPT/Codex認証情報をDBへ保存しない
 - 被験者画面に `M1` から `M4` の内部ラベルを直接表示しない
-- 回答、AI診断、AI応答、学習ステージ更新を研究ログとして保存する。再テスト、確認テストでは理由記述を保存する
+- 回答、出題時刻、回答時刻、回答時間、AI診断、AI応答、学習ステージ更新を研究ログとして保存する
+- 管理画面とCSVでは、テスト回答と学習ターン回答を `answer_history` として同じ回答履歴に統合する
 - 実験分析に必要なCSVを出力できるようにする
 
 ## 推奨構成
@@ -50,7 +51,7 @@
 | `docs/08_backend_api_spec.md` | REST API仕様 |
 | `docs/09_frontend_ux_flow.md` | 画面遷移、UI要件、禁止表示 |
 | `docs/10_ai_prompt_contracts.md` | AI入出力スキーマとプロンプト契約 |
-| `docs/11_seed_questions.md` | 初期問題、選択肢、再テスト/確認テスト問題在庫 |
+| `docs/11_seed_questions.md` | 初期問題、選択肢、L2/再テスト/最終テストの同一問題運用 |
 | `docs/12_evaluation_metrics.md` | 評価指標、CSV、分析仕様 |
 | `docs/13_docker_development.md` | Docker開発環境 |
 | `docs/14_testing_acceptance.md` | テスト・受け入れ条件 |
@@ -141,4 +142,4 @@ GET /api/admin/participants/{participant_id}/logs
 GET /api/admin/participants/{participant_id}/logs.csv
 ```
 
-CSVは `record_type, participant_id, display_code, phase, term_slug, event_time, summary, value_json` の形式で、回答・学習状態・学習ターン・AIログなどを1ファイルにまとめます。出力先は `exports/` です。
+CSVは `record_type, source_type, participant_id, display_code, phase, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。

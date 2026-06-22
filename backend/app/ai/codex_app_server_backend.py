@@ -231,6 +231,7 @@ class CodexAppServerBackend:
             f"教材、問い返し、practice_question は必ず現在の用語『{term_label}』だけを主題にする。",
             "入力JSONの learning_stage が term_understanding の場合は、component_term だけを今回の主題にし、その構成用語を説明させる問題を1つ作る。",
             "入力JSONの learning_stage が concept_understanding の場合は、component_terms を使って対象概念全体を説明させる問題を1つ作る。",
+            "misconception_scaffolding_guidance があれば、その方略を最優先で教材本文へ反映する。",
             "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
             "rag_context.chunks がある場合は、その教材コンテキストを優先して教材と問題を作る。教材にない内容は推測で断定しない。",
             "previous_practice_question が空でなければ、tutor_message の冒頭に『前の問題: ...』を入れる。",
@@ -249,6 +250,7 @@ class CodexAppServerBackend:
             rules.append("統制群では、L3相当の基礎教材とL2相当の観点教材を両方tutor_messageに含める。ただし質問はL2相当の1問だけにし、L3質問は出さない。")
         else:
             rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
+            rules.append("M1ならカテゴリ捉え直し、M2なら境界比較、M3なら表層語から構造・判断基準への誘導、unknownなら基礎定義確認を優先する。")
             rules.append("提案群では、term_understandingをL3教材+L3質問、concept_understandingをL2教材+L2質問として段階的に提示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)

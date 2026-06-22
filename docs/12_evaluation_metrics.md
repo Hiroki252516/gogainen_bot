@@ -2,10 +2,11 @@
 
 ## 2026-06 Iterative Metrics Update
 
-反復型フローでは、途中の再テストは未達項目を減らすための形成的テストとして扱う。主な到達評価は、全用語を対象にした `final_test` の正答率と、各周回で未達項目数が減ったかで見る。正解済み用語は次周回から除外されるため、周回ごとの負担減少も分析対象にできる。
+反復型フローでは、途中の再テストは全用語を対象にした形成的テストとして扱う。主な到達評価は、全用語を対象にした `final_test` の正答率と、各周回で未達項目数が減ったかで見る。正解済み用語は次周回の学習対象から除外されるため、周回ごとの負担減少も分析対象にできる。
 
-現行MVPの `final_test` は、転移学習とLLMの学習段階の2用語すべてを対象にした選択式テストである。理由記述は要求しない。
+現行MVPの `final_test` は、TransformerとLLMの学習段階の2用語すべてを対象にした選択式テストである。理由記述は要求しない。
 
+時間分析では、問題表示時刻 `question_shown_at`、回答時刻 `answered_at`、回答時間秒 `response_time_sec` を使う。`created_at` はサーバー保存時刻として扱い、所要時間の主指標にはしない。
 
 ## 主評価指標
 
@@ -31,24 +32,23 @@ same_type_recurrence_count / initial_misconception_count
 
 `unknown` と `ambiguous` は主指標の分母に含めない。ただし補助指標として集計する。
 
-### 2. 足場掛けなし自力解答率
+### 2. 最終テスト正答率
 
-無支援フェーズで正答できた割合。
+最終テストでヒントなし・即時フィードバックなしで正答できた割合。
 
 ```text
-confirmation_correct_rate = l0_correct_count / l0_question_count
+final_test_correct_rate = final_test_correct_count / final_test_question_count
 ```
 
 分母:
 
-- l0_check phaseで出題された問題数
+- final_test phaseで出題された問題数
 
 分子:
 
-- `l0_success = true`
 - `is_correct = true`
 
-必要に応じて `final_test` についても別指標として同様に集計する。足場掛けなし自力解答の判定は、L1到達ではなく `l0_check` / `final_test` の無支援正答で見る。
+L0確認は互換・補助フェーズとして残るが、現行MVPの主到達評価は `final_test` を使う。
 
 ## 補助指標
 
@@ -62,8 +62,8 @@ score = correct_count / total_question_count
 
 - pretest
 - retest
-- l0_check
-- transfer
+- final_test
+- l0_check は補助・互換指標
 
 ### 誤概念タイプ別再発率
 
@@ -71,10 +71,10 @@ score = correct_count / total_question_count
 m1_recurrence_rate = m1_recurrence_count / initial_m1_count
 m2_recurrence_rate = m2_recurrence_count / initial_m2_count
 m3_recurrence_rate = m3_recurrence_count / initial_m3_count
-m4_failure_rate = transfer_m4_failure_count / transfer_question_count
+m4_failure_rate = m4_failure_count / evaluated_m4_context_count
 ```
 
-M4は再テストや確認テストで文脈適用の失敗が明確な場合に内部集計する。
+M4は再テストや最終テストで文脈適用の失敗が明確な場合に内部集計する。
 
 ### Unknown継続率
 
@@ -127,7 +127,7 @@ MVPでは管理画面に記述統計を表示する。
 
 - 群別 pretest vs retest 正答率
 - 群別同種誤答再発率
-- 群別確認テスト正答率
+- 群別最終テスト正答率
 - Mタイプ別出現数
 - Mタイプ別再発率
 - 用語別誤概念分布
@@ -137,20 +137,20 @@ MVPでは管理画面に記述統計を表示する。
 
 現行の管理画面では、テーブル別CSVを主導線にしない。代わりに以下を使う。
 
-- 全体ログ: 全参加者の進捗、最近の回答、AI呼び出し、再発イベント、評価サマリーを見る
+- 全体ログ: 全参加者の進捗、最近の統合回答履歴、AI呼び出し、再発イベント、評価サマリーを見る
 - 全体ログCSV: `overview.csv`
 - 全体ログCSV Excel版: `overview_excel.csv`
-- 被験者別ログ: 1人の回答、学習状態、学習ターン、AI呼び出し、再発イベントを見る
+- 被験者別ログ: 1人の統合回答履歴、学習状態、学習セッション詳細、AI呼び出し、再発イベントを見る
 - 被験者別ログCSV: 1人分のログCSV
 - 被験者別ログCSV Excel版: 1人分のUTF-8 BOM付きログCSV
 
 ログCSVは1ファイルにまとめ、行ごとに `record_type` を持たせる。
 
 ```text
-record_type, participant_id, display_code, phase, term_slug, event_time, summary, value_json
+record_type, source_type, participant_id, display_code, phase, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json
 ```
 
-`record_type` には `attempt`, `learner_state`, `tutor_session`, `tutor_turn`, `ai_call`, `recurrence`, `evaluation_summary` などが入る。
+回答単位の行は `record_type=answer` とし、`source_type=test_attempt` または `source_type=learning_turn` で区別する。`learner_state`, `tutor_session`, `ai_call`, `recurrence`, `evaluation_summary` は補助行として同じCSVに入る。学習ターン回答は `answer` 行として統合するため、重複する `record_type=tutor_turn` 行は出さない。
 
 ## 欠損値の扱い
 

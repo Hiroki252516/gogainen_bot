@@ -111,7 +111,7 @@ Mock rules:
 - 正解済み用語は学習対象から除外され、未達用語だけが学習対象として選ばれる
 - 学習セッションが開始できる
 - 再テストが実施できる
-- 確認テストが実施できる
+- 最終テストが実施できる
 - 評価サマリーが生成される
 
 ### B. 提案群の動作
@@ -145,20 +145,22 @@ Mock rules:
 - retestで理由欄を出さない
 - retestは既存seedの選択式問題を使い、AI生成しない
 - confirmation checkでチャット欄がない
-- 同じ問題文をpretest/retestで使い回さない
+- L2・再テスト・最終テストで同一問題文を使う
 
 ### E. データ出力
 
 - 管理画面で全体ログを表示できる
 - 管理画面で被験者別ログを表示できる
+- 被験者別ログに `回答履歴（テスト＋学習）` があり、テスト回答と学習ターン回答が同じ表に出る
 - 全体ログCSVを出力できる
 - 被験者別ログCSVを出力できる
+- CSVの回答行は `record_type=answer` とし、`source_type=test_attempt` / `source_type=learning_turn` を含む
 - 既存のテーブル別CSVリンク群は管理画面の主導線から外れている
 
 ### F. AIバックエンド
 
 - `AI_BACKEND=codex_app_server` でCodex app-serverに接続できる
-- app-server経由で診断、学習ターン、学習フィードバック、再テスト/確認テスト採点を実行できる
+- app-server経由で診断、学習ターン、学習フィードバック、再テスト/最終テスト採点を実行できる
 - `AI_BACKEND=mock` はテスト時に完全に動く
 - app-server未接続時は分かりやすいエラーを出す
 - ChatGPT未ログイン時はログイン案内を出す
@@ -169,7 +171,7 @@ Mock rules:
 ### proposed participant
 
 1. Participant P001をproposedで作成
-2. 転移学習またはLLMの学習段階でM1/M2/M3誤答
+2. TransformerまたはLLMの学習段階でM1/M2/M3誤答
 3. Diagnosis後、未達用語だけがlearning targetになる
 4. 提案群では `term_understanding` の `L3基礎確認` から始まる
 5. L3基礎確認で十分回答なら `concept_understanding` へ進む

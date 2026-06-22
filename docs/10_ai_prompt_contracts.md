@@ -45,7 +45,7 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
 - `unknown` と誤概念を混同しない
 - 事前テストは選択肢だけで診断する
 - テスト問題の正解を直接教えない
-- 確認テストではヒント、例、解説を出さない
+- 最終テストではヒント、例、解説を出さない
 
 ## Diagnosis Payload
 
@@ -54,8 +54,8 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
   "participant_id": "uuid",
   "group_condition": "proposed",
   "term": {
-    "slug": "attention",
-    "label": "transfer",
+    "slug": "transformer",
+    "label": "Transformer",
     "definition": "..."
   },
   "question": {
@@ -130,8 +130,8 @@ ambiguous: 判定困難
   "group_condition": "proposed",
   "term": {
     "slug": "transformer",
-    "label": "transfer",
-    "description": "あるデータやタスクで学習済みのモデルや特徴を、別の関連タスクの学習に活用する方法。"
+    "label": "Transformer",
+    "description": "Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造。"
   },
   "learner_state": {
     "current_status": "misconception",
@@ -183,11 +183,11 @@ ambiguous: 判定困難
 目的:
 - 誤概念を修正する
 - 自己説明を促す
-- 最終的に確認テストで自力解答できる状態へ移行させる
+- 最終的に最終テストで自力解答できる状態へ移行させる
 
 制約:
-- 再テスト、確認テストの答えを直接教えない
-- 確認テストではヒント・例・解説を出さない
+- 再テスト、最終テストの答えを直接教えない
+- 最終テストではヒント・例・解説を出さない
 - 被験者にM1/M2/M3/M4という内部ラベルを直接見せない
 - 統制群では過去ログや誤概念タイプに応じた支援をしない
 - 出力は指定JSONのみ

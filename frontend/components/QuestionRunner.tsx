@@ -36,6 +36,8 @@ export function QuestionRunner({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [questionStartedAt, setQuestionStartedAt] = useState(() => Date.now());
+  const [questionShownAt, setQuestionShownAt] = useState(() => new Date().toISOString());
   const current = questions[index];
 
   useEffect(() => {
@@ -47,6 +49,11 @@ export function QuestionRunner({
   }, [sourcePath]);
 
   const progress = useMemo(() => (questions.length ? `${index + 1} / ${questions.length}` : ""), [index, questions.length]);
+
+  useEffect(() => {
+    setQuestionStartedAt(Date.now());
+    setQuestionShownAt(new Date().toISOString());
+  }, [current?.question_id]);
 
   async function submit() {
     if (!current) return;
@@ -62,31 +69,42 @@ export function QuestionRunner({
     setSaving(true);
     setError("");
     const id = requireParticipant();
-    await api("/api/attempts", {
-      method: "POST",
-      body: JSON.stringify({
-        participant_id: id,
-        question_id: current.question_id,
-        phase,
-        selected_option_id: selected || null,
-        free_text_answer: current.options.length ? null : reason || null,
-        reason_text: requiresReason ? reason : null,
-        response_time_sec: 10
-      })
-    });
-    if (index + 1 < questions.length) {
-      setIndex(index + 1);
-      setSelected("");
-      setReason("");
+    const answeredAt = new Date().toISOString();
+    const responseTimeSec = Math.max(0.001, (Date.now() - questionStartedAt) / 1000);
+    try {
+      await api("/api/attempts", {
+        method: "POST",
+        body: JSON.stringify({
+          participant_id: id,
+          question_id: current.question_id,
+          phase,
+          selected_option_id: selected || null,
+          free_text_answer: current.options.length ? null : reason || null,
+          reason_text: requiresReason ? reason : null,
+          response_time_sec: responseTimeSec,
+          question_shown_at: questionShownAt,
+          answered_at: answeredAt
+        })
+      });
+      if (index + 1 < questions.length) {
+        setIndex(index + 1);
+        setSelected("");
+        setReason("");
+        setQuestionStartedAt(Date.now());
+        setQuestionShownAt(new Date().toISOString());
+        setSaving(false);
+        return;
+      }
+      if (scorePath) {
+        const result = await api<{ next_url?: string }>(scorePath(id), { method: "POST" });
+        router.push(result.next_url || nextPath);
+        return;
+      }
+      router.push(nextPath);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
       setSaving(false);
-      return;
     }
-    if (scorePath) {
-      const result = await api<{ next_url?: string }>(scorePath(id), { method: "POST" });
-      router.push(result.next_url || nextPath);
-      return;
-    }
-    router.push(nextPath);
   }
 
   if (loading) return <div className="panel">読み込み中...</div>;

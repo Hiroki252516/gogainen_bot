@@ -110,7 +110,7 @@ export default function AdminPage() {
         </section>
         <section className="panel stack">
           <h2>全体ログ</h2>
-          <p className="muted">全参加者の進捗、最近の回答、学習ターン、AI呼び出し、再発イベントをまとめて確認します。</p>
+          <p className="muted">全参加者の進捗、最近の回答履歴、AI呼び出し、再発イベントをまとめて確認します。</p>
           <div className="grid">
             <div className="notice">
               <strong>被験者数</strong>
@@ -125,8 +125,7 @@ export default function AdminPage() {
               <p>{overview?.recurrence_events?.length ?? "-"}</p>
             </div>
           </div>
-          <LogList title="最近の回答" rows={overview?.recent_attempts} fields={["display_code", "phase", "term_slug", "is_correct", "misconception_type", "created_at"]} />
-          <LogList title="最近の学習ターン" rows={overview?.recent_tutor_turns} fields={["display_code", "term_slug", "turn_index", "teaching_strategy", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={overview?.recent_answer_history} fields={["display_code", "source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
           <LogList title="最近のAI呼び出し" rows={overview?.recent_ai_call_logs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
         </section>
         <section className="panel">
@@ -169,7 +168,7 @@ export default function AdminPage() {
                   {participantLog.participant.group_condition} / {participantLog.participant.current_step}
                 </p>
               </div>
-              <LogList title="テスト回答履歴" rows={participantLog.attempts} fields={["phase", "term_slug", "is_correct", "misconception_type", "recurrence_flag", "created_at"]} />
+              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
               <LogList title="AI呼び出しログ" rows={participantLog.ai_call_logs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
@@ -237,7 +236,7 @@ function SessionLog({ sessions }: { sessions: any[] }) {
               <strong>
                 {session.term_label} session {session.session_index}
               </strong>
-              <LogList title="学習ターン" rows={session.turns} fields={["turn_index", "learning_stage", "component_term", "next_learning_stage", "teaching_strategy", "created_at"]} />
+              <LogList title="学習ターン詳細" rows={session.turns} fields={["turn_index", "learning_stage", "component_term", "next_learning_stage", "is_sufficient", "learning_misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               {session.turns?.slice(0, 3).map((turn: any) => (
                 <details key={turn.tutor_turn_id}>
                   <summary>turn {turn.turn_index} 詳細</summary>

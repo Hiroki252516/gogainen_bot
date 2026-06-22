@@ -1,249 +1,66 @@
 # 18. Implementation Blueprint
 
-この文書は、現在の実装構成と、今後拡張するときの青写真をまとめる。
+現行実装の構成を示す。新規実装時はこの構成を正とし、独自の別アーキテクチャへ分岐しない。
 
-## Build Order
+## Backend
 
-1. backendとDBを先に作る
-2. seed questionsを入れる
-3. AIBackend抽象を作り、CodexAppServerBackendを通常実行にする
-4. frontendを研究フロー順に接続する
-5. CSV exportとadminを作る
-6. MockAIBackendはテスト・切り分け用に維持する
+- FastAPI entrypoint: `backend/app/main.py`
+- DB初期化: `backend/app/db/session.py`
+- Models: `backend/app/models/__init__.py`
+- Experiment services: `backend/app/services/experiment.py`
+- Seed: `backend/app/seed/data.py`, `backend/app/seed/seed_questions.py`
+- AI backend protocol: `backend/app/ai/backend.py`
+- Codex app-server backend: `backend/app/ai/codex_app_server_backend.py`
+- Mock backend: `backend/app/ai/mock_backend.py`
 
-理由:
+`init_db()` は `create_all()` に加えてSQLite/PostgreSQLの既存DBへ不足カラムを追加する軽量スキーマ更新を行う。Alembicマイグレーションだけに依存しない。
 
-- 研究ロジックはAI接続から分離する
-- 自動テストはMockで再現性を確保できる
-- app-server仕様変更の影響を隔離できる
+## Frontend
 
-## Backend Package Layout
+- Main flow pages: `/start`, `/pretest`, `/diagnosing`, `/learning-targets`, `/learning/[termSlug]`, `/retest`, `/final-test`, `/survey`, `/finish`
+- Admin page: `/admin`
+- Test runner: `frontend/components/QuestionRunner.tsx`
+- API helper: `frontend/lib/api.ts`
 
-```text
-backend/app/
-├── main.py
-├── core/
-│   ├── config.py
-│   ├── errors.py
-│   └── logging.py
-├── db/
-│   ├── session.py
-│   └── base.py
-├── models/
-│   ├── participant.py
-│   ├── question.py
-│   ├── attempt.py
-│   ├── learner_state.py
-│   ├── tutor.py
-│   ├── recurrence.py
-│   ├── ai_call_log.py
-│   └── evaluation.py
-├── schemas/
-│   ├── api.py
-│   ├── ai.py
-│   └── export.py
-├── services/
-│   ├── experiment_service.py
-│   ├── question_service.py
-│   ├── diagnosis_service.py
-│   ├── learner_state_service.py
-│   ├── scaffolding_service.py
-│   ├── tutoring_service.py
-│   ├── evaluation_service.py
-│   └── export_service.py
-├── ai/
-│   ├── backend.py
-│   ├── mock_backend.py
-│   ├── codex_app_server_backend.py
-│   ├── codex_client.py
-│   └── prompts.py
-├── api/
-│   ├── participants.py
-│   ├── questions.py
-│   ├── attempts.py
-│   ├── diagnosis.py
-│   ├── tutoring.py
-│   ├── scoring.py
-│   ├── admin.py
-│   └── ai_status.py
-├── seed/
-│   └── seed_questions.py
-└── exports/
-    └── csv_exporter.py
+frontendはブラウザから相対パス `/api/...` を呼び、Next.js rewriteがbackendへプロキシする。Dockerではfrontendからbackendへ `INTERNAL_API_BASE_URL` を使う。
+
+## Experiment Flow
+
+1. 参加者作成
+2. 事前テスト2問
+3. 診断と学習対象選択
+4. 未達用語だけ学習
+5. 再テストは事前テスト対象の全問
+6. 正答用語は学習対象から外し、誤答用語だけ残す
+7. 未達0件で最終テスト2問
+8. 採点後 `/survey`
+
+現行seedは `llm_training_process` と `transformer` の2語である。L2概念理解問題・再テスト・最終テストは同一問題文と同一選択肢セットを使う。
+
+## Logging
+
+- `attempts`: テスト回答、選択肢、正誤、誤概念、出題時刻、回答時刻、回答時間、問題スナップショット
+- `tutor_turns`: 学習ターン、教材、学習内回答、十分性判定、学習ステージ、出題時刻、回答時刻、回答時間
+- `answer_history`: API/CSV/管理画面上の統合ビュー。物理テーブルではない
+- `ai_call_logs`: Codex app-serverまたはMockのAI呼び出し記録
+- `recurrence_events`: 同種誤概念再発
+- `evaluation_summaries`: 評価指標の保存値
+
+CSVの回答行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` とする。
+
+## AI Backend
+
+通常実行は `AI_BACKEND=codex_app_server` を使う。ホスト側で次を起動する。
+
+```bash
+codex app-server --listen ws://127.0.0.1:4500
 ```
 
-## Frontend Package Layout
+OpenAI APIキーやOpenAI SDKの直接呼び出しは使わない。app-server未接続・未ログイン時はMockへ自動フォールバックせず、失敗を管理画面と `ai_call_logs` に残す。
 
-```text
-frontend/app/
-├── start/page.tsx
-├── pretest/page.tsx
-├── diagnosing/page.tsx
-├── learning-targets/page.tsx
-├── learning/[termSlug]/page.tsx
-├── retest/page.tsx
-├── l0-check/page.tsx
-├── finish/page.tsx
-└── admin/page.tsx
+## Verification
 
-frontend/components/
-├── QuestionCard.tsx
-├── ConfidenceScale.tsx
-├── ReasonTextarea.tsx
-├── ProgressHeader.tsx
-├── TutorPanel.tsx
-├── AdminMetricCards.tsx
-└── CsvExportButtons.tsx
-```
-
-## Core Domain Types
-
-### ScaffoldingLevel
-
-```text
-L3 > L2 > L1
-```
-
-Utility:
-
-- `lower_level(level)`
-- `raise_level(level)`
-- `level_to_numeric(level)`
-
-### TeachingStrategy
-
-- general_explanation
-- foundational_explanation
-- category_reorientation
-- boundary_comparison
-- deep_structure_focus
-- context_transfer_training (今回の教材方略では使用しない)
-- self_explanation_check
-- contrastive_example
-- discrimination_practice
-- counterexample_prompt
-- common_structure_extraction
-- guided_self_correction
-
-## Critical Algorithms
-
-### Learning Target Selection
-
-Input:
-
-- pretest attempts
-- diagnosis result
-- pretest does not collect reason_text or confidence
-- learning session does not collect confidence
-- response time
-
-Priority:
-
-1. M1 or M2 misconception
-2. M3 misconception
-3. unknown
-4. unstable_correct
-5. stable_correct that still needs confirmation test
-
-Output:
-
-- up to `MAX_LEARNING_TARGETS` (default 5)
-- term_assignments with `is_learning_target = true`
-- 現行seedは2用語なので、実際の最大候補数は2件
-- 診断後、正解済み用語は `is_learning_target = false` とし、未達用語だけを学習対象にする
-
-### Diagnosis Merge
-
-1. Start from selected option label
-2. Do not send reason_text or confidence in pretest diagnosis
-3. If selected option correct but available evidence is weak, mark unstable_correct
-4. If conflict is strong, mark ambiguous
-
-### Recurrence
-
-```text
-recurrence_flag =
-  previous phase has primary misconception M1-M3
-  and current phase has same primary misconception
-  and term_id is same
-```
-
-Unknown is not recurrence.
-
-### Stage-Based Learning Update
-
-Use deterministic service logic from `04_scaffolding_and_tutoring.md`. In learning turns, backend uses AI feedback `is_sufficient` as the update signal for stage progression. In `term_understanding`, sufficient answers move to the next component term, and the last component term moves to `concept_understanding`. Insufficient answers repeat the same component term. In `concept_understanding`, sufficient answers complete the session and move to `final_feedback`; insufficient answers return to the first component term. AI `next_action`, `next_scaffolding_level`, and generated `scaffolding_level` are advisory or compatibility fields and do not control navigation. Continued material includes previous practice question, learner response, and feedback. Initial material always includes a full explanation: definition, role in the target concept, common misconception contrast, and criterion/example.
-
-## MVP API Dependency Graph
-
-```text
-POST /participants
-  -> GET /pretest
-  -> POST /attempts
-  -> POST /diagnose-pretest
-  -> GET /learning-targets
-  -> POST /tutor-sessions
-  -> POST /tutor-sessions/{id}/turns
-  -> POST /tutor-turns/{id}/respond
-  -> GET /retest
-  -> POST /score-retest
-  -> GET /l0-check
-  -> POST /score-l0-check
-  -> POST /evaluation-summary/recalculate
-  -> GET /admin/logs/overview
-  -> GET /admin/participants/{id}/logs
-  -> GET /admin/logs/overview.csv
-  -> GET /admin/participants/{id}/logs.csv
-```
-
-## Development Guardrails
-
-- Do not implement an OpenAI API key path
-- Do not leak internal labels to participant pages
-- Do not let AI decide final metrics
-- Do not let app-server failure block MockAIBackend testing
-- Do not skip CSV export
-- Do not hardcode model names
-- Do not store auth tokens
-
-## Minimum Seed Data
-
-MVP seed must include:
-
-- 2 active terms: `llm_training_process`, `transformer`
-- pretest question per active term
-- retest variant per active term
-- l0_check free-response question per active term
-- final_test choice question per active term
-- transfer question per active term
-- option labels correct/M1/M2/M3/unknown
-
-現行MVP seedでは、`llm_training_process` と `transformer` を必須対象にする。用語理解段階では教材に基づき、LLMの学習段階は `事前学習`, `インストラクションチューニング`, `事後学習`、Transformerは `Attentionレイヤー`, `FFNレイヤー`, `トークン間の関係性` を順に扱う。
-
-## README to Generate During Implementation
-
-The final implemented README should include:
-
-- prerequisites
-- docker compose start
-- migration
-- seed
-- running with Codex app-server
-- MockAIBackend is test-only
-- admin URL
-- CSV export location
-- troubleshooting
-
-## First Implementation PR Scope
-
-If implementation is split, the first PR should stop at:
-
-- Docker backend/db/frontend boots
-- DB migrations
-- seed
-- Codex app-server status check
-- pretest -> diagnosis -> learner_states
-
-## RAG教材参照
-
-学習ターン生成と学習回答フィードバックでは、`rag_ready_教材` のローカルTF-IDF検索結果を `rag_context` としてAIBackend payloadへ渡す。OpenAI APIキーや外部vector storeは通常実行に使わない。RAG資産が見つからない場合は空のcontextとして扱い、実験フローを停止しない。
+- backend: `./.venv/bin/python -m pytest -s tests/test_experiment_flow.py`
+- frontend smoke: Windows Nodeで `frontend/tests/smoke.mjs`
+- Docker: `docker compose up --build`
+- Admin: `http://localhost:3000/admin`

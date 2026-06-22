@@ -89,7 +89,7 @@ def seed_database(db: Session) -> None:
         term.is_active = True
 
         for phase in ("pretest", "retest"):
-            qd = item["questions"][phase]
+            qd = item["questions"]["pretest"]
             _upsert_question(
                 db,
                 term,
@@ -115,7 +115,7 @@ def seed_database(db: Session) -> None:
             variant_key="l0_check_v1",
         )
 
-        final_q = item["questions"].get("final_test")
+        final_q = item["questions"].get("pretest")
         if final_q:
             _upsert_question(
                 db,

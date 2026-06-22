@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from app.models import LearnerState, Term, TutorSession
 
-from app.ai.codex_app_server_backend import CodexAppServerBackend
+from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
 from app.db.session import get_db, init_db
 from app.seed.seed_questions import seed_database
@@ -76,6 +77,8 @@ class AttemptPayload(BaseModel):
     free_text_answer: str | None = None
     reason_text: str | None = None
     response_time_sec: float | None = None
+    question_shown_at: datetime | None = None
+    answered_at: datetime | None = None
 
 
 class TutorSessionCreate(BaseModel):
@@ -86,6 +89,9 @@ class TutorSessionCreate(BaseModel):
 class TutorTurnRespond(BaseModel):
     learner_response: str = ""
     selected_option_id: str | None = None
+    response_time_sec: float | None = None
+    question_shown_at: datetime | None = None
+    answered_at: datetime | None = None
 
 
 class AILoginStart(BaseModel):
@@ -313,14 +319,29 @@ async def api_ai_status() -> dict:
 
 @app.post("/api/admin/ai/login/start")
 async def api_ai_login_start(payload: AILoginStart) -> dict:
-    return await CodexAppServerBackend().start_login(payload.type)
+    try:
+        return await CodexAppServerBackend().start_login(payload.type)
+    except CodexAppServerError as exc:
+        raise HTTPException(status_code=503, detail={"error_code": exc.code, "message": exc.user_message, "detail": exc.detail}) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={"error_code": "app_server_unreachable", "message": "Codex app-serverに接続できません。", "detail": str(exc)}) from exc
 
 
 @app.post("/api/admin/ai/login/cancel")
 async def api_ai_login_cancel(payload: AILoginCancel) -> dict:
-    return await CodexAppServerBackend().cancel_login(payload.login_id)
+    try:
+        return await CodexAppServerBackend().cancel_login(payload.login_id)
+    except CodexAppServerError as exc:
+        raise HTTPException(status_code=503, detail={"error_code": exc.code, "message": exc.user_message, "detail": exc.detail}) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={"error_code": "app_server_unreachable", "message": "Codex app-serverに接続できません。", "detail": str(exc)}) from exc
 
 
 @app.post("/api/admin/ai/logout")
 async def api_ai_logout() -> dict:
-    return await CodexAppServerBackend().logout()
+    try:
+        return await CodexAppServerBackend().logout()
+    except CodexAppServerError as exc:
+        raise HTTPException(status_code=503, detail={"error_code": exc.code, "message": exc.user_message, "detail": exc.detail}) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={"error_code": "app_server_unreachable", "message": "Codex app-serverに接続できません。", "detail": str(exc)}) from exc

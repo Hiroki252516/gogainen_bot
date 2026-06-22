@@ -33,7 +33,7 @@
 
 現行実装では、MVP対象を `llm_training_process` と `transformer` とし、`term_understanding` では教材に基づく構成用語を順番に確認する。`llm_training_process` は `事前学習 → インストラクションチューニング → 事後学習`、`transformer` は `Attentionレイヤー → FFNレイヤー → トークン間の関係性` を扱う。最後の構成用語で十分回答なら `concept_understanding` へ進み、L2相当の観点確認問題を出す。
 
-### 確認テスト
+### 最終テスト
 
 許可:
 
@@ -75,8 +75,8 @@
 | 再テスト | 誤答 | 維持 | needs_review |
 | 再テスト | 同じMで誤答 | 維持 | strategy_changed=true |
 | 再テスト | 正答 | L2を維持 | 未達対象から外す |
-| 確認テスト | 正答 | L2を維持 | l0_success_count加算 |
-| 確認テスト | 誤答 | L3へ上げる | needs_review |
+| 最終テスト | 正答 | L2を維持 | l0_success_count加算 |
+| 最終テスト | 誤答 | L3へ上げる | needs_review |
 
 レベル境界:
 

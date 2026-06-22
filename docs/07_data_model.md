@@ -178,6 +178,10 @@ misconception_type values:
 - reason_text TEXT NULL  # pretestでは常にNULL
 - confidence INT NULL  # legacy nullable; pretestとlearningでは収集しない
 - response_time_sec FLOAT NULL
+- question_shown_at TIMESTAMP NULL
+- answered_at TIMESTAMP NULL
+- question_body_snapshot TEXT NULL
+- option_order_snapshot JSONB NULL
 - is_correct BOOLEAN NULL
 - score FLOAT NULL
 - diagnosed_status TEXT NULL
@@ -192,6 +196,8 @@ misconception_type values:
 - idempotency_key TEXT NULL
 - created_at TIMESTAMP NOT NULL
 - updated_at TIMESTAMP NOT NULL
+
+`question_shown_at` と `answered_at` はクライアントが送るISO時刻を保存する。`created_at` はサーバーが回答を保存した時刻であり、回答所要時間の分析には `response_time_sec` を優先する。`question_body_snapshot` と `option_order_snapshot` は、seedや表示順が後で変わっても当時の出題内容を復元するために保存する。
 
 ### learner_states
 
@@ -249,8 +255,24 @@ Unique:
 - grading_json JSONB NULL
 - next_scaffolding_level TEXT NULL
 - forbidden_help_given BOOLEAN NOT NULL DEFAULT false
+- question_shown_at TIMESTAMP NULL
+- answered_at TIMESTAMP NULL
+- response_time_sec FLOAT NULL
 - created_at TIMESTAMP NOT NULL
 - updated_at TIMESTAMP NOT NULL
+
+学習ターンの `question_shown_at`、`answered_at`、`response_time_sec` は、学習セッション内問題の表示から回答までの時間分析に使う。問題本文と選択肢は `practice_question_json` に保存する。
+
+## 調査用統合回答履歴
+
+`answer_history` は物理テーブルではなく、管理画面・ログAPI・CSVで作る調査用ビューである。`attempts` と `tutor_turns` は統合せず、回答単位で比較できる行だけを次の形に正規化する。
+
+| source_type | 元データ | 用途 |
+|---|---|---|
+| `test_attempt` | `attempts` | 事前テスト、再テスト、最終テストなどのテスト回答 |
+| `learning_turn` | `tutor_turns` | 学習セッション内の問題回答 |
+
+共通フィールドは、`participant_id`, `phase`, `term_slug`, `question_body`, `learner_response`, `is_correct`, `is_sufficient`, `misconception_type`, `teaching_strategy`, `question_shown_at`, `answered_at`, `response_time_sec`, `created_at` とする。並び順は `answered_at` があればそれを使い、なければ `created_at` を使う。
 
 ### recurrence_events
 

@@ -14,7 +14,7 @@
 | 誤概念タイプで支援を変える | `03_misconception_taxonomy.md`, `04_scaffolding_and_tutoring.md` | teaching_strategy |
 | 足場掛けは支えるだけでなく減らす | `04_scaffolding_and_tutoring.md` | scaffolding_level L3-L1 |
 | 同じ誤概念が再発したら方略変更 | `02_experiment_flow.md`, `04_scaffolding_and_tutoring.md` | recurrence_events, strategy_changed |
-| 問題をそのまま使い回さない | `11_seed_questions.md` | construct_key, variant_key |
+| L2・再テスト・最終テストで同一問題を使う | `11_seed_questions.md` | construct_key, variant_key |
 | 遅延再テストも可能 | `02_experiment_flow.md`, `07_data_model.md` | delayed_retest phase |
 | ログDBとCSVで分析する | `07_data_model.md`, `12_evaluation_metrics.md` | export endpoints |
 
@@ -118,8 +118,8 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 
 ## PPTX Details Captured
 
-- 現行MVPの転移学習、LLM学習段階の問題例は `11_seed_questions.md` に反映する
-- Transformer、Attention、事前学習、事後学習は過去仕様・拡張候補として扱う
+- 現行MVPのTransformer、LLM学習段階の問題例は `11_seed_questions.md` に反映する
+- Attention、事前学習、事後学習など単独用語は過去仕様・拡張候補として扱う
 - Problem phase separation from 5月25日 slide 22/23 is reflected in `02_experiment_flow.md`
 - "same problem should not be reused" is implemented through `construct_key` and `variant_key`
 - 教材参照は `rag_ready_教材` のローカルTF-IDF RAG資産として実装する

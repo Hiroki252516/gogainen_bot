@@ -119,9 +119,9 @@ Response:
   "questions": [
     {
       "question_id": "uuid",
-      "term_slug": "transfer_learning",
-      "term_label": "transfer",
-      "body": "転移学習の説明として、最も適切なものはどれか。",
+      "term_slug": "transformer",
+      "term_label": "Transformer",
+      "body": "Transformerの構造の説明として、最も適切なものはどれか。",
       "options": [
         { "option_id": "uuid", "label": "A", "body": "..." }
       ],
@@ -135,9 +135,9 @@ Response:
 
 ### GET /api/experiment/{participant_id}/retest
 
-学習対象用語の再テスト問題を返す。同じ `construct_key` の別 `variant_key` を選ぶ。
+事前テスト対象の全用語について再テスト問題を返す。
 
-現行実装では、`TermAssignment.is_learning_target = true` の未達用語だけを返す。再テストは選択式で、理由記述を要求しない。問題はAI生成せず、seed済みの `retest` 問題を使う。再テストを複数回行う場合は、同一questionでも表示本文に簡単な確認文を前置して再提示する。
+現行実装では、再テストは選択式で、理由記述を要求しない。問題はAI生成せず、seed済みの `retest` 問題を使う。2026-06運用では、L2概念理解問題、再テスト、最終テストは完全に同じ問題文と選択肢セットを使う。
 
 ### GET /api/experiment/{participant_id}/final-test
 
@@ -145,7 +145,7 @@ Response:
 
 ### GET /api/experiment/{participant_id}/l0-check
 
-確認テスト問題を返す。チャットやヒント表示はfrontendで無効化する。
+最終テスト問題を返す。チャットやヒント表示はfrontendで無効化する。
 
 ## Attempts
 
@@ -163,7 +163,9 @@ Request:
   "selected_option_id": "uuid",
   "free_text_answer": null,
   "reason_text": null,
-  "response_time_sec": 18.3
+  "response_time_sec": 18.3,
+  "question_shown_at": "2026-06-22T06:00:00.000Z",
+  "answered_at": "2026-06-22T06:00:18.300Z"
 }
 ```
 
@@ -207,8 +209,8 @@ Response:
 {
   "targets": [
     {
-      "term_slug": "transfer_learning",
-      "term_label": "transfer",
+      "term_slug": "transformer",
+      "term_label": "Transformer",
       "summary_for_learner": "人間の注意ではなく、モデル内部の重み付けとして確認します。",
       "current_stage_for_display": "用語理解から確認"
     }
@@ -289,7 +291,11 @@ Request:
 
 ```json
 {
-  "learner_response": "未知データで性能が下がることが重要だと思います。"
+  "learner_response": "未知データで性能が下がることが重要だと思います。",
+  "selected_option_id": "A",
+  "response_time_sec": 12.4,
+  "question_shown_at": "2026-06-22T06:05:00.000Z",
+  "answered_at": "2026-06-22T06:05:12.400Z"
 }
 ```
 
@@ -324,9 +330,11 @@ Response:
 
 現行実装では、再テストは選択肢の `is_correct` と `misconception_type` だけで決定論的に採点する。理由記述やAI採点は使わない。
 
+再テスト採点後、正答した用語は次周回の学習対象から外し、誤答・`unknown` の用語だけを学習対象として残す。再テスト自体の出題対象は常に全用語である。
+
 ### POST /api/participants/{id}/score-l0-check
 
-確認テスト回答を採点し、`l0_success` を保存する。
+最終テスト回答を採点し、`l0_success` を保存する。
 
 ### POST /api/participants/{id}/score-final-test
 
@@ -385,11 +393,11 @@ Response:
 
 ### GET /api/admin/logs/overview
 
-管理画面の全体ログ用に、全参加者の進捗、最近の回答、最近の学習ターン、AI呼び出し、再発イベント、評価サマリーを返す。
+管理画面の全体ログ用に、全参加者の進捗、最近の統合回答履歴、AI呼び出し、再発イベント、評価サマリーを返す。統合回答履歴は `recent_answer_history` に入り、テスト回答は `source_type=test_attempt`、学習ターン回答は `source_type=learning_turn` とする。互換用に `recent_attempts` と `recent_tutor_turns` も残す。
 
 ### GET /api/admin/logs/overview.csv
 
-全体ログを1つのCSVで返す。行ごとに `record_type` を持たせ、attempt、learner_state、tutor_turn、ai_call、recurrence、evaluation_summaryなどを区別する。
+全体ログを1つのCSVで返す。回答単位の行は `record_type=answer` とし、`source_type=test_attempt` または `source_type=learning_turn` で出所を区別する。学習状態、学習セッション、AI呼び出し、再発、評価サマリーは補助行として同じCSVに含める。
 
 ### GET /api/admin/logs/overview_excel.csv
 
@@ -397,11 +405,11 @@ Response:
 
 ### GET /api/admin/participants/{id}/logs
 
-1人の被験者について、回答履歴、学習状態、学習セッション、学習ターン、AI呼び出し、再発イベント、評価サマリーをJSONで返す。
+1人の被験者について、統合回答履歴、学習状態、学習セッション、学習ターン、AI呼び出し、再発イベント、評価サマリーをJSONで返す。`answer_history` はテスト回答と学習ターン回答を時系列に統合した主要調査ビューである。`attempts` と `tutor_sessions` は詳細確認と後方互換のために残す。
 
 ### GET /api/admin/participants/{id}/logs.csv
 
-被験者別ログを1つのCSVで返す。CSV列は `record_type, participant_id, display_code, phase, term_slug, event_time, summary, value_json` とする。
+被験者別ログを1つのCSVで返す。CSV列は `record_type, source_type, participant_id, display_code, phase, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` とする。
 
 ### GET /api/admin/participants/{id}/logs_excel.csv
 

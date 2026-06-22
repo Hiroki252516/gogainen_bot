@@ -48,10 +48,23 @@ if (!learningPage.includes("learning_stage: data.next_learning_stage")) {
 if (!learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") || !learningPage.includes("className=\"preserve-lines\">{feedback.feedback}")) {
   throw new Error("learning page must preserve line breaks in material and feedback text");
 }
+if (!learningPage.includes("turnShownAt") || !learningPage.includes("question_shown_at: turnShownAt") || !learningPage.includes("answered_at: answeredAt")) {
+  throw new Error("learning page must send turn timing timestamps");
+}
 
 const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow backend next_url after scoring");
+}
+
+if (questionRunner.includes("response_time_sec: 10")) {
+  throw new Error("QuestionRunner must not send fixed response_time_sec");
+}
+if (!questionRunner.includes("responseTimeSec") || !questionRunner.includes("questionStartedAt")) {
+  throw new Error("QuestionRunner must send measured response_time_sec");
+}
+if (!questionRunner.includes("questionShownAt") || !questionRunner.includes("question_shown_at: questionShownAt") || !questionRunner.includes("answered_at: answeredAt")) {
+  throw new Error("QuestionRunner must send question timing timestamps");
 }
 const finalTestPage = fs.readFileSync(new URL("../app/final-test/page.tsx", import.meta.url), "utf8");
 for (const expectedText of ['phase="final_test"', '/api/experiment/${id}/final-test', '/api/participants/${id}/score-final-test', 'nextPath="/survey"']) {
@@ -64,6 +77,11 @@ const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.u
 for (const expectedText of ["全体ログ", "全体ログCSV UTF-8", "全体ログCSV Excel", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログCSV Excel", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/logs.csv", "/logs_excel.csv"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing log UI: ${expectedText}`);
+  }
+}
+for (const expectedText of ["最近の回答履歴", "recent_answer_history", "回答履歴（テスト＋学習）", "answer_history", "source_type", "is_sufficient", "学習ターン詳細"]) {
+  if (!adminPage.includes(expectedText)) {
+    throw new Error(`admin page missing unified answer history UI: ${expectedText}`);
   }
 }
 if (adminPage.indexOf("/api/admin/logs/overview_excel.csv") > adminPage.indexOf("/api/admin/logs/overview.csv")) {
