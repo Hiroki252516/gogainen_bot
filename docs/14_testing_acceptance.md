@@ -19,7 +19,9 @@
 
 ステージ制学習の受け入れ条件:
 
-- 用語理解段階で十分回答しても、構成用語が残っていれば `session_completed = false` のまま次の構成用語へ進む。
+- L3初回画面では複数構成用語の教材と確認問題が同時に表示される。
+- L3回答後は構成用語ごとに正解/不正解、正解文、フィードバックが表示される。
+- 一部の構成用語が不十分なら、十分だった構成用語を除外し、不十分だった構成用語だけを再提示する。
 - 全構成用語が十分回答されると `concept_understanding` へ進む。
 - 概念理解段階で不十分なら `term_understanding` の先頭へ戻る。
 - 概念理解段階で十分なら `session_completed = true` になり、最終フィードバック画面を表示する。
@@ -117,8 +119,8 @@ Mock rules:
 ### B. 提案群の動作
 
 - 誤概念タイプに応じて教授方略が変わる
-- `learning_stage`, `component_term`, `component_index`, `component_total` が保存・返却される
-- 用語理解段階で `is_sufficient = true` のとき次の構成用語へ進む
+- `learning_stage`, `component_term`, `component_index`, `component_total`, `practice_question.items`, `grading_json.item_results` が保存・返却される
+- 用語理解段階で `is_sufficient = false` のとき不十分な構成用語だけが次ターンに残る
 - 全構成用語が十分なら概念理解段階へ進む
 - 概念理解段階で `is_sufficient = true` のときだけセッション完了になる
 - `next_action = move_next` でも `is_sufficient = false` ならセッション完了にしない

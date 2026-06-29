@@ -11,7 +11,7 @@
 
 学習セッションの画面進行は、固定3ターンのL1/L2/L3足場掛け制ではなく、次のステージ制を正とする。
 
-1. `term_understanding`: 対象概念に必要な構成用語を1つずつ確認する。十分回答なら次の構成用語へ進み、不十分なら同じ構成用語を再提示する。
+1. `term_understanding`: 対象概念に必要な複数の構成用語を一度に確認する。十分だった構成用語は次回から除外し、不十分だった構成用語だけを再提示する。
 2. `concept_understanding`: 構成用語を用いて対象概念全体を説明させる。十分回答なら `final_feedback` へ進み、不十分なら `term_understanding` の先頭へ戻る。
 3. `final_feedback`: 問題・回答欄を出さず、教材フィードバックと次へボタンだけを表示する。
 
@@ -31,7 +31,7 @@
 
 `scaffolding_level` / `next_scaffolding_level` は既存ログ、CSV互換、内部分析のために `L3/L2` のみ残す。教材生成時にAIが返す `scaffolding_level` は参考値であり、被験者画面には表示しない。
 
-現行実装では、MVP対象を `llm_training_process` と `transformer` とし、`term_understanding` では教材に基づく構成用語を順番に確認する。`llm_training_process` は `事前学習 → インストラクションチューニング → 事後学習`、`transformer` は `Attentionレイヤー → FFNレイヤー → トークン間の関係性` を扱う。最後の構成用語で十分回答なら `concept_understanding` へ進み、L2相当の観点確認問題を出す。
+現行実装では、MVP対象を `llm_training_process` と `transformer` とし、`term_understanding` では教材に基づく構成用語の教材と確認問題を一度に提示する。`llm_training_process` は `事前学習`、`インストラクションチューニング`、`事後学習`、`transformer` は `Attentionレイヤー`、`FFNレイヤー`、`トークン間の関係性` を扱う。十分だった構成用語は次回から除外し、全構成用語で十分回答なら `concept_understanding` へ進み、L2相当の観点確認問題を出す。
 
 ### 最終テスト
 
@@ -68,8 +68,8 @@
 
 | 場面 | 今回結果 | 次回レベル | 追加処理 |
 |---|---|---|---|
-| 用語理解段階 | `is_sufficient = true` | 次の構成用語、または概念理解段階へ進む | stable_correct_count加算 |
-| 用語理解段階 | `is_sufficient = false` | 同じ構成用語を再提示 | needs_review |
+| 用語理解段階 | `is_sufficient = true` | 全構成用語が十分なら概念理解段階へ進む | stable_correct_count加算 |
+| 用語理解段階 | `is_sufficient = false` | 不十分だった構成用語だけを再提示 | needs_review |
 | 概念理解段階 | `is_sufficient = true` | final_feedbackへ進みセッション完了 | stable_correct_count加算 |
 | 概念理解段階 | `is_sufficient = false` | 用語理解段階の先頭へ戻る | needs_review |
 | 再テスト | 誤答 | 維持 | needs_review |
@@ -141,7 +141,7 @@
 
 学習セッションでは、デバッグ用に誤概念タイプ判定、learning_stage、回答判定、教授方略を通常の被験者画面にも表示する。教材・フィードバック本文では、たとえばM1の場合は「この説明では、概念を少し別の種類のものとして捉えている可能性があります」のように自然言語へ変換し、内部ラベルを説明文へ混ぜない。
 
-ターン継続時は回答確認後の単独フィードバック枠を表示しない。継続ターンがある場合は、保存した前の問題、学習者回答、`ai_feedback` を次ターン教材の冒頭に統合する。セッション完了時は問題を出さず、教材フィードバックだけを表示してから次へ進む。
+L3回答後は、構成用語ごとに正解/不正解、正解文、短いフィードバックを表示する。継続ターンがある場合は、保存した前の問題、学習者回答、`ai_feedback` を次ターン教材の冒頭に統合する。セッション完了時は問題を出さず、教材フィードバックだけを表示してから次へ進む。
 
 ## 再発時の方略変更
 

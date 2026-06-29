@@ -229,7 +229,7 @@ class CodexAppServerBackend:
             "学習セッション用の短い日本語チュータ発話を作る。",
             "足場掛けレベルは L3/L2 のみを使い、指定外のレベルは使わない。",
             f"教材、問い返し、practice_question は必ず現在の用語『{term_label}』だけを主題にする。",
-            "入力JSONの learning_stage が term_understanding の場合は、component_term だけを今回の主題にし、その構成用語を説明させる問題を1つ作る。",
+            "入力JSONの learning_stage が term_understanding の場合は、component_terms と fixed_practice_question_items に含まれる複数構成用語を今回の主題にし、それぞれの教材観点を説明する。",
             "入力JSONの learning_stage が concept_understanding の場合は、component_terms を使って対象概念全体を説明させる問題を1つ作る。",
             "misconception_scaffolding_guidance があれば、その方略を最優先で教材本文へ反映する。",
             "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
@@ -240,7 +240,7 @@ class CodexAppServerBackend:
             "教材本文には、現在の主題の定義、役割、よくある誤解との違い、短い具体例または判断基準を必ず含める。",
             "問題文は、教材で説明した内容を学習者が自分の言葉で再説明する記述問題にする。答えだけの丸写しではなく、役割や判断基準を含めて説明させる。",
             "通常群と提案群で教材量の差が主効果にならないよう、指定されたL3/L2教材量の条件を守る。",
-            "practice_question.body には現在の用語に関する質問文を1つだけ入れる。",
+            "practice_question.body はbackend固定問題の補助として短く書く。L3の実際の複数確認問題と選択肢は fixed_practice_question_items をbackendが表示する。",
             "practice_question.expected_answer は現在の用語の期待回答にする。",
             "再テスト、確認テストの具体的な正解を先取りして出さない。",
             "tutor_message, learner_prompt, practice_question.body に M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
@@ -251,7 +251,7 @@ class CodexAppServerBackend:
         else:
             rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
             rules.append("M1ならカテゴリ捉え直し、M2なら境界比較、M3なら表層語から構造・判断基準への誘導、unknownなら基礎定義確認を優先する。")
-            rules.append("提案群では、term_understandingをL3教材+L3質問、concept_understandingをL2教材+L2質問として段階的に提示する。")
+            rules.append("提案群では、term_understandingをL3複数構成用語教材+L3複数質問、concept_understandingをL2教材+L2質問として段階的に提示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)
         result["tutor_message"] = _strip_internal_labels(result["tutor_message"])

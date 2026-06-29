@@ -12,6 +12,14 @@ type SessionMisconception = {
 };
 
 type Option = { option_id: string; label: string; body: string };
+type PracticeItem = {
+  component_term: string;
+  material?: string;
+  body: string;
+  expected_answer?: string;
+  question_type?: string;
+  options?: Option[];
+};
 
 type Turn = {
   turn_id: string;
@@ -19,7 +27,7 @@ type Turn = {
   term_label?: string;
   tutor_message: string;
   learner_prompt: string;
-  practice_question: { body: string; options?: Option[] };
+  practice_question: { body: string; options?: Option[]; items?: PracticeItem[] };
   turn_index: number;
   max_turns: number;
   learning_stage?: string;
@@ -34,6 +42,16 @@ type Turn = {
   latest_learning_misconception_reason?: string | null;
   session_misconception_history?: SessionMisconception[];
   teaching_strategy?: string;
+};
+
+type ItemResult = {
+  component_term: string;
+  question_body: string;
+  selected_option_body?: string | null;
+  correct_answer?: string | null;
+  is_correct: boolean;
+  is_sufficient: boolean;
+  feedback: string;
 };
 
 type Feedback = {
@@ -54,6 +72,7 @@ type Feedback = {
   next_scaffolding_level: string;
   turn_index: number;
   max_turns: number;
+  item_results?: ItemResult[];
 };
 
 function judgementLabel(feedback: Feedback | null) {
@@ -69,6 +88,7 @@ export default function LearningPage() {
   const [turn, setTurn] = useState<Turn | null>(null);
   const [response, setResponse] = useState("");
   const [selectedOptionId, setSelectedOptionId] = useState("");
+  const [selectedItemOptionIds, setSelectedItemOptionIds] = useState<Record<string, string>>({});
   const [turnStartedAt, setTurnStartedAt] = useState(() => Date.now());
   const [turnShownAt, setTurnShownAt] = useState(() => new Date().toISOString());
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -104,8 +124,13 @@ export default function LearningPage() {
   async function submit() {
     if (!turn || submitting) return;
     const options = turn.practice_question?.options || [];
+    const items = turn.practice_question?.items || [];
     if (options.length && !selectedOptionId) {
       setError("選択肢を選んでください。");
+      return;
+    }
+    if (items.length && items.some((item) => !selectedItemOptionIds[item.component_term])) {
+      setError("すべての確認問題で選択肢を選んでください。");
       return;
     }
     setSubmitting(true);
@@ -116,7 +141,14 @@ export default function LearningPage() {
       const responseTimeSec = Math.max(0.001, (Date.now() - turnStartedAt) / 1000);
       const data = await api<Feedback>(`/api/tutor-turns/${turn.turn_id}/respond`, {
         method: "POST",
-        body: JSON.stringify({ selected_option_id: selectedOptionId || null, learner_response: selectedOption?.body || response, response_time_sec: responseTimeSec, question_shown_at: turnShownAt, answered_at: answeredAt })
+        body: JSON.stringify({
+          selected_option_id: selectedOptionId || null,
+          selected_item_option_ids: items.length ? selectedItemOptionIds : null,
+          learner_response: selectedOption?.body || response,
+          response_time_sec: responseTimeSec,
+          question_shown_at: turnShownAt,
+          answered_at: answeredAt
+        })
       });
       const updatedTurn = {
         ...turn,
@@ -126,18 +158,28 @@ export default function LearningPage() {
         latest_learning_misconception_type: data.learning_misconception_type ?? turn.latest_learning_misconception_type,
         latest_learning_misconception_reason: data.learning_misconception_reason ?? turn.latest_learning_misconception_reason
       };
-      if (!data.session_completed && sessionId) {
-        const next = await api<Turn>(`/api/tutor-sessions/${sessionId}/turns`, { method: "POST", body: JSON.stringify({}) });
-        setTurn(next);
-        setTurnStartedAt(Date.now());
-        setTurnShownAt(new Date().toISOString());
-        setResponse("");
-        setSelectedOptionId("");
-        setFeedback(null);
-      } else {
-        setTurn(updatedTurn);
-        setFeedback(data);
-      }
+      setTurn(updatedTurn);
+      setFeedback(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function continueLearning() {
+    if (!sessionId || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const next = await api<Turn>(`/api/tutor-sessions/${sessionId}/turns`, { method: "POST", body: JSON.stringify({}) });
+      setTurn(next);
+      setTurnStartedAt(Date.now());
+      setTurnShownAt(new Date().toISOString());
+      setResponse("");
+      setSelectedOptionId("");
+      setSelectedItemOptionIds({});
+      setFeedback(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -181,10 +223,22 @@ export default function LearningPage() {
                 <section className="learning-block material-block" aria-labelledby="feedback-title">
                   <h2 id="feedback-title">教材フィードバック</h2>
                   <p className="preserve-lines">{feedback.feedback}</p>
+                  {feedback.item_results?.length ? (
+                    <div className="stack">
+                      {feedback.item_results.map((item) => (
+                        <article className={`result-card ${item.is_correct ? "correct" : "incorrect"}`} key={item.component_term}>
+                          <h3>{item.component_term}: {item.is_correct ? "正解" : "不正解"}</h3>
+                          <p>あなたの回答: {item.selected_option_body || "未選択"}</p>
+                          <p>正解: {item.correct_answer}</p>
+                          <p>{item.feedback}</p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
                 </section>
                 <div className="actions">
-                  <button className="secondary" onClick={() => router.push(nextHref)}>
-                    次へ
+                  <button className="secondary" onClick={() => feedback.session_completed ? router.push(nextHref) : continueLearning()} disabled={submitting}>
+                    {feedback.session_completed ? "次へ" : "次の確認へ"}
                   </button>
                 </div>
               </>
@@ -198,7 +252,33 @@ export default function LearningPage() {
                   <section className="learning-block problem-block" aria-labelledby="problem-title">
                     <h2 id="problem-title">問題</h2>
                     <p>{turn.practice_question?.body || turn.learner_prompt}</p>
-                    {turn.practice_question?.options?.length ? (
+                    {turn.practice_question?.items?.length ? (
+                      <div className="stack">
+                        {turn.practice_question.items.map((item) => (
+                          <article className="component-question" key={item.component_term}>
+                            <h3>{item.component_term}</h3>
+                            {item.material ? <p className="preserve-lines">{item.material}</p> : null}
+                            <p>{item.body}</p>
+                            <div className="options">
+                              {(item.options || []).map((option) => (
+                                <label className="option" key={option.option_id}>
+                                  <input
+                                    type="radio"
+                                    name={`learning-option-${item.component_term}`}
+                                    value={option.option_id}
+                                    checked={selectedItemOptionIds[item.component_term] === option.option_id}
+                                    onChange={() => setSelectedItemOptionIds((current) => ({ ...current, [item.component_term]: option.option_id }))}
+                                  />
+                                  <span>
+                                    <strong>{option.label}.</strong> {option.body}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    ) : turn.practice_question?.options?.length ? (
                       <div className="options">
                         {turn.practice_question.options.map((option) => (
                           <label className="option" key={option.option_id}>

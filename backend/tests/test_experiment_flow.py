@@ -174,37 +174,43 @@ def _assert_component_sequence(pid: str, term_slug: str, expected_components: li
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": term_slug}).json()
 
     ai_calls_before = _ai_call_count("generate_tutoring_turn")
-    for index, component in enumerate(expected_components):
-        turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-        assert _ai_call_count("generate_tutoring_turn") == ai_calls_before + index + 1
-        assert turn["learning_stage"] == "term_understanding"
-        assert turn["component_term"] == component
-        assert turn["component_index"] == index
-        assert turn["component_total"] == len(expected_components)
-        assert len(turn["practice_question"]["options"]) == 5
-        if index == 0:
-            latest_call = _latest_ai_call("generate_tutoring_turn")
-            assert latest_call.request_payload["learner_state"]["primary_misconception"]
-            assert latest_call.request_payload["component_term"] == component
-            assert latest_call.request_payload["misconception_scaffolding_guidance"]
-        correct_option = next(option for option in turn["practice_question"]["options"] if option["label"] == "A")
-        feedback = client.post(
-            f"/api/tutor-turns/{turn['turn_id']}/respond",
-            json={"selected_option_id": correct_option["option_id"], "response_time_sec": 2.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
-        ).json()
-        assert feedback["is_sufficient"] is True
-        assert feedback["session_completed"] is False
-        saved_turn = _latest_turn(turn["turn_id"])
-        assert saved_turn.response_time_sec == 2.5
-        assert saved_turn.question_shown_at.isoformat() == QUESTION_SHOWN_AT
-        assert saved_turn.answered_at.isoformat() == ANSWERED_AT
-        assert saved_turn.grading_json["response_time_sec"] == 2.5
-        assert saved_turn.grading_json["material_source"] == "ai"
-        expected_next = "concept_understanding" if index == len(expected_components) - 1 else "term_understanding"
-        assert feedback["next_learning_stage"] == expected_next
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert _ai_call_count("generate_tutoring_turn") == ai_calls_before + 1
+    assert turn["learning_stage"] == "term_understanding"
+    assert turn["component_term"] == expected_components[0]
+    assert turn["component_index"] == 0
+    assert turn["component_total"] == len(expected_components)
+    assert [item["component_term"] for item in turn["practice_question"]["items"]] == expected_components
+    assert all(len(item["options"]) == 5 for item in turn["practice_question"]["items"])
+    latest_call = _latest_ai_call("generate_tutoring_turn")
+    assert latest_call.request_payload["learner_state"]["primary_misconception"]
+    assert latest_call.request_payload["component_terms"] == expected_components
+    assert latest_call.request_payload["fixed_practice_question_items"]
+    assert latest_call.request_payload["misconception_scaffolding_guidance"]
+    correct_options = {
+        item["component_term"]: next(option for option in item["options"] if option["label"] == "A")["option_id"]
+        for item in turn["practice_question"]["items"]
+    }
+    feedback = client.post(
+        f"/api/tutor-turns/{turn['turn_id']}/respond",
+        json={"selected_item_option_ids": correct_options, "response_time_sec": 2.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
+    ).json()
+    assert feedback["is_sufficient"] is True
+    assert feedback["session_completed"] is False
+    assert feedback["next_learning_stage"] == "concept_understanding"
+    assert len(feedback["item_results"]) == len(expected_components)
+    assert all(item["is_correct"] for item in feedback["item_results"])
+    assert all(item["correct_answer"] for item in feedback["item_results"])
+    saved_turn = _latest_turn(turn["turn_id"])
+    assert saved_turn.response_time_sec == 2.5
+    assert saved_turn.question_shown_at.isoformat() == QUESTION_SHOWN_AT
+    assert saved_turn.answered_at.isoformat() == ANSWERED_AT
+    assert saved_turn.grading_json["response_time_sec"] == 2.5
+    assert saved_turn.grading_json["material_source"] == "ai"
+    assert len(saved_turn.grading_json["item_results"]) == len(expected_components)
 
     concept = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    assert _ai_call_count("generate_tutoring_turn") == ai_calls_before + len(expected_components) + 1
+    assert _ai_call_count("generate_tutoring_turn") == ai_calls_before + 2
     assert concept["learning_stage"] == "concept_understanding"
     assert len(concept["practice_question"]["options"]) == 5
     pretest_question = next(question for question in client.get(f"/api/experiment/{pid}/pretest").json()["questions"] if question["term_slug"] == term_slug)
@@ -253,15 +259,24 @@ def test_learning_choice_incorrect_option_sets_learning_misconception_type():
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
 
     assert turn["learning_stage"] == "term_understanding"
-    wrong_option = next(option for option in turn["practice_question"]["options"] if option["label"] == "B")
+    first_item = turn["practice_question"]["items"][0]
+    selected = {
+        item["component_term"]: next(option for option in item["options"] if option["label"] == "A")["option_id"]
+        for item in turn["practice_question"]["items"]
+    }
+    wrong_option = next(option for option in first_item["options"] if option["label"] == "B")
+    selected[first_item["component_term"]] = wrong_option["option_id"]
     feedback = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={"selected_option_id": wrong_option["option_id"]},
+        json={"selected_item_option_ids": selected},
     ).json()
 
     assert feedback["is_sufficient"] is False
     assert feedback["next_learning_stage"] == "term_understanding"
     assert feedback["learning_misconception_type"] == "M1"
+    assert feedback["item_results"][0]["is_correct"] is False
+    retry = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert [item["component_term"] for item in retry["practice_question"]["items"]] == [first_item["component_term"]]
 
 
 def test_retest_removes_correct_terms_and_final_test_stays_two_items():
@@ -308,11 +323,14 @@ def test_admin_overview_and_participant_logs_have_json_and_csv():
     target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    correct_option = next(option for option in turn["practice_question"]["options"] if option["label"] == "A")
+    correct_options = {
+        item["component_term"]: next(option for option in item["options"] if option["label"] == "A")["option_id"]
+        for item in turn["practice_question"]["items"]
+    }
     turn_response = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
         json={
-            "selected_option_id": correct_option["option_id"],
+            "selected_item_option_ids": correct_options,
             "response_time_sec": 2.5,
             "question_shown_at": QUESTION_SHOWN_AT,
             "answered_at": ANSWERED_AT,
@@ -337,7 +355,7 @@ def test_admin_overview_and_participant_logs_have_json_and_csv():
     assert any(row["term_slug"] == "transformer" for row in logs_json["attempts"])
     assert "answer_history" in logs_json
     assert [row["source_type"] for row in logs_json["answer_history"]].count("test_attempt") == 2
-    assert [row["source_type"] for row in logs_json["answer_history"]].count("learning_turn") == 1
+    assert [row["source_type"] for row in logs_json["answer_history"]].count("learning_turn") == 3
     learning_answer = next(row for row in logs_json["answer_history"] if row["source_type"] == "learning_turn")
     assert learning_answer["phase"] == "learning"
     assert learning_answer["is_sufficient"] is True
@@ -374,8 +392,8 @@ def test_tutoring_prompt_contract_mentions_new_group_design():
     text = prompt_source.read_text()
     assert "L3相当の基礎教材とL2相当の観点教材を両方" in text
     assert "質問はL2相当の1問だけ" in text
-    assert "term_understandingをL3教材+L3質問、concept_understandingをL2教材+L2質問" in text
-    assert "practice_question.body には現在の用語に関する質問文を1つだけ入れる" in text
+    assert "term_understandingをL3複数構成用語教材+L3複数質問、concept_understandingをL2教材+L2質問" in text
+    assert "fixed_practice_question_items をbackendが表示する" in text
     assert "misconception_scaffolding_guidance" in text
 
 

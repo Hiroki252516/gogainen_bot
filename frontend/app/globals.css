@@ -219,6 +219,32 @@ button:disabled {
   background: #fffdf7;
 }
 
+.component-question,
+.result-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  background: #fff;
+}
+
+.component-question h3,
+.result-card h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.result-card.correct {
+  border-color: #8fd3c7;
+  background: #f1fbf9;
+}
+
+.result-card.incorrect {
+  border-color: #f2b8b5;
+  background: #fff8f7;
+}
+
 @media (max-width: 760px) {
   .learning-layout {
     grid-template-columns: 1fr;

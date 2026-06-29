@@ -27,7 +27,7 @@
 - `component_total`
 - `component_terms`
 
-`learning_stage = term_understanding` では、AIは `component_term` だけを今回の主題にし、その構成用語の意味、対象概念内での役割、よくある誤解との違い、判断基準を最初から説明する。
+`learning_stage = term_understanding` では、backendが `component_terms` と `fixed_practice_question_items` で今回提示する複数構成用語を渡す。AIは各構成用語の意味、対象概念内での役割、よくある誤解との違い、判断基準を最初から説明する。
 
 `learning_stage = concept_understanding` では、AIは `component_terms` を使って対象概念全体を最初から説明し、その後に学習者へ自分の言葉で再説明させる。
 
@@ -278,7 +278,7 @@ backendはAI出力をPydanticで検証する。
 
 現行実装では、統制群の学習セッションはL3相当の基礎教材とL2相当の観点教材を両方提示するが、質問はL2相当の1問だけにする。`learning_stage` は `concept_understanding` として扱い、十分回答なら `final_feedback` へ進む。
 
-提案群では、`term_understanding` で `L3基礎確認` を扱い、十分回答後に `concept_understanding` へ進む。`concept_understanding` ではL2相当の問いを出し、十分回答なら `final_feedback` へ進む。
+提案群では、`term_understanding` でL3構成用語群を一度に扱い、十分だった構成用語は次回から除外する。全構成用語が十分回答になった後に `concept_understanding` へ進む。`concept_understanding` ではL2相当の問いを出し、十分回答なら `final_feedback` へ進む。
 
 追加制約:
 

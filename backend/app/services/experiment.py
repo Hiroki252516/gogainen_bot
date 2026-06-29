@@ -178,6 +178,18 @@ def _learning_question_spec(term_slug: str, learning_stage: str, component_term:
     return spec
 
 
+def _learning_question_item(term_slug: str, component_term: str) -> dict[str, Any]:
+    spec = _learning_question_spec(term_slug, "term_understanding", component_term)
+    return {
+        "component_term": component_term,
+        "material": spec["material"],
+        "body": spec["body"],
+        "expected_answer": spec["expected_answer"],
+        "question_type": spec["question_type"],
+        "options": _public_learning_options(spec),
+    }
+
+
 def _public_learning_options(spec: dict[str, Any]) -> list[dict[str, str]]:
     return [{"option_id": option["option_id"], "label": option["label"], "body": option["body"]} for option in spec["options"]]
 
@@ -233,6 +245,36 @@ def _fixed_feedback(option: dict[str, Any] | None, spec: dict[str, Any]) -> dict
     }
 
 
+def _fixed_item_result(component_term: str, selected_option_id: str | None, response: str, spec: dict[str, Any]) -> dict[str, Any]:
+    option = _selected_fixed_option(spec, selected_option_id, response)
+    correct_option = next((item for item in spec["options"] if item["is_correct"]), None)
+    is_correct = bool(option and option["is_correct"])
+    misconception_type = None if is_correct else ((option or {}).get("misconception_type") or "unknown")
+    return {
+        "component_term": component_term,
+        "question_body": spec["body"],
+        "selected_option_id": option.get("option_id") if option else selected_option_id,
+        "selected_option_body": option.get("body") if option else response,
+        "correct_option_id": correct_option.get("option_id") if correct_option else None,
+        "correct_answer": correct_option.get("body") if correct_option else spec.get("expected_answer"),
+        "is_correct": is_correct,
+        "is_sufficient": is_correct,
+        "learning_misconception_type": misconception_type,
+        "feedback": "正解です。要点を押さえられています。" if is_correct else "不正解です。正解文と教材を確認して、次の確認で選び直してください。",
+    }
+
+
+def _feedback_text_from_item_results(item_results: list[dict[str, Any]]) -> str:
+    lines = ["回答結果"]
+    for item in item_results:
+        status = "正解" if item["is_correct"] else "不正解"
+        lines.append(f"【{item['component_term']}】{status}")
+        lines.append(f"あなたの回答: {item.get('selected_option_body') or '未選択'}")
+        lines.append(f"正解: {item.get('correct_answer') or ''}")
+        lines.append(f"フィードバック: {item['feedback']}")
+    return "\n".join(lines)
+
+
 def _previous_turn_prefix(previous_turn: TutorTurn | None) -> str:
     if not previous_turn:
         return ""
@@ -245,6 +287,15 @@ def _previous_turn_prefix(previous_turn: TutorTurn | None) -> str:
     if previous_turn.ai_feedback:
         parts.append(f"前の回答を踏まえて、{previous_turn.ai_feedback}")
     return "\n".join(parts) + ("\n\n" if parts else "")
+
+
+def _practice_question_text(practice_question: dict[str, Any] | None) -> str:
+    if not practice_question:
+        return ""
+    if practice_question.get("body"):
+        return practice_question["body"]
+    items = practice_question.get("items") or []
+    return " / ".join(item.get("body", "") for item in items if item.get("body"))
 
 
 def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
@@ -289,6 +340,7 @@ def _learning_position(db: Session, session: TutorSession, term: Term, participa
         }
     stage = "term_understanding"
     component_index = 0
+    sufficient_components: set[str] = set()
     for turn in turns:
         if not turn.learner_response:
             continue
@@ -297,10 +349,24 @@ def _learning_position(db: Session, session: TutorSession, term: Term, participa
         turn_component_index = int(meta.get("component_index") or 0)
         is_sufficient = bool((turn.grading_json or {}).get("is_sufficient"))
         if turn_stage == "term_understanding":
-            if is_sufficient and turn_component_index + 1 >= len(components):
+            item_results = (turn.grading_json or {}).get("item_results") or []
+            if item_results:
+                for item in item_results:
+                    if item.get("is_sufficient") and item.get("component_term"):
+                        sufficient_components.add(item["component_term"])
+                pending = [component for component in components if component not in sufficient_components]
+                if pending:
+                    stage = "term_understanding"
+                    component_index = components.index(pending[0])
+                else:
+                    stage = "concept_understanding"
+                    component_index = len(components)
+            elif is_sufficient and turn_component_index + 1 >= len(components):
+                sufficient_components.add(meta.get("component_term") or components[turn_component_index])
                 stage = "concept_understanding"
                 component_index = len(components)
             elif is_sufficient:
+                sufficient_components.add(meta.get("component_term") or components[turn_component_index])
                 stage = "term_understanding"
                 component_index = turn_component_index + 1
             else:
@@ -313,12 +379,15 @@ def _learning_position(db: Session, session: TutorSession, term: Term, participa
             else:
                 stage = "term_understanding"
                 component_index = 0
+                sufficient_components.clear()
+    pending_components = [component for component in components if component not in sufficient_components]
     return {
         "learning_stage": stage,
         "learning_stage_label": LEARNING_STAGE_LABELS[stage],
         "component_term": components[component_index] if stage == "term_understanding" else None,
         "component_index": component_index if stage == "term_understanding" else len(components),
         "component_total": len(components),
+        "component_terms": pending_components if stage == "term_understanding" else components,
     }
 
 
@@ -330,6 +399,7 @@ def _merge_stage_meta(practice_question: dict[str, Any], position: dict[str, Any
         "component_term": position["component_term"],
         "component_index": position["component_index"],
         "component_total": position["component_total"],
+        "component_terms": position.get("component_terms") or [],
     }
     return practice_question
 
@@ -725,18 +795,34 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if participant.group_condition == "control":
         effective_strategy = "general_explanation"
 
-    spec = _learning_question_spec(term.slug, position["learning_stage"], position["component_term"])
-    question_type = spec["question_type"]
-    if participant.group_condition == "control" and position["learning_stage"] == "concept_understanding":
-        question_type = "control_l2_check"
-    practice_question = {
-        "body": spec["body"],
-        "expected_answer": spec["expected_answer"],
-        "question_type": question_type,
-        "options": _public_learning_options(spec),
-    }
-
-    tutor_message = _previous_turn_prefix(previous_turn) + spec["material"]
+    l3_batch = participant.group_condition == "proposed" and position["learning_stage"] == "term_understanding"
+    if l3_batch:
+        items = [_learning_question_item(term.slug, component) for component in position.get("component_terms") or _component_terms(term.slug, term.label)]
+        practice_question = {
+            "body": "次の構成用語について、それぞれ最も適切な説明を選んでください。",
+            "question_type": "component_choice_set",
+            "items": items,
+        }
+        tutor_message = _previous_turn_prefix(previous_turn) + "\n\n".join(f"【{item['component_term']}】\n{item['material']}" for item in items)
+        spec = {
+            "body": practice_question["body"],
+            "expected_answer": " / ".join(item["expected_answer"] for item in items),
+            "material": tutor_message,
+            "question_type": "component_choice_set",
+        }
+        question_type = "component_choice_set"
+    else:
+        spec = _learning_question_spec(term.slug, position["learning_stage"], position["component_term"])
+        question_type = spec["question_type"]
+        if participant.group_condition == "control" and position["learning_stage"] == "concept_understanding":
+            question_type = "control_l2_check"
+        practice_question = {
+            "body": spec["body"],
+            "expected_answer": spec["expected_answer"],
+            "question_type": question_type,
+            "options": _public_learning_options(spec),
+        }
+        tutor_message = _previous_turn_prefix(previous_turn) + spec["material"]
     teaching_strategy = effective_strategy
     material_source = "fixed"
     material_generation_ms = None
@@ -760,7 +846,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             },
             "previous_answer": previous_attempt.reason_text if previous_attempt else "",
             "previous_diagnosis_for_learner": state.state_summary,
-            "previous_practice_question": (previous_turn.practice_question_json or {}).get("body") if previous_turn else "",
+            "previous_practice_question": _practice_question_text(previous_turn.practice_question_json if previous_turn else None),
             "previous_learner_response": previous_turn.learner_response if previous_turn else "",
             "previous_feedback_for_learner": previous_turn.ai_feedback if previous_turn else "",
             "previous_learning_misconception": previous_learning_misconception,
@@ -771,12 +857,13 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
                 "expected_answer": spec["expected_answer"],
                 "question_type": question_type,
             },
+            "fixed_practice_question_items": practice_question.get("items") or [],
             "rag_context": _rag_context(
                 term.label,
                 term.description,
                 position["component_term"],
                 previous_attempt.reason_text if previous_attempt else "",
-                (previous_turn.practice_question_json or {}).get("body") if previous_turn else "",
+                _practice_question_text(previous_turn.practice_question_json if previous_turn else None),
                 previous_turn.learner_response if previous_turn else "",
             ),
         }
@@ -784,7 +871,11 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         result = await _ai_call(db, "generate_tutoring_turn", payload)
         material_generation_ms = int((perf_counter() - started) * 1000)
         material_source = "ai"
-        tutor_message = result["tutor_message"]
+        if l3_batch:
+            fixed_material = "\n\n".join(f"【{item['component_term']}】\n{item['material']}" for item in practice_question["items"])
+            tutor_message = f"{result['tutor_message']}\n\n{fixed_material}"
+        else:
+            tutor_message = result["tutor_message"]
         teaching_strategy = result["teaching_strategy"]
 
     turn = TutorTurn(
@@ -819,11 +910,37 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     component_index = int(meta.get("component_index") or 0)
     component_total = int(meta.get("component_total") or len(_component_terms(term.slug, term.label)))
     component_term = meta.get("component_term")
-    spec = _learning_question_spec(term.slug, learning_stage, component_term)
-    option = _selected_fixed_option(spec, payload.get("selected_option_id"), response)
-    if option:
-        response = option["body"]
-    result = _fixed_feedback(option, spec)
+    practice_question = turn.practice_question_json or {}
+    selected_item_option_ids = payload.get("selected_item_option_ids") or {}
+    item_results: list[dict[str, Any]] = []
+    if learning_stage == "term_understanding" and practice_question.get("items"):
+        response_parts = []
+        for item in practice_question.get("items") or []:
+            item_component = item["component_term"]
+            item_spec = _learning_question_spec(term.slug, "term_understanding", item_component)
+            item_result = _fixed_item_result(item_component, selected_item_option_ids.get(item_component), "", item_spec)
+            item_results.append(item_result)
+            response_parts.append(f"{item_component}: {item_result.get('selected_option_body') or '未選択'}")
+        response = "\n".join(response_parts)
+        is_sufficient = all(item["is_sufficient"] for item in item_results)
+        first_incorrect = next((item for item in item_results if not item["is_sufficient"]), None)
+        result = {
+            "feedback": _feedback_text_from_item_results(item_results),
+            "is_sufficient": is_sufficient,
+            "next_action": "move_next" if is_sufficient else "continue",
+            "next_scaffolding_level": "L2" if is_sufficient else "L3",
+            "learning_misconception_type": first_incorrect.get("learning_misconception_type") if first_incorrect else None,
+            "learning_misconception_confidence": 0.95,
+            "learning_misconception_reason": "L3複数構成用語の固定選択式問題で項目別に判定しました。",
+            "state_update_reason": "fixed_choice_set_correct" if is_sufficient else "fixed_choice_set_incomplete",
+        }
+        option = None
+    else:
+        spec = _learning_question_spec(term.slug, learning_stage, component_term)
+        option = _selected_fixed_option(spec, payload.get("selected_option_id"), response)
+        if option:
+            response = option["body"]
+        result = _fixed_feedback(option, spec)
     is_sufficient = bool(result.get("is_sufficient"))
     learning_misconception_type = result.get("learning_misconception_type")
     if learning_misconception_type not in {"M1", "M2", "M3", "M4", "unknown", None}:
@@ -832,9 +949,14 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     learning_misconception_reason = result.get("learning_misconception_reason") or result.get("state_update_reason") or ""
     next_level = normalize_level(lower_level(state.scaffolding_level) if is_sufficient else raise_level(state.scaffolding_level))
     if learning_stage == "term_understanding":
-        stage_completed = is_sufficient and component_index + 1 >= component_total
+        stage_completed = is_sufficient and (bool(item_results) or component_index + 1 >= component_total)
         next_learning_stage = "concept_understanding" if stage_completed else "term_understanding"
-        next_component_index = component_total if stage_completed else (component_index + 1 if is_sufficient else component_index)
+        if item_results and not is_sufficient:
+            components = _component_terms(term.slug, term.label)
+            first_pending = next((item["component_term"] for item in item_results if not item["is_sufficient"]), component_term)
+            next_component_index = components.index(first_pending) if first_pending in components else component_index
+        else:
+            next_component_index = component_total if stage_completed else (component_index + 1 if is_sufficient else component_index)
         session_completed = False
         next_action = "continue"
     elif learning_stage == "concept_understanding":
@@ -864,6 +986,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "component_term": component_term,
         "component_index": component_index,
         "component_total": component_total,
+        "item_results": item_results,
         "stage_completed": stage_completed,
         "next_learning_stage": next_learning_stage,
         "next_component_index": next_component_index,
@@ -901,6 +1024,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "next_scaffolding_level": next_level,
         "turn_index": turn.turn_index,
         "max_turns": get_settings().max_turns_per_term,
+        "item_results": item_results,
     }
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
@@ -1201,8 +1325,48 @@ def _answer_history_turn_row(turn_row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _answer_history_turn_rows(turn_row: dict[str, Any]) -> list[dict[str, Any]]:
+    item_results = (turn_row.get("grading_json") or {}).get("item_results") or []
+    if not item_results:
+        return [_answer_history_turn_row(turn_row)]
+    rows = []
+    for index, item in enumerate(item_results):
+        rows.append(
+            {
+                **turn_row,
+                "answer_log_id": f"tutor_turn:{turn_row['tutor_turn_id']}:item:{index}",
+                "source_type": "learning_turn",
+                "source_id": turn_row["tutor_turn_id"],
+                "phase": "learning",
+                "is_correct": item.get("is_correct"),
+                "misconception_type": item.get("learning_misconception_type"),
+                "recurrence_flag": None,
+                "question_body": item.get("question_body"),
+                "question_body_snapshot": item.get("question_body"),
+                "option_order_snapshot": next(
+                    (practice_item.get("options") for practice_item in (turn_row.get("practice_question") or {}).get("items", []) if practice_item.get("component_term") == item.get("component_term")),
+                    None,
+                ),
+                "free_text_answer": None,
+                "reason_text": None,
+                "learner_response": item.get("selected_option_body"),
+                "selected_option_body": item.get("selected_option_body"),
+                "is_sufficient": item.get("is_sufficient"),
+                "learning_misconception_type": item.get("learning_misconception_type"),
+                "component_term": item.get("component_term"),
+                "component_index": index,
+                "component_total": len(item_results),
+            }
+        )
+    return rows
+
+
 def _answer_history_rows(attempt_rows: list[dict[str, Any]], turn_rows: list[dict[str, Any]], *, reverse: bool = False, limit: int | None = None) -> list[dict[str, Any]]:
-    rows = [_answer_history_attempt_row(row) for row in attempt_rows] + [_answer_history_turn_row(row) for row in turn_rows]
+    rows = [_answer_history_attempt_row(row) for row in attempt_rows]
+    for row in turn_rows:
+        if not row.get("learner_response") and not row.get("grading_json"):
+            continue
+        rows.extend(_answer_history_turn_rows(row))
     rows.sort(key=_answer_event_time, reverse=reverse)
     return rows[:limit] if limit is not None else rows
 

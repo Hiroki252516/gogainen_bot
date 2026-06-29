@@ -89,6 +89,7 @@ class TutorSessionCreate(BaseModel):
 class TutorTurnRespond(BaseModel):
     learner_response: str = ""
     selected_option_id: str | None = None
+    selected_item_option_ids: dict[str, str] | None = None
     response_time_sec: float | None = None
     question_shown_at: datetime | None = None
     answered_at: datetime | None = None

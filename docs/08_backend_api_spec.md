@@ -46,7 +46,7 @@
 - `component_total`
 - `next_component_index`
 
-`session_completed` は、`concept_understanding` の回答が十分だった場合だけ `true` になる。用語理解段階で `is_sufficient = true` になっても、次の構成用語または概念理解段階へ進むだけでセッションは終了しない。
+`session_completed` は、`concept_understanding` の回答が十分だった場合だけ `true` になる。用語理解段階では複数構成用語を一度に返す場合があり、`practice_question.items` に構成用語ごとの教材、問題、選択肢を入れる。十分だった構成用語は次回から除外し、全構成用語が十分なら概念理解段階へ進む。
 
 
 FastAPIでREST APIを実装する。実験中のAI応答ストリーミングが必要な場合のみSSEを使う。MVPでは同期APIでよい。
@@ -320,7 +320,7 @@ Response:
 }
 ```
 
-`feedback` はログ保存、次ステージ教材への統合、セッション完了時の教材フィードバック画面に使う。ターン継続時は回答直後に単独表示しない。セッション完了時は問題を出さず、`feedback` と次へボタンだけを表示する。`next_learning_stage` と `next_component_index` はbackendの決定論的更新結果であり、画面進行に使う。`next_scaffolding_level` は `L3/L2` の互換ログ用に返す。
+`feedback` はログ保存、回答後フィードバック表示、次ステージ教材への統合、セッション完了時の教材フィードバック画面に使う。L3複数構成用語回答では `item_results` に構成用語ごとの正解/不正解、選択回答、正解文、フィードバックを返す。`next_learning_stage` と `next_component_index` はbackendの決定論的更新結果であり、画面進行に使う。`next_scaffolding_level` は `L3/L2` の互換ログ用に返す。
 
 ## Scoring APIs
 
