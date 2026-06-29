@@ -418,6 +418,24 @@ def session_misconception_history(db: Session, session_id: str) -> list[dict[str
             continue
         meta = _practice_meta(turn)
         stage = grading.get("learning_stage") or meta.get("learning_stage") or "term_understanding"
+        item_results = grading.get("item_results") or []
+        if item_results:
+            for index, item in enumerate(item_results):
+                history.append(
+                    {
+                        "turn_id": turn.id,
+                        "turn_index": turn.turn_index,
+                        "learning_stage": stage,
+                        "label": item.get("component_term") or f"構成用語{index + 1}",
+                        "component_term": item.get("component_term"),
+                        "component_index": index,
+                        "misconception_type": item.get("learning_misconception_type"),
+                        "confidence": grading.get("learning_misconception_confidence"),
+                        "reason": item.get("feedback") or grading.get("learning_misconception_reason"),
+                        "is_sufficient": item.get("is_sufficient"),
+                    }
+                )
+            continue
         label = grading.get("component_term") or meta.get("component_term") or ("概念理解" if stage == "concept_understanding" else "用語理解")
         history.append(
             {

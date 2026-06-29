@@ -80,6 +80,17 @@ function judgementLabel(feedback: Feedback | null) {
   return feedback.is_sufficient ? "十分" : "不十分";
 }
 
+function componentDisplay(turn: Turn) {
+  const items = turn.practice_question?.items || [];
+  if (items.length) {
+    return `用語: ${items.map((item) => item.component_term).join("、")} (${items.length}件)`;
+  }
+  if (typeof turn.component_index === "number" && typeof turn.component_total === "number") {
+    return `用語: ${turn.component_term} ${turn.component_index + 1} / ${turn.component_total}`;
+  }
+  return `用語: ${turn.component_term || "構成用語"}`;
+}
+
 export default function LearningPage() {
   const router = useRouter();
   const params = useParams<{ termSlug: string }>();
@@ -199,7 +210,7 @@ export default function LearningPage() {
               <p>対象概念: {turn.term_label || termSlug}</p>
               <p>段階: {turn.learning_stage_label || "用語理解"}</p>
               {turn.learning_stage === "term_understanding" ? (
-                <p>用語: {turn.component_term} {typeof turn.component_index === "number" && typeof turn.component_total === "number" ? `${turn.component_index + 1} / ${turn.component_total}` : ""}</p>
+                <p>{componentDisplay(turn)}</p>
               ) : (
                 <p>対象概念全体を説明します</p>
               )}
