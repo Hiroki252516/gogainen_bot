@@ -245,6 +245,122 @@ button:disabled {
   background: #fff8f7;
 }
 
+.flow-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: #fbfcfe;
+}
+
+.flow-panel h3 {
+  margin: 0 0 6px;
+}
+
+.flow-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.metric {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.metric span,
+.field-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.metric strong {
+  font-size: 22px;
+}
+
+.metric.ok strong {
+  color: var(--ok);
+}
+
+.metric.bad strong {
+  color: var(--danger);
+}
+
+.flow-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.flow-card {
+  border: 1px solid var(--line);
+  border-left-width: 6px;
+  border-radius: 8px;
+  background: white;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.flow-card.ok {
+  border-left-color: var(--ok);
+}
+
+.flow-card.bad {
+  border-left-color: var(--danger);
+}
+
+.flow-card.neutral {
+  border-left-color: var(--muted);
+}
+
+.flow-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.flow-card-body {
+  display: grid;
+  gap: 10px;
+}
+
+.flow-card-body p {
+  margin: 4px 0 0;
+}
+
+.phase-pill,
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+.phase-pill {
+  background: var(--primary-quiet);
+  color: var(--primary);
+}
+
+.status-pill {
+  background: #f1f3f6;
+  color: var(--text);
+}
+
+.flow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 @media (max-width: 760px) {
   .learning-layout {
     grid-template-columns: 1fr;

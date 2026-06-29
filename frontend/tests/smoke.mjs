@@ -84,6 +84,11 @@ for (const expectedText of ["最近の回答履歴", "recent_answer_history", "�
     throw new Error(`admin page missing unified answer history UI: ${expectedText}`);
   }
 }
+for (const expectedText of ["実験フロー", "どのフェーズで、どの問題に、何を選び", "FlowCard", "phaseLabel", "selected_option_body", "question_body_snapshot"]) {
+  if (!adminPage.includes(expectedText)) {
+    throw new Error(`admin page missing visual participant flow UI: ${expectedText}`);
+  }
+}
 if (adminPage.indexOf("/api/admin/logs/overview_excel.csv") > adminPage.indexOf("/api/admin/logs/overview.csv")) {
   throw new Error("admin page must prioritize Excel overview CSV before UTF-8 CSV");
 }

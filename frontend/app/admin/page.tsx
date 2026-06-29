@@ -168,6 +168,7 @@ export default function AdminPage() {
                   {participantLog.participant.group_condition} / {participantLog.participant.current_step}
                 </p>
               </div>
+              <ParticipantFlow logs={participantLog} />
               <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
@@ -192,6 +193,105 @@ export default function AdminPage() {
 function formatRate(value: number | null) {
   if (value === null || value === undefined) return "-";
   return `${Math.round(value * 100)}%`;
+}
+
+function ParticipantFlow({ logs }: { logs: any }) {
+  const rows = [...(logs.answer_history || [])].sort((a: any, b: any) => flowTime(a).localeCompare(flowTime(b)));
+  const testRows = rows.filter((row: any) => row.source_type === "test_attempt");
+  const learningRows = rows.filter((row: any) => row.source_type === "learning_turn");
+  const correctCount = testRows.filter((row: any) => row.is_correct === true).length;
+  const incorrectCount = testRows.filter((row: any) => row.is_correct === false).length;
+  const sufficientCount = learningRows.filter((row: any) => row.is_sufficient === true).length;
+  const insufficientCount = learningRows.filter((row: any) => row.is_sufficient === false).length;
+  return (
+    <section className="flow-panel stack" aria-labelledby="participant-flow-title">
+      <div>
+        <h3 id="participant-flow-title">実験フロー</h3>
+        <p className="muted">どのフェーズで、どの問題に、何を選び、どう判定されたかを時系列で確認します。</p>
+      </div>
+      <div className="flow-summary">
+        <Metric label="テスト正解" value={`${correctCount}件`} />
+        <Metric label="テスト不正解" value={`${incorrectCount}件`} tone={incorrectCount ? "bad" : "ok"} />
+        <Metric label="学習十分" value={`${sufficientCount}件`} />
+        <Metric label="学習不十分" value={`${insufficientCount}件`} tone={insufficientCount ? "bad" : "ok"} />
+      </div>
+      <div className="flow-timeline">
+        {rows.length ? rows.map((row: any) => <FlowCard key={row.answer_log_id || row.source_id} row={row} />) : <p className="muted">回答ログはまだありません。</p>}
+      </div>
+    </section>
+  );
+}
+
+function Metric({ label, value, tone }: { label: string; value: string; tone?: "ok" | "bad" }) {
+  return (
+    <div className={`metric ${tone || ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function FlowCard({ row }: { row: any }) {
+  const isTest = row.source_type === "test_attempt";
+  const status = isTest ? answerStatus(row.is_correct, "正解", "不正解") : answerStatus(row.is_sufficient, "十分", "不十分");
+  return (
+    <article className={`flow-card ${status.tone}`}>
+      <div className="flow-card-head">
+        <div>
+          <span className="phase-pill">{phaseLabel(row.phase)}</span>
+          <strong>{row.term_label || row.term_slug}</strong>
+          {row.component_term ? <span className="muted"> / {row.component_term}</span> : null}
+        </div>
+        <span className="status-pill">{status.label}</span>
+      </div>
+      <div className="flow-card-body">
+        <div>
+          <span className="field-label">問題</span>
+          <p>{row.question_body_snapshot || row.question_body || "-"}</p>
+        </div>
+        <div>
+          <span className="field-label">選択した回答</span>
+          <p>{row.selected_option_body || row.learner_response || "-"}</p>
+        </div>
+        <div className="flow-meta">
+          <span>誤概念: {row.misconception_type || row.learning_misconception_type || "none"}</span>
+          <span>回答時間: {formatSeconds(row.response_time_sec)}</span>
+          <span>{formatDateTime(row.answered_at || row.created_at)}</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function answerStatus(value: boolean | null | undefined, okLabel: string, badLabel: string) {
+  if (value === true) return { label: okLabel, tone: "ok" };
+  if (value === false) return { label: badLabel, tone: "bad" };
+  return { label: "未判定", tone: "neutral" };
+}
+
+function phaseLabel(phase: string) {
+  const labels: Record<string, string> = {
+    pretest: "事前テスト",
+    learning: "学習",
+    retest: "再テスト",
+    final_test: "最終テスト",
+    l0_check: "L0確認",
+  };
+  return labels[phase] || phase || "-";
+}
+
+function flowTime(row: any) {
+  return row.answered_at || row.created_at || row.question_shown_at || "";
+}
+
+function formatSeconds(value: number | null | undefined) {
+  if (value === null || value === undefined) return "-";
+  return `${Math.round(Number(value) * 10) / 10}秒`;
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  return value.replace("T", " ").slice(0, 19);
 }
 
 function LogList({ title, rows, fields }: { title: string; rows?: any[]; fields: string[] }) {
