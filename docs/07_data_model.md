@@ -343,7 +343,14 @@ status values:
 - completed BOOLEAN NOT NULL DEFAULT false
 - created_at TIMESTAMP NOT NULL
 
-次段のログ拡張では、周回数が固定されない再テストを扱うため、`score_timeline_json` と `misconception_timeline_json` のようなJSON列を追加候補にする。現時点ではスコア推移は `attempts` と `answer_history` から再計算できる形を正とし、保存済みsummaryだけに依存しない。
+次段のログ拡張では、周回数が固定されない再テストを扱うため、以下のJSON列を追加候補にする。現時点ではスコア推移は `attempts` と `answer_history` から再計算できる形を正とし、保存済みsummaryだけに依存しない。
+
+- score_timeline_json JSONB NULL
+- misconception_timeline_json JSONB NULL
+- learning_burden_json JSONB NULL
+- condition_check_json JSONB NULL
+
+`score_timeline_json` は `pretest`, `retest_1`, `retest_2`, ..., `final_test` の得点率、事前比差分ポイント、直前比差分ポイント、未達項目数を保持する。`misconception_timeline_json` は用語別に `pretest -> retest_n -> final_test` の誤概念タイプ推移と `resolved`, `same_type_recurred`, `changed_type`, `unknown_persisted`, `regressed` の変化分類を保持する。既存の `pretest_score`, `retest_score`, `l0_correct_rate` は互換用に残す。
 
 ### export_jobs
 

@@ -147,4 +147,4 @@ GET /api/admin/participants/{participant_id}/logs.csv
 
 CSVは `record_type, source_type, participant_id, display_code, phase, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。
 
-現行の評価サマリーは `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を中心に保存します。`l0_correct_rate` は互換名で、`final_test` がある場合は最終テスト正答率として扱います。事前テスト、再テスト1、再テスト2、最終テストの得点率推移ログは次段の追加仕様です。
+現行の評価サマリーは `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を中心に保存します。`l0_correct_rate` は互換名で、`final_test` がある場合は最終テスト正答率として扱います。次段の追加仕様では、事前テスト、再テスト1、再テスト2、最終テストの得点率推移、差分ポイント、誤概念推移、未達項目数推移をログ化します。

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { api, requireParticipant } from "@/lib/api";
@@ -105,6 +105,8 @@ export default function LearningPage() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const bootedTermRef = useRef<string | null>(null);
+  const actionInFlightRef = useRef(false);
 
   const nextHref = useMemo(() => {
     if (typeof window === "undefined") return "/retest";
@@ -115,6 +117,15 @@ export default function LearningPage() {
 
   useEffect(() => {
     async function boot() {
+      if (bootedTermRef.current === termSlug) return;
+      bootedTermRef.current = termSlug;
+      setSessionId("");
+      setTurn(null);
+      setFeedback(null);
+      setResponse("");
+      setSelectedOptionId("");
+      setSelectedItemOptionIds({});
+      setError("");
       try {
         const session = await api<{ tutor_session_id: string }>("/api/tutor-sessions", {
           method: "POST",
@@ -126,6 +137,7 @@ export default function LearningPage() {
         setTurnStartedAt(Date.now());
         setTurnShownAt(new Date().toISOString());
       } catch (err) {
+        bootedTermRef.current = null;
         setError(err instanceof Error ? err.message : String(err));
       }
     }
@@ -133,7 +145,7 @@ export default function LearningPage() {
   }, [termSlug]);
 
   async function submit() {
-    if (!turn || submitting) return;
+    if (!turn || actionInFlightRef.current) return;
     const options = turn.practice_question?.options || [];
     const items = turn.practice_question?.items || [];
     if (options.length && !selectedOptionId) {
@@ -144,6 +156,7 @@ export default function LearningPage() {
       setError("すべての確認問題で選択肢を選んでください。");
       return;
     }
+    actionInFlightRef.current = true;
     setSubmitting(true);
     setError("");
     try {
@@ -174,12 +187,14 @@ export default function LearningPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      actionInFlightRef.current = false;
       setSubmitting(false);
     }
   }
 
   async function continueLearning() {
-    if (!sessionId || submitting) return;
+    if (!sessionId || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
     setSubmitting(true);
     setError("");
     try {
@@ -194,6 +209,7 @@ export default function LearningPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      actionInFlightRef.current = false;
       setSubmitting(false);
     }
   }

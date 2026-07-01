@@ -782,6 +782,14 @@ def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> Tu
     term = db.query(Term).filter_by(slug=term_slug).one_or_none()
     if not term:
         raise HTTPException(status_code=404, detail="term not found")
+    existing = (
+        db.query(TutorSession)
+        .filter_by(participant_id=participant.id, term_id=term.id, ended_at=None)
+        .order_by(TutorSession.started_at.desc())
+        .first()
+    )
+    if existing:
+        return existing
     count = db.query(func.count(TutorSession.id)).filter_by(participant_id=participant.id, term_id=term.id).scalar() or 0
     session = TutorSession(participant_id=participant.id, term_id=term.id, session_index=count + 1, group_condition=participant.group_condition)
     db.add(session)
@@ -800,6 +808,14 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
     previous_turn = db.get(TutorTurn, state.last_tutor_turn_id) if state.last_tutor_turn_id else None
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
+    latest_open_turn = (
+        db.query(TutorTurn)
+        .filter_by(tutor_session_id=session.id, learner_response=None)
+        .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
+        .first()
+    )
+    if latest_open_turn:
+        return latest_open_turn
     position = _learning_position(db, session, term, participant)
     if position["learning_stage"] == "final_feedback":
         raise HTTPException(status_code=400, detail="learning session already completed")
@@ -1132,6 +1148,144 @@ def _rate(items: list[Attempt], predicate) -> float | None:
     return sum(1 for item in items if predicate(item)) / len(items)
 
 
+def _attempt_sort_key(attempt: Attempt) -> tuple[int, int, str]:
+    phase_order = {"pretest": 0, "retest": 1, "final_test": 2, "l0_check": 3}
+    return (phase_order.get(attempt.phase, 99), attempt.attempt_index, attempt.created_at.isoformat())
+
+
+def _round_label(phase: str, attempt_index: int) -> str:
+    if phase == "retest":
+        return f"retest_{attempt_index}"
+    return phase
+
+
+def _test_rounds(attempts: list[Attempt]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, int], list[Attempt]] = {}
+    for attempt in attempts:
+        if attempt.phase not in {"pretest", "retest", "final_test", "l0_check"}:
+            continue
+        grouped.setdefault((attempt.phase, attempt.attempt_index), []).append(attempt)
+
+    rows: list[dict[str, Any]] = []
+    pretest_score: float | None = None
+    previous_score: float | None = None
+    for phase, attempt_index in sorted(grouped, key=lambda item: ({"pretest": 0, "retest": 1, "final_test": 2, "l0_check": 3}.get(item[0], 99), item[1])):
+        items = grouped[(phase, attempt_index)]
+        score_rate = _rate(items, lambda attempt: bool(attempt.is_correct))
+        if phase == "pretest" and attempt_index == 1:
+            pretest_score = score_rate
+        incorrect_count = sum(1 for attempt in items if attempt.is_correct is False)
+        row = {
+            "round": _round_label(phase, attempt_index),
+            "phase": phase,
+            "attempt_index": attempt_index,
+            "question_count": len(items),
+            "correct_count": sum(1 for attempt in items if attempt.is_correct is True),
+            "score_rate": score_rate,
+            "score_delta_from_pretest_pt": None if score_rate is None or pretest_score is None else round((score_rate - pretest_score) * 100, 6),
+            "score_delta_from_previous_test_pt": None if score_rate is None or previous_score is None else round((score_rate - previous_score) * 100, 6),
+            "remaining_learning_target_count": incorrect_count if phase in {"pretest", "retest"} else None,
+            "event_time": _iso(max((attempt.answered_at or attempt.created_at for attempt in items), default=None)),
+        }
+        rows.append(row)
+        if score_rate is not None:
+            previous_score = score_rate
+    return rows
+
+
+def _misconception_value(attempt: Attempt) -> str | None:
+    if attempt.is_correct:
+        return None
+    return attempt.misconception_type or attempt.diagnosed_status
+
+
+def _misconception_change_type(initial: Attempt | None, latest: Attempt | None) -> str | None:
+    if not initial or not latest:
+        return None
+    initial_m = _misconception_value(initial)
+    latest_m = _misconception_value(latest)
+    if initial.is_correct and latest.is_correct:
+        return None
+    if initial.is_correct and latest.is_correct is False:
+        return "regressed"
+    if not initial.is_correct and latest.is_correct:
+        return "resolved"
+    if initial_m == "unknown" and latest_m == "unknown":
+        return "unknown_persisted"
+    if initial_m in {"M1", "M2", "M3", "M4"} and latest_m == initial_m:
+        return "same_type_recurred"
+    if initial_m in {"M1", "M2", "M3", "M4"} and latest_m in {"M1", "M2", "M3", "M4"} and latest_m != initial_m:
+        return "changed_type"
+    return None
+
+
+def _misconception_timeline(attempts: list[Attempt], terms: dict[str, Term]) -> dict[str, Any]:
+    by_term: dict[str, list[Attempt]] = {}
+    for attempt in attempts:
+        if attempt.phase in {"pretest", "retest", "final_test", "l0_check"}:
+            by_term.setdefault(attempt.term_id, []).append(attempt)
+
+    terms_out: list[dict[str, Any]] = []
+    for term_id, items in sorted(by_term.items(), key=lambda pair: terms.get(pair[0]).display_order if terms.get(pair[0]) else 99):
+        ordered = sorted(items, key=_attempt_sort_key)
+        initial = next((attempt for attempt in ordered if attempt.phase == "pretest"), ordered[0] if ordered else None)
+        latest = ordered[-1] if ordered else None
+        term = terms.get(term_id)
+        terms_out.append(
+            {
+                "term_slug": term.slug if term else None,
+                "term_label": term.label if term else None,
+                "change_type": _misconception_change_type(initial, latest),
+                "events": [
+                    {
+                        "round": _round_label(attempt.phase, attempt.attempt_index),
+                        "phase": attempt.phase,
+                        "attempt_index": attempt.attempt_index,
+                        "is_correct": attempt.is_correct,
+                        "misconception_type": _misconception_value(attempt),
+                        "diagnosed_status": attempt.diagnosed_status,
+                        "recurrence_flag": attempt.recurrence_flag,
+                        "event_time": _iso(attempt.answered_at or attempt.created_at),
+                    }
+                    for attempt in ordered
+                ],
+            }
+        )
+    return {"terms": terms_out}
+
+
+def _learning_burden(db: Session, participant_id: str, attempts: list[Attempt]) -> dict[str, Any]:
+    sessions = db.query(TutorSession).filter_by(participant_id=participant_id).all()
+    session_ids = [session.id for session in sessions]
+    turns = db.query(TutorTurn).filter(TutorTurn.tutor_session_id.in_(session_ids or ["__none__"])).all()
+    retest_count = max((attempt.attempt_index for attempt in attempts if attempt.phase == "retest"), default=0)
+    test_time = sum(attempt.response_time_sec or 0 for attempt in attempts if attempt.phase in {"pretest", "retest", "final_test", "l0_check"})
+    learning_time = sum(turn.response_time_sec or 0 for turn in turns)
+    retained_count = sum(1 for attempt in attempts if attempt.phase in {"pretest", "retest"} and attempt.is_correct is False)
+    return {
+        "retest_count": retest_count,
+        "tutor_session_count": len(sessions),
+        "tutor_turn_count": len(turns),
+        "learning_target_retained_count": retained_count,
+        "total_learning_time_sec": learning_time,
+        "total_test_time_sec": test_time,
+    }
+
+
+def _condition_check(db: Session, participant: Participant, attempts: list[Attempt]) -> dict[str, Any]:
+    sessions = db.query(TutorSession).filter_by(participant_id=participant.id).all()
+    session_ids = [session.id for session in sessions]
+    turns = db.query(TutorTurn).filter(TutorTurn.tutor_session_id.in_(session_ids or ["__none__"])).all()
+    strategies = [turn.teaching_strategy for turn in turns if turn.teaching_strategy]
+    return {
+        "control_general_explanation_maintained": all(strategy == "general_explanation" for strategy in strategies) if participant.group_condition == "control" else None,
+        "proposed_adaptive_strategy_used": any(strategy != "general_explanation" for strategy in strategies) if participant.group_condition == "proposed" else None,
+        "strategy_changed_count": sum(1 for turn in turns if turn.strategy_changed),
+        "forbidden_help_count": sum(1 for turn in turns if turn.forbidden_help_given),
+        "manual_review_count": sum(1 for attempt in attempts if attempt.requires_manual_review),
+    }
+
+
 def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummary:
     participant = get_participant(db, participant_id)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id).all()
@@ -1160,6 +1314,10 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         m4_failure_rate=None,
         unknown_persistence_rate=None,
         learning_target_count=db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0,
+        score_timeline_json={"rounds": _test_rounds(attempts)},
+        misconception_timeline_json=_misconception_timeline(attempts, _term_map(db)),
+        learning_burden_json=_learning_burden(db, participant.id, attempts),
+        condition_check_json=_condition_check(db, participant, attempts),
         completed=participant.completed_at is not None,
     )
     db.add(summary)
@@ -1181,12 +1339,21 @@ def admin_summary(db: Session) -> dict[str, Any]:
         def avg(attr: str):
             vals = [getattr(s, attr) for s in latest_summaries if getattr(s, attr) is not None]
             return sum(vals) / len(vals) if vals else None
+        def avg_final_delta() -> float | None:
+            vals = []
+            for summary in latest_summaries:
+                rounds = (summary.score_timeline_json or {}).get("rounds") or []
+                final_round = next((row for row in reversed(rounds) if row.get("phase") in {"final_test", "l0_check"}), None)
+                if final_round and final_round.get("score_delta_from_pretest_pt") is not None:
+                    vals.append(final_round["score_delta_from_pretest_pt"])
+            return sum(vals) / len(vals) if vals else None
         rows.append(
             {
                 "group_condition": group,
                 "participant_count": len(group_participants),
                 "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
                 "l0_correct_rate": avg("l0_correct_rate"),
+                "avg_score_delta_from_pretest_pt": avg_final_delta(),
             }
         )
     return {"groups": rows}
@@ -1200,7 +1367,7 @@ EXPORTS = {
     "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
-    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "completed", "created_at"]),
+    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "score_timeline_json", "misconception_timeline_json", "learning_burden_json", "condition_check_json", "completed", "created_at"]),
 }
 
 
@@ -1464,6 +1631,10 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "retest_score": row.retest_score,
                 "l0_correct_rate": row.l0_correct_rate,
                 "same_misconception_recurrence_rate": row.same_misconception_recurrence_rate,
+                "score_timeline": row.score_timeline_json,
+                "misconception_timeline": row.misconception_timeline_json,
+                "learning_burden": row.learning_burden_json,
+                "condition_check": row.condition_check_json,
                 "completed": row.completed,
                 "created_at": _iso(row.created_at),
             }
@@ -1585,6 +1756,10 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "m2_recurrence_rate": summary.m2_recurrence_rate,
             "m3_recurrence_rate": summary.m3_recurrence_rate,
             "learning_target_count": summary.learning_target_count,
+            "score_timeline": summary.score_timeline_json,
+            "misconception_timeline": summary.misconception_timeline_json,
+            "learning_burden": summary.learning_burden_json,
+            "condition_check": summary.condition_check_json,
             "completed": summary.completed,
             "created_at": _iso(summary.created_at),
         },
@@ -1688,7 +1863,7 @@ def export_csv(db: Session, name: str) -> Path:
         writer = csv.DictWriter(f, fieldnames=columns)
         writer.writeheader()
         for row in rows:
-            writer.writerow({col: getattr(row, col) for col in columns})
+            writer.writerow({col: _csv_value(getattr(row, col)) if isinstance(getattr(row, col), (dict, list)) else getattr(row, col) for col in columns})
     db.add(ExportJob(export_name=name, file_path=str(path), status="success", row_count=len(rows)))
     db.commit()
     return path

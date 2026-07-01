@@ -117,6 +117,10 @@ Mock rules:
 - 評価サマリーが生成される
 - 評価サマリーには `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率が入る
 - `l0_correct_rate` は互換名として残り、final_testがある場合はfinal_test正答率として扱われる
+- 次段ログ拡張では、再テストが複数回あっても `retest_1`, `retest_2`, ... の周回別スコアが欠けない
+- 次段ログ拡張では、pretestが0%の場合も差分ポイントの `score_delta_from_pretest_pt` を計算できる
+- 次段ログ拡張では、誤概念タイプ推移が管理画面ログとCSVから復元できる
+- 次段ログ拡張では、final_testの得点率が評価サマリーとCSVに出る
 
 ### B. 提案群の動作
 
@@ -161,6 +165,7 @@ Mock rules:
 - 被験者別ログCSVを出力できる
 - CSVの回答行は `record_type=answer` とし、`source_type=test_attempt` / `source_type=learning_turn` を含む
 - 既存のテーブル別CSVリンク群は管理画面の主導線から外れている
+- 次段ログ拡張では、`evaluation_summary` 行の `value_json` にスコア推移、誤概念推移、未達項目数推移、学習負担ログ、条件統制チェックが入る
 
 ### F. AIバックエンド
 

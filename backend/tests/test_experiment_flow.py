@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.db.session import SessionLocal
-from app.models import AICallLog, Attempt, TutorTurn
+from app.models import AICallLog, Attempt, EvaluationSummary, TutorTurn
 
 
 client = TestClient(app)
@@ -125,9 +125,21 @@ def test_final_test_is_choice_only_and_scores_without_reason():
 
     summary = client.post(f"/api/participants/{pid}/evaluation-summary/recalculate")
     assert summary.status_code == 200
+    db = SessionLocal()
+    try:
+        latest = db.query(EvaluationSummary).filter_by(participant_id=pid).order_by(EvaluationSummary.created_at.desc()).first()
+        assert latest is not None
+        assert latest.score_timeline_json["rounds"][-1]["round"] == "final_test"
+        assert latest.score_timeline_json["rounds"][-1]["score_delta_from_pretest_pt"] == 0
+        assert latest.misconception_timeline_json["terms"]
+        assert latest.learning_burden_json["retest_count"] == 0
+        assert latest.condition_check_json["manual_review_count"] == 0
+    finally:
+        db.close()
     export = client.get("/api/admin/export/evaluation_summary.csv")
     assert export.status_code == 200
     assert "l0_correct_rate" in export.text
+    assert "score_timeline_json" in export.text
 
 
 def test_control_group_gets_l3_l2_material_but_only_l2_question():
@@ -157,6 +169,21 @@ def test_control_group_gets_l3_l2_material_but_only_l2_question():
     ).json()
     assert response["next_learning_stage"] == "final_feedback"
     assert response["session_completed"] is True
+
+
+def test_duplicate_learning_session_and_turn_requests_reuse_open_records():
+    pid = _create_participant_with_pretest(group="control")
+    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
+
+    first_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
+    second_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
+    assert second_session["tutor_session_id"] == first_session["tutor_session_id"]
+    assert second_session["session_index"] == first_session["session_index"]
+
+    first_turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
+    second_turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
+    assert second_turn["turn_id"] == first_turn["turn_id"]
+    assert second_turn["turn_index"] == first_turn["turn_index"]
 
 
 def _answer_for_component(component_term: str) -> str:

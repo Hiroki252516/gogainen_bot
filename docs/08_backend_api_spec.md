@@ -353,6 +353,16 @@ Response:
 
 現行の評価サマリーは `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を中心に返す。`l0_correct_rate` は互換フィールド名であり、`final_test` が存在する場合は `final_test` の正答率を入れる。事前テストから複数回再テスト、最終テストまでの得点率推移は次段のログ拡張対象である。
 
+次段のログ拡張では、評価サマリーAPIと管理画面ログAPIで以下を返せるようにする。
+
+- 参加者別スコア推移
+- 用語別スコア推移
+- 誤概念タイプ推移
+- 未達項目数の減少
+- 最終テストまでに何周学習したか
+- 学習負担ログ
+- 条件統制チェック
+
 テストフェーズ中は個別の正誤を被験者に返さない。
 
 ## Evaluation
@@ -378,6 +388,8 @@ Response:
 }
 ```
 
+次段のログ拡張では、群別集計に `score_delta_from_pretest_pt` と `score_delta_from_previous_test_pt` の平均を追加候補にする。参加者別の詳細な時系列は、`GET /api/admin/participants/{id}/logs` とCSVの `evaluation_summary` 行で返す。
+
 ## Admin
 
 - GET /api/admin/participants
@@ -399,6 +411,8 @@ Response:
 
 管理画面の全体ログ用に、全参加者の進捗、最近の統合回答履歴、AI呼び出し、再発イベント、評価サマリーを返す。統合回答履歴は `recent_answer_history` に入り、テスト回答は `source_type=test_attempt`、学習ターン回答は `source_type=learning_turn` とする。互換用に `recent_attempts` と `recent_tutor_turns` も残す。
 
+次段のログ拡張では、全体ログに参加者別スコア推移、最終テストまでの学習周回数、未達項目数の減少、条件統制チェックを含める。
+
 ### GET /api/admin/logs/overview.csv
 
 全体ログを1つのCSVで返す。回答単位の行は `record_type=answer` とし、`source_type=test_attempt` または `source_type=learning_turn` で出所を区別する。学習状態、学習セッション、AI呼び出し、再発、評価サマリーは補助行として同じCSVに含める。
@@ -410,6 +424,8 @@ Response:
 ### GET /api/admin/participants/{id}/logs
 
 1人の被験者について、統合回答履歴、学習状態、学習セッション、学習ターン、AI呼び出し、再発イベント、評価サマリーをJSONで返す。`answer_history` はテスト回答と学習ターン回答を時系列に統合した主要調査ビューである。`attempts` と `tutor_sessions` は詳細確認と後方互換のために残す。
+
+次段のログ拡張では、被験者別ログに `score_timeline`, `misconception_timeline`, `learning_burden`, `condition_check` を追加候補にする。
 
 ### GET /api/admin/participants/{id}/logs.csv
 

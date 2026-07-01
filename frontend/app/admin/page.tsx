@@ -15,6 +15,7 @@ export default function AdminPage() {
   const [login, setLogin] = useState<any>(null);
   const [loginError, setLoginError] = useState("");
   const [logError, setLogError] = useState("");
+  const [recalculating, setRecalculating] = useState(false);
 
   useEffect(() => {
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants));
@@ -46,6 +47,21 @@ export default function AdminPage() {
       setParticipantLog(result);
     } catch (err) {
       setLogError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function recalculateParticipantSummary(participantId: string) {
+    setLogError("");
+    setRecalculating(true);
+    try {
+      await api(`/api/participants/${participantId}/evaluation-summary/recalculate`, { method: "POST" });
+      await loadParticipantLog(participantId);
+      api("/api/admin/evaluation-summary").then(setSummary);
+      api("/api/admin/logs/overview").then(setOverview);
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRecalculating(false);
     }
   }
 
@@ -86,6 +102,7 @@ export default function AdminPage() {
                 <strong>{group.group_condition}</strong>
                 <p>参加者: {group.participant_count}</p>
                 <p>確認テスト正答率: {formatRate(group.l0_correct_rate)}</p>
+                <p>事前比改善: {formatPoints(group.avg_score_delta_from_pretest_pt)}</p>
               </div>
             ))}
           </div>
@@ -126,6 +143,7 @@ export default function AdminPage() {
             </div>
           </div>
           <LogList title="最近の回答履歴" rows={overview?.recent_answer_history} fields={["display_code", "source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+          <LogList title="評価サマリー" rows={overview?.evaluation_summaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "completed", "created_at"]} />
           <LogList title="最近のAI呼び出し" rows={overview?.recent_ai_call_logs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
         </section>
         <section className="panel">
@@ -167,19 +185,26 @@ export default function AdminPage() {
                 <p>
                   {participantLog.participant.group_condition} / {participantLog.participant.current_step}
                 </p>
+                <button className="secondary" disabled={recalculating} onClick={() => recalculateParticipantSummary(participantLog.participant.participant_id)}>
+                  {recalculating ? "評価サマリー再計算中..." : "評価サマリーを再計算"}
+                </button>
               </div>
+              {participantLog.latest_evaluation_summary ? (
+                <EvaluationSummary summary={participantLog.latest_evaluation_summary} />
+              ) : (
+                <section className="insight-panel stack">
+                  <div>
+                    <h3>評価ログ早見</h3>
+                    <p className="muted">まだ評価サマリーがありません。上の「評価サマリーを再計算」を押すと、スコア推移・誤概念推移・学習負担が見えるようになります。</p>
+                  </div>
+                </section>
+              )}
               <ParticipantFlow logs={participantLog} />
               <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
               <LogList title="AI呼び出しログ" rows={participantLog.ai_call_logs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
               <LogList title="再発イベント" rows={participantLog.recurrence_events} fields={["term_slug", "previous_misconception_type", "current_misconception_type", "phase", "created_at"]} />
-              {participantLog.latest_evaluation_summary ? (
-                <details className="notice">
-                  <summary>評価サマリー</summary>
-                  <pre>{JSON.stringify(participantLog.latest_evaluation_summary, null, 2)}</pre>
-                </details>
-              ) : null}
             </>
           ) : (
             <p className="muted">被験者一覧の「被験者ログを見る」を押すと、1人分の流れを確認できます。</p>
@@ -193,6 +218,145 @@ export default function AdminPage() {
 function formatRate(value: number | null) {
   if (value === null || value === undefined) return "-";
   return `${Math.round(value * 100)}%`;
+}
+
+function formatPoints(value: number | null) {
+  if (value === null || value === undefined) return "-";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${Math.round(value * 10) / 10}pt`;
+}
+
+function EvaluationSummary({ summary }: { summary: any }) {
+  const rounds = summary.score_timeline?.rounds || [];
+  const burden = summary.learning_burden || {};
+  const misconceptionTerms = summary.misconception_timeline?.terms || [];
+  const condition = summary.condition_check || {};
+  const finalRound = rounds.find((round: any) => round.phase === "final_test") || rounds[rounds.length - 1];
+  return (
+    <section className="insight-panel stack" aria-labelledby="evaluation-insight-title">
+      <div className="insight-head">
+        <div>
+          <h3 id="evaluation-insight-title">評価ログ早見</h3>
+          <p className="muted">得点率の推移、誤概念の変化、学習負担、条件統制をここで確認します。</p>
+        </div>
+        <div className={`delta-badge ${(finalRound?.score_delta_from_pretest_pt || 0) >= 0 ? "ok" : "bad"}`}>
+          事前比 {formatPoints(finalRound?.score_delta_from_pretest_pt)}
+        </div>
+      </div>
+      <div className="flow-summary">
+        <Metric label="事前テスト" value={formatRate(summary.pretest_score)} />
+        <Metric label="再テスト" value={formatRate(summary.retest_score)} />
+        <Metric label="最終テスト" value={formatRate(summary.l0_correct_rate)} />
+        <Metric label="再テスト回数" value={`${burden.retest_count ?? 0}回`} />
+      </div>
+      {rounds.length ? (
+        <div className="score-road" aria-label="得点率推移">
+          {rounds.map((round: any) => (
+            <div className="score-step" key={`${round.round}-${round.attempt_index}`}>
+              <div className="score-step-head">
+                <strong>{roundLabel(round.round)}</strong>
+                <span>{formatRate(round.score_rate)}</span>
+              </div>
+              <div className="score-bar">
+                <span style={{ width: `${Math.max(0, Math.min(100, Number(round.score_rate || 0) * 100))}%` }} />
+              </div>
+              <div className="score-meta">
+                <span>事前比 {formatPoints(round.score_delta_from_pretest_pt)}</span>
+                <span>直前比 {formatPoints(round.score_delta_from_previous_test_pt)}</span>
+                <span>未達 {round.remaining_learning_target_count ?? "-"}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="insight-grid">
+        <div className="insight-card">
+          <h4>誤概念推移</h4>
+          {misconceptionTerms.length ? (
+            <div className="term-timeline">
+              {misconceptionTerms.map((term: any) => (
+                <div className="term-row" key={term.term_slug || term.term_label}>
+                  <div className="term-row-head">
+                    <strong>{term.term_label || term.term_slug}</strong>
+                    <span className={`change-pill ${term.change_type || "neutral"}`}>{changeLabel(term.change_type)}</span>
+                  </div>
+                  <div className="event-chips">
+                    {(term.events || []).map((event: any) => (
+                      <span className={`event-chip ${event.is_correct ? "ok" : "bad"}`} key={`${event.round}-${event.attempt_index}`}>
+                        {roundLabel(event.round)}: {event.is_correct ? "正答" : event.misconception_type || "誤答"}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">誤概念推移はまだありません。</p>
+          )}
+        </div>
+        <div className="insight-card">
+          <h4>学習負担</h4>
+          <div className="mini-metrics">
+            <Metric label="学習セッション" value={`${burden.tutor_session_count ?? 0}回`} />
+            <Metric label="学習ターン" value={`${burden.tutor_turn_count ?? 0}回`} />
+            <Metric label="学習時間" value={formatSeconds(burden.total_learning_time_sec)} />
+            <Metric label="テスト時間" value={formatSeconds(burden.total_test_time_sec)} />
+          </div>
+        </div>
+        <div className="insight-card">
+          <h4>条件統制チェック</h4>
+          <ul className="check-list">
+            <CheckItem label="統制群は一般解説を維持" value={condition.control_general_explanation_maintained} />
+            <CheckItem label="提案群で適応方略を使用" value={condition.proposed_adaptive_strategy_used} />
+            <CheckItem label="禁止ヘルプ" value={(condition.forbidden_help_count ?? 0) === 0} suffix={`${condition.forbidden_help_count ?? 0}件`} />
+            <CheckItem label="手動確認" value={(condition.manual_review_count ?? 0) === 0} suffix={`${condition.manual_review_count ?? 0}件`} />
+          </ul>
+        </div>
+      </div>
+      <details className="raw-json">
+        <summary>詳細JSON</summary>
+        <pre>{JSON.stringify(summary, null, 2)}</pre>
+      </details>
+    </section>
+  );
+}
+
+function CheckItem({ label, value, suffix }: { label: string; value: boolean | null | undefined; suffix?: string }) {
+  if (value === null || value === undefined) {
+    return (
+      <li className="neutral">
+        <span>{label}</span>
+        <strong>{suffix || "対象外"}</strong>
+      </li>
+    );
+  }
+  return (
+    <li className={value ? "ok" : "bad"}>
+      <span>{label}</span>
+      <strong>{suffix || (value ? "OK" : "要確認")}</strong>
+    </li>
+  );
+}
+
+function roundLabel(round: string) {
+  if (!round) return "-";
+  if (round === "pretest") return "事前";
+  if (round === "final_test") return "最終";
+  if (round.startsWith("retest_")) return `再${round.replace("retest_", "")}`;
+  return round;
+}
+
+function changeLabel(type: string | null | undefined) {
+  return (
+    {
+      resolved: "解消",
+      same_type_recurred: "同種再発",
+      changed_type: "別タイプ化",
+      unknown_persisted: "unknown継続",
+      regressed: "後戻り",
+      neutral: "変化なし",
+    } as Record<string, string>
+  )[type || "neutral"] || type || "変化なし";
 }
 
 function ParticipantFlow({ logs }: { logs: any }) {

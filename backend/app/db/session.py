@@ -37,6 +37,12 @@ def _ensure_lightweight_schema_updates() -> None:
             ("answered_at", datetime_type),
             ("response_time_sec", "FLOAT"),
         ],
+        "evaluation_summaries": [
+            ("score_timeline_json", json_type),
+            ("misconception_timeline_json", json_type),
+            ("learning_burden_json", json_type),
+            ("condition_check_json", json_type),
+        ],
     }
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())

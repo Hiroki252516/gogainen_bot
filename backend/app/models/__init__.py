@@ -271,6 +271,10 @@ class EvaluationSummary(Base):
     m4_failure_rate: Mapped[float | None] = mapped_column(Float)
     unknown_persistence_rate: Mapped[float | None] = mapped_column(Float)
     learning_target_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    score_timeline_json: Mapped[dict | None] = mapped_column(JSON)
+    misconception_timeline_json: Mapped[dict | None] = mapped_column(JSON)
+    learning_burden_json: Mapped[dict | None] = mapped_column(JSON)
+    condition_check_json: Mapped[dict | None] = mapped_column(JSON)
     completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
