@@ -38,6 +38,16 @@ from app.services.experiment import (
 
 MAX_SLOT_ATTEMPTS = 3
 MAX_PHASE2_ATTEMPTS = 3
+PREREQUISITE_REQUIRED_SLOT_COUNT = 1
+CONCEPT_PHASE1_REQUIRED_SLOT_COUNT = 2
+
+
+def _required_slot_count(stage: str | None) -> int:
+    if stage in {"prerequisite", "prerequisite_review"}:
+        return PREREQUISITE_REQUIRED_SLOT_COUNT
+    if stage == "concept_phase1":
+        return CONCEPT_PHASE1_REQUIRED_SLOT_COUNT
+    return 1
 
 
 def _participant_release(db: Session, participant: Participant) -> ContentVersion:
@@ -515,6 +525,8 @@ def fixed_learning_session_state(db: Session, session_id: str) -> dict[str, Any]
     slot_index = 1
     if session.current_slot_key and "slot2" in session.current_slot_key:
         slot_index = 2
+    required_slot_count = _required_slot_count(session.current_stage)
+    displayed_slot_index = min(slot_index, required_slot_count)
     return {
         "learning_session_id": session.id,
         "participant_id": participant.id,
@@ -528,8 +540,8 @@ def fixed_learning_session_state(db: Session, session_id: str) -> dict[str, Any]
         "progress": {
             "prerequisite_index": current_prereq_index,
             "prerequisite_total": len(prereqs),
-            "required_question_index": slot_index if session.current_stage in {"prerequisite", "prerequisite_review", "concept_phase1"} else None,
-            "required_question_total": 2 if session.current_stage in {"prerequisite", "prerequisite_review", "concept_phase1"} else 1,
+            "required_question_index": displayed_slot_index if session.current_stage in {"prerequisite", "prerequisite_review", "concept_phase1"} else None,
+            "required_question_total": required_slot_count,
             "attempt_index": session.current_attempt_index,
             "max_attempts": 1 if session.current_stage == "concept_phase2" and session.group_condition == "control" else 3,
             "cycle_index": session.current_cycle_index,
@@ -670,10 +682,13 @@ def _complete_prerequisite_slot(
         .filter_by(learning_session_id=session.id, prerequisite_key=session.current_prerequisite_key)
         .one()
     )
-    row.completed_slot_count = min(2, row.completed_slot_count + 1)
+    row.completed_slot_count = max(
+        row.completed_slot_count,
+        min(PREREQUISITE_REQUIRED_SLOT_COUNT, row.completed_slot_count + 1),
+    )
     if forced:
         row.forced_slot_count += 1
-    if row.completed_slot_count >= 2:
+    if row.completed_slot_count >= PREREQUISITE_REQUIRED_SLOT_COUNT:
         row.status = "completed"
     return row
 
@@ -686,7 +701,7 @@ async def _advance_after_completed_slot(
 ) -> None:
     if stage == "prerequisite":
         row = _complete_prerequisite_slot(db, session, forced)
-        if "slot1" in (session.current_slot_key or ""):
+        if "slot1" in (session.current_slot_key or "") and row.completed_slot_count < PREREQUISITE_REQUIRED_SLOT_COUNT:
             session.current_slot_key = f"prerequisite:{session.current_prerequisite_key}:slot2"
             session.current_attempt_index = 1
             return
@@ -733,8 +748,7 @@ async def _start_prerequisite_review(
         .one()
     )
     review_row.review_count += 1
-    slot_index = 1 if review_row.review_count % 2 else 2
-    slot_key = f"prerequisite:{review_key}:slot{slot_index}"
+    slot_key = f"prerequisite:{review_key}:slot1"
     session.review_return_slot_key = session.current_slot_key
     session.review_prerequisite_key = review_key
     session.current_stage = "prerequisite_review"

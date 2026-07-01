@@ -176,6 +176,116 @@ button:disabled {
   padding: 14px;
 }
 
+.learning-progress {
+  display: grid;
+  gap: 14px;
+}
+
+.stepper {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.stepper-item {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+  min-width: 0;
+}
+
+.stepper-item:last-child {
+  border-right: 0;
+}
+
+.stepper-item.active {
+  background: var(--primary-quiet);
+}
+
+.stepper-item.done {
+  background: #f0fdfa;
+}
+
+.stepper-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: #fff;
+}
+
+.stepper-item.active .stepper-dot {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 5px #fff;
+  background: var(--primary);
+}
+
+.stepper-item.done .stepper-dot {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+
+.stepper-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stepper-text strong,
+.stepper-text span {
+  overflow-wrap: anywhere;
+}
+
+.stepper-text span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.current-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.current-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+
+.current-summary > div:nth-child(3n) {
+  border-right: 0;
+}
+
+.current-summary > div:nth-last-child(-n + 3) {
+  border-bottom: 0;
+}
+
+.current-summary span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.current-summary strong {
+  overflow-wrap: anywhere;
+}
+
 .learning-material {
   padding: 18px;
 }
@@ -265,6 +375,86 @@ button:disabled {
   margin: 0;
 }
 
+.analysis-progress {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #b9d7ff;
+  border-radius: 8px;
+  background: var(--primary-quiet);
+}
+
+.analysis-heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.analysis-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.analysis-heading span:not(.spinner) {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #b9d7ff;
+  border-top-color: var(--primary);
+  border-radius: 999px;
+  animation: spin 0.9s linear infinite;
+  flex: 0 0 auto;
+}
+
+.analysis-progress ol {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.analysis-progress li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+}
+
+.analysis-progress li > span {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid #b9d7ff;
+  background: #fff;
+}
+
+.analysis-progress li.active {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.analysis-progress li.active > span {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.analysis-progress li.done > span {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .danger {
   color: var(--danger);
 }
@@ -321,6 +511,34 @@ button:disabled {
   .grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+
+  .stepper {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stepper-item {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .stepper-item:last-child {
+    border-bottom: 0;
+  }
+
+  .current-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .current-summary > div,
+  .current-summary > div:nth-child(3n),
+  .current-summary > div:nth-last-child(-n + 3) {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .current-summary > div:last-child {
+    border-bottom: 0;
   }
 
   h1 {

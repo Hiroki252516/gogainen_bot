@@ -229,7 +229,7 @@ function LearningPanel({
               name="learning-option"
               value={option.option_id}
               checked={selected === option.option_id}
-              disabled={Boolean(result)}
+              disabled={Boolean(result) || saving}
               onChange={() => setSelected(option.option_id)}
             />
             <span><strong>{option.label}.</strong> {option.body}</span>
@@ -237,7 +237,12 @@ function LearningPanel({
         ))}
       </div>
       {!result ? (
-        <button onClick={onSubmit} disabled={saving || !selected}>回答する</button>
+        <>
+          {saving ? <SubmitProgress /> : null}
+          <button onClick={onSubmit} disabled={saving || !selected}>
+            {saving ? "分析中..." : "回答する"}
+          </button>
+        </>
       ) : (
         <div className="stack">
           <div className={result.is_correct ? "feedback-card feedback-card-ok" : "feedback-card feedback-card-error"}>
@@ -262,24 +267,70 @@ function LearningPanel({
 
 function Progress({ session }: { session: LearningSession }) {
   const progress = session.progress;
+  const requiredIndex = progress.required_question_index || 1;
+  const requiredTotal = progress.required_question_total || 1;
+  const isPrerequisite = session.stage === "prerequisite" || session.stage === "prerequisite_review";
+  const isConceptPhase1 = session.stage === "concept_phase1";
+  const isCompleted = session.status === "completed";
+  const stepItems = [
+    {
+      key: "prerequisite",
+      label: "前提用語",
+      detail: `${Math.min(progress.prerequisite_index || 1, progress.prerequisite_total)} / ${progress.prerequisite_total}`,
+      state: isPrerequisite ? "active" : isConceptPhase1 || isCompleted ? "done" : "upcoming"
+    },
+    {
+      key: "concept_phase1",
+      label: "概念フェーズ1",
+      detail: isConceptPhase1 ? `小問 ${requiredIndex} / ${requiredTotal}` : "教材あり",
+      state: isConceptPhase1 ? "active" : isCompleted ? "done" : "upcoming"
+    },
+    {
+      key: "retest",
+      label: "再テスト",
+      detail: isCompleted ? "次へ" : "待機中",
+      state: isCompleted ? "active" : "upcoming"
+    }
+  ];
+
   return (
-    <div className="grid">
-      <div className="notice">
-        <strong>前提用語</strong>
-        <p className="muted">
-          {session.prerequisites.filter((item) => item.status === "completed").length} / {session.prerequisites.length} 完了
-        </p>
-      </div>
-      <div className="notice">
-        <strong>現在</strong>
-        <p className="muted">{stageTitle(session)}</p>
-      </div>
-      <div className="notice">
-        <strong>試行</strong>
-        <p className="muted">
-          {progress.attempt_index} / {progress.max_attempts}
-          {session.stage === "concept_phase1" ? ` ・サイクル ${progress.cycle_index}` : ""}
-        </p>
+    <div className="learning-progress">
+      <ol className="stepper" aria-label="学習セッションの進行状況">
+        {stepItems.map((item) => (
+          <li className={`stepper-item ${item.state}`} key={item.key}>
+            <span className="stepper-dot" aria-hidden="true" />
+            <span className="stepper-text">
+              <strong>{item.label}</strong>
+              <span>{item.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <div className="current-summary" aria-label="現在の学習対象">
+        <div>
+          <span>対象概念</span>
+          <strong>{session.term_label}</strong>
+        </div>
+        <div>
+          <span>現在フェーズ</span>
+          <strong>{stageTitle(session)}</strong>
+        </div>
+        <div>
+          <span>{isPrerequisite ? "現在の前提用語" : "現在の確認"}</span>
+          <strong>{session.current_prerequisite?.label || `概念小問 ${requiredIndex} / ${requiredTotal}`}</strong>
+        </div>
+        <div>
+          <span>小問</span>
+          <strong>{requiredIndex} / {requiredTotal}</strong>
+        </div>
+        <div>
+          <span>試行</span>
+          <strong>{progress.attempt_index} / {progress.max_attempts}</strong>
+        </div>
+        <div>
+          <span>サイクル</span>
+          <strong>{isConceptPhase1 ? progress.cycle_index : "-"}</strong>
+        </div>
       </div>
     </div>
   );
@@ -290,6 +341,42 @@ function stageTitle(session: LearningSession) {
   if (session.stage === "prerequisite") {
     return `前提用語 ${session.progress.prerequisite_index || 1} / ${session.progress.prerequisite_total}: ${session.current_prerequisite?.label || ""}`;
   }
-  if (session.stage === "concept_phase1") return `概念フェーズ1 教材あり・確認 ${session.progress.required_question_index || 1} / 2`;
+  if (session.stage === "concept_phase1") {
+    return `概念フェーズ1 教材あり・確認 ${session.progress.required_question_index || 1} / ${session.progress.required_question_total || 2}`;
+  }
   return "完了";
+}
+
+function SubmitProgress() {
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const steps = ["回答を記録しています", "選択内容を確認しています", "解説を生成しています", "次の教材を準備しています"];
+  const activeIndex = Math.min(steps.length - 1, Math.floor(elapsedSec / 8));
+
+  useEffect(() => {
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="analysis-progress" role="status" aria-live="polite">
+      <div className="analysis-heading">
+        <span className="spinner" aria-hidden="true" />
+        <div>
+          <strong>分析中です</strong>
+          <span>{elapsedSec}秒経過</span>
+        </div>
+      </div>
+      <ol>
+        {steps.map((step, index) => (
+          <li className={index < activeIndex ? "done" : index === activeIndex ? "active" : ""} key={step}>
+            <span aria-hidden="true" />
+            {step}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }

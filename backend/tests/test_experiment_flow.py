@@ -178,6 +178,16 @@ def test_proposed_flow_uses_fixed_prerequisites_and_adaptive_returns():
 
     session = pass_prerequisites(session)
     assert session["stage"] == "concept_phase1"
+    db = SessionLocal()
+    try:
+        prereq_attempts = (
+            db.query(LearningChoiceAttempt)
+            .filter_by(learning_session_id=session["learning_session_id"], stage="prerequisite")
+            .count()
+        )
+        assert prereq_attempts == 5
+    finally:
+        db.close()
     wrong = answer(session, "M1")
     assert wrong["is_correct"] is False
     assert wrong["correct_answer"] is None
@@ -229,7 +239,9 @@ def test_third_wrong_forces_resolution_without_blocking():
     assert third["result_status"] == "forced_resolved"
     assert third["correct_answer"]["body"]
     assert third["session"]["status"] == "prerequisite"
-    assert third["session"]["progress"]["required_question_index"] == 2
+    assert third["session"]["progress"]["prerequisite_index"] == 2
+    assert third["session"]["progress"]["required_question_index"] == 1
+    assert third["session"]["progress"]["required_question_total"] == 1
     db = SessionLocal()
     try:
         attempts = db.query(LearningChoiceAttempt).filter_by(learning_session_id=session["learning_session_id"]).all()
