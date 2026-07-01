@@ -8,6 +8,38 @@ from app.ai.backend import initial_level, strategy_for
 class MockAIBackend:
     provider = "mock"
 
+    def _current_misconception(self, payload: dict[str, Any]) -> str | None:
+        for row in reversed(payload.get("learning_history") or []):
+            mtype = row.get("misconception_type")
+            if mtype:
+                return mtype
+        retest = (payload.get("retest_context") or {}).get("latest_retest") or {}
+        if retest.get("misconception_type"):
+            return retest["misconception_type"]
+        diagnosis = (payload.get("diagnosis_context") or {}).get("initial_test_diagnosis") or {}
+        return diagnosis.get("misconception_type")
+
+    def _mock_focus_lines(self, mtype: str | None) -> list[str]:
+        if mtype == "M1":
+            return [
+                "- **まず分けること**: これは人間の気持ちや物理的な場所ではなく、モデル内の役割を持つ概念です。",
+                "- **見直す観点**: 何ではないか、何の種類の概念かを先に確認します。",
+            ]
+        if mtype == "M2":
+            return [
+                "- **まず比べること**: 似ている概念と同じものとして扱わず、役割と処理対象を分けます。",
+                "- **見直す観点**: 入力、処理、出力、使う場面の違いを確認します。",
+            ]
+        if mtype == "M3":
+            return [
+                "- **まず見ること**: 名前やキーワードだけではなく、仕組みと判断基準に注目します。",
+                "- **見直す観点**: その単語があるかではなく、どんな関係や処理が起きているかを確認します。",
+            ]
+        return [
+            "- **まず押さえること**: 基本的な意味と役割を短く確認します。",
+            "- **見直す観点**: 具体例と反例を一つずつ使って整理します。",
+        ]
+
     def _learning_diagnosis(self, payload: dict[str, Any], is_passed: bool) -> dict[str, Any]:
         answer = (payload.get("learner_answer") or "").strip()
         if payload.get("group_condition") == "control":
@@ -92,12 +124,15 @@ class MockAIBackend:
         target = payload["target_term"]["label"]
         prerequisite = payload["fixed_prerequisite"]["label"]
         mode = payload.get("material_mode", "initial")
+        focus_lines = "\n".join(self._mock_focus_lines(self._current_misconception(payload)))
         return {
             "material": (
                 f"## {prerequisite}の要点\n"
                 f"- **役割**: {target}を理解するための基礎です。\n"
                 f"- **つながり**: {mode}教材として、役割、関係、具体例を整理します。\n"
-                "- **確認**: 何を表し、どこで使うかを分けて見ます。"
+                "- **確認**: 何を表し、どこで使うかを分けて見ます。\n"
+                "## 今回の見直し方\n"
+                f"{focus_lines}"
             ),
             "examples": [f"{prerequisite}を使う簡単な例"],
             "comparisons": [f"{prerequisite}と似た概念の違い"],
@@ -108,12 +143,14 @@ class MockAIBackend:
 
     async def explain_selected_distractor(self, payload: dict[str, Any]) -> dict[str, Any]:
         selected = payload.get("selected_option_body", "選択した説明")
+        focus_lines = "\n".join(self._mock_focus_lines(self._current_misconception(payload)))
         return {
             "feedback": (
                 "## どこが違うか\n"
                 f"- 「{selected}」は、対象概念の役割または処理範囲と一致しません。\n"
                 "## 見直す観点\n"
-                "- 正答そのものではなく、何を処理し何が変わるかを確認してください。"
+                "- 正答そのものではなく、何を処理し何が変わるかを確認してください。\n"
+                f"{focus_lines}"
             ),
             "remediation_focus": "概念の種類、類似概念との境界、処理の仕組みを確認する。",
             "general_knowledge_supplement": None,
@@ -204,11 +241,14 @@ class MockAIBackend:
         term = payload["target_term"]
         prereq_labels = [item["term_label"] for item in payload.get("prerequisites", [])]
         joined = "、".join(prereq_labels)
+        focus_lines = "\n".join(self._mock_focus_lines(self._current_misconception(payload)))
         return {
             "concept_material": (
                 f"## {term['label']}の全体像\n"
                 f"- **前提用語とのつながり**: {joined}を組み合わせて理解します。\n"
-                "- **確認**: 各前提用語がどの役割を持つかをつなげて見ます。"
+                "- **確認**: 各前提用語がどの役割を持つかをつなげて見ます。\n"
+                "## 今回の見直し方\n"
+                f"{focus_lines}"
             ),
             "concept_prompt": f"{joined}を使って、{term['label']}を自分の言葉で説明してください。",
             "expected_answer": f"{joined}を使い、{term['label']}の役割を説明できている。",

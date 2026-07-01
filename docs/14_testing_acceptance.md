@@ -12,6 +12,8 @@
 - L2完了後、概念フェーズ2へ進まずsessionが完了する。
 - 統制群AI payloadに初期診断、Mタイプ履歴、再テスト誤答履歴が入らない。
 - 提案群AI payloadには初期診断、学習履歴、再テスト誤答Mタイプが入る。
+- 提案群AI payloadには `misconception_taxonomy` と `teaching_guidelines` が入り、M1/M2/M3/unknownの定義と教材生成指針が含まれる。
+- 統制群AI payloadには `misconception_taxonomy` と `teaching_guidelines` が入らない。
 - 最終テスト採点後は `finish` になり、事後アンケートへ遷移しない。
 - AI教材、誤答解説、正答要点のプロンプトがMarkdown本文を要求し、内部ラベルや正答漏洩の既存制約を維持する。
 

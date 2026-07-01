@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.ai.codex_app_server_backend import CodexAppServerError
 from app.ai.backend import initial_level, lower_level, raise_level, strategy_for
 from app.ai.factory import get_ai_backend
+from app.ai.misconception_taxonomy import enrich_payload_with_misconception_support
 from app.core.config import get_settings
 from app.models import (
     AdaptiveSupportEvent,
@@ -234,19 +235,20 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
 
 async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[str, Any]:
     backend = get_ai_backend()
+    request_payload = enrich_payload_with_misconception_support(purpose, payload)
     started = datetime.now(UTC)
     try:
-        result = await getattr(backend, purpose)(payload)
+        result = await getattr(backend, purpose)(request_payload)
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
         log = AICallLog(
-                provider=backend.provider,
-                fallback_provider=result.pop("_fallback_provider", None),
-                purpose=purpose,
-                request_payload=payload,
-                response_payload=result,
-                status="success",
-                latency_ms=latency,
-            )
+            provider=backend.provider,
+            fallback_provider=result.pop("_fallback_provider", None),
+            purpose=purpose,
+            request_payload=request_payload,
+            response_payload=result,
+            status="success",
+            latency_ms=latency,
+        )
         db.add(log)
         db.commit()
         db.refresh(log)
@@ -257,7 +259,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
             AICallLog(
                 provider=getattr(backend, "provider", "unknown"),
                 purpose=purpose,
-                request_payload=payload,
+                request_payload=request_payload,
                 status="failed",
                 error_code=exc.code,
                 error_message=exc.detail,
@@ -274,7 +276,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
             },
         ) from exc
     except Exception as exc:
-        db.add(AICallLog(provider=getattr(backend, "provider", "unknown"), purpose=purpose, request_payload=payload, status="failed", error_code="ai_call_failed", error_message=str(exc)))
+        db.add(AICallLog(provider=getattr(backend, "provider", "unknown"), purpose=purpose, request_payload=request_payload, status="failed", error_code="ai_call_failed", error_message=str(exc)))
         db.commit()
         raise
 

@@ -180,6 +180,7 @@ class CodexAppServerBackend:
                 "正答選択肢なら diagnosed_status は stable_correct、recommended_initial_scaffolding_level は L1 にする。",
                 "誤答または unknown なら recommended_initial_scaffolding_level は L3 にする。L4は使わない。",
                 "誤概念タイプは内部研究ラベルとして M1/M2/M3/M4/unknown/null のみを使う。",
+                "入力JSONにmisconception_taxonomyとteaching_guidelinesがある場合は、それをMタイプ解釈と教授方略の内部基準として使う。",
                 "natural_language_diagnosis には M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
                 "統制群でも分類は保存してよいが、教授方略に使う推薦は general_explanation にする。",
                 f"recommended_teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。",
@@ -234,7 +235,7 @@ class CodexAppServerBackend:
         if group == "control":
             rules.append("統制群なので、過去ログ、誤概念タイプ、足場掛け履歴に適応しない通常AIチューターとして説明する。teaching_strategy は general_explanation に固定する。")
         else:
-            rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
+            rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。misconception_taxonomyとteaching_guidelinesを内部基準として使う。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)
         result["tutor_message"] = _strip_internal_labels(result["tutor_message"])
@@ -272,7 +273,7 @@ class CodexAppServerBackend:
         if group == "control":
             rules.append("統制群なので事前診断、過去回答、累積誤概念、戻り履歴を利用しない。")
         else:
-            rules.append("提案群なので、渡された事前診断と累積履歴を教材の焦点へ反映する。")
+            rules.append("提案群なので、渡された事前診断と累積履歴を教材の焦点へ反映する。misconception_taxonomyとteaching_guidelinesを内部基準として使い、M1ならカテゴリー再定位、M2なら境界比較、M3なら深層構造注目、unknownなら基礎説明を優先する。")
         result = await self._run_structured_turn(
             "generate_prerequisite_material",
             self._prompt("fixed_prerequisite_material", prompt_payload, rules),
@@ -305,6 +306,7 @@ class CodexAppServerBackend:
                 prompt_payload,
                 [
                     "選択した説明のどこが対象概念と一致しないかを自然な日本語で説明する。",
+                    "入力JSONにmisconception_taxonomyとteaching_guidelinesがある場合は、選択肢のmisconception_typeと本文を照合し、該当タイプの教材生成指針に沿って説明する。",
                     _LEARNER_MARKDOWN_RULE,
                     "feedback は「どこが違うか」「見直す観点」を短い見出しと箇条書きで示す。",
                     "正答選択肢の本文、位置、正答そのものは教えない。",
@@ -374,6 +376,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "固定問題バンクが枯渇した場合だけ使う追加5択問題を作る。",
+                    "入力JSONのmisconception_taxonomyとteaching_guidelinesがある場合は、それに基づいてM1/M2/M3の誤答選択肢を作る。",
                     "正答1件、M1、M2、M3、わからないを各1件にする。",
                     "既出問題と同じ文面を使わない。",
                     "選択肢本文へM1/M2/M3/M4という内部ラベルを書かない。",
@@ -512,6 +515,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "前提用語理解の記述回答を採点する。",
+                    "入力JSONにmisconception_taxonomyとteaching_guidelinesがある場合は、それをMタイプ判定とrecommended_strategyの内部基準として使う。",
                     "中核要素が含まれ重大な誤りがなければpassにする。",
                     "failなら、より簡単な再説明と具体例を remediation_material に書く。",
                     "提案群では回答対象の前提用語についてM1/M2/M3/unknown/ambiguous/resolvedを判定する。重大な誤概念があればpassにしない。",
@@ -546,6 +550,7 @@ class CodexAppServerBackend:
                     "前提用語または統制群小問を踏まえて、対象概念フェーズ1の教材を作る。",
                     "学習者に前提用語を使って対象概念を説明させるpromptを作る。",
                     "統制群payloadの場合はpretest診断や誤概念情報を使わず、一般説明にする。",
+                    "提案群payloadにmisconception_taxonomyとteaching_guidelinesがある場合は、M1ならカテゴリー再定位、M2なら境界比較、M3なら深層構造注目、unknownなら基礎説明を教材の焦点にする。",
                     _LEARNER_MARKDOWN_RULE,
                     "concept_material は「要点」「前提用語とのつながり」「注意点」などの短い見出しと箇条書きを中心にする。",
                     "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
@@ -590,6 +595,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "教材あり概念理解フェーズ1の記述回答を採点する。",
+                    "入力JSONにmisconception_taxonomyとteaching_guidelinesがある場合は、それをMタイプ判定とrecommended_strategyの内部基準として使う。",
                     "前提用語を使って対象概念の役割や仕組みを説明できていればpassにする。",
                     "提案群のfailなら不足している前提用語と、直前に確認すべき関連用語を返す。統制群では不足用語リストは空でもよい。",
                     "confirmed_prerequisite_labelsには回答中で意味のある形で正しく使われた前提用語だけを入れる。",
@@ -661,6 +667,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "教材なし概念説明フェーズ2の回答を採点する。",
+                    "入力JSONにmisconception_taxonomyとteaching_guidelinesがある場合は、それをMタイプ判定とrecommended_strategyの内部基準として使う。",
                     "対象概念の中核、前提用語の自然な利用、light_conditionsの充足、重大な誤りの有無で判断する。",
                     "提案群でfailなら return_to_phase1 を true にする。統制群は戻り制御を使わないが、採点結果としては true/false を返してよい。",
                     "提案群ではM1/M2/M3/unknown/ambiguous/resolvedを判定し、重大な誤概念があればpassにしない。",
@@ -714,6 +721,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "確定済みの誤概念診断と更新後状態に基づき、フィードバック、補助教材、別文面の次の確認質問を作る。",
+                    "入力JSONのmisconception_taxonomyとteaching_guidelinesを内部基準として、観察されたMタイプに対応する支援方略を使う。",
                     "完成回答やそのまま提出できる模範回答は禁止する。観点、部分例、比較、反例だけを示す。",
                     "rag_contextを優先する。一般知識を補足した場合はgeneral_knowledge_supplementに分離する。",
                     "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
@@ -830,6 +838,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "再テスト、L0確認、転移テストの回答を採点する。",
+                    "入力JSONにmisconception_taxonomyとteaching_guidelinesがある場合は、それをMタイプ判定の内部基準として使う。",
                     "学習者には即時正解やヒントを出さない前提なので、feedback_for_log は管理・分析ログ用に短く書く。",
                     "転移テストで文脈適用に失敗している場合は misconception_type を M4 にする。",
                 ],
@@ -859,6 +868,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
+                    "入力JSONにmisconception_taxonomyとteaching_guidelinesがある場合は、それを内部基準として支援方略を選ぶ。",
                     "rag_context がある場合は教材コンテキストを優先し、教材にない内容は推測で断定しない。",
                     "M1/M2/M3/M4 という内部ラベルを学習者向け文面に絶対に書かない。",
                     "理解が十分なら move_next、不十分なら continue にする。",

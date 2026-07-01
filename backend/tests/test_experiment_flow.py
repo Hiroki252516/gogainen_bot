@@ -173,6 +173,10 @@ def test_proposed_flow_uses_fixed_prerequisites_and_adaptive_returns():
         log = db.query(AICallLog).filter_by(purpose="generate_prerequisite_material").order_by(AICallLog.created_at.desc()).first()
         assert log.request_payload["diagnosis_context"]["initial_test_diagnosis"]["misconception_type"] == "M1"
         assert log.request_payload["rag_context"]["source"] == "rag_ready_教材"
+        assert "misconception_taxonomy" in log.request_payload
+        assert "teaching_guidelines" in log.request_payload
+        assert log.request_payload["misconception_taxonomy"]["types"]["M1"]["name"] == "category_misclassification"
+        assert log.request_payload["teaching_guidelines"]["strategy_map"]["M2"] == "boundary_comparison"
     finally:
         db.close()
 
@@ -192,6 +196,12 @@ def test_proposed_flow_uses_fixed_prerequisites_and_adaptive_returns():
     assert wrong["is_correct"] is False
     assert wrong["correct_answer"] is None
     assert wrong["session"]["stage"] == "prerequisite_review"
+    db = SessionLocal()
+    try:
+        feedback_log = db.query(AICallLog).filter_by(purpose="explain_selected_distractor").order_by(AICallLog.created_at.desc()).first()
+        assert feedback_log.request_payload["misconception_taxonomy"]["types"]["M3"]["name"] == "surface_feature_keyword_reaction"
+    finally:
+        db.close()
     reviewed = answer(wrong["session"], None)
     assert reviewed["session"]["stage"] == "concept_phase1"
     assert reviewed["session"]["progress"]["attempt_index"] == 2
@@ -219,12 +229,22 @@ def test_control_uses_same_questions_without_adaptive_history():
         assert log.request_payload["group_condition"] == "control"
         assert "diagnosis_context" not in log.request_payload
         assert "learning_history" not in log.request_payload
+        assert "misconception_taxonomy" not in log.request_payload
+        assert "teaching_guidelines" not in log.request_payload
     finally:
         db.close()
     control = pass_prerequisites(control)
     wrong = answer(control, "M1")
     assert wrong["session"]["stage"] == "concept_phase1"
     assert wrong["session"]["progress"]["attempt_index"] == 2
+    db = SessionLocal()
+    try:
+        feedback_log = db.query(AICallLog).filter_by(purpose="explain_selected_distractor").order_by(AICallLog.created_at.desc()).first()
+        assert feedback_log.request_payload["group_condition"] == "control"
+        assert "misconception_taxonomy" not in feedback_log.request_payload
+        assert "teaching_guidelines" not in feedback_log.request_payload
+    finally:
+        db.close()
     completed = pass_phase1(wrong["session"])
     assert completed["status"] == "completed"
 
