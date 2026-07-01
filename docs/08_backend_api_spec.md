@@ -9,8 +9,8 @@
 - `GET /api/participants/{participant_id}/learning-targets`: 現在ループで未完了の学習対象だけを返す。
 - `POST /api/learning-sessions`: 現在ループ用の固定選択式学習sessionを作成する。再学習では新しいsessionを作る。
 - `GET /api/learning-sessions/{session_id}`: 現在教材、問題、表示順、進捗を返す。正答IDやMタイプは返さない。
-- `POST /api/learning-sessions/{session_id}/prerequisite-attempts`: 前提用語問題への選択回答を保存する。
-- `POST /api/learning-sessions/{session_id}/concept-phase1-attempts`: 概念フェーズ1問題への選択回答を保存する。
+- `POST /api/learning-sessions/{session_id}/prerequisite-attempts`: L3用語問題への選択回答を保存する。APIパスは内部互換のため `prerequisite` 名を維持する。
+- `POST /api/learning-sessions/{session_id}/concept-phase1-attempts`: L2問題への選択回答を保存する。APIパスは内部互換のため `concept-phase1` 名を維持する。
 - `GET /api/experiment/{participant_id}/retest`: `retest_v1` の全5問を返す。
 - `POST /api/participants/{participant_id}/score-retest`: 再テスト回を保存し、全問正解なら `/final-test`、不正解があれば `/learning-targets` を返す。
 - `GET /api/experiment/{participant_id}/final-test`: `final_test_v1` の全5問を返す。

@@ -7,7 +7,7 @@
 1. `/start`: 参加同意と群条件の設定
 2. `/initial-test`: 初期テスト。全5概念・5択・理由欄なし・自信度なし
 3. `/diagnosing`: 初期テスト結果から、正答以外の概念を学習対象にする
-4. `/learning-targets` と `/learning/[termSlug]`: 学習対象ごとに、前提用語フェーズと概念フェーズ1を実施
+4. `/learning-targets` と `/learning/[termSlug]`: 学習対象ごとに、L3（前提用語学習）とL2（概念理解フェーズ1）を実施
 5. `/retest`: 再テスト。全5概念を出題し、1問でも不正解またはunknownなら不正解概念だけ再学習へ戻す
 6. `/final-test`: 再テストで全5問正解後に実施する最終テスト
 7. `/finish`: 実験終了

@@ -11,13 +11,13 @@
 
 ## `generate_prerequisite_material`
 
-入力: 対象概念、固定前提用語、material mode、RAG。提案群だけ診断snapshotと履歴を追加。
+入力: 対象概念、L3用語、material mode、RAG。提案群だけ診断snapshotと履歴を追加。関数名と内部payload keyは互換性のため `prerequisite` 名を維持する。
 
 出力: material、examples、comparisons、counterexamples、rag sources、general knowledge supplement。`material` はMarkdown本文として表示される。
 
 ## `generate_concept_phase1_material`
 
-入力: 対象概念、固定前提用語名、cycle、material mode、RAG。提案群だけ診断と履歴を追加。
+入力: 対象概念、L3用語名、cycle、material mode、RAG。提案群だけ診断と履歴を追加。関数名と内部payload keyは互換性のため `concept_phase1` 名を維持する。
 
 出力は教材のみ。問題文や正答を生成しない。`concept_material` はMarkdown本文として表示される。
 

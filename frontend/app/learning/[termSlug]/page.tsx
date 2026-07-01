@@ -214,7 +214,7 @@ function LearningPanel({
       <Progress session={session} />
       {session.material ? (
         <div className="notice learning-material">
-          <strong className="card-eyebrow">{session.current_prerequisite?.label || "概念教材"}</strong>
+          <strong className="card-eyebrow">{session.current_prerequisite?.label || "L2教材"}</strong>
           <MarkdownText content={session.material.body} />
         </div>
       ) : null}
@@ -275,13 +275,13 @@ function Progress({ session }: { session: LearningSession }) {
   const stepItems = [
     {
       key: "prerequisite",
-      label: "前提用語",
+      label: "L3",
       detail: `${Math.min(progress.prerequisite_index || 1, progress.prerequisite_total)} / ${progress.prerequisite_total}`,
       state: isPrerequisite ? "active" : isConceptPhase1 || isCompleted ? "done" : "upcoming"
     },
     {
       key: "concept_phase1",
-      label: "概念フェーズ1",
+      label: "L2",
       detail: isConceptPhase1 ? `小問 ${requiredIndex} / ${requiredTotal}` : "教材あり",
       state: isConceptPhase1 ? "active" : isCompleted ? "done" : "upcoming"
     },
@@ -316,8 +316,8 @@ function Progress({ session }: { session: LearningSession }) {
           <strong>{stageTitle(session)}</strong>
         </div>
         <div>
-          <span>{isPrerequisite ? "現在の前提用語" : "現在の確認"}</span>
-          <strong>{session.current_prerequisite?.label || `概念小問 ${requiredIndex} / ${requiredTotal}`}</strong>
+          <span>{isPrerequisite ? "現在のL3用語" : "現在のL2確認"}</span>
+          <strong>{session.current_prerequisite?.label || `L2小問 ${requiredIndex} / ${requiredTotal}`}</strong>
         </div>
         <div>
           <span>小問</span>
@@ -337,12 +337,12 @@ function Progress({ session }: { session: LearningSession }) {
 }
 
 function stageTitle(session: LearningSession) {
-  if (session.stage === "prerequisite_review") return `前提用語レビュー: ${session.current_prerequisite?.label || ""}`;
+  if (session.stage === "prerequisite_review") return `L3レビュー: ${session.current_prerequisite?.label || ""}`;
   if (session.stage === "prerequisite") {
-    return `前提用語 ${session.progress.prerequisite_index || 1} / ${session.progress.prerequisite_total}: ${session.current_prerequisite?.label || ""}`;
+    return `L3 ${session.progress.prerequisite_index || 1} / ${session.progress.prerequisite_total}: ${session.current_prerequisite?.label || ""}`;
   }
   if (session.stage === "concept_phase1") {
-    return `概念フェーズ1 教材あり・確認 ${session.progress.required_question_index || 1} / ${session.progress.required_question_total || 2}`;
+    return `L2 教材あり・確認 ${session.progress.required_question_index || 1} / ${session.progress.required_question_total || 2}`;
   }
   return "完了";
 }
