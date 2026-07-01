@@ -93,7 +93,12 @@ class MockAIBackend:
         prerequisite = payload["fixed_prerequisite"]["label"]
         mode = payload.get("material_mode", "initial")
         return {
-            "material": f"{prerequisite}は{target}を理解するための基礎です。{mode}教材として、役割、関係、具体例を整理します。",
+            "material": (
+                f"## {prerequisite}の要点\n"
+                f"- **役割**: {target}を理解するための基礎です。\n"
+                f"- **つながり**: {mode}教材として、役割、関係、具体例を整理します。\n"
+                "- **確認**: 何を表し、どこで使うかを分けて見ます。"
+            ),
             "examples": [f"{prerequisite}を使う簡単な例"],
             "comparisons": [f"{prerequisite}と似た概念の違い"],
             "counterexamples": [f"{prerequisite}ではない例"],
@@ -104,14 +109,19 @@ class MockAIBackend:
     async def explain_selected_distractor(self, payload: dict[str, Any]) -> dict[str, Any]:
         selected = payload.get("selected_option_body", "選択した説明")
         return {
-            "feedback": f"「{selected}」は、対象概念の役割または処理範囲と一致しません。正答そのものではなく、何を処理し何が変わるかを見直してください。",
+            "feedback": (
+                "## どこが違うか\n"
+                f"- 「{selected}」は、対象概念の役割または処理範囲と一致しません。\n"
+                "## 見直す観点\n"
+                "- 正答そのものではなく、何を処理し何が変わるかを確認してください。"
+            ),
             "remediation_focus": "概念の種類、類似概念との境界、処理の仕組みを確認する。",
             "general_knowledge_supplement": None,
         }
 
     async def generate_correct_answer_summary(self, payload: dict[str, Any]) -> dict[str, Any]:
         label = payload.get("focus_label") or payload.get("target_term", {}).get("label", "この概念")
-        return {"summary": f"{label}の役割と処理対象を区別できていることが要点です。"}
+        return {"summary": f"## 今回の要点\n- **{label}**の役割と処理対象を区別できていることが要点です。"}
 
     async def generate_emergency_question_variant(self, payload: dict[str, Any]) -> dict[str, Any]:
         label = payload.get("focus_label") or payload.get("target_term", {}).get("label", "対象概念")
@@ -195,7 +205,11 @@ class MockAIBackend:
         prereq_labels = [item["term_label"] for item in payload.get("prerequisites", [])]
         joined = "、".join(prereq_labels)
         return {
-            "concept_material": f"{term['label']}は、{joined}を組み合わせて理解します。各前提用語がどの役割を持つかをつなげて説明しましょう。",
+            "concept_material": (
+                f"## {term['label']}の全体像\n"
+                f"- **前提用語とのつながり**: {joined}を組み合わせて理解します。\n"
+                "- **確認**: 各前提用語がどの役割を持つかをつなげて見ます。"
+            ),
             "concept_prompt": f"{joined}を使って、{term['label']}を自分の言葉で説明してください。",
             "expected_answer": f"{joined}を使い、{term['label']}の役割を説明できている。",
         }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { MarkdownText } from "@/components/MarkdownText";
 import { api, requireParticipant } from "@/lib/api";
 
 type Option = {
@@ -212,9 +213,9 @@ function LearningPanel({
     <div className="stack">
       <Progress session={session} />
       {session.material ? (
-        <div className="notice">
-          <strong>{session.current_prerequisite?.label || "概念教材"}</strong>
-          <p>{session.material.body}</p>
+        <div className="notice learning-material">
+          <strong className="card-eyebrow">{session.current_prerequisite?.label || "概念教材"}</strong>
+          <MarkdownText content={session.material.body} />
         </div>
       ) : null}
       <div className="notice">
@@ -239,13 +240,14 @@ function LearningPanel({
         <button onClick={onSubmit} disabled={saving || !selected}>回答する</button>
       ) : (
         <div className="stack">
-          <div className={result.is_correct ? "notice" : "danger"}>
+          <div className={result.is_correct ? "feedback-card feedback-card-ok" : "feedback-card feedback-card-error"}>
             <strong>{result.is_correct ? "正解です。" : "不正解です。"}</strong>
-            <p>{result.feedback}</p>
+            <MarkdownText content={result.feedback} />
             {result.correct_answer ? (
-              <div>
+              <div className="correct-answer-summary">
                 <strong>正しい説明</strong>
-                <p>{result.correct_answer.body}</p>
+                <p className="answer-body">{result.correct_answer.body}</p>
+                <MarkdownText content={result.correct_answer.summary} />
               </div>
             ) : null}
           </div>

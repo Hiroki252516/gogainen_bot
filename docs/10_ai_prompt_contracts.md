@@ -7,26 +7,27 @@
 - RAGを優先し、一般知識補足を別フィールドへ返す
 - 固定問題の正答位置、correct option ID、未使用選択肢一覧を渡さない
 - 統制群へ事前診断・累積ログ・戻り履歴を渡さない
+- 学習者向けの教材・解説・要点はMarkdown本文で返す。使用できる形式は `##` 見出し、`-` 箇条書き、`**太字**`、短い段落までとし、HTML、表、コードブロック、長大な連続段落は禁止する
 
 ## `generate_prerequisite_material`
 
 入力: 対象概念、固定前提用語、material mode、RAG。提案群だけ診断snapshotと履歴を追加。
 
-出力: material、examples、comparisons、counterexamples、rag sources、general knowledge supplement。
+出力: material、examples、comparisons、counterexamples、rag sources、general knowledge supplement。`material` はMarkdown本文として表示される。
 
 ## `generate_concept_phase1_material`
 
 入力: 対象概念、固定前提用語名、cycle、material mode、RAG。提案群だけ診断と履歴を追加。
 
-出力は教材のみ。問題文や正答を生成しない。
+出力は教材のみ。問題文や正答を生成しない。`concept_material` はMarkdown本文として表示される。
 
 ## `explain_selected_distractor`
 
-現在選択された誤答が不適切な理由と見直す観点を返す。1〜2回目は正答選択肢本文を返さない。
+現在選択された誤答が不適切な理由と見直す観点をMarkdown本文で返す。1〜2回目は正答選択肢本文を返さない。
 
 ## `generate_correct_answer_summary`
 
-正答文をそのまま繰り返さず、短い要点を返す。
+正答文をそのまま繰り返さず、短いMarkdown要点を返す。
 
 ## `generate_emergency_question_variant`
 

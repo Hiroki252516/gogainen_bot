@@ -263,6 +263,8 @@ class CodexAppServerBackend:
         rules = [
             "固定済みの前提用語について教材だけを生成する。問題文や選択肢は生成しない。",
             "例、比較、反例を使ってよい。教材の長さは理解に必要な範囲で判断する。",
+            _LEARNER_MARKDOWN_RULE,
+            "material は「要点」「具体例」「注意点」などの短い見出しと箇条書きを中心にする。",
             "未出題問題の正答文を推測して再現しない。",
             "rag_contextを優先し、一般知識を補足した場合はgeneral_knowledge_supplementへ分ける。",
             "M1/M2/M3/M4という内部ラベルを学習者向け文章に書かない。",
@@ -303,6 +305,8 @@ class CodexAppServerBackend:
                 prompt_payload,
                 [
                     "選択した説明のどこが対象概念と一致しないかを自然な日本語で説明する。",
+                    _LEARNER_MARKDOWN_RULE,
+                    "feedback は「どこが違うか」「見直す観点」を短い見出しと箇条書きで示す。",
                     "正答選択肢の本文、位置、正答そのものは教えない。",
                     "次に見直す観点を一つ以上示す。",
                     "M1/M2/M3/M4という内部ラベルを書かない。",
@@ -329,6 +333,8 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "正答文をそのまま繰り返さず、学習上の要点を短く説明する。",
+                    _LEARNER_MARKDOWN_RULE,
+                    "summary は「今回の要点」だけを短く示す。",
                     "M1/M2/M3/M4という内部ラベルを書かない。",
                 ],
             ),
@@ -540,6 +546,8 @@ class CodexAppServerBackend:
                     "前提用語または統制群小問を踏まえて、対象概念フェーズ1の教材を作る。",
                     "学習者に前提用語を使って対象概念を説明させるpromptを作る。",
                     "統制群payloadの場合はpretest診断や誤概念情報を使わず、一般説明にする。",
+                    _LEARNER_MARKDOWN_RULE,
+                    "concept_material は「要点」「前提用語とのつながり」「注意点」などの短い見出しと箇条書きを中心にする。",
                     "M1/M2/M3/M4という内部ラベルは学習者向け文面に書かない。",
                     "rag_context を優先し、教材にない内容は断定しない。",
                 ],
@@ -1065,6 +1073,11 @@ _TEACHING_STRATEGIES = [
     "diagnostic_clarification",
     "fading",
 ]
+
+_LEARNER_MARKDOWN_RULE = (
+    "学習者に表示する文章は日本語Markdownで返す。使える形式は ## 見出し、- 箇条書き、"
+    "**太字**、短い段落だけ。表、HTML、コードブロック、長大な連続段落は禁止する。"
+)
 
 
 def _learning_diagnosis_properties() -> dict[str, Any]:

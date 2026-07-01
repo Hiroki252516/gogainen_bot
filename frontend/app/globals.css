@@ -8,7 +8,11 @@
   --primary: #1f6feb;
   --primary-quiet: #e8f1ff;
   --danger: #b42318;
+  --danger-quiet: #fff1f0;
+  --danger-line: #ffccc7;
   --ok: #0f766e;
+  --ok-quiet: #e6fffb;
+  --ok-line: #99f6e4;
 }
 
 * {
@@ -170,6 +174,95 @@ button:disabled {
   border: 1px solid #b9d7ff;
   border-radius: 8px;
   padding: 14px;
+}
+
+.learning-material {
+  padding: 18px;
+}
+
+.card-eyebrow {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.markdown-text {
+  display: grid;
+  gap: 10px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.markdown-text > * {
+  margin: 0;
+}
+
+.markdown-text h2 {
+  font-size: 17px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+.markdown-text h3 {
+  font-size: 15px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+.markdown-text ul,
+.markdown-text ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 1.35rem;
+}
+
+.markdown-text li {
+  padding-left: 2px;
+}
+
+.markdown-text strong {
+  font-weight: 700;
+}
+
+.feedback-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.feedback-card-error {
+  background: var(--danger-quiet);
+  border-color: var(--danger-line);
+  color: var(--text);
+}
+
+.feedback-card-error > strong {
+  color: var(--danger);
+}
+
+.feedback-card-ok {
+  background: var(--ok-quiet);
+  border-color: var(--ok-line);
+  color: var(--text);
+}
+
+.feedback-card-ok > strong {
+  color: var(--ok);
+}
+
+.correct-answer-summary {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(23, 32, 42, 0.14);
+}
+
+.answer-body {
+  margin: 0;
 }
 
 .danger {
