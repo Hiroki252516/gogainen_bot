@@ -60,7 +60,7 @@ def create_participant(group: str, pretest_choice: str | None = "unknown") -> tu
         json={"group_condition": group, "consent_checked": True},
     ).json()
     pid = participant["participant_id"]
-    questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    questions = client.get(f"/api/experiment/{pid}/initial-test").json()["questions"]
     for question in questions:
         option = option_for_test(question, pretest_choice)
         response = client.post(
@@ -68,12 +68,12 @@ def create_participant(group: str, pretest_choice: str | None = "unknown") -> tu
             json={
                 "participant_id": pid,
                 "question_id": question["question_id"],
-                "phase": "pretest",
+                "phase": "initial_test",
                 "selected_option_id": option["option_id"],
             },
         )
         assert response.status_code == 200
-    diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
+    diagnosis = client.post(f"/api/participants/{pid}/diagnose-initial-test")
     assert diagnosis.status_code == 200
     return pid, questions
 
@@ -139,23 +139,26 @@ def test_content_import_has_fixed_release_and_255_questions():
         db.close()
 
 
-def test_pretest_and_retest_are_all_five_mcq_with_saved_order():
-    pid, pretest = create_participant("proposed", "unknown")
-    assert len(pretest) == 5
-    assert {question["requires_reason"] for question in pretest} == {False}
+def test_initial_retest_and_final_are_all_five_mcq_with_saved_order():
+    pid, initial = create_participant("proposed", "unknown")
+    assert len(initial) == 5
+    assert {question["requires_reason"] for question in initial} == {False}
     db = SessionLocal()
     try:
         participant = db.get(Participant, pid)
         assert participant.content_version_id is not None
         assert db.query(QuestionDisplayOrder).filter_by(participant_id=pid).count() == 5
-        assert {question.variant_key for question in db.query(Question).filter_by(phase="pretest", is_active=True)} == {"pretest_v2"}
+        assert {question.variant_key for question in db.query(Question).filter_by(phase="initial_test", is_active=True)} == {"initial_test_v1"}
     finally:
         db.close()
     retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
     assert len(retest) == 5
+    final = client.get(f"/api/experiment/{pid}/final-test").json()["questions"]
+    assert len(final) == 5
     db = SessionLocal()
     try:
-        assert {question.variant_key for question in db.query(Question).filter_by(phase="retest", is_active=True)} == {"retest_v2"}
+        assert {question.variant_key for question in db.query(Question).filter_by(phase="retest", is_active=True)} == {"retest_v1"}
+        assert {question.variant_key for question in db.query(Question).filter_by(phase="final_test", is_active=True)} == {"final_test_v1"}
     finally:
         db.close()
 
@@ -168,7 +171,7 @@ def test_proposed_flow_uses_fixed_prerequisites_and_adaptive_returns():
     db = SessionLocal()
     try:
         log = db.query(AICallLog).filter_by(purpose="generate_prerequisite_material").order_by(AICallLog.created_at.desc()).first()
-        assert log.request_payload["diagnosis_context"]["pretest_diagnosis"]["misconception_type"] == "M1"
+        assert log.request_payload["diagnosis_context"]["initial_test_diagnosis"]["misconception_type"] == "M1"
         assert log.request_payload["rag_context"]["source"] == "rag_ready_教材"
     finally:
         db.close()
@@ -182,14 +185,8 @@ def test_proposed_flow_uses_fixed_prerequisites_and_adaptive_returns():
     reviewed = answer(wrong["session"], None)
     assert reviewed["session"]["stage"] == "concept_phase1"
     assert reviewed["session"]["progress"]["attempt_index"] == 2
-    phase2 = pass_phase1(reviewed["session"])
-    assert phase2["stage"] == "concept_phase2"
-    phase2_wrong = answer(phase2, "M2")
-    assert phase2_wrong["session"]["stage"] == "concept_phase1"
-    assert phase2_wrong["session"]["progress"]["cycle_index"] == 2
-    phase2_again = pass_phase1(phase2_wrong["session"])
-    completed = answer(phase2_again, None)
-    assert completed["session"]["status"] == "completed"
+    completed = pass_phase1(reviewed["session"])
+    assert completed["status"] == "completed"
 
 
 def test_control_uses_same_questions_without_adaptive_history():
@@ -218,10 +215,8 @@ def test_control_uses_same_questions_without_adaptive_history():
     wrong = answer(control, "M1")
     assert wrong["session"]["stage"] == "concept_phase1"
     assert wrong["session"]["progress"]["attempt_index"] == 2
-    control = pass_phase1(wrong["session"])
-    completed = answer(control, "M2")
-    assert completed["session"]["status"] == "completed"
-    assert completed["correct_answer"] is None
+    completed = pass_phase1(wrong["session"])
+    assert completed["status"] == "completed"
 
 
 def test_third_wrong_forces_resolution_without_blocking():
@@ -258,7 +253,7 @@ def test_display_order_is_stable_and_internal_metadata_is_hidden():
         db.close()
 
 
-def test_all_correct_pretest_skips_learning_but_retest_still_has_five():
+def test_all_correct_initial_test_skips_learning_but_retest_still_has_five():
     pid, _ = create_participant("proposed", None)
     targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
     assert targets == []
@@ -281,12 +276,13 @@ def test_retest_scoring_metrics_and_exports():
         ).status_code == 200
     scored = client.post(f"/api/participants/{pid}/score-retest")
     assert scored.status_code == 200
-    assert scored.json()["next_step"] == "post_survey"
+    assert scored.json()["next_step"] == "learning_targets"
+    assert scored.json()["relearning_target_count"] == 5
     assert client.post(f"/api/participants/{pid}/evaluation-summary/recalculate").status_code == 200
     summary = client.get("/api/admin/export/evaluation_summary.csv")
     assert summary.status_code == 200
-    assert "retest_score_all_terms" in summary.text
-    assert "no_material_concept_discrimination_accuracy" in summary.text
+    assert "first_retest_score_all_terms" in summary.text
+    assert "initial_to_first_retest_gain" in summary.text
     choices = client.get("/api/admin/export/learning_choice_attempts.csv")
     assert choices.status_code == 200
 

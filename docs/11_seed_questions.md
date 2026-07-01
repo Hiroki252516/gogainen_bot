@@ -7,8 +7,9 @@
 - schema: 1
 - release: `experiment_content_v1`
 - validation: `provisional`
-- pretest: `pretest_v2`
-- retest: `retest_v2`
+- initial_test: `initial_test_v1`
+- retest: `retest_v1`
+- final_test: `final_test_v1`
 
 ## Learning Bank
 
@@ -24,7 +25,7 @@
 
 ## Retest v2
 
-再テストは事前テストと同じ5構成概念を別文面・別状況で測る。学習対象だけに限定せず全5概念を出す。`retest_v1` は非activeで保持する。
+初期テスト、再テスト、最終テストは同じ5構成概念を別文面で測る。再テストは学習対象だけに限定せず全5概念を出し、全問正解まで学習ループ判定に使う。旧pretest/retest版は非activeで保持する。
 
 ## Validation
 

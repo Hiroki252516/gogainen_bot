@@ -1,60 +1,49 @@
-# 02. Experiment Flow
+# 実験フロー
+
+設計根拠はリポジトリ直下の `initial_retest_final_test_experiment_design_review.md` とする。
 
 ```text
-Start
-  -> Participant Registration
-  -> Pretest (5 concepts, MCQ only)
-  -> Diagnosis and Learning Target Selection
-  -> Learning Sessions for non-correct concepts, max 5
-       1. Fixed prerequisites
-       2. Concept phase 1 with AI material
-       3. Concept phase 2 without material
-  -> Retest v2 (all 5 concepts)
-  -> Post Survey
-  -> Finish
+/start
+  -> /initial-test
+  -> /diagnosing
+  -> /learning-targets
+  -> /learning/[termSlug] ... 学習対象概念を全件実施
+  -> /retest
+     -> 全5問正解: /final-test
+     -> 1問以上不正解/unknown: 不正解概念だけ /learning-targets へ戻す
+  -> /final-test
+  -> /finish
 ```
 
-## Pretest
+## 初期テスト
 
-- active版は `pretest_v2`
-- 選択式のみ
-- 選択肢順を参加者ごとにランダム化して保存
-- correctは学習対象外
+- phase: `initial_test`
+- active版: `initial_test_v1`
+- 全5概念・5択・理由欄なし・自信度なし
+- 正答概念は学習対象外
 - M1/M2/M3/unknownはすべて学習対象
 
-## Fixed Prerequisites
+## 学習セッション
 
-- YAMLで概念ごとの名称と順序を固定
-- 初期版は各概念5件
-- 両群で全件実施
-- 各用語は必須2スロット、各スロット最大3バリアント
-- AIは教材だけを参加者ごとに生成
+- 前提用語フェーズと概念フェーズ1だけを参加者フローで使う。
+- 概念フェーズ2はYAML/DB互換のため残すが、画面・遷移・新分析では使わない。
+- 統制群と提案群は同じ固定問題を解く。
+- 提案群だけが初期テスト診断、学習履歴、再テスト誤答を教材生成に使う。
+- 統制群は同じログを保存するが、教材生成には使わない。
 
-## Immediate Feedback
+## 再テスト
 
-- 正答: 正答表示と短い要点を表示
-- 1〜2回目誤答: 不正解表示、AI誤答説明、再教材、別バリアント。正答は非表示
-- 3回目誤答: 正答と要点を表示し `forced_resolved`
+- phase: `retest`
+- active版: `retest_v1`
+- 毎回全5概念を出す。
+- 1問でも不正解またはunknownなら、不正解概念だけを再学習対象にして新しい `LearningSession` を作る。
+- その回の全5問が正解なら最終テストへ進む。
+- 正誤や得点は参加者へ表示しない。
 
-## Concept Phase 1
+## 最終テスト
 
-- AI教材あり
-- 必須2スロット、各最大3試行
-- 提案群の誤答時は `linked_prerequisite_keys` の先頭前提用語を未使用問題で1問レビュー
-- 統制群は前提用語へ戻らず一般再教材を表示
-- 全スロットがpassedまたはforced_resolvedならフェーズ2へ進む
-
-## Concept Phase 2
-
-- 教材・ヒント・軽い条件を表示しない
-- 提案群は最大3回。1〜2回目誤答は新しいフェーズ1サイクルへ戻り、3回目誤答は正答提示後completed
-- 統制群は1回でcompleted
-
-理解不足によるblocked/failed状態は使わない。AI、RAG、コンテンツ不整合時だけ `technical_blocked` とする。
-
-## Retest
-
-- active版は `retest_v2`
-- 全5概念を出題
-- 正誤、教材、ヒント、正答を表示しない
-- 完了後は事後アンケートへ進む
+- phase: `final_test`
+- active版: `final_test_v1`
+- 全5概念・5択・理由欄なし・自信度なし
+- 不正解があっても実験は終了する。
+- 得点は参加者へ表示しない。

@@ -27,7 +27,7 @@ export default function StartPage() {
       localStorage.setItem("participant_id", data.participant_id);
       localStorage.setItem("display_code", data.display_code);
       localStorage.setItem("group_condition", data.group_condition);
-      router.push("/pretest");
+      router.push("/initial-test");
     } catch (err) {
       setError(err instanceof Error ? err.message : "実験を開始できませんでした。");
     } finally {

@@ -250,6 +250,36 @@ class Attempt(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class RetestCycle(Base):
+    __tablename__ = "retest_cycles"
+    __table_args__ = (UniqueConstraint("participant_id", "cycle_index", name="uq_retest_cycle"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    cycle_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="in_progress", nullable=False)
+    all_correct: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    relearning_target_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class RetestCycleResult(Base):
+    __tablename__ = "retest_cycle_results"
+    __table_args__ = (UniqueConstraint("retest_cycle_id", "term_id", name="uq_retest_cycle_result"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    retest_cycle_id: Mapped[str] = mapped_column(String(36), ForeignKey("retest_cycles.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
+    attempt_id: Mapped[str] = mapped_column(String(36), ForeignKey("attempts.id"), nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    misconception_type: Mapped[str | None] = mapped_column(String(32))
+    becomes_learning_target: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class LearnerState(Base):
     __tablename__ = "learner_states"
     __table_args__ = (UniqueConstraint("participant_id", "term_id", name="uq_learner_state"),)
@@ -289,6 +319,9 @@ class LearningSession(Base):
     content_version_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("content_versions.id"))
     prerequisite_set_version: Mapped[str | None] = mapped_column(String(160))
     current_stage: Mapped[str | None] = mapped_column(String(64))
+    learning_cycle_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    triggered_by_retest_cycle_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("retest_cycles.id"))
+    is_relearning_session: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     current_prerequisite_key: Mapped[str | None] = mapped_column(String(120))
     current_slot_key: Mapped[str | None] = mapped_column(String(180))
     current_attempt_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
@@ -609,6 +642,14 @@ class EvaluationSummary(Base):
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     pretest_score: Mapped[float | None] = mapped_column(Float)
     retest_score: Mapped[float | None] = mapped_column(Float)
+    initial_test_score_all_terms: Mapped[float | None] = mapped_column(Float)
+    first_retest_score_all_terms: Mapped[float | None] = mapped_column(Float)
+    initial_to_first_retest_gain: Mapped[float | None] = mapped_column(Float)
+    retest_loop_count: Mapped[int | None] = mapped_column(Integer)
+    retest_relearning_target_count: Mapped[int | None] = mapped_column(Integer)
+    final_test_score_all_terms: Mapped[float | None] = mapped_column(Float)
+    initial_to_final_m_transition: Mapped[float | None] = mapped_column(Float)
+    retest_error_m_transition: Mapped[float | None] = mapped_column(Float)
     pretest_score_all_terms: Mapped[float | None] = mapped_column(Float)
     retest_score_all_terms: Mapped[float | None] = mapped_column(Float)
     learning_target_retest_score: Mapped[float | None] = mapped_column(Float)

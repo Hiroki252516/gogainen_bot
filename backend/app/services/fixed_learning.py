@@ -26,7 +26,14 @@ from app.models import (
     Term,
     now,
 )
-from app.services.experiment import _ai_call, _learning_rag_context, _pretest_context, get_participant
+from app.services.experiment import (
+    _ai_call,
+    _current_learning_cycle_index,
+    _initial_test_context,
+    _latest_retest_context,
+    _learning_rag_context,
+    get_participant,
+)
 
 
 MAX_SLOT_ATTEMPTS = 3
@@ -210,7 +217,8 @@ def _material_payload(
             "label": definition.label,
         }
     if participant.group_condition == "proposed":
-        payload["diagnosis_context"] = _pretest_context(db, participant, term)
+        payload["diagnosis_context"] = _initial_test_context(db, participant, term)
+        payload["retest_context"] = _latest_retest_context(db, participant, term)
         payload["learning_history"] = _history(db, session)
     return payload
 
@@ -331,7 +339,8 @@ async def _ensure_question_available(db: Session, session: LearningSession) -> L
     }
     if session.group_condition == "proposed":
         participant = get_participant(db, session.participant_id)
-        payload["diagnosis_context"] = _pretest_context(db, participant, term)
+        payload["diagnosis_context"] = _initial_test_context(db, participant, term)
+        payload["retest_context"] = _latest_retest_context(db, participant, term)
         payload["learning_history"] = _history(db, session)
     result = await _ai_call(db, "generate_emergency_question_variant", payload)
     options = result.get("options") or []
@@ -407,12 +416,14 @@ async def create_fixed_learning_session(
     participant = get_participant(db, participant_id)
     release = _participant_release(db, participant)
     term = _term(db, term_slug)
+    learning_cycle_index = _current_learning_cycle_index(db, participant.id)
     existing = (
         db.query(LearningSession)
         .filter_by(
             participant_id=participant.id,
             term_id=term.id,
             content_version_id=release.id,
+            learning_cycle_index=learning_cycle_index,
         )
         .order_by(LearningSession.created_at.desc())
         .first()
@@ -428,6 +439,15 @@ async def create_fixed_learning_session(
     if not definitions:
         raise HTTPException(status_code=503, detail="fixed prerequisites are not available")
     count = db.query(func.count(LearningSession.id)).filter_by(participant_id=participant.id, term_id=term.id).scalar() or 0
+    trigger_cycle = None
+    if learning_cycle_index > 1:
+        from app.models import RetestCycle
+
+        trigger_cycle = (
+            db.query(RetestCycle)
+            .filter_by(participant_id=participant.id, cycle_index=learning_cycle_index - 1)
+            .one_or_none()
+        )
     session = LearningSession(
         participant_id=participant.id,
         term_id=term.id,
@@ -436,6 +456,9 @@ async def create_fixed_learning_session(
         status="prerequisite",
         content_version_id=release.id,
         prerequisite_set_version=definitions[0].set_version,
+        learning_cycle_index=learning_cycle_index,
+        triggered_by_retest_cycle_id=trigger_cycle.id if trigger_cycle else None,
+        is_relearning_session=learning_cycle_index > 1,
         current_stage="prerequisite",
         current_prerequisite_key=definitions[0].prerequisite_key,
         current_slot_key=f"prerequisite:{definitions[0].prerequisite_key}:slot1",
@@ -458,12 +481,19 @@ async def create_fixed_learning_session(
     try:
         await _generate_material(db, session, "prerequisite", "initial")
         await _ensure_question_available(db, session)
-    except Exception:
-        if session.status != "technical_blocked":
-            session.status = "technical_blocked"
-            session.technical_block_reason = "教材生成に失敗しました。"
-            db.commit()
-        raise
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            raise
+        session = db.get(LearningSession, session.id) or session
+        session.status = "technical_blocked"
+        session.technical_block_reason = (
+            exc.detail.get("message")
+            if isinstance(exc.detail, dict)
+            else str(exc.detail or "教材生成に失敗しました。")
+        )
+        db.commit()
+        db.refresh(session)
+        return session
     return session
 
 
@@ -623,7 +653,8 @@ async def _feedback(
     }
     if session.group_condition == "proposed":
         participant = get_participant(db, session.participant_id)
-        payload["diagnosis_context"] = _pretest_context(db, participant, term)
+        payload["diagnosis_context"] = _initial_test_context(db, participant, term)
+        payload["retest_context"] = _latest_retest_context(db, participant, term)
         payload["learning_history"] = _history(db, session)
     result = await _ai_call(db, "explain_selected_distractor", payload)
     return result["feedback"], result
@@ -680,16 +711,12 @@ async def _advance_after_completed_slot(
             session.current_slot_key = f"phase1:cycle{session.current_cycle_index}:slot2"
             session.current_attempt_index = 1
             return
-        session.current_stage = "concept_phase2"
-        session.status = "concept_phase2"
-        session.current_slot_key = "phase2"
-        session.current_attempt_index = (
-            db.query(func.count(LearningChoiceAttempt.id))
-            .filter_by(learning_session_id=session.id, stage="concept_phase2")
-            .scalar()
-            or 0
-        ) + 1
+        session.current_stage = "completed"
+        session.status = "completed"
+        session.current_slot_key = None
+        session.current_attempt_index = 1
         session.current_material_id = None
+        session.completed_at = now()
 
 
 async def _start_prerequisite_review(

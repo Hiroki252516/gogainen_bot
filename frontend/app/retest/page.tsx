@@ -5,13 +5,13 @@ import { QuestionRunner } from "@/components/QuestionRunner";
 
 export default function RetestPage() {
   return (
-    <AppShell step="即時再テスト">
+    <AppShell step="再テスト">
       <QuestionRunner
         phase="retest"
-        title="即時再テスト"
+        title="再テスト"
         sourcePath={(id) => `/api/experiment/${id}/retest`}
         scorePath={(id) => `/api/participants/${id}/score-retest`}
-        nextPath="/survey/post"
+        nextPath="/final-test"
         collectReason={false}
       />
     </AppShell>

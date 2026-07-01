@@ -2,8 +2,9 @@ schema_version: 1
 release_version: experiment_content_v1
 validation_status: provisional
 is_active: true
-pretest_file: pretest/pretest_v2.yaml
-retest_file: retest/retest_v2.yaml
+initial_test_file: initial_test/initial_test_v1.yaml
+retest_file: retest/retest_v1.yaml
+final_test_file: final_test/final_test_v1.yaml
 term_files:
   - terms/transformer.yaml
   - terms/attention.yaml

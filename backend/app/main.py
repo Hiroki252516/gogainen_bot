@@ -18,6 +18,7 @@ from app.services.experiment import (
     create_participant,
     create_learning_session,
     create_tutor_session,
+    diagnose_initial_test,
     diagnose_pretest,
     export_csv,
     generate_control_learning_turn,
@@ -31,7 +32,9 @@ from app.services.experiment import (
     respond_tutor_turn,
     retry_adaptive_support,
     save_survey,
+    score_final_test,
     score_phase,
+    score_retest,
     submit_concept_attempt,
     submit_concept_phase1_attempt,
     submit_concept_phase2_attempt,
@@ -177,10 +180,10 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
 
     participant = get_participant(db, participant_id)
     mapping = {
-        "pretest": "/pretest",
+        "initial_test": "/initial-test",
         "learning_targets": "/learning-targets",
         "retest": "/retest",
-        "post_survey": "/survey/post",
+        "final_test": "/final-test",
         "finish": "/finish",
     }
     return {"step": participant.current_step, "next_url": mapping.get(participant.current_step, "/start")}
@@ -189,17 +192,22 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
 @app.post("/api/participants/{participant_id}/survey")
 def api_save_survey(participant_id: str, payload: SurveyPayload, db: Session = Depends(get_db)) -> dict:
     save_survey(db, participant_id, payload.model_dump())
-    return {"saved": True, "next_step": "finish" if payload.phase == "post_survey" else "pretest"}
+    return {"saved": True, "next_step": "finish" if payload.phase == "post_survey" else "initial_test"}
 
 
-@app.get("/api/experiment/{participant_id}/pretest")
-def get_pretest(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return {"phase": "pretest", "questions": question_payloads(db, participant_id, "pretest")}
+@app.get("/api/experiment/{participant_id}/initial-test")
+def get_initial_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return {"phase": "initial_test", "questions": question_payloads(db, participant_id, "initial_test")}
 
 
 @app.get("/api/experiment/{participant_id}/retest")
 def get_retest(participant_id: str, db: Session = Depends(get_db)) -> dict:
     return {"phase": "retest", "questions": question_payloads(db, participant_id, "retest")}
+
+
+@app.get("/api/experiment/{participant_id}/final-test")
+def get_final_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return {"phase": "final_test", "questions": question_payloads(db, participant_id, "final_test")}
 
 
 @app.get("/api/experiment/{participant_id}/l0-check")
@@ -221,6 +229,12 @@ def api_submit_attempt(payload: AttemptPayload, idempotency_key: str | None = He
 @app.post("/api/participants/{participant_id}/diagnose-pretest")
 async def api_diagnose_pretest(participant_id: str, db: Session = Depends(get_db)) -> dict:
     count = await diagnose_pretest(db, participant_id)
+    return {"status": "completed", "learning_target_count": count, "next_step": "learning_targets"}
+
+
+@app.post("/api/participants/{participant_id}/diagnose-initial-test")
+async def api_diagnose_initial_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    count = await diagnose_initial_test(db, participant_id)
     return {"status": "completed", "learning_target_count": count, "next_step": "learning_targets"}
 
 
@@ -356,7 +370,12 @@ async def api_respond_tutor_turn(turn_id: str, payload: TutorTurnRespond, db: Se
 
 @app.post("/api/participants/{participant_id}/score-retest")
 async def api_score_retest(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return await score_phase(db, participant_id, "retest")
+    return await score_retest(db, participant_id)
+
+
+@app.post("/api/participants/{participant_id}/score-final-test")
+async def api_score_final_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return await score_final_test(db, participant_id)
 
 
 @app.post("/api/participants/{participant_id}/score-l0-check")

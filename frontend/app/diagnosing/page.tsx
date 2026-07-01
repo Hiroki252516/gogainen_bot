@@ -10,7 +10,7 @@ export default function DiagnosingPage() {
   const [message, setMessage] = useState("回答を整理しています...");
 
   useEffect(() => {
-    api<{ learning_target_count: number }>(`/api/participants/${requireParticipant()}/diagnose-pretest`, { method: "POST" })
+    api<{ learning_target_count: number }>(`/api/participants/${requireParticipant()}/diagnose-initial-test`, { method: "POST" })
       .then((data) => {
         setMessage(`${data.learning_target_count}件の重点確認項目を作成しました。`);
         setTimeout(() => router.push("/learning-targets"), 500);

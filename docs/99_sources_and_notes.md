@@ -14,7 +14,8 @@ Later documents override earlier design drafts. The current implementation sourc
 
 - Research target is concept discrimination and misconception avoidance, not prose explanation ability.
 - Both groups receive the same fixed prerequisites and questions.
-- Proposed only uses pretest diagnosis and cumulative learning logs.
+- Proposed only uses initial-test diagnosis, cumulative learning logs, and retest-error logs for teaching adaptation.
+- `initial_retest_final_test_experiment_design_review.md` is the current design source for the initial-test, retest-loop, final-test flow.
 - Learning answers are fixed five-choice items.
 - AI generates materials and feedback, not normal questions or scores.
 - Pre-survey, L0 check, and transfer test are not conducted.

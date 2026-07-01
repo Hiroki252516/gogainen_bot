@@ -41,6 +41,8 @@ from app.models import (
     QuestionDisplayOrder,
     QuestionOption,
     RecurrenceEvent,
+    RetestCycle,
+    RetestCycleResult,
     Term,
     TermAssignment,
     TermUnderstandingAttempt,
@@ -101,7 +103,7 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
         assignment_method=assignment_method,
         consent_checked=consent_checked,
         content_version_id=active_content.id if active_content else None,
-        current_step="pretest",
+        current_step="initial_test",
         started_at=now(),
     )
     db.add(participant)
@@ -127,7 +129,7 @@ def save_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> No
         free_comment=payload.get("free_comment"),
     )
     db.add(survey)
-    participant.current_step = "finish" if phase == "post_survey" else "pretest"
+    participant.current_step = "finish" if phase == "post_survey" else "initial_test"
     if phase == "post_survey":
         participant.completed_at = now()
     db.commit()
@@ -138,7 +140,7 @@ def _question_query_for_phase(db: Session, participant: Participant, phase: str)
         Question.phase == phase,
         Term.is_active.is_(True),
     )
-    if participant.content_version_id and phase in {"pretest", "retest"}:
+    if participant.content_version_id and phase in {"initial_test", "retest", "final_test"}:
         query = query.filter(Question.content_version_id == participant.content_version_id)
     else:
         query = query.filter(Question.is_active.is_(True))
@@ -158,7 +160,7 @@ def _question_query_for_phase(db: Session, participant: Participant, phase: str)
 
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
     participant = get_participant(db, participant_id)
-    if not participant.content_version_id and phase in {"pretest", "retest"}:
+    if not participant.content_version_id and phase in {"initial_test", "retest", "final_test"}:
         release = (
             db.query(ContentVersion)
             .filter_by(content_type="experiment_release", is_active=True)
@@ -196,7 +198,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "body": question.body,
                 "question_type": question.question_type,
                 "options": public_options,
-                "requires_reason": phase not in {"pretest", "retest"},
+                "requires_reason": phase not in {"initial_test", "retest", "final_test"},
                 "requires_confidence": False,
             }
         )
@@ -313,11 +315,11 @@ def _priority(attempt: Attempt) -> tuple[float, str]:
     return 10, "転移準備"
 
 
-async def diagnose_pretest(db: Session, participant_id: str) -> int:
+async def diagnose_initial_test(db: Session, participant_id: str) -> int:
     participant = get_participant(db, participant_id)
-    attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase="pretest").all()
+    attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase="initial_test").all()
     if not attempts:
-        raise HTTPException(status_code=400, detail="pretest attempts not found")
+        raise HTTPException(status_code=400, detail="initial_test attempts not found")
 
     scored_attempts: list[Attempt] = []
     for attempt in attempts:
@@ -361,14 +363,14 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
             db.add(state)
             db.flush()
         existing_observation = db.query(MisconceptionObservation).filter_by(
-            source_phase="pretest",
+            source_phase="initial_test",
             source_attempt_id=attempt.id,
         ).one_or_none()
         if not existing_observation:
             observation = MisconceptionObservation(
                 participant_id=participant.id,
                 term_id=attempt.term_id,
-                source_phase="pretest",
+                source_phase="initial_test",
                 source_attempt_type="test",
                 source_attempt_id=attempt.id,
                 diagnosed_status=result["diagnosed_status"],
@@ -413,13 +415,31 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
     return sum(1 for assignment in assignments if assignment.is_learning_target)
 
 
+async def diagnose_pretest(db: Session, participant_id: str) -> int:
+    return await diagnose_initial_test(db, participant_id)
+
+
+def _current_learning_cycle_index(db: Session, participant_id: str) -> int:
+    latest = (
+        db.query(RetestCycle)
+        .filter_by(participant_id=participant_id)
+        .order_by(RetestCycle.cycle_index.desc())
+        .first()
+    )
+    if latest and latest.status == "needs_relearning":
+        return latest.cycle_index + 1
+    return 1
+
+
 def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
     participant = get_participant(db, participant_id)
+    required_cycle = _current_learning_cycle_index(db, participant.id)
     terminal_term_ids = {
         session.term_id
         for session in db.query(LearningSession)
         .filter(
             LearningSession.participant_id == participant.id,
+            LearningSession.learning_cycle_index == required_cycle,
             LearningSession.status.in_(tuple(TERMINAL_LEARNING_STATUSES)),
         )
         .all()
@@ -452,22 +472,22 @@ def _term_by_slug(db: Session, term_slug: str) -> Term:
     return term
 
 
-def _pretest_attempt_for_term(db: Session, participant_id: str, term_id: str) -> Attempt | None:
+def _initial_test_attempt_for_term(db: Session, participant_id: str, term_id: str) -> Attempt | None:
     return (
         db.query(Attempt)
-        .filter_by(participant_id=participant_id, term_id=term_id, phase="pretest")
+        .filter_by(participant_id=participant_id, term_id=term_id, phase="initial_test")
         .order_by(Attempt.created_at.desc())
         .first()
     )
 
 
-def _pretest_context(db: Session, participant: Participant, term: Term) -> dict[str, Any]:
-    attempt = _pretest_attempt_for_term(db, participant.id, term.id)
+def _initial_test_context(db: Session, participant: Participant, term: Term) -> dict[str, Any]:
+    attempt = _initial_test_attempt_for_term(db, participant.id, term.id)
     option = _selected_option(db, attempt) if attempt else None
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one_or_none()
     assignment = db.query(TermAssignment).filter_by(participant_id=participant.id, term_id=term.id).one_or_none()
     return {
-        "pretest_diagnosis": None
+        "initial_test_diagnosis": None
         if not state
         else {
             "diagnosed_status": state.current_status,
@@ -476,6 +496,37 @@ def _pretest_context(db: Session, participant: Participant, term: Term) -> dict[
         },
         "selected_option_body": option.body if option else None,
         "selection_reason": assignment.selection_reason if assignment else None,
+    }
+
+
+def _pretest_context(db: Session, participant: Participant, term: Term) -> dict[str, Any]:
+    return _initial_test_context(db, participant, term)
+
+
+def _latest_retest_context(db: Session, participant: Participant, term: Term) -> dict[str, Any]:
+    attempt = (
+        db.query(Attempt)
+        .filter_by(participant_id=participant.id, term_id=term.id, phase="retest")
+        .order_by(Attempt.created_at.desc())
+        .first()
+    )
+    option = _selected_option(db, attempt) if attempt else None
+    cycle_result = (
+        db.query(RetestCycleResult)
+        .filter_by(participant_id=participant.id, term_id=term.id)
+        .order_by(RetestCycleResult.created_at.desc())
+        .first()
+    )
+    return {
+        "latest_retest": None
+        if not attempt
+        else {
+            "is_correct": attempt.is_correct,
+            "diagnosed_status": attempt.diagnosed_status,
+            "misconception_type": attempt.misconception_type,
+            "selected_option_body": option.body if option else None,
+            "becomes_learning_target": cycle_result.becomes_learning_target if cycle_result else None,
+        }
     }
 
 
@@ -1766,7 +1817,156 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     return {"feedback": turn.ai_feedback, "next_action": result["next_action"], "session_completed": turn.turn_index >= get_settings().max_turns_per_term or correct}
 
 
+def _latest_attempts_by_term(db: Session, participant_id: str, phase: str) -> list[Attempt]:
+    attempts = (
+        db.query(Attempt)
+        .filter_by(participant_id=participant_id, phase=phase)
+        .order_by(Attempt.created_at.desc())
+        .all()
+    )
+    latest: dict[str, Attempt] = {}
+    for attempt in attempts:
+        latest.setdefault(attempt.term_id, attempt)
+    return list(latest.values())
+
+
+def _score_test_attempts(db: Session, participant: Participant, attempts: list[Attempt], phase: str) -> None:
+    for attempt in attempts:
+        option = _selected_option(db, attempt)
+        if not option:
+            raise HTTPException(status_code=400, detail=f"{phase} requires a selected option")
+        attempt.is_correct = option.is_correct
+        attempt.score = 1.0 if option.is_correct else 0.0
+        attempt.diagnosed_status = "resolved" if option.is_correct else ("unknown" if option.misconception_type == "unknown" else "misconception")
+        attempt.misconception_type = None if option.is_correct else option.misconception_type
+        attempt.secondary_misconception_type = None
+        state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
+        if not state:
+            continue
+        previous = (
+            db.query(Attempt)
+            .filter_by(participant_id=participant.id, term_id=attempt.term_id, phase="initial_test")
+            .order_by(Attempt.created_at.desc())
+            .first()
+        )
+        if previous and previous.misconception_type in {"M1", "M2", "M3"} and previous.misconception_type == attempt.misconception_type:
+            attempt.recurrence_flag = True
+            state.recurrence_count += 1
+            db.add(
+                RecurrenceEvent(
+                    participant_id=participant.id,
+                    term_id=attempt.term_id,
+                    previous_attempt_id=previous.id,
+                    current_attempt_id=attempt.id,
+                    previous_misconception_type=previous.misconception_type,
+                    current_misconception_type=attempt.misconception_type,
+                    is_same_type=True,
+                    phase=phase,
+                )
+            )
+        previous_observation = _latest_observation(db, participant.id, attempt.term_id, None)
+        status = "resolved" if attempt.is_correct else ("unknown" if attempt.misconception_type == "unknown" else "misconception")
+        observation = MisconceptionObservation(
+            participant_id=participant.id,
+            term_id=attempt.term_id,
+            source_phase=phase,
+            source_attempt_type="test",
+            source_attempt_id=attempt.id,
+            diagnosed_status=status,
+            primary_misconception_type=None if attempt.is_correct else attempt.misconception_type,
+            secondary_misconception_type=None,
+            diagnosis_confidence=1.0,
+            diagnosis_evidence=option.body,
+            previous_status=previous_observation.diagnosed_status if previous_observation else state.current_status,
+            previous_misconception_type=previous_observation.primary_misconception_type if previous_observation else state.primary_misconception,
+            resolution_stage="confirmed_by_retest" if phase == "retest" and attempt.is_correct else ("confirmed_by_final_test" if phase == "final_test" and attempt.is_correct else "none"),
+            transition_type="resolution" if attempt.is_correct else ("recurrence" if attempt.recurrence_flag else f"{phase}_change"),
+            is_recurrence=attempt.recurrence_flag,
+            standard_strategy=strategy_for(attempt.misconception_type, status, participant.group_condition),
+            applied_strategy=strategy_for(attempt.misconception_type, status, participant.group_condition),
+        )
+        db.add(observation)
+        db.flush()
+        state.current_status = "resolved" if attempt.is_correct else status
+        state.primary_misconception = None if attempt.is_correct else attempt.misconception_type
+        state.last_attempt_id = attempt.id
+        state.latest_observation_id = observation.id
+        state.resolution_stage = observation.resolution_stage
+
+
+async def score_retest(db: Session, participant_id: str) -> dict[str, Any]:
+    participant = get_participant(db, participant_id)
+    attempts = _latest_attempts_by_term(db, participant.id, "retest")
+    if len(attempts) < 5:
+        raise HTTPException(status_code=400, detail="retest requires all five concept attempts")
+    _score_test_attempts(db, participant, attempts, "retest")
+    cycle_index = (db.query(func.max(RetestCycle.cycle_index)).filter_by(participant_id=participant.id).scalar() or 0) + 1
+    all_correct = all(bool(attempt.is_correct) for attempt in attempts)
+    cycle = RetestCycle(
+        participant_id=participant.id,
+        cycle_index=cycle_index,
+        status="passed" if all_correct else "needs_relearning",
+        all_correct=all_correct,
+        relearning_target_count=sum(1 for attempt in attempts if not attempt.is_correct),
+        completed_at=now(),
+    )
+    db.add(cycle)
+    db.flush()
+    for attempt in attempts:
+        becomes_target = not bool(attempt.is_correct)
+        db.add(
+            RetestCycleResult(
+                retest_cycle_id=cycle.id,
+                participant_id=participant.id,
+                term_id=attempt.term_id,
+                attempt_id=attempt.id,
+                is_correct=bool(attempt.is_correct),
+                misconception_type=attempt.misconception_type,
+                becomes_learning_target=becomes_target,
+            )
+        )
+        assignment = db.query(TermAssignment).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
+        score, reason = _priority(attempt)
+        if not assignment:
+            assignment = TermAssignment(
+                participant_id=participant.id,
+                term_id=attempt.term_id,
+                group_condition=participant.group_condition,
+            )
+            db.add(assignment)
+        assignment.is_learning_target = becomes_target
+        assignment.priority_score = score if becomes_target else 0
+        assignment.selection_reason = "再テスト不正解のため再学習" if becomes_target else "再テスト正答のため再学習対象外"
+    participant.current_step = "final_test" if all_correct else "learning_targets"
+    db.commit()
+    return {
+        "status": "completed",
+        "next_step": participant.current_step,
+        "next_url": "/final-test" if all_correct else "/learning-targets",
+        "all_correct": all_correct,
+        "retest_cycle_id": cycle.id,
+        "relearning_target_count": cycle.relearning_target_count,
+    }
+
+
+async def score_final_test(db: Session, participant_id: str) -> dict[str, Any]:
+    participant = get_participant(db, participant_id)
+    attempts = _latest_attempts_by_term(db, participant.id, "final_test")
+    if len(attempts) < 5:
+        raise HTTPException(status_code=400, detail="final_test requires all five concept attempts")
+    _score_test_attempts(db, participant, attempts, "final_test")
+    participant.current_step = "finish"
+    participant.completed_at = now()
+    db.commit()
+    recalculate_evaluation(db, participant.id)
+    return {"status": "completed", "next_step": "finish", "next_url": "/finish"}
+
+
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
+    if phase == "retest":
+        return await score_retest(db, participant_id)
+    if phase == "final_test":
+        return await score_final_test(db, participant_id)
     participant = get_participant(db, participant_id)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase).all()
     if not attempts:
@@ -1844,8 +2044,8 @@ def _rate(items: list[Attempt], predicate) -> float | None:
 def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummary:
     participant = get_participant(db, participant_id)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id).all()
-    by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in ["pretest", "retest", "l0_check", "transfer"]}
-    initial_m = [a for a in by_phase["pretest"] if a.misconception_type in {"M1", "M2", "M3"}]
+    by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in ["initial_test", "retest", "final_test", "l0_check", "transfer"]}
+    initial_m = [a for a in by_phase["initial_test"] if a.misconception_type in {"M1", "M2", "M3"}]
     same_rec = [a for a in by_phase["retest"] if a.recurrence_flag]
     def m_rate(m: str) -> float | None:
         denom = [a for a in initial_m if a.misconception_type == m]
@@ -1867,15 +2067,20 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
     phase2_pass_session_ids = {attempt.learning_session_id for attempt in phase2_attempts if attempt.is_passed}
     phase2_retry_sessions = [session for session in learning_sessions if session.phase2_retry_count > 0]
     phase2_max_retry_sessions = [session for session in learning_sessions if session.concept_phase2_attempt_count >= PHASE2_ATTEMPT_LIMIT]
-    retest_by_term_id = {attempt.term_id: attempt for attempt in by_phase["retest"]}
+    retest_by_term_id = {attempt.term_id: attempt for attempt in _latest_attempts_by_term(db, participant.id, "retest")}
+    final_by_term_id = {attempt.term_id: attempt for attempt in _latest_attempts_by_term(db, participant.id, "final_test")}
+    initial_by_term_id = {attempt.term_id: attempt for attempt in _latest_attempts_by_term(db, participant.id, "initial_test")}
+    retest_cycles = db.query(RetestCycle).filter_by(participant_id=participant.id).order_by(RetestCycle.cycle_index).all()
+    first_cycle = retest_cycles[0] if retest_cycles else None
+    first_cycle_results = db.query(RetestCycleResult).filter_by(retest_cycle_id=first_cycle.id).all() if first_cycle else []
     target_term_ids = {
         row.term_id
         for row in db.query(TermAssignment)
         .filter_by(participant_id=participant.id, is_learning_target=True)
         .all()
     }
-    target_retests = [attempt for attempt in by_phase["retest"] if attempt.term_id in target_term_ids]
-    non_target_retests = [attempt for attempt in by_phase["retest"] if attempt.term_id not in target_term_ids]
+    target_retests = [attempt for attempt in retest_by_term_id.values() if attempt.term_id in target_term_ids]
+    non_target_retests = [attempt for attempt in retest_by_term_id.values() if attempt.term_id not in target_term_ids]
     choice_attempts = (
         db.query(LearningChoiceAttempt)
         .filter(LearningChoiceAttempt.learning_session_id.in_(session_ids))
@@ -1979,10 +2184,43 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
     summary = EvaluationSummary(
         participant_id=participant.id,
         group_condition=participant.group_condition,
-        pretest_score=_rate(by_phase["pretest"], lambda a: bool(a.is_correct)),
-        retest_score=_rate(by_phase["retest"], lambda a: bool(a.is_correct)),
-        pretest_score_all_terms=_rate(by_phase["pretest"], lambda a: bool(a.is_correct)),
-        retest_score_all_terms=_rate(by_phase["retest"], lambda a: bool(a.is_correct)),
+        pretest_score=_rate(list(initial_by_term_id.values()), lambda a: bool(a.is_correct)),
+        retest_score=_rate(list(retest_by_term_id.values()), lambda a: bool(a.is_correct)),
+        initial_test_score_all_terms=_rate(list(initial_by_term_id.values()), lambda a: bool(a.is_correct)),
+        first_retest_score_all_terms=(
+            sum(1 for item in first_cycle_results if item.is_correct) / len(first_cycle_results)
+            if first_cycle_results
+            else None
+        ),
+        initial_to_first_retest_gain=(
+            (sum(1 for item in first_cycle_results if item.is_correct) / len(first_cycle_results))
+            - _rate(list(initial_by_term_id.values()), lambda a: bool(a.is_correct))
+            if first_cycle_results and _rate(list(initial_by_term_id.values()), lambda a: bool(a.is_correct)) is not None
+            else None
+        ),
+        retest_loop_count=len(retest_cycles) if retest_cycles else None,
+        retest_relearning_target_count=sum(cycle.relearning_target_count for cycle in retest_cycles) if retest_cycles else None,
+        final_test_score_all_terms=_rate(list(final_by_term_id.values()), lambda a: bool(a.is_correct)),
+        initial_to_final_m_transition=(
+            sum(
+                1
+                for term_id, initial in initial_by_term_id.items()
+                if initial.misconception_type in {"M1", "M2", "M3"}
+                and final_by_term_id.get(term_id)
+                and final_by_term_id[term_id].misconception_type != initial.misconception_type
+            )
+            / len([a for a in initial_by_term_id.values() if a.misconception_type in {"M1", "M2", "M3"}])
+            if [a for a in initial_by_term_id.values() if a.misconception_type in {"M1", "M2", "M3"}]
+            else None
+        ),
+        retest_error_m_transition=(
+            sum(1 for item in first_cycle_results if item.misconception_type in {"M1", "M2", "M3"} and final_by_term_id.get(item.term_id) and final_by_term_id[item.term_id].misconception_type != item.misconception_type)
+            / len([item for item in first_cycle_results if item.misconception_type in {"M1", "M2", "M3"}])
+            if [item for item in first_cycle_results if item.misconception_type in {"M1", "M2", "M3"}]
+            else None
+        ),
+        pretest_score_all_terms=_rate(list(initial_by_term_id.values()), lambda a: bool(a.is_correct)),
+        retest_score_all_terms=_rate(list(retest_by_term_id.values()), lambda a: bool(a.is_correct)),
         learning_target_retest_score=_rate(target_retests, lambda a: bool(a.is_correct)),
         non_target_retest_retention_rate=_rate(non_target_retests, lambda a: bool(a.is_correct)),
         l0_correct_rate=_rate(by_phase["l0_check"], lambda a: bool(a.l0_success)),
@@ -2122,6 +2360,14 @@ def admin_summary(db: Session) -> dict[str, Any]:
             {
                 "group_condition": group,
                 "participant_count": len(group_participants),
+                "initial_test_score_all_terms": avg("initial_test_score_all_terms"),
+                "first_retest_score_all_terms": avg("first_retest_score_all_terms"),
+                "initial_to_first_retest_gain": avg("initial_to_first_retest_gain"),
+                "retest_loop_count": avg("retest_loop_count"),
+                "retest_relearning_target_count": avg("retest_relearning_target_count"),
+                "final_test_score_all_terms": avg("final_test_score_all_terms"),
+                "initial_to_final_m_transition": avg("initial_to_final_m_transition"),
+                "retest_error_m_transition": avg("retest_error_m_transition"),
                 "pretest_score": avg("pretest_score"),
                 "retest_score": avg("retest_score"),
                 "pretest_score_all_terms": avg("pretest_score_all_terms"),
@@ -2228,7 +2474,7 @@ def override_diagnosis(
     )
     db.add(override)
     db.flush()
-    if original.source_attempt_id and original.source_phase in {"pretest", "retest"}:
+    if original.source_attempt_id and original.source_phase in {"initial_test", "retest", "final_test"}:
         attempt = db.get(Attempt, original.source_attempt_id)
         if attempt:
             attempt.diagnosed_status = "stable_correct" if status == "resolved" else status
@@ -2272,12 +2518,12 @@ def override_diagnosis(
             },
         )
     )
-    pretest_by_term = {
+    initial_by_term = {
         item.term_id: item
-        for item in db.query(Attempt).filter_by(participant_id=participant.id, phase="pretest").all()
+        for item in db.query(Attempt).filter_by(participant_id=participant.id, phase="initial_test").all()
     }
     for retest_attempt in db.query(Attempt).filter_by(participant_id=participant.id, phase="retest").all():
-        pretest_attempt = pretest_by_term.get(retest_attempt.term_id)
+        pretest_attempt = initial_by_term.get(retest_attempt.term_id)
         retest_attempt.recurrence_flag = bool(
             pretest_attempt
             and pretest_attempt.misconception_type in {"M1", "M2", "M3"}
@@ -2300,7 +2546,7 @@ EXPORTS = {
     "term_assignments": (TermAssignment, ["id", "participant_id", "term_id", "group_condition", "is_learning_target", "selection_reason", "priority_score", "created_at"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "reason_text", "free_text_answer", "confidence", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "transfer_success", "requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "secondary_misconception", "resolution_stage", "latest_observation_id", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "transfer_success_count", "updated_at"]),
-    "learning_sessions": (LearningSession, ["id", "participant_id", "term_id", "group_condition", "session_index", "content_version_id", "prerequisite_set_version", "status", "current_stage", "current_prerequisite_key", "current_slot_key", "current_attempt_index", "current_cycle_index", "phase2_forced_completion", "technical_block_reason", "completed_at", "created_at"]),
+    "learning_sessions": (LearningSession, ["id", "participant_id", "term_id", "group_condition", "session_index", "learning_cycle_index", "triggered_by_retest_cycle_id", "is_relearning_session", "content_version_id", "prerequisite_set_version", "status", "current_stage", "current_prerequisite_key", "current_slot_key", "current_attempt_index", "current_cycle_index", "phase2_forced_completion", "technical_block_reason", "completed_at", "created_at"]),
     "learning_session_prerequisites": (LearningSessionPrerequisite, ["id", "learning_session_id", "prerequisite_definition_id", "prerequisite_key", "label", "display_order", "status", "completed_slot_count", "forced_slot_count", "review_count", "created_at"]),
     "generated_learning_materials": (GeneratedLearningMaterial, ["id", "participant_id", "learning_session_id", "target_term_id", "prerequisite_definition_id", "stage", "material_mode", "cycle_index", "slot_key", "attempt_index", "group_condition", "diagnosis_snapshot", "rag_context", "material", "examples", "comparisons", "counterexamples", "rag_sources", "general_knowledge_supplement", "answer_leak_detected", "regeneration_count", "ai_call_log_id", "created_at"]),
     "learning_choice_attempts": (LearningChoiceAttempt, ["id", "participant_id", "learning_session_id", "target_term_id", "prerequisite_definition_id", "stage", "slot_key", "question_id", "selected_option_id", "displayed_option_order", "cycle_index", "attempt_index", "is_correct", "misconception_type", "transition_type", "is_persistence", "is_recurrence", "result_status", "forced_answer_shown", "response_time_sec", "material_id", "feedback_text", "idempotency_key", "created_at"]),
@@ -2310,10 +2556,12 @@ EXPORTS = {
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at"]),
     "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "created_at"]),
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
+    "retest_cycles": (RetestCycle, ["id", "participant_id", "cycle_index", "status", "all_correct", "relearning_target_count", "started_at", "completed_at", "created_at"]),
+    "retest_cycle_results": (RetestCycleResult, ["id", "retest_cycle_id", "participant_id", "term_id", "attempt_id", "is_correct", "misconception_type", "becomes_learning_target", "created_at"]),
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
     "misconception_observations": (MisconceptionObservation, ["id", "participant_id", "term_id", "learning_session_id", "prerequisite_term_id", "source_phase", "source_attempt_type", "source_attempt_id", "diagnosed_status", "primary_misconception_type", "secondary_misconception_type", "diagnosis_confidence", "diagnosis_evidence", "previous_status", "previous_misconception_type", "resolution_stage", "transition_type", "is_persistence", "is_recurrence", "standard_strategy", "applied_strategy", "strategy_override_reason", "requires_manual_review", "is_manual_override", "overrides_observation_id", "created_at"]),
     "adaptive_support_events": (AdaptiveSupportEvent, ["id", "misconception_observation_id", "learning_session_id", "mode", "feedback", "supplemental_material", "next_check_question", "diagnostic_focus", "rag_sources", "general_knowledge_supplement", "ai_call_log_id", "created_at"]),
-    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score_all_terms", "retest_score_all_terms", "learning_target_retest_score", "non_target_retest_retention_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "prerequisite_required_question_accuracy", "prerequisite_first_attempt_accuracy", "prerequisite_retry_recovery_rate", "prerequisite_forced_resolution_rate", "phase1_all_questions_pass_rate", "phase1_forced_resolution_rate", "no_material_concept_discrimination_accuracy", "phase2_after_retry_success_rate", "phase2_forced_completion_rate", "learning_target_count", "completed", "created_at"]),
+    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "initial_test_score_all_terms", "first_retest_score_all_terms", "initial_to_first_retest_gain", "retest_loop_count", "retest_relearning_target_count", "final_test_score_all_terms", "initial_to_final_m_transition", "retest_error_m_transition", "prerequisite_required_question_accuracy", "prerequisite_first_attempt_accuracy", "prerequisite_retry_recovery_rate", "prerequisite_forced_resolution_rate", "phase1_all_questions_pass_rate", "phase1_forced_resolution_rate", "learning_target_count", "completed", "created_at"]),
 }
 
 

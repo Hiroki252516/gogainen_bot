@@ -16,8 +16,9 @@
 ```text
 experiment_content/
   manifest.yaml
-  pretest/pretest_v2.yaml
-  retest/retest_v2.yaml
+  initial_test/initial_test_v1.yaml
+  retest/retest_v1.yaml
+  final_test/final_test_v1.yaml
   terms/
     transformer.yaml
     attention.yaml
@@ -33,7 +34,7 @@ The term files contain prerequisite names and deterministic question templates. 
 ```text
 prerequisite
   -> concept_phase1
-  -> concept_phase2
+  -> completed
   -> completed
 
 AI/RAG/content failure -> technical_blocked -> retry-material -> previous stage

@@ -18,7 +18,9 @@
 
 ## Status
 
-- session: `prerequisite`, `prerequisite_review`, `concept_phase1`, `concept_phase2`, `completed`, `technical_blocked`
+- session: `prerequisite`, `prerequisite_review`, `concept_phase1`, `completed`, `technical_blocked`
+- retest loop: `retest_cycles`, `retest_cycle_results` で各回の全問正解判定と再学習対象を保存する。
+- `learning_sessions.learning_cycle_index` で初回学習と再学習sessionを区別する。
 - slot result: `pending`, `retry`, `passed`, `forced_resolved`
 - question source: `predefined_codex`, `runtime_ai_fallback`
 

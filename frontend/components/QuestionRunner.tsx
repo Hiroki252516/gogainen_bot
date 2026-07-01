@@ -90,7 +90,9 @@ export function QuestionRunner({
       return;
     }
     if (scorePath) {
-      await api(scorePath(id), { method: "POST" });
+      const scored = await api<{ next_url?: string }>(scorePath(id), { method: "POST" });
+      router.push(scored.next_url || nextPath);
+      return;
     }
     router.push(nextPath);
   }

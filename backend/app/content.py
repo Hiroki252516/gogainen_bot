@@ -90,15 +90,17 @@ class ManifestSpec(BaseModel):
     release_version: str
     validation_status: str
     is_active: bool = True
-    pretest_file: str
+    initial_test_file: str
     retest_file: str
+    final_test_file: str
     term_files: list[str]
 
 
 class ContentBundle(BaseModel):
     manifest: ManifestSpec
-    pretest: TestFileSpec
+    initial_test: TestFileSpec
     retest: TestFileSpec
+    final_test: TestFileSpec
     terms: list[TermContentSpec]
     file_hash: str
     root: str
@@ -109,10 +111,12 @@ class ContentBundle(BaseModel):
         if len(term_slugs) != 5 or len(set(term_slugs)) != 5:
             raise ValueError("exactly five unique target terms are required")
         expected = set(term_slugs)
-        if {item.target_term for item in self.pretest.questions} != expected:
-            raise ValueError("pretest must cover all target terms")
+        if {item.target_term for item in self.initial_test.questions} != expected:
+            raise ValueError("initial_test must cover all target terms")
         if {item.target_term for item in self.retest.questions} != expected:
             raise ValueError("retest must cover all target terms")
+        if {item.target_term for item in self.final_test.questions} != expected:
+            raise ValueError("final_test must cover all target terms")
         return self
 
 
@@ -128,7 +132,12 @@ def load_content_bundle(root: str | Path | None = None) -> ContentBundle:
     content_root = Path(root or get_settings().experiment_content_dir).resolve()
     manifest_path = content_root / "manifest.yaml"
     manifest = ManifestSpec.model_validate(_read_yaml(manifest_path))
-    files = [manifest_path, content_root / manifest.pretest_file, content_root / manifest.retest_file]
+    files = [
+        manifest_path,
+        content_root / manifest.initial_test_file,
+        content_root / manifest.retest_file,
+        content_root / manifest.final_test_file,
+    ]
     files.extend(content_root / relative for relative in manifest.term_files)
     digest = hashlib.sha256()
     for path in files:
@@ -136,8 +145,9 @@ def load_content_bundle(root: str | Path | None = None) -> ContentBundle:
         digest.update(path.read_bytes())
     return ContentBundle(
         manifest=manifest,
-        pretest=TestFileSpec.model_validate(_read_yaml(content_root / manifest.pretest_file)),
+        initial_test=TestFileSpec.model_validate(_read_yaml(content_root / manifest.initial_test_file)),
         retest=TestFileSpec.model_validate(_read_yaml(content_root / manifest.retest_file)),
+        final_test=TestFileSpec.model_validate(_read_yaml(content_root / manifest.final_test_file)),
         terms=[TermContentSpec.model_validate(_read_yaml(content_root / path)) for path in manifest.term_files],
         file_hash=digest.hexdigest(),
         root=str(content_root),
@@ -195,7 +205,11 @@ def _sync_test_file(
             question = Question(
                 term_id=term.id,
                 phase=phase,
-                question_type="definition" if phase == "pretest" else "retest_same_construct",
+                question_type={
+                    "initial_test": "initial_construct",
+                    "retest": "retest_gate",
+                    "final_test": "final_construct",
+                }.get(phase, "test"),
                 body=item.body,
                 construct_key=f"{item.target_term}_{phase}",
                 variant_key=spec.version,
@@ -519,9 +533,10 @@ def sync_content_bundle(db: Session, bundle: ContentBundle | None = None) -> Con
         if slug not in active_slugs:
             term.is_active = False
 
-    _sync_test_file(db, release, existing_terms, bundle.pretest, "pretest")
+    _sync_test_file(db, release, existing_terms, bundle.initial_test, "initial_test")
     _sync_test_file(db, release, existing_terms, bundle.retest, "retest")
-    db.query(Question).filter(Question.phase.in_(("l0_check", "transfer"))).update(
+    _sync_test_file(db, release, existing_terms, bundle.final_test, "final_test")
+    db.query(Question).filter(Question.phase.in_(("pretest", "l0_check", "transfer"))).update(
         {"is_active": False}, synchronize_session=False
     )
     for spec in bundle.terms:

@@ -97,9 +97,7 @@ export default function LearningPage() {
     const endpoint =
       session.stage === "concept_phase1"
         ? "concept-phase1-attempts"
-        : session.stage === "concept_phase2"
-          ? "concept-phase2-attempts"
-          : "prerequisite-attempts";
+        : "prerequisite-attempts";
     try {
       const data = await api<AnswerResult>(`/api/learning-sessions/${session.learning_session_id}/${endpoint}`, {
         method: "POST",
@@ -156,7 +154,8 @@ export default function LearningPage() {
           {session ? <span className="muted">{session.content_version}</span> : null}
         </div>
         {error ? <div className="danger">{error}</div> : null}
-        {!session ? <p>読み込み中...</p> : null}
+        {!session && !error ? <p>読み込み中...</p> : null}
+        {!session && error ? <button onClick={() => window.location.reload()}>再読み込み</button> : null}
         {session?.status === "technical_blocked" ? (
           <div className="stack">
             <div className="danger">{session.technical_block_reason || "教材生成を再試行してください。"}</div>
@@ -217,12 +216,7 @@ function LearningPanel({
           <strong>{session.current_prerequisite?.label || "概念教材"}</strong>
           <p>{session.material.body}</p>
         </div>
-      ) : (
-        <div className="notice">
-          <strong>教材なし確認</strong>
-          <p className="muted">この段階では問題文と選択肢だけで判断してください。</p>
-        </div>
-      )}
+      ) : null}
       <div className="notice">
         <strong>{session.question.body}</strong>
       </div>
@@ -282,7 +276,7 @@ function Progress({ session }: { session: LearningSession }) {
         <strong>試行</strong>
         <p className="muted">
           {progress.attempt_index} / {progress.max_attempts}
-          {session.stage === "concept_phase1" || session.stage === "concept_phase2" ? ` ・サイクル ${progress.cycle_index}` : ""}
+          {session.stage === "concept_phase1" ? ` ・サイクル ${progress.cycle_index}` : ""}
         </p>
       </div>
     </div>
@@ -295,6 +289,5 @@ function stageTitle(session: LearningSession) {
     return `前提用語 ${session.progress.prerequisite_index || 1} / ${session.progress.prerequisite_total}: ${session.current_prerequisite?.label || ""}`;
   }
   if (session.stage === "concept_phase1") return `概念フェーズ1 教材あり・確認 ${session.progress.required_question_index || 1} / 2`;
-  if (session.stage === "concept_phase2") return "概念フェーズ2 教材なし";
   return "完了";
 }

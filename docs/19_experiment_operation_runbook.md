@@ -6,17 +6,18 @@
 2. Start the application with Docker Compose.
 3. Confirm `/api/admin/ai/status`.
 4. Run content validation/import and confirm active `experiment_content_v1`.
-5. Confirm `pretest_v2`, 255 learning questions, and `retest_v2`.
+5. Confirm `initial_test_v1`, `retest_v1`, `final_test_v1`, and fixed learning questions.
 6. Do not use MockAIBackend for experiment data.
 
 ## Participant Flow
 
 1. Start and consent
-2. Pretest
+2. Initial test
 3. Diagnosis
 4. Learning targets
 5. Fixed prerequisite / phase1 / phase2 learning sessions
-6. All-five retest
+6. All-five retest loop
+7. Final test
 7. Post survey
 8. Finish
 

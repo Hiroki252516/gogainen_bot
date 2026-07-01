@@ -119,14 +119,13 @@ export default function AdminPage() {
               <div className="notice" key={group.group_condition}>
                 <strong>{group.group_condition}</strong>
                 <p>参加者: {group.participant_count}</p>
-                <p>全5概念再テスト正答率: {formatRate(group.retest_score_all_terms)}</p>
-                <p>学習対象再テスト正答率: {formatRate(group.learning_target_retest_score)}</p>
-                <p>同種誤答再発率: {formatRate(group.same_misconception_recurrence_rate)}</p>
+                <p>初期テスト正答率: {formatRate(group.initial_test_score_all_terms)}</p>
+                <p>初回再テスト正答率: {formatRate(group.first_retest_score_all_terms)}</p>
+                <p>初期→初回再テスト伸び: {formatRate(group.initial_to_first_retest_gain)}</p>
+                <p>再テストループ回数: {group.retest_loop_count ?? "-"}</p>
+                <p>最終テスト正答率: {formatRate(group.final_test_score_all_terms)}</p>
                 <p>前提問題正答率: {formatRate(group.prerequisite_required_question_accuracy)}</p>
                 <p>前提問題強制解決率: {formatRate(group.prerequisite_forced_resolution_rate)}</p>
-                <p>教材なし概念弁別正答率: {formatRate(group.no_material_concept_discrimination_accuracy)}</p>
-                <p>Phase2再支援後成功率: {formatRate(group.phase2_after_retry_success_rate)}</p>
-                <p>Phase2強制完了率: {formatRate(group.phase2_forced_completion_rate)}</p>
               </div>
             ))}
           </div>
@@ -153,6 +152,8 @@ export default function AdminPage() {
               "tutor_sessions",
               "tutor_turns",
               "recurrence_events",
+              "retest_cycles",
+              "retest_cycle_results",
               "ai_call_logs",
               "misconception_observations",
               "adaptive_support_events",
