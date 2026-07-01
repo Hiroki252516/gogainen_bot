@@ -1,7 +1,9 @@
 from collections.abc import Generator
+import time
 
 from sqlalchemy import create_engine
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
@@ -15,9 +17,16 @@ engine = create_engine(settings.database_url, future=True, pool_pre_ping=True, c
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
-def init_db() -> None:
-    Base.metadata.create_all(bind=engine)
-    _ensure_compatible_columns()
+def init_db(max_attempts: int = 15, retry_delay_sec: float = 1.0) -> None:
+    for attempt in range(1, max_attempts + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            _ensure_compatible_columns()
+            return
+        except OperationalError:
+            if attempt == max_attempts:
+                raise
+            time.sleep(retry_delay_sec)
 
 
 def _ensure_compatible_columns() -> None:

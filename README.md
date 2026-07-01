@@ -72,7 +72,7 @@
 先にMacホストでCodex app-serverを起動します。
 
 ```bash
-codex app-server --listen ws://127.0.0.1:4500
+./scripts/start_codex_app_server.sh
 ```
 
 その後、アプリを起動します。
@@ -121,7 +121,7 @@ cd frontend && npm run build
 通常実行の既定は `AI_BACKEND=codex_app_server` です。OpenAI APIキーは使わず、ホスト側のCodex app-serverが保持するChatGPT/Codexログインを使います。
 
 ```bash
-codex app-server --listen ws://127.0.0.1:4500
+./scripts/start_codex_app_server.sh
 ```
 
 Docker Composeではbackendコンテナからホストへ接続するため、以下を使います。

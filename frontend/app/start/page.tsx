@@ -10,6 +10,7 @@ export default function StartPage() {
   const [group, setGroup] = useState("proposed");
   const [consent, setConsent] = useState(true);
   const [error, setError] = useState("");
+  const [starting, setStarting] = useState(false);
 
   async function start() {
     setError("");
@@ -17,14 +18,21 @@ export default function StartPage() {
       setError("同意チェックが必要です。");
       return;
     }
-    const data = await api<{ participant_id: string; display_code: string; group_condition: string }>("/api/participants", {
-      method: "POST",
-      body: JSON.stringify({ group_condition: group, assignment_method: "manual", consent_checked: consent })
-    });
-    localStorage.setItem("participant_id", data.participant_id);
-    localStorage.setItem("display_code", data.display_code);
-    localStorage.setItem("group_condition", data.group_condition);
-    router.push("/pretest");
+    setStarting(true);
+    try {
+      const data = await api<{ participant_id: string; display_code: string; group_condition: string }>("/api/participants", {
+        method: "POST",
+        body: JSON.stringify({ group_condition: group, assignment_method: "manual", consent_checked: consent })
+      });
+      localStorage.setItem("participant_id", data.participant_id);
+      localStorage.setItem("display_code", data.display_code);
+      localStorage.setItem("group_condition", data.group_condition);
+      router.push("/pretest");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "実験を開始できませんでした。");
+    } finally {
+      setStarting(false);
+    }
   }
 
   return (
@@ -45,7 +53,9 @@ export default function StartPage() {
         </label>
         {error ? <div className="danger">{error}</div> : null}
         <div className="actions">
-          <button onClick={start}>開始</button>
+          <button onClick={start} disabled={starting}>
+            {starting ? "接続中..." : "開始"}
+          </button>
         </div>
       </section>
     </AppShell>

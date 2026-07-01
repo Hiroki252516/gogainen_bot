@@ -18,7 +18,8 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   backend:
     build: ./backend
@@ -41,7 +42,8 @@ services:
       - ./experiment_content:/app/experiment_content:ro
       - ./.local/codex-ws-token:/run/secrets/codex_ws_token:ro
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   db:
     image: postgres:16
@@ -71,8 +73,8 @@ curl -fsSL https://chatgpt.com/codex/install.sh | sh
 # 2. login
 codex
 
-# 3. app-server起動
-codex app-server --listen ws://127.0.0.1:4500
+# 3. 認証付きapp-server listener起動
+./scripts/start_codex_app_server.sh
 ```
 
 ### Capability tokenを使う場合
@@ -137,7 +139,7 @@ export:
 
 ## 開発起動順
 
-1. ホストで `codex app-server --listen ws://127.0.0.1:4500` を起動する
+1. ホストで `./scripts/start_codex_app_server.sh` を実行する
 2. `docker compose up --build`
 3. backend起動ログで `experiment_content_v1` の検証・同期成功を確認する
 4. `http://localhost:3000/admin` でAI statusがログイン済みか確認する
@@ -146,7 +148,7 @@ export:
 
 ## app-server接続確認
 
-1. ホストで `codex app-server --listen ws://127.0.0.1:4500`
+1. ホストで `./scripts/start_codex_app_server.sh`
 2. `.env` またはcomposeで `AI_BACKEND=codex_app_server`
 3. backend再起動
 4. `/admin` のAI statusで接続確認
