@@ -34,6 +34,8 @@ AI・情報系専門用語の概念理解支援を目的とした、誤概念タ
 11. 現行MVP対象用語は `llm_training_process`（LLMの学習段階）と `transformer`（Transformer）の2語とする
 12. ユーザー指定により、L2概念理解問題・再テスト・最終テストでは同じ問題文と選択肢セットを使う
 13. 再テスト、最終テスト、L0確認ではチャット、ヒント、即時正解表示を禁止する
+14. 現行実装では再テストも事前テスト対象の2語すべてを毎回出題し、採点後に未達用語だけを次周回学習対象として残す
+15. `l0_check` は互換・補助フェーズとして扱い、現行MVPの主導線は `/final-test` とする
 
 ## Frontend
 
@@ -47,7 +49,7 @@ AI・情報系専門用語の概念理解支援を目的とした、誤概念タ
 - `/retest`
 - `/final-test`
 - `/survey`
-- `/l0-check`
+- `/l0-check`  # 互換・補助
 - `/finish`
 - `/admin`
 
@@ -79,7 +81,6 @@ UIは研究実験用であり、派手さよりも誤操作防止、ログ完全
 - terms
 - questions
 - question_options
-- question_variants
 - attempts
 - learner_states
 - tutor_sessions
@@ -89,6 +90,8 @@ UIは研究実験用であり、派手さよりも誤操作防止、ログ完全
 - evaluation_summaries
 - export_jobs
 - audit_events
+
+問題バリアントの識別は `questions.construct_key` と `questions.variant_key` で扱う。現行実装では `question_variants` を独立テーブルとして必須にしない。
 
 ## AI
 
@@ -141,6 +144,7 @@ MVPでは以下を優先してください。
 - 同じ誤概念が再発した場合 `recurrence_flag = true` になる
 - 未達0件になったら、2用語すべてを対象にした選択式・理由なしの `/final-test` へ進み、採点後 `/survey` へ進む
 - 管理画面とCSVでは、テスト回答と学習ターン回答を `answer_history` として同じ回答履歴に統合する
+- 評価サマリーは `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率を保存し、`l0_correct_rate` はfinal_test正答率の互換名として扱う
 - control群では一般解説のみになる
 - app-server未接続時は分かりやすいエラーが出る
 - READMEにセットアップ手順が書かれている

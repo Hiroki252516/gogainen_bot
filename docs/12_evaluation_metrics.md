@@ -8,6 +8,8 @@
 
 時間分析では、問題表示時刻 `question_shown_at`、回答時刻 `answered_at`、回答時間秒 `response_time_sec` を使う。`created_at` はサーバー保存時刻として扱い、所要時間の主指標にはしない。
 
+現行実装の `evaluation_summaries` は、参加者単位の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を保存する。`l0_correct_rate` は互換名だが、`final_test` が存在する場合は `final_test` の正答率を入れる。事前テスト、再テスト1、再テスト2、最終テストの得点率推移と誤概念推移は、次段のログ拡張で追加する。
+
 ## 主評価指標
 
 ### 1. 同種誤答再発率
@@ -48,7 +50,7 @@ final_test_correct_rate = final_test_correct_count / final_test_question_count
 
 - `is_correct = true`
 
-L0確認は互換・補助フェーズとして残るが、現行MVPの主到達評価は `final_test` を使う。
+L0確認は互換・補助フェーズとして残るが、現行MVPの主到達評価は `final_test` を使う。実装上の保存先は既存互換のため `evaluation_summaries.l0_correct_rate` でよい。
 
 ## 補助指標
 
@@ -64,6 +66,8 @@ score = correct_count / total_question_count
 - retest
 - final_test
 - l0_check は補助・互換指標
+
+現行の `retest_score` は、保存されている `retest` attempts 全体から計算する。複数周回の再テストを周回別に分けるスコア推移は、次段の追加仕様で `attempt_index` または時系列から明示的に切り出す。
 
 ### 誤概念タイプ別再発率
 
@@ -114,7 +118,9 @@ MVPでは管理画面に記述統計を表示する。
 - 平均pretest_score
 - 平均retest_score
 - 平均same_misconception_recurrence_rate
-- 平均confirmation_correct_rate
+- 平均l0_correct_rate  # 現行MVPでは final_test 正答率として扱う
+
+次段のログ拡張では、`score_delta_from_pretest_pt` と `score_delta_from_previous_test_pt` を追加候補にする。増加率は相対率ではなく、まず差分ポイントで扱う。
 
 小規模な卒研では統計検定より、参加者別・用語別の変化を説明できるCSVを重視する。必要なら外部分析で以下を行う。
 

@@ -44,9 +44,11 @@ frontendはブラウザから相対パス `/api/...` を呼び、Next.js rewrite
 - `answer_history`: API/CSV/管理画面上の統合ビュー。物理テーブルではない
 - `ai_call_logs`: Codex app-serverまたはMockのAI呼び出し記録
 - `recurrence_events`: 同種誤概念再発
-- `evaluation_summaries`: 評価指標の保存値
+- `evaluation_summaries`: `pretest_score`, `retest_score`, `l0_correct_rate`, 再発率などの保存値。`l0_correct_rate` は互換名で、現行MVPでは `final_test` 正答率を入れる
 
 CSVの回答行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` とする。
+
+事前テスト、再テスト1、再テスト2、最終テストの得点率推移と誤概念推移は、次段のログ拡張として扱う。現時点では `attempts` と `answer_history` から再計算できることを優先する。
 
 ## AI Backend
 

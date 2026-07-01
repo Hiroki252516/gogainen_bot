@@ -2,7 +2,7 @@
 
 ## 2026-06 Iterative Flow API Update
 
-反復型フローでは、`GET /api/experiment/{participant_id}/retest` は現在 `TermAssignment.is_learning_target = true` の未達用語だけを返す。`POST /api/participants/{participant_id}/score-retest` は正解済み用語を次周回対象から除外し、未達が残れば `next_url=/learning-targets`、残り0件なら `next_url=/final-test` を返す。
+反復型フローでは、`GET /api/experiment/{participant_id}/retest` は事前テスト対象の全2用語を毎回返す。`POST /api/participants/{participant_id}/score-retest` は採点後に `TermAssignment.is_learning_target` を更新し、正解済み用語を次周回の学習対象から除外する。未達が残れば `next_url=/learning-targets`、残り0件なら `next_url=/final-test` を返す。
 
 `GET /api/experiment/{participant_id}/final-test` と `POST /api/participants/{participant_id}/score-final-test` を追加する。最終テストは途中で除外された用語も含め、現行seedの2用語すべてを選択式・理由なしで出題する。採点後は `next_url=/survey` を返す。
 
@@ -138,6 +138,8 @@ Response:
 事前テスト対象の全用語について再テスト問題を返す。
 
 現行実装では、再テストは選択式で、理由記述を要求しない。問題はAI生成せず、seed済みの `retest` 問題を使う。2026-06運用では、L2概念理解問題、再テスト、最終テストは完全に同じ問題文と選択肢セットを使う。
+
+旧仕様の「未達用語だけを再テストに出す」挙動は使わない。未達判定は採点後の次周回学習対象選択にだけ使う。
 
 ### GET /api/experiment/{participant_id}/final-test
 
@@ -334,7 +336,7 @@ Response:
 
 ### POST /api/participants/{id}/score-l0-check
 
-最終テスト回答を採点し、`l0_success` を保存する。
+互換・補助フェーズの回答を採点し、`l0_success` を保存する。現行MVPの主導線では `/final-test` を使う。
 
 ### POST /api/participants/{id}/score-final-test
 
@@ -348,6 +350,8 @@ Response:
   "next_step": "finish"
 }
 ```
+
+現行の評価サマリーは `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を中心に返す。`l0_correct_rate` は互換フィールド名であり、`final_test` が存在する場合は `final_test` の正答率を入れる。事前テストから複数回再テスト、最終テストまでの得点率推移は次段のログ拡張対象である。
 
 テストフェーズ中は個別の正誤を被験者に返さない。
 

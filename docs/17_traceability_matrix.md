@@ -7,12 +7,12 @@
 | PPTX上の要点 | 仕様への反映 | 実装要素 |
 |---|---|---|
 | 専門用語は「知っているつもり」でも誤って理解する | `00_project_summary.md`, `03_misconception_taxonomy.md` | diagnosis, misconception_type |
-| その場の正解だけでは不十分 | `02_experiment_flow.md`, `12_evaluation_metrics.md` | retest, l0_check |
+| その場の正解だけでは不十分 | `02_experiment_flow.md`, `12_evaluation_metrics.md` | retest, final_test |
 | 評価は正答率だけでなく再発と自力解答を見る | `12_evaluation_metrics.md` | evaluation_summaries |
 | AIを使うかではなくログで支援を変えるかを比較 | `01_research_requirements.md` | group_condition control/proposed |
 | 学習ログは次の支援を決める診断材料 | `05_system_architecture.md`, `07_data_model.md` | learner_states, tutor_turns |
 | 誤概念タイプで支援を変える | `03_misconception_taxonomy.md`, `04_scaffolding_and_tutoring.md` | teaching_strategy |
-| 足場掛けは支えるだけでなく減らす | `04_scaffolding_and_tutoring.md` | scaffolding_level L3-L1 |
+| 足場掛けは支えるだけでなく段階を記録する | `04_scaffolding_and_tutoring.md` | learning_stage, scaffolding_level L3/L2互換ログ |
 | 同じ誤概念が再発したら方略変更 | `02_experiment_flow.md`, `04_scaffolding_and_tutoring.md` | recurrence_events, strategy_changed |
 | L2・再テスト・最終テストで同一問題を使う | `11_seed_questions.md` | construct_key, variant_key |
 | 遅延再テストも可能 | `02_experiment_flow.md`, `07_data_model.md` | delayed_retest phase |
@@ -64,7 +64,8 @@
 必要データ:
 
 - scaffolding_level history
-- l0_check attempts
+- final_test attempts
+- l0_check attempts  # 互換・補助
 - l0_success
 - stable_correct_count
 

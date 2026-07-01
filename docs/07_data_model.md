@@ -15,7 +15,7 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 - `diagnosis`
 - `learning`
 - `retest`
-- `l0_check`
+- `l0_check`  # 互換・補助フェーズ。現行MVPの主導線は final_test
 - `final_test`
 - `transfer`
 - `delayed_retest`
@@ -54,7 +54,7 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 
 - `L3`
 - `L2`
-- `L1`
+- `L1`  # legacy nullable/互換値。現行MVPの進行制御では使わない
 - `null`
 
 ## Tables
@@ -324,6 +324,8 @@ status values:
 
 ### evaluation_summaries
 
+現行実装の評価サマリーは参加者単位の最新集計として保存する。再計算のたびに新しい行を作成し、管理画面では最新行を参照する。既存カラム名との互換性のため `l0_correct_rate` を残すが、現行MVPでは `final_test` が存在する場合に `final_test` の選択式正答率を入れる。
+
 - id UUID PRIMARY KEY
 - participant_id UUID REFERENCES participants(id)
 - group_condition TEXT NOT NULL
@@ -340,6 +342,8 @@ status values:
 - learning_target_count INT NOT NULL DEFAULT 0
 - completed BOOLEAN NOT NULL DEFAULT false
 - created_at TIMESTAMP NOT NULL
+
+次段のログ拡張では、周回数が固定されない再テストを扱うため、`score_timeline_json` と `misconception_timeline_json` のようなJSON列を追加候補にする。現時点ではスコア推移は `attempts` と `answer_history` から再計算できる形を正とし、保存済みsummaryだけに依存しない。
 
 ### export_jobs
 

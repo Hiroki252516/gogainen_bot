@@ -60,7 +60,7 @@
 | stable_correct | L2 |
 | transfer_ready | L2 |
 
-`stable_correct` や `transfer_ready` でも、現行運用では互換ログを `L2` に揃える。足場掛けなし自力解答は `l0_check` / `final_test` の無支援正答で判定する。
+`stable_correct` や `transfer_ready` でも、現行運用では互換ログを `L2` に揃える。足場掛けなし自力解答は主に `final_test` の無支援正答で判定し、`l0_check` は互換・補助フェーズとして残す。
 
 ## 更新ルール
 

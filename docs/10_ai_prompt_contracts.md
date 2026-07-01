@@ -88,7 +88,7 @@ AIには必ず構造化出力を要求する。できれば app-server の `outp
   "diagnosis_confidence": 0.92,
   "natural_language_diagnosis": "この選択では...",
   "evidence": "選択肢の内容...",
-  "recommended_initial_scaffolding_level": "L1",
+  "recommended_initial_scaffolding_level": "L2",
   "recommended_teaching_strategy": "self_explanation_check",
   "requires_manual_review": false
 }
@@ -268,8 +268,8 @@ backendはAI出力をPydanticで検証する。
 - known M optionならそのMを返す
 - unknown optionなら `unknown`
 - pretestではreason_textを使わず、選択肢ラベルだけで診断する
-- retest/l0_checkではreason_textに「同じ」「同一」「混同」があればM2寄せ
-- retest/l0_checkではreason_textに「言葉」「字」「単語」「名前」があればM3寄せ
+- l0_checkなどの自由記述互換フェーズではreason_textに「同じ」「同一」「混同」があればM2寄せ
+- l0_checkなどの自由記述互換フェーズではreason_textに「言葉」「字」「単語」「名前」があればM3寄せ
 - recurrence判定はAIではなくbackendが行う
 
 ## Control Group Prompt Differences

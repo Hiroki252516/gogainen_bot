@@ -115,6 +115,8 @@ Mock rules:
 - 再テストが実施できる
 - 最終テストが実施できる
 - 評価サマリーが生成される
+- 評価サマリーには `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率が入る
+- `l0_correct_rate` は互換名として残り、final_testがある場合はfinal_test正答率として扱われる
 
 ### B. 提案群の動作
 
@@ -146,7 +148,8 @@ Mock rules:
 - retestでヒントを出さない
 - retestで理由欄を出さない
 - retestは既存seedの選択式問題を使い、AI生成しない
-- confirmation checkでチャット欄がない
+- retestは事前テスト対象の全2用語を毎回出題する
+- l0_checkは互換・補助フェーズとして扱い、現行MVPの主導線は final_test とする
 - L2・再テスト・最終テストで同一問題文を使う
 
 ### E. データ出力
@@ -178,7 +181,7 @@ Mock rules:
 4. 提案群では `term_understanding` の `L3基礎確認` から始まる
 5. L3基礎確認で十分回答なら `concept_understanding` へ進む
 6. concept理解で十分回答なら `final_feedback` へ進む
-7. 学習後retestで同じ誤概念ならrecurrence_flag true
+7. 学習後retestは2用語すべてを出題し、同じ誤概念ならrecurrence_flag true
 8. 再テストで未達が0件なら `/final-test` へ進む
 9. final_testは2問選択式・理由なしで、採点後 `/survey` へ進む
 10. evaluation_summaryに指標が反映される

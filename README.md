@@ -11,8 +11,10 @@
 主評価指標は次の3つです。
 
 1. 同種誤答再発率
-2. 足場掛けなし自力解答率
-3. 最終テスト正答率と回答時間
+2. 最終テスト正答率
+3. 回答時間
+
+現行MVPでは、最終テストは `llm_training_process` と `transformer` の2語すべてを対象にした選択式テストです。`l0_check` は互換・補助フェーズとして残っていますが、主導線は `/final-test` です。
 
 ## 実装で守る前提
 
@@ -26,6 +28,7 @@
 - 回答、出題時刻、回答時刻、回答時間、AI診断、AI応答、学習ステージ更新を研究ログとして保存する
 - 管理画面とCSVでは、テスト回答と学習ターン回答を `answer_history` として同じ回答履歴に統合する
 - 実験分析に必要なCSVを出力できるようにする
+- 再テストは毎回、事前テスト対象の2用語すべてを出題し、採点後に次周回の学習対象だけを未達用語へ絞る
 
 ## 推奨構成
 
@@ -143,3 +146,5 @@ GET /api/admin/participants/{participant_id}/logs.csv
 ```
 
 CSVは `record_type, source_type, participant_id, display_code, phase, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。
+
+現行の評価サマリーは `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を中心に保存します。`l0_correct_rate` は互換名で、`final_test` がある場合は最終テスト正答率として扱います。事前テスト、再テスト1、再テスト2、最終テストの得点率推移ログは次段の追加仕様です。
