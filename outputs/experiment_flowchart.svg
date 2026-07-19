@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <style>
+      .title { font: 700 34px "Yu Gothic", "Meiryo", sans-serif; fill: #111111; }
+      .note { font: 500 18px "Yu Gothic", "Meiryo", sans-serif; fill: #444444; }
+      .label { font: 700 23px "Yu Gothic", "Meiryo", sans-serif; fill: #111111; }
+      .small { font: 500 17px "Yu Gothic", "Meiryo", sans-serif; fill: #333333; }
+      .tiny { font: 500 15px "Yu Gothic", "Meiryo", sans-serif; fill: #444444; }
+      .tag { font: 700 17px "Yu Gothic", "Meiryo", sans-serif; fill: #111111; }
+      .box { fill: #f7f7f7; stroke: #222222; stroke-width: 3; }
+      .white { fill: #ffffff; stroke: #222222; stroke-width: 3; }
+      .decision { fill: #ffffff; stroke: #222222; stroke-width: 3; }
+      .memo { fill: #fafafa; stroke: #bdbdbd; stroke-width: 2; }
+      .arrow { fill: none; stroke: #222222; stroke-width: 3; marker-end: url(#arrow); }
+      .loop { fill: none; stroke: #555555; stroke-width: 3; stroke-dasharray: 9 9; marker-end: url(#arrowGray); }
+      .thin { fill: none; stroke: #777777; stroke-width: 2.5; marker-end: url(#arrowGray); }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#222222"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#555555"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#ffffff"/>
+  <text x="70" y="62" class="title">実験フロー</text>
+  <text x="70" y="96" class="note">元の図の構成を保ちつつ、上から下へ進むように整理</text>
+
+  <!-- Main vertical flow -->
+  <rect x="640" y="120" width="320" height="66" rx="16" class="white"/>
+  <text x="800" y="160" text-anchor="middle" class="label">事前テスト</text>
+
+  <polygon points="800,215 950,280 800,345 650,280" class="decision"/>
+  <text x="800" y="275" text-anchor="middle" class="label">回答結果</text>
+  <text x="800" y="302" text-anchor="middle" class="small">正解 / わからない / 不正解</text>
+
+  <!-- Result branches -->
+  <rect x="250" y="265" width="230" height="58" rx="14" class="white"/>
+  <text x="365" y="301" text-anchor="middle" class="label">正解</text>
+
+  <rect x="1065" y="210" width="230" height="58" rx="14" class="box"/>
+  <text x="1180" y="246" text-anchor="middle" class="label">わからない</text>
+
+  <rect x="1065" y="320" width="230" height="58" rx="14" class="box"/>
+  <text x="1180" y="356" text-anchor="middle" class="label">不正解</text>
+
+  <path d="M650 280 H480" class="thin"/>
+  <text x="540" y="262" class="tag">正解</text>
+  <path d="M950 262 H1065" class="thin"/>
+  <text x="982" y="241" class="tag">わからない</text>
+  <path d="M950 302 H1015 V349 H1065" class="thin"/>
+  <text x="985" y="332" class="tag">不正解</text>
+
+  <!-- Learning target merge -->
+  <rect x="640" y="405" width="320" height="72" rx="16" class="box"/>
+  <text x="800" y="435" text-anchor="middle" class="label">学習対象リスト作成</text>
+  <text x="800" y="461" text-anchor="middle" class="small">誤答・unknown の用語のみ</text>
+
+  <path d="M1180 268 V405 H920" class="thin"/>
+  <path d="M1180 378 V442 H960" class="thin"/>
+  <path d="M365 323 V840 H640" class="thin"/>
+  <text x="388" y="830" class="small">正解済み用語は学習対象から除外</text>
+
+  <polygon points="800,510 950,575 800,640 650,575" class="decision"/>
+  <text x="800" y="568" text-anchor="middle" class="label">学習対象あり？</text>
+  <text x="800" y="596" text-anchor="middle" class="small">未達用語があるか</text>
+
+  <path d="M800 186 V215" class="arrow"/>
+  <path d="M800 477 V510" class="arrow"/>
+
+  <!-- Learning session -->
+  <rect x="510" y="685" width="580" height="170" rx="18" class="memo"/>
+  <text x="800" y="724" text-anchor="middle" class="label">学習セッション</text>
+
+  <rect x="555" y="760" width="220" height="58" rx="14" class="white"/>
+  <text x="665" y="783" text-anchor="middle" class="label">L3 用語理解</text>
+  <text x="665" y="807" text-anchor="middle" class="tiny">教材あり・質問あり</text>
+
+  <rect x="825" y="760" width="220" height="58" rx="14" class="white"/>
+  <text x="935" y="783" text-anchor="middle" class="label">L2 概念理解</text>
+  <text x="935" y="807" text-anchor="middle" class="tiny">教材あり・質問あり</text>
+
+  <path d="M800 640 V685" class="arrow"/>
+  <text x="822" y="668" class="tag">はい</text>
+  <path d="M775 789 H825" class="arrow"/>
+  <text x="790" y="773" class="tag">十分</text>
+  <path d="M935 818 V842 H665 V818" class="loop"/>
+  <text x="790" y="864" text-anchor="middle" class="tag">不十分なら戻る</text>
+
+  <!-- Retest and final -->
+  <rect x="640" y="895" width="320" height="66" rx="16" class="white"/>
+  <text x="800" y="922" text-anchor="middle" class="label">再テスト</text>
+  <text x="800" y="946" text-anchor="middle" class="small">毎回、全対象用語を出題</text>
+  <path d="M800 855 V895" class="arrow"/>
+
+  <polygon points="1230,760 1380,825 1230,890 1080,825" class="decision"/>
+  <text x="1230" y="817" text-anchor="middle" class="label">全問正解？</text>
+  <text x="1230" y="845" text-anchor="middle" class="small">未達0件か</text>
+
+  <path d="M960 928 H1230 V890" class="arrow"/>
+
+  <rect x="1220" y="560" width="300" height="66" rx="16" class="white"/>
+  <text x="1370" y="587" text-anchor="middle" class="label">最終テスト</text>
+  <text x="1370" y="611" text-anchor="middle" class="small">ヒント・即時FBなし</text>
+
+  <rect x="1220" y="435" width="300" height="60" rx="16" class="box"/>
+  <text x="1370" y="472" text-anchor="middle" class="label">アンケート・終了</text>
+
+  <path d="M1230 760 V626" class="arrow"/>
+  <text x="1252" y="705" class="tag">はい</text>
+  <path d="M1370 560 V495" class="arrow"/>
+
+  <!-- No target goes straight to final test -->
+  <path d="M950 575 H1370 V560" class="arrow"/>
+  <text x="1010" y="556" class="tag">いいえ</text>
+
+  <!-- Loop if not all correct -->
+  <path d="M1080 825 H1030 V705 H1090" class="loop"/>
+  <text x="1045" y="807" text-anchor="end" class="tag">いいえ</text>
+  <rect x="1165" y="920" width="350" height="58" rx="14" class="memo"/>
+  <text x="1340" y="945" text-anchor="middle" class="label">全問正解するまで繰り返す</text>
+  <text x="1340" y="967" text-anchor="middle" class="tiny">誤答・unknown の用語だけ再学習</text>
+
+  <!-- Shape legend -->
+  <rect x="70" y="725" width="360" height="150" rx="16" class="memo"/>
+  <text x="100" y="765" class="label">図形の意味</text>
+  <text x="100" y="798" class="small">角丸長方形: テスト・処理・学習</text>
+  <text x="100" y="827" class="small">ひし形: 条件分岐</text>
+  <text x="100" y="856" class="small">点線: 繰り返し・戻り</text>
+</svg>
