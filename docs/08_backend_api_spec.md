@@ -21,7 +21,7 @@ Transformerのテスト問題は複数選択で返す。
 
 ## POST /api/attempts
 
-`selected_option_ids: string[]` を追加する。既存互換のため `selected_option_id` も残す。複数選択問題では3件ちょうどを必須とする。
+`selected_option_ids: string[]` を追加する。既存互換のため `selected_option_id` も残す。複数選択問題では、A〜Iから3件ちょうど、またはJのみ1件を必須とする。JとA〜Iの混在は不可とする。
 
 ```json
 {
@@ -32,7 +32,7 @@ Transformerのテスト問題は複数選択で返す。
 }
 ```
 
-採点はA/B/C完全一致のみ正解。不正解分類はM3優先、次にM1、unknownのみならunknown。
+採点はA/B/C完全一致のみ正解。不正解分類はM3を最優先、次にM1、A/B/C完全一致なら正解、Jのみならunknownとする。
 
 ## Learning Stage
 

@@ -51,7 +51,7 @@ if (!learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") 
 if (!learningPage.includes("turnShownAt") || !learningPage.includes("question_shown_at: turnShownAt") || !learningPage.includes("answered_at: answeredAt")) {
   throw new Error("learning page must send turn timing timestamps");
 }
-for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "概念変化", "豊富化"]) {
+for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "概念変化", "豊富化", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing multiple-selection/new-stage behavior: ${expectedText}`);
   }
@@ -76,7 +76,7 @@ if (!questionRunner.includes("responseTimeSec") || !questionRunner.includes("que
 if (!questionRunner.includes("questionShownAt") || !questionRunner.includes("question_shown_at: questionShownAt") || !questionRunner.includes("answered_at: answeredAt")) {
   throw new Error("QuestionRunner must send question timing timestamps");
 }
-for (const expectedText of ["selection_mode", "selectedIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "min_selections", "max_selections"]) {
+for (const expectedText of ["selection_mode", "selectedIds", "selected_option_ids", "type={isMultipleQuestion ? \"checkbox\" : \"radio\"}", "min_selections", "max_selections", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "disabled={isDisabled}", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`QuestionRunner missing multiple-selection behavior: ${expectedText}`);
   }

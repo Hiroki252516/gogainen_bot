@@ -157,6 +157,41 @@ button:disabled {
   margin-top: 4px;
 }
 
+.selection-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  color: var(--muted);
+}
+
+.selection-status strong {
+  color: var(--text);
+}
+
+.selection-status.ok {
+  border-color: #98d4b4;
+  background: #f0fdf6;
+}
+
+.option.option-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+.option.option-unknown {
+  border-style: dashed;
+}
+
+.option.option-disabled input {
+  cursor: not-allowed;
+}
+
 .muted {
   color: var(--muted);
 }

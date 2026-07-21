@@ -1,6 +1,6 @@
 # Frontend UX Flow
 
-テスト画面は `selection_mode = multiple` の場合、チェックボックスで選択肢を表示する。`min_selections = max_selections = 3` のため、3つ選ばないと送信できない。
+テスト画面は `selection_mode = multiple` の場合、チェックボックスで選択肢を表示する。A〜Iは3つ選ぶまで送信できず、3つ選ぶと未選択のA〜Iはdisabledになる。J「わからない」は単独選択専用で、Jを選ぶとA〜Iをクリアしてdisabledにする。
 
 被験者向け学習画面の段階表示は次の3つだけを使う。
 

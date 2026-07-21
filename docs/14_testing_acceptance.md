@@ -7,7 +7,7 @@
 - A/B/Cのみ選択で正解になる。
 - D/E/Fを含む不正解はM1になる。
 - G/H/Iを含む不正解はM3になる。
-- Jのみ、またはunknown相当のみはunknownになる。
+- Jのみはunknownになる。
 - M1/M3不正解後は `conceptual_change` に進む。
 - unknown後は `enrichment` に進む。
 - retest/final_testも同じ問題文・選択肢セットを使う。

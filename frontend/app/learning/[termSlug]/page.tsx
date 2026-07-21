@@ -99,6 +99,22 @@ function componentDisplay(turn: Turn) {
   return `用語: ${turn.component_term || "構成用語"}`;
 }
 
+function multipleSelectionState(options: Option[], selectedIds: string[], requiredSelections = 3) {
+  const selectedOptions = options.filter((option) => selectedIds.includes(option.option_id));
+  const hasUnknown = selectedOptions.some((option) => option.label === "J");
+  const normalSelectedCount = selectedOptions.filter((option) => option.label !== "J").length;
+  const isComplete = (hasUnknown && selectedOptions.length === 1) || (!hasUnknown && normalSelectedCount === requiredSelections);
+  return { selectedOptions, hasUnknown, normalSelectedCount, reachedLimit: !hasUnknown && normalSelectedCount >= requiredSelections, isComplete };
+}
+
+function nextMultipleSelection(options: Option[], selectedIds: string[], option: Option, requiredSelections = 3) {
+  const isSelected = selectedIds.includes(option.option_id);
+  if (isSelected) return selectedIds.filter((id) => id !== option.option_id);
+  if (option.label === "J") return [option.option_id];
+  const withoutUnknown = selectedIds.filter((id) => options.find((item) => item.option_id === id)?.label !== "J");
+  return withoutUnknown.length >= requiredSelections ? selectedIds : [...withoutUnknown, option.option_id];
+}
+
 export default function LearningPage() {
   const router = useRouter();
   const params = useParams<{ termSlug: string }>();
@@ -160,10 +176,9 @@ export default function LearningPage() {
     const items = turn.practice_question?.items || [];
     const isMultiple = turn.practice_question?.selection_mode === "multiple";
     const requiredSelections = turn.practice_question?.min_selections ?? 3;
-    const selectedLabels = options.filter((option) => selectedOptionIds.includes(option.option_id)).map((option) => option.label);
-    const isUnknownOnly = selectedLabels.length === 1 && selectedLabels[0] === "J";
-    if (isMultiple && !isUnknownOnly && selectedOptionIds.length !== requiredSelections) {
-      setError(`${requiredSelections}つ選んでください。`);
+    const selectionState = multipleSelectionState(options, selectedOptionIds, requiredSelections);
+    if (isMultiple && !selectionState.isComplete) {
+      setError(`A〜Iから${requiredSelections}つ選ぶか、「わからない」だけを選んでください。`);
       return;
     }
     if (!isMultiple && options.length && !selectedOptionId) {
@@ -323,35 +338,60 @@ export default function LearningPage() {
                         ))}
                       </div>
                     ) : turn.practice_question?.options?.length ? (
-                      <div className="options">
-                        {turn.practice_question.options.map((option) => {
-                          const isMultiple = turn.practice_question?.selection_mode === "multiple";
+                      <>
+                        {turn.practice_question.selection_mode === "multiple" ? (() => {
+                          const requiredSelections = turn.practice_question.min_selections ?? 3;
+                          const selectionState = multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, requiredSelections);
                           return (
-                            <label className="option" key={option.option_id}>
-                              <input
-                                type={isMultiple ? "checkbox" : "radio"}
-                                name="learning-option"
-                                value={option.option_id}
-                                checked={isMultiple ? selectedOptionIds.includes(option.option_id) : selectedOptionId === option.option_id}
-                                onChange={() => {
-                                  if (!isMultiple) {
-                                    setSelectedOptionId(option.option_id);
-                                    return;
-                                  }
-                                  setSelectedOptionIds((currentIds) =>
-                                    currentIds.includes(option.option_id)
-                                      ? currentIds.filter((id) => id !== option.option_id)
-                                      : [...currentIds, option.option_id]
-                                  );
-                                }}
-                              />
+                            <div className={`selection-status ${selectionState.isComplete ? "ok" : ""}`}>
+                              <strong>{selectionState.hasUnknown ? "わからないを選択中" : `${selectionState.normalSelectedCount}/${requiredSelections} 選択済み`}</strong>
                               <span>
-                                <strong>{option.label}.</strong> {option.body}
+                                {selectionState.hasUnknown
+                                  ? "わからないを選ぶ場合は単独選択です。"
+                                  : selectionState.reachedLimit
+                                    ? "上限に達しました。変更するには選択済みの項目を外してください。"
+                                    : `A〜Iから${requiredSelections}つ選ぶか、J「わからない」だけを選んでください。`}
                               </span>
-                            </label>
+                            </div>
                           );
-                        })}
-                      </div>
+                        })() : null}
+                        <div className="options">
+                          {turn.practice_question.options.map((option) => {
+                            const isMultiple = turn.practice_question?.selection_mode === "multiple";
+                            const requiredSelections = turn.practice_question?.min_selections ?? 3;
+                            const selectionState = multipleSelectionState(turn.practice_question?.options || [], selectedOptionIds, requiredSelections);
+                            const isSelected = isMultiple ? selectedOptionIds.includes(option.option_id) : selectedOptionId === option.option_id;
+                            const isUnknown = option.label === "J";
+                            const isDisabled =
+                              isMultiple &&
+                              !isSelected &&
+                              ((selectionState.hasUnknown && !isUnknown) ||
+                                (!isUnknown && selectionState.reachedLimit) ||
+                                (isUnknown && selectionState.normalSelectedCount > 0));
+                            return (
+                              <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
+                                <input
+                                  type={isMultiple ? "checkbox" : "radio"}
+                                  name="learning-option"
+                                  value={option.option_id}
+                                  checked={isSelected}
+                                  disabled={isDisabled}
+                                  onChange={() => {
+                                    if (!isMultiple) {
+                                      setSelectedOptionId(option.option_id);
+                                      return;
+                                    }
+                                    setSelectedOptionIds((currentIds) => nextMultipleSelection(turn.practice_question?.options || [], currentIds, option, requiredSelections));
+                                  }}
+                                />
+                                <span>
+                                  <strong>{option.label}.</strong> {option.body}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </>
                     ) : (
                       <label>
                         あなたの回答・自己説明
@@ -366,8 +406,7 @@ export default function LearningPage() {
                     disabled={
                       submitting ||
                       (turn.practice_question?.selection_mode === "multiple" &&
-                        selectedOptionIds.length !== (turn.practice_question?.min_selections ?? 3) &&
-                        !(selectedOptionIds.length === 1 && turn.practice_question.options?.find((option) => option.option_id === selectedOptionIds[0])?.label === "J"))
+                        !multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, turn.practice_question.min_selections ?? 3).isComplete)
                     }
                   >
                     {submitting ? "回答を確認中..." : "回答を確認"}

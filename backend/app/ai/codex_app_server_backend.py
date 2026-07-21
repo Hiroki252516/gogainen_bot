@@ -250,7 +250,7 @@ class CodexAppServerBackend:
             rules.append("統制群では、L3相当の基礎教材とL2相当の観点教材を両方tutor_messageに含める。ただし質問はL2相当の1問だけにし、L3質問は出さない。")
         else:
             rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
-            rules.append("M1なら誤信念の修正、M3なら本来のモデル構造カテゴリへの捉え直し、unknownなら基礎知識の豊富化を優先する。")
+            rules.append("選択にM3が含まれる場合はM3を最優先し、M1より先に本来のモデル構造カテゴリへの捉え直しを扱う。M1なら誤信念の修正、unknownなら基礎知識の豊富化を優先する。")
             rules.append("提案群では、unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)

@@ -156,17 +156,33 @@ def _selected_labels(options: list[dict[str, Any]]) -> str:
     return " / ".join(option["label"] for option in options)
 
 
+def _option_label(option: Any) -> str | None:
+    return option.option_label if hasattr(option, "option_label") else option.get("label")
+
+
+def _option_misconception(option: Any) -> str | None:
+    return option.misconception_type if hasattr(option, "misconception_type") else option.get("misconception_type")
+
+
+def _validate_multi_select_labels(labels: set[str], selected_count: int) -> None:
+    if labels == {"J"} and selected_count == 1:
+        return
+    if "J" in labels:
+        raise HTTPException(status_code=400, detail="unknown option cannot be combined with other options")
+    if not labels.issubset(set("ABCDEFGHI")) or selected_count != 3:
+        raise HTTPException(status_code=400, detail="select exactly three options from A-I or only J")
+
+
 def _classify_selected_options(options: list[Any], correct_labels: set[str] | None = None) -> tuple[bool, str | None, str]:
-    selected_labels = {option.option_label if hasattr(option, "option_label") else option.get("label") for option in options}
+    selected_labels = {_option_label(option) for option in options}
     correct_labels = correct_labels or {"A", "B", "C"}
-    is_correct = selected_labels == correct_labels
-    if is_correct:
-        return True, None, "stable_correct"
-    misconceptions = [option.misconception_type if hasattr(option, "misconception_type") else option.get("misconception_type") for option in options]
+    misconceptions = [_option_misconception(option) for option in options]
     if "M3" in misconceptions:
         return False, "M3", "misconception"
     if "M1" in misconceptions:
         return False, "M1", "misconception"
+    if selected_labels == correct_labels:
+        return True, None, "stable_correct"
     return False, "unknown", "unknown"
 
 
@@ -480,11 +496,11 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
     selected_option_ids = [option_id for option_id in selected_option_ids if option_id]
     constraints = _selection_constraints(question.question_type, db.query(func.count(QuestionOption.id)).filter_by(question_id=question.id).scalar() or 0)
     if constraints["selection_mode"] == "multiple":
-        selected_for_validation = db.query(QuestionOption).filter(QuestionOption.id.in_(selected_option_ids or ["__none__"])).all()
+        selected_for_validation = db.query(QuestionOption).filter(QuestionOption.question_id == question.id, QuestionOption.id.in_(selected_option_ids or ["__none__"])).all()
+        if len(selected_for_validation) != len(selected_option_ids):
+            raise HTTPException(status_code=400, detail="invalid selected options")
         selected_labels = {option.option_label for option in selected_for_validation}
-        allows_unknown_only = selected_labels == {"J"}
-        if not allows_unknown_only and (len(selected_option_ids) < constraints["min_selections"] or len(selected_option_ids) > constraints["max_selections"]):
-            raise HTTPException(status_code=400, detail="invalid selection count")
+        _validate_multi_select_labels(selected_labels, len(selected_option_ids))
     if idempotency_key:
         existing = db.query(Attempt).filter_by(participant_id=participant.id, idempotency_key=idempotency_key).one_or_none()
         if existing:
@@ -882,6 +898,8 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
 
     spec = _learning_question_spec(term.slug, learning_stage, component_term)
     selected_options = _selected_learning_options(spec, payload.get("selected_option_ids"), payload.get("selected_option_id"), response)
+    if spec.get("selection_mode") == "multiple":
+        _validate_multi_select_labels({_option_label(option) for option in selected_options}, len(selected_options))
     result = _fixed_feedback_for_options(selected_options, spec)
     response = result.get("selected_option_body") or response
 

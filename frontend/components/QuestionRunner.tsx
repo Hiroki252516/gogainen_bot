@@ -18,6 +18,22 @@ type Question = {
   max_selections?: number;
 };
 
+function multipleSelectionState(options: Option[], selectedIds: string[], requiredSelections = 3) {
+  const selectedOptions = options.filter((option) => selectedIds.includes(option.option_id));
+  const hasUnknown = selectedOptions.some((option) => option.label === "J");
+  const normalSelectedCount = selectedOptions.filter((option) => option.label !== "J").length;
+  const isComplete = (hasUnknown && selectedOptions.length === 1) || (!hasUnknown && normalSelectedCount === requiredSelections);
+  return { selectedOptions, hasUnknown, normalSelectedCount, reachedLimit: !hasUnknown && normalSelectedCount >= requiredSelections, isComplete };
+}
+
+function nextMultipleSelection(options: Option[], selectedIds: string[], option: Option, requiredSelections = 3) {
+  const isSelected = selectedIds.includes(option.option_id);
+  if (isSelected) return selectedIds.filter((id) => id !== option.option_id);
+  if (option.label === "J") return [option.option_id];
+  const withoutUnknown = selectedIds.filter((id) => options.find((item) => item.option_id === id)?.label !== "J");
+  return withoutUnknown.length >= requiredSelections ? selectedIds : [...withoutUnknown, option.option_id];
+}
+
 export function QuestionRunner({
   phase,
   title,
@@ -64,10 +80,9 @@ export function QuestionRunner({
     const isMultiple = current.selection_mode === "multiple";
     const minSelections = current.min_selections ?? (isMultiple ? 1 : 0);
     const maxSelections = current.max_selections ?? (isMultiple ? current.options.length : 1);
-    const selectedLabels = current.options.filter((option) => selectedIds.includes(option.option_id)).map((option) => option.label);
-    const isUnknownOnly = selectedLabels.length === 1 && selectedLabels[0] === "J";
-    if (isMultiple && !isUnknownOnly && (selectedIds.length < minSelections || selectedIds.length > maxSelections)) {
-      setError(`${minSelections === maxSelections ? `${minSelections}つ` : `${minSelections}〜${maxSelections}つ`}選んでください。`);
+    const selectionState = multipleSelectionState(current.options, selectedIds, minSelections);
+    if (isMultiple && (!selectionState.isComplete || selectedIds.length > maxSelections)) {
+      setError(`A〜Iから${minSelections}つ選ぶか、「わからない」だけを選んでください。`);
       return;
     }
     if (!isMultiple && current.options.length && !selected) {
@@ -126,6 +141,11 @@ export function QuestionRunner({
   if (error && !current) return <div className="panel danger">{error}</div>;
   if (!current) return <div className="panel">問題がありません。</div>;
 
+  const isMultipleQuestion = current.selection_mode === "multiple";
+  const requiredSelections = current.min_selections ?? 3;
+  const selectionState = multipleSelectionState(current.options, selectedIds, requiredSelections);
+  const canSubmit = !saving && (!isMultipleQuestion || selectionState.isComplete);
+
   return (
     <div className="panel stack">
       <div className="topbar">
@@ -136,27 +156,43 @@ export function QuestionRunner({
         <strong>{current.term_label}</strong>
         <p>{current.body}</p>
       </div>
+      {isMultipleQuestion ? (
+        <div className={`selection-status ${selectionState.isComplete ? "ok" : ""}`}>
+          <strong>{selectionState.hasUnknown ? "わからないを選択中" : `${selectionState.normalSelectedCount}/${requiredSelections} 選択済み`}</strong>
+          <span>
+            {selectionState.hasUnknown
+              ? "わからないを選ぶ場合は単独選択です。"
+              : selectionState.reachedLimit
+                ? "上限に達しました。変更するには選択済みの項目を外してください。"
+                : `A〜Iから${requiredSelections}つ選ぶか、J「わからない」だけを選んでください。`}
+          </span>
+        </div>
+      ) : null}
       {current.options.length > 0 ? (
         <div className="options">
           {current.options.map((option) => {
-            const isMultiple = current.selection_mode === "multiple";
+            const isSelected = isMultipleQuestion ? selectedIds.includes(option.option_id) : selected === option.option_id;
+            const isUnknown = option.label === "J";
+            const isDisabled =
+              isMultipleQuestion &&
+              !isSelected &&
+              ((selectionState.hasUnknown && !isUnknown) ||
+                (!isUnknown && selectionState.reachedLimit) ||
+                (isUnknown && selectionState.normalSelectedCount > 0));
             return (
-              <label className="option" key={option.option_id}>
+              <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
                 <input
-                  type={isMultiple ? "checkbox" : "radio"}
+                  type={isMultipleQuestion ? "checkbox" : "radio"}
                   name="option"
                   value={option.option_id}
-                  checked={isMultiple ? selectedIds.includes(option.option_id) : selected === option.option_id}
+                  checked={isSelected}
+                  disabled={isDisabled}
                   onChange={() => {
-                    if (!isMultiple) {
+                    if (!isMultipleQuestion) {
                       setSelected(option.option_id);
                       return;
                     }
-                    setSelectedIds((currentIds) =>
-                      currentIds.includes(option.option_id)
-                        ? currentIds.filter((id) => id !== option.option_id)
-                        : [...currentIds, option.option_id]
-                    );
+                    setSelectedIds((currentIds) => nextMultipleSelection(current.options, currentIds, option, requiredSelections));
                   }}
                 />
                 <span>
@@ -177,12 +213,7 @@ export function QuestionRunner({
       <div className="actions">
         <button
           onClick={submit}
-          disabled={
-            saving ||
-            (current.selection_mode === "multiple" &&
-              selectedIds.length !== (current.min_selections ?? 3) &&
-              !(selectedIds.length === 1 && current.options.find((option) => option.option_id === selectedIds[0])?.label === "J"))
-          }
+          disabled={!canSubmit}
         >
           {index + 1 === questions.length ? "完了" : "次へ"}
         </button>

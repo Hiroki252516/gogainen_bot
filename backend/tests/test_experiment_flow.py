@@ -62,7 +62,7 @@ def test_pretest_returns_only_transformer_multi_select_question():
     assert question["requires_reason"] is False
 
 
-def test_attempt_requires_three_choices_except_unknown_j_only():
+def test_attempt_requires_three_from_a_to_i_or_unknown_j_only():
     participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
     pid = participant["participant_id"]
     question = client.get(f"/api/experiment/{pid}/pretest").json()["questions"][0]
@@ -72,6 +72,18 @@ def test_attempt_requires_three_choices_except_unknown_j_only():
         json={"participant_id": pid, "question_id": question["question_id"], "phase": "pretest", "selected_option_ids": _ids_for_labels(question, ["A"])},
     )
     assert one_non_unknown.status_code == 400
+
+    four_normal = client.post(
+        "/api/attempts",
+        json={"participant_id": pid, "question_id": question["question_id"], "phase": "pretest", "selected_option_ids": _ids_for_labels(question, ["A", "B", "C", "D"])},
+    )
+    assert four_normal.status_code == 400
+
+    mixed_unknown = client.post(
+        "/api/attempts",
+        json={"participant_id": pid, "question_id": question["question_id"], "phase": "pretest", "selected_option_ids": _ids_for_labels(question, ["A", "D", "J"])},
+    )
+    assert mixed_unknown.status_code == 400
 
     unknown_only = client.post(
         "/api/attempts",
@@ -83,10 +95,11 @@ def test_attempt_requires_three_choices_except_unknown_j_only():
 def test_pretest_scoring_correct_m1_m3_unknown_and_snapshots():
     cases = [
         (["A", "B", "C"], True, None, "stable_correct"),
+        (["A", "B", "D"], False, "M1", "misconception"),
+        (["A", "D", "G"], False, "M3", "misconception"),
         (["D", "E", "F"], False, "M1", "misconception"),
         (["G", "H", "I"], False, "M3", "misconception"),
         (["J"], False, "unknown", "unknown"),
-        (["D", "G", "J"], False, "M3", "misconception"),
     ]
     for labels, is_correct, misconception_type, status in cases:
         pid = _create_participant_with_pretest(labels=labels)
@@ -126,9 +139,15 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "transformer"}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
 
+    mixed_unknown = client.post(
+        f"/api/tutor-turns/{turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["A", "D", "J"])},
+    )
+    assert mixed_unknown.status_code == 400
+
     wrong = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["G", "H", "I"])},
+        json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["A", "D", "G"])},
     ).json()
     assert wrong["is_sufficient"] is False
     assert wrong["next_learning_stage"] == "conceptual_change"
