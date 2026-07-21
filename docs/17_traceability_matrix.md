@@ -31,12 +31,11 @@
 
 5月25日の更新案では、先行研究に基づく独自の分析枠組みとして、次の4分類へ整理された。
 
-- M1: カテゴリー誤分類型
-- M2: 類似概念境界混同型
-- M3: 表層特徴・キーワード反応型
-- M4: 文脈転移失敗型
+- M1: 誤信念型
+- M3: カテゴリー錯誤型
+- unknown: 知識不足
 
-実装は最終分類M1〜M4を採用する。旧分類との対応は `03_misconception_taxonomy.md` に記載する。
+実装は今回のMVP分類としてM1/M3/unknownを採用する。M2/M4は互換値として残すが新規生成しない。
 
 ## Research Questions to Data
 
@@ -88,7 +87,7 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 
 - term x misconception_type count
 - term x recurrence rate
-- M4 failure rate
+- unknown persistence rate
 
 ## Implementation Traceability
 

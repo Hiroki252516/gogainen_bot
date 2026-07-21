@@ -27,7 +27,7 @@ type Turn = {
   term_label?: string;
   tutor_message: string;
   learner_prompt: string;
-  practice_question: { body: string; options?: Option[]; items?: PracticeItem[] };
+  practice_question: { body: string; options?: Option[]; items?: PracticeItem[]; selection_mode?: "single" | "multiple"; min_selections?: number; max_selections?: number };
   turn_index: number;
   max_turns: number;
   learning_stage?: string;
@@ -80,6 +80,14 @@ function judgementLabel(feedback: Feedback | null) {
   return feedback.is_sufficient ? "十分" : "不十分";
 }
 
+function learningStageLabel(stage?: string, backendLabel?: string) {
+  if (backendLabel) return backendLabel;
+  if (stage === "enrichment") return "豊富化";
+  if (stage === "conceptual_change") return "概念変化";
+  if (stage === "final_feedback") return "教材フィードバック";
+  return "概念変化";
+}
+
 function componentDisplay(turn: Turn) {
   const items = turn.practice_question?.items || [];
   if (items.length) {
@@ -99,6 +107,7 @@ export default function LearningPage() {
   const [turn, setTurn] = useState<Turn | null>(null);
   const [response, setResponse] = useState("");
   const [selectedOptionId, setSelectedOptionId] = useState("");
+  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
   const [selectedItemOptionIds, setSelectedItemOptionIds] = useState<Record<string, string>>({});
   const [turnStartedAt, setTurnStartedAt] = useState(() => Date.now());
   const [turnShownAt, setTurnShownAt] = useState(() => new Date().toISOString());
@@ -124,6 +133,7 @@ export default function LearningPage() {
       setFeedback(null);
       setResponse("");
       setSelectedOptionId("");
+      setSelectedOptionIds([]);
       setSelectedItemOptionIds({});
       setError("");
       try {
@@ -148,7 +158,15 @@ export default function LearningPage() {
     if (!turn || actionInFlightRef.current) return;
     const options = turn.practice_question?.options || [];
     const items = turn.practice_question?.items || [];
-    if (options.length && !selectedOptionId) {
+    const isMultiple = turn.practice_question?.selection_mode === "multiple";
+    const requiredSelections = turn.practice_question?.min_selections ?? 3;
+    const selectedLabels = options.filter((option) => selectedOptionIds.includes(option.option_id)).map((option) => option.label);
+    const isUnknownOnly = selectedLabels.length === 1 && selectedLabels[0] === "J";
+    if (isMultiple && !isUnknownOnly && selectedOptionIds.length !== requiredSelections) {
+      setError(`${requiredSelections}つ選んでください。`);
+      return;
+    }
+    if (!isMultiple && options.length && !selectedOptionId) {
       setError("選択肢を選んでください。");
       return;
     }
@@ -161,14 +179,16 @@ export default function LearningPage() {
     setError("");
     try {
       const selectedOption = options.find((option) => option.option_id === selectedOptionId);
+      const selectedOptions = options.filter((option) => selectedOptionIds.includes(option.option_id));
       const answeredAt = new Date().toISOString();
       const responseTimeSec = Math.max(0.001, (Date.now() - turnStartedAt) / 1000);
       const data = await api<Feedback>(`/api/tutor-turns/${turn.turn_id}/respond`, {
         method: "POST",
         body: JSON.stringify({
-          selected_option_id: selectedOptionId || null,
+          selected_option_id: isMultiple ? (selectedOptionIds[0] || null) : (selectedOptionId || null),
+          selected_option_ids: isMultiple ? selectedOptionIds : null,
           selected_item_option_ids: items.length ? selectedItemOptionIds : null,
-          learner_response: selectedOption?.body || response,
+          learner_response: isMultiple ? selectedOptions.map((option) => option.label).join(" / ") : (selectedOption?.body || response),
           response_time_sec: responseTimeSec,
           question_shown_at: turnShownAt,
           answered_at: answeredAt
@@ -204,6 +224,7 @@ export default function LearningPage() {
       setTurnShownAt(new Date().toISOString());
       setResponse("");
       setSelectedOptionId("");
+      setSelectedOptionIds([]);
       setSelectedItemOptionIds({});
       setFeedback(null);
     } catch (err) {
@@ -224,12 +245,8 @@ export default function LearningPage() {
             <div className="notice">
               <strong>今回の学習</strong>
               <p>対象概念: {turn.term_label || termSlug}</p>
-              <p>段階: {turn.learning_stage_label || "用語理解"}</p>
-              {turn.learning_stage === "term_understanding" ? (
-                <p>{componentDisplay(turn)}</p>
-              ) : (
-                <p>対象概念全体を説明します</p>
-              )}
+              <p>段階: {learningStageLabel(turn.learning_stage, turn.learning_stage_label)}</p>
+              <p>{turn.learning_stage === "enrichment" ? "不足知識を補います" : "誤った捉え方を見直します"}</p>
             </div>
             <div className="notice">
               <strong>デバッグ</strong>
@@ -307,20 +324,33 @@ export default function LearningPage() {
                       </div>
                     ) : turn.practice_question?.options?.length ? (
                       <div className="options">
-                        {turn.practice_question.options.map((option) => (
-                          <label className="option" key={option.option_id}>
-                            <input
-                              type="radio"
-                              name="learning-option"
-                              value={option.option_id}
-                              checked={selectedOptionId === option.option_id}
-                              onChange={() => setSelectedOptionId(option.option_id)}
-                            />
-                            <span>
-                              <strong>{option.label}.</strong> {option.body}
-                            </span>
-                          </label>
-                        ))}
+                        {turn.practice_question.options.map((option) => {
+                          const isMultiple = turn.practice_question?.selection_mode === "multiple";
+                          return (
+                            <label className="option" key={option.option_id}>
+                              <input
+                                type={isMultiple ? "checkbox" : "radio"}
+                                name="learning-option"
+                                value={option.option_id}
+                                checked={isMultiple ? selectedOptionIds.includes(option.option_id) : selectedOptionId === option.option_id}
+                                onChange={() => {
+                                  if (!isMultiple) {
+                                    setSelectedOptionId(option.option_id);
+                                    return;
+                                  }
+                                  setSelectedOptionIds((currentIds) =>
+                                    currentIds.includes(option.option_id)
+                                      ? currentIds.filter((id) => id !== option.option_id)
+                                      : [...currentIds, option.option_id]
+                                  );
+                                }}
+                              />
+                              <span>
+                                <strong>{option.label}.</strong> {option.body}
+                              </span>
+                            </label>
+                          );
+                        })}
                       </div>
                     ) : (
                       <label>
@@ -331,7 +361,15 @@ export default function LearningPage() {
                   </section>
                 </div>
                 <div className="actions">
-                  <button onClick={submit} disabled={submitting}>
+                  <button
+                    onClick={submit}
+                    disabled={
+                      submitting ||
+                      (turn.practice_question?.selection_mode === "multiple" &&
+                        selectedOptionIds.length !== (turn.practice_question?.min_selections ?? 3) &&
+                        !(selectedOptionIds.length === 1 && turn.practice_question.options?.find((option) => option.option_id === selectedOptionIds[0])?.label === "J"))
+                    }
+                  >
                     {submitting ? "回答を確認中..." : "回答を確認"}
                   </button>
                 </div>

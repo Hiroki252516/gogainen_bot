@@ -131,6 +131,7 @@ class Attempt(Base):
     phase: Mapped[str] = mapped_column(String(32), nullable=False)
     attempt_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     selected_option_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("question_options.id"))
+    selected_option_ids: Mapped[list | None] = mapped_column(JSON)
     free_text_answer: Mapped[str | None] = mapped_column(Text)
     reason_text: Mapped[str | None] = mapped_column(Text)
     confidence: Mapped[int | None] = mapped_column(Integer)

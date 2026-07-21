@@ -37,131 +37,55 @@ from app.models import (
 )
 
 
-PUBLIC_LEVEL = {"L3": "用語理解から確認", "L2": "概念理解を確認"}
-PRETEST_TERM_ORDER = {"llm_training_process": 0, "transformer": 1}
+PUBLIC_LEVEL = {"L3": "豊富化", "L2": "概念変化"}
+PRETEST_TERM_ORDER = {"transformer": 0}
 PRETEST_TERM_SLUGS = set(PRETEST_TERM_ORDER)
 LEARNING_STAGE_LABELS = {
-    "term_understanding": "用語理解",
-    "concept_understanding": "概念理解",
+    "enrichment": "豊富化",
+    "conceptual_change": "概念変化",
     "final_feedback": "教材フィードバック",
 }
 TEST_PHASES = {"pretest", "retest", "final_test"}
 COMPONENT_TERMS = {
-    "llm_training_process": ["事前学習", "インストラクションチューニング", "事後学習"],
     "transformer": ["Attentionレイヤー", "FFNレイヤー", "トークン間の関係性"],
 }
 
 LEARNING_CHOICE_BANK = {
-    "llm_training_process": {
-        "事前学習": {
-            "material": "今回はLLMの学習段階を理解するための構成用語として、事前学習を確認します。事前学習とは、大量のテキストなどから言語パターンや知識の基盤を学び、後続の調整の土台となる能力を獲得する段階です。インストラクションチューニングや事後学習とは目的が異なります。",
-            "body": "LLMにおける事前学習の説明として、最も適切なものはどれか。",
-            "expected_answer": "大量のテキストなどから言語パターンや知識の基盤を学び、後続の調整の土台となる能力を獲得する段階。",
-            "question_type": "component_choice",
-            "options": [
-                {"option_id": "A", "label": "A", "body": "大量のテキストなどから言語パターンや知識の基盤を学び、後続の調整の土台となる能力を獲得する段階。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "大量の文章を読んで意味を理解し、モデルの内部で人間のような知識や意図を形成する段階。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "指示と望ましい応答の例を使い、ユーザーの命令に沿った回答をしやすくする調整段階。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "モデルを使う前に、プロンプトや条件をあらかじめ設定して回答の方向性を決める段階。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
-            ],
-        },
-        "インストラクションチューニング": {
-            "material": "今回はLLMの学習段階を理解するための構成用語として、インストラクションチューニングを確認します。インストラクションチューニングとは、指示と望ましい応答の例を使い、LLMがユーザーの指示に沿った回答をしやすくする調整段階です。事前学習で作った基盤能力を、指示応答に使いやすくします。",
-            "body": "インストラクションチューニングの説明として、最も適切なものはどれか。",
-            "expected_answer": "指示と望ましい応答の例を使い、LLMがユーザーの指示に沿った回答をしやすくする調整段階。",
-            "question_type": "component_choice",
-            "options": [
-                {"option_id": "A", "label": "A", "body": "指示と望ましい応答の例を使い、LLMがユーザーの指示に沿った回答をしやすくする調整段階。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "ユーザーの指示文を読んで意図を理解し、内部で考えた内容を会話として表現する段階。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "大量の未ラベルテキストから、言語パターンや知識の基盤を最初に獲得する段階。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "temperatureや最大トークン数などを設定し、出力の長さやランダム性を調整すること。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
-            ],
-        },
-        "事後学習": {
-            "material": "今回はLLMの学習段階を理解するための構成用語として、事後学習を確認します。事後学習とは、人間評価や報酬モデルなどを使い、出力をより安全で有用なものに近づける調整段階です。回答後の反省や単なる評価テストではありません。",
-            "body": "LLMにおける事後学習の説明として、最も適切なものはどれか。",
-            "expected_answer": "人間評価や報酬モデルなどを使い、出力をより安全で有用なものに近づける調整段階。",
-            "question_type": "component_choice",
-            "options": [
-                {"option_id": "A", "label": "A", "body": "人間評価や報酬モデルなどを使い、出力をより安全で有用なものに近づける調整段階。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "モデルが回答後に自分の出力を振り返り、次回の会話で同じ失敗を避けるように反省する段階。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "指示と望ましい応答の例を使い、ユーザーの命令に沿った回答をしやすくする調整段階。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "学習が終わった後に、性能を測るテストやアンケートを実施して結果を比較する段階。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
-            ],
-        },
-        "__concept__": {
-            "material": "LLMの主な学習プロセスは、事前学習、インストラクションチューニング、事後学習に分けて考えます。事前学習で言語パターンを学び、インストラクションチューニングで指示に従う応答へ調整し、事後学習で出力の望ましさを高めます。",
-            "body": "対象範囲で説明されているLLMの主な学習プロセスの組み合わせとして、最も適切なものはどれか。",
-            "expected_answer": "大量のテキストで言語パターンを学ぶ事前学習、指示に従う応答へ調整するインストラクションチューニング、出力の望ましさを高める事後学習。",
-            "question_type": "concept_choice",
-            "options": [
-                {"option_id": "A", "label": "A", "body": "大量のテキストで言語パターンを学ぶ事前学習、指示に従う応答へ調整するインストラクションチューニング、出力の望ましさを高める事後学習。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "入力された文章を理解する事前学習、内部で思考するインストラクションチューニング、必要に応じて意図を形成してから会話として出力する事後学習。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "ユーザーがプロンプトを入力する事前学習、コンテキストウィンドウに情報を保持するインストラクションチューニング、必要に応じてFunction Callingで外部処理を行う事後学習。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "学習前の性能を測定する事前学習、学習後の性能をテストするインストラクションチューニング、前後比較を行う評価手順である事後学習。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
-            ],
-        },
-    },
     "transformer": {
-        "Attentionレイヤー": {
-            "material": "今回はTransformerを理解するための構成用語として、Attentionレイヤーを確認します。Attentionレイヤーは、入力中の各トークンが他のトークンとどの程度関係するかを重み付けし、文脈上参照すべき情報を扱う仕組みです。文章全体を人間のように意識して判断する仕組みではありません。",
-            "body": "TransformerにおけるAttentionレイヤーの説明として、最も適切なものはどれか。",
-            "expected_answer": "入力中の各トークンが他のトークンとどの程度関係するかを重み付けし、文脈上参照すべき情報を扱う仕組み。",
-            "question_type": "component_choice",
+        "enrichment": {
+            "material": "まずTransformerの基本を確認します。Transformerは、Attentionレイヤーでトークン間の関係性を重みづけして扱い、FFNレイヤーで各トークンの表現を変換するモデルアーキテクチャです。わからない場合は、Attentionは関係性、FFNは各トークン表現の変換、と分けて押さえます。",
+            "body": "Transformerについて、適切だと思うものをすべて選びなさい。",
+            "expected_answer": "A、B、Cをすべて選択し、それ以外を選ばない。",
+            "question_type": "learning_multi_select",
+            "selection_mode": "multiple",
+            "min_selections": 3,
+            "max_selections": 3,
             "options": [
-                {"option_id": "A", "label": "A", "body": "入力中の各トークンが他のトークンとどの程度関係するかを重み付けし、文脈上参照すべき情報を扱う仕組み。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "文章全体の意味を理解し、重要な内容に意識を向けて判断する仕組み。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "各トークンの表現を個別に変換し、Attention後の特徴を加工する層。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "重要そうな単語を検索し、その単語を正しい意味や正しい語に置き換える仕組み。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
+                {"option_id": "A", "label": "A", "body": "Transformerは、Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造である。", "is_correct": True, "misconception_type": None},
+                {"option_id": "B", "label": "B", "body": "Attentionは、入力中の各トークンが他のトークンとどのように関係するかを重みづけして扱う仕組みである。", "is_correct": True, "misconception_type": None},
+                {"option_id": "C", "label": "C", "body": "FFNは、Attentionの結果を受け取り、各トークンの表現を変換する層である。", "is_correct": True, "misconception_type": None},
+                {"option_id": "D", "label": "D", "body": "Transformerは、Attentionレイヤーで文章全体の意味を理解し、FFNレイヤーで考えたり判断したりする構造である。", "is_correct": False, "misconception_type": "M1"},
+                {"option_id": "E", "label": "E", "body": "Attentionレイヤーは、文章全体の意味を理解する部分である。", "is_correct": False, "misconception_type": "M1"},
+                {"option_id": "F", "label": "F", "body": "FFNレイヤーは、Attentionの結果を受け取り、モデルが内部で考えたり判断したりする部分である。", "is_correct": False, "misconception_type": "M1"},
+                {"option_id": "G", "label": "G", "body": "Transformerは、Attentionレイヤーで文章中の重要語を探し、FFNレイヤーで文章を翻訳や生成に変換する機能である。", "is_correct": False, "misconception_type": "M3"},
+                {"option_id": "H", "label": "H", "body": "Transformerは、Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換するアプリである。", "is_correct": False, "misconception_type": "M3"},
+                {"option_id": "I", "label": "I", "body": "Transformerは、Attentionレイヤーで文章中の重要語を探し、FFNレイヤーで思考・判断を行う知能である。", "is_correct": False, "misconception_type": "M3"},
+                {"option_id": "J", "label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
             ],
         },
-        "FFNレイヤー": {
-            "material": "今回はTransformerを理解するための構成用語として、FFNレイヤーを確認します。FFNレイヤーは、Attention後の各トークン表現を個別に変換し、特徴を加工する層です。トークン同士の関係性を計算するAttentionとは役割が異なります。",
-            "body": "TransformerにおけるFFNレイヤーの説明として、最も適切なものはどれか。",
-            "expected_answer": "Attention後の各トークン表現を個別に変換し、特徴を加工する層。",
-            "question_type": "component_choice",
-            "options": [
-                {"option_id": "A", "label": "A", "body": "Attention後の各トークン表現を個別に変換し、特徴を加工する層。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "Attentionで得た文章全体の意味をもとに、モデルが内部で思考して最終判断を行う層。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "各トークンが他のトークンとどの程度関係するかを計算し、参照すべき情報を重み付けする層。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "入力文を前から後ろへ流し、正しい語順や正しい単語になるように並べ替える層。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
-            ],
-        },
-        "トークン間の関係性": {
-            "material": "今回はTransformerを理解するための構成用語として、トークン間の関係性を確認します。トークン間の関係性とは、文中の各トークンが他のトークンとどの程度関連しているかを表す情報です。Transformerはこの関係性をAttentionで扱います。",
-            "body": "Transformerで扱うトークン間の関係性の説明として、最も適切なものはどれか。",
-            "expected_answer": "文中の各トークンが、他のトークンとどの程度関連しているかを表す情報。",
-            "question_type": "component_choice",
-            "options": [
-                {"option_id": "A", "label": "A", "body": "文中の各トークンが、他のトークンとどの程度関連しているかを表す情報。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "文章全体を読んだときに人間が感じ取る意味、意図、文脈のまとまり。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "各トークンの表現を個別に変換し、特徴量を加工する処理。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "文中で近くにある単語だけを順番に結びつけ、前の単語から次の単語へ意味を渡すこと。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
-            ],
-        },
-        "__concept__": {
-            "material": "Transformerは、Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造です。RNNのように前から順番に隠れ状態だけを渡す構造とは異なります。",
-            "body": "Transformerの構造の説明として、最も適切なものはどれか。",
-            "expected_answer": "Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造。",
-            "question_type": "concept_choice",
-            "options": [
-                {"option_id": "A", "label": "A", "body": "Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "Attentionレイヤーが文章全体の意味を理解し、FFNレイヤーが思考して判断を行う構造。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "C", "label": "C", "body": "入力文を先頭から順番に処理し、前の単語の隠れ状態を次の単語へ渡しながら文脈を保持する構造。", "is_correct": False, "misconception_type": "M2"},
-                {"option_id": "D", "label": "D", "body": "Attentionレイヤーで単語の意味を検索し、FFNレイヤーで正しい単語に置き換える構造。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "E", "label": "E", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
-            ],
+        "conceptual_change": {
+            "material": "ここではTransformerを人間の理解・思考や、翻訳アプリ・機能そのものとして捉えないように確認します。Transformerはアプリや知能主体ではなく、AttentionとFFNなどからなるモデル構造です。Attentionは重要語検索ではなくトークン間の関係性の重みづけ、FFNは思考や判断ではなく各トークン表現の変換を担います。",
+            "body": "Transformerについて、適切だと思うものをすべて選びなさい。",
+            "expected_answer": "A、B、Cをすべて選択し、それ以外を選ばない。",
+            "question_type": "learning_multi_select",
+            "selection_mode": "multiple",
+            "min_selections": 3,
+            "max_selections": 3,
+            "options": [],
         },
     },
 }
-
+LEARNING_CHOICE_BANK["transformer"]["conceptual_change"]["options"] = LEARNING_CHOICE_BANK["transformer"]["enrichment"]["options"]
 
 def _component_terms(term_slug: str, term_label: str) -> list[str]:
     return COMPONENT_TERMS.get(term_slug, [term_label])
@@ -171,15 +95,15 @@ def _learning_question_spec(term_slug: str, learning_stage: str, component_term:
     bank = LEARNING_CHOICE_BANK.get(term_slug)
     if not bank:
         raise HTTPException(status_code=400, detail="fixed learning questions not found")
-    key = component_term if learning_stage == "term_understanding" else "__concept__"
-    spec = bank.get(key or "")
+    stage = learning_stage if learning_stage in {"enrichment", "conceptual_change"} else "conceptual_change"
+    spec = bank.get(stage)
     if not spec:
         raise HTTPException(status_code=400, detail="fixed learning question not found")
     return spec
 
 
 def _learning_question_item(term_slug: str, component_term: str) -> dict[str, Any]:
-    spec = _learning_question_spec(term_slug, "term_understanding", component_term)
+    spec = _learning_question_spec(term_slug, "conceptual_change", component_term)
     return {
         "component_term": component_term,
         "material": spec["material"],
@@ -192,6 +116,14 @@ def _learning_question_item(term_slug: str, component_term: str) -> dict[str, An
 
 def _public_learning_options(spec: dict[str, Any]) -> list[dict[str, str]]:
     return [{"option_id": option["option_id"], "label": option["label"], "body": option["body"]} for option in spec["options"]]
+
+
+def _selection_constraints(question_type: str | None, option_count: int) -> dict[str, Any]:
+    if question_type and "multi_select" in question_type:
+        return {"selection_mode": "multiple", "min_selections": 3, "max_selections": 3}
+    if option_count:
+        return {"selection_mode": "single", "min_selections": 1, "max_selections": 1}
+    return {"selection_mode": "free_text", "min_selections": 0, "max_selections": 0}
 
 
 def _learning_option_meta(spec: dict[str, Any], option_id: str | None) -> dict[str, Any] | None:
@@ -207,42 +139,59 @@ def _selected_fixed_option(spec: dict[str, Any], selected_option_id: str | None,
     cleaned = (response or "").strip()
     if not cleaned:
         return None
-    expected = spec.get("expected_answer") or ""
-    if any(word in cleaned for word in expected.split("、") if word):
-        return _learning_option_meta(spec, "A")
-    markers = [
-        word
-        for word in ["事前学習", "インストラクション", "事後学習", "基盤", "指示", "応答", "安全", "有用", "Attention", "FFN", "トークン", "関係", "特徴", "変換"]
-        if word in expected
-    ]
-    if markers and any(word in cleaned for word in markers):
-        return _learning_option_meta(spec, "A")
     return next((item for item in spec["options"] if item["body"] == cleaned), None)
 
 
-def _fixed_feedback(option: dict[str, Any] | None, spec: dict[str, Any]) -> dict[str, Any]:
-    if not option:
-        return {
-            "feedback": "選択肢を選んでください。",
-            "is_sufficient": False,
-            "next_action": "continue",
-            "next_scaffolding_level": "L3",
-            "learning_misconception_type": "unknown",
-            "learning_misconception_confidence": 0.8,
-            "learning_misconception_reason": "固定選択式問題で未選択または判定不能でした。",
-            "state_update_reason": "fixed_choice_unselected",
-        }
-    is_correct = bool(option["is_correct"])
+def _selected_learning_options(spec: dict[str, Any], selected_option_ids: list[str] | None, selected_option_id: str | None, response: str) -> list[dict[str, Any]]:
+    ids = selected_option_ids or ([selected_option_id] if selected_option_id else [])
+    options = [_learning_option_meta(spec, option_id) for option_id in ids]
+    selected = [option for option in options if option]
+    if selected:
+        return selected
+    option = _selected_fixed_option(spec, selected_option_id, response)
+    return [option] if option else []
+
+
+def _selected_labels(options: list[dict[str, Any]]) -> str:
+    return " / ".join(option["label"] for option in options)
+
+
+def _classify_selected_options(options: list[Any], correct_labels: set[str] | None = None) -> tuple[bool, str | None, str]:
+    selected_labels = {option.option_label if hasattr(option, "option_label") else option.get("label") for option in options}
+    correct_labels = correct_labels or {"A", "B", "C"}
+    is_correct = selected_labels == correct_labels
+    if is_correct:
+        return True, None, "stable_correct"
+    misconceptions = [option.misconception_type if hasattr(option, "misconception_type") else option.get("misconception_type") for option in options]
+    if "M3" in misconceptions:
+        return False, "M3", "misconception"
+    if "M1" in misconceptions:
+        return False, "M1", "misconception"
+    return False, "unknown", "unknown"
+
+
+def _fixed_feedback_for_options(options: list[dict[str, Any]], spec: dict[str, Any]) -> dict[str, Any]:
+    if not options:
+        is_correct, mtype, status = False, "unknown", "unknown"
+        selected_label_text = "未選択"
+    else:
+        is_correct, mtype, status = _classify_selected_options(options)
+        selected_label_text = _selected_labels(options)
     return {
-        "feedback": "選択内容は十分です。次の確認へ進みます。" if is_correct else "選択内容はまだ不十分です。教材を確認して、もう一度同じ観点を選び直してください。",
+        "feedback": "選択内容は十分です。次の確認へ進みます。" if is_correct else "選択内容はまだ不十分です。教材を確認して、もう一度選び直してください。",
         "is_sufficient": is_correct,
         "next_action": "move_next" if is_correct else "continue",
         "next_scaffolding_level": "L2" if is_correct else "L3",
-        "learning_misconception_type": None if is_correct else option["misconception_type"],
+        "learning_misconception_type": mtype,
         "learning_misconception_confidence": 0.95,
-        "learning_misconception_reason": "固定選択式問題で正解選択肢を選びました。" if is_correct else f"固定選択式問題で{option['misconception_type']}相当の選択肢を選びました。",
-        "state_update_reason": "fixed_choice_correct" if is_correct else "fixed_choice_incorrect",
+        "learning_misconception_reason": "固定3選択式問題で正解選択肢だけを選びました。" if is_correct else f"固定3選択式問題で{mtype}相当として判定しました。",
+        "state_update_reason": "fixed_multi_select_correct" if is_correct else f"fixed_multi_select_{status}",
+        "selected_option_body": selected_label_text,
     }
+
+
+def _fixed_feedback(option: dict[str, Any] | None, spec: dict[str, Any]) -> dict[str, Any]:
+    return _fixed_feedback_for_options([option] if option else [], spec)
 
 
 def _fixed_item_result(component_term: str, selected_option_id: str | None, response: str, spec: dict[str, Any]) -> dict[str, Any]:
@@ -300,9 +249,8 @@ def _practice_question_text(practice_question: dict[str, Any] | None) -> str:
 
 def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
     return {
-        "M1": "概念を人間の理解・思考など別カテゴリとして捉えないよう、専門用語としてのカテゴリと役割を捉え直させる。",
-        "M2": "似ている概念との境界を比較し、どちらが何を扱うかを短く対比させる。",
-        "M3": "語感や表面的なキーワードではなく、構造・役割・判断基準に注目させる。",
+        "M1": "Transformerを人間の理解・思考・判断として捉えないよう、計算機構としての役割を捉え直させる。",
+        "M3": "Transformerをアプリ・機能・知能主体ではなく、モデルアーキテクチャとして捉え直させる。",
         "unknown": "基礎定義と構成要素を短く確認し、最小限の判断基準を示す。",
     }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
 
@@ -313,83 +261,35 @@ def _practice_meta(turn: TutorTurn | None) -> dict[str, Any]:
     return turn.practice_question_json.get("stage_meta") or {}
 
 
+def _learning_stage_for_misconception(misconception_type: str | None, status: str | None = None) -> str:
+    return "enrichment" if misconception_type == "unknown" or status == "unknown" else "conceptual_change"
+
+
 def _learning_position(db: Session, session: TutorSession, term: Term, participant: Participant) -> dict[str, Any]:
-    components = _component_terms(term.slug, term.label)
+    state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one_or_none()
     turns = (
         db.query(TutorTurn)
         .filter_by(tutor_session_id=session.id)
         .order_by(TutorTurn.turn_index)
         .all()
     )
-    if participant.group_condition == "control":
-        for turn in turns:
-            if turn.learner_response and bool((turn.grading_json or {}).get("is_sufficient")):
-                return {
-                    "learning_stage": "final_feedback",
-                    "learning_stage_label": LEARNING_STAGE_LABELS["final_feedback"],
-                    "component_term": None,
-                    "component_index": 1,
-                    "component_total": 1,
-                }
-        return {
-            "learning_stage": "concept_understanding",
-            "learning_stage_label": LEARNING_STAGE_LABELS["concept_understanding"],
-            "component_term": None,
-            "component_index": 1,
-            "component_total": 1,
-        }
-    stage = "term_understanding"
-    component_index = 0
-    sufficient_components: set[str] = set()
+    stage = _learning_stage_for_misconception(state.primary_misconception if state else None, state.current_status if state else None)
     for turn in turns:
         if not turn.learner_response:
             continue
-        meta = _practice_meta(turn)
-        turn_stage = meta.get("learning_stage") or "term_understanding"
-        turn_component_index = int(meta.get("component_index") or 0)
-        is_sufficient = bool((turn.grading_json or {}).get("is_sufficient"))
-        if turn_stage == "term_understanding":
-            item_results = (turn.grading_json or {}).get("item_results") or []
-            if item_results:
-                for item in item_results:
-                    if item.get("is_sufficient") and item.get("component_term"):
-                        sufficient_components.add(item["component_term"])
-                pending = [component for component in components if component not in sufficient_components]
-                if pending:
-                    stage = "term_understanding"
-                    component_index = components.index(pending[0])
-                else:
-                    stage = "concept_understanding"
-                    component_index = len(components)
-            elif is_sufficient and turn_component_index + 1 >= len(components):
-                sufficient_components.add(meta.get("component_term") or components[turn_component_index])
-                stage = "concept_understanding"
-                component_index = len(components)
-            elif is_sufficient:
-                sufficient_components.add(meta.get("component_term") or components[turn_component_index])
-                stage = "term_understanding"
-                component_index = turn_component_index + 1
-            else:
-                stage = "term_understanding"
-                component_index = min(turn_component_index, len(components) - 1)
-        elif turn_stage == "concept_understanding":
-            if is_sufficient:
-                stage = "final_feedback"
-                component_index = len(components)
-            else:
-                stage = "term_understanding"
-                component_index = 0
-                sufficient_components.clear()
-    pending_components = [component for component in components if component not in sufficient_components]
+        grading = turn.grading_json or {}
+        if grading.get("is_sufficient"):
+            stage = "final_feedback"
+        else:
+            stage = _learning_stage_for_misconception(grading.get("learning_misconception_type"), grading.get("diagnosed_status"))
     return {
         "learning_stage": stage,
         "learning_stage_label": LEARNING_STAGE_LABELS[stage],
-        "component_term": components[component_index] if stage == "term_understanding" else None,
-        "component_index": component_index if stage == "term_understanding" else len(components),
-        "component_total": len(components),
-        "component_terms": pending_components if stage == "term_understanding" else components,
+        "component_term": None,
+        "component_index": 0,
+        "component_total": 1,
+        "component_terms": _component_terms(term.slug, term.label),
     }
-
 
 def _merge_stage_meta(practice_question: dict[str, Any], position: dict[str, Any]) -> dict[str, Any]:
     practice_question = dict(practice_question or {})
@@ -417,7 +317,7 @@ def session_misconception_history(db: Session, session_id: str) -> list[dict[str
         if not grading or "learning_misconception_type" not in grading:
             continue
         meta = _practice_meta(turn)
-        stage = grading.get("learning_stage") or meta.get("learning_stage") or "term_understanding"
+        stage = grading.get("learning_stage") or meta.get("learning_stage") or "conceptual_change"
         item_results = grading.get("item_results") or []
         if item_results:
             for index, item in enumerate(item_results):
@@ -436,7 +336,7 @@ def session_misconception_history(db: Session, session_id: str) -> list[dict[str
                     }
                 )
             continue
-        label = grading.get("component_term") or meta.get("component_term") or ("概念理解" if stage == "concept_understanding" else "用語理解")
+        label = grading.get("component_term") or meta.get("component_term") or LEARNING_STAGE_LABELS.get(stage, "概念変化")
         history.append(
             {
                 "turn_id": turn.id,
@@ -516,6 +416,8 @@ def _displayed_options(db: Session, participant: Participant, question: Question
     options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id).order_by(QuestionOption.default_order).all()
     if not options:
         return []
+    if "multi_select" in question.question_type:
+        return [{"option_id": option.id, "label": option.option_label, "body": option.body} for option in options]
     display = db.query(QuestionDisplayOrder).filter_by(participant_id=participant.id, question_id=question.id).one_or_none()
     if not display:
         seed = f"{get_settings().random_seed}:{participant.id}:{question.id}"
@@ -551,6 +453,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "question_type": question.question_type,
                 "options": public_options,
                 "requires_reason": phase not in {"pretest", "retest", "final_test"},
+                **_selection_constraints(question.question_type, len(public_options)),
             }
         )
     return out
@@ -573,6 +476,15 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
     if not question:
         raise HTTPException(status_code=404, detail="question not found")
     participant = get_participant(db, payload["participant_id"])
+    selected_option_ids = payload.get("selected_option_ids") or ([payload.get("selected_option_id")] if payload.get("selected_option_id") else [])
+    selected_option_ids = [option_id for option_id in selected_option_ids if option_id]
+    constraints = _selection_constraints(question.question_type, db.query(func.count(QuestionOption.id)).filter_by(question_id=question.id).scalar() or 0)
+    if constraints["selection_mode"] == "multiple":
+        selected_for_validation = db.query(QuestionOption).filter(QuestionOption.id.in_(selected_option_ids or ["__none__"])).all()
+        selected_labels = {option.option_label for option in selected_for_validation}
+        allows_unknown_only = selected_labels == {"J"}
+        if not allows_unknown_only and (len(selected_option_ids) < constraints["min_selections"] or len(selected_option_ids) > constraints["max_selections"]):
+            raise HTTPException(status_code=400, detail="invalid selection count")
     if idempotency_key:
         existing = db.query(Attempt).filter_by(participant_id=participant.id, idempotency_key=idempotency_key).one_or_none()
         if existing:
@@ -591,7 +503,8 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         question_id=question.id,
         phase=phase,
         attempt_index=attempt_index,
-        selected_option_id=payload.get("selected_option_id"),
+        selected_option_id=(payload.get("selected_option_id") or (selected_option_ids[0] if selected_option_ids else None)),
+        selected_option_ids=selected_option_ids or None,
         free_text_answer=None if is_pretest else payload.get("free_text_answer"),
         reason_text=None if is_pretest else payload.get("reason_text"),
         confidence=None,
@@ -659,10 +572,41 @@ def _selected_option(db: Session, attempt: Attempt) -> QuestionOption | None:
     return db.get(QuestionOption, attempt.selected_option_id) if attempt.selected_option_id else None
 
 
+def _selected_options(db: Session, attempt: Attempt) -> list[QuestionOption]:
+    option_ids = attempt.selected_option_ids or ([attempt.selected_option_id] if attempt.selected_option_id else [])
+    if not option_ids:
+        return []
+    options = db.query(QuestionOption).filter(QuestionOption.id.in_(option_ids)).all()
+    by_id = {option.id: option for option in options}
+    return [by_id[option_id] for option_id in option_ids if option_id in by_id]
+
+
+def _selected_option_label_text(options: list[QuestionOption]) -> str | None:
+    return " / ".join(option.option_label for option in options) if options else None
+
+
+def _fixed_attempt_result(options: list[QuestionOption]) -> dict[str, Any]:
+    is_correct, misconception_type, status = _classify_selected_options(options)
+    return {
+        "is_correct": is_correct,
+        "score": 1.0 if is_correct else 0.0,
+        "diagnosed_status": status,
+        "misconception_type": misconception_type,
+        "secondary_misconception_type": None,
+        "diagnosis_confidence": 0.95,
+        "natural_language_diagnosis": "正しい構造を選択できています。" if is_correct else ("基本知識が不足している可能性があります。" if status == "unknown" else "選択内容に誤った捉え方が含まれています。"),
+        "recommended_initial_scaffolding_level": "L2" if is_correct else "L3",
+        "recommended_teaching_strategy": strategy_for(misconception_type, status, "proposed"),
+        "requires_manual_review": False,
+        "l0_success": is_correct,
+    }
+
+
 def _diagnosis_payload(db: Session, participant: Participant, attempt: Attempt) -> dict[str, Any]:
     question = db.get(Question, attempt.question_id)
     term = db.get(Term, attempt.term_id)
     option = _selected_option(db, attempt)
+    options = _selected_options(db, attempt)
     payload = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
@@ -671,6 +615,10 @@ def _diagnosis_payload(db: Session, participant: Participant, attempt: Attempt) 
         "selected_option": None
         if not option
         else {"id": option.id, "body": option.body, "is_correct": option.is_correct, "initial_misconception_type": option.misconception_type},
+        "selected_options": [
+            {"id": item.id, "label": item.option_label, "body": item.body, "is_correct": item.is_correct, "initial_misconception_type": item.misconception_type}
+            for item in options
+        ],
         "history": {"previous_attempts": []},
     }
     if question.phase != "pretest":
@@ -693,14 +641,12 @@ def _public_summary(text: str | None) -> str:
 def _priority(attempt: Attempt) -> tuple[float, str]:
     term_order_bonus = 0
     if attempt.diagnosed_status == "misconception":
-        score = 70 + term_order_bonus
-        if attempt.misconception_type in {"M1", "M2"}:
-            score += 20
-        elif attempt.misconception_type == "M3":
+        score = 80 + term_order_bonus
+        if attempt.misconception_type == "M3":
             score += 10
-        return score, f"{attempt.misconception_type}を重点確認"
+        return score, f"{attempt.misconception_type}を概念変化で確認"
     if attempt.diagnosed_status == "unknown":
-        return 55 + term_order_bonus, "基礎理解を確認"
+        return 70 + term_order_bonus, "豊富化で基礎理解を確認"
     if attempt.diagnosed_status == "unstable_correct":
         return 45 + term_order_bonus, "理解を確認"
     return 10 + term_order_bonus, "転移準備"
@@ -714,7 +660,13 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
 
     scored_attempts: list[Attempt] = []
     for attempt in attempts:
-        result = await _ai_call(db, "diagnose_answer", _diagnosis_payload(db, participant, attempt))
+        question = db.get(Question, attempt.question_id)
+        if question and "multi_select" in question.question_type:
+            result = _fixed_attempt_result(_selected_options(db, attempt))
+            if participant.group_condition == "control":
+                result["recommended_teaching_strategy"] = "general_explanation"
+        else:
+            result = await _ai_call(db, "diagnose_answer", _diagnosis_payload(db, participant, attempt))
         attempt.is_correct = result["is_correct"]
         attempt.score = 1.0 if result["is_correct"] else 0.0
         attempt.diagnosed_status = result["diagnosed_status"]
@@ -829,34 +781,18 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if participant.group_condition == "control":
         effective_strategy = "general_explanation"
 
-    l3_batch = participant.group_condition == "proposed" and position["learning_stage"] == "term_understanding"
-    if l3_batch:
-        items = [_learning_question_item(term.slug, component) for component in position.get("component_terms") or _component_terms(term.slug, term.label)]
-        practice_question = {
-            "body": "次の構成用語について、それぞれ最も適切な説明を選んでください。",
-            "question_type": "component_choice_set",
-            "items": items,
-        }
-        tutor_message = _previous_turn_prefix(previous_turn) + "\n\n".join(f"【{item['component_term']}】\n{item['material']}" for item in items)
-        spec = {
-            "body": practice_question["body"],
-            "expected_answer": " / ".join(item["expected_answer"] for item in items),
-            "material": tutor_message,
-            "question_type": "component_choice_set",
-        }
-        question_type = "component_choice_set"
-    else:
-        spec = _learning_question_spec(term.slug, position["learning_stage"], position["component_term"])
-        question_type = spec["question_type"]
-        if participant.group_condition == "control" and position["learning_stage"] == "concept_understanding":
-            question_type = "control_l2_check"
-        practice_question = {
-            "body": spec["body"],
-            "expected_answer": spec["expected_answer"],
-            "question_type": question_type,
-            "options": _public_learning_options(spec),
-        }
-        tutor_message = _previous_turn_prefix(previous_turn) + spec["material"]
+    spec = _learning_question_spec(term.slug, position["learning_stage"], position["component_term"])
+    question_type = "control_learning_multi_select" if participant.group_condition == "control" else spec["question_type"]
+    practice_question = {
+        "body": spec["body"],
+        "expected_answer": spec["expected_answer"],
+        "question_type": question_type,
+        "options": _public_learning_options(spec),
+        "selection_mode": spec.get("selection_mode", "multiple"),
+        "min_selections": spec.get("min_selections", 3),
+        "max_selections": spec.get("max_selections", 3),
+    }
+    tutor_message = _previous_turn_prefix(previous_turn) + spec["material"]
     teaching_strategy = effective_strategy
     material_source = "fixed"
     material_generation_ms = None
@@ -890,8 +826,11 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
                 "body": spec["body"],
                 "expected_answer": spec["expected_answer"],
                 "question_type": question_type,
+                "selection_mode": practice_question.get("selection_mode"),
+                "min_selections": practice_question.get("min_selections"),
+                "max_selections": practice_question.get("max_selections"),
             },
-            "fixed_practice_question_items": practice_question.get("items") or [],
+            "fixed_practice_question_items": [],
             "rag_context": _rag_context(
                 term.label,
                 term.description,
@@ -905,11 +844,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         result = await _ai_call(db, "generate_tutoring_turn", payload)
         material_generation_ms = int((perf_counter() - started) * 1000)
         material_source = "ai"
-        if l3_batch:
-            fixed_material = "\n\n".join(f"【{item['component_term']}】\n{item['material']}" for item in practice_question["items"])
-            tutor_message = f"{result['tutor_message']}\n\n{fixed_material}"
-        else:
-            tutor_message = result["tutor_message"]
+        tutor_message = result["tutor_message"]
         teaching_strategy = result["teaching_strategy"]
 
     turn = TutorTurn(
@@ -940,71 +875,29 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     participant = get_participant(db, session.participant_id)
     term = db.get(Term, session.term_id)
     meta = _practice_meta(turn)
-    learning_stage = meta.get("learning_stage") or "term_understanding"
+    learning_stage = meta.get("learning_stage") or "conceptual_change"
     component_index = int(meta.get("component_index") or 0)
-    component_total = int(meta.get("component_total") or len(_component_terms(term.slug, term.label)))
+    component_total = int(meta.get("component_total") or 1)
     component_term = meta.get("component_term")
-    practice_question = turn.practice_question_json or {}
-    selected_item_option_ids = payload.get("selected_item_option_ids") or {}
-    item_results: list[dict[str, Any]] = []
-    if learning_stage == "term_understanding" and practice_question.get("items"):
-        response_parts = []
-        for item in practice_question.get("items") or []:
-            item_component = item["component_term"]
-            item_spec = _learning_question_spec(term.slug, "term_understanding", item_component)
-            item_result = _fixed_item_result(item_component, selected_item_option_ids.get(item_component), "", item_spec)
-            item_results.append(item_result)
-            response_parts.append(f"{item_component}: {item_result.get('selected_option_body') or '未選択'}")
-        response = "\n".join(response_parts)
-        is_sufficient = all(item["is_sufficient"] for item in item_results)
-        first_incorrect = next((item for item in item_results if not item["is_sufficient"]), None)
-        result = {
-            "feedback": _feedback_text_from_item_results(item_results),
-            "is_sufficient": is_sufficient,
-            "next_action": "move_next" if is_sufficient else "continue",
-            "next_scaffolding_level": "L2" if is_sufficient else "L3",
-            "learning_misconception_type": first_incorrect.get("learning_misconception_type") if first_incorrect else None,
-            "learning_misconception_confidence": 0.95,
-            "learning_misconception_reason": "L3複数構成用語の固定選択式問題で項目別に判定しました。",
-            "state_update_reason": "fixed_choice_set_correct" if is_sufficient else "fixed_choice_set_incomplete",
-        }
-        option = None
-    else:
-        spec = _learning_question_spec(term.slug, learning_stage, component_term)
-        option = _selected_fixed_option(spec, payload.get("selected_option_id"), response)
-        if option:
-            response = option["body"]
-        result = _fixed_feedback(option, spec)
+
+    spec = _learning_question_spec(term.slug, learning_stage, component_term)
+    selected_options = _selected_learning_options(spec, payload.get("selected_option_ids"), payload.get("selected_option_id"), response)
+    result = _fixed_feedback_for_options(selected_options, spec)
+    response = result.get("selected_option_body") or response
+
     is_sufficient = bool(result.get("is_sufficient"))
     learning_misconception_type = result.get("learning_misconception_type")
-    if learning_misconception_type not in {"M1", "M2", "M3", "M4", "unknown", None}:
+    if learning_misconception_type not in {"M1", "M3", "unknown", None}:
         learning_misconception_type = "unknown"
     learning_misconception_confidence = result.get("learning_misconception_confidence")
     learning_misconception_reason = result.get("learning_misconception_reason") or result.get("state_update_reason") or ""
+    diagnosed_status = "stable_correct" if is_sufficient else ("unknown" if learning_misconception_type == "unknown" else "misconception")
     next_level = normalize_level(lower_level(state.scaffolding_level) if is_sufficient else raise_level(state.scaffolding_level))
-    if learning_stage == "term_understanding":
-        stage_completed = is_sufficient and (bool(item_results) or component_index + 1 >= component_total)
-        next_learning_stage = "concept_understanding" if stage_completed else "term_understanding"
-        if item_results and not is_sufficient:
-            components = _component_terms(term.slug, term.label)
-            first_pending = next((item["component_term"] for item in item_results if not item["is_sufficient"]), component_term)
-            next_component_index = components.index(first_pending) if first_pending in components else component_index
-        else:
-            next_component_index = component_total if stage_completed else (component_index + 1 if is_sufficient else component_index)
-        session_completed = False
-        next_action = "continue"
-    elif learning_stage == "concept_understanding":
-        stage_completed = is_sufficient
-        next_learning_stage = "final_feedback" if is_sufficient else ("concept_understanding" if participant.group_condition == "control" else "term_understanding")
-        next_component_index = component_total if is_sufficient else (component_total if participant.group_condition == "control" else 0)
-        session_completed = is_sufficient
-        next_action = "move_next" if is_sufficient else "continue"
-    else:
-        stage_completed = True
-        next_learning_stage = "final_feedback"
-        next_component_index = component_total
-        session_completed = True
-        next_action = "move_next"
+    stage_completed = is_sufficient
+    next_learning_stage = "final_feedback" if is_sufficient else _learning_stage_for_misconception(learning_misconception_type, diagnosed_status)
+    session_completed = is_sufficient
+    next_action = "move_next" if is_sufficient else "continue"
+
     turn.learner_response = response
     turn.learner_confidence = None
     turn.question_shown_at = _naive_datetime(payload.get("question_shown_at"))
@@ -1014,16 +907,18 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     turn.ai_feedback = result["feedback"]
     turn.grading_json = {
         "is_sufficient": is_sufficient,
-        "selected_option_id": option.get("option_id") if option else payload.get("selected_option_id"),
-        "selected_option_body": option.get("body") if option else response,
+        "selected_option_id": selected_options[0]["option_id"] if selected_options else payload.get("selected_option_id"),
+        "selected_option_ids": [option["option_id"] for option in selected_options],
+        "selected_option_body": result.get("selected_option_body") or response,
         "learning_stage": learning_stage,
         "component_term": component_term,
         "component_index": component_index,
         "component_total": component_total,
-        "item_results": item_results,
+        "item_results": [],
         "stage_completed": stage_completed,
         "next_learning_stage": next_learning_stage,
-        "next_component_index": next_component_index,
+        "next_component_index": component_total if is_sufficient else component_index,
+        "diagnosed_status": diagnosed_status,
         "learning_misconception_type": learning_misconception_type,
         "learning_misconception_confidence": learning_misconception_confidence,
         "learning_misconception_reason": learning_misconception_reason,
@@ -1034,7 +929,8 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     }
     state.scaffolding_level = next_level
     state.stable_correct_count += 1 if is_sufficient else 0
-    state.current_status = "stable_correct" if session_completed else ("learning_in_progress" if is_sufficient else "needs_review")
+    state.current_status = "stable_correct" if session_completed else diagnosed_status
+    state.primary_misconception = None if is_sufficient else learning_misconception_type
     state.updated_reason = result["state_update_reason"]
     state.last_tutor_turn_id = turn.id
     if session_completed:
@@ -1051,14 +947,14 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "component_term": component_term,
         "component_index": component_index,
         "component_total": component_total,
-        "next_component_index": next_component_index,
+        "next_component_index": component_total if is_sufficient else component_index,
         "learning_misconception_type": learning_misconception_type,
         "learning_misconception_confidence": learning_misconception_confidence,
         "learning_misconception_reason": learning_misconception_reason,
         "next_scaffolding_level": next_level,
         "turn_index": turn.turn_index,
         "max_turns": get_settings().max_turns_per_term,
-        "item_results": item_results,
+        "item_results": [],
     }
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
@@ -1069,15 +965,22 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
     for attempt in attempts:
         question = db.get(Question, attempt.question_id)
         option = _selected_option(db, attempt)
+        options = _selected_options(db, attempt)
         payload = {
             "participant_id": participant.id,
             "group_condition": participant.group_condition,
             "question": {"id": question.id, "phase": phase, "body": question.body, "expected_answer": question.expected_answer, "expected_keywords": question.expected_keywords},
             "selected_option": None if not option else {"id": option.id, "body": option.body, "is_correct": option.is_correct, "initial_misconception_type": option.misconception_type},
+            "selected_options": [
+                {"id": item.id, "label": item.option_label, "body": item.body, "is_correct": item.is_correct, "initial_misconception_type": item.misconception_type}
+                for item in options
+            ],
             "free_text_answer": attempt.free_text_answer,
             "reason_text": attempt.reason_text,
         }
-        if phase in {"retest", "final_test"} and option:
+        if "multi_select" in question.question_type:
+            result = _fixed_attempt_result(options)
+        elif phase in {"retest", "final_test"} and option:
             result = {
                 "is_correct": bool(option.is_correct),
                 "score": 1.0 if option.is_correct else 0.0,
@@ -1099,7 +1002,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
             continue
         if phase == "retest":
             previous = db.query(Attempt).filter_by(participant_id=participant.id, term_id=attempt.term_id, phase="pretest").order_by(Attempt.created_at.desc()).first()
-            if previous and previous.misconception_type in {"M1", "M2", "M3"} and previous.misconception_type == attempt.misconception_type:
+            if previous and previous.misconception_type in {"M1", "M3"} and previous.misconception_type == attempt.misconception_type:
                 attempt.recurrence_flag = True
                 state.recurrence_count += 1
                 state.previous_teaching_strategy = state.teaching_strategy
@@ -1117,7 +1020,8 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         if phase in {"l0_check", "final_test"}:
             state.l0_success_count += 1 if attempt.is_correct else 0
             state.scaffolding_level = "L2" if attempt.is_correct else "L3"
-        state.current_status = "stable_correct" if attempt.is_correct else "misconception"
+        state.current_status = "stable_correct" if attempt.is_correct else ("unknown" if attempt.misconception_type == "unknown" else "misconception")
+        state.primary_misconception = None if attempt.is_correct else attempt.misconception_type
         state.last_attempt_id = attempt.id
     if phase == "retest":
         db.flush()
@@ -1212,9 +1116,9 @@ def _misconception_change_type(initial: Attempt | None, latest: Attempt | None) 
         return "resolved"
     if initial_m == "unknown" and latest_m == "unknown":
         return "unknown_persisted"
-    if initial_m in {"M1", "M2", "M3", "M4"} and latest_m == initial_m:
+    if initial_m in {"M1", "M3"} and latest_m == initial_m:
         return "same_type_recurred"
-    if initial_m in {"M1", "M2", "M3", "M4"} and latest_m in {"M1", "M2", "M3", "M4"} and latest_m != initial_m:
+    if initial_m in {"M1", "M3"} and latest_m in {"M1", "M3"} and latest_m != initial_m:
         return "changed_type"
     return None
 
@@ -1291,7 +1195,7 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
     attempts = db.query(Attempt).filter_by(participant_id=participant.id).all()
     by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in ["pretest", "retest", "l0_check", "final_test"]}
     final_items = by_phase["final_test"] or by_phase["l0_check"]
-    initial_m = [a for a in by_phase["pretest"] if a.misconception_type in {"M1", "M2", "M3"}]
+    initial_m = [a for a in by_phase["pretest"] if a.misconception_type in {"M1", "M3"}]
     same_rec = [a for a in by_phase["retest"] if a.recurrence_flag]
     def m_rate(m: str) -> float | None:
         denom = [a for a in initial_m if a.misconception_type == m]
@@ -1361,7 +1265,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
 
 EXPORTS = {
     "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at"]),
-    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "reason_text", "free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
+    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "selected_option_ids", "reason_text", "free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at"]),
     "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
@@ -1402,6 +1306,8 @@ def _attempt_log_row(
     term = terms.get(attempt.term_id)
     question = questions.get(attempt.question_id)
     option = options.get(attempt.selected_option_id or "")
+    selected_options = [options[option_id] for option_id in (attempt.selected_option_ids or []) if option_id in options]
+    selected_option_body = _selected_option_label_text(selected_options) or (option.body if option else None)
     return {
         "attempt_id": attempt.id,
         "participant_id": attempt.participant_id,
@@ -1411,7 +1317,8 @@ def _attempt_log_row(
         "term_slug": term.slug if term else None,
         "term_label": term.label if term else None,
         "question_body": question.body if question else None,
-        "selected_option_body": option.body if option else None,
+        "selected_option_body": selected_option_body,
+        "selected_option_ids": attempt.selected_option_ids,
         "question_body_snapshot": attempt.question_body_snapshot,
         "option_order_snapshot": attempt.option_order_snapshot,
         "response_time_sec": attempt.response_time_sec,

@@ -199,7 +199,7 @@ MVPではキューを導入しない。AI診断やCSV出力は同期APIでよい
 | `CODEX_APP_SERVER_CWD` | `/tmp` | app-server threadの作業ディレクトリ |
 | `CODEX_TURN_TIMEOUT_SEC` | `120` | AI応答タイムアウト |
 | `CODEX_REASONING_EFFORT` | `low` | turn/startのreasoning effort |
-| `MAX_LEARNING_TARGETS` | `5` | 学習対象数の上限。現行seedは2用語 |
+| `MAX_LEARNING_TARGETS` | `5` | 学習対象数の上限。現行seedはTransformer 1用語 |
 | `MAX_TURNS_PER_TERM` | `3` | 1用語あたり最大ターン数 |
 | `RANDOM_SEED` | `20260525` | 再現性のあるランダム化 |
 

@@ -1,212 +1,27 @@
-# 14. Testing and Acceptance Criteria
+# Testing Acceptance
 
-## 2026-06 Iterative Acceptance Update
+## Backend
 
-反復型フローの受け入れ条件として、初回テストで正解済み用語が学習対象から除外されること、再テストで正解した用語が次周回から消えること、未達が0件になったら現行seedの2用語すべての最終テストへ進むこと、M4が教材方略として使われないことを確認する。
+- pretestはTransformer 1問だけを返す。
+- 問題は10択で、`selection_mode = multiple`、`min_selections = max_selections = 3` を返す。
+- A/B/Cのみ選択で正解になる。
+- D/E/Fを含む不正解はM1になる。
+- G/H/Iを含む不正解はM3になる。
+- Jのみ、またはunknown相当のみはunknownになる。
+- M1/M3不正解後は `conceptual_change` に進む。
+- unknown後は `enrichment` に進む。
+- retest/final_testも同じ問題文・選択肢セットを使う。
+- evaluation summaryはM1/M3/unknown中心で再計算できる。
 
+## Frontend
 
-## 2026-06 Learning-Session Misconception Acceptance
+- pretest/retest/final-testで複数選択UIが出る。
+- 3つ選ばないと送信できない。
+- 学習画面に旧ステージ名 `term_understanding` / `concept_understanding` を被験者向け表示しない。
+- 管理画面の回答履歴に複数選択回答とM1/M3分類が表示される。
 
-- 用語理解回答後に `learning_misconception_type` が `tutor_turns.grading_json` に保存される。
-- 概念理解回答後にも別の学習内誤概念判定が保存される。
-- 次ターン生成時に直近判定と同一セッション内履歴がpayloadへ入る。
-- 提案群では学習内誤概念が次教材の `teaching_strategy` に反映される。
-- 統制群では分類は保存されるが `teaching_strategy` は `general_explanation` のまま。
-- frontendでは事前テスト由来Mと学習内Mを別々に表示する。
+## Regression
 
-
-## 2026-06 Stage-Based Learning Acceptance
-
-ステージ制学習の受け入れ条件:
-
-- L3初回画面では複数構成用語の教材と確認問題が同時に表示される。
-- L3回答後は構成用語ごとに正解/不正解、正解文、フィードバックが表示される。
-- 一部の構成用語が不十分なら、十分だった構成用語を除外し、不十分だった構成用語だけを再提示する。
-- 全構成用語が十分回答されると `concept_understanding` へ進む。
-- 概念理解段階で不十分なら `term_understanding` の先頭へ戻る。
-- 概念理解段階で十分なら `session_completed = true` になり、最終フィードバック画面を表示する。
-- frontendには「ターン: x / 3」と「足場掛けレベル: Lx」を表示しない。
-
-
-## Testing Strategy
-
-研究システムなので、見た目よりも以下を重点的にテストする。
-
-- 実験フローが崩れないこと
-- 群条件が混ざらないこと
-- ログが欠けないこと
-- 評価指標が再計算可能であること
-- 通常実行でCodex app-server経由のAI呼び出しが動くこと
-- 自動テストではMockAIBackendを明示指定して決定論的に動くこと
-
-## Unit Tests
-
-### backend
-
-- DiagnosisService
-- ScaffoldingService
-- Recurrence calculation
-- Evaluation metric calculation
-- CSV export
-- Question randomization
-- Learning target selection
-- AIBackend mock
-- Pydantic schema validation
-- forbidden help detection
-
-### frontend
-
-- pretest form
-- no confidence input in pretest and learning session
-- learning session page
-- confirmation page without chat
-- admin dashboard rendering
-- submit button double-click prevention
-
-## Integration Tests
-
-- create participant
-- fetch pretest questions
-- submit pretest attempts
-- run diagnosis with MockAIBackend
-- create learner states
-- select learning targets
-- run learning session
-- submit retest
-- compute recurrence
-- run confirmation check
-- generate evaluation summary
-- export CSV
-
-## AIBackend Acceptance
-
-通常実行では `AI_BACKEND=codex_app_server` を使う。
-
-- `account/read` でChatGPT/Codexログイン状態を確認できる
-- `thread/start` と `turn/start` を使って構造化JSONを生成できる
-- `outputSchema` で診断・教授・採点・フィードバックの戻り値を制約する
-- `codex_app_server` モードではMockへ自動フォールバックしない
-- app-server未接続・未ログイン・timeout・schema失敗は `ai_call_logs.status=failed` に残す
-
-## MockAIBackend Acceptance
-
-テスト・CI・障害切り分け用として実装する。`AI_BACKEND=mock` を明示した場合だけ使う。
-
-Mock rules:
-
-- correct optionなら stable_correct
-- known M optionならそのMを返す
-- unknown optionなら unknown
-- reason_textに「同じ」「同一」「混同」があればM2寄せ
-- reason_textに「言葉」「字」「単語」「名前」があればM3寄せ
-- recurrence_flagはbackendで判定
-
-## Acceptance Criteria
-
-### A. 基本実験フロー
-
-- 被験者を作成できる
-- 事前テストを完了できる
-- AI診断が実行される
-- learner_states が作成される
-- 事前テストで扱った2用語が出題される
-- 正解済み用語は学習対象から除外され、未達用語だけが学習対象として選ばれる
-- 学習セッションが開始できる
-- 再テストが実施できる
-- 最終テストが実施できる
-- 評価サマリーが生成される
-- 評価サマリーには `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率が入る
-- `l0_correct_rate` は互換名として残り、final_testがある場合はfinal_test正答率として扱われる
-- 次段ログ拡張では、再テストが複数回あっても `retest_1`, `retest_2`, ... の周回別スコアが欠けない
-- 次段ログ拡張では、pretestが0%の場合も差分ポイントの `score_delta_from_pretest_pt` を計算できる
-- 次段ログ拡張では、誤概念タイプ推移が管理画面ログとCSVから復元できる
-- 次段ログ拡張では、final_testの得点率が評価サマリーとCSVに出る
-
-### B. 提案群の動作
-
-- 誤概念タイプに応じて教授方略が変わる
-- `learning_stage`, `component_term`, `component_index`, `component_total`, `practice_question.items`, `grading_json.item_results` が保存・返却される
-- 用語理解段階で `is_sufficient = false` のとき不十分な構成用語だけが次ターンに残る
-- 全構成用語が十分なら概念理解段階へ進む
-- 概念理解段階で `is_sufficient = true` のときだけセッション完了になる
-- `next_action = move_next` でも `is_sufficient = false` ならセッション完了にしない
-- 同じMが再発したら recurrence_flag = true
-- 同じMが再発したら teaching_strategy が変更される
-- 学習セッションの通常画面にデバッグ用の誤概念タイプ判定、`learning_stage`、回答判定、`teaching_strategy` が表示される
-- 回答後のデバッグ欄は更新後の `next_learning_stage` を表示する
-- 継続時の教材に前の問題とあなたの回答が表示される
-- セッション完了時は問題・回答欄を表示せず、教材フィードバックと次へボタンだけを表示する
-- 教材本文やAIフィードバック本文にはM1〜M4などの内部ラベルが混ざらない
-
-### C. 統制群の動作
-
-- 一般解説のみ
-- 誤概念分類は保存されるが教授に使われない
-- 学習ステージ履歴や誤概念タイプによる個別化はしない
-- teaching_strategyは general_explanation
-- 過去ログに基づく個別化をしない
-
-### D. テストフェーズ制御
-
-- pretestで正誤を表示しない
-- retestでヒントを出さない
-- retestで理由欄を出さない
-- retestは既存seedの選択式問題を使い、AI生成しない
-- retestは事前テスト対象の全2用語を毎回出題する
-- l0_checkは互換・補助フェーズとして扱い、現行MVPの主導線は final_test とする
-- L2・再テスト・最終テストで同一問題文を使う
-
-### E. データ出力
-
-- 管理画面で全体ログを表示できる
-- 管理画面で被験者別ログを表示できる
-- 被験者別ログに `回答履歴（テスト＋学習）` があり、テスト回答と学習ターン回答が同じ表に出る
-- 全体ログCSVを出力できる
-- 被験者別ログCSVを出力できる
-- CSVの回答行は `record_type=answer` とし、`source_type=test_attempt` / `source_type=learning_turn` を含む
-- 既存のテーブル別CSVリンク群は管理画面の主導線から外れている
-- 次段ログ拡張では、`evaluation_summary` 行の `value_json` にスコア推移、誤概念推移、未達項目数推移、学習負担ログ、条件統制チェックが入る
-
-### F. AIバックエンド
-
-- `AI_BACKEND=codex_app_server` でCodex app-serverに接続できる
-- app-server経由で診断、学習ターン、学習フィードバック、再テスト/最終テスト採点を実行できる
-- `AI_BACKEND=mock` はテスト時に完全に動く
-- app-server未接続時は分かりやすいエラーを出す
-- ChatGPT未ログイン時はログイン案内を出す
-- AI出力schema validationに失敗したらai_call_logsに残る
-
-## End-to-End Test Scenario
-
-### proposed participant
-
-1. Participant P001をproposedで作成
-2. TransformerまたはLLMの学習段階でM1/M2/M3誤答
-3. Diagnosis後、未達用語だけがlearning targetになる
-4. 提案群では `term_understanding` の `L3基礎確認` から始まる
-5. L3基礎確認で十分回答なら `concept_understanding` へ進む
-6. concept理解で十分回答なら `final_feedback` へ進む
-7. 学習後retestは2用語すべてを出題し、同じ誤概念ならrecurrence_flag true
-8. 再テストで未達が0件なら `/final-test` へ進む
-9. final_testは2問選択式・理由なしで、採点後 `/survey` へ進む
-10. evaluation_summaryに指標が反映される
-
-### control participant
-
-1. Participant P002をcontrolで作成
-2. 同様のpretest誤答を入力
-3. Diagnosisは保存される
-4. 学習画面では一般解説のみ
-5. teaching_strategyはgeneral_explanation
-6. L3相当教材とL2相当教材を提示するが、質問はL2相当1問だけ
-
-## Definition of Done
-
-- `docker compose up --build` で起動
-- `http://localhost:3000` が開く
-- `http://localhost:8000/api/health` がok
-- backend tests pass
-- frontend tests pass
-- E2E happy path pass
-- CSV exports open in spreadsheet software
-- READMEにCodex app-server起動、ChatGPT/Codexログイン確認、Mockテスト用途が書かれている
+- `AI_BACKEND=mock` で全フローが通る。
+- `AI_BACKEND=codex_app_server` でMockへ自動フォールバックしない。
+- 既存の単一選択API互換を壊さない。

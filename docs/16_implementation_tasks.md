@@ -7,7 +7,7 @@
 - Next.js frontend と FastAPI backend のDocker Compose構成
 - PostgreSQL本番相当構成とSQLiteローカル構成
 - SQLAlchemy models と起動時の軽量スキーマ更新
-- active seed: `llm_training_process`, `transformer`
+- active seed: `transformer`
 - 事前テスト、診断、学習対象選択、学習セッション、再テスト、最終テスト、survey遷移
 - 再テストは事前テスト対象の全問を出題
 - L2概念理解問題・再テスト・最終テストの同一問題文/選択肢運用

@@ -22,14 +22,13 @@
 
 5月18日案ではM1〜M6の誤概念分類が提示されていた。5月25日案では、先行研究に基づく独自の分析枠組みとしてM1〜M4へ整理された。
 
-最終仕様ではM1〜M4を採用する。
+2026-07-22更新後のMVPでは、Transformer問題に対してM1/M3/unknownのみを採用する。M2/M4は互換値として残す。
 
 | Final | Name |
 |---|---|
-| M1 | カテゴリー誤分類型 |
-| M2 | 類似概念境界混同型 |
-| M3 | 表層特徴・キーワード反応型 |
-| M4 | 文脈転移失敗型 |
+| M1 | 誤信念型 |
+| M3 | カテゴリー錯誤型 |
+| unknown | 知識不足 |
 
 ### Problem phase separation
 
@@ -60,27 +59,27 @@ PPTXで繰り返し示されていた主評価指標は以下。
 - Chi, M. T. (2009). Three types of conceptual change: Belief revision, mental model transformation, and categorical shift.
 - Chi, M. T. H. (2008). Three types of conceptual change: Belief revision, mental model transformation, and categorical shift.
 
-M1「カテゴリー誤分類型」の根拠として使用。
+M3「カテゴリー錯誤型」の根拠として使用。
 
 ### Similar concept boundary confusion
 
 - Hassani, H., Ghodsi, M., & Howell, G. (2010). A note on standard deviation and standard error. Teaching Mathematics and its Applications, 29(2), 108-112.
 - Qian, Y., & Lehman, J. (2017). Students' Misconceptions and Other Difficulties in Introductory Programming: A Literature Review.
 
-M2「類似概念境界混同型」の根拠として使用。
+M2は今回のMVPでは扱わない。
 
 ### Surface feature / keyword reaction
 
 - Chi, M. T., Feltovich, P. J., & Glaser, R. (1981). Categorization and representation of physics problems by experts and novices. Cognitive Science, 5(2), 121-152.
 
-M3「表層特徴・キーワード反応型」の根拠として使用。
+M1「誤信念型」はTransformerを人間の理解・思考・意図として捉える誤信念の検出に使う。
 
 ### Transfer
 
 - Bransford, J. D., & Schwartz, D. L. (1999). Rethinking Transfer: A Simple Proposal With Multiple Implications. Review of Research in Education, 24(1), 61-100.
 - 白水始. (2012). 認知科学と学習科学における知識の転移. 人工知能, 27(4), 347-358.
 
-M4「文脈転移失敗型」の理論的背景として使用。
+M4は今回のMVPでは扱わない。
 
 ### AI tutoring / scaffolding / learning analytics
 
@@ -113,7 +112,7 @@ M4「文脈転移失敗型」の理論的背景として使用。
 - 参加者数が少ない場合、用語単位の被験者内比較へ拡張可能にする
 - 現行MVPの学習対象候補は、事前テストで扱うTransformer、LLMの学習段階の2件
 - 診断後、正解済み用語は学習対象から除外し、未達用語だけを学習する
-- 再テストは毎回、事前テスト対象の2用語すべてを出題する。未達用語だけに絞るのは次周回の学習対象である
+- 再テストは毎回、事前テスト対象のTransformerを出題する。
 - 事前テスト、学習、再テスト、最終テストは現行seedの2語を基本にする
 - Attention、事前学習、事後学習など単独用語は過去仕様・拡張候補として扱う
 - 遅延再テストは任意拡張
@@ -121,7 +120,7 @@ M4「文脈転移失敗型」の理論的背景として使用。
 
 ## Known Deck Inconsistencies and Resolution
 
-5月25日PPTXの一部ノートには、旧分類番号らしきM2/M3/M7表記が残っていた。最終スライド本文ではM1〜M4が採用されているため、仕様ではM1〜M4へ統一した。
+7月22日PPTXの更新を受け、スライド37由来の古い判定ルールは含めず、TransformerのM1/M3/unknown判定へ統一した。
 
 5月18日PPTXではH0の表記があったが、現在の実装では固定3ターンの足場掛け制ではなく、用語理解段階と概念理解段階のステージ制に統一する。L1/L2/L3相当の値は互換ログ用に残す。
 

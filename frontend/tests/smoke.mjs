@@ -51,6 +51,16 @@ if (!learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") 
 if (!learningPage.includes("turnShownAt") || !learningPage.includes("question_shown_at: turnShownAt") || !learningPage.includes("answered_at: answeredAt")) {
   throw new Error("learning page must send turn timing timestamps");
 }
+for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "概念変化", "豊富化"]) {
+  if (!learningPage.includes(expectedText)) {
+    throw new Error(`learning page missing multiple-selection/new-stage behavior: ${expectedText}`);
+  }
+}
+for (const removedText of ["term_understanding", "concept_understanding"]) {
+  if (learningPage.includes(`turn.learning_stage === "${removedText}"`)) {
+    throw new Error(`learning page must not branch participant display on old stage: ${removedText}`);
+  }
+}
 
 const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
 if (!questionRunner.includes("result.next_url || nextPath")) {
@@ -65,6 +75,11 @@ if (!questionRunner.includes("responseTimeSec") || !questionRunner.includes("que
 }
 if (!questionRunner.includes("questionShownAt") || !questionRunner.includes("question_shown_at: questionShownAt") || !questionRunner.includes("answered_at: answeredAt")) {
   throw new Error("QuestionRunner must send question timing timestamps");
+}
+for (const expectedText of ["selection_mode", "selectedIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "min_selections", "max_selections"]) {
+  if (!questionRunner.includes(expectedText)) {
+    throw new Error(`QuestionRunner missing multiple-selection behavior: ${expectedText}`);
+  }
 }
 const finalTestPage = fs.readFileSync(new URL("../app/final-test/page.tsx", import.meta.url), "utf8");
 for (const expectedText of ['phase="final_test"', '/api/experiment/${id}/final-test', '/api/participants/${id}/score-final-test', 'nextPath="/survey"']) {

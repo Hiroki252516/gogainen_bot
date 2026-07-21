@@ -4,28 +4,12 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.db.session import SessionLocal
-from app.models import AICallLog, Attempt, EvaluationSummary, TutorTurn
+from app.models import Attempt, EvaluationSummary, TutorTurn
 
 
 client = TestClient(app)
 QUESTION_SHOWN_AT = "2026-06-22T06:00:00"
 ANSWERED_AT = "2026-06-22T06:00:05"
-
-
-def _ai_call_count(purpose: str) -> int:
-    db = SessionLocal()
-    try:
-        return db.query(AICallLog).filter_by(purpose=purpose, status="success").count()
-    finally:
-        db.close()
-
-
-def _latest_ai_call(purpose: str) -> AICallLog | None:
-    db = SessionLocal()
-    try:
-        return db.query(AICallLog).filter_by(purpose=purpose, status="success").order_by(AICallLog.created_at.desc()).first()
-    finally:
-        db.close()
 
 
 def _latest_turn(turn_id: str) -> TutorTurn | None:
@@ -35,393 +19,210 @@ def _latest_turn(turn_id: str) -> TutorTurn | None:
     finally:
         db.close()
 
-def _option_containing(question: dict, marker: str) -> dict:
-    return next(option for option in question["options"] if marker in option["body"])
+
+def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
+    by_label = {option["label"]: option["option_id"] for option in question["options"]}
+    return [by_label[label] for label in labels]
 
 
-def _create_participant_with_pretest(group: str = "proposed", *, correct: bool = False) -> str:
+def _create_participant_with_pretest(group: str = "proposed", labels: list[str] | None = None) -> str:
     participant = client.post("/api/participants", json={"group_condition": group, "consent_checked": True}).json()
     pid = participant["participant_id"]
-    markers = {
-        "llm_training_process": "大量のテキストで言語パターン" if correct else "入力された文章を理解",
-        "transformer": "Attentionレイヤーでトークン間" if correct else "文章全体の意味を理解",
-    }
-    for question in client.get(f"/api/experiment/{pid}/pretest").json()["questions"]:
-        option = _option_containing(question, markers[question["term_slug"]])
-        response = client.post(
-            "/api/attempts",
-            json={
-                "participant_id": pid,
-                "question_id": question["question_id"],
-                "phase": "pretest",
-                "selected_option_id": option["option_id"],
-                "response_time_sec": 1.25,
-                "question_shown_at": QUESTION_SHOWN_AT,
-                "answered_at": ANSWERED_AT,
-            },
-        )
-        assert response.status_code == 200
+    question = client.get(f"/api/experiment/{pid}/pretest").json()["questions"][0]
+    selected = _ids_for_labels(question, labels or ["D", "E", "F"])
+    response = client.post(
+        "/api/attempts",
+        json={
+            "participant_id": pid,
+            "question_id": question["question_id"],
+            "phase": "pretest",
+            "selected_option_ids": selected,
+            "response_time_sec": 1.25,
+            "question_shown_at": QUESTION_SHOWN_AT,
+            "answered_at": ANSWERED_AT,
+        },
+    )
+    assert response.status_code == 200, response.text
     diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
-    assert diagnosis.status_code == 200
+    assert diagnosis.status_code == 200, diagnosis.text
     return pid
 
 
-def test_pretest_returns_only_llm_training_process_and_transformer():
+def test_pretest_returns_only_transformer_multi_select_question():
     participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
     questions = client.get(f"/api/experiment/{participant['participant_id']}/pretest").json()["questions"]
 
-    assert [question["term_slug"] for question in questions] == ["llm_training_process", "transformer"]
-    assert len(questions) == 2
-    assert all(question["options"] for question in questions)
-    assert all(question["requires_reason"] is False for question in questions)
+    assert [question["term_slug"] for question in questions] == ["transformer"]
+    question = questions[0]
+    assert question["selection_mode"] == "multiple"
+    assert question["min_selections"] == 3
+    assert question["max_selections"] == 3
+    assert [option["label"] for option in question["options"]] == list("ABCDEFGHIJ")
+    assert len(question["options"]) == 10
+    assert question["requires_reason"] is False
 
 
+def test_attempt_requires_three_choices_except_unknown_j_only():
+    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    question = client.get(f"/api/experiment/{pid}/pretest").json()["questions"][0]
 
-def test_attempt_timing_and_question_snapshot_are_stored():
-    pid = _create_participant_with_pretest(group="proposed")
-    db = SessionLocal()
-    try:
-        attempts = db.query(Attempt).filter_by(participant_id=pid, phase="pretest").all()
-        assert attempts
-        assert all(attempt.response_time_sec == 1.25 for attempt in attempts)
-        assert all(attempt.question_shown_at.isoformat() == QUESTION_SHOWN_AT for attempt in attempts)
-        assert all(attempt.answered_at.isoformat() == ANSWERED_AT for attempt in attempts)
-        assert all(attempt.question_body_snapshot for attempt in attempts)
-        assert all(len(attempt.option_order_snapshot) == 5 for attempt in attempts)
-    finally:
-        db.close()
+    one_non_unknown = client.post(
+        "/api/attempts",
+        json={"participant_id": pid, "question_id": question["question_id"], "phase": "pretest", "selected_option_ids": _ids_for_labels(question, ["A"])},
+    )
+    assert one_non_unknown.status_code == 400
+
+    unknown_only = client.post(
+        "/api/attempts",
+        json={"participant_id": pid, "question_id": question["question_id"], "phase": "pretest", "selected_option_ids": _ids_for_labels(question, ["J"])},
+    )
+    assert unknown_only.status_code == 200
 
 
-def test_final_test_is_choice_only_and_scores_without_reason():
-    pid = _create_participant_with_pretest(correct=True)
+def test_pretest_scoring_correct_m1_m3_unknown_and_snapshots():
+    cases = [
+        (["A", "B", "C"], True, None, "stable_correct"),
+        (["D", "E", "F"], False, "M1", "misconception"),
+        (["G", "H", "I"], False, "M3", "misconception"),
+        (["J"], False, "unknown", "unknown"),
+        (["D", "G", "J"], False, "M3", "misconception"),
+    ]
+    for labels, is_correct, misconception_type, status in cases:
+        pid = _create_participant_with_pretest(labels=labels)
+        db = SessionLocal()
+        try:
+            attempt = db.query(Attempt).filter_by(participant_id=pid, phase="pretest").one()
+            assert attempt.is_correct is is_correct
+            assert attempt.misconception_type == misconception_type
+            assert attempt.diagnosed_status == status
+            assert attempt.selected_option_ids
+            assert attempt.question_shown_at.isoformat() == QUESTION_SHOWN_AT
+            assert attempt.answered_at.isoformat() == ANSWERED_AT
+            assert len(attempt.option_order_snapshot) == 10
+        finally:
+            db.close()
+
+
+def test_learning_routes_m1_to_conceptual_change_and_unknown_to_enrichment():
+    m1_pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    m1_target = client.get(f"/api/participants/{m1_pid}/learning-targets").json()["targets"][0]
+    m1_session = client.post("/api/tutor-sessions", json={"participant_id": m1_pid, "term_slug": m1_target["term_slug"]}).json()
+    m1_turn = client.post(f"/api/tutor-sessions/{m1_session['tutor_session_id']}/turns", json={}).json()
+    assert m1_turn["learning_stage"] == "conceptual_change"
+    assert m1_turn["learning_stage_label"] == "概念変化"
+    assert m1_turn["practice_question"]["selection_mode"] == "multiple"
+
+    unknown_pid = _create_participant_with_pretest(labels=["J"])
+    unknown_target = client.get(f"/api/participants/{unknown_pid}/learning-targets").json()["targets"][0]
+    unknown_session = client.post("/api/tutor-sessions", json={"participant_id": unknown_pid, "term_slug": unknown_target["term_slug"]}).json()
+    unknown_turn = client.post(f"/api/tutor-sessions/{unknown_session['tutor_session_id']}/turns", json={}).json()
+    assert unknown_turn["learning_stage"] == "enrichment"
+    assert unknown_turn["learning_stage_label"] == "豊富化"
+
+
+def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "transformer"}).json()
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+
+    wrong = client.post(
+        f"/api/tutor-turns/{turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["G", "H", "I"])},
+    ).json()
+    assert wrong["is_sufficient"] is False
+    assert wrong["next_learning_stage"] == "conceptual_change"
+    assert wrong["learning_misconception_type"] == "M3"
+
+    retry = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    assert retry["learning_stage"] == "conceptual_change"
+    correct = client.post(
+        f"/api/tutor-turns/{retry['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(retry["practice_question"], ["A", "B", "C"]), "response_time_sec": 2.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
+    ).json()
+    assert correct["is_sufficient"] is True
+    assert correct["session_completed"] is True
+    assert correct["next_learning_stage"] == "final_feedback"
+    saved_turn = _latest_turn(retry["turn_id"])
+    assert saved_turn.response_time_sec == 2.5
+    assert saved_turn.grading_json["selected_option_ids"] == ["A", "B", "C"]
+
+
+def test_control_group_logs_same_stage_but_uses_general_explanation():
+    pid = _create_participant_with_pretest(group="control", labels=["G", "H", "I"])
+    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+
+    assert turn["learning_stage"] == "conceptual_change"
+    assert turn["teaching_strategy"] == "general_explanation"
+    assert turn["practice_question"]["selection_mode"] == "multiple"
+
+
+def test_retest_and_final_test_use_same_transformer_question_set():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+    assert [question["term_slug"] for question in retest] == ["transformer"]
+    assert retest[0]["selection_mode"] == "multiple"
+
+    response = client.post(
+        "/api/attempts",
+        json={"participant_id": pid, "question_id": retest[0]["question_id"], "phase": "retest", "selected_option_ids": _ids_for_labels(retest[0], ["A", "B", "C"])},
+    )
+    assert response.status_code == 200
+    score = client.post(f"/api/participants/{pid}/score-retest").json()
+    assert score["next_url"] == "/final-test"
+
     final_questions = client.get(f"/api/experiment/{pid}/final-test").json()["questions"]
+    assert len(final_questions) == 1
+    assert retest[0]["body"] == final_questions[0]["body"]
+    assert [option["body"] for option in retest[0]["options"]] == [option["body"] for option in final_questions[0]["options"]]
 
-    assert [question["term_slug"] for question in final_questions] == ["llm_training_process", "transformer"]
-    assert all(question["question_type"] == "final_choice" for question in final_questions)
-    assert all(question["requires_reason"] is False for question in final_questions)
-    assert all(question["options"] for question in final_questions)
 
-    for question in final_questions:
-        correct = next(option for option in question["options"] if option["body"] != "わからない。" and option["label"])
-        # Pick the actual correct option by stable text markers because option display order is randomized.
-        if question["term_slug"] == "llm_training_process":
-            correct = _option_containing(question, "大量のテキストで言語パターン")
-        else:
-            correct = _option_containing(question, "Attentionレイヤーでトークン間")
-        response = client.post(
-            "/api/attempts",
-            json={
-                "participant_id": pid,
-                "question_id": question["question_id"],
-                "phase": "final_test",
-                "selected_option_id": correct["option_id"],
-            },
-        )
-        assert response.status_code == 200
+def test_final_test_scoring_and_evaluation_summary_focus_on_m1_m3_unknown():
+    pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    final_question = client.get(f"/api/experiment/{pid}/final-test").json()["questions"][0]
+    assert client.post(
+        "/api/attempts",
+        json={"participant_id": pid, "question_id": final_question["question_id"], "phase": "final_test", "selected_option_ids": _ids_for_labels(final_question, ["A", "B", "C"])},
+    ).status_code == 200
+    assert client.post(f"/api/participants/{pid}/score-final-test").json()["next_url"] == "/survey"
+    assert client.post(f"/api/participants/{pid}/evaluation-summary/recalculate").status_code == 200
 
-    score = client.post(f"/api/participants/{pid}/score-final-test")
-    assert score.status_code == 200
-    assert score.json()["next_url"] == "/survey"
-
-    summary = client.post(f"/api/participants/{pid}/evaluation-summary/recalculate")
-    assert summary.status_code == 200
     db = SessionLocal()
     try:
         latest = db.query(EvaluationSummary).filter_by(participant_id=pid).order_by(EvaluationSummary.created_at.desc()).first()
         assert latest is not None
         assert latest.score_timeline_json["rounds"][-1]["round"] == "final_test"
-        assert latest.score_timeline_json["rounds"][-1]["score_delta_from_pretest_pt"] == 0
-        assert latest.misconception_timeline_json["terms"]
-        assert latest.learning_burden_json["retest_count"] == 0
-        assert latest.condition_check_json["manual_review_count"] == 0
+        assert latest.m2_recurrence_rate is None
+        assert latest.m4_failure_rate is None
     finally:
         db.close()
-    export = client.get("/api/admin/export/evaluation_summary.csv")
-    assert export.status_code == 200
-    assert "l0_correct_rate" in export.text
-    assert "score_timeline_json" in export.text
 
 
-def test_control_group_gets_l3_l2_material_but_only_l2_question():
-    pid = _create_participant_with_pretest(group="control")
-    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
-    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    ai_calls_before = _ai_call_count("generate_tutoring_turn")
-    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    assert _ai_call_count("generate_tutoring_turn") == ai_calls_before
+def test_admin_logs_and_csv_show_multiple_selection_labels():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    logs = client.get(f"/api/admin/participants/{pid}/logs").json()
+    assert len(logs["attempts"]) == 1
+    assert logs["attempts"][0]["selected_option_body"] == "D / E / F"
+    assert logs["attempts"][0]["misconception_type"] == "M1"
 
-    assert turn["term_label"] in {"LLMの学習段階", "Transformer"}
-    assert turn["teaching_strategy"] == "general_explanation"
-    assert turn["learning_stage"] == "concept_understanding"
-    assert "L3" not in turn["practice_question"]["question_type"]
-    assert turn["practice_question"]["question_type"] == "control_l2_check"
-    assert "事前学習" in turn["tutor_message"] or "Attention" in turn["tutor_message"]
-    assert len(turn["practice_question"]["options"]) == 5
-
-    learner_response = (
-        "事前学習、インストラクションチューニング、事後学習の目的が違います。"
-        if target["term_slug"] == "llm_training_process"
-        else "Attentionで関係性を扱い、FFNで特徴を変換します。"
-    )
-    response = client.post(
-        f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={"learner_response": learner_response},
-    ).json()
-    assert response["next_learning_stage"] == "final_feedback"
-    assert response["session_completed"] is True
-
-
-def test_duplicate_learning_session_and_turn_requests_reuse_open_records():
-    pid = _create_participant_with_pretest(group="control")
-    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
-
-    first_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    second_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    assert second_session["tutor_session_id"] == first_session["tutor_session_id"]
-    assert second_session["session_index"] == first_session["session_index"]
-
-    first_turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
-    second_turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
-    assert second_turn["turn_id"] == first_turn["turn_id"]
-    assert second_turn["turn_index"] == first_turn["turn_index"]
-
-
-def _answer_for_component(component_term: str) -> str:
-    return {
-        "事前学習": "事前学習は大規模データから基盤能力を作る段階です。",
-        "インストラクションチューニング": "インストラクションチューニングは指示と応答の例から指示応答を学ぶ段階です。",
-        "事後学習": "事後学習は人間評価などで安全性や有用性を調整する段階です。",
-        "Attentionレイヤー": "Attentionレイヤーはトークン間の関係性を計算して重み付けします。",
-        "FFNレイヤー": "FFNレイヤーは各トークンの特徴を変換します。",
-        "トークン間の関係性": "トークン間の関係性は離れたトークン同士のつながりを扱う情報です。",
-    }[component_term]
-
-
-def _assert_component_sequence(pid: str, term_slug: str, expected_components: list[str], concept_answer: str) -> None:
-    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": term_slug}).json()
-
-    ai_calls_before = _ai_call_count("generate_tutoring_turn")
-    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    assert _ai_call_count("generate_tutoring_turn") == ai_calls_before + 1
-    assert turn["learning_stage"] == "term_understanding"
-    assert turn["component_term"] == expected_components[0]
-    assert turn["component_index"] == 0
-    assert turn["component_total"] == len(expected_components)
-    assert [item["component_term"] for item in turn["practice_question"]["items"]] == expected_components
-    assert all(len(item["options"]) == 5 for item in turn["practice_question"]["items"])
-    latest_call = _latest_ai_call("generate_tutoring_turn")
-    assert latest_call.request_payload["learner_state"]["primary_misconception"]
-    assert latest_call.request_payload["component_terms"] == expected_components
-    assert latest_call.request_payload["fixed_practice_question_items"]
-    assert latest_call.request_payload["misconception_scaffolding_guidance"]
-    correct_options = {
-        item["component_term"]: next(option for option in item["options"] if option["label"] == "A")["option_id"]
-        for item in turn["practice_question"]["items"]
-    }
-    feedback = client.post(
-        f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={"selected_item_option_ids": correct_options, "response_time_sec": 2.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
-    ).json()
-    assert feedback["is_sufficient"] is True
-    assert feedback["session_completed"] is False
-    assert feedback["next_learning_stage"] == "concept_understanding"
-    assert len(feedback["item_results"]) == len(expected_components)
-    assert all(item["is_correct"] for item in feedback["item_results"])
-    assert all(item["correct_answer"] for item in feedback["item_results"])
-    saved_turn = _latest_turn(turn["turn_id"])
-    assert saved_turn.response_time_sec == 2.5
-    assert saved_turn.question_shown_at.isoformat() == QUESTION_SHOWN_AT
-    assert saved_turn.answered_at.isoformat() == ANSWERED_AT
-    assert saved_turn.grading_json["response_time_sec"] == 2.5
-    assert saved_turn.grading_json["material_source"] == "ai"
-    assert len(saved_turn.grading_json["item_results"]) == len(expected_components)
-
-    concept = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    assert _ai_call_count("generate_tutoring_turn") == ai_calls_before + 2
-    assert concept["learning_stage"] == "concept_understanding"
-    assert len(concept["practice_question"]["options"]) == 5
-    pretest_question = next(question for question in client.get(f"/api/experiment/{pid}/pretest").json()["questions"] if question["term_slug"] == term_slug)
-    assert concept["practice_question"]["body"] == pretest_question["body"]
-    assert sorted(option["body"] for option in concept["practice_question"]["options"]) == sorted(option["body"] for option in pretest_question["options"])
-    concept_correct = next(option for option in concept["practice_question"]["options"] if option["label"] == "A")
-    concept_feedback = client.post(
-        f"/api/tutor-turns/{concept['turn_id']}/respond",
-        json={"selected_option_id": concept_correct["option_id"], "response_time_sec": 3.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
-    ).json()
-    assert concept_feedback["is_sufficient"] is True
-    assert concept_feedback["session_completed"] is True
-    assert concept_feedback["next_learning_stage"] == "final_feedback"
-    saved_concept = _latest_turn(concept["turn_id"])
-    assert saved_concept.response_time_sec == 3.5
-    assert saved_concept.question_shown_at.isoformat() == QUESTION_SHOWN_AT
-    assert saved_concept.answered_at.isoformat() == ANSWERED_AT
-    assert saved_concept.grading_json["response_time_sec"] == 3.5
-    assert saved_concept.grading_json["material_source"] == "ai"
-
-
-def test_proposed_group_progresses_llm_training_components_then_l2_question():
-    pid = _create_participant_with_pretest(group="proposed")
-    _assert_component_sequence(
-        pid,
-        "llm_training_process",
-        ["事前学習", "インストラクションチューニング", "事後学習"],
-        "事前学習、インストラクションチューニング、事後学習の3段階でLLMの学習プロセスを説明できます。",
-    )
-
-
-def test_proposed_group_progresses_transformer_components_then_l2_question():
-    pid = _create_participant_with_pretest(group="proposed")
-    _assert_component_sequence(
-        pid,
-        "transformer",
-        ["Attentionレイヤー", "FFNレイヤー", "トークン間の関係性"],
-        "TransformerはAttentionでトークン間の関係性を扱い、FFNで各トークンの特徴を変換します。",
-    )
-
-
-
-def test_learning_choice_incorrect_option_sets_learning_misconception_type():
-    pid = _create_participant_with_pretest(group="proposed")
-    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "transformer"}).json()
-    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-
-    assert turn["learning_stage"] == "term_understanding"
-    first_item = turn["practice_question"]["items"][0]
-    selected = {
-        item["component_term"]: next(option for option in item["options"] if option["label"] == "A")["option_id"]
-        for item in turn["practice_question"]["items"]
-    }
-    wrong_option = next(option for option in first_item["options"] if option["label"] == "B")
-    selected[first_item["component_term"]] = wrong_option["option_id"]
-    feedback = client.post(
-        f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={"selected_item_option_ids": selected},
-    ).json()
-
-    assert feedback["is_sufficient"] is False
-    assert feedback["next_learning_stage"] == "term_understanding"
-    assert feedback["learning_misconception_type"] == "M1"
-    assert feedback["item_results"][0]["is_correct"] is False
-    retry = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    assert [item["component_term"] for item in retry["practice_question"]["items"]] == [first_item["component_term"]]
-
-
-def test_retest_removes_correct_terms_and_final_test_stays_two_items():
-    pid = _create_participant_with_pretest(group="proposed")
-    retest = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
-    assert [question["term_slug"] for question in retest] == ["llm_training_process", "transformer"]
-    assert all(question["requires_reason"] is False for question in retest)
-
-    answers = {
-        "llm_training_process": "入力された文章を理解",
-        "transformer": "Attentionレイヤーでトークン間",
-    }
-    for question in retest:
-        option = _option_containing(question, answers[question["term_slug"]])
-        assert client.post(
-            "/api/attempts",
-            json={
-                "participant_id": pid,
-                "question_id": question["question_id"],
-                "phase": "retest",
-                "selected_option_id": option["option_id"],
-            },
-        ).status_code == 200
-
-    score = client.post(f"/api/participants/{pid}/score-retest").json()
-    assert score["next_url"] == "/learning-targets"
-    participant_logs = client.get(f"/api/admin/participants/{pid}/logs").json()
-    assert all(state["scaffolding_level"] in {"L2", "L3"} for state in participant_logs["learner_states"])
-    targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
-    assert [target["term_slug"] for target in targets] == ["llm_training_process"]
-
-    final_questions = client.get(f"/api/experiment/{pid}/final-test").json()["questions"]
-    assert len(final_questions) == 2
-    assert all(question["requires_reason"] is False for question in final_questions)
-    final_by_term = {question["term_slug"]: question for question in final_questions}
-    for question in retest:
-        final_question = final_by_term[question["term_slug"]]
-        assert question["body"] == final_question["body"]
-        assert sorted(option["body"] for option in question["options"]) == sorted(option["body"] for option in final_question["options"])
-
-
-def test_admin_overview_and_participant_logs_have_json_and_csv():
-    pid = _create_participant_with_pretest(group="proposed")
-    target = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"][0]
-    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target["term_slug"]}).json()
-    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    correct_options = {
-        item["component_term"]: next(option for option in item["options"] if option["label"] == "A")["option_id"]
-        for item in turn["practice_question"]["items"]
-    }
-    turn_response = client.post(
-        f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={
-            "selected_item_option_ids": correct_options,
-            "response_time_sec": 2.5,
-            "question_shown_at": QUESTION_SHOWN_AT,
-            "answered_at": ANSWERED_AT,
-        },
-    )
-    assert turn_response.status_code == 200
-
-    overview = client.get("/api/admin/logs/overview")
-    assert overview.status_code == 200
-    overview_json = overview.json()
-    assert "participants" in overview_json
-    assert "recent_attempts" in overview_json
-    assert "recent_answer_history" in overview_json
-    assert any(row["participant_id"] == pid for row in overview_json["participants"])
-    assert any(row["source_type"] == "learning_turn" for row in overview_json["recent_answer_history"])
-
-    participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
-    assert participant_logs.status_code == 200
-    logs_json = participant_logs.json()
-    assert logs_json["participant"]["participant_id"] == pid
-    assert len(logs_json["attempts"]) == 2
-    assert any(row["term_slug"] == "transformer" for row in logs_json["attempts"])
-    assert "answer_history" in logs_json
-    assert [row["source_type"] for row in logs_json["answer_history"]].count("test_attempt") == 2
-    assert [row["source_type"] for row in logs_json["answer_history"]].count("learning_turn") == 3
-    learning_answer = next(row for row in logs_json["answer_history"] if row["source_type"] == "learning_turn")
-    assert learning_answer["phase"] == "learning"
-    assert learning_answer["is_sufficient"] is True
-    assert learning_answer["learning_stage"] == "term_understanding"
-    assert learning_answer["response_time_sec"] == 2.5
-    assert "learner_states" in logs_json
-    assert "ai_call_logs" in logs_json
-
-    overview_csv = client.get("/api/admin/logs/overview.csv")
-    assert overview_csv.status_code == 200
-    assert "record_type,source_type,participant_id,display_code,phase,term_slug,event_time,question_shown_at,answered_at,response_time_sec,question_body,selected_option_body,question_body_snapshot,option_order_snapshot,summary,value_json" in overview_csv.text
-    assert "question_body_snapshot" in overview_csv.text
-    assert "answer,test_attempt" in overview_csv.text
-    assert "answer,learning_turn" in overview_csv.text
-    overview_excel_csv = client.get("/api/admin/logs/overview_excel.csv")
-    assert overview_excel_csv.status_code == 200
-    assert overview_excel_csv.content.startswith(b"\xef\xbb\xbf")
-    assert "answer".encode() in overview_excel_csv.content
+    overview = client.get("/api/admin/logs/overview").json()
+    assert any(row.get("selected_option_body") == "D / E / F" for row in overview["recent_answer_history"])
 
     participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert participant_csv.status_code == 200
-    assert "record_type,source_type,participant_id,display_code,phase,term_slug,event_time,question_shown_at,answered_at,response_time_sec,question_body,selected_option_body,question_body_snapshot,option_order_snapshot,summary,value_json" in participant_csv.text
-    assert "option_order_snapshot" in participant_csv.text
+    assert "D / E / F" in participant_csv.text
     assert "answer,test_attempt" in participant_csv.text
-    assert "answer,learning_turn" in participant_csv.text
-    participant_excel_csv = client.get(f"/api/admin/participants/{pid}/logs_excel.csv")
-    assert participant_excel_csv.status_code == 200
-    assert participant_excel_csv.content.startswith(b"\xef\xbb\xbf")
-    assert "answer".encode() in participant_excel_csv.content
 
 
 def test_tutoring_prompt_contract_mentions_new_group_design():
     prompt_source = Path(__file__).resolve().parents[1] / "app" / "ai" / "codex_app_server_backend.py"
-    text = prompt_source.read_text()
-    assert "L3相当の基礎教材とL2相当の観点教材を両方" in text
-    assert "質問はL2相当の1問だけ" in text
-    assert "term_understandingをL3複数構成用語教材+L3複数質問、concept_understandingをL2教材+L2質問" in text
-    assert "fixed_practice_question_items をbackendが表示する" in text
-    assert "misconception_scaffolding_guidance" in text
+    text = prompt_source.read_text(encoding="utf-8")
+    assert "learning_stage が enrichment" in text
+    assert "learning_stage が conceptual_change" in text
+    assert "M2/M4は今回のMVPでは使わない" in text
+    assert "fixed_practice_question" in text
 
 
 def test_m4_does_not_select_context_transfer_strategy():
@@ -431,13 +232,9 @@ def test_m4_does_not_select_context_transfer_strategy():
     assert strategy_for("M4", "misconception", "control") == "general_explanation"
 
 
-def test_rag_retrieves_current_active_material_chunks():
+def test_rag_retrieves_transformer_material_chunks():
     from app.rag.retriever import retrieve_rag_context
-
-    llm_context = retrieve_rag_context("LLMの学習プロセス 事前学習 インストラクションチューニング 事後学習")
-    assert llm_context["status"] == "ok"
-    assert any("LLM の学習プロセス" in chunk["section"] for chunk in llm_context["chunks"])
 
     transformer_context = retrieve_rag_context("Transformer Attention FFN トークン間の関係性")
     assert transformer_context["status"] == "ok"
-    assert any("Transformer の解説" in chunk["section"] for chunk in transformer_context["chunks"])
+    assert any("Transformer" in chunk["section"] or "Transformer" in chunk["text"] for chunk in transformer_context["chunks"])

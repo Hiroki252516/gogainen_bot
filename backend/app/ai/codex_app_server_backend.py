@@ -178,8 +178,8 @@ class CodexAppServerBackend:
             [
                 "事前テスト診断では選択肢の正誤と誤答選択肢の初期ラベルだけから理解状態を診断する。",
                 "natural_language_diagnosis では、入力欄の有無や未入力であることに絶対に触れず、選択内容から見える理解状態だけを書く。",
-                "誤概念タイプは内部研究ラベルとして M1/M2/M3/M4/unknown/null のみを使う。",
-                "natural_language_diagnosis には M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
+                "今回のMVPでは誤概念タイプは内部研究ラベルとして M1/M3/unknown/null を使う。M2/M4は新規判定に使わない。",
+                "natural_language_diagnosis には M1/M3 という内部ラベルを絶対に書かない。",
                 "統制群でも分類は保存してよいが、教授方略に使う推薦は general_explanation にする。",
                 f"recommended_teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。",
             ],
@@ -229,8 +229,8 @@ class CodexAppServerBackend:
             "学習セッション用の短い日本語チュータ発話を作る。",
             "足場掛けレベルは L3/L2 のみを使い、指定外のレベルは使わない。",
             f"教材、問い返し、practice_question は必ず現在の用語『{term_label}』だけを主題にする。",
-            "入力JSONの learning_stage が term_understanding の場合は、component_terms と fixed_practice_question_items に含まれる複数構成用語を今回の主題にし、それぞれの教材観点を説明する。",
-            "入力JSONの learning_stage が concept_understanding の場合は、component_terms を使って対象概念全体を説明させる問題を1つ作る。",
+            "入力JSONの learning_stage が enrichment の場合は、不足知識を補う基礎教材として説明する。",
+            "入力JSONの learning_stage が conceptual_change の場合は、誤信念またはカテゴリー錯誤を修正する教材として説明する。",
             "misconception_scaffolding_guidance があれば、その方略を最優先で教材本文へ反映する。",
             "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
             "rag_context.chunks がある場合は、その教材コンテキストを優先して教材と問題を作る。教材にない内容は推測で断定しない。",
@@ -243,15 +243,15 @@ class CodexAppServerBackend:
             "practice_question.body はbackend固定問題の補助として短く書く。L3の実際の複数確認問題と選択肢は fixed_practice_question_items をbackendが表示する。",
             "practice_question.expected_answer は現在の用語の期待回答にする。",
             "再テスト、確認テストの具体的な正解を先取りして出さない。",
-            "tutor_message, learner_prompt, practice_question.body に M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
+            "tutor_message, learner_prompt, practice_question.body に M1/M3 という内部ラベルを絶対に書かない。",
         ]
         if group == "control":
             rules.append("統制群なので、過去ログ、誤概念タイプ、足場掛け履歴に適応しない通常AIチューターとして説明する。teaching_strategy は general_explanation に固定する。")
             rules.append("統制群では、L3相当の基礎教材とL2相当の観点教材を両方tutor_messageに含める。ただし質問はL2相当の1問だけにし、L3質問は出さない。")
         else:
             rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
-            rules.append("M1ならカテゴリ捉え直し、M2なら境界比較、M3なら表層語から構造・判断基準への誘導、unknownなら基礎定義確認を優先する。")
-            rules.append("提案群では、term_understandingをL3複数構成用語教材+L3複数質問、concept_understandingをL2教材+L2質問として段階的に提示する。")
+            rules.append("M1なら誤信念の修正、M3なら本来のモデル構造カテゴリへの捉え直し、unknownなら基礎知識の豊富化を優先する。")
+            rules.append("提案群では、unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)
         result["tutor_message"] = _strip_internal_labels(result["tutor_message"])
@@ -330,12 +330,12 @@ class CodexAppServerBackend:
                 [
                     "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
                     "rag_context.chunks がある場合は、その教材コンテキストを優先して判定・フィードバックする。教材にない内容は推測で断定しない。",
-                    "M1/M2/M3/M4 という内部ラベルを学習者向け文面に絶対に書かない。",
-                    "learning_misconception_type は、この学習セッション内の今回回答だけに対する内部診断として M1/M2/M3/M4/unknown/null から選ぶ。事前テスト由来の primary_misconception を上書きしない。",
-                    "十分回答なら learning_misconception_type は null にしてよい。不十分な場合は、カテゴリー誤分類はM1、類似概念境界混同はM2、表層語反応はM3、知識不足はunknownにする。M4は今回の学習セッション教材方略では使わない。",
+                    "M1/M3 という内部ラベルを学習者向け文面に絶対に書かない。",
+                    "learning_misconception_type は、この学習セッション内の今回回答だけに対する内部診断として M1/M3/unknown/null から選ぶ。事前テスト由来の primary_misconception を上書きしない。",
+                    "十分回答なら learning_misconception_type は null にしてよい。不十分な場合は、誤信念型はM1、カテゴリー錯誤型はM3、知識不足はunknownにする。M2/M4は今回のMVPでは使わない。",
                     "learning_misconception_reason は研究者向けログ用に短く書き、学習者向けfeedbackには内部ラベルを書かない。",
-                    "learning_stage が term_understanding の場合、is_sufficient は component_term の意味と対象概念内での役割が十分に説明されている場合だけ true にする。",
-                    "learning_stage が concept_understanding の場合、is_sufficient は component_terms を使って対象概念全体を十分に説明できている場合だけ true にする。",
+                    "learning_stage が enrichment の場合、知識不足を補う観点で十分性を判定する。",
+                    "learning_stage が conceptual_change の場合、誤った捉え方から正しいカテゴリー・構造へ移行できているかを判定する。",
                     "理解が十分なら move_next、不十分なら continue にする。",
                     "next_scaffolding_level は参考値として L3/L2 のいずれかにし、指定外のレベルは使わない。最終更新はbackendが決める。",
                 ],
@@ -366,7 +366,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "管理者用と学習者用の短い状態要約を作る。",
-                    "学習者用要約には M1/M2/M3/M4 という内部ラベルを絶対に書かない。",
+                    "学習者用要約には M1/M3 という内部ラベルを絶対に書かない。",
                 ],
             ),
             schema,
@@ -479,7 +479,7 @@ class CodexAppServerBackend:
                 "",
                 "出力は指定JSON Schemaに一致するJSONオブジェクトのみ。Markdown、説明文、コードブロックは禁止。",
                 "個人情報、APIキー、アクセストークン、認証情報を要求・保存・推測しない。",
-                "被験者に見える文面では内部研究ラベル M1/M2/M3/M4 を使わない。",
+                "被験者に見える文面では内部研究ラベル M1/M3 を使わない。",
                 "",
                 "追加ルール:",
                 *[f"- {rule}" for rule in rules],
@@ -527,6 +527,7 @@ Return only the JSON object requested by the caller's output schema.
 
 _TEACHING_STRATEGIES = [
     "general_explanation",
+    "belief_revision",
     "category_reorientation",
     "boundary_comparison",
     "deep_structure_focus",

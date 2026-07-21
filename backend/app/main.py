@@ -74,6 +74,7 @@ class AttemptPayload(BaseModel):
     question_id: str
     phase: str | None = None
     selected_option_id: str | None = None
+    selected_option_ids: list[str] | None = None
     free_text_answer: str | None = None
     reason_text: str | None = None
     response_time_sec: float | None = None
@@ -89,6 +90,7 @@ class TutorSessionCreate(BaseModel):
 class TutorTurnRespond(BaseModel):
     learner_response: str = ""
     selected_option_id: str | None = None
+    selected_option_ids: list[str] | None = None
     selected_item_option_ids: dict[str, str] | None = None
     response_time_sec: float | None = None
     question_shown_at: datetime | None = None

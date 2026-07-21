@@ -21,14 +21,10 @@ def strategy_for(misconception_type: str | None, status: str | None, group_condi
     if group_condition == "control":
         return "general_explanation"
     if misconception_type == "M1":
-        return "category_reorientation"
-    if misconception_type == "M2":
-        return "boundary_comparison"
+        return "belief_revision"
     if misconception_type == "M3":
-        return "deep_structure_focus"
-    if misconception_type == "M4":
-        return "self_explanation_check"
-    if status == "unknown":
+        return "category_reorientation"
+    if status == "unknown" or misconception_type == "unknown":
         return "foundational_explanation"
     if status == "unstable_correct":
         return "self_explanation_check"

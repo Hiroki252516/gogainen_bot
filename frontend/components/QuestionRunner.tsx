@@ -13,6 +13,9 @@ type Question = {
   question_type: string;
   options: Option[];
   requires_reason?: boolean;
+  selection_mode?: "single" | "multiple" | "free_text";
+  min_selections?: number;
+  max_selections?: number;
 };
 
 export function QuestionRunner({
@@ -32,6 +35,7 @@ export function QuestionRunner({
   const [questions, setQuestions] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -57,7 +61,16 @@ export function QuestionRunner({
 
   async function submit() {
     if (!current) return;
-    if (current.options.length && !selected) {
+    const isMultiple = current.selection_mode === "multiple";
+    const minSelections = current.min_selections ?? (isMultiple ? 1 : 0);
+    const maxSelections = current.max_selections ?? (isMultiple ? current.options.length : 1);
+    const selectedLabels = current.options.filter((option) => selectedIds.includes(option.option_id)).map((option) => option.label);
+    const isUnknownOnly = selectedLabels.length === 1 && selectedLabels[0] === "J";
+    if (isMultiple && !isUnknownOnly && (selectedIds.length < minSelections || selectedIds.length > maxSelections)) {
+      setError(`${minSelections === maxSelections ? `${minSelections}つ` : `${minSelections}〜${maxSelections}つ`}選んでください。`);
+      return;
+    }
+    if (!isMultiple && current.options.length && !selected) {
       setError("選択肢を選んでください。");
       return;
     }
@@ -78,7 +91,8 @@ export function QuestionRunner({
           participant_id: id,
           question_id: current.question_id,
           phase,
-          selected_option_id: selected || null,
+          selected_option_id: isMultiple ? (selectedIds[0] || null) : (selected || null),
+          selected_option_ids: isMultiple ? selectedIds : null,
           free_text_answer: current.options.length ? null : reason || null,
           reason_text: requiresReason ? reason : null,
           response_time_sec: responseTimeSec,
@@ -89,6 +103,7 @@ export function QuestionRunner({
       if (index + 1 < questions.length) {
         setIndex(index + 1);
         setSelected("");
+        setSelectedIds([]);
         setReason("");
         setQuestionStartedAt(Date.now());
         setQuestionShownAt(new Date().toISOString());
@@ -123,14 +138,33 @@ export function QuestionRunner({
       </div>
       {current.options.length > 0 ? (
         <div className="options">
-          {current.options.map((option) => (
-            <label className="option" key={option.option_id}>
-              <input type="radio" name="option" value={option.option_id} checked={selected === option.option_id} onChange={() => setSelected(option.option_id)} />
-              <span>
-                <strong>{option.label}.</strong> {option.body}
-              </span>
-            </label>
-          ))}
+          {current.options.map((option) => {
+            const isMultiple = current.selection_mode === "multiple";
+            return (
+              <label className="option" key={option.option_id}>
+                <input
+                  type={isMultiple ? "checkbox" : "radio"}
+                  name="option"
+                  value={option.option_id}
+                  checked={isMultiple ? selectedIds.includes(option.option_id) : selected === option.option_id}
+                  onChange={() => {
+                    if (!isMultiple) {
+                      setSelected(option.option_id);
+                      return;
+                    }
+                    setSelectedIds((currentIds) =>
+                      currentIds.includes(option.option_id)
+                        ? currentIds.filter((id) => id !== option.option_id)
+                        : [...currentIds, option.option_id]
+                    );
+                  }}
+                />
+                <span>
+                  <strong>{option.label}.</strong> {option.body}
+                </span>
+              </label>
+            );
+          })}
         </div>
       ) : null}
       {current.requires_reason ?? true ? (
@@ -141,7 +175,15 @@ export function QuestionRunner({
       ) : null}
       {error ? <div className="danger">{error}</div> : null}
       <div className="actions">
-        <button onClick={submit} disabled={saving}>
+        <button
+          onClick={submit}
+          disabled={
+            saving ||
+            (current.selection_mode === "multiple" &&
+              selectedIds.length !== (current.min_selections ?? 3) &&
+              !(selectedIds.length === 1 && current.options.find((option) => option.option_id === selectedIds[0])?.label === "J"))
+          }
+        >
           {index + 1 === questions.length ? "完了" : "次へ"}
         </button>
         <span className="muted">このフェーズでは正誤やヒントは表示されません。</span>

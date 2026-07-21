@@ -35,7 +35,7 @@ frontendはブラウザから相対パス `/api/...` を呼び、Next.js rewrite
 7. 未達0件で最終テスト2問
 8. 採点後 `/survey`
 
-現行seedは `llm_training_process` と `transformer` の2語である。L2概念理解問題・再テスト・最終テストは同一問題文と同一選択肢セットを使う。
+現行seedは `transformer` の1語である。pretest・retest・final_test・学習内確認問題は同一問題文と同一10択セットを使う。
 
 ## Logging
 
