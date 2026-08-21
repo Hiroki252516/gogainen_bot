@@ -1,60 +1,207 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import joblib
-import scipy.sparse as sp
+import numpy as np
+from scipy import sparse
+from sklearn.feature_extraction.text import HashingVectorizer
+
+from app.core.config import get_settings
 
 
-RAG_DIR = Path(__file__).resolve().parents[3] / "rag_ready_教材"
-CHUNKS_PATH = RAG_DIR / "chunks.jsonl"
-VECTORS_PATH = RAG_DIR / "vectors_tfidf_sparse.npz"
-VECTORIZER_PATH = RAG_DIR / "tfidf_vectorizer.joblib"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_RAG_DIR = PROJECT_ROOT / "rag_agent_knowledge_base"
+LEGACY_RAG_DIR = PROJECT_ROOT / "rag_ready_教材"
 
 
-@lru_cache(maxsize=1)
-def _load_index() -> tuple[list[dict[str, Any]], Any, Any]:
-    for path in (CHUNKS_PATH, VECTORS_PATH, VECTORIZER_PATH):
-        if not path.exists():
-            raise FileNotFoundError(f"RAG asset not found: {path}")
-    with CHUNKS_PATH.open("r", encoding="utf-8") as f:
-        chunks = [json.loads(line) for line in f if line.strip()]
-    vectorizer = joblib.load(VECTORIZER_PATH)
-    vectors = sp.load_npz(VECTORS_PATH)
-    return chunks, vectorizer, vectors
+def _configured_rag_dir() -> Path:
+    configured = os.environ.get("RAG_BASE_DIR") or get_settings().rag_base_dir
+    path = Path(configured)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+
+    if (path / "chunks.jsonl").exists():
+        return path
+    if (LEGACY_RAG_DIR / "chunks.jsonl").exists():
+        return LEGACY_RAG_DIR
+    return path
 
 
-def retrieve_rag_context(query: str, top_k: int = 3) -> dict[str, Any]:
-    normalized_query = query.strip() or "Transformer LLM 学習"
-    empty_context = {
-        "source": "rag_ready_教材",
-        "retrieval_method": "local_sparse_tfidf",
-        "query": normalized_query,
-        "top_k": top_k,
-        "chunks": [],
-    }
+def _first_existing(directory: Path, names: tuple[str, ...]) -> Path:
+    for name in names:
+        candidate = directory / name
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(f"RAG index file not found in {directory}: {names}")
+
+
+class _QueryEncoder:
+    def __init__(self, model: Any) -> None:
+        if isinstance(model, dict) and "hashing_params" in model:
+            params = dict(model["hashing_params"])
+            params["ngram_range"] = tuple(params.get("ngram_range", (1, 1)))
+            self._hashing = HashingVectorizer(**params)
+            self._tfidf = model["tfidf_transformer"]
+            self._vectorizer = None
+        else:
+            self._hashing = None
+            self._tfidf = None
+            self._vectorizer = model
+
+    def transform(self, queries: list[str]) -> Any:
+        if self._hashing is not None and self._tfidf is not None:
+            return self._tfidf.transform(self._hashing.transform(queries))
+        return self._vectorizer.transform(queries)
+
+
+@lru_cache(maxsize=4)
+def _load_index(directory: str) -> tuple[list[dict[str, Any]], Any, _QueryEncoder]:
+    rag_dir = Path(directory)
+    chunks_path = rag_dir / "chunks.jsonl"
+    vector_path = _first_existing(
+        rag_dir,
+        ("embeddings_sparse.npz", "vectors_tfidf_sparse.npz", "embeddings.npy"),
+    )
+    model_path = _first_existing(
+        rag_dir,
+        ("retrieval_model.joblib", "tfidf_vectorizer.joblib"),
+    )
+
+    chunks: list[dict[str, Any]] = []
+    with chunks_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                chunks.append(json.loads(line))
+
+    if vector_path.suffix == ".npz":
+        vectors = sparse.load_npz(vector_path)
+    else:
+        vectors = np.load(vector_path)
+    vectorizer = _QueryEncoder(joblib.load(model_path))
+    return chunks, vectors, vectorizer
+
+
+def _chunk_search_text(chunk: dict[str, Any]) -> str:
+    section_path = chunk.get("section_path") or []
+    if isinstance(section_path, str):
+        section_path = [section_path]
+    return " ".join(
+        str(value)
+        for value in [
+            chunk.get("heading"),
+            chunk.get("section"),
+            *section_path,
+            chunk.get("text"),
+        ]
+        if value
+    )
+
+
+def _is_allowed_chunk(
+    chunk: dict[str, Any],
+    allowed_sections: list[str] | tuple[str, ...] | None,
+) -> bool:
+    search_text = _chunk_search_text(chunk)
+    if "langgraph" in search_text.lower():
+        return False
+    if not allowed_sections:
+        return True
+    section_path = chunk.get("section_path") or []
+    if isinstance(section_path, str):
+        section_path = [section_path]
+    section_values = [
+        str(chunk.get("heading") or ""),
+        str(chunk.get("section") or ""),
+        *(str(value) for value in section_path),
+    ]
+    return any(
+        _section_matches_marker(value, marker)
+        for marker in allowed_sections
+        for value in section_values
+    )
+
+
+def _section_matches_marker(value: str, marker: str) -> bool:
+    normalized_value = value.strip()
+    normalized_marker = str(marker).strip()
+    if not normalized_value or not normalized_marker:
+        return False
+
+    if re.fullmatch(r"\d+(?:\.\d+)*", normalized_marker):
+        section_match = re.match(r"^(\d+(?:\.\d+)*)", normalized_value)
+        if not section_match:
+            return False
+        section_id = section_match.group(1)
+        return section_id == normalized_marker or section_id.startswith(f"{normalized_marker}.")
+
+    return normalized_marker.casefold() in normalized_value.casefold()
+
+
+def retrieve_rag_context(
+    query: str,
+    top_k: int = 3,
+    *,
+    allowed_sections: list[str] | tuple[str, ...] | None = None,
+    topic_slug: str | None = None,
+) -> dict[str, Any]:
+    rag_dir = _configured_rag_dir()
     try:
-        chunks, vectorizer, vectors = _load_index()
-    except Exception as exc:
-        return {**empty_context, "status": "unavailable", "error": str(exc)}
+        chunks, vectors, vectorizer = _load_index(str(rag_dir))
+    except (FileNotFoundError, OSError, ValueError):
+        return {
+            "source": rag_dir.name,
+            "topic_slug": topic_slug,
+            "allowed_sections": list(allowed_sections or []),
+            "query": query,
+            "chunks": [],
+        }
 
-    q_vec = vectorizer.transform([normalized_query])
-    scores = (vectors @ q_vec.T).toarray().ravel()
-    ranked = scores.argsort()[::-1][:top_k]
+    if not query.strip() or not chunks:
+        return {
+            "source": rag_dir.name,
+            "topic_slug": topic_slug,
+            "allowed_sections": list(allowed_sections or []),
+            "query": query,
+            "chunks": [],
+        }
 
-    results: list[dict[str, Any]] = []
-    for idx in ranked:
-        chunk = chunks[int(idx)]
-        results.append(
+    query_vector = vectorizer.transform([query])
+    scores = vectors @ query_vector.T
+    scores = np.asarray(scores.toarray() if sparse.issparse(scores) else scores).reshape(-1)
+
+    eligible: list[tuple[float, dict[str, Any]]] = []
+    for index, chunk in enumerate(chunks):
+        if not _is_allowed_chunk(chunk, allowed_sections):
+            continue
+        row = int(chunk.get("embedding_row", index))
+        if row < 0 or row >= len(scores):
+            continue
+        eligible.append((float(scores[row]), chunk))
+
+    eligible.sort(key=lambda item: item[0], reverse=True)
+    selected = []
+    for score, chunk in eligible[: max(top_k, 0)]:
+        selected.append(
             {
-                "chunk_id": chunk["chunk_id"],
-                "source_file": chunk["source_file"],
-                "section": chunk["section"],
-                "score": float(scores[int(idx)]),
-                "text": chunk["text"],
+                "chunk_id": chunk.get("chunk_id"),
+                "source_file": chunk.get("source_file"),
+                "heading": chunk.get("heading"),
+                "section_path": chunk.get("section_path") or chunk.get("section"),
+                "text": chunk.get("text", ""),
+                "score": score,
             }
         )
-    return {**empty_context, "status": "ok", "chunks": results}
+
+    return {
+        "source": rag_dir.name,
+        "topic_slug": topic_slug,
+        "allowed_sections": list(allowed_sections or []),
+        "query": query,
+        "chunks": selected,
+    }

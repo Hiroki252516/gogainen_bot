@@ -89,19 +89,20 @@ def seed_database(db: Session) -> None:
         term.is_active = True
 
         for phase in ("pretest", "retest"):
-            qd = item["questions"]["pretest"]
-            _upsert_question(
-                db,
-                term,
-                phase=phase,
-                question_type="multi_select" if phase == "pretest" else "retest_multi_select",
-                body=qd["body"],
-                expected_answer=qd["expected"],
-                expected_keywords=item["keywords"],
-                construct_key=f"{item['slug']}_definition",
-                variant_key=f"{phase}_v1",
-                options=qd["options"],
-            )
+            variants = item["questions"][phase] if phase == "retest" else [item["questions"]["pretest"]]
+            for qd in variants:
+                _upsert_question(
+                    db,
+                    term,
+                    phase=phase,
+                    question_type="multi_select" if phase == "pretest" else "retest_multi_select",
+                    body=qd["body"],
+                    expected_answer=qd["expected"],
+                    expected_keywords=item["keywords"],
+                    construct_key=f"{item['slug']}_definition",
+                    variant_key=qd["variant_key"],
+                    options=qd["options"],
+                )
 
         _upsert_question(
             db,
@@ -115,7 +116,7 @@ def seed_database(db: Session) -> None:
             variant_key="l0_check_v1",
         )
 
-        final_q = item["questions"].get("pretest")
+        final_q = item["questions"].get("final_test")
         if final_q:
             _upsert_question(
                 db,
@@ -126,7 +127,7 @@ def seed_database(db: Session) -> None:
                 expected_answer=final_q["expected"],
                 expected_keywords=item["keywords"],
                 construct_key=f"{item['slug']}_final_test",
-                variant_key="final_test_v1",
+                variant_key=final_q["variant_key"],
                 options=final_q["options"],
             )
 
@@ -145,6 +146,7 @@ def seed_database(db: Session) -> None:
     for term in db.query(Term).all():
         if term.slug not in active_slugs:
             term.is_active = False
+            db.query(Question).filter(Question.term_id == term.id).update({Question.is_active: False}, synchronize_session=False)
     db.commit()
 
 

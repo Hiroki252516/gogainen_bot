@@ -1,68 +1,43 @@
 # 18. Implementation Blueprint
 
-現行実装の構成を示す。新規実装時はこの構成を正とし、独自の別アーキテクチャへ分岐しない。
-
 ## Backend
 
 - FastAPI entrypoint: `backend/app/main.py`
-- DB初期化: `backend/app/db/session.py`
-- Models: `backend/app/models/__init__.py`
-- Experiment services: `backend/app/services/experiment.py`
-- Seed: `backend/app/seed/data.py`, `backend/app/seed/seed_questions.py`
-- AI backend protocol: `backend/app/ai/backend.py`
-- Codex app-server backend: `backend/app/ai/codex_app_server_backend.py`
+- Experiment service: `backend/app/services/experiment.py`
+- YAML loader: `backend/app/seed/content_loader.py`
+- YAML seed: `backend/app/seed/content/learning_content.yml`
+- DB seed: `backend/app/seed/seed_questions.py`
+- AI protocol: `backend/app/ai/backend.py`
+- Codex backend: `backend/app/ai/codex_app_server_backend.py`
 - Mock backend: `backend/app/ai/mock_backend.py`
+- Runtime taxonomy: `backend/app/ai/misconception_taxonomy.py`
+- RAG retriever: `backend/app/rag/retriever.py`
 
-`init_db()` は `create_all()` に加えてSQLite/PostgreSQLの既存DBへ不足カラムを追加する軽量スキーマ更新を行う。Alembicマイグレーションだけに依存しない。
+`init_db()` とseed処理は既存DB・既存ログを削除しない。旧Termは非アクティブ化し、新規のTerm/question queryから除外する。
 
 ## Frontend
 
-- Main flow pages: `/start`, `/pretest`, `/diagnosing`, `/learning-targets`, `/learning/[termSlug]`, `/retest`, `/final-test`, `/survey`, `/finish`
-- Admin page: `/admin`
+- Main pages: `/start`, `/pretest`, `/diagnosing`, `/learning-targets`, `/learning/[termSlug]`, `/retest`, `/final-test`, `/survey`, `/l0-check`, `/finish`
 - Test runner: `frontend/components/QuestionRunner.tsx`
-- API helper: `frontend/lib/api.ts`
+- Learning page: `frontend/app/learning/[termSlug]/page.tsx`
 
-frontendはブラウザから相対パス `/api/...` を呼び、Next.js rewriteがbackendへプロキシする。Dockerではfrontendからbackendへ `INTERNAL_API_BASE_URL` を使う。
-
-## Experiment Flow
+## Experiment flow
 
 1. 参加者作成
-2. 事前テスト2問
+2. 3用語のpretest
 3. 診断と学習対象選択
-4. 未達用語だけ学習
-5. 再テストは事前テスト対象の全問
-6. 正答用語は学習対象から外し、誤答用語だけ残す
-7. 未達0件で最終テスト2問
-8. 採点後 `/survey`
+4. 未達用語の学習・確認問題
+5. 用語ごとのretest（v1〜v4、以後v4再利用）
+6. 未達があれば対象を絞って反復
+7. 3用語のfinal_test
+8. `/survey`
 
-現行seedは `transformer` の1語である。pretest・retest・final_test・学習内確認問題は同一問題文と同一10択セットを使う。
+learning確認はstage・用語ごとにv1〜v5を使う。`construct_key` と `variant_key` で既存DBモデルと互換性を保つ。
 
-## Logging
+## RAG
 
-- `attempts`: テスト回答、選択肢、正誤、誤概念、出題時刻、回答時刻、回答時間、問題スナップショット
-- `tutor_turns`: 学習ターン、教材、学習内回答、十分性判定、学習ステージ、出題時刻、回答時刻、回答時間
-- `answer_history`: API/CSV/管理画面上の統合ビュー。物理テーブルではない
-- `ai_call_logs`: Codex app-serverまたはMockのAI呼び出し記録
-- `recurrence_events`: 同種誤概念再発
-- `evaluation_summaries`: `pretest_score`, `retest_score`, `l0_correct_rate`, 再発率などの保存値。`l0_correct_rate` は互換名で、現行MVPでは `final_test` 正答率を入れる
+`rag_agent_knowledge_base/` はDockerからread-onlyで参照する。`retriever.py` は `chunks.jsonl`、`embeddings_sparse.npz`、`retrieval_model.joblib` を読み、用語ごとのallowed sectionとLangGraph除外を適用する。
 
-CSVの回答行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` とする。
+## AI backend
 
-事前テスト、再テスト1、再テスト2、最終テストの得点率推移と誤概念推移は、次段のログ拡張として扱う。現時点では `attempts` と `answer_history` から再計算できることを優先する。
-
-## AI Backend
-
-通常実行は `AI_BACKEND=codex_app_server` を使う。ホスト側で次を起動する。
-
-```bash
-codex app-server --listen ws://127.0.0.1:4500
-```
-
-OpenAI APIキーやOpenAI SDKの直接呼び出しは使わない。app-server未接続・未ログイン時はMockへ自動フォールバックせず、失敗を管理画面と `ai_call_logs` に残す。
-
-## Verification
-
-- backend: `./.venv/bin/python -m pytest -s tests/test_experiment_flow.py`
-- frontend smoke: Windows Nodeで `frontend/tests/smoke.mjs`
-- Docker: `docker compose up --build`
-- Admin: `http://localhost:3000/admin`
+通常実行は `AI_BACKEND=codex_app_server`、モデルは `gpt-5.6-luna`、推論レベルは `medium` とする。OpenAI APIキーやOpenAI SDKの直接呼び出しは使わない。app-server未接続時はMockへフォールバックせず、失敗を管理画面と `ai_call_logs` に残す。

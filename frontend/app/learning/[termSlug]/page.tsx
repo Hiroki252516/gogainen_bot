@@ -5,12 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { api, requireParticipant } from "@/lib/api";
 
-type SessionMisconception = {
-  label: string;
-  misconception_type?: string | null;
-  reason?: string | null;
-};
-
 type Option = { option_id: string; label: string; body: string };
 type PracticeItem = {
   component_term: string;
@@ -36,12 +30,6 @@ type Turn = {
   component_index?: number;
   component_total?: number;
   scaffolding_level?: string;
-  initial_misconception_type?: string | null;
-  misconception_type?: string | null;
-  latest_learning_misconception_type?: string | null;
-  latest_learning_misconception_reason?: string | null;
-  session_misconception_history?: SessionMisconception[];
-  teaching_strategy?: string;
 };
 
 type ItemResult = {
@@ -74,11 +62,6 @@ type Feedback = {
   max_turns: number;
   item_results?: ItemResult[];
 };
-
-function judgementLabel(feedback: Feedback | null) {
-  if (!feedback) return "未判定";
-  return feedback.is_sufficient ? "十分" : "不十分";
-}
 
 function learningStageLabel(stage?: string, backendLabel?: string) {
   if (backendLabel) return backendLabel;
@@ -214,8 +197,6 @@ export default function LearningPage() {
         scaffolding_level: data.next_scaffolding_level,
         learning_stage: data.next_learning_stage || turn.learning_stage,
         component_index: data.next_component_index ?? turn.component_index,
-        latest_learning_misconception_type: data.learning_misconception_type ?? turn.latest_learning_misconception_type,
-        latest_learning_misconception_reason: data.learning_misconception_reason ?? turn.latest_learning_misconception_reason
       };
       setTurn(updatedTurn);
       setFeedback(data);
@@ -262,20 +243,6 @@ export default function LearningPage() {
               <p>対象概念: {turn.term_label || termSlug}</p>
               <p>段階: {learningStageLabel(turn.learning_stage, turn.learning_stage_label)}</p>
               <p>{turn.learning_stage === "enrichment" ? "不足知識を補います" : "誤った捉え方を見直します"}</p>
-            </div>
-            <div className="notice">
-              <strong>デバッグ</strong>
-              <p>事前テスト由来の誤概念: {turn.initial_misconception_type || turn.misconception_type || "none"}</p>
-              <p>学習内の現在判定: {feedback?.learning_misconception_type || turn.latest_learning_misconception_type || "未判定"}</p>
-              <p>learning_stage: {feedback?.next_learning_stage || turn.learning_stage || "none"}</p>
-              <p>回答判定: {judgementLabel(feedback)}</p>
-              <p className="muted">teaching_strategy: {turn.teaching_strategy || "none"}</p>
-              {turn.session_misconception_history?.length ? (
-                <p className="muted">
-                  学習内判定履歴: {turn.session_misconception_history.map((item) => `${item.label} ${item.misconception_type || "none"}`).join(" / ")}
-                </p>
-              ) : null}
-              {feedback?.learning_misconception_reason ? <p className="muted">学習内判定理由: {feedback.learning_misconception_reason}</p> : null}
             </div>
             {feedback ? (
               <>

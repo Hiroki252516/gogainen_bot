@@ -2,7 +2,7 @@
 
 このリポジトリは、卒業研究で使う「誤概念タイプと学習ステージに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 
-`docs/` 以下に研究・設計仕様、`backend/` にFastAPIアプリ、`frontend/` にNext.jsアプリがあります。現行MVPの対象用語は、LLMの学習段階とTransformerの2語です。
+`docs/` 以下に研究・設計仕様、`backend/` にFastAPIアプリ、`frontend/` にNext.jsアプリがあります。現行MVPの対象用語は、`llm_knowledge`、`multi_agent`、`memory_process` の3項目です。
 
 ## 研究の要点
 
@@ -14,7 +14,11 @@
 2. 最終テスト正答率
 3. 回答時間
 
-現行MVPでは、最終テストは `llm_training_process` と `transformer` の2語すべてを対象にした選択式テストです。`l0_check` は互換・補助フェーズとして残っていますが、主導線は `/final-test` です。
+現行MVPでは、最終テストは上記3項目を対象にした選択式テストです。`l0_check` は互換・補助フェーズとして残っていますが、主導線は `/final-test` です。
+
+問題は `backend/app/seed/content/learning_content.yml` で管理します。事前・最終テストは各項目1問、再テストは4バリエーション（5回目以降はv4を再利用）、学習確認問題は5バリエーション（6回目以降はv5を再利用）です。各問題はA〜Jの10選択肢で、A〜Cが正答、D〜FがM1、G〜IがM3、Jが「わからない」です。
+
+教材生成では、両群が `rag_agent_knowledge_base/` の共通RAG本文を参照します。提案群だけが学習ログ・誤概念分類・足場掛け情報を利用し、統制群には個人の履歴やtaxonomyを渡しません。LangGraph関連のチャンクは対象外です。
 
 ## 実装で守る前提
 
@@ -28,7 +32,7 @@
 - 回答、出題時刻、回答時刻、回答時間、AI診断、AI応答、学習ステージ更新を研究ログとして保存する
 - 管理画面とCSVでは、テスト回答と学習ターン回答を `answer_history` として同じ回答履歴に統合する
 - 実験分析に必要なCSVを出力できるようにする
-- 再テストは毎回、事前テスト対象の2用語すべてを出題し、採点後に次周回の学習対象だけを未達用語へ絞る
+- 再テストは毎回、事前テスト対象の3項目すべてを出題し、採点後に次周回の学習対象だけを未達項目へ絞る
 
 ## 推奨構成
 
@@ -85,7 +89,7 @@ docker compose up --build
 - backend health: http://localhost:8000/api/health
 - admin: http://localhost:3000/admin
 
-DockerではPostgreSQLを使用します。現行composeではbackendをhost networkで動かし、Codex app-serverへ `ws://127.0.0.1:4500` で接続します。初期seedはbackend起動時に自動投入されます。
+DockerではPostgreSQLを使用します。Docker Desktop for Mac上のbackendはbridgeネットワークで動き、Codex app-serverへ `ws://host.docker.internal:4500` で接続します。`rag_agent_knowledge_base/` はread-onlyでbackendへマウントされ、初期seedはYAMLを検証したうえでbackend起動時に自動投入されます。
 
 ### ローカル開発
 
@@ -128,11 +132,20 @@ Docker Composeではbackendコンテナからホストへ接続するため、�
 
 ```env
 AI_BACKEND=codex_app_server
-CODEX_APP_SERVER_URL=ws://127.0.0.1:4500
+CODEX_APP_SERVER_URL=ws://host.docker.internal:4500
 CODEX_APP_SERVER_CWD=/tmp
+CODEX_MODEL=gpt-5.6-luna
+CODEX_REASONING_EFFORT=medium
+RAG_BASE_DIR=/rag_agent_knowledge_base
 ```
 
 ローカルでbackendを直接起動する場合も `CODEX_APP_SERVER_URL=ws://127.0.0.1:4500` を使います。`MockAIBackend` は `AI_BACKEND=mock` を明示したテスト用途に限ります。app-serverが未起動または未ログインの場合、AI呼び出しはMockへ自動フォールバックせず、`ai_call_logs` に失敗として記録されます。
+
+## トラブルシューティング
+
+- Macでbackendだけ `http://localhost:8000` に接続できない場合は、`docker-compose.yml` がbackendの `ports: "8000:8000"`、DBの接続先 `db:5432`、app-serverの接続先 `host.docker.internal:4500` を使っているか確認します。
+- `/api/admin/ai/status` が未接続なら、Macホスト側で `codex app-server --listen ws://127.0.0.1:4500` が起動しているか確認します。
+- AI呼び出しが `usageLimitExceeded` で503になる場合は、ChatGPT/Codexアカウントの利用枠が回復してから再実行します。通常実行ではMockへ自動切替しません。
 
 ## 管理画面ログとCSV
 

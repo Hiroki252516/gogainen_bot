@@ -14,7 +14,7 @@
 | 誤概念タイプで支援を変える | `03_misconception_taxonomy.md`, `04_scaffolding_and_tutoring.md` | teaching_strategy |
 | 足場掛けは支えるだけでなく段階を記録する | `04_scaffolding_and_tutoring.md` | learning_stage, scaffolding_level L3/L2互換ログ |
 | 同じ誤概念が再発したら方略変更 | `02_experiment_flow.md`, `04_scaffolding_and_tutoring.md` | recurrence_events, strategy_changed |
-| L2・再テスト・最終テストで同一問題を使う | `11_seed_questions.md` | construct_key, variant_key |
+| YAMLの問題variantを段階ごとに使う | `11_seed_questions.md` | construct_key, variant_key |
 | 遅延再テストも可能 | `02_experiment_flow.md`, `07_data_model.md` | delayed_retest phase |
 | ログDBとCSVで分析する | `07_data_model.md`, `12_evaluation_metrics.md` | export endpoints |
 
@@ -29,13 +29,15 @@
 - 適用条件誤解型
 - 表層キーワード依存型
 
-5月25日の更新案では、先行研究に基づく独自の分析枠組みとして、次の4分類へ整理された。
+現行の研究計画では、先行研究に基づく知識構造の粒度として次の4分類を使う。
 
 - M1: 誤信念型
+- M2: 欠陥メンタルモデル型
 - M3: カテゴリー錯誤型
+- M4: 欠如したスキーマ型
 - unknown: 知識不足
 
-実装は今回のMVP分類としてM1/M3/unknownを採用する。M2/M4は互換値として残すが新規生成しない。
+固定問題の選択肢はM1/M3/unknownを診断対象とし、M2/M4はAI内部taxonomyとして保持する。taxonomyの実行時定義は `backend/app/ai/misconception_taxonomy.py` にある。
 
 ## Research Questions to Data
 
@@ -54,7 +56,7 @@
 主要出力:
 
 - same_misconception_recurrence_rate
-- m1/m2/m3 recurrence rate
+- M1〜M4 recurrence rate
 
 ### RQ2
 
@@ -118,11 +120,11 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 
 ## PPTX Details Captured
 
-- 現行MVPのTransformer、LLM学習段階の問題例は `11_seed_questions.md` に反映する
-- Attention、事前学習、事後学習など単独用語は過去仕様・拡張候補として扱う
+- 現行MVPの3用語の問題は `backend/app/seed/content/learning_content.yml` に反映する
+- Transformer等の旧用語は過去ログ・DB互換用として非アクティブ化する
 - Problem phase separation from 5月25日 slide 22/23 is reflected in `02_experiment_flow.md`
-- "same problem should not be reused" is implemented through `construct_key` and `variant_key`
-- 教材参照は `rag_ready_教材` のローカルTF-IDF RAG資産として実装する
+- 問題バリエーションの再利用上限は `construct_key` と `variant_key`、YAMLのvariant定義で管理する
+- 教材参照は `rag_agent_knowledge_base` のローカルRAG資産として実装し、用語別sectionとLangGraph除外を適用する
 - "足場掛けはどうやってやるのか" is answered in `04_scaffolding_and_tutoring.md`
 
 ## Remaining Research Decisions

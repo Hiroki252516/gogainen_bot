@@ -25,19 +25,23 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+psycopg://app:app@127.0.0.1:5432/ai_tutor
+      DATABASE_URL: postgresql+psycopg://app:app@db:5432/ai_tutor
       AI_BACKEND: codex_app_server
-      CODEX_APP_SERVER_URL: ws://127.0.0.1:4500
+      CODEX_APP_SERVER_URL: ws://host.docker.internal:4500
       CODEX_WS_TOKEN_FILE: /run/secrets/codex_ws_token
       CODEX_APP_SERVER_CWD: /tmp
       CODEX_TURN_TIMEOUT_SEC: "120"
-      CODEX_REASONING_EFFORT: low
-      MAX_LEARNING_TARGETS: "5"
+      CODEX_MODEL: gpt-5.6-luna
+      CODEX_REASONING_EFFORT: medium
+      RAG_BASE_DIR: /rag_agent_knowledge_base
+      MAX_LEARNING_TARGETS: "3"
       MAX_TURNS_PER_TERM: "3"
       RANDOM_SEED: "20260525"
-    network_mode: host
     volumes:
       - ./exports:/app/exports
+      - ./rag_agent_knowledge_base:/rag_agent_knowledge_base:ro
+      # 旧RAG資産のマウントは互換用に残してもよいが、新規実行では上の
+      # rag_agent_knowledge_baseだけを参照する。
       - ./.local/codex-ws-token:/run/secrets/codex_ws_token:ro
     depends_on:
       - db
@@ -86,7 +90,7 @@ codex app-server \
   --ws-token-file "$(pwd)/.local/codex-ws-token"
 ```
 
-現行Docker Composeではbackendを `network_mode: host` で動かし、backendから `ws://127.0.0.1:4500` へ接続する。
+Docker Desktop for Mac上のbackendはbridgeネットワークで動かし、backendから `ws://host.docker.internal:4500` へ接続する。ローカルでbackendを直接起動する場合は `ws://127.0.0.1:4500` を使う。
 
 ## .env.example
 
@@ -96,11 +100,12 @@ DATABASE_URL=sqlite:///./.local/app.db
 AI_BACKEND=codex_app_server
 CODEX_APP_SERVER_URL=ws://127.0.0.1:4500
 CODEX_WS_TOKEN_FILE=/run/secrets/codex_ws_token
-CODEX_MODEL=
+CODEX_MODEL=gpt-5.6-luna
 CODEX_APP_SERVER_CWD=/tmp
 CODEX_TURN_TIMEOUT_SEC=120
-CODEX_REASONING_EFFORT=low
-MAX_LEARNING_TARGETS=5
+CODEX_REASONING_EFFORT=medium
+RAG_BASE_DIR=./rag_agent_knowledge_base
+MAX_LEARNING_TARGETS=3
 MAX_TURNS_PER_TERM=3
 RANDOM_SEED=20260525
 EXPORT_DIR=/app/exports

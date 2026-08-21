@@ -170,7 +170,7 @@ sequenceDiagram
 
 ### 方式A: host Codex app-server
 
-Macホスト上でCodexをログイン・起動する。現行Docker Composeではbackendを `network_mode: host` で動かし、backendから `ws://127.0.0.1:4500` へ接続する。MVPではこの方式を優先する。
+Macホスト上でCodexをログイン・起動する。Docker Desktop for Mac上のbackendはbridgeネットワークで動かし、backendから `ws://host.docker.internal:4500` へ接続する。MVPではこの方式を優先する。
 
 ### 方式B: codex sidecar container
 
@@ -194,12 +194,14 @@ MVPではキューを導入しない。AI診断やCSV出力は同期APIでよい
 | `APP_ENV` | `development` | 実行環境 |
 | `DATABASE_URL` | `sqlite:///./.local/app.db` | ローカル既定DB接続。Docker ComposeではPostgreSQLを指定する |
 | `AI_BACKEND` | `codex_app_server` | 通常実行のAI実装。`mock` はテスト時のみ明示指定 |
-| `CODEX_APP_SERVER_URL` | `ws://127.0.0.1:4500` | app-server接続先。現行Docker Composeはbackendをhost networkで動かす |
+| `CODEX_APP_SERVER_URL` | `ws://127.0.0.1:4500` | app-server接続先。Docker Composeでは `ws://host.docker.internal:4500` を使う |
 | `CODEX_WS_TOKEN_FILE` | `/run/secrets/codex_ws_token` | capability token |
 | `CODEX_APP_SERVER_CWD` | `/tmp` | app-server threadの作業ディレクトリ |
 | `CODEX_TURN_TIMEOUT_SEC` | `120` | AI応答タイムアウト |
-| `CODEX_REASONING_EFFORT` | `low` | turn/startのreasoning effort |
-| `MAX_LEARNING_TARGETS` | `5` | 学習対象数の上限。現行seedはTransformer 1用語 |
+| `CODEX_MODEL` | `gpt-5.6-luna` | Codex app-serverへ渡すモデル |
+| `CODEX_REASONING_EFFORT` | `medium` | turn/startのreasoning effort |
+| `RAG_BASE_DIR` | `./rag_agent_knowledge_base` | read-only RAG資産のルート |
+| `MAX_LEARNING_TARGETS` | `3` | 学習対象数の上限。現行seedは3用語 |
 | `MAX_TURNS_PER_TERM` | `3` | 1用語あたり最大ターン数 |
 | `RANDOM_SEED` | `20260525` | 再現性のあるランダム化 |
 

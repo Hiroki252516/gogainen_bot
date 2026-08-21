@@ -28,7 +28,7 @@ app-serverは実験用LLM APIではなくCodex rich client向けプロトコル�
 1. MacホストにCodex CLIをインストールする
 2. `codex` または `codex login` で ChatGPT にログインする
 3. ホスト上で `codex app-server --listen ws://127.0.0.1:4500` を起動する
-4. 現行Docker Composeではbackendをhost networkで起動し、backendから `ws://127.0.0.1:4500` に接続する
+4. Docker Desktop for Mac上のbackendから `ws://host.docker.internal:4500` に接続する
 
 ### セキュリティ
 
@@ -150,7 +150,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
   "method": "thread/start",
   "id": 10,
   "params": {
-    "model": null,
+    "model": "gpt-5.6-luna",
     "cwd": "/tmp",
     "approvalPolicy": "never",
     "sandbox": "read-only",
@@ -160,7 +160,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 }
 ```
 
-モデル名はCodex環境に依存するため、固定文字列をハードコードしない。`.env` の `CODEX_MODEL` が空ならCodex側の既定値を使う。
+モデルは設定値 `CODEX_MODEL` から渡し、現行実験設定は `gpt-5.6-luna` とする。
 
 `cwd` は既定で `/tmp` にする。アプリが研究仕様リポジトリ配下の `AGENTS.md` をAIタスクへ混入させないためである。
 
@@ -180,7 +180,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
     ],
     "approvalPolicy": "never",
     "sandboxPolicy": { "type": "readOnly", "networkAccess": false },
-    "effort": "low",
+    "effort": "medium",
     "outputSchema": {
       "type": "object",
       "properties": {
@@ -198,7 +198,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 
 `outputSchema` が使えない、または不安定な場合は、プロンプトでJSONのみ返すようにし、backendでJSON抽出・検証・再試行する。
 
-`effort=minimal` はapp-server側のツール定義と衝突する場合があるため、既定は `low` とする。
+現行実験設定の推論レベルは `medium` とする。app-server側のschemaが変わった場合は、その時点のschemaに合わせてpayloadを検証する。
 
 ## ストリーミング処理
 

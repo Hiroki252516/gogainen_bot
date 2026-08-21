@@ -23,12 +23,14 @@ const learningPage = fs.readFileSync(new URL("../app/learning/[termSlug]/page.ts
 if (learningPage.includes("{feedback ? <div className=\"notice\">{feedback.feedback}</div>")) {
   throw new Error("learning page must not show standalone feedback after submit");
 }
-if (!learningPage.includes("<strong>デバッグ</strong>")) {
-  throw new Error("learning page must show debug panel in the normal participant view");
+for (const forbiddenText of ["<strong>デバッグ</strong>", "事前テスト由来の誤概念:", "学習内の現在判定:", "teaching_strategy:"]) {
+  if (learningPage.includes(forbiddenText)) {
+    throw new Error(`learning page must not expose internal debug text: ${forbiddenText}`);
+  }
 }
-for (const expectedText of ["事前テスト由来の誤概念:", "学習内の現在判定:", "learning_stage:", "teaching_strategy:"]) {
+for (const expectedText of ["今回の学習", "対象概念:", "教材", "問題", "回答を確認中..."]) {
   if (!learningPage.includes(expectedText)) {
-    throw new Error(`learning page missing debug text: ${expectedText}`);
+    throw new Error(`learning page missing participant-facing learning text: ${expectedText}`);
   }
 }
 if (learningPage.includes("足場掛けレベル:")) {
@@ -37,7 +39,7 @@ if (learningPage.includes("足場掛けレベル:")) {
 if (learningPage.includes("ターン: {turn.turn_index}")) {
   throw new Error("learning page must not show fixed turn progress in stage-based UI");
 }
-for (const expectedText of ["対象概念:", "学習内判定履歴:", "回答判定:", "教材フィードバック", "judgementLabel(feedback)"]) {
+for (const expectedText of ["対象概念:", "教材フィードバック", "item_results", "次の確認へ"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing final feedback/debug update behavior: ${expectedText}`);
   }

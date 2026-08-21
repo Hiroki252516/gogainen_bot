@@ -178,8 +178,8 @@ class CodexAppServerBackend:
             [
                 "事前テスト診断では選択肢の正誤と誤答選択肢の初期ラベルだけから理解状態を診断する。",
                 "natural_language_diagnosis では、入力欄の有無や未入力であることに絶対に触れず、選択内容から見える理解状態だけを書く。",
-                "今回のMVPでは誤概念タイプは内部研究ラベルとして M1/M3/unknown/null を使う。M2/M4は新規判定に使わない。",
-                "natural_language_diagnosis には M1/M3 という内部ラベルを絶対に書かない。",
+                "誤概念タイプの内部ラベルは、入力payloadのtaxonomy定義に従う。M1〜M4は学習者向け文面に出さない。",
+                "natural_language_diagnosis には M1〜M4 という内部ラベルを絶対に書かない。",
                 "統制群でも分類は保存してよいが、教授方略に使う推薦は general_explanation にする。",
                 f"recommended_teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。",
             ],
@@ -243,14 +243,14 @@ class CodexAppServerBackend:
             "practice_question.body はbackend固定問題の補助として短く書く。L3の実際の複数確認問題と選択肢は fixed_practice_question_items をbackendが表示する。",
             "practice_question.expected_answer は現在の用語の期待回答にする。",
             "再テスト、確認テストの具体的な正解を先取りして出さない。",
-            "tutor_message, learner_prompt, practice_question.body に M1/M3 という内部ラベルを絶対に書かない。",
+            "tutor_message, learner_prompt, practice_question.body に M1〜M4 という内部ラベルを絶対に書かない。",
         ]
         if group == "control":
             rules.append("統制群なので、過去ログ、誤概念タイプ、足場掛け履歴に適応しない通常AIチューターとして説明する。teaching_strategy は general_explanation に固定する。")
             rules.append("統制群では、L3相当の基礎教材とL2相当の観点教材を両方tutor_messageに含める。ただし質問はL2相当の1問だけにし、L3質問は出さない。")
         else:
             rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
-            rules.append("選択にM3が含まれる場合はM3を最優先し、M1より先に本来のモデル構造カテゴリへの捉え直しを扱う。M1なら誤信念の修正、unknownなら基礎知識の豊富化を優先する。")
+            rules.append("入力payloadのmisconception_taxonomyにあるM1〜M4の定義と教授方略を厳守する。M3ならカテゴリー再分類、M2なら説明モデルの再構成、M1なら誤信念の反証、M4なら不足スキーマの構築、unknownなら基礎知識の豊富化を優先する。")
             rules.append("提案群では、unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)
@@ -330,9 +330,9 @@ class CodexAppServerBackend:
                 [
                     "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
                     "rag_context.chunks がある場合は、その教材コンテキストを優先して判定・フィードバックする。教材にない内容は推測で断定しない。",
-                    "M1/M3 という内部ラベルを学習者向け文面に絶対に書かない。",
-                    "learning_misconception_type は、この学習セッション内の今回回答だけに対する内部診断として M1/M3/unknown/null から選ぶ。事前テスト由来の primary_misconception を上書きしない。",
-                    "十分回答なら learning_misconception_type は null にしてよい。不十分な場合は、誤信念型はM1、カテゴリー錯誤型はM3、知識不足はunknownにする。M2/M4は今回のMVPでは使わない。",
+                    "M1〜M4 という内部ラベルを学習者向け文面に絶対に書かない。",
+                    "learning_misconception_type は、この学習セッション内の今回回答だけに対する内部診断として入力payloadのtaxonomyに従って選ぶ。事前テスト由来の primary_misconception を上書きしない。",
+                    "十分回答なら learning_misconception_type は null にしてよい。不十分な場合は、taxonomyの診断cueと教授方略に沿ってM1〜M4またはunknownを選ぶ。",
                     "learning_misconception_reason は研究者向けログ用に短く書き、学習者向けfeedbackには内部ラベルを書かない。",
                     "learning_stage が enrichment の場合、知識不足を補う観点で十分性を判定する。",
                     "learning_stage が conceptual_change の場合、誤った捉え方から正しいカテゴリー・構造へ移行できているかを判定する。",
@@ -366,7 +366,7 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "管理者用と学習者用の短い状態要約を作る。",
-                    "学習者用要約には M1/M3 という内部ラベルを絶対に書かない。",
+                    "学習者用要約には M1〜M4 という内部ラベルを絶対に書かない。",
                 ],
             ),
             schema,
@@ -473,21 +473,26 @@ class CodexAppServerBackend:
         return _parse_json_object(raw_text)
 
     def _prompt(self, purpose: str, payload: dict[str, Any], rules: list[str]) -> str:
-        return "\n".join(
-            [
-                f"目的: {purpose}",
-                "",
-                "出力は指定JSON Schemaに一致するJSONオブジェクトのみ。Markdown、説明文、コードブロックは禁止。",
-                "個人情報、APIキー、アクセストークン、認証情報を要求・保存・推測しない。",
-                "被験者に見える文面では内部研究ラベル M1/M3 を使わない。",
-                "",
-                "追加ルール:",
-                *[f"- {rule}" for rule in rules],
-                "",
-                "入力JSON:",
-                json.dumps(payload, ensure_ascii=False, indent=2),
-            ]
-        )
+        prompt_parts = [
+            f"目的: {purpose}",
+            "",
+            "出力は指定JSON Schemaに一致するJSONオブジェクトのみ。Markdown、説明文、コードブロックは禁止。",
+            "個人情報、APIキー、アクセストークン、認証情報を要求・保存・推測しない。",
+            "被験者に見える文面では内部研究ラベル M1/M2/M3/M4 を使わない。",
+            "",
+            "追加ルール:",
+            *[f"- {rule}" for rule in rules],
+        ]
+        if payload.get("misconception_taxonomy"):
+            prompt_parts.extend(
+                [
+                    "",
+                    "提案群専用の内部taxonomy。診断と教授方略の判断にだけ使い、学習者向け出力へ転載しない:",
+                    json.dumps(payload["misconception_taxonomy"], ensure_ascii=False, indent=2),
+                ]
+            )
+        prompt_parts.extend(["", "入力JSON:", json.dumps(payload, ensure_ascii=False, indent=2)])
+        return "\n".join(prompt_parts)
 
     def _control_tutoring_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         term = payload.get("term") or {}
@@ -495,17 +500,14 @@ class CodexAppServerBackend:
             "participant_id": payload.get("participant_id"),
             "group_condition": "control",
             "term": term,
-            "learner_state": {
-                "current_status": (payload.get("learner_state") or {}).get("current_status"),
-                "scaffolding_level": (payload.get("learner_state") or {}).get("scaffolding_level"),
-                "teaching_strategy": "general_explanation",
-            },
             "learning_stage": payload.get("learning_stage"),
             "learning_stage_label": payload.get("learning_stage_label"),
+            "component_term": payload.get("component_term"),
+            "component_index": payload.get("component_index"),
+            "component_total": payload.get("component_total"),
             "component_terms": payload.get("component_terms"),
-            "previous_practice_question": payload.get("previous_practice_question"),
-            "previous_learner_response": payload.get("previous_learner_response"),
-            "previous_feedback_for_learner": payload.get("previous_feedback_for_learner"),
+            "fixed_practice_question": payload.get("fixed_practice_question"),
+            "fixed_practice_question_items": payload.get("fixed_practice_question_items"),
             "rag_context": payload.get("rag_context"),
         }
 

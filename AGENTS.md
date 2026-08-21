@@ -16,7 +16,7 @@
 - 被験者画面に `M1`、`M2`、`M3`、`M4` を直接表示しない。
 - 再テスト、最終テスト、L0確認ではチャット、ヒント、即時正解表示を禁止する。
 - 2026-06-22時点の現行実装では、ユーザー指定を優先し、L2概念理解問題・再テスト・最終テストで同一の問題文と選択肢セットを使う。
-- 現行MVP対象用語は `llm_training_process` と `transformer` とする。
+- 現行MVP対象用語は `llm_knowledge`、`multi_agent`、`memory_process` の3項目とする。
 
 ## AI Backend Rules
 

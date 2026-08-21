@@ -1,0 +1,35 @@
+{
+  "format": "portable-rag-pack-v2",
+  "language": "ja",
+  "chunk_count": 32,
+  "embedding": {
+    "method": "Japanese char n-gram (2-5) hashing + corpus TF-IDF",
+    "dimensions": 8192,
+    "dtype": "float32",
+    "normalized": true,
+    "dense_file": "embeddings.npy",
+    "sparse_file": "embeddings_sparse.npz",
+    "query_model": "retrieval_model.joblib",
+    "external_api_used": false,
+    "semantic_neural_model": false,
+    "note": "Offline/reproducible lexical vector embedding. Strong for Japanese technical terms/proper nouns; replace with a neural embedding model if broader semantic recall is required."
+  },
+  "sources": [
+    {
+      "doc_id": "doc01",
+      "original_name": "message (3)(1).txt",
+      "packaged_name": "source_01.txt",
+      "sha256": "a495f46bcf1d28b09e04b0a9f358dba4fff447b5488e35ab9e72a344b80ef17b",
+      "line_count": 234,
+      "char_count": 8451
+    },
+    {
+      "doc_id": "doc02",
+      "original_name": "message (4)(1).txt",
+      "packaged_name": "source_02.txt",
+      "sha256": "ce02619fc2cae4f6cd67ed14beb0679762154074820d63f9af35c7c2c869b04f",
+      "line_count": 105,
+      "char_count": 2057
+    }
+  ]
+}

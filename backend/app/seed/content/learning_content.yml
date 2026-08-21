@@ -1,0 +1,155 @@
+version: 1
+selection_policy:
+  option_count: 10
+  correct_labels: [A, B, C]
+  misconception_labels:
+    M1: [D, E, F]
+    M3: [G, H, I]
+  unknown_label: J
+  classification_priority: [M3, M1, unknown]
+
+option_sets:
+  llm_knowledge: &llm_knowledge_options
+    - {label: A, body: "事前学習は、大規模で多様なデータから言語パターンや一般的知識の基盤を獲得する方法である。", is_correct: true, misconception_type: null}
+    - {label: B, body: "RAGは、回答時に外部文書を検索し、その内容をモデルへの文脈として利用する方法である。", is_correct: true, misconception_type: null}
+    - {label: C, body: "プロンプトエンジニアリングは、指示や入力の構成を工夫して、望ましい応答を引き出す方法である。", is_correct: true, misconception_type: null}
+    - {label: D, body: "RAGを使うと、検索した文書の内容がその場でモデルの重みに恒久的に書き込まれる。", is_correct: false, misconception_type: M1}
+    - {label: E, body: "プロンプトエンジニアリングを行えば、モデルの学習済み重みそのものが更新される。", is_correct: false, misconception_type: M1}
+    - {label: F, body: "ファインチューニングは、入力文の書き方を少し変えるだけで、訓練データを使わない。", is_correct: false, misconception_type: M1}
+    - {label: G, body: "RAGは、モデル内部に知識を保存するための重み更新そのものである。", is_correct: false, misconception_type: M3}
+    - {label: H, body: "プロンプトエンジニアリングは、外部文書を検索するデータベースという種類の仕組みである。", is_correct: false, misconception_type: M3}
+    - {label: I, body: "事前学習は、利用者が回答を検索するための画面やアプリケーションである。", is_correct: false, misconception_type: M3}
+    - {label: J, body: "わからない。", is_correct: false, misconception_type: unknown}
+
+  multi_agent: &multi_agent_options
+    - {label: A, body: "マルチエージェントでは、複数のエージェントが役割分担しながら課題に取り組める。", is_correct: true, misconception_type: null}
+    - {label: B, body: "エージェント間の情報共有や結果の受け渡しを設計すると、複数の処理を連携させられる。", is_correct: true, misconception_type: null}
+    - {label: C, body: "複雑な課題を分解し、調査・計画・実行などの役割ごとに処理させることができる。", is_correct: true, misconception_type: null}
+    - {label: D, body: "プロンプトを複数書けば、役割分担や情報交換がなくても必ずマルチエージェントになる。", is_correct: false, misconception_type: M1}
+    - {label: E, body: "マルチエージェントでは、すべてのエージェントが常に同じ回答を出さなければならない。", is_correct: false, misconception_type: M1}
+    - {label: F, body: "エージェントが一度得た情報は、設計に関係なく永久に正しい記憶として保持される。", is_correct: false, misconception_type: M1}
+    - {label: G, body: "マルチエージェントとは、単一の巨大なモデルを一つの処理として実行する方式である。", is_correct: false, misconception_type: M3}
+    - {label: H, body: "ツールから返されたデータそのものが、独立した目的と判断を持つエージェントである。", is_correct: false, misconception_type: M3}
+    - {label: I, body: "処理が分岐するワークフローは、エージェントの役割や自律性がなくても必ずマルチエージェントである。", is_correct: false, misconception_type: M3}
+    - {label: J, body: "わからない。", is_correct: false, misconception_type: unknown}
+
+  memory_process: &memory_process_options
+    - {label: A, body: "記憶プロセスは、過去の対話や経験から必要な情報を保存し、後で参照できるようにする処理である。", is_correct: true, misconception_type: null}
+    - {label: B, body: "記憶を検索・更新・要約する仕組みによって、現在の処理へ過去の情報を活用できる。", is_correct: true, misconception_type: null}
+    - {label: C, body: "自己評価や振り返りを記憶プロセスと組み合わせると、過去の結果を次の応答改善に利用できる。", is_correct: true, misconception_type: null}
+    - {label: D, body: "記憶プロセスは、過去の会話を必ず一字一句そのまま永久保存する処理である。", is_correct: false, misconception_type: M1}
+    - {label: E, body: "記憶を利用する場合、保存した情報は内容を確認せず、常に正しいものとして使う。", is_correct: false, misconception_type: M1}
+    - {label: F, body: "自己評価を一度行えば、記憶の検索や更新を設計しなくても自動的に次の応答へ反映される。", is_correct: false, misconception_type: M1}
+    - {label: G, body: "記憶プロセスは、モデルの学習済み重みそのものと同じ種類の知識保存である。", is_correct: false, misconception_type: M3}
+    - {label: H, body: "RAGによる文書検索と記憶プロセスは、目的や更新方法に違いがなく完全に同じ仕組みである。", is_correct: false, misconception_type: M3}
+    - {label: I, body: "会話の入力を一つのプロンプトに貼り付けるだけで、記憶プロセス全体が成立する。", is_correct: false, misconception_type: M3}
+    - {label: J, body: "わからない。", is_correct: false, misconception_type: unknown}
+
+terms:
+  - slug: llm_knowledge
+    label: "LLMに知識を与える方法"
+    description: "LLMに知識や能力を与える方法には、事前学習、ファインチューニング、プロンプトエンジニアリング、RAGなどがあり、それぞれ重み更新の有無や情報を使う時点が異なる。"
+    keywords: [事前学習, ファインチューニング, プロンプトエンジニアリング, RAG, 外部知識]
+    component_terms: [事前学習, ファインチューニング, プロンプトエンジニアリング, RAG]
+    rag_sections: ["3.1", "事前学習", "ファインチューニング", "プロンプトエンジニアリング"]
+    questions:
+      pretest:
+        - {variant_key: pretest_v1, body: "LLMに知識や能力を与える方法について、適切なものをすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *llm_knowledge_options}
+      retest:
+        - {variant_key: retest_v1, body: "LLMの知識や能力を補う方法について、正しい説明をすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *llm_knowledge_options}
+        - {variant_key: retest_v2, body: "重み更新を伴う方法と、利用時に情報を与える方法の説明として適切なものをすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *llm_knowledge_options}
+        - {variant_key: retest_v3, body: "事前学習・RAG・プロンプトの役割を区別した説明として適切なものをすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *llm_knowledge_options}
+        - {variant_key: retest_v4, body: "LLMへ情報を与える仕組みの違いに関する説明として適切なものをすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *llm_knowledge_options}
+      final_test:
+        - {variant_key: final_test_v1, body: "LLMに知識や能力を与える方法について、最も適切な説明をすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *llm_knowledge_options}
+      l0: "LLMに知識や能力を与える方法を、重み更新の有無と利用時の情報の扱いに触れて説明してください。"
+      transfer: "新しい社内資料を参照しながら回答するLLMを設計するとき、事前学習・プロンプト・RAGのどれをどのように使い分けるか説明してください。"
+    learning:
+      enrichment:
+        material: "LLMに知識を与える方法を、学習時に重みを変える方法と、利用時に情報を与える方法に分けて整理します。"
+        variants:
+          - {variant_key: learning_enrichment_v1, body: "LLMに知識を与える方法のうち、学習時に行う方法と利用時に行う方法を区別して説明しなさい。", options: *llm_knowledge_options}
+          - {variant_key: learning_enrichment_v2, body: "事前学習、RAG、プロンプトエンジニアリングの役割を一つずつ説明しなさい。", options: *llm_knowledge_options}
+          - {variant_key: learning_enrichment_v3, body: "RAGが回答時にどのように外部知識を使うかを説明しなさい。", options: *llm_knowledge_options}
+          - {variant_key: learning_enrichment_v4, body: "モデルの重みを更新する方法と、更新せずに情報を与える方法の違いを説明しなさい。", options: *llm_knowledge_options}
+          - {variant_key: learning_enrichment_v5, body: "LLMへ知識を与える方法を、使うタイミングと情報の所在に触れて説明しなさい。", options: *llm_knowledge_options}
+      conceptual_change:
+        material: "似た言葉でも、重みを更新する学習と、推論時に外部情報を文脈へ加える方法は異なります。どの方法が何を変えるのかを対比します。"
+        variants:
+          - {variant_key: learning_conceptual_change_v1, body: "RAGとファインチューニングを、重み更新と情報利用の違いから比較しなさい。", options: *llm_knowledge_options}
+          - {variant_key: learning_conceptual_change_v2, body: "プロンプトエンジニアリングがモデルの重みを更新しない理由を説明しなさい。", options: *llm_knowledge_options}
+          - {variant_key: learning_conceptual_change_v3, body: "外部資料を参照して回答する仕組みを、事前学習との違いに触れて説明しなさい。", options: *llm_knowledge_options}
+          - {variant_key: learning_conceptual_change_v4, body: "LLMに知識を与える方法を、学習時と推論時の二つの観点で整理しなさい。", options: *llm_knowledge_options}
+          - {variant_key: learning_conceptual_change_v5, body: "知識をモデル内部に持たせる方法と、回答時に外部から与える方法を比較しなさい。", options: *llm_knowledge_options}
+
+  - slug: multi_agent
+    label: "マルチエージェント"
+    description: "マルチエージェントは、複数のエージェントに役割や目的を持たせ、情報共有や結果の受け渡しを通じて複雑な課題を分担して処理する設計である。"
+    keywords: [マルチエージェント, エージェント, 役割分担, 情報共有, タスク分解]
+    component_terms: [役割分担, タスク分解, 情報共有, 結果の統合]
+    rag_sections: ["4.1"]
+    questions:
+      pretest:
+        - {variant_key: pretest_v1, body: "マルチエージェントについて、適切な説明をすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *multi_agent_options}
+      retest:
+        - {variant_key: retest_v1, body: "複数のエージェントを連携させる設計について、正しい説明をすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *multi_agent_options}
+        - {variant_key: retest_v2, body: "マルチエージェントにおける役割と情報交換の説明として適切なものをすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *multi_agent_options}
+        - {variant_key: retest_v3, body: "複雑な課題を複数のエージェントで処理する方法について、適切なものをすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *multi_agent_options}
+        - {variant_key: retest_v4, body: "マルチエージェントの構成要素と連携方法に関する説明として適切なものをすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *multi_agent_options}
+      final_test:
+        - {variant_key: final_test_v1, body: "マルチエージェントについて、最も適切な説明をすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *multi_agent_options}
+      l0: "マルチエージェントとは何かを、役割分担、タスク分解、情報共有に触れて説明してください。"
+      transfer: "調査・計画・実行を別々の担当に任せるAIシステムを設計するとき、エージェント間の情報受け渡しをどのように設計するか説明してください。"
+    learning:
+      enrichment:
+        material: "マルチエージェントを、複数の役割を持つエージェントが課題を分担し、情報を交換して結果を統合する仕組みとして整理します。"
+        variants:
+          - {variant_key: learning_enrichment_v1, body: "マルチエージェントにおける役割分担の意味を説明しなさい。", options: *multi_agent_options}
+          - {variant_key: learning_enrichment_v2, body: "複雑な課題をタスク分解する利点を説明しなさい。", options: *multi_agent_options}
+          - {variant_key: learning_enrichment_v3, body: "エージェント間の情報共有が必要な理由を説明しなさい。", options: *multi_agent_options}
+          - {variant_key: learning_enrichment_v4, body: "複数のエージェントの結果を統合する流れを説明しなさい。", options: *multi_agent_options}
+          - {variant_key: learning_enrichment_v5, body: "マルチエージェントの基本構造を、役割と連携に触れて説明しなさい。", options: *multi_agent_options}
+      conceptual_change:
+        material: "複数の処理があるだけではマルチエージェントとは限りません。役割、目的、判断、情報交換を持つ単位としてエージェントを捉えます。"
+        variants:
+          - {variant_key: learning_conceptual_change_v1, body: "単なる処理分割とマルチエージェントの違いを説明しなさい。", options: *multi_agent_options}
+          - {variant_key: learning_conceptual_change_v2, body: "ツールとエージェントの役割の違いを説明しなさい。", options: *multi_agent_options}
+          - {variant_key: learning_conceptual_change_v3, body: "マルチエージェントにおいて、役割と情報交換がどのように関係するか説明しなさい。", options: *multi_agent_options}
+          - {variant_key: learning_conceptual_change_v4, body: "一つの大きなモデルと複数エージェントの設計上の違いを説明しなさい。", options: *multi_agent_options}
+          - {variant_key: learning_conceptual_change_v5, body: "マルチエージェントを、処理数ではなく自律的な役割と連携の観点から説明しなさい。", options: *multi_agent_options}
+
+  - slug: memory_process
+    label: "記憶プロセス"
+    description: "記憶プロセスは、過去の対話や経験から必要な情報を保存・検索・更新し、現在の応答や次の処理に活用する仕組みである。"
+    keywords: [記憶プロセス, 保存, 検索, 更新, 自己評価, 振り返り]
+    component_terms: [記憶の保存, 記憶の検索, 記憶の更新, 振り返り]
+    rag_sections: ["5.1.1"]
+    questions:
+      pretest:
+        - {variant_key: pretest_v1, body: "記憶プロセスについて、適切な説明をすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *memory_process_options}
+      retest:
+        - {variant_key: retest_v1, body: "AIシステムの記憶を保存・検索・更新する仕組みについて、正しい説明をすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *memory_process_options}
+        - {variant_key: retest_v2, body: "過去の情報を現在の応答へ活用する記憶プロセスの説明として適切なものをすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *memory_process_options}
+        - {variant_key: retest_v3, body: "記憶の検索・更新と振り返りの関係について、適切な説明をすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *memory_process_options}
+        - {variant_key: retest_v4, body: "AIの記憶を扱う処理の特徴に関する説明として適切なものをすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *memory_process_options}
+      final_test:
+        - {variant_key: final_test_v1, body: "記憶プロセスについて、最も適切な説明をすべて選びなさい。", expected: "A、B、Cをすべて選択し、それ以外を選ばない。", options: *memory_process_options}
+      l0: "記憶プロセスを、保存、検索、更新、振り返りの関係に触れて説明してください。"
+      transfer: "対話型AIが過去の相談内容を次回の応答に活用する仕組みを設計するとき、保存・検索・更新の流れを説明してください。"
+    learning:
+      enrichment:
+        material: "記憶プロセスを、必要な情報を保存し、検索して現在の処理へ渡し、必要に応じて更新する流れとして整理します。"
+        variants:
+          - {variant_key: learning_enrichment_v1, body: "記憶プロセスにおける保存・検索・更新の役割を説明しなさい。", options: *memory_process_options}
+          - {variant_key: learning_enrichment_v2, body: "過去の対話を次の応答へ活用する流れを説明しなさい。", options: *memory_process_options}
+          - {variant_key: learning_enrichment_v3, body: "記憶を検索する処理が必要な理由を説明しなさい。", options: *memory_process_options}
+          - {variant_key: learning_enrichment_v4, body: "記憶を更新する処理が必要な場面を説明しなさい。", options: *memory_process_options}
+          - {variant_key: learning_enrichment_v5, body: "記憶プロセスの基本的な流れを、過去情報の利用に触れて説明しなさい。", options: *memory_process_options}
+      conceptual_change:
+        material: "記憶プロセスは、モデルの重みそのものでも、会話を無条件に貼り付けるだけの処理でもありません。何を保存し、どう検索・更新するかを設計する仕組みです。"
+        variants:
+          - {variant_key: learning_conceptual_change_v1, body: "記憶プロセスとモデルの学習済み重みの違いを説明しなさい。", options: *memory_process_options}
+          - {variant_key: learning_conceptual_change_v2, body: "記憶プロセスとRAGの共通点・相違点を説明しなさい。", options: *memory_process_options}
+          - {variant_key: learning_conceptual_change_v3, body: "会話をそのまま貼り付けることと記憶プロセスの違いを説明しなさい。", options: *memory_process_options}
+          - {variant_key: learning_conceptual_change_v4, body: "振り返りや自己評価を記憶の更新へつなげる意味を説明しなさい。", options: *memory_process_options}
+          - {variant_key: learning_conceptual_change_v5, body: "記憶プロセスを保存・検索・更新の設計として説明しなさい。", options: *memory_process_options}

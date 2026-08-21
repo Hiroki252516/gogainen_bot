@@ -16,8 +16,10 @@ from sqlalchemy.orm import Session
 from app.ai.codex_app_server_backend import CodexAppServerError
 from app.ai.backend import lower_level, normalize_level, raise_level, strategy_for
 from app.ai.factory import get_ai_backend
+from app.ai.misconception_taxonomy import taxonomy_for_prompt
 from app.core.config import get_settings
 from app.rag.retriever import retrieve_rag_context
+from app.seed.content_loader import content_term, learning_question_spec, load_content
 from app.models import (
     AICallLog,
     Attempt,
@@ -38,7 +40,9 @@ from app.models import (
 
 
 PUBLIC_LEVEL = {"L3": "豊富化", "L2": "概念変化"}
-PRETEST_TERM_ORDER = {"transformer": 0}
+PRETEST_TERM_ORDER = {
+    term["slug"]: index for index, term in enumerate(load_content()["terms"])
+}
 PRETEST_TERM_SLUGS = set(PRETEST_TERM_ORDER)
 LEARNING_STAGE_LABELS = {
     "enrichment": "豊富化",
@@ -46,60 +50,23 @@ LEARNING_STAGE_LABELS = {
     "final_feedback": "教材フィードバック",
 }
 TEST_PHASES = {"pretest", "retest", "final_test"}
-COMPONENT_TERMS = {
-    "transformer": ["Attentionレイヤー", "FFNレイヤー", "トークン間の関係性"],
-}
-
-LEARNING_CHOICE_BANK = {
-    "transformer": {
-        "enrichment": {
-            "material": "まずTransformerの基本を確認します。Transformerは、Attentionレイヤーでトークン間の関係性を重みづけして扱い、FFNレイヤーで各トークンの表現を変換するモデルアーキテクチャです。わからない場合は、Attentionは関係性、FFNは各トークン表現の変換、と分けて押さえます。",
-            "body": "Transformerについて、適切だと思うものをすべて選びなさい。",
-            "expected_answer": "A、B、Cをすべて選択し、それ以外を選ばない。",
-            "question_type": "learning_multi_select",
-            "selection_mode": "multiple",
-            "min_selections": 3,
-            "max_selections": 3,
-            "options": [
-                {"option_id": "A", "label": "A", "body": "Transformerは、Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造である。", "is_correct": True, "misconception_type": None},
-                {"option_id": "B", "label": "B", "body": "Attentionは、入力中の各トークンが他のトークンとどのように関係するかを重みづけして扱う仕組みである。", "is_correct": True, "misconception_type": None},
-                {"option_id": "C", "label": "C", "body": "FFNは、Attentionの結果を受け取り、各トークンの表現を変換する層である。", "is_correct": True, "misconception_type": None},
-                {"option_id": "D", "label": "D", "body": "Transformerは、Attentionレイヤーで文章全体の意味を理解し、FFNレイヤーで考えたり判断したりする構造である。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "E", "label": "E", "body": "Attentionレイヤーは、文章全体の意味を理解する部分である。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "F", "label": "F", "body": "FFNレイヤーは、Attentionの結果を受け取り、モデルが内部で考えたり判断したりする部分である。", "is_correct": False, "misconception_type": "M1"},
-                {"option_id": "G", "label": "G", "body": "Transformerは、Attentionレイヤーで文章中の重要語を探し、FFNレイヤーで文章を翻訳や生成に変換する機能である。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "H", "label": "H", "body": "Transformerは、Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換するアプリである。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "I", "label": "I", "body": "Transformerは、Attentionレイヤーで文章中の重要語を探し、FFNレイヤーで思考・判断を行う知能である。", "is_correct": False, "misconception_type": "M3"},
-                {"option_id": "J", "label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"},
-            ],
-        },
-        "conceptual_change": {
-            "material": "ここではTransformerを人間の理解・思考や、翻訳アプリ・機能そのものとして捉えないように確認します。Transformerはアプリや知能主体ではなく、AttentionとFFNなどからなるモデル構造です。Attentionは重要語検索ではなくトークン間の関係性の重みづけ、FFNは思考や判断ではなく各トークン表現の変換を担います。",
-            "body": "Transformerについて、適切だと思うものをすべて選びなさい。",
-            "expected_answer": "A、B、Cをすべて選択し、それ以外を選ばない。",
-            "question_type": "learning_multi_select",
-            "selection_mode": "multiple",
-            "min_selections": 3,
-            "max_selections": 3,
-            "options": [],
-        },
-    },
-}
-LEARNING_CHOICE_BANK["transformer"]["conceptual_change"]["options"] = LEARNING_CHOICE_BANK["transformer"]["enrichment"]["options"]
-
 def _component_terms(term_slug: str, term_label: str) -> list[str]:
-    return COMPONENT_TERMS.get(term_slug, [term_label])
+    try:
+        return list(content_term(term_slug).get("component_terms") or [term_label])
+    except StopIteration:
+        return [term_label]
 
 
-def _learning_question_spec(term_slug: str, learning_stage: str, component_term: str | None) -> dict[str, Any]:
-    bank = LEARNING_CHOICE_BANK.get(term_slug)
-    if not bank:
-        raise HTTPException(status_code=400, detail="fixed learning questions not found")
-    stage = learning_stage if learning_stage in {"enrichment", "conceptual_change"} else "conceptual_change"
-    spec = bank.get(stage)
-    if not spec:
-        raise HTTPException(status_code=400, detail="fixed learning question not found")
-    return spec
+def _learning_question_spec(
+    term_slug: str,
+    learning_stage: str,
+    component_term: str | None,
+    variant_index: int = 1,
+) -> dict[str, Any]:
+    try:
+        return learning_question_spec(term_slug, learning_stage, variant_index)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=400, detail="fixed learning question not found") from exc
 
 
 def _learning_question_item(term_slug: str, component_term: str) -> dict[str, Any]:
@@ -265,8 +232,10 @@ def _practice_question_text(practice_question: dict[str, Any] | None) -> str:
 
 def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
     return {
-        "M1": "Transformerを人間の理解・思考・判断として捉えないよう、計算機構としての役割を捉え直させる。",
-        "M3": "Transformerをアプリ・機能・知能主体ではなく、モデルアーキテクチャとして捉え直させる。",
+        "M1": "単一の誤った命題を明示し、反証と正しい説明を対比して信念を置き換えさせる。",
+        "M2": "複数の信念がつながった説明モデルを確認し、中核前提を修正してモデル全体を再構成させる。",
+        "M3": "対象概念を誤った上位カテゴリーに置いていることへ気づかせ、正しいカテゴリーへ再分類させる。",
+        "M4": "不足しているカテゴリーや関係のスキーマを具体例から構築し、新しい知識構造へ接続させる。",
         "unknown": "基礎定義と構成要素を短く確認し、最小限の判断基準を示す。",
     }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
 
@@ -379,8 +348,14 @@ def _rag_query(*parts: str | None) -> str:
     return " ".join(part.strip() for part in parts if part and part.strip())
 
 
-def _rag_context(*parts: str | None) -> dict[str, Any]:
-    return retrieve_rag_context(_rag_query(*parts), top_k=3)
+def _rag_context(term_slug: str, *parts: str | None) -> dict[str, Any]:
+    term_config = content_term(term_slug)
+    return retrieve_rag_context(
+        _rag_query(*parts),
+        top_k=3,
+        allowed_sections=term_config.get("rag_sections") or [],
+        topic_slug=term_slug,
+    )
 
 
 def get_participant(db: Session, participant_id: str) -> Participant:
@@ -428,6 +403,32 @@ def _question_query_for_phase(db: Session, participant: Participant, phase: str)
     return query.order_by(Term.display_order, Question.variant_key)
 
 
+def _question_for_phase_variant(
+    db: Session,
+    participant: Participant,
+    term_id: str,
+    phase: str,
+    candidates: list[Question],
+) -> Question | None:
+    if not candidates:
+        return None
+    if phase == "retest":
+        previous_count = db.query(func.count(Attempt.id)).filter_by(
+            participant_id=participant.id,
+            term_id=term_id,
+            phase="retest",
+        ).scalar() or 0
+        variant_number = min(previous_count + 1, 4)
+        expected_key = f"retest_v{variant_number}"
+    elif phase == "pretest":
+        expected_key = "pretest_v1"
+    elif phase == "final_test":
+        expected_key = "final_test_v1"
+    else:
+        expected_key = "l0_check_v1"
+    return next((question for question in candidates if question.variant_key == expected_key), candidates[0])
+
+
 def _displayed_options(db: Session, participant: Participant, question: Question) -> list[dict[str, str]]:
     options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id).order_by(QuestionOption.default_order).all()
     if not options:
@@ -453,9 +454,19 @@ def _displayed_options(db: Session, participant: Participant, question: Question
 
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
     participant = get_participant(db, participant_id)
-    questions = _question_query_for_phase(db, participant, phase).all()
-    if phase == "pretest":
-        questions = sorted(questions, key=lambda question: PRETEST_TERM_ORDER.get(db.get(Term, question.term_id).slug, 99))
+    all_questions = _question_query_for_phase(db, participant, phase).all()
+    by_term: dict[str, list[Question]] = {}
+    for question in all_questions:
+        by_term.setdefault(question.term_id, []).append(question)
+    questions = [
+        selected
+        for term_id, candidates in by_term.items()
+        if (selected := _question_for_phase_variant(db, participant, term_id, phase, candidates)) is not None
+    ]
+    questions = sorted(
+        questions,
+        key=lambda question: PRETEST_TERM_ORDER.get(db.get(Term, question.term_id).slug, 99),
+    )
     out = []
     for question in questions:
         term = db.get(Term, question.term_id)
@@ -639,6 +650,8 @@ def _diagnosis_payload(db: Session, participant: Participant, attempt: Attempt) 
     }
     if question.phase != "pretest":
         payload["learner_response"] = {"reason_text": attempt.reason_text, "free_text_answer": attempt.free_text_answer}
+    if participant.group_condition == "proposed":
+        payload["misconception_taxonomy"] = taxonomy_for_prompt()
     return payload
 
 
@@ -748,7 +761,7 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
 def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> TutorSession:
     participant = get_participant(db, participant_id)
     term = db.query(Term).filter_by(slug=term_slug).one_or_none()
-    if not term:
+    if not term or not term.is_active:
         raise HTTPException(status_code=404, detail="term not found")
     existing = (
         db.query(TutorSession)
@@ -797,7 +810,17 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if participant.group_condition == "control":
         effective_strategy = "general_explanation"
 
-    spec = _learning_question_spec(term.slug, position["learning_stage"], position["component_term"])
+    existing_turns = db.query(TutorTurn).filter_by(tutor_session_id=session.id).all()
+    stage_turn_count = sum(
+        1 for turn in existing_turns if _practice_meta(turn).get("learning_stage") == position["learning_stage"]
+    )
+    learning_variant_index = min(stage_turn_count + 1, 5)
+    spec = _learning_question_spec(
+        term.slug,
+        position["learning_stage"],
+        position["component_term"],
+        learning_variant_index,
+    )
     question_type = "control_learning_multi_select" if participant.group_condition == "control" else spec["question_type"]
     practice_question = {
         "body": spec["body"],
@@ -807,22 +830,45 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "selection_mode": spec.get("selection_mode", "multiple"),
         "min_selections": spec.get("min_selections", 3),
         "max_selections": spec.get("max_selections", 3),
+        "variant_key": spec["variant_key"],
+        "learning_variant_index": learning_variant_index,
     }
     tutor_message = _previous_turn_prefix(previous_turn) + spec["material"]
     teaching_strategy = effective_strategy
-    material_source = "fixed"
+    material_source = "ai"
     material_generation_ms = None
+    common_payload = {
+        "participant_id": participant.id,
+        "group_condition": participant.group_condition,
+        "term": {"slug": term.slug, "label": term.label, "description": term.description},
+        "learning_stage": position["learning_stage"],
+        "learning_stage_label": position["learning_stage_label"],
+        "component_term": position["component_term"],
+        "component_index": position["component_index"],
+        "component_total": position["component_total"],
+        "component_terms": _component_terms(term.slug, term.label),
+        "fixed_practice_question": {
+            "body": spec["body"],
+            "expected_answer": spec["expected_answer"],
+            "question_type": question_type,
+            "options": _public_learning_options(spec),
+            "selection_mode": practice_question.get("selection_mode"),
+            "min_selections": practice_question.get("min_selections"),
+            "max_selections": practice_question.get("max_selections"),
+            "variant_key": spec["variant_key"],
+        },
+        "fixed_practice_question_items": _public_learning_options(spec),
+        "rag_context": _rag_context(
+            term.slug,
+            term.label,
+            term.description,
+            position["learning_stage_label"],
+            position["component_term"],
+        ),
+    }
     if participant.group_condition == "proposed":
         payload = {
-            "participant_id": participant.id,
-            "group_condition": participant.group_condition,
-            "term": {"slug": term.slug, "label": term.label, "description": term.description},
-            "learning_stage": position["learning_stage"],
-            "learning_stage_label": position["learning_stage_label"],
-            "component_term": position["component_term"],
-            "component_index": position["component_index"],
-            "component_total": position["component_total"],
-            "component_terms": _component_terms(term.slug, term.label),
+            **common_payload,
             "learner_state": {
                 "current_status": state.current_status,
                 "primary_misconception": state.primary_misconception,
@@ -838,30 +884,15 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "previous_learning_misconception": previous_learning_misconception,
             "session_misconception_history": misconception_history,
             "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(effective_misconception),
-            "fixed_practice_question": {
-                "body": spec["body"],
-                "expected_answer": spec["expected_answer"],
-                "question_type": question_type,
-                "selection_mode": practice_question.get("selection_mode"),
-                "min_selections": practice_question.get("min_selections"),
-                "max_selections": practice_question.get("max_selections"),
-            },
-            "fixed_practice_question_items": [],
-            "rag_context": _rag_context(
-                term.label,
-                term.description,
-                position["component_term"],
-                previous_attempt.reason_text if previous_attempt else "",
-                _practice_question_text(previous_turn.practice_question_json if previous_turn else None),
-                previous_turn.learner_response if previous_turn else "",
-            ),
+            "misconception_taxonomy": taxonomy_for_prompt(),
         }
-        started = perf_counter()
-        result = await _ai_call(db, "generate_tutoring_turn", payload)
-        material_generation_ms = int((perf_counter() - started) * 1000)
-        material_source = "ai"
-        tutor_message = result["tutor_message"]
-        teaching_strategy = result["teaching_strategy"]
+    else:
+        payload = common_payload
+    started = perf_counter()
+    result = await _ai_call(db, "generate_tutoring_turn", payload)
+    material_generation_ms = int((perf_counter() - started) * 1000)
+    tutor_message = result["tutor_message"]
+    teaching_strategy = result["teaching_strategy"]
 
     turn = TutorTurn(
         tutor_session_id=session.id,
@@ -892,11 +923,12 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     term = db.get(Term, session.term_id)
     meta = _practice_meta(turn)
     learning_stage = meta.get("learning_stage") or "conceptual_change"
+    variant_index = int((turn.practice_question_json or {}).get("learning_variant_index") or 1)
     component_index = int(meta.get("component_index") or 0)
     component_total = int(meta.get("component_total") or 1)
     component_term = meta.get("component_term")
 
-    spec = _learning_question_spec(term.slug, learning_stage, component_term)
+    spec = _learning_question_spec(term.slug, learning_stage, component_term, variant_index)
     selected_options = _selected_learning_options(spec, payload.get("selected_option_ids"), payload.get("selected_option_id"), response)
     if spec.get("selection_mode") == "multiple":
         _validate_multi_select_labels({_option_label(option) for option in selected_options}, len(selected_options))
@@ -996,6 +1028,8 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
             "free_text_answer": attempt.free_text_answer,
             "reason_text": attempt.reason_text,
         }
+        if participant.group_condition == "proposed":
+            payload["misconception_taxonomy"] = taxonomy_for_prompt()
         if "multi_select" in question.question_type:
             result = _fixed_attempt_result(options)
         elif phase in {"retest", "final_test"} and option:

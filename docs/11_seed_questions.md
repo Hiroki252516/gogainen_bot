@@ -1,22 +1,37 @@
 # Seed Questions
 
-今回のMVP対象用語は `transformer` のみである。`pretest`、`retest`、`final_test`、学習セッション内確認問題は同じ問題文・選択肢セットを使う。
+問題コンテンツの正本は `backend/app/seed/content/learning_content.yml` である。
 
-## Transformer
+`backend/app/seed/content_loader.py` が起動・seed時に形式を検証し、`backend/app/seed/seed_questions.py` がDBへ投入する。
 
-問題文: Transformerについて、適切だと思うものをすべて選びなさい。
+## Active topics
 
-選択形式: A〜Iの9択から3つ選択、またはJ「わからない」単独選択。選択肢順は固定し、A〜Jを意味のある判定ラベルとして扱う。
+| slug | label | RAG section |
+|---|---|---|
+| `llm_knowledge` | LLMに知識を与える方法 | 第3章「LLMに知識を与える」 |
+| `multi_agent` | マルチエージェント | 第4章「マルチエージェントとは」 |
+| `memory_process` | 記憶プロセス | 第5章「記憶プロセス」 |
 
-- A. Transformerは、Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換する構造である。 (正解)
-- B. Attentionは、入力中の各トークンが他のトークンとどのように関係するかを重みづけして扱う仕組みである。 (正解)
-- C. FFNは、Attentionの結果を受け取り、各トークンの表現を変換する層である。 (正解)
-- D. Transformerは、Attentionレイヤーで文章全体の意味を理解し、FFNレイヤーで考えたり判断したりする構造である。 (M1)
-- E. Attentionレイヤーは、文章全体の意味を理解する部分である。 (M1)
-- F. FFNレイヤーは、Attentionの結果を受け取り、モデルが内部で考えたり判断したりする部分である。 (M1)
-- G. Transformerは、Attentionレイヤーで文章中の重要語を探し、FFNレイヤーで文章を翻訳や生成に変換する機能である。 (M3)
-- H. Transformerは、Attentionレイヤーでトークン間の関係性を扱い、FFNレイヤーで各トークンの特徴を変換するアプリである。 (M3)
-- I. Transformerは、Attentionレイヤーで文章中の重要語を探し、FFNレイヤーで思考・判断を行う知能である。 (M3)
-- J. わからない。 (unknown)
+LangGraphを含む見出し・セクションのチャンクは検索結果から除外する。
 
-採点はA〜IからA/B/Cの3つだけを選択した場合に完全正解とする。それ以外は不正解である。
+## 固定問題の構成
+
+各問題はA〜Jの10選択肢を持つ。
+
+- A〜C: `is_correct: true`
+- D〜F: `misconception_type: M1`
+- G〜I: `misconception_type: M3`
+- J: `misconception_type: unknown`
+
+正解はA/B/Cの3つだけを選択した場合に限定し、Jは単独選択だけを有効とする。YAMLローダーは選択肢数、配分、variant数、LangGraph混入を検証する。
+
+## Variant policy
+
+| phase | 用語ごとの定義 |
+|---|---|
+| `pretest` | 1問（`pretest_v1`） |
+| `retest` | 4問（`retest_v1`〜`retest_v4`）、5回目以降はv4再利用 |
+| learning confirmation | 各stage 5問（v1〜v5）、6回目以降はv5再利用 |
+| `final_test` | 1問（`final_test_v1`） |
+
+旧Transformerなど既存DB内の問題は削除せず非アクティブ化し、新規seed・新規参加者の導線には含めない。

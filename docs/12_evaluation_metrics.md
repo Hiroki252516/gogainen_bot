@@ -2,9 +2,9 @@
 
 ## 2026-06 Iterative Metrics Update
 
-反復型フローでは、途中の再テストは全用語を対象にした形成的テストとして扱う。主な到達評価は、全用語を対象にした `final_test` の正答率と、各周回で未達項目数が減ったかで見る。正解済み用語は次周回の学習対象から除外されるため、周回ごとの負担減少も分析対象にできる。
+反復型フローでは、途中の再テストは3用語を対象にした形成的テストとして扱う。主な到達評価は、3用語を対象にした `final_test` の正答率と、各周回で未達項目数が減ったかで見る。正解済み用語は次周回の学習対象から除外されるため、周回ごとの負担減少も分析対象にできる。
 
-現行MVPの `final_test` は、Transformer 1用語を対象にしたA〜Iの9択から3つ選択、またはJ「わからない」単独選択のテストである。理由記述は要求しない。
+現行MVPの `final_test` は、3用語を対象にしたA〜Iの9択から3つ選択、またはJ「わからない」単独選択のテストである。理由記述は要求しない。
 
 時間分析では、問題表示時刻 `question_shown_at`、回答時刻 `answered_at`、回答時間秒 `response_time_sec` を使う。`created_at` はサーバー保存時刻として扱い、所要時間の主指標にはしない。
 
@@ -62,7 +62,7 @@ same_type_recurrence_count / initial_misconception_count
 分母:
 
 - pretestで `diagnosed_status = misconception`
-- misconception_type が M1, M3 のいずれか
+- misconception_type が M1〜M4のいずれか
 - 学習対象になった用語
 
 分子:
@@ -116,7 +116,7 @@ m3_recurrence_rate = m3_recurrence_count / initial_m3_count
 m4_failure_rate = m4_failure_count / evaluated_m4_context_count
 ```
 
-M4は今回のMVPでは新規判定・教材方略に使わない。
+固定問題のM4選択肢は今回のMVPでは使わないが、内部taxonomy・ログ・将来分析の分類値として保持する。
 
 ### Unknown継続率
 

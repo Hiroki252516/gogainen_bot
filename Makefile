@@ -11,8 +11,8 @@ seed:
 	docker compose exec backend python -m app.seed.seed_questions
 
 test:
-	cd backend && pytest
-	cd frontend && npm test
+	docker compose exec backend pytest
+	docker compose exec frontend npm test
 
 frontend-build:
 	cd frontend && npm run build

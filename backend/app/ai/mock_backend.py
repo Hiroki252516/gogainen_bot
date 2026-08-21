@@ -24,25 +24,29 @@ class MockAIBackend:
 
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
         term = payload.get("term") or {}
-        label = term.get("label", "Transformer")
+        label = term.get("label", "対象用語")
+        description = term.get("description") or f"{label}の基本的な定義と役割を確認します。"
         stage = payload.get("learning_stage") or "conceptual_change"
         group = payload.get("group_condition", "proposed")
+        fixed_question = payload.get("fixed_practice_question") or {}
+        question_body = fixed_question.get("body") or f"{label}について、適切な説明をすべて選びなさい。"
         if stage == "enrichment":
-            message = "Transformerの基本を確認します。Attentionはトークン間の関係性を重みづけし、FFNは各トークン表現を変換します。"
+            message = f"## {label}\n\n**要点**\n\n- {description}\n- まずは構成要素と役割を分けて確認します。"
         else:
-            message = "Transformerをアプリや人間の知能主体ではなく、AttentionとFFNなどからなるモデル構造として捉え直します。"
+            message = f"## {label}\n\n**理解の整理**\n\n- {description}\n- 似た仕組みとの違いを、役割と情報の流れから確認します。"
         if group == "control":
-            message = f"{label}について、基本構造を確認します。{message}"
+            message = f"{label}について、基本的な説明を確認します。\n\n{message}"
+        learner_state = payload.get("learner_state") or {}
         return {
             "tutor_message": message,
-            "teaching_strategy": "general_explanation" if group == "control" else payload.get("learner_state", {}).get("teaching_strategy") or "belief_revision",
-            "scaffolding_level": payload.get("learner_state", {}).get("scaffolding_level") or "L3",
+            "teaching_strategy": "general_explanation" if group == "control" else learner_state.get("teaching_strategy") or "foundational_explanation",
+            "scaffolding_level": learner_state.get("scaffolding_level") or "L3",
             "requires_learner_response": True,
-            "learner_prompt": "Transformerについて、適切だと思うものをすべて選びなさい。",
+            "learner_prompt": question_body,
             "practice_question": {
-                "body": "Transformerについて、適切だと思うものをすべて選びなさい。",
-                "expected_answer": "A、B、Cをすべて選択し、それ以外を選ばない。",
-                "question_type": "learning_multi_select",
+                "body": question_body,
+                "expected_answer": fixed_question.get("expected_answer") or "A、B、Cをすべて選択し、それ以外を選ばない。",
+                "question_type": fixed_question.get("question_type") or "learning_multi_select",
             },
             "forbidden_help_given": False,
         }
@@ -64,10 +68,13 @@ class MockAIBackend:
 
     async def generate_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = payload.get("learner_response") or ""
-        is_sufficient = all(word in response for word in ["Attention", "FFN"])
+        term = payload.get("term") or {}
+        label = term.get("label", "対象用語")
+        keywords = [str(keyword) for keyword in term.get("keywords") or []]
+        is_sufficient = bool(response.strip()) and (not keywords or any(keyword in response for keyword in keywords))
         mtype = None if is_sufficient else ("unknown" if "わからない" in response else "M1")
         return {
-            "feedback": "要点を押さえられています。" if is_sufficient else "Transformerの構造として、AttentionとFFNの役割を確認してください。",
+            "feedback": "要点を押さえられています。" if is_sufficient else f"{label}の定義と構成要素の役割を確認してください。",
             "is_sufficient": is_sufficient,
             "next_action": "move_next" if is_sufficient else "continue",
             "next_scaffolding_level": "L2" if is_sufficient else "L3",
@@ -79,12 +86,12 @@ class MockAIBackend:
         }
 
     async def summarize_learner_state(self, payload: dict[str, Any]) -> dict[str, Any]:
-        label = payload.get("term", {}).get("label", "Transformer")
+        label = payload.get("term", {}).get("label", "対象用語")
         return {
             "summary_for_admin": f"{label}の現在状態を要確認。",
             "summary_for_learner": f"{label}について重点的に確認します。",
             "risk_flags": [],
-            "recommended_next_focus": "AttentionとFFNの役割を確認する",
+            "recommended_next_focus": f"{label}の定義と構成要素の役割を確認する",
         }
 
 

@@ -8,7 +8,7 @@
 2. ホストで `codex app-server --listen ws://127.0.0.1:4500` を起動する
 3. `codex` または管理画面のログイン導線でChatGPT/Codexログインを確認する
 4. `docker compose up --build` を実行する
-5. seed questionsはbackend起動時に自動投入される
+5. `learning_content.yml` を検証してseed questionsがbackend起動時に自動投入される
 6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する
 7. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
 
@@ -34,7 +34,9 @@
 9. アンケート遷移画面
 10. 終了
 
-現行MVPの事前テスト・最終テスト対象は、Transformer 1用語である。`/survey` は暫定画面で、アンケート本体は次の実装で接続する。
+現行MVPの事前テスト・最終テスト対象は、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語である。`/survey` は暫定画面で、アンケート本体は次の実装で接続する。
+
+問題はYAMLで管理される。事前・最終テストは各用語1問、再テストはv1〜v4（以後v4再利用）、学習確認はv1〜v5（以後v5再利用）である。LangGraphはRAG検索結果に含めない。
 
 研究者が見るもの:
 
@@ -79,7 +81,7 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 2. evaluation summaryを再計算する
 3. 管理画面で全体ログと被験者別ログを確認する
 4. 被験者別ログの `回答履歴（テスト＋学習）` で、テスト回答と学習ターン回答の時刻・回答時間が連続して見えることを確認する
-5. `evaluation_summaries` の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率を確認する
+5. `evaluation_summaries` の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率を確認する。用語別variant_keyも必要に応じて確認する
 6. 必要に応じて全体ログCSVまたは被験者別ログCSVを出力する
 7. exportsフォルダを研究分析用に保管する
 8. 必要なら被験者データを削除する

@@ -1,33 +1,28 @@
 # 16. Implementation Tasks
 
-このファイルは現行プログラムの実装状態を示す。未実装チェックリストではなく、運用時に確認する実装済み機能と残タスクを整理する。
+この文書は、3用語・YAML問題・RAG対応の現行実装状態を示す。
 
 ## 実装済み
 
-- Next.js frontend と FastAPI backend のDocker Compose構成
-- PostgreSQL本番相当構成とSQLiteローカル構成
-- SQLAlchemy models と起動時の軽量スキーマ更新
-- active seed: `transformer`
-- 事前テスト、診断、学習対象選択、学習セッション、再テスト、最終テスト、survey遷移
-- 再テストは事前テスト対象の全問を出題
-- L2概念理解問題・再テスト・最終テストの同一問題文/選択肢運用
-- テスト回答と学習ターン回答の `question_shown_at`, `answered_at`, `response_time_sec` 保存
-- `answer_history` によるテスト回答と学習ターン回答の統合ログ
-- 全体ログCSV、被験者別ログCSV、Excel向けUTF-8 BOM付きCSV
-- Codex app-server backend、AI status、ChatGPT/device codeログイン導線
-- `AI_BACKEND=codex_app_server` でMockへ自動フォールバックしない失敗ログ
-- MockAIBackendを使った自動テスト
-- 管理画面で全体ログ、被験者別ログ、AI呼び出し、再発イベント、評価サマリーを確認
-- 現行評価サマリーとして `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を保存
+- `codex/soma-three-topic-rag` ブランチ上でsomaの作業状態を引き継ぎ
+- active seedを `llm_knowledge`、`multi_agent`、`memory_process` の3用語へ変更
+- YAML問題バンクと起動・seed時の形式検証
+- pretest/final_test各1問、retest v1〜v4、learning確認 v1〜v5
+- A/B/C正答、M3優先、M1、unknownの決定論的採点
+- 旧Term・問題・ログを削除せず非アクティブ化
+- ローカルRAG packの読み込み、用語別section制限、LangGraph除外
+- control/proposedの共通RAGと個別化payloadの分離
+- 最新M1〜M4/unknown taxonomyを `backend/app/ai/misconception_taxonomy.py` から実行時注入
+- Codex app-server設定 `gpt-5.6-luna` / `medium`
+- frontendの参加者画面から内部debug・M分類表示を除去
+- MockAIBackend、backend pytest、frontend smoke/build
 
 ## 残タスク
 
+- 実験本番データ取得前のapp-server接続確認
 - アンケート本体の設問拡張
 - 管理画面のグラフ化とフィルタ機能
-- 事前テスト、再テスト1、再テスト2、最終テストの得点率推移ログ
-- 誤概念タイプの時系列推移ログ
 - 手動診断修正UIとaudit_eventsの実運用導線
-- export_jobsの実ジョブ履歴化
 - 大人数運用時のCSV出力非同期化
 - 研究本番データ用のバックアップ手順強化
 
