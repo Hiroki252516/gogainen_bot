@@ -1571,6 +1571,12 @@ def _ai_log_belongs_to(log: AICallLog, participant_id: str) -> bool:
     return payload.get("participant_id") == participant_id
 
 
+def _ai_log_group_condition(log: AICallLog, participants: dict[str, Participant]) -> str | None:
+    participant_id = (log.request_payload or {}).get("participant_id")
+    participant = participants.get(participant_id)
+    return participant.group_condition if participant else None
+
+
 def admin_logs_overview(db: Session) -> dict[str, Any]:
     participants = db.query(Participant).order_by(Participant.created_at.desc()).all()
     participant_by_id = {participant.id: participant for participant in participants}
@@ -1615,6 +1621,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "error_code": row.error_code,
                 "error_message": row.error_message,
                 "latency_ms": row.latency_ms,
+                "group_condition": _ai_log_group_condition(row, participant_by_id),
                 "created_at": _iso(row.created_at),
             }
             for row in ai_logs
@@ -1628,6 +1635,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "previous_misconception_type": row.previous_misconception_type,
                 "current_misconception_type": row.current_misconception_type,
                 "phase": row.phase,
+                "group_condition": participant_by_id.get(row.participant_id).group_condition if participant_by_id.get(row.participant_id) else None,
                 "created_at": _iso(row.created_at),
             }
             for row in recurrences

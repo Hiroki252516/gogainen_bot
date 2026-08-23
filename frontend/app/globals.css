@@ -290,6 +290,28 @@ button:disabled {
   align-items: center;
 }
 
+.group-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.group-tab {
+  flex: 1 1 160px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.group-tab.active {
+  background: var(--primary);
+  color: white;
+}
+
 .learning-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

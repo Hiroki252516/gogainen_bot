@@ -364,6 +364,12 @@ def test_admin_logs_and_csv_show_multiple_selection_labels():
 
     overview = client.get("/api/admin/logs/overview").json()
     assert any(row.get("selected_option_body") == "D / E / F" for row in overview["recent_answer_history"])
+    assert any(row.get("group_condition") == "proposed" for row in overview["recent_ai_call_logs"])
+
+    recalculate = client.post(f"/api/participants/{pid}/evaluation-summary/recalculate")
+    assert recalculate.status_code == 200
+    participant_summary = client.get(f"/api/admin/participants/{pid}/logs").json()["latest_evaluation_summary"]
+    assert participant_summary["condition_check"] is not None
 
     participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert participant_csv.status_code == 200

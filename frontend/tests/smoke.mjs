@@ -19,6 +19,16 @@ for (const file of required) {
 
 console.log("frontend smoke ok");
 
+const groupAdminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ['"control", "proposed"', "role=\"tablist\"", "activeGroup", "group_condition"]) {
+  if (!groupAdminPage.includes(expectedText)) {
+    throw new Error(`admin page missing group filtering behavior: ${expectedText}`);
+  }
+}
+if (groupAdminPage.includes("条件統制チェック")) {
+  throw new Error("admin page must not show the condition control check card");
+}
+
 
 const learningPage = fs.readFileSync(new URL("../app/learning/[termSlug]/page.tsx", import.meta.url), "utf8");
 if (learningPage.includes("{feedback ? <div className=\"notice\">{feedback.feedback}</div>")) {
