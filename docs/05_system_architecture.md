@@ -1,6 +1,12 @@
 # 05. System Architecture
 
-## 推奨アーキテクチャ
+## 現行MVPの実装
+
+現行コードは、FastAPIの単一backendサービスとNext.js frontendを中心に構成される。実験フロー、問題seed、学習セッション、評価再計算は主に `backend/app/services/experiment.py` に実装され、AI呼び出しは `AIBackend` 経由で `CodexAppServerBackend` または明示指定時の `MockAIBackend` が処理する。Docker Composeではbackend、frontend、PostgreSQLを起動し、ローカルの直接起動ではSQLiteを使用できる。
+
+以下の分離サービス図は将来の責務分割案であり、現行コードに同名の独立サービスクラスがすべて存在することを意味しない。
+
+## 将来の推奨アーキテクチャ
 
 ```text
 Browser
@@ -33,28 +39,32 @@ ChatGPT/Codex Login
 
 ## 技術スタック
 
-### frontend
+### frontend（現行）
 
 - Next.js
 - TypeScript
-- React Hook Formまたは同等のフォーム管理
-- Tailwind CSS
-- chart libraryは軽量なものを利用
+- Reactのローカルstateによるフォーム管理
+- `frontend/app/globals.css` を中心としたCSS
+- 管理画面は現行の一覧・サマリー表示を中心とし、詳細グラフは将来対応
 
-### backend
+### backend（現行）
 
 - FastAPI
 - SQLAlchemy
-- Alembic
 - Pydantic
-- async PostgreSQL driver
+- 同期SQLAlchemy engine（PostgreSQLはDocker、ローカルはSQLite）
 - websockets client for Codex app-server
-- pandas互換CSV出力
+- 標準CSV出力
 
-### db
+Alembicによるマイグレーション運用、非同期DBドライバ、専用グラフライブラリは将来対応である。
+
+### db（現行）
 
 - PostgreSQL 16系
 - Docker volumeで永続化
+- ローカル直接起動時はSQLite
+- 起動時に `Base.metadata.create_all` と互換用の不足列追加を実行
+- IDはアプリケーション上36文字の文字列、構造化列はSQLAlchemyのJSON型
 
 ## モノレポ構成
 
@@ -78,7 +88,7 @@ ChatGPT/Codex Login
 │   │   ├── ai/
 │   │   ├── seed/
 │   │   └── exports/
-│   ├── alembic/
+│   ├── alembic/              # 将来のマイグレーション候補
 │   └── tests/
 ├── docs/
 ├── exports/
@@ -87,19 +97,16 @@ ChatGPT/Codex Login
 └── README.md
 ```
 
-## サービス責務
+## 現行コード上の責務境界
 
 | Service | 責務 |
 |---|---|
-| ExperimentService | 参加者作成、進捗管理、群割当、フェーズ遷移 |
-| QuestionService | 問題取得、選択肢ランダム化、問題バリアント選定 |
-| DiagnosisService | 選択肢・理由記述・AIによる診断の統合 |
-| LearnerStateService | 用語別状態、誤概念、学習ステージ互換情報、再発情報の管理 |
-| TutoringService | 学習セッションとチューターターン生成 |
-| LearningStageService | 用語理解・概念理解の進行、方略変更、研究条件の決定論的制御 |
-| EvaluationService | 評価指標、群別集計、用語別集計の計算 |
-| ExportService | CSV作成、エクスポート履歴管理 |
-| AiBackendService | AIBackend実装の選択、AI呼び出しログ保存 |
+| `backend/app/services/experiment.py` | 参加者作成、問題取得、回答保存、診断、学習状態、再発、学習ターン、評価再計算 |
+| `backend/app/seed/content_loader.py` / `seed_questions.py` | YAML検証と問題seed |
+| `backend/app/ai/backend.py` | AIBackendプロトコル、方略・段階の互換ロジック |
+| `backend/app/ai/codex_app_server_backend.py` | Codex app-server呼び出し、構造化JSON、教材・解説生成 |
+| `backend/app/rag/retriever.py` | 用語別RAG検索とLangGraph除外 |
+| `backend/app/main.py` | APIルート、起動時DB初期化・seed、管理API |
 
 管理画面とCSVでは、`Attempt` と `TutorTurn` を物理的に統合しない。Experiment/Exportサービス層で `answer_history` を作り、テスト回答を `source_type=test_attempt`、学習ターン回答を `source_type=learning_turn` として同じ回答履歴に並べる。
 
@@ -113,6 +120,8 @@ class AIBackend(Protocol):
     async def generate_tutoring_turn(self, payload: TutoringPayload) -> TutoringResult: ...
     async def grade_response(self, payload: GradingPayload) -> GradingResult: ...
     async def generate_feedback(self, payload: FeedbackPayload) -> FeedbackResult: ...
+    async def generate_correct_answer_summary(self, payload: FeedbackPayload) -> CorrectAnswerSummary: ...
+    async def explain_selected_distractor(self, payload: FeedbackPayload) -> DistractorExplanation: ...
     async def summarize_learner_state(self, payload: StateSummaryPayload) -> StateSummaryResult: ...
 ```
 
@@ -132,15 +141,17 @@ sequenceDiagram
   participant F as Frontend
   participant B as Backend
   participant DB as PostgreSQL
-  participant AI as AIBackend
+  participant Y as YAML/固定採点
+  participant AI as AIBackend（互換）
   F->>B: POST /api/attempts
   B->>DB: save attempt
   F->>B: POST /api/participants/{id}/diagnose-pretest
   B->>DB: load attempts/options
-  B->>AI: diagnose_answer(payload)
-  AI-->>B: DiagnosisResult
-  B->>DB: save ai_call_log, update attempts
-  B->>DB: create learner_states
+  B->>Y: fixed option scoring
+  Y-->>B: deterministic diagnosis
+  B->>AI: diagnose_answer（自由回答・互換時のみ）
+  AI-->>B: DiagnosisResult（互換時のみ）
+  B->>DB: create/update attempts and learner_states
   B-->>F: diagnosis summary without internal labels
 ```
 
@@ -151,6 +162,7 @@ sequenceDiagram
   participant F as Frontend
   participant B as Backend
   participant DB as PostgreSQL
+  participant Y as YAML/固定採点
   participant AI as AIBackend
   F->>B: POST /api/tutor-sessions
   B->>DB: create tutor_session
@@ -161,7 +173,9 @@ sequenceDiagram
   B->>DB: save tutor_turn
   B-->>F: tutor message
   F->>B: POST /api/tutor-turns/{turn_id}/respond
-  B->>AI: grade_response/generate_feedback
+  B->>Y: fixed YAML scoring
+  Y-->>B: deterministic result
+  B->>AI: generate_correct_answer_summary / explain_selected_distractor
   B->>DB: save learner response, feedback, state update
   B-->>F: feedback and next action
 ```
@@ -195,7 +209,7 @@ MVPではキューを導入しない。AI診断やCSV出力は同期APIでよい
 | `DATABASE_URL` | `sqlite:///./.local/app.db` | ローカル既定DB接続。Docker ComposeではPostgreSQLを指定する |
 | `AI_BACKEND` | `codex_app_server` | 通常実行のAI実装。`mock` はテスト時のみ明示指定 |
 | `CODEX_APP_SERVER_URL` | `ws://127.0.0.1:4500` | app-server接続先。Docker Composeでは `ws://host.docker.internal:4500` を使う |
-| `CODEX_WS_TOKEN_FILE` | `/run/secrets/codex_ws_token` | capability token |
+| `CODEX_WS_TOKEN_FILE` | optional | capability token。現行composeの既定環境では設定しない |
 | `CODEX_APP_SERVER_CWD` | `/tmp` | app-server threadの作業ディレクトリ |
 | `CODEX_TURN_TIMEOUT_SEC` | `120` | AI応答タイムアウト |
 | `CODEX_MODEL` | `gpt-5.6-luna` | Codex app-serverへ渡すモデル |

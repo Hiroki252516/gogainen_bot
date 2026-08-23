@@ -25,10 +25,10 @@ app-serverは実験用LLM APIではなくCodex rich client向けプロトコル�
 
 ### 推奨: host Codexログイン
 
-1. MacホストにCodex CLIをインストールする
+1. ホストOSにCodex CLIをインストールする
 2. `codex` または `codex login` で ChatGPT にログインする
-3. ホスト上で `codex app-server --listen ws://127.0.0.1:4500` を起動する
-4. Docker Desktop for Mac上のbackendから `ws://host.docker.internal:4500` に接続する
+3. ルート`.env`の`CODEX_APP_SERVER_LISTEN_URL`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`で起動する
+4. backendからルート`.env`の`CODEX_APP_SERVER_URL`へ接続する。Docker Desktopでは通常`ws://host.docker.internal:4500`を使う
 
 ### セキュリティ
 
@@ -43,7 +43,13 @@ app-serverは実験用LLM APIではなくCodex rich client向けプロトコル�
 ### 開発用・ローカルのみ
 
 ```bash
-codex app-server --listen ws://127.0.0.1:4500
+./scripts/start-codex-app-server.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\start-codex-app-server.ps1
 ```
 
 ### capability tokenを使う場合
@@ -136,12 +142,15 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 
 診断・教授・採点で用途を分ける。
 
-- diagnosis thread
-- tutoring thread
-- grading thread
-- feedback thread
+- diagnosis thread（自由回答・互換フェーズ）
+- tutoring thread（教材生成）
+- grading thread（互換・補助フェーズ）
+- feedback thread（互換・補助フェーズ）
+- correct-answer summary / distractor explanation thread
 
-スレッドを用途ごとに使い回すか、毎回ephemeralにするかは実装時に選ぶ。MVPでは再現性とログ単純化のため、用途ごとにephemeral threadを作る方針でよい。
+現行実装では、構造化されたAI呼び出しごとにephemeral threadを作る。用途は `diagnose_answer`、`generate_tutoring_turn`、`generate_correct_answer_summary`、`explain_selected_distractor` などの `purpose` としてログに残す。
+
+現行の有効なpretest・retest・final_test・learning確認問題は固定YAMLの複数選択式であり、採点とM1/M3/unknown分類をapp-serverへ依存しない。`diagnose_answer`、`grade_response`、`generate_feedback` は自由回答や過去データとの互換用に残る。通常の学習導線でapp-serverを使う主な箇所は教材生成と回答後解説生成である。
 
 ## thread/start 例
 
@@ -196,7 +205,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 }
 ```
 
-`outputSchema` が使えない、または不安定な場合は、プロンプトでJSONのみ返すようにし、backendでJSON抽出・検証・再試行する。
+`outputSchema` とプロンプトでJSON契約を指定し、backendでJSON抽出・型検証を行う。現行実装はAI出力の自動再試行を行わず、検証失敗をエラーとして扱う。
 
 現行実験設定の推論レベルは `medium` とする。app-server側のschemaが変わった場合は、その時点のschemaに合わせてpayloadを検証する。
 
@@ -239,9 +248,9 @@ AI呼び出しに失敗した場合、通常実行ではMockへ自動フォー�
 | app_server_unreachable | Codex app-serverに接続できません | 起動手順を表示 |
 | not_logged_in | Codexへのログインが必要です | login startを案内 |
 | auth_failed | app-server認証に失敗しました | token確認を案内 |
-| schema_validation_failed | AI出力を検証できませんでした | 再試行後、保留 |
+| schema_validation_failed | AI出力を検証できませんでした | ai_call_logsに保存し、APIエラーとして扱う |
 | turn_failed | AI応答生成に失敗しました | ai_call_logsに保存 |
-| timeout | AI応答がタイムアウトしました | 再試行または保留 |
+| timeout | AI応答がタイムアウトしました | ai_call_logsに保存し、APIエラーとして扱う |
 
 ## 実装しないこと
 

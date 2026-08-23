@@ -21,14 +21,14 @@
 - Test runner: `frontend/components/QuestionRunner.tsx`
 - Learning page: `frontend/app/learning/[termSlug]/page.tsx`
 
-## Experiment flow
+## Experiment flow（現行）
 
 1. 参加者作成
 2. 3用語のpretest
 3. 診断と学習対象選択
 4. 未達用語の学習・確認問題
 5. 用語ごとのretest（v1〜v4、以後v4再利用）
-6. 未達があれば対象を絞って反復
+6. 未達があれば `current_step=learning_targets` に戻す。追加周回はクライアントまたは研究者が再開し、自動反復ループはない
 7. 3用語のfinal_test
 8. `/survey`
 
@@ -40,4 +40,4 @@ learning確認はstage・用語ごとにv1〜v5を使う。`construct_key` と `
 
 ## AI backend
 
-通常実行は `AI_BACKEND=codex_app_server`、モデルは `gpt-5.6-luna`、推論レベルは `medium` とする。OpenAI APIキーやOpenAI SDKの直接呼び出しは使わない。app-server未接続時はMockへフォールバックせず、失敗を管理画面と `ai_call_logs` に残す。
+通常実行は `AI_BACKEND=codex_app_server`、モデルは `gpt-5.6-luna`、推論レベルは `medium` とする。OpenAI APIキーやOpenAI SDKの直接呼び出しは使わない。app-server未接続時はMockへフォールバックせず、失敗をAPIエラーと `ai_call_logs` に残す。管理者による手動診断修正・削除監査、遅延再テスト、完全な転移評価は将来対応である。

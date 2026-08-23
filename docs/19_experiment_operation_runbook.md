@@ -1,15 +1,15 @@
 # 19. Experiment Operation Runbook
 
-この文書は、実験実施時に研究者がどう操作するかを示す。実装時のUI・APIはこの運用に合わせる。
+この文書は、現行MVPで実験実施時に研究者がどう操作するかを示す。未実装の研究拡張は各節で「将来対応」と明記する。
 
 ## Before Experiment
 
 1. Docker Desktopを起動する
-2. ホストで `codex app-server --listen ws://127.0.0.1:4500` を起動する
+2. ルート`.env`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動する
 3. `codex` または管理画面のログイン導線でChatGPT/Codexログインを確認する
 4. `docker compose up --build` を実行する
 5. `learning_content.yml` を検証してseed questionsがbackend起動時に自動投入される
-6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する
+6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する（AI status APIは `/api/admin/ai/status`）
 7. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
 
 ## Participant Setup
@@ -25,14 +25,14 @@
 被験者の流れ:
 
 1. 事前テスト
-3. 診断待ち
-4. 学習対象確認
-5. 学習セッション
-6. 即時再テスト
-7. 必要なら2回目以降の学習
-8. 未達0件になったら最終テスト
-9. アンケート遷移画面
-10. 終了
+2. 診断待ち
+3. 学習対象確認
+4. 学習セッション
+5. 再テストAPIで現在の再テストを実施
+6. 未達が残る場合は研究者またはクライアントが追加学習を再開（backendの自動ループはない）
+7. 未達0件になったら最終テスト
+8. アンケート遷移画面
+9. 終了
 
 現行MVPの事前テスト・最終テスト対象は、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語である。`/survey` は暫定画面で、アンケート本体は次の実装で接続する。
 
@@ -42,14 +42,14 @@
 
 - `/admin` の進捗
 - AI診断失敗
-- manual review
+- AI call logの失敗・未接続状態。手動診断修正UIとAuditEvent書き込みは将来対応
 - app-server接続状態
 
 ## If AI Fails
 
 ### CodexAppServerBackend
 
-1. `/admin/ai/status` を確認
+1. `/admin` のAI statusを確認する（backend APIは `/api/admin/ai/status`）
 2. app-serverが起動しているか確認
 3. ChatGPTログイン状態を確認
 4. token設定を確認
@@ -60,7 +60,7 @@
 
 Mockは自動テスト・障害切り分け用であり、本実験運用では使わない。Mockで動作確認したログは本分析から除外する。
 
-## Manual Review
+## Manual Review（将来対応）
 
 以下の場合は管理者確認対象。
 
@@ -69,7 +69,7 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 - AI出力schema validationに失敗した
 - forbidden_help_given = true
 
-手動修正時:
+手動修正UIを将来追加する場合:
 
 - 修正理由を入力する
 - audit_eventsへ保存する
@@ -84,11 +84,11 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 5. `evaluation_summaries` の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率を確認する。用語別variant_keyも必要に応じて確認する
 6. 必要に応じて全体ログCSVまたは被験者別ログCSVを出力する
 7. exportsフォルダを研究分析用に保管する
-8. 必要なら被験者データを削除する
+8. 必要なら被験者データを削除する（現行MVPには削除APIがないため、運用上はDBバックアップと保存方針に従う）
 
-`l0_correct_rate` は互換名であり、現行MVPでは `final_test` が存在する場合に最終テスト正答率として読む。事前テスト、再テスト1、再テスト2、最終テストの得点率推移は次段のログ拡張で追加する。
+`l0_correct_rate` は互換名であり、現行MVPでは `final_test` が存在する場合に最終テスト正答率として読む。得点率・誤概念・負担・条件統制の推移は現行 `evaluation_summaries` のJSONとCSVの `value_json` に保存される。自動周回のない参加者では存在するattemptsだけが集計対象になる。
 
-## Delayed Retest Optional Operation
+## Delayed Retest Optional Operation（将来対応）
 
 遅延再テストを行う場合:
 
@@ -98,7 +98,7 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 4. 学習セッションやヒントは出さない
 5. delayed_retest_scoreとdelayed recurrenceを別集計する
 
-MVPでは必須ではない。
+現行MVPには `delayed_retest` を開始するAPI/UIがない。別日再テストを導入する場合の運用案として残す。
 
 ## Data Export Checklist
 

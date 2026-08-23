@@ -118,8 +118,8 @@ Codex app-server連携は `docs/06_codex_app_server_integration.md` に従って
 
 MVPでは以下を優先してください。
 
-- Macホスト上で `codex app-server --listen ws://127.0.0.1:4500` を起動
-- Docker Desktop for Mac上のbackendから `ws://host.docker.internal:4500` に接続
+- ルート`.env`の`CODEX_APP_SERVER_LISTEN_URL`を使って、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動
+- backendからルート`.env`の`CODEX_APP_SERVER_URL`へ接続。Docker Desktopでは通常`ws://host.docker.internal:4500`
 - WebSocket auth tokenが設定されている場合はそれもサポート
 - app-server接続に失敗した通常実行はMockへ自動フォールバックせず、`ai_call_logs` に失敗を保存して管理画面に表示する
 

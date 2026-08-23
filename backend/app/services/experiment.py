@@ -586,7 +586,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
             detail={
                 "error_code": exc.code,
                 "message": exc.user_message,
-                "hint": "ホストで `codex app-server --listen ws://127.0.0.1:4500` を起動し、Codex/ChatGPTログイン状態を確認してください。",
+                "hint": "ルート`.env`のCODEX_APP_SERVER_URLとCODEX_APP_SERVER_LISTEN_URLを確認し、scripts/start-codex-app-server.shまたは.ps1でCodex app-serverを起動して、Codex/ChatGPTログイン状態を確認してください。",
             },
         ) from exc
     except Exception as exc:

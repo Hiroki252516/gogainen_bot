@@ -16,6 +16,8 @@
 - Codex app-server設定 `gpt-5.6-luna` / `medium`
 - frontendの参加者画面から内部debug・M分類表示を除去
 - MockAIBackend、backend pytest、frontend smoke/build
+- 学習教材・回答解説のMarkdown表示、正誤カード、初回読み込み・回答送信の動的進捗UI
+- 現行の評価JSON、管理サマリー、全体・被験者別CSV出力
 
 ## 残タスク
 
@@ -25,6 +27,7 @@
 - 手動診断修正UIとaudit_eventsの実運用導線
 - 大人数運用時のCSV出力非同期化
 - 研究本番データ用のバックアップ手順強化
+- 遅延再テスト、完全な転移評価、M2/M4固定診断問題、理解度差分・足場掛け削減量の自動算出
 
 ## 実装優先順位
 

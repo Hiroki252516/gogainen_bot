@@ -15,7 +15,7 @@
 | 足場掛けは支えるだけでなく段階を記録する | `04_scaffolding_and_tutoring.md` | learning_stage, scaffolding_level L3/L2互換ログ |
 | 同じ誤概念が再発したら方略変更 | `02_experiment_flow.md`, `04_scaffolding_and_tutoring.md` | recurrence_events, strategy_changed |
 | YAMLの問題variantを段階ごとに使う | `11_seed_questions.md` | construct_key, variant_key |
-| 遅延再テストも可能 | `02_experiment_flow.md`, `07_data_model.md` | delayed_retest phase |
+| 遅延再テストも可能 | `02_experiment_flow.md`, `07_data_model.md` | DB互換の `delayed_retest` 値。実行導線・集計は将来対応 |
 | ログDBとCSVで分析する | `07_data_model.md`, `12_evaluation_metrics.md` | export endpoints |
 
 ## Taxonomy Evolution
@@ -56,7 +56,8 @@
 主要出力:
 
 - same_misconception_recurrence_rate
-- M1〜M4 recurrence rate
+- M1/M3 recurrence rate（現行固定問題）
+- M2/M4 recurrence rate（固定診断問題を追加した場合の将来指標）
 
 ### RQ2
 
@@ -73,7 +74,7 @@
 主要出力:
 
 - l0_correct_rate
-- scaffolding_reduction
+- scaffolding_reduction（将来指標。現行サマリーでは未算出）
 
 ### RQ3
 
@@ -88,6 +89,8 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 主要出力:
 
 - term x misconception_type count
+
+現行固定問題で直接集計できる誤概念タイプはM1/M3であり、M2/M4の件数・再発率は将来の診断問題または別の観測手段を追加した場合に集計する。
 - term x recurrence rate
 - unknown persistence rate
 
@@ -95,15 +98,15 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 
 | Research Object | DB Table | Backend Service | Frontend Page |
 |---|---|---|---|
-| 被験者 | participants | ExperimentService | /start |
-| 問題 | questions, question_options | QuestionService | /pretest, /retest |
-| 回答 | attempts | ExperimentService | all test pages |
-| AI診断 | attempts, ai_call_logs | DiagnosisService | /diagnosing, /admin |
-| 学習者状態 | learner_states | LearnerStateService | /learning-targets |
-| 学習対話 | tutor_sessions, tutor_turns | TutoringService | /learning/[termSlug] |
-| 再発 | recurrence_events | ScaffoldingService | /admin |
-| 評価 | evaluation_summaries | EvaluationService | /admin |
-| CSV | export_jobs | ExportService | /admin |
+| 被験者 | participants | `backend/app/services/experiment.py` | /start |
+| 問題 | questions, question_options | `backend/app/services/experiment.py` / seed modules | /pretest, /retest |
+| 回答 | attempts | `backend/app/services/experiment.py` | all test pages |
+| 診断・分類 | attempts, ai_call_logs | `backend/app/services/experiment.py`（固定YAML採点） + AIBackend（自由回答・互換） | /diagnosing, /admin |
+| 学習者状態 | learner_states | `backend/app/services/experiment.py` | /learning-targets |
+| 学習対話 | tutor_sessions, tutor_turns | `backend/app/services/experiment.py` | /learning/[termSlug] |
+| 再発 | recurrence_events | `backend/app/services/experiment.py` | /admin |
+| 評価 | evaluation_summaries | `backend/app/services/experiment.py` | /admin |
+| CSV | export_jobs / log exporters | `backend/app/main.py` and experiment service | /admin |
 
 ## Control vs Proposed Traceability
 
@@ -113,7 +116,7 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 | Uses pretest log for tutoring | no | yes |
 | Uses M type for tutoring | no | yes |
 | Dynamic scaffolding | no | yes |
-| Strategy changes on recurrence | no | yes |
+| Strategy changes on recurrence | no | retestのM1/M3再発時に状態方略を更新 |
 | Stores diagnosis | yes | yes |
 | Stores AI logs | yes | yes |
 | Includes in evaluation | yes | yes |

@@ -73,10 +73,18 @@
 
 ### Docker Compose
 
-先にMacホストでCodex app-serverを起動します。
+先にホストOSでCodex app-serverを起動します。接続先はルート`.env`で設定します。
 
 ```bash
-codex app-server --listen ws://127.0.0.1:4500
+cp .env.example .env
+./scripts/start-codex-app-server.sh
+```
+
+Windows PowerShellでは次を実行します。
+
+```powershell
+Copy-Item .env.example .env
+.\scripts\start-codex-app-server.ps1
 ```
 
 その後、アプリを起動します。
@@ -89,7 +97,7 @@ docker compose up --build
 - backend health: http://localhost:8000/api/health
 - admin: http://localhost:3000/admin
 
-DockerではPostgreSQLを使用します。Docker Desktop for Mac上のbackendはbridgeネットワークで動き、Codex app-serverへ `ws://host.docker.internal:4500` で接続します。`rag_agent_knowledge_base/` はread-onlyでbackendへマウントされ、初期seedはYAMLを検証したうえでbackend起動時に自動投入されます。
+DockerではPostgreSQLを使用します。backendからCodex app-serverへの接続先は`.env`の`CODEX_APP_SERVER_URL`で変更できます。Docker Desktopでは通常`ws://host.docker.internal:4500`を使います。`rag_agent_knowledge_base/` はread-onlyでbackendへマウントされ、初期seedはYAMLを検証したうえでbackend起動時に自動投入されます。
 
 ### ローカル開発
 
@@ -125,26 +133,27 @@ cd frontend && npm run build
 通常実行の既定は `AI_BACKEND=codex_app_server` です。OpenAI APIキーは使わず、ホスト側のCodex app-serverが保持するChatGPT/Codexログインを使います。
 
 ```bash
-codex app-server --listen ws://127.0.0.1:4500
+./scripts/start-codex-app-server.sh
 ```
 
-Docker Composeではbackendコンテナからホストへ接続するため、以下を使います。
+Docker Composeではbackendコンテナからホストへ接続するため、`.env`に以下を設定します。
 
 ```env
 AI_BACKEND=codex_app_server
 CODEX_APP_SERVER_URL=ws://host.docker.internal:4500
+CODEX_APP_SERVER_LISTEN_URL=ws://127.0.0.1:4500
 CODEX_APP_SERVER_CWD=/tmp
 CODEX_MODEL=gpt-5.6-luna
 CODEX_REASONING_EFFORT=medium
 RAG_BASE_DIR=/rag_agent_knowledge_base
 ```
 
-ローカルでbackendを直接起動する場合も `CODEX_APP_SERVER_URL=ws://127.0.0.1:4500` を使います。`MockAIBackend` は `AI_BACKEND=mock` を明示したテスト用途に限ります。app-serverが未起動または未ログインの場合、AI呼び出しはMockへ自動フォールバックせず、`ai_call_logs` に失敗として記録されます。
+ローカルでbackendを直接起動する場合は、backendが動くホストから到達できるURLへ`CODEX_APP_SERVER_URL`を変更します。通常は`ws://127.0.0.1:4500`です。`MockAIBackend` は `AI_BACKEND=mock` を明示したテスト用途に限ります。app-serverが未起動または未ログインの場合、AI呼び出しはMockへ自動フォールバックせず、`ai_call_logs` に失敗として記録されます。
 
 ## トラブルシューティング
 
-- Macでbackendだけ `http://localhost:8000` に接続できない場合は、`docker-compose.yml` がbackendの `ports: "8000:8000"`、DBの接続先 `db:5432`、app-serverの接続先 `host.docker.internal:4500` を使っているか確認します。
-- `/api/admin/ai/status` が未接続なら、Macホスト側で `codex app-server --listen ws://127.0.0.1:4500` が起動しているか確認します。
+- frontendからbackendへ接続できない場合は、`.env`の`FRONTEND_INTERNAL_API_BASE_URL`を確認します。Docker Desktopでは通常`http://host.docker.internal:8000`です。
+- `/api/admin/ai/status` が未接続なら、`.env`の`CODEX_APP_SERVER_URL`と`CODEX_APP_SERVER_LISTEN_URL`を確認し、`scripts/start-codex-app-server.sh`または`.ps1`でapp-serverを起動します。WindowsでDockerからホストへ到達できない場合は、`CODEX_APP_SERVER_LISTEN_URL`を環境に合わせて変更し、ファイアウォールで4500番ポートを許可してください。
 - AI呼び出しが `usageLimitExceeded` で503になる場合は、ChatGPT/Codexアカウントの利用枠が回復してから再実行します。通常実行ではMockへ自動切替しません。
 
 ## 管理画面ログとCSV

@@ -3,12 +3,12 @@ services:
     build:
       context: ./frontend
       args:
-        INTERNAL_API_BASE_URL: http://host.docker.internal:8000
+        INTERNAL_API_BASE_URL: ${FRONTEND_INTERNAL_API_BASE_URL:-http://host.docker.internal:8000}
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ""
-      INTERNAL_API_BASE_URL: http://host.docker.internal:8000
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+      INTERNAL_API_BASE_URL: ${FRONTEND_INTERNAL_API_BASE_URL:-http://host.docker.internal:8000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -22,17 +22,18 @@ services:
       APP_ENV: development
       DATABASE_URL: postgresql+psycopg://app:app@db:5432/ai_tutor
       AI_BACKEND: codex_app_server
-      CODEX_APP_SERVER_URL: ws://host.docker.internal:4500
-      CODEX_APP_SERVER_CWD: /tmp
-      CODEX_TURN_TIMEOUT_SEC: "120"
-      CODEX_MODEL: gpt-5.6-luna
-      CODEX_REASONING_EFFORT: medium
+      CODEX_APP_SERVER_URL: ${CODEX_APP_SERVER_URL:-ws://host.docker.internal:4500}
+      CODEX_WS_TOKEN_FILE: ${CODEX_WS_TOKEN_FILE:-}
+      CODEX_APP_SERVER_CWD: ${CODEX_APP_SERVER_CWD:-/tmp}
+      CODEX_TURN_TIMEOUT_SEC: ${CODEX_TURN_TIMEOUT_SEC:-120}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.6-luna}
+      CODEX_REASONING_EFFORT: ${CODEX_REASONING_EFFORT:-medium}
       RAG_BASE_DIR: /rag_agent_knowledge_base
       MAX_LEARNING_TARGETS: "3"
       MAX_TURNS_PER_TERM: "3"
       RANDOM_SEED: "20260525"
       EXPORT_DIR: /app/exports
-      FRONTEND_ORIGIN: http://localhost:3000
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
     volumes:
       - ./exports:/app/exports
       - ./rag_agent_knowledge_base:/rag_agent_knowledge_base:ro

@@ -8,11 +8,11 @@
 
 時間分析では、問題表示時刻 `question_shown_at`、回答時刻 `answered_at`、回答時間秒 `response_time_sec` を使う。`created_at` はサーバー保存時刻として扱い、所要時間の主指標にはしない。
 
-現行実装の `evaluation_summaries` は、参加者単位の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を保存する。`l0_correct_rate` は互換名だが、`final_test` が存在する場合は `final_test` の正答率を入れる。事前テスト、再テスト1、再テスト2、最終テストの得点率推移と誤概念推移は、次段のログ拡張で追加する。
+現行実装の `evaluation_summaries` は、参加者単位の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率に加えて、得点推移、誤概念推移、学習負担、条件統制のJSONを保存する。`l0_correct_rate` は互換名だが、`final_test` が存在する場合は `final_test` の正答率を入れる。`transfer_correct_rate`、`m4_failure_rate`、`unknown_persistence_rate` など固定問題や集計処理が未提供の値は `null` になり得る。
 
-## 次段追加: 得点率推移・誤概念推移ログ
+## 現行保存値: 得点率推移・誤概念推移ログ
 
-次段の評価ログ拡張では、事前テストから最終テストまでを時系列で追えるようにする。再テスト回数は固定せず、参加者ごとに `retest_1`, `retest_2`, ... と周回順で扱う。
+現行の再計算処理は、事前テスト、再テスト、最終テスト、L0確認の既存attemptsを時系列としてまとめる。再テストの自動周回ループはなく、複数回分が存在する場合に保存済み回答を周回順に集計する。
 
 保存・出力する主な値:
 
@@ -40,7 +40,7 @@ score_delta_from_previous_test_pt =
 |---|---|
 | `resolved` | 誤概念またはunknownから正答へ変化 |
 | `same_type_recurred` | 同じMタイプが再発 |
-| `changed_type` | M1からM2など、別タイプの誤概念へ変化 |
+| `changed_type` | 別タイプの誤概念へ変化（現行固定問題ではM1とM3の間の変化を扱う） |
 | `unknown_persisted` | unknownが継続 |
 | `regressed` | 正答後に誤答へ戻った |
 
@@ -59,10 +59,10 @@ same_misconception_recurrence_rate =
 same_type_recurrence_count / initial_misconception_count
 ```
 
-分母:
+分母（現行MVP）:
 
 - pretestで `diagnosed_status = misconception`
-- misconception_type が M1〜M4のいずれか
+- `misconception_type` が M1またはM3
 - 学習対象になった用語
 
 分子:
@@ -70,7 +70,7 @@ same_type_recurrence_count / initial_misconception_count
 - retestで同一参加者・同一用語の misconception_type がpretestと同じ
 - recurrence_flag = true
 
-`unknown` と `ambiguous` は主指標の分母に含めない。ただし補助指標として集計する。
+`unknown` と `ambiguous` は主指標の分母に含めない。M2/M4はtaxonomyには存在するが、現行固定問題の選択肢からは判定しないため、M2/M4の再発率は将来の固定診断問題を追加した後に算出する。
 
 ### 2. 最終テスト正答率
 
@@ -92,6 +92,8 @@ L0確認は互換・補助フェーズとして残るが、現行MVPの主到達
 
 ## 補助指標
 
+以下のうち、`retest_score` と同種誤答再発率などは現行ログから利用できる。一方、M2/M4を固定問題で評価する指標、unknown継続率、主観理解度差分、支援段階変化量の式は、研究計画上の将来指標であり、現行MVPの自動集計結果ではない。
+
 ### 正答率
 
 ```text
@@ -105,18 +107,20 @@ score = correct_count / total_question_count
 - final_test
 - l0_check は補助・互換指標
 
-現行の `retest_score` は、保存されている `retest` attempts 全体から計算する。次段のログ拡張では、複数周回の再テストを `retest_1`, `retest_2`, ... と周回別に分け、各周回の得点率を `score_timeline_json` またはCSVの `evaluation_summary` 補助行で復元できるようにする。
+現行の `retest_score` は、保存されている `retest` attempts 全体から計算する。複数周回の再テストが存在する場合は、`score_timeline_json` とCSVの `evaluation_summary` 補助行から、存在する順序で得点率を確認できる。backendが自動で周回を生成するわけではない。
 
-### 誤概念タイプ別再発率
+### 誤概念タイプ別再発率（M1/M3は現行、M2/M4は将来）
 
 ```text
 m1_recurrence_rate = m1_recurrence_count / initial_m1_count
-m2_recurrence_rate = m2_recurrence_count / initial_m2_count
 m3_recurrence_rate = m3_recurrence_count / initial_m3_count
+
+# 将来の固定診断問題を追加した場合の定義
+m2_recurrence_rate = m2_recurrence_count / initial_m2_count
 m4_failure_rate = m4_failure_count / evaluated_m4_context_count
 ```
 
-固定問題のM4選択肢は今回のMVPでは使わないが、内部taxonomy・ログ・将来分析の分類値として保持する。
+現行の `recalculate_evaluation` はM1/M3の分母だけを対象にし、M2の再発率は入力がないため通常 `null`、M4失敗率は未算出である。M2/M4は内部taxonomy・ログ・将来分析の分類値として保持する。
 
 ### Unknown継続率
 
@@ -127,6 +131,8 @@ unknown_in_retest_count / initial_unknown_count
 
 これは誤概念再発ではなく、知識不足が残った割合として扱う。
 
+現行の `recalculate_evaluation` は `unknown_persistence_rate` を算出せず、未提供値として `null` を保存する。上式は将来の補助指標の定義である。
+
 ### 主観理解度変化
 
 ```text
@@ -134,6 +140,8 @@ understanding_delta = post_understanding - pre_understanding
 ```
 
 用語別にも全体平均でも出せるようにする。
+
+現行モデルにアンケート値を保存する領域はあるが、理解度差分を評価サマリーへ自動算出する処理は未実装である。
 
 ### 支援段階変化量
 
@@ -147,7 +155,7 @@ initial_scaffolding_numeric - final_scaffolding_numeric
 - L3 = 3
 - L2 = 2
 
-現行運用では `scaffolding_level` は `L3/L2` のみを使う。したがって支援段階変化量は `L3 -> L2` の1段階変化までを扱う。
+現行運用では `scaffolding_level` は `L3/L2` のみを使う。ただし、`scaffolding_reduction` を評価サマリーへ自動保存する処理は未実装であり、`L3 -> L2` の変化量は将来指標として扱う。
 ## 群別比較
 
 MVPでは管理画面に記述統計を表示する。
@@ -158,7 +166,7 @@ MVPでは管理画面に記述統計を表示する。
 - 平均same_misconception_recurrence_rate
 - 平均l0_correct_rate  # 現行MVPでは final_test 正答率として扱う
 
-次段のログ拡張では、群別にも `score_delta_from_pretest_pt` と `score_delta_from_previous_test_pt` の平均を確認できるようにする。増加率は相対率ではなく、まず差分ポイントで扱う。
+現行の管理サマリーでは、群別参加者数、同種誤答再発率、L0互換名で保存した最終テスト正答率、pretestからの最終差分を確認できる。詳細なグラフ表示や周回別の群間グラフは将来対応である。
 
 小規模な卒研では統計検定より、参加者別・用語別の変化を説明できるCSVを重視する。必要なら外部分析で以下を行う。
 
@@ -167,7 +175,7 @@ MVPでは管理画面に記述統計を表示する。
 - McNemar検定
 - 用語別クロス集計
 
-## 管理画面に表示するグラフ
+## 将来の管理画面グラフ
 
 - 群別 pretest vs retest 正答率
 - 群別同種誤答再発率
@@ -201,15 +209,15 @@ record_type, source_type, participant_id, display_code, phase, term_slug, event_
 
 回答単位の行は `record_type=answer` とし、`source_type=test_attempt` または `source_type=learning_turn` で区別する。`learner_state`, `tutor_session`, `ai_call`, `recurrence`, `evaluation_summary` は補助行として同じCSVに入る。学習ターン回答は `answer` 行として統合するため、重複する `record_type=tutor_turn` 行は出さない。
 
-次段のログ拡張では、`evaluation_summary` 行の `value_json` にスコア推移、誤概念推移、未達項目数推移、学習負担ログ、条件統制チェックを含める。CSV列自体は互換性のため増やさず、詳細は `value_json` で保持する。
+現行の `evaluation_summary` 行の `value_json` には、利用可能なスコア推移、誤概念推移、未達項目数推移、学習負担ログ、条件統制チェックを入れる。CSV列自体は互換性のため増やさず、詳細は `value_json` で保持する。
 
 ## 欠損値の扱い
 
 - 未回答は空欄で出力する
 - 途中離脱参加者は `completed = false`
 - 指標の分母が0の場合はnull
-- AI失敗による未診断は `requires_manual_review = true`
-- 管理者手動修正済みの場合はattemptsに反映し、audit_eventsにも残す
+- AI失敗による未診断はAPIエラーと `ai_call_logs.status=failed` で追跡する。手動レビュー状態へ自動移行するとは限らない
+- 管理者手動修正と `audit_events` への書き込みは将来対応である
 
 ## 再計算
 

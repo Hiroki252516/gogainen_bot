@@ -26,9 +26,11 @@
 - pretest: 用語ごとに `pretest_v1`
 - retest: `retest_v1`〜`retest_v4`。5回目以降はv4を再利用
 - learning: stage・用語ごとにv1〜v5。6回目以降はv5を再利用
-- final_test: 用語ごとに `final_v1`
+- final_test: 用語ごとに `final_test_v1`
 
 `variant_key` は既存DBの `questions.variant_key` と互換に保存する。
+
+現行の主なAPIルートは `/api/health`、`/api/participants`、`/api/experiment/{experiment_id}/pretest|retest|l0-check|final-test`、`/api/attempts`、`/api/participants/{participant_id}/diagnose-pretest`、`/api/tutor-sessions`、`/api/tutor-turns/{turn_id}/respond`、`/api/participants/{participant_id}/evaluation-summary/recalculate`、`/api/admin/*` である。frontendの `/api/*` はNext.jsのrewriteでbackendへ転送する。
 
 ## Scoring
 
@@ -37,3 +39,5 @@ A/B/Cの3つだけを選択した場合だけ正解。不正解分類はM3を最
 ## Learning API
 
 `learning_stage` は既存の内部値 `enrichment`、`conceptual_change`、`final_feedback` を使う。教材生成時は用語・段階・固定確認問題・共通RAG本文を両群へ渡す。proposedだけがログ・taxonomy・足場掛け情報を追加で受け取る。
+
+学習ターン回答APIのレスポンスには `item_results` フィールドを残すが、現行の固定複数選択フローでは空配列になる。個別項目結果を返す自由回答フローは将来または互換用である。

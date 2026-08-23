@@ -1,6 +1,6 @@
 # 07. Data Model
 
-PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `created_at` を持たせ、更新されるテーブルには `updated_at` を持たせる。主キーはUUIDを基本にする。
+Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使用する。SQLAlchemyの同期engineで接続し、起動時は `Base.metadata.create_all` と互換用の不足列追加を行う。Alembicによるマイグレーションは現行起動経路では使用しない。モデル上のIDは36文字の文字列（SQLAlchemyの `String(36)`）として保存し、構造化列はSQLAlchemyのJSON型である。
 
 ## Enum Values
 
@@ -18,14 +18,15 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 - `l0_check`  # 互換・補助フェーズ。現行MVPの主導線は final_test
 - `final_test`
 - `transfer`
-- `delayed_retest`
+- `delayed_retest`（将来対応。現行APIの主導線では未使用）
 
 ### question_type
 
-- `definition`
-- `discrimination`
-- `practice`
-- `retest_same_construct`
+- `multi_select`
+- `retest_multi_select`
+- `final_multi_select`
+- `learning_multi_select`
+- `control_learning_multi_select`
 - `l0_free_response`
 - `transfer`
 
@@ -61,7 +62,7 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 
 ### participants
 
-- id UUID PRIMARY KEY
+- id TEXT(36) PRIMARY KEY
 - display_code TEXT UNIQUE NOT NULL
 - group_condition TEXT NOT NULL
 - assignment_method TEXT NOT NULL DEFAULT `manual`
@@ -78,14 +79,14 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 
 アンケート接続用の現行モデル。`/survey` 画面は暫定表示だが、DBモデルは用意されている。
 
-- id UUID PRIMARY KEY
-- participant_id UUID REFERENCES participants(id)
+- id TEXT(36) PRIMARY KEY
+- participant_id TEXT(36) REFERENCES participants(id)
 - phase TEXT NOT NULL
 - ai_experience_level INT NULL
 - programming_experience_level INT NULL
 - llm_usage_level INT NULL
 - self_rated_ai_knowledge INT NULL
-- term_confidences JSONB NULL
+- term_confidences JSON NULL
 - usability_rating INT NULL
 - helpfulness_rating INT NULL
 - perceived_hint_amount INT NULL
@@ -94,7 +95,7 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 
 ### terms
 
-- id UUID PRIMARY KEY
+- id TEXT(36) PRIMARY KEY
 - slug TEXT UNIQUE NOT NULL
 - label TEXT NOT NULL
 - description TEXT
@@ -106,9 +107,9 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 
 参加者内比較を将来使う場合に備える。MVPでは参加者の `group_condition` と同じ値を保存してよい。
 
-- id UUID PRIMARY KEY
-- participant_id UUID REFERENCES participants(id)
-- term_id UUID REFERENCES terms(id)
+- id TEXT(36) PRIMARY KEY
+- participant_id TEXT(36) REFERENCES participants(id)
+- term_id TEXT(36) REFERENCES terms(id)
 - group_condition TEXT NOT NULL
 - is_learning_target BOOLEAN NOT NULL DEFAULT false
 - selection_reason TEXT NULL
@@ -117,13 +118,13 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 
 ### questions
 
-- id UUID PRIMARY KEY
-- term_id UUID REFERENCES terms(id)
+- id TEXT(36) PRIMARY KEY
+- term_id TEXT(36) REFERENCES terms(id)
 - phase TEXT NOT NULL
 - question_type TEXT NOT NULL
 - body TEXT NOT NULL
 - expected_answer TEXT
-- expected_keywords JSONB NULL
+- expected_keywords JSON NULL
 - difficulty INT DEFAULT 1
 - construct_key TEXT NOT NULL
 - variant_key TEXT NOT NULL
@@ -134,8 +135,8 @@ PostgreSQL + SQLAlchemy + Alembicを使用する。すべてのテーブルに `
 
 ### question_options
 
-- id UUID PRIMARY KEY
-- question_id UUID REFERENCES questions(id)
+- id TEXT(36) PRIMARY KEY
+- question_id TEXT(36) REFERENCES questions(id)
 - option_label TEXT NOT NULL
 - body TEXT NOT NULL
 - is_correct BOOLEAN NOT NULL
@@ -158,22 +159,23 @@ misconception_type values:
 
 選択肢ランダム化の再現性を保存する。
 
-- id UUID PRIMARY KEY
-- participant_id UUID REFERENCES participants(id)
-- question_id UUID REFERENCES questions(id)
-- option_order JSONB NOT NULL
+- id TEXT(36) PRIMARY KEY
+- participant_id TEXT(36) REFERENCES participants(id)
+- question_id TEXT(36) REFERENCES questions(id)
+- option_order JSON NOT NULL
 - random_seed TEXT NOT NULL
 - created_at TIMESTAMP NOT NULL
 
 ### attempts
 
-- id UUID PRIMARY KEY
-- participant_id UUID REFERENCES participants(id)
-- term_id UUID REFERENCES terms(id)
-- question_id UUID REFERENCES questions(id)
+- id TEXT(36) PRIMARY KEY
+- participant_id TEXT(36) REFERENCES participants(id)
+- term_id TEXT(36) REFERENCES terms(id)
+- question_id TEXT(36) REFERENCES questions(id)
 - phase TEXT NOT NULL
 - attempt_index INT NOT NULL DEFAULT 1
-- selected_option_id UUID NULL REFERENCES question_options(id)
+- selected_option_id TEXT(36) NULL REFERENCES question_options(id)  # 旧互換列
+- selected_option_ids JSON NULL  # 現行の複数選択正本
 - free_text_answer TEXT NULL
 - reason_text TEXT NULL  # pretestでは常にNULL
 - confidence INT NULL  # legacy nullable; pretestとlearningでは収集しない
@@ -181,7 +183,7 @@ misconception_type values:
 - question_shown_at TIMESTAMP NULL
 - answered_at TIMESTAMP NULL
 - question_body_snapshot TEXT NULL
-- option_order_snapshot JSONB NULL
+- option_order_snapshot JSON NULL
 - is_correct BOOLEAN NULL
 - score FLOAT NULL
 - diagnosed_status TEXT NULL
@@ -201,9 +203,9 @@ misconception_type values:
 
 ### learner_states
 
-- id UUID PRIMARY KEY
-- participant_id UUID REFERENCES participants(id)
-- term_id UUID REFERENCES terms(id)
+- id TEXT(36) PRIMARY KEY
+- participant_id TEXT(36) REFERENCES participants(id)
+- term_id TEXT(36) REFERENCES terms(id)
 - current_status TEXT NOT NULL
 - primary_misconception TEXT NULL
 - secondary_misconception TEXT NULL
@@ -214,8 +216,8 @@ misconception_type values:
 - recurrence_count INT DEFAULT 0
 - l0_success_count INT DEFAULT 0
 - transfer_success_count INT DEFAULT 0
-- last_attempt_id UUID NULL REFERENCES attempts(id)
-- last_tutor_turn_id UUID NULL REFERENCES tutor_turns(id)
+- last_attempt_id TEXT(36) NULL REFERENCES attempts(id)
+- last_tutor_turn_id TEXT(36) NULL REFERENCES tutor_turns(id)
 - state_summary TEXT NULL
 - updated_reason TEXT NULL
 - created_at TIMESTAMP NOT NULL
@@ -227,9 +229,9 @@ Unique:
 
 ### tutor_sessions
 
-- id UUID PRIMARY KEY
-- participant_id UUID REFERENCES participants(id)
-- term_id UUID REFERENCES terms(id)
+- id TEXT(36) PRIMARY KEY
+- participant_id TEXT(36) REFERENCES participants(id)
+- term_id TEXT(36) REFERENCES terms(id)
 - session_index INT NOT NULL
 - group_condition TEXT NOT NULL
 - started_at TIMESTAMP NOT NULL
@@ -238,8 +240,8 @@ Unique:
 
 ### tutor_turns
 
-- id UUID PRIMARY KEY
-- tutor_session_id UUID REFERENCES tutor_sessions(id)
+- id TEXT(36) PRIMARY KEY
+- tutor_session_id TEXT(36) REFERENCES tutor_sessions(id)
 - turn_index INT NOT NULL
 - scaffolding_level TEXT NULL
 - teaching_strategy TEXT NOT NULL
@@ -247,12 +249,12 @@ Unique:
 - strategy_changed BOOLEAN NOT NULL DEFAULT false
 - tutor_message TEXT NOT NULL
 - learner_prompt TEXT NULL
-- practice_question_json JSONB NULL
+- practice_question_json JSON NULL
 - learner_response TEXT NULL
 - learner_confidence INT NULL  # legacy nullable; learningでは収集しない
 - ai_feedback TEXT NULL
-- diagnosis_json JSONB NULL
-- grading_json JSONB NULL
+- diagnosis_json JSON NULL
+- grading_json JSON NULL
 - next_scaffolding_level TEXT NULL
 - forbidden_help_given BOOLEAN NOT NULL DEFAULT false
 - question_shown_at TIMESTAMP NULL
@@ -276,11 +278,11 @@ Unique:
 
 ### recurrence_events
 
-- id UUID PRIMARY KEY
-- participant_id UUID REFERENCES participants(id)
-- term_id UUID REFERENCES terms(id)
-- previous_attempt_id UUID REFERENCES attempts(id)
-- current_attempt_id UUID REFERENCES attempts(id)
+- id TEXT(36) PRIMARY KEY
+- participant_id TEXT(36) REFERENCES participants(id)
+- term_id TEXT(36) REFERENCES terms(id)
+- previous_attempt_id TEXT(36) REFERENCES attempts(id)
+- current_attempt_id TEXT(36) REFERENCES attempts(id)
 - previous_misconception_type TEXT NOT NULL
 - current_misconception_type TEXT NOT NULL
 - is_same_type BOOLEAN NOT NULL
@@ -291,12 +293,12 @@ Unique:
 
 ### ai_call_logs
 
-- id UUID PRIMARY KEY
+- id TEXT(36) PRIMARY KEY
 - provider TEXT NOT NULL
 - fallback_provider TEXT NULL
 - purpose TEXT NOT NULL
-- request_payload JSONB NOT NULL
-- response_payload JSONB NULL
+- request_payload JSON NOT NULL
+- response_payload JSON NULL
 - raw_text TEXT NULL
 - codex_thread_id TEXT NULL
 - codex_turn_id TEXT NULL
@@ -312,22 +314,22 @@ purpose values:
 - generate_tutoring_turn
 - grade_response
 - generate_feedback
+- generate_correct_answer_summary
+- explain_selected_distractor
 - summarize_learner_state
 
 status values:
 
 - success
 - failed
-- retried
-- fallback_used
-- pending_manual_review
+- `retried`, `fallback_used`, `pending_manual_review` は互換上保持できるが、現行の通常AI呼び出しは自動再試行・Mockフォールバック・手動保留を行わず、主に `success` または `failed` を記録する。
 
 ### evaluation_summaries
 
 現行実装の評価サマリーは参加者単位の最新集計として保存する。再計算のたびに新しい行を作成し、管理画面では最新行を参照する。既存カラム名との互換性のため `l0_correct_rate` を残すが、現行MVPでは `final_test` が存在する場合に `final_test` の選択式正答率を入れる。
 
-- id UUID PRIMARY KEY
-- participant_id UUID REFERENCES participants(id)
+- id TEXT(36) PRIMARY KEY
+- participant_id TEXT(36) REFERENCES participants(id)
 - group_condition TEXT NOT NULL
 - pretest_score FLOAT NULL
 - retest_score FLOAT NULL
@@ -343,18 +345,18 @@ status values:
 - completed BOOLEAN NOT NULL DEFAULT false
 - created_at TIMESTAMP NOT NULL
 
-次段のログ拡張では、周回数が固定されない再テストを扱うため、以下のJSON列を追加候補にする。現時点ではスコア推移は `attempts` と `answer_history` から再計算できる形を正とし、保存済みsummaryだけに依存しない。
+以下のJSON列は現行の `EvaluationSummary` モデルと再計算処理で使用する。保存済みsummaryだけに依存せず、`attempts`、`learner_states`、`recurrence_events`から再計算できる。
 
-- score_timeline_json JSONB NULL
-- misconception_timeline_json JSONB NULL
-- learning_burden_json JSONB NULL
-- condition_check_json JSONB NULL
+- score_timeline_json JSON NULL
+- misconception_timeline_json JSON NULL
+- learning_burden_json JSON NULL
+- condition_check_json JSON NULL
 
 `score_timeline_json` は `pretest`, `retest_1`, `retest_2`, ..., `final_test` の得点率、事前比差分ポイント、直前比差分ポイント、未達項目数を保持する。`misconception_timeline_json` は用語別に `pretest -> retest_n -> final_test` の誤概念タイプ推移と `resolved`, `same_type_recurred`, `changed_type`, `unknown_persisted`, `regressed` の変化分類を保持する。既存の `pretest_score`, `retest_score`, `l0_correct_rate` は互換用に残す。
 
 ### export_jobs
 
-- id UUID PRIMARY KEY
+- id TEXT(36) PRIMARY KEY
 - export_name TEXT NOT NULL
 - file_path TEXT NOT NULL
 - status TEXT NOT NULL
@@ -363,18 +365,20 @@ status values:
 
 ### audit_events
 
-- id UUID PRIMARY KEY
+- id TEXT(36) PRIMARY KEY
 - actor TEXT NOT NULL
 - action TEXT NOT NULL
 - entity_type TEXT NOT NULL
-- entity_id UUID NULL
-- before_json JSONB NULL
-- after_json JSONB NULL
+- entity_id TEXT(36) NULL
+- before_json JSON NULL
+- after_json JSON NULL
 - created_at TIMESTAMP NOT NULL
 
-管理者による手動修正、データ削除、CSV出力を記録する。
+`AuditEvent` モデルは存在するが、管理者による手動修正・データ削除の書き込みAPIは現行MVPにない。CSV出力は `ExportJob` とログAPIで管理する。手動修正・削除の監査記録は将来対応である。
 
-## Indexes
+## Logical Search Keys and Constraints
+
+以下はAPI・集計で使う論理的な検索キーと、現行モデルで明示されている一意制約である。現行コードはこれらすべてを物理的な`Index`として宣言しているわけではないため、DBの物理インデックス一覧とは区別する。
 
 - participants.display_code unique
 - terms.slug unique
@@ -387,9 +391,9 @@ status values:
 - recurrence_events.participant_id + term_id
 - ai_call_logs.purpose + status
 
-## 削除方針
+## 削除方針（将来運用）
 
-MVPでは物理削除でよい。ただし管理画面から削除した場合は `audit_events` に記録する。
+現行MVPには管理画面から参加者や全実験データを削除するAPIがない。データ削除を導入する場合は、物理削除の範囲、確認ダイアログ、`audit_events` 記録を別途実装する。
 
 削除対象:
 
