@@ -50,7 +50,7 @@ if (learningPage.includes("足場掛けレベル:")) {
 if (learningPage.includes("ターン: {turn.turn_index}")) {
   throw new Error("learning page must not show fixed turn progress in stage-based UI");
 }
-for (const expectedText of ["対象概念:", "教材フィードバック", "正解です。", "不正解です。", "feedback-card-ok", "feedback-card-error", "item_results", "次の確認へ"]) {
+for (const expectedText of ["対象概念:", "教材フィードバック", "正解です。", "不正解です。", "feedback-card-ok", "feedback-card-error", "item_results", "次の確認へ", "次の確認を準備中..."]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing final feedback/debug update behavior: ${expectedText}`);
   }
@@ -60,7 +60,7 @@ for (const expectedText of ["SubmitProgress", "分析中です", "秒経過", "�
     throw new Error(`learning page missing submit progress behavior: ${expectedText}`);
   }
 }
-for (const expectedText of ["SessionLoadProgress", "学習セッションを準備しています", "教材を生成しています", "確認問題を準備しています", "学習画面を表示しています", "aria-busy", "学習セッション読み込みの進行状況"]) {
+for (const expectedText of ["SessionLoadProgress", "ContinueProgress", "学習セッションを準備しています", "教材を生成しています", "確認問題を準備しています", "学習画面を表示しています", "aria-busy={submitting", "学習セッション読み込みの進行状況", "次の確認読み込みの進行状況"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing initial loading progress behavior: ${expectedText}`);
   }
@@ -102,6 +102,18 @@ for (const removedText of ["term_understanding", "concept_understanding"]) {
 const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow backend next_url after scoring");
+}
+
+const learningTargetsPage = fs.readFileSync(new URL("../app/learning-targets/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ["pretest_results", "今回の確認結果", "result_label", "result_summary", "is_learning_target", "pretest-result-correct", "pretest-result-incorrect"]) {
+  if (!learningTargetsPage.includes(expectedText)) {
+    throw new Error(`learning targets page missing pretest result behavior: ${expectedText}`);
+  }
+}
+for (const forbiddenText of ["misconception_type", "M1", "M2", "M3", "M4", "taxonomy"]) {
+  if (learningTargetsPage.includes(forbiddenText)) {
+    throw new Error(`learning targets page must not expose internal diagnosis text: ${forbiddenText}`);
+  }
 }
 
 const markdownText = fs.readFileSync(new URL("../components/MarkdownText.tsx", import.meta.url), "utf8");

@@ -177,6 +177,46 @@ def test_learning_target_display_reflects_m1_m3_and_unknown_diagnoses():
         assert target["current_stage_for_display"] == expected_stage
 
 
+def test_learning_targets_returns_all_pretest_results_without_internal_labels():
+    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    labels_by_term = {
+        "llm_knowledge": ["A", "B", "C"],
+        "multi_agent": ["G", "H", "I"],
+        "memory_process": ["J"],
+    }
+    for question in questions:
+        response = client.post(
+            "/api/attempts",
+            json={
+                "participant_id": pid,
+                "question_id": question["question_id"],
+                "phase": "pretest",
+                "selected_option_ids": _ids_for_labels(question, labels_by_term[question["term_slug"]]),
+                "response_time_sec": 1.25,
+                "question_shown_at": QUESTION_SHOWN_AT,
+                "answered_at": ANSWERED_AT,
+            },
+        )
+        assert response.status_code == 200, response.text
+    diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
+    assert diagnosis.status_code == 200, diagnosis.text
+
+    response = client.get(f"/api/participants/{pid}/learning-targets")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    results = payload["pretest_results"]
+    assert [result["term_slug"] for result in results] == list(ACTIVE_TERM_SLUGS)
+    assert [result["is_correct"] for result in results] == [True, False, False]
+    assert [result["result_label"] for result in results] == ["正解", "不正解", "不正解"]
+    assert [result["is_learning_target"] for result in results] == [False, True, True]
+    assert "概念の分類や位置づけに関する捉え方を見直します。" in results[1]["result_summary"]
+    assert results[2]["result_summary"] == "基本知識が不足している可能性があります。"
+    assert all("misconception_type" not in result for result in results)
+    assert all("M1" not in str(result) and "M3" not in str(result) for result in results)
+
+
 def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()

@@ -160,6 +160,16 @@ function SessionLoadProgress() {
   );
 }
 
+function ContinueProgress() {
+  return (
+    <ProgressCard
+      title="学習セッションを準備しています"
+      steps={SESSION_LOAD_PROGRESS_STEPS}
+      ariaLabel="次の確認読み込みの進行状況"
+    />
+  );
+}
+
 export default function LearningPage() {
   const router = useRouter();
   const params = useParams<{ termSlug: string }>();
@@ -295,7 +305,7 @@ export default function LearningPage() {
 
   return (
     <AppShell step="学習セッション">
-      <section className="panel stack" aria-busy={!turn && !error}>
+      <section className="panel stack" aria-busy={submitting || (!turn && !error)}>
         <h1>学習セッション</h1>
         {error ? <div className="danger">{error}</div> : null}
         {turn ? (
@@ -332,9 +342,10 @@ export default function LearningPage() {
                     </div>
                   ) : null}
                 </section>
+                {submitting ? <ContinueProgress /> : null}
                 <div className="actions">
                   <button className="secondary" onClick={() => feedback.session_completed ? router.push(nextHref) : continueLearning()} disabled={submitting}>
-                    {feedback.session_completed ? "次へ" : "次の確認へ"}
+                    {feedback.session_completed ? "次へ" : submitting ? "次の確認を準備中..." : "次の確認へ"}
                   </button>
                 </div>
               </>
