@@ -19,6 +19,7 @@ from app.services.experiment import (
     admin_summary,
     admin_logs_overview,
     create_participant,
+    delete_participant,
     create_tutor_session,
     export_overview_logs_excel_csv,
     export_overview_logs_csv,
@@ -270,6 +271,11 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
             for row in rows
         ]
     }
+
+
+@app.delete("/api/admin/participants/{participant_id}")
+def api_delete_admin_participant(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return delete_participant(db, participant_id)
 
 
 @app.get("/api/admin/logs/overview")

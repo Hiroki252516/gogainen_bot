@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { API_BASE, api } from "@/lib/api";
 
@@ -18,6 +19,7 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState("");
   const [logError, setLogError] = useState("");
   const [recalculating, setRecalculating] = useState(false);
+  const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null);
 
   useEffect(() => {
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants));
@@ -69,6 +71,32 @@ export default function AdminPage() {
       setLogError(err instanceof Error ? err.message : String(err));
     } finally {
       setRecalculating(false);
+    }
+  }
+
+  async function deleteParticipant(participant: Participant) {
+    const confirmed = window.confirm(`参加者 ${participant.display_code} と関連する実験データを完全に削除します。元に戻せません。続行しますか？`);
+    if (!confirmed) return;
+
+    setLogError("");
+    setDeletingParticipantId(participant.participant_id);
+    try {
+      await api(`/api/admin/participants/${participant.participant_id}`, { method: "DELETE" });
+      if (participantLog?.participant?.participant_id === participant.participant_id) {
+        setParticipantLog(null);
+      }
+      const [participantData, summaryData, overviewData] = await Promise.all([
+        api<{ participants: Participant[] }>("/api/admin/participants"),
+        api("/api/admin/evaluation-summary"),
+        api("/api/admin/logs/overview")
+      ]);
+      setParticipants(participantData.participants);
+      setSummary(summaryData);
+      setOverview(overviewData);
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeletingParticipantId(null);
     }
   }
 
@@ -133,6 +161,9 @@ export default function AdminPage() {
             ) : null}
           </div>
           <div className="actions">
+            <Link className="button secondary" href="/start">
+              実験開始画面へ戻る
+            </Link>
             <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview_excel.csv`}>
               全体ログCSV Excel
             </a>
@@ -174,6 +205,7 @@ export default function AdminPage() {
                 <th>進捗</th>
                 <th>完了</th>
                 <th>ログ</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -186,6 +218,15 @@ export default function AdminPage() {
                   <td>
                     <button className="secondary" onClick={() => loadParticipantLog(p.participant_id)}>
                       被験者ログを見る
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className="danger-button"
+                      disabled={deletingParticipantId === p.participant_id}
+                      onClick={() => deleteParticipant(p)}
+                    >
+                      {deletingParticipantId === p.participant_id ? "削除中..." : "参加者を削除"}
                     </button>
                   </td>
                 </tr>

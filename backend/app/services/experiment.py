@@ -22,11 +22,13 @@ from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import content_term, learning_question_spec, load_content
 from app.models import (
     AICallLog,
+    AuditEvent,
     Attempt,
     EvaluationSummary,
     ExportJob,
     LearnerState,
     Participant,
+    ParticipantSurvey,
     Question,
     QuestionDisplayOrder,
     QuestionOption,
@@ -386,6 +388,57 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
     db.commit()
     db.refresh(participant)
     return participant
+
+
+def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
+    participant = get_participant(db, participant_id)
+    session_ids = [session.id for session in db.query(TutorSession).filter_by(participant_id=participant.id).all()]
+    deleted_counts: dict[str, int] = {}
+
+    def delete_by_participant(model: Any) -> None:
+        deleted_counts[model.__tablename__] = db.query(model).filter_by(participant_id=participant.id).delete(synchronize_session=False)
+
+    try:
+        delete_by_participant(ParticipantSurvey)
+        delete_by_participant(TermAssignment)
+        delete_by_participant(QuestionDisplayOrder)
+        delete_by_participant(RecurrenceEvent)
+        if session_ids:
+            deleted_counts["tutor_turns"] = db.query(TutorTurn).filter(TutorTurn.tutor_session_id.in_(session_ids)).delete(synchronize_session=False)
+        else:
+            deleted_counts["tutor_turns"] = 0
+        delete_by_participant(TutorSession)
+        delete_by_participant(LearnerState)
+        delete_by_participant(EvaluationSummary)
+        delete_by_participant(Attempt)
+
+        ai_logs = db.query(AICallLog).all()
+        participant_ai_logs = [log for log in ai_logs if (log.request_payload or {}).get("participant_id") == participant.id]
+        for log in participant_ai_logs:
+            db.delete(log)
+        deleted_counts["ai_call_logs"] = len(participant_ai_logs)
+
+        audit = AuditEvent(
+            actor="admin_ui",
+            action="delete_participant",
+            entity_type="participant",
+            entity_id=participant.id,
+            before_json={
+                "display_code": participant.display_code,
+                "group_condition": participant.group_condition,
+                "current_step": participant.current_step,
+                "deleted_counts": deleted_counts,
+            },
+            after_json={"deleted": True},
+        )
+        db.add(audit)
+        db.delete(participant)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {"participant_id": participant.id, "deleted": True, "deleted_counts": deleted_counts}
 
 
 
