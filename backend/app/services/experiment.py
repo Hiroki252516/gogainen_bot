@@ -800,12 +800,30 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
         .order_by(TermAssignment.priority_score.desc())
         .all()
     )
+
+    def learner_summary(state: LearnerState) -> str:
+        if state.current_status == "unknown":
+            return "基本知識が不足している可能性があります。"
+        if participant.group_condition == "proposed":
+            if state.primary_misconception == "M3":
+                return "概念の分類や位置づけに関する捉え方を見直します。"
+            if state.primary_misconception == "M1":
+                return "概念についての個別の説明に関する捉え方を見直します。"
+        return _public_summary(state.state_summary)
+
+    def target_stage(state: LearnerState) -> str:
+        if state.current_status == "misconception":
+            return LEARNING_STAGE_LABELS["conceptual_change"]
+        if state.current_status == "unknown":
+            return LEARNING_STAGE_LABELS["enrichment"]
+        return PUBLIC_LEVEL.get(normalize_level(state.scaffolding_level), "概念理解を確認")
+
     return [
         {
             "term_slug": term.slug,
             "term_label": term.label,
-            "summary_for_learner": _public_summary(state.state_summary),
-            "current_stage_for_display": PUBLIC_LEVEL.get(normalize_level(state.scaffolding_level), "概念理解を確認"),
+            "summary_for_learner": learner_summary(state),
+            "current_stage_for_display": target_stage(state),
         }
         for _, term, state in rows
     ]
