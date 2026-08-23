@@ -1,6 +1,7 @@
 import asyncio
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.ai.backend import strategy_for
@@ -10,7 +11,20 @@ from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.main import app
-from app.models import AICallLog, Attempt, TutorTurn
+from app.models import (
+    AICallLog,
+    AuditEvent,
+    Attempt,
+    EvaluationSummary,
+    LearnerState,
+    Participant,
+    ParticipantSurvey,
+    QuestionDisplayOrder,
+    RecurrenceEvent,
+    TermAssignment,
+    TutorSession,
+    TutorTurn,
+)
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, content_term, load_content
 import app.services.experiment as experiment_service
@@ -375,6 +389,76 @@ def test_admin_logs_and_csv_show_multiple_selection_labels():
     assert participant_csv.status_code == 200
     assert "D / E / F" in participant_csv.text
     assert "answer,test_attempt" in participant_csv.text
+
+
+def test_admin_can_delete_participant_and_related_data():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session_response = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"})
+    assert session_response.status_code == 200
+    assert client.post(f"/api/participants/{pid}/evaluation-summary/recalculate").status_code == 200
+
+    db = SessionLocal()
+    try:
+        attempts = db.query(Attempt).filter_by(participant_id=pid).order_by(Attempt.created_at).all()
+        db.add(ParticipantSurvey(participant_id=pid, phase="posttest"))
+        db.add(
+            RecurrenceEvent(
+                participant_id=pid,
+                term_id=attempts[0].term_id,
+                previous_attempt_id=attempts[0].id,
+                current_attempt_id=attempts[1].id,
+                previous_misconception_type="M1",
+                current_misconception_type="M1",
+                is_same_type=True,
+                phase="retest",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    deleted = client.delete(f"/api/admin/participants/{pid}")
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["deleted"] is True
+    assert client.get(f"/api/admin/participants/{pid}/logs").status_code == 404
+    assert pid not in {row["participant_id"] for row in client.get("/api/admin/participants").json()["participants"]}
+
+    db = SessionLocal()
+    try:
+        assert db.query(Participant).filter_by(id=pid).count() == 0
+        assert db.query(ParticipantSurvey).filter_by(participant_id=pid).count() == 0
+        assert db.query(TermAssignment).filter_by(participant_id=pid).count() == 0
+        assert db.query(QuestionDisplayOrder).filter_by(participant_id=pid).count() == 0
+        assert db.query(RecurrenceEvent).filter_by(participant_id=pid).count() == 0
+        assert db.query(TutorSession).filter_by(participant_id=pid).count() == 0
+        assert db.query(LearnerState).filter_by(participant_id=pid).count() == 0
+        assert db.query(EvaluationSummary).filter_by(participant_id=pid).count() == 0
+        assert db.query(Attempt).filter_by(participant_id=pid).count() == 0
+        assert not any((log.request_payload or {}).get("participant_id") == pid for log in db.query(AICallLog).all())
+        audit = db.query(AuditEvent).filter_by(entity_type="participant", entity_id=pid, action="delete_participant").first()
+        assert audit is not None
+        assert audit.after_json == {"deleted": True}
+    finally:
+        db.close()
+
+    assert client.delete(f"/api/admin/participants/{pid}").status_code == 404
+
+
+def test_admin_participant_delete_rolls_back_on_commit_failure(monkeypatch):
+    participant = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    db = SessionLocal()
+    try:
+        def fail_commit():
+            raise RuntimeError("commit failed")
+
+        monkeypatch.setattr(db, "commit", fail_commit)
+        with pytest.raises(RuntimeError, match="commit failed"):
+            experiment_service.delete_participant(db, pid)
+    finally:
+        db.close()
+
+    assert client.get(f"/api/admin/participants/{pid}/logs").status_code == 200
 
 
 def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonomy():
