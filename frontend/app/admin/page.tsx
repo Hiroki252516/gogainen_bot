@@ -8,6 +8,16 @@ import { API_BASE, api } from "@/lib/api";
 type Participant = { participant_id: string; display_code: string; group_condition: string; current_step: string; completed_at: string | null };
 type GroupCondition = "control" | "proposed";
 
+const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
+  resolved: "解消",
+  same_type_recurred: "同種再発",
+  changed_type: "別タイプ化",
+  unknown_persisted: "unknown継続",
+  regressed: "後戻り",
+  unclassified: "未分類"
+};
+const MISCONCEPTION_TRANSITION_TYPES = Object.keys(MISCONCEPTION_TRANSITION_LABELS);
+
 export default function AdminPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activeGroup, setActiveGroup] = useState<GroupCondition>("control");
@@ -191,6 +201,7 @@ export default function AdminPage() {
               <p>{activeParticipants.length}</p>
             </div>
           </div>
+          <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
           <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
           <LogList title="評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "completed", "created_at"]} />
           <LogList title="最近のAI呼び出し" rows={activeAiLogs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
@@ -283,6 +294,55 @@ function formatPoints(value: number | null) {
   if (value === null || value === undefined) return "-";
   const sign = value > 0 ? "+" : "";
   return `${sign}${Math.round(value * 10) / 10}pt`;
+}
+
+function MisconceptionTransitionSummary({ summary }: { summary: any }) {
+  if (!summary) return null;
+  const terms = summary.terms || [];
+  return (
+    <section className="insight-panel stack" aria-labelledby="group-misconception-title">
+      <div>
+        <h3 id="group-misconception-title">誤概念推移（群集計）</h3>
+        <p className="muted">用語ごとの事前テスト実施者を分母に、誤概念の変化を集計しています。</p>
+      </div>
+      {terms.length ? (
+        <div className="insight-grid">
+          {terms.map((term: any) => (
+            <div className="insight-card" key={term.term_slug}>
+              <div className="term-row-head">
+                <strong>{term.term_label || term.term_slug}</strong>
+                <span className="muted">集計対象 {term.eligible_count}人 / 未受験 {term.missing_count}人</span>
+              </div>
+              {term.eligible_count > 0 ? (
+                <table className="table compact-table">
+                  <thead>
+                    <tr>
+                      <th>変化</th>
+                      <th>人数</th>
+                      <th>割合</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {MISCONCEPTION_TRANSITION_TYPES.map((transitionType) => (
+                      <tr key={transitionType}>
+                        <td>{MISCONCEPTION_TRANSITION_LABELS[transitionType]}</td>
+                        <td>{term.counts?.[transitionType] ?? 0}人</td>
+                        <td>{formatRate(term.rates?.[transitionType])}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="muted">集計対象データなし</p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">集計対象データなし</p>
+      )}
+    </section>
+  );
 }
 
 function EvaluationSummary({ summary }: { summary: any }) {

@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -389,6 +390,58 @@ def test_admin_logs_and_csv_show_multiple_selection_labels():
     assert participant_csv.status_code == 200
     assert "D / E / F" in participant_csv.text
     assert "answer,test_attempt" in participant_csv.text
+
+
+def test_group_misconception_transition_summary_uses_term_pretest_denominator():
+    transition_types = ["resolved", "same_type_recurred", "changed_type", "unknown_persisted", "regressed", "unclassified"]
+    control_pids = [
+        client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()["participant_id"]
+        for _ in transition_types
+    ]
+    missing_pid = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()["participant_id"]
+    proposed_pid = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()["participant_id"]
+
+    db = SessionLocal()
+    try:
+        control_participants = [db.get(experiment_service.Participant, pid) for pid in control_pids + [missing_pid]]
+        proposed_participant = db.get(experiment_service.Participant, proposed_pid)
+        terms = experiment_service._term_map(db)
+        control_summaries = [
+            SimpleNamespace(
+                participant_id=pid,
+                misconception_timeline_json={
+                    "terms": [
+                        {
+                            "term_slug": "llm_knowledge",
+                            "change_type": transition_type,
+                            "events": [{"phase": "pretest"}],
+                        }
+                    ]
+                },
+            )
+            for pid, transition_type in zip(control_pids, transition_types)
+        ]
+        control_result = experiment_service._group_misconception_transition_summary(control_participants, control_summaries, terms)
+        control_term = next(row for row in control_result["terms"] if row["term_slug"] == "llm_knowledge")
+        assert control_term["eligible_count"] == len(transition_types)
+        assert control_term["missing_count"] == 1
+        assert control_term["counts"] == {transition_type: 1 for transition_type in transition_types}
+        assert all(rate == 1 / len(transition_types) for rate in control_term["rates"].values())
+
+        proposed_result = experiment_service._group_misconception_transition_summary(
+            [proposed_participant],
+            [SimpleNamespace(participant_id=proposed_pid, misconception_timeline_json={"terms": [{"term_slug": "llm_knowledge", "change_type": "resolved", "events": [{"phase": "pretest"}]}]})],
+            terms,
+        )
+        proposed_term = next(row for row in proposed_result["terms"] if row["term_slug"] == "llm_knowledge")
+        assert proposed_term["counts"]["resolved"] == 1
+        assert sum(proposed_term["counts"].values()) == 1
+    finally:
+        db.close()
+
+    api_groups = client.get("/api/admin/evaluation-summary").json()["groups"]
+    assert all("misconception_transition_summary" in group for group in api_groups)
+    assert all(len(group["misconception_transition_summary"]["terms"]) == 3 for group in api_groups)
 
 
 def test_admin_can_delete_participant_and_related_data():

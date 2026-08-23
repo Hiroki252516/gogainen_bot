@@ -44,6 +44,12 @@ score_delta_from_previous_test_pt =
 | `unknown_persisted` | unknownが継続 |
 | `regressed` | 正答後に誤答へ戻った |
 
+## 群別誤概念推移集計
+
+管理画面の `control` / `proposed` 群タブでは、保存済みの参加者別 `misconception_timeline_json` を用語ごとに集計する。集計対象は、その用語の事前テストイベントを持つ参加者とし、未受験者・途中離脱者など事前テスト結果がない参加者は `missing_count` に分ける。
+
+群・用語ごとに `resolved`、`same_type_recurred`、`changed_type`、`unknown_persisted`、`regressed`、`unclassified` の人数と割合を返す。割合の分母は群全体ではなく、その用語の `eligible_count` とする。集計値は既存の参加者別評価サマリーから算出し、新しいDB列は追加しない。
+
 学習負担ログとして、再テスト回数、学習セッション数、学習ターン数、学習対象として残った回数、合計学習時間、合計テスト時間も集計候補にする。
 
 条件統制チェックとして、control群で `teaching_strategy = general_explanation` が維持されたか、proposed群で誤概念タイプ・過去ログ・学習ステージが教授方略に使われたか、`forbidden_help_given` や `requires_manual_review` が発生したかをCSVで判別できるようにする。

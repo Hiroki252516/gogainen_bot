@@ -1386,8 +1386,65 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
     return summary
 
 
+MISCONCEPTION_TRANSITION_TYPES = (
+    "resolved",
+    "same_type_recurred",
+    "changed_type",
+    "unknown_persisted",
+    "regressed",
+    "unclassified",
+)
+
+
+def _group_misconception_transition_summary(
+    group_participants: list[Participant],
+    latest_summaries: list[EvaluationSummary],
+    terms: dict[str, Term],
+) -> dict[str, Any]:
+    summaries_by_participant = {summary.participant_id: summary for summary in latest_summaries}
+    active_terms = sorted(
+        (term for term in terms.values() if term.slug in PRETEST_TERM_SLUGS),
+        key=lambda term: term.display_order,
+    )
+    output_terms: list[dict[str, Any]] = []
+
+    for term in active_terms:
+        counts = {transition_type: 0 for transition_type in MISCONCEPTION_TRANSITION_TYPES}
+        eligible_count = 0
+        for participant in group_participants:
+            summary = summaries_by_participant.get(participant.id)
+            timeline_terms = (summary.misconception_timeline_json or {}).get("terms", []) if summary else []
+            term_timeline = next((row for row in timeline_terms if row.get("term_slug") == term.slug), None)
+            events = (term_timeline or {}).get("events", [])
+            if not any(event.get("phase") == "pretest" for event in events):
+                continue
+            eligible_count += 1
+            change_type = (term_timeline or {}).get("change_type") or "unclassified"
+            if change_type not in counts:
+                change_type = "unclassified"
+            counts[change_type] += 1
+
+        rates = {
+            transition_type: counts[transition_type] / eligible_count if eligible_count else 0
+            for transition_type in MISCONCEPTION_TRANSITION_TYPES
+        }
+        output_terms.append(
+            {
+                "term_slug": term.slug,
+                "term_label": term.label,
+                "eligible_count": eligible_count,
+                "missing_count": max(len(group_participants) - eligible_count, 0),
+                "counts": counts,
+                "rates": rates,
+            }
+        )
+
+    return {"terms": output_terms}
+
+
 def admin_summary(db: Session) -> dict[str, Any]:
     participants = db.query(Participant).all()
+    terms = _term_map(db)
     rows = []
     for group in ["control", "proposed"]:
         group_participants = [p for p in participants if p.group_condition == group]
@@ -1414,6 +1471,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
                 "l0_correct_rate": avg("l0_correct_rate"),
                 "avg_score_delta_from_pretest_pt": avg_final_delta(),
+                "misconception_transition_summary": _group_misconception_transition_summary(group_participants, latest_summaries, terms),
             }
         )
     return {"groups": rows}
