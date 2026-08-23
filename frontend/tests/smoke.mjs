@@ -7,7 +7,8 @@ const required = [
   "app/final-test/page.tsx",
   "app/survey/page.tsx",
   "app/admin/page.tsx",
-  "components/QuestionRunner.tsx"
+  "components/QuestionRunner.tsx",
+  "components/MarkdownText.tsx"
 ];
 
 for (const file of required) {
@@ -28,7 +29,7 @@ for (const forbiddenText of ["<strong>デバッグ</strong>", "事前テスト�
     throw new Error(`learning page must not expose internal debug text: ${forbiddenText}`);
   }
 }
-for (const expectedText of ["今回の学習", "対象概念:", "教材", "問題", "回答を確認中..."]) {
+for (const expectedText of ["今回の学習", "対象概念:", "教材", "問題", "分析中..."]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing participant-facing learning text: ${expectedText}`);
   }
@@ -39,16 +40,40 @@ if (learningPage.includes("足場掛けレベル:")) {
 if (learningPage.includes("ターン: {turn.turn_index}")) {
   throw new Error("learning page must not show fixed turn progress in stage-based UI");
 }
-for (const expectedText of ["対象概念:", "教材フィードバック", "item_results", "次の確認へ"]) {
+for (const expectedText of ["対象概念:", "教材フィードバック", "正解です。", "不正解です。", "feedback-card-ok", "feedback-card-error", "item_results", "次の確認へ"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing final feedback/debug update behavior: ${expectedText}`);
   }
 }
+for (const expectedText of ["SubmitProgress", "分析中です", "秒経過", "回答を記録しています", "選択内容を確認しています", "解説を生成しています", "次の教材を準備しています", "analysis-progress", "spinner"]) {
+  if (!learningPage.includes(expectedText)) {
+    throw new Error(`learning page missing submit progress behavior: ${expectedText}`);
+  }
+}
+for (const expectedText of ["SessionLoadProgress", "学習セッションを準備しています", "教材を生成しています", "確認問題を準備しています", "学習画面を表示しています", "aria-busy", "学習セッション読み込みの進行状況"]) {
+  if (!learningPage.includes(expectedText)) {
+    throw new Error(`learning page missing initial loading progress behavior: ${expectedText}`);
+  }
+}
+if (learningPage.includes("読み込み中...")) {
+  throw new Error("learning page must not show a standalone loading message");
+}
 if (!learningPage.includes("learning_stage: data.next_learning_stage")) {
   throw new Error("learning page must update stage from next_learning_stage after response");
 }
-if (!learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") || !learningPage.includes("className=\"preserve-lines\">{feedback.feedback}")) {
-  throw new Error("learning page must preserve line breaks in material and feedback text");
+for (const expectedText of [
+  "import { MarkdownText } from \"@/components/MarkdownText\";",
+  "<MarkdownText>{turn.tutor_message}</MarkdownText>",
+  "<MarkdownText>{feedback.feedback}</MarkdownText>",
+  "<MarkdownText className=\"markdown-compact\">{item.material}</MarkdownText>",
+  "<MarkdownText className=\"markdown-compact\">{item.feedback}</MarkdownText>"
+]) {
+  if (!learningPage.includes(expectedText)) {
+    throw new Error(`learning page missing Markdown material/feedback rendering: ${expectedText}`);
+  }
+}
+if (learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") || learningPage.includes("className=\"preserve-lines\">{feedback.feedback}")) {
+  throw new Error("learning page must render material and feedback through MarkdownText");
 }
 if (!learningPage.includes("turnShownAt") || !learningPage.includes("question_shown_at: turnShownAt") || !learningPage.includes("answered_at: answeredAt")) {
   throw new Error("learning page must send turn timing timestamps");
@@ -67,6 +92,16 @@ for (const removedText of ["term_understanding", "concept_understanding"]) {
 const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow backend next_url after scoring");
+}
+
+const markdownText = fs.readFileSync(new URL("../components/MarkdownText.tsx", import.meta.url), "utf8");
+for (const expectedText of ["react-markdown", "skipHtml", "allowedElements", "unwrapDisallowed", "markdown-body"]) {
+  if (!markdownText.includes(expectedText)) {
+    throw new Error(`MarkdownText missing safe Markdown behavior: ${expectedText}`);
+  }
+}
+if (markdownText.includes("rehype-raw")) {
+  throw new Error("MarkdownText must not enable raw HTML rendering");
 }
 
 if (questionRunner.includes("response_time_sec: 10")) {

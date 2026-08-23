@@ -948,13 +948,64 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     session_completed = is_sufficient
     next_action = "move_next" if is_sufficient else "continue"
 
+    selected_explanation_options = [
+        option for option in selected_options if is_sufficient or not option.get("is_correct")
+    ]
+    selected_explanation_bodies = [option.get("body", "") for option in selected_explanation_options if option.get("body")]
+    explanation_payload = {
+        "participant_id": participant.id,
+        "group_condition": participant.group_condition,
+        "term": {"slug": term.slug, "label": term.label, "description": term.description},
+        "learning_stage": learning_stage,
+        "component_term": component_term,
+        "question_body": spec["body"],
+        "selected_option_body": " / ".join(selected_explanation_bodies),
+        "selected_option_bodies": selected_explanation_bodies,
+        "material": turn.tutor_message or "",
+        "rag_context": _rag_context(
+            term.slug,
+            term.label,
+            term.description,
+            LEARNING_STAGE_LABELS.get(learning_stage, learning_stage),
+            component_term,
+        ),
+    }
+    if participant.group_condition == "proposed":
+        explanation_payload.update(
+            {
+                "learner_state": {
+                    "current_status": state.current_status,
+                    "primary_misconception": state.primary_misconception,
+                    "scaffolding_level": normalize_level(state.scaffolding_level),
+                    "teaching_strategy": strategy_for(
+                        learning_misconception_type,
+                        diagnosed_status,
+                        participant.group_condition,
+                    ),
+                    "recurrence_count": state.recurrence_count,
+                },
+                "learning_misconception_type": learning_misconception_type,
+                "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(learning_misconception_type),
+                "misconception_taxonomy": taxonomy_for_prompt(),
+                "session_misconception_history": session_misconception_history(db, session.id),
+            }
+        )
+    if is_sufficient:
+        explanation_result = await _ai_call(db, "generate_correct_answer_summary", explanation_payload)
+        feedback_text = explanation_result.get("summary") or ""
+    else:
+        explanation_result = await _ai_call(db, "explain_selected_distractor", explanation_payload)
+        feedback_text = explanation_result.get("feedback") or ""
+    if not feedback_text.strip():
+        raise RuntimeError("AI explanation response was empty")
+
     turn.learner_response = response
     turn.learner_confidence = None
     turn.question_shown_at = _naive_datetime(payload.get("question_shown_at"))
     turn.answered_at = _naive_datetime(payload.get("answered_at"))
     turn.response_time_sec = payload.get("response_time_sec")
     turn.next_scaffolding_level = next_level
-    turn.ai_feedback = result["feedback"]
+    turn.ai_feedback = feedback_text
     turn.grading_json = {
         "is_sufficient": is_sufficient,
         "selected_option_id": selected_options[0]["option_id"] if selected_options else payload.get("selected_option_id"),

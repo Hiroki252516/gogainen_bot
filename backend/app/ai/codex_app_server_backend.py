@@ -226,7 +226,7 @@ class CodexAppServerBackend:
         }
         term_label = (payload.get("term") or {}).get("label", "この用語")
         rules = [
-            "学習セッション用の短い日本語チュータ発話を作る。",
+            "学習セッション用の短い日本語チュータ発話を、安全なMarkdownとして作る。",
             "足場掛けレベルは L3/L2 のみを使い、指定外のレベルは使わない。",
             f"教材、問い返し、practice_question は必ず現在の用語『{term_label}』だけを主題にする。",
             "入力JSONの learning_stage が enrichment の場合は、不足知識を補う基礎教材として説明する。",
@@ -234,10 +234,14 @@ class CodexAppServerBackend:
             "misconception_scaffolding_guidance があれば、その方略を最優先で教材本文へ反映する。",
             "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
             "rag_context.chunks がある場合は、その教材コンテキストを優先して教材と問題を作る。教材にない内容は推測で断定しない。",
-            "previous_practice_question が空でなければ、tutor_message の冒頭に『前の問題: ...』を入れる。",
-            "previous_learner_response が空でなければ、tutor_message の冒頭に『あなたの回答: ...』を入れる。",
-            "previous_feedback_for_learner が空でなければ、前の問題・回答の後に『前の回答を踏まえて、... 今回は...』という短い振り返りを自然に入れる。",
+            "previous_practice_question が空でなければ、tutor_message の冒頭に『前の問題: ...』を短いMarkdown段落として入れる。",
+            "previous_learner_response が空でなければ、tutor_message の冒頭に『あなたの回答: ...』を短いMarkdown段落として入れる。",
+            "previous_feedback_for_learner が空でなければ、前の問題・回答の後に短いMarkdown段落で振り返りを入れる。",
+            "tutor_message は必ず『## 用語名』『### 要点』『### 具体例』『### 注意点』の順に構成する。",
             "教材本文には、現在の主題の定義、役割、よくある誤解との違い、短い具体例または判断基準を必ず含める。",
+            "各セクションは2〜4個程度の簡潔な箇条書き、または短い段落で書く。重要語は **太字** にしてよい。",
+            "内容上必要な場合だけ『### 前提用語とのつながり』『### 何ではないか』を追加する。",
+            "教材Markdownでは見出し、箇条書き、太字、短い段落だけを使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
             "問題文は、教材で説明した内容を学習者が自分の言葉で再説明する記述問題にする。答えだけの丸写しではなく、役割や判断基準を含めて説明させる。",
             "通常群と提案群で教材量の差が主効果にならないよう、指定されたL3/L2教材量の条件を守る。",
             "practice_question.body はbackend固定問題の補助として短く書く。L3の実際の複数確認問題と選択肢は fixed_practice_question_items をbackendが表示する。",
@@ -329,6 +333,8 @@ class CodexAppServerBackend:
                 payload,
                 [
                     "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
+                    "feedback は安全なMarkdownとして返す。複数の観点を含める場合は箇条書きにし、長い一段落にしない。重要語は **太字** にしてよい。",
+                    "feedback では見出しを必須にしないが、見出し、箇条書き、太字、短い段落だけを使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
                     "rag_context.chunks がある場合は、その教材コンテキストを優先して判定・フィードバックする。教材にない内容は推測で断定しない。",
                     "M1〜M4 という内部ラベルを学習者向け文面に絶対に書かない。",
                     "learning_misconception_type は、この学習セッション内の今回回答だけに対する内部診断として入力payloadのtaxonomyに従って選ぶ。事前テスト由来の primary_misconception を上書きしない。",
@@ -345,6 +351,68 @@ class CodexAppServerBackend:
         result["feedback"] = _strip_internal_labels(result["feedback"])
         result["learning_misconception_reason"] = _strip_internal_labels(result["learning_misconception_reason"])
         result["state_update_reason"] = _strip_internal_labels(result["state_update_reason"])
+        return result
+
+    async def generate_correct_answer_summary(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {"summary": {"type": "string"}},
+            "required": ["summary"],
+            "additionalProperties": False,
+        }
+        result = await self._run_structured_turn(
+            "generate_correct_answer_summary",
+            self._prompt(
+                "correct_answer_summary",
+                payload,
+                [
+                    "固定YAMLの採点結果は正答済みである。正答選択肢の本文をそのまま繰り返さず、学習上の要点だけを短く説明する。",
+                    "summary は学習者向けの安全なMarkdownにする。冒頭に ## 今回の要点 を置き、箇条書き、**太字**、短い段落だけを使う。",
+                    "HTML、表、コードブロック、画像、長大な連続段落は使わない。",
+                    "rag_context.chunks がある場合はその本文を優先し、本文にない内容を推測で断定しない。",
+                    "M1〜M4、unknown、taxonomy、足場掛け、研究者向け診断、AIの思考過程を出力しない。",
+                    "summary には学習者の個人情報や内部識別子を含めない。",
+                ],
+            ),
+            schema,
+        )
+        result["summary"] = _strip_internal_labels(result["summary"])
+        return result
+
+    async def explain_selected_distractor(self, payload: dict[str, Any]) -> dict[str, Any]:
+        schema = {
+            "type": "object",
+            "properties": {
+                "feedback": {"type": "string"},
+                "remediation_focus": {"type": "string"},
+                "general_knowledge_supplement": {"type": ["string", "null"]},
+            },
+            "required": ["feedback", "remediation_focus", "general_knowledge_supplement"],
+            "additionalProperties": False,
+        }
+        prompt_payload = payload if payload.get("group_condition") == "proposed" else self._control_feedback_payload(payload)
+        result = await self._run_structured_turn(
+            "explain_selected_distractor",
+            self._prompt(
+                "selected_distractor_feedback",
+                prompt_payload,
+                [
+                    "固定YAMLの採点結果は不正解である。選択された説明の問題点と、教材を見直す観点だけを説明する。",
+                    "正答の選択肢本文、正答位置、正答そのものを直接示さない。",
+                    "feedback は ## どこが違うか と ## 見直す観点を中心に、箇条書き、**太字**、短い段落だけを使う安全なMarkdownにする。",
+                    "remediation_focus は学習者が次に確認する観点を一文で返し、general_knowledge_supplement は追加説明が不要なら null にする。",
+                    "提案群でtaxonomyや誤概念タイプが入力されている場合は教授方略の判断に使うが、M1〜M4などのラベルを出力しない。",
+                    "HTML、表、コードブロック、画像、長大な連続段落、AIの思考過程は出力しない。",
+                    "rag_context.chunks がある場合はその本文を優先し、本文にない内容を推測で断定しない。",
+                    "選択内容が空なら、前提知識不足として定義と判断基準の確認を促す。",
+                ],
+            ),
+            schema,
+        )
+        result["feedback"] = _strip_internal_labels(result["feedback"])
+        result["remediation_focus"] = _strip_internal_labels(result["remediation_focus"])
+        if result.get("general_knowledge_supplement"):
+            result["general_knowledge_supplement"] = _strip_internal_labels(result["general_knowledge_supplement"])
         return result
 
     async def summarize_learner_state(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -508,6 +576,19 @@ class CodexAppServerBackend:
             "component_terms": payload.get("component_terms"),
             "fixed_practice_question": payload.get("fixed_practice_question"),
             "fixed_practice_question_items": payload.get("fixed_practice_question_items"),
+            "rag_context": payload.get("rag_context"),
+        }
+
+    def _control_feedback_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "group_condition": "control",
+            "term": payload.get("term"),
+            "learning_stage": payload.get("learning_stage"),
+            "component_term": payload.get("component_term"),
+            "question_body": payload.get("question_body"),
+            "selected_option_body": payload.get("selected_option_body"),
+            "selected_option_bodies": payload.get("selected_option_bodies"),
+            "material": payload.get("material"),
             "rag_context": payload.get("rag_context"),
         }
 

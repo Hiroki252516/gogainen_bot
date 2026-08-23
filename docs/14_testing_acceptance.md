@@ -11,6 +11,8 @@
 - RAGは用語別の指定sectionだけを検索し、LangGraphチャンクを返さない。
 - controlとproposedのRAG本文が共通で、proposedだけにtaxonomy・履歴・足場掛け情報が入る。
 - app-server payloadが `gpt-5.6-luna` / `medium` を使う。
+- 正答時は `generate_correct_answer_summary`、誤答時は `explain_selected_distractor` が呼ばれ、解説生成の目的とpayloadが `AICallLog` に記録される。
+- 解説生成に失敗した場合、固定採点結果や学習状態を部分確定せず、Mockへ自動フォールバックしない。
 
 ## Frontend
 
@@ -18,6 +20,12 @@
 - 10択複数選択UIで、3つまたはJ単独以外は送信できない。
 - 学習画面にM1〜M4、unknown、LangGraph、内部教授方略を表示しない。
 - 学習本文、問題、結果表示がモバイル幅で重ならない。
+- 学習セッション初回読み込み中に、スピナー、経過秒数、4つの安全な進捗状態が表示され、読み込み完了後に消える。
+- 初回読み込みAPIが失敗した場合、進捗表示が停止し、既存のエラーメッセージだけが表示される。
+- 回答送信中にスピナー、経過秒数、4つの安全な処理状態、`分析中...` ボタンが表示される。
+- 正答時は緑色の正誤カードとMarkdown要点解説、誤答時は赤色の正誤カードとMarkdown見直し解説が表示される。
+- 解説表示後も `item_results` と次の確認への遷移が維持される。
+- AIの内部思考過程、M1〜M4、誤概念taxonomyが被験者画面に表示されない。
 - 旧stage名や旧Transformerの新規導線に依存しない。
 
 ## Regression

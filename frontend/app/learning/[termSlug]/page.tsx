@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { MarkdownText } from "@/components/MarkdownText";
 import { api, requireParticipant } from "@/lib/api";
 
 type Option = { option_id: string; label: string; body: string };
@@ -96,6 +97,67 @@ function nextMultipleSelection(options: Option[], selectedIds: string[], option:
   if (option.label === "J") return [option.option_id];
   const withoutUnknown = selectedIds.filter((id) => options.find((item) => item.option_id === id)?.label !== "J");
   return withoutUnknown.length >= requiredSelections ? selectedIds : [...withoutUnknown, option.option_id];
+}
+
+const SUBMIT_PROGRESS_STEPS = [
+  "回答を記録しています",
+  "選択内容を確認しています",
+  "解説を生成しています",
+  "次の教材を準備しています",
+];
+
+const SESSION_LOAD_PROGRESS_STEPS = [
+  "学習セッションを準備しています",
+  "教材を生成しています",
+  "確認問題を準備しています",
+  "学習画面を表示しています",
+];
+
+function ProgressCard({ title, steps, ariaLabel }: { title: string; steps: string[]; ariaLabel: string }) {
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const activeIndex = Math.min(steps.length - 1, Math.floor(elapsedSec / 8));
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="analysis-progress" role="status" aria-live="polite">
+      <div className="analysis-heading">
+        <span className="spinner" aria-hidden="true" />
+        <div>
+          <strong>{title}</strong>
+          <span className="analysis-elapsed">{elapsedSec}秒経過</span>
+        </div>
+      </div>
+      <ol aria-label={ariaLabel}>
+        {steps.map((step, index) => (
+          <li className={index < activeIndex ? "done" : index === activeIndex ? "active" : ""} key={step}>
+            <span aria-hidden="true" />
+            {step}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function SubmitProgress() {
+  return <ProgressCard title="分析中です" steps={SUBMIT_PROGRESS_STEPS} ariaLabel="回答処理の進行状況" />;
+}
+
+function SessionLoadProgress() {
+  return (
+    <ProgressCard
+      title="学習セッションを準備しています"
+      steps={SESSION_LOAD_PROGRESS_STEPS}
+      ariaLabel="学習セッション読み込みの進行状況"
+    />
+  );
 }
 
 export default function LearningPage() {
@@ -233,7 +295,7 @@ export default function LearningPage() {
 
   return (
     <AppShell step="学習セッション">
-      <section className="panel stack">
+      <section className="panel stack" aria-busy={!turn && !error}>
         <h1>学習セッション</h1>
         {error ? <div className="danger">{error}</div> : null}
         {turn ? (
@@ -246,9 +308,17 @@ export default function LearningPage() {
             </div>
             {feedback ? (
               <>
-                <section className="learning-block material-block" aria-labelledby="feedback-title">
+                <section
+                  className={`learning-block material-block feedback-card ${feedback.is_sufficient ? "feedback-card-ok" : "feedback-card-error"}`}
+                  aria-labelledby="feedback-title"
+                  role="status"
+                  aria-live="polite"
+                >
                   <h2 id="feedback-title">教材フィードバック</h2>
-                  <p className="preserve-lines">{feedback.feedback}</p>
+                  <strong className="feedback-status">
+                    {feedback.is_sufficient ? "正解です。" : "不正解です。"}
+                  </strong>
+                  <MarkdownText>{feedback.feedback}</MarkdownText>
                   {feedback.item_results?.length ? (
                     <div className="stack">
                       {feedback.item_results.map((item) => (
@@ -256,7 +326,7 @@ export default function LearningPage() {
                           <h3>{item.component_term}: {item.is_correct ? "正解" : "不正解"}</h3>
                           <p>あなたの回答: {item.selected_option_body || "未選択"}</p>
                           <p>正解: {item.correct_answer}</p>
-                          <p>{item.feedback}</p>
+                          <MarkdownText className="markdown-compact">{item.feedback}</MarkdownText>
                         </article>
                       ))}
                     </div>
@@ -273,7 +343,7 @@ export default function LearningPage() {
                 <div className="learning-layout">
                   <section className="learning-block material-block" aria-labelledby="material-title">
                     <h2 id="material-title">教材</h2>
-                    <p className="preserve-lines">{turn.tutor_message}</p>
+                    <MarkdownText>{turn.tutor_message}</MarkdownText>
                   </section>
                   <section className="learning-block problem-block" aria-labelledby="problem-title">
                     <h2 id="problem-title">問題</h2>
@@ -283,7 +353,7 @@ export default function LearningPage() {
                         {turn.practice_question.items.map((item) => (
                           <article className="component-question" key={item.component_term}>
                             <h3>{item.component_term}</h3>
-                            {item.material ? <p className="preserve-lines">{item.material}</p> : null}
+                            {item.material ? <MarkdownText className="markdown-compact">{item.material}</MarkdownText> : null}
                             <p>{item.body}</p>
                             <div className="options">
                               {(item.options || []).map((option) => (
@@ -293,6 +363,7 @@ export default function LearningPage() {
                                     name={`learning-option-${item.component_term}`}
                                     value={option.option_id}
                                     checked={selectedItemOptionIds[item.component_term] === option.option_id}
+                                    disabled={submitting}
                                     onChange={() => setSelectedItemOptionIds((current) => ({ ...current, [item.component_term]: option.option_id }))}
                                   />
                                   <span>
@@ -342,7 +413,7 @@ export default function LearningPage() {
                                   name="learning-option"
                                   value={option.option_id}
                                   checked={isSelected}
-                                  disabled={isDisabled}
+                                  disabled={submitting || isDisabled}
                                   onChange={() => {
                                     if (!isMultiple) {
                                       setSelectedOptionId(option.option_id);
@@ -362,12 +433,13 @@ export default function LearningPage() {
                     ) : (
                       <label>
                         あなたの回答・自己説明
-                        <textarea value={response} onChange={(event) => setResponse(event.target.value)} />
+                        <textarea disabled={submitting} value={response} onChange={(event) => setResponse(event.target.value)} />
                       </label>
                     )}
                   </section>
                 </div>
                 <div className="actions">
+                  {submitting ? <SubmitProgress /> : null}
                   <button
                     onClick={submit}
                     disabled={
@@ -376,15 +448,13 @@ export default function LearningPage() {
                         !multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, turn.practice_question.min_selections ?? 3).isComplete)
                     }
                   >
-                    {submitting ? "回答を確認中..." : "回答を確認"}
+                    {submitting ? "分析中..." : "回答を確認"}
                   </button>
                 </div>
               </>
             )}
           </>
-        ) : (
-          <p>読み込み中...</p>
-        )}
+        ) : error ? null : <SessionLoadProgress />}
       </section>
     </AppShell>
   );

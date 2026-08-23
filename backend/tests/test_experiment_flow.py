@@ -1,9 +1,11 @@
+import asyncio
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.ai.backend import strategy_for
-from app.ai.codex_app_server_backend import CodexAppServerBackend
+from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
+from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY
 from app.core.config import get_settings
 from app.db.session import SessionLocal
@@ -11,6 +13,7 @@ from app.main import app
 from app.models import AICallLog, Attempt, TutorTurn
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, content_term, load_content
+import app.services.experiment as experiment_service
 
 
 client = TestClient(app)
@@ -178,6 +181,94 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     assert saved_turn.grading_json["selected_option_ids"] == ["A", "B", "C"]
 
 
+def test_learning_answer_generates_feedback_with_group_specific_payloads():
+    proposed_pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    proposed_session = client.post("/api/tutor-sessions", json={"participant_id": proposed_pid, "term_slug": "multi_agent"}).json()
+    proposed_turn = client.post(f"/api/tutor-sessions/{proposed_session['tutor_session_id']}/turns", json={}).json()
+    proposed_wrong = client.post(
+        f"/api/tutor-turns/{proposed_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(proposed_turn["practice_question"], ["A", "D", "G"])},
+    )
+    assert proposed_wrong.status_code == 200, proposed_wrong.text
+    assert "## どこが違うか" in proposed_wrong.json()["feedback"]
+
+    control_pid = _create_participant_with_pretest(group="control", labels=["D", "E", "F"])
+    control_session = client.post("/api/tutor-sessions", json={"participant_id": control_pid, "term_slug": "multi_agent"}).json()
+    control_turn = client.post(f"/api/tutor-sessions/{control_session['tutor_session_id']}/turns", json={}).json()
+    control_wrong = client.post(
+        f"/api/tutor-turns/{control_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(control_turn["practice_question"], ["A", "D", "G"])},
+    )
+    assert control_wrong.status_code == 200, control_wrong.text
+
+    correct_pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    correct_session = client.post("/api/tutor-sessions", json={"participant_id": correct_pid, "term_slug": "memory_process"}).json()
+    correct_turn = client.post(f"/api/tutor-sessions/{correct_session['tutor_session_id']}/turns", json={}).json()
+    correct = client.post(
+        f"/api/tutor-turns/{correct_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(correct_turn["practice_question"], ["A", "B", "C"])},
+    )
+    assert correct.status_code == 200, correct.text
+    assert "## 今回の要点" in correct.json()["feedback"]
+
+    db = SessionLocal()
+    try:
+        explanation_logs = db.query(AICallLog).filter(AICallLog.purpose.in_(["generate_correct_answer_summary", "explain_selected_distractor"])).all()
+        proposed_log = next(log for log in reversed(explanation_logs) if log.request_payload.get("participant_id") == proposed_pid)
+        control_log = next(log for log in reversed(explanation_logs) if log.request_payload.get("participant_id") == control_pid)
+        summary_log = next(log for log in reversed(explanation_logs) if log.request_payload.get("participant_id") == correct_pid)
+        tutoring_logs = db.query(AICallLog).filter_by(purpose="generate_tutoring_turn").all()
+        proposed_tutoring_log = next(log for log in reversed(tutoring_logs) if log.request_payload.get("participant_id") == proposed_pid)
+        control_tutoring_log = next(log for log in reversed(tutoring_logs) if log.request_payload.get("participant_id") == control_pid)
+        assert proposed_log.purpose == "explain_selected_distractor"
+        assert proposed_log.request_payload["misconception_taxonomy"] == MISCONCEPTION_TAXONOMY
+        assert "session_misconception_history" in proposed_log.request_payload
+        assert control_log.purpose == "explain_selected_distractor"
+        assert "misconception_taxonomy" not in control_log.request_payload
+        assert "learner_state" not in control_log.request_payload
+        assert "session_misconception_history" not in control_log.request_payload
+        assert summary_log.purpose == "generate_correct_answer_summary"
+        assert proposed_log.request_payload["rag_context"] == proposed_tutoring_log.request_payload["rag_context"]
+        assert control_log.request_payload["rag_context"] == control_tutoring_log.request_payload["rag_context"]
+    finally:
+        db.close()
+
+
+def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch):
+    class FailingBackend:
+        provider = "codex_app_server"
+
+        async def explain_selected_distractor(self, payload):
+            raise CodexAppServerError("turn_failed", "解説生成に失敗しました。")
+
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
+    turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda: FailingBackend())
+    response = client.post(
+        f"/api/tutor-turns/{turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["A", "D", "G"])},
+    )
+    assert response.status_code == 503
+    saved_turn = _latest_turn(turn["turn_id"])
+    assert saved_turn is not None
+    assert saved_turn.learner_response is None
+    assert saved_turn.grading_json is None
+
+    db = SessionLocal()
+    try:
+        failed_log = (
+            db.query(AICallLog)
+            .filter_by(purpose="explain_selected_distractor", status="failed")
+            .order_by(AICallLog.created_at.desc())
+            .first()
+        )
+        assert failed_log is not None
+        assert failed_log.request_payload["participant_id"] == pid
+    finally:
+        db.close()
+
+
 def test_control_group_logs_same_stage_but_uses_general_explanation():
     pid = _create_participant_with_pretest(group="control", labels=["G", "H", "I"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
@@ -288,6 +379,48 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     assert "misconception_taxonomy" in text
     assert "M4なら不足スキーマの構築" in text
     assert "fixed_practice_question" in text
+    assert "### 要点" in text
+    assert "### 具体例" in text
+    assert "### 注意点" in text
+    assert "feedback は安全なMarkdownとして返す" in text
+    assert "generate_correct_answer_summary" in text
+    assert "explain_selected_distractor" in text
+    assert "正答の選択肢本文、正答位置、正答そのものを直接示さない" in text
+
+
+def test_mock_tutoring_and_feedback_use_markdown_contract():
+    backend = MockAIBackend()
+    payload = {
+        "term": {
+            "label": "マルチエージェント",
+            "description": "複数のエージェントが役割分担して課題を処理する設計です。",
+            "keywords": ["役割"],
+        },
+        "learning_stage": "enrichment",
+        "group_condition": "proposed",
+        "fixed_practice_question": {"body": "説明してください。"},
+    }
+
+    turn = asyncio.run(backend.generate_tutoring_turn(payload))
+    for heading in ("## マルチエージェント", "### 要点", "### 具体例", "### 注意点"):
+        assert heading in turn["tutor_message"]
+
+    correct_feedback = asyncio.run(
+        backend.generate_feedback({**payload, "learner_response": "役割を分担します。"})
+    )
+    incorrect_feedback = asyncio.run(
+        backend.generate_feedback({**payload, "learner_response": "わからない"})
+    )
+    assert "### 要点" in correct_feedback["feedback"]
+    assert "### 見直しポイント" in incorrect_feedback["feedback"]
+
+    correct_summary = asyncio.run(backend.generate_correct_answer_summary(payload))
+    distractor_feedback = asyncio.run(
+        backend.explain_selected_distractor({**payload, "selected_option_bodies": ["誤った説明"]})
+    )
+    assert "## 今回の要点" in correct_summary["summary"]
+    assert "## どこが違うか" in distractor_feedback["feedback"]
+    assert "## 見直す観点" in distractor_feedback["feedback"]
 
 
 def test_latest_taxonomy_and_strategy_cover_m1_to_m4():

@@ -31,11 +31,27 @@ class MockAIBackend:
         fixed_question = payload.get("fixed_practice_question") or {}
         question_body = fixed_question.get("body") or f"{label}について、適切な説明をすべて選びなさい。"
         if stage == "enrichment":
-            message = f"## {label}\n\n**要点**\n\n- {description}\n- まずは構成要素と役割を分けて確認します。"
+            message = (
+                f"## {label}\n\n"
+                "### 要点\n"
+                f"- **{label}**: {description}\n"
+                "- まずは構成要素と役割を分けて確認します。\n\n"
+                "### 具体例\n"
+                f"- {label}の構成要素が、それぞれの役割を分担して働く場面を考えます。\n\n"
+                "### 注意点\n"
+                "- 用語名だけで判断せず、役割と情報の流れに注目します。"
+            )
         else:
-            message = f"## {label}\n\n**理解の整理**\n\n- {description}\n- 似た仕組みとの違いを、役割と情報の流れから確認します。"
-        if group == "control":
-            message = f"{label}について、基本的な説明を確認します。\n\n{message}"
+            message = (
+                f"## {label}\n\n"
+                "### 要点\n"
+                f"- **{label}**: {description}\n"
+                "- 誤った捉え方と正しい役割の違いを整理します。\n\n"
+                "### 具体例\n"
+                f"- {label}を、役割と情報の流れに沿って説明する場面を考えます。\n\n"
+                "### 注意点\n"
+                "- 似た仕組みとの違いを、表面的な言葉ではなく構造から確認します。"
+            )
         learner_state = payload.get("learner_state") or {}
         return {
             "tutor_message": message,
@@ -73,8 +89,15 @@ class MockAIBackend:
         keywords = [str(keyword) for keyword in term.get("keywords") or []]
         is_sufficient = bool(response.strip()) and (not keywords or any(keyword in response for keyword in keywords))
         mtype = None if is_sufficient else ("unknown" if "わからない" in response else "M1")
+        feedback = (
+            "### 要点\n"
+            f"- **{label}**の説明で、中心となる役割を押さえられています。"
+            if is_sufficient
+            else "### 見直しポイント\n"
+            f"- **{label}**の定義と構成要素の役割を、教材の具体例と照らして確認してください。"
+        )
         return {
-            "feedback": "要点を押さえられています。" if is_sufficient else f"{label}の定義と構成要素の役割を確認してください。",
+            "feedback": feedback,
             "is_sufficient": is_sufficient,
             "next_action": "move_next" if is_sufficient else "continue",
             "next_scaffolding_level": "L2" if is_sufficient else "L3",
@@ -83,6 +106,34 @@ class MockAIBackend:
             "learning_misconception_reason": "MockAIBackendによる決定論的判定です。",
             "strategy_changed": False,
             "state_update_reason": "mock_feedback",
+        }
+
+    async def generate_correct_answer_summary(self, payload: dict[str, Any]) -> dict[str, Any]:
+        term = payload.get("term") or {}
+        label = payload.get("focus_label") or term.get("label", "この概念")
+        return {
+            "summary": (
+                "## 今回の要点\n\n"
+                f"- **{label}**の役割と処理対象を区別できていることが要点です。\n"
+                "- 教材で確認した定義と具体例を結び付けて考えられています。"
+            )
+        }
+
+    async def explain_selected_distractor(self, payload: dict[str, Any]) -> dict[str, Any]:
+        term = payload.get("term") or {}
+        label = term.get("label", "対象概念")
+        selected = payload.get("selected_option_bodies") or payload.get("selected_option_body") or "選択した説明"
+        if isinstance(selected, list):
+            selected = " / ".join(str(item) for item in selected)
+        return {
+            "feedback": (
+                "## どこが違うか\n\n"
+                f"- 「{selected}」は、**{label}**の役割や処理範囲と一致しません。\n\n"
+                "## 見直す観点\n\n"
+                "- 教材の定義、構成要素の役割、情報の流れを確認してください。"
+            ),
+            "remediation_focus": "定義、構成要素の役割、情報の流れを確認する。",
+            "general_knowledge_supplement": None,
         }
 
     async def summarize_learner_state(self, payload: dict[str, Any]) -> dict[str, Any]:
