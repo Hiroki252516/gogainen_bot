@@ -77,7 +77,6 @@ export default function AdminPage() {
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
   const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup);
   const activeAiLogs = (overview?.recent_ai_call_logs || []).filter((row: any) => row.group_condition === activeGroup);
-  const activeRecurrenceEvents = (overview?.recurrence_events || []).filter((row: any) => row.group_condition === activeGroup);
 
   return (
     <AppShell step="管理画面">
@@ -159,14 +158,6 @@ export default function AdminPage() {
             <div className="notice">
               <strong>被験者数</strong>
               <p>{activeParticipants.length}</p>
-            </div>
-            <div className="notice">
-              <strong>最近のAI失敗</strong>
-              <p>{activeAiLogs.filter((row: any) => row.status !== "success").length}</p>
-            </div>
-            <div className="notice">
-              <strong>再発イベント</strong>
-              <p>{activeRecurrenceEvents.length}</p>
             </div>
           </div>
           <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
