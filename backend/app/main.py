@@ -31,6 +31,7 @@ from app.services.experiment import (
     latest_learning_misconception,
     learning_targets,
     participant_logs,
+    pretest_results,
     question_payloads,
     recalculate_evaluation,
     respond_tutor_turn,
@@ -179,7 +180,10 @@ async def api_diagnose_pretest(participant_id: str, db: Session = Depends(get_db
 
 @app.get("/api/participants/{participant_id}/learning-targets")
 def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return {"targets": learning_targets(db, participant_id)}
+    return {
+        "targets": learning_targets(db, participant_id),
+        "pretest_results": pretest_results(db, participant_id),
+    }
 
 
 @app.post("/api/tutor-sessions")

@@ -32,6 +32,8 @@
 
 現行の主なAPIルートは `/api/health`、`/api/participants`、`/api/experiment/{experiment_id}/pretest|retest|l0-check|final-test`、`/api/attempts`、`/api/participants/{participant_id}/diagnose-pretest`、`/api/tutor-sessions`、`/api/tutor-turns/{turn_id}/respond`、`/api/participants/{participant_id}/evaluation-summary/recalculate`、`/api/admin/*` である。管理画面から `DELETE /api/admin/participants/{participant_id}` を呼ぶと、対象参加者と関連する実験データを完全削除し、削除操作の監査記録だけを残す。frontendの `/api/*` はNext.jsのrewriteでbackendへ転送する。
 
+`GET /api/participants/{participant_id}/learning-targets` は、既存の未達対象一覧に加えて、事前テスト後の学習者向け結果一覧を `pretest_results` として返す。`pretest_results` は3用語を表示順に含み、`term_slug`、`term_label`、`is_correct`、`result_label`、`result_summary`、`is_learning_target` を持つ。結果は保存済み `Attempt.is_correct` を正本とし、M分類などの内部診断値は含めない。`targets` は従来どおり学習開始先を決める未達用語の一覧として維持する。
+
 ## Scoring
 
 A/B/Cの3つだけを選択した場合だけ正解。不正解分類はM3を最優先し、次にM1、J単独または判定材料なしはunknownとする。採点・遷移はbackendが決定し、AI出力で上書きしない。

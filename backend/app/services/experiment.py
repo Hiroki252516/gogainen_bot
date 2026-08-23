@@ -834,6 +834,64 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def pretest_results(db: Session, participant_id: str) -> list[dict[str, Any]]:
+    """Return participant-safe results for the completed pretest.
+
+    The stored Attempt fields remain the source of truth. This projection deliberately
+    omits misconception labels and other diagnostic details from the participant API.
+    """
+    participant = get_participant(db, participant_id)
+    target_rows = learning_targets(db, participant_id)
+    targets_by_slug = {row["term_slug"]: row for row in target_rows}
+    terms = (
+        db.query(Term)
+        .filter(Term.slug.in_(PRETEST_TERM_SLUGS), Term.is_active.is_(True))
+        .order_by(Term.display_order)
+        .all()
+    )
+    attempts = (
+        db.query(Attempt)
+        .filter(Attempt.participant_id == participant.id, Attempt.phase == "pretest")
+        .order_by(Attempt.created_at.desc(), Attempt.id.desc())
+        .all()
+    )
+    latest_attempt_by_term: dict[str, Attempt] = {}
+    for attempt in attempts:
+        latest_attempt_by_term.setdefault(attempt.term_id, attempt)
+
+    results: list[dict[str, Any]] = []
+    for term in terms:
+        attempt = latest_attempt_by_term.get(term.id)
+        target = targets_by_slug.get(term.slug)
+        if attempt is None:
+            result_label = "未回答"
+            result_summary = "事前テストの結果を確認できません。"
+            is_correct: bool | None = None
+        elif attempt.is_correct:
+            result_label = "正解"
+            result_summary = "正しい構造を選択できています。"
+            is_correct = True
+        else:
+            result_label = "不正解"
+            result_summary = target["summary_for_learner"] if target else (
+                "基本知識が不足している可能性があります。"
+                if attempt.diagnosed_status == "unknown"
+                else "選択内容に誤った捉え方が含まれています。"
+            )
+            is_correct = False
+        results.append(
+            {
+                "term_slug": term.slug,
+                "term_label": term.label,
+                "is_correct": is_correct,
+                "result_label": result_label,
+                "result_summary": result_summary,
+                "is_learning_target": bool(target),
+            }
+        )
+    return results
+
+
 def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> TutorSession:
     participant = get_participant(db, participant_id)
     term = db.query(Term).filter_by(slug=term_slug).one_or_none()
