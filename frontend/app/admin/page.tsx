@@ -5,9 +5,11 @@ import { AppShell } from "@/components/AppShell";
 import { API_BASE, api } from "@/lib/api";
 
 type Participant = { participant_id: string; display_code: string; group_condition: string; current_step: string; completed_at: string | null };
+type GroupCondition = "control" | "proposed";
 
 export default function AdminPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [activeGroup, setActiveGroup] = useState<GroupCondition>("control");
   const [summary, setSummary] = useState<any>(null);
   const [overview, setOverview] = useState<any>(null);
   const [participantLog, setParticipantLog] = useState<any>(null);
@@ -23,6 +25,11 @@ export default function AdminPage() {
     api("/api/admin/logs/overview").then(setOverview);
     api("/api/admin/ai/status").then(setAi);
   }, []);
+
+  useEffect(() => {
+    setParticipantLog(null);
+    setLogError("");
+  }, [activeGroup]);
 
   async function startLogin(type: "chatgpt" | "chatgptDeviceCode") {
     setLoginError("");
@@ -65,11 +72,31 @@ export default function AdminPage() {
     }
   }
 
+  const activeParticipants = participants.filter((participant) => participant.group_condition === activeGroup);
+  const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup);
+  const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
+  const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup);
+  const activeAiLogs = (overview?.recent_ai_call_logs || []).filter((row: any) => row.group_condition === activeGroup);
+  const activeRecurrenceEvents = (overview?.recurrence_events || []).filter((row: any) => row.group_condition === activeGroup);
+
   return (
     <AppShell step="管理画面">
       <div className="stack">
         <section className="panel stack">
           <h1>管理画面</h1>
+          <div className="group-tabs" role="tablist" aria-label="実験群">
+            {(["control", "proposed"] as GroupCondition[]).map((group) => (
+              <button
+                key={group}
+                className={activeGroup === group ? "group-tab active" : "group-tab"}
+                role="tab"
+                aria-selected={activeGroup === group}
+                onClick={() => setActiveGroup(group)}
+              >
+                {group}
+              </button>
+            ))}
+          </div>
           <div className="grid">
             <div className="notice">
               <strong>AI Backend</strong>
@@ -97,14 +124,14 @@ export default function AdminPage() {
               ) : null}
               {loginError ? <p className="danger">{loginError}</p> : null}
             </div>
-            {summary?.groups?.map((group: any) => (
-              <div className="notice" key={group.group_condition}>
-                <strong>{group.group_condition}</strong>
-                <p>参加者: {group.participant_count}</p>
-                <p>確認テスト正答率: {formatRate(group.l0_correct_rate)}</p>
-                <p>事前比改善: {formatPoints(group.avg_score_delta_from_pretest_pt)}</p>
+            {activeGroupSummary ? (
+              <div className="notice">
+                <strong>{activeGroupSummary.group_condition}</strong>
+                <p>参加者: {activeGroupSummary.participant_count}</p>
+                <p>確認テスト正答率: {formatRate(activeGroupSummary.l0_correct_rate)}</p>
+                <p>事前比改善: {formatPoints(activeGroupSummary.avg_score_delta_from_pretest_pt)}</p>
               </div>
-            ))}
+            ) : null}
           </div>
           <div className="actions">
             <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview_excel.csv`}>
@@ -127,27 +154,27 @@ export default function AdminPage() {
         </section>
         <section className="panel stack">
           <h2>全体ログ</h2>
-          <p className="muted">全参加者の進捗、最近の回答履歴、AI呼び出し、再発イベントをまとめて確認します。</p>
+          <p className="muted">{activeGroup}群の進捗、最近の回答履歴、AI呼び出し、再発イベントを確認します。</p>
           <div className="grid">
             <div className="notice">
               <strong>被験者数</strong>
-              <p>{overview?.participant_count ?? "-"}</p>
+              <p>{activeParticipants.length}</p>
             </div>
             <div className="notice">
               <strong>最近のAI失敗</strong>
-              <p>{overview?.recent_ai_call_logs?.filter((row: any) => row.status !== "success").length ?? "-"}</p>
+              <p>{activeAiLogs.filter((row: any) => row.status !== "success").length}</p>
             </div>
             <div className="notice">
               <strong>再発イベント</strong>
-              <p>{overview?.recurrence_events?.length ?? "-"}</p>
+              <p>{activeRecurrenceEvents.length}</p>
             </div>
           </div>
-          <LogList title="最近の回答履歴" rows={overview?.recent_answer_history} fields={["display_code", "source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
-          <LogList title="評価サマリー" rows={overview?.evaluation_summaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "completed", "created_at"]} />
-          <LogList title="最近のAI呼び出し" rows={overview?.recent_ai_call_logs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+          <LogList title="評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "completed", "created_at"]} />
+          <LogList title="最近のAI呼び出し" rows={activeAiLogs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
         </section>
         <section className="panel">
-          <h2>被験者一覧</h2>
+          <h2>{activeGroup}群の被験者一覧</h2>
           <table className="table">
             <thead>
               <tr>
@@ -159,7 +186,7 @@ export default function AdminPage() {
               </tr>
             </thead>
             <tbody>
-              {participants.map((p) => (
+              {activeParticipants.map((p) => (
                 <tr key={p.participant_id}>
                   <td>{p.display_code}</td>
                   <td>{p.group_condition}</td>
@@ -230,14 +257,13 @@ function EvaluationSummary({ summary }: { summary: any }) {
   const rounds = summary.score_timeline?.rounds || [];
   const burden = summary.learning_burden || {};
   const misconceptionTerms = summary.misconception_timeline?.terms || [];
-  const condition = summary.condition_check || {};
   const finalRound = rounds.find((round: any) => round.phase === "final_test") || rounds[rounds.length - 1];
   return (
     <section className="insight-panel stack" aria-labelledby="evaluation-insight-title">
       <div className="insight-head">
         <div>
           <h3 id="evaluation-insight-title">評価ログ早見</h3>
-          <p className="muted">得点率の推移、誤概念の変化、学習負担、条件統制をここで確認します。</p>
+          <p className="muted">得点率の推移、誤概念の変化、学習負担をここで確認します。</p>
         </div>
         <div className={`delta-badge ${(finalRound?.score_delta_from_pretest_pt || 0) >= 0 ? "ok" : "bad"}`}>
           事前比 {formatPoints(finalRound?.score_delta_from_pretest_pt)}
@@ -303,38 +329,12 @@ function EvaluationSummary({ summary }: { summary: any }) {
             <Metric label="テスト時間" value={formatSeconds(burden.total_test_time_sec)} />
           </div>
         </div>
-        <div className="insight-card">
-          <h4>条件統制チェック</h4>
-          <ul className="check-list">
-            <CheckItem label="統制群は一般解説を維持" value={condition.control_general_explanation_maintained} />
-            <CheckItem label="提案群で適応方略を使用" value={condition.proposed_adaptive_strategy_used} />
-            <CheckItem label="禁止ヘルプ" value={(condition.forbidden_help_count ?? 0) === 0} suffix={`${condition.forbidden_help_count ?? 0}件`} />
-            <CheckItem label="手動確認" value={(condition.manual_review_count ?? 0) === 0} suffix={`${condition.manual_review_count ?? 0}件`} />
-          </ul>
-        </div>
       </div>
       <details className="raw-json">
         <summary>詳細JSON</summary>
         <pre>{JSON.stringify(summary, null, 2)}</pre>
       </details>
     </section>
-  );
-}
-
-function CheckItem({ label, value, suffix }: { label: string; value: boolean | null | undefined; suffix?: string }) {
-  if (value === null || value === undefined) {
-    return (
-      <li className="neutral">
-        <span>{label}</span>
-        <strong>{suffix || "対象外"}</strong>
-      </li>
-    );
-  }
-  return (
-    <li className={value ? "ok" : "bad"}>
-      <span>{label}</span>
-      <strong>{suffix || (value ? "OK" : "要確認")}</strong>
-    </li>
   );
 }
 
