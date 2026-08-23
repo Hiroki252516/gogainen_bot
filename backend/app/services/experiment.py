@@ -368,8 +368,13 @@ def get_participant(db: Session, participant_id: str) -> Participant:
 
 
 def next_display_code(db: Session) -> str:
-    count = db.query(func.count(Participant.id)).scalar() or 0
-    return f"P{count + 1:03d}"
+    display_codes = db.query(Participant.display_code).all()
+    max_number = 0
+    for (display_code,) in display_codes:
+        match = re.fullmatch(r"P(\d+)", display_code or "")
+        if match:
+            max_number = max(max_number, int(match.group(1)))
+    return f"P{max_number + 1:03d}"
 
 
 def create_participant(db: Session, group_condition: str | None, assignment_method: str, consent_checked: bool) -> Participant:

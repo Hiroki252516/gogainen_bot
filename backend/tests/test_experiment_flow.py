@@ -512,6 +512,17 @@ def test_admin_can_delete_participant_and_related_data():
     assert client.delete(f"/api/admin/participants/{pid}").status_code == 404
 
 
+def test_participant_creation_uses_next_unused_display_code_after_deletion():
+    original = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
+    successor = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
+    assert client.delete(f"/api/admin/participants/{original['participant_id']}").status_code == 200
+
+    recreated = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True})
+    assert recreated.status_code == 200, recreated.text
+    assert recreated.json()["display_code"] != original["display_code"]
+    assert int(recreated.json()["display_code"][1:]) > int(successor["display_code"][1:])
+
+
 def test_admin_participant_delete_rolls_back_on_commit_failure(monkeypatch):
     participant = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
     pid = participant["participant_id"]
