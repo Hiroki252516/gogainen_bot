@@ -162,6 +162,21 @@ def test_learning_routes_m1_to_conceptual_change_and_unknown_to_enrichment():
     assert unknown_turn["learning_stage_label"] == "豊富化"
 
 
+def test_learning_target_display_reflects_m1_m3_and_unknown_diagnoses():
+    cases = [
+        (["D", "E", "F"], "概念についての個別の説明に関する捉え方を見直します。", "概念変化"),
+        (["G", "H", "I"], "概念の分類や位置づけに関する捉え方を見直します。", "概念変化"),
+        (["J"], "基本知識が不足している可能性があります。", "豊富化"),
+    ]
+    for labels, expected_summary, expected_stage in cases:
+        pid = _create_participant_with_pretest(labels=labels)
+        response = client.get(f"/api/participants/{pid}/learning-targets")
+        assert response.status_code == 200, response.text
+        target = next(item for item in response.json()["targets"] if item["term_slug"] == "llm_knowledge")
+        assert target["summary_for_learner"] == expected_summary
+        assert target["current_stage_for_display"] == expected_stage
+
+
 def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
