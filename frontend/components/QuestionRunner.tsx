@@ -141,7 +141,7 @@ export function QuestionRunner({
         if (Array.isArray(result.learning_target_slugs)) {
           localStorage.setItem("learning_targets", JSON.stringify(result.learning_target_slugs));
         }
-        router.push(result.next_url || nextPath);
+        router.push("/learning-targets");
         return;
       }
       router.push(nextPath);

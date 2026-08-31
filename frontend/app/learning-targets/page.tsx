@@ -14,16 +14,32 @@ type PretestResult = {
   result_summary: string;
   is_learning_target: boolean;
 };
+type TestResult = {
+  term_slug: string;
+  term_label: string;
+  question_body: string | null;
+  selected_options: { label: string; body: string }[];
+  is_correct: boolean | null;
+  result_label: string;
+  is_learning_target: boolean;
+};
+type TestResults = {
+  test_round: string | null;
+  test_round_label: string | null;
+  results: TestResult[];
+};
 type LearningTargetsResponse = {
   current_step: string;
   targets: Target[];
   pretest_results: PretestResult[];
+  test_results: TestResults;
 };
 
 export default function LearningTargetsPage() {
   const [currentStep, setCurrentStep] = useState("");
   const [targets, setTargets] = useState<Target[]>([]);
   const [pretestResults, setPretestResults] = useState<PretestResult[]>([]);
+  const [testResults, setTestResults] = useState<TestResults>({ test_round: null, test_round_label: null, results: [] });
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -32,6 +48,7 @@ export default function LearningTargetsPage() {
         setCurrentStep(data.current_step);
         setTargets(data.targets);
         setPretestResults(data.pretest_results);
+        setTestResults(data.test_results || { test_round: null, test_round_label: null, results: [] });
         localStorage.setItem("learning_targets", JSON.stringify(data.targets.map((t) => t.term_slug)));
       })
       .catch((err) => setError(err.message));
@@ -40,11 +57,53 @@ export default function LearningTargetsPage() {
   return (
     <AppShell step="学習対象">
       <section className="panel stack">
-        <h1>今回の確認結果</h1>
+        <h1>{testResults.test_round_label ? `${testResults.test_round_label}の確認結果` : "今回の確認結果"}</h1>
         {error ? <div className="danger">{error}</div> : null}
         <div className="stack">
-          {pretestResults.map((result, i) => (
-            <div className={`notice pretest-result ${result.is_correct ? "pretest-result-correct" : "pretest-result-incorrect"}`} key={result.term_slug}>
+          {testResults.results.length ? testResults.results.map((result, i) => (
+            <div
+              className={`notice pretest-result ${result.is_correct === true ? "pretest-result-correct" : result.is_correct === false ? "pretest-result-incorrect" : "pretest-result-pending"}`}
+              key={result.term_slug}
+            >
+              <div className="term-row-head">
+                <strong>{i + 1}. {result.term_label}</strong>
+                <span className="status-pill">{result.result_label}</span>
+              </div>
+              <div className="result-detail">
+                <strong>問題</strong>
+                <p>{result.question_body || "問題文を確認できません。"}</p>
+              </div>
+              <div className="result-detail">
+                <strong>自分が選んだ選択肢</strong>
+                {result.selected_options.length ? (
+                  <ul>
+                    {result.selected_options.map((option) => (
+                      <li key={`${result.term_slug}-${option.label}-${option.body}`}>
+                        <strong>{option.label}.</strong> {option.body}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>未回答</p>
+                )}
+              </div>
+              <p className="result-verdict">
+                {result.is_correct === true ? "この問題は正解です。" : result.is_correct === false ? "この問題は不正解です。" : "この問題は未回答です。"}
+              </p>
+              {result.is_learning_target ? (
+                <>
+                  <span className="muted">この用語を学習します。</span>
+                  {(() => {
+                    const target = targets.find((item) => item.term_slug === result.term_slug);
+                    return target ? <span className="muted">学習段階: {target.current_stage_for_display}</span> : null;
+                  })()}
+                </>
+              ) : (
+                <span className="muted">この用語は今回の学習対象ではありません。</span>
+              )}
+            </div>
+          )) : pretestResults.map((result, i) => (
+            <div className={`notice pretest-result ${result.is_correct === true ? "pretest-result-correct" : "pretest-result-incorrect"}`} key={result.term_slug}>
               <div className="term-row-head">
                 <strong>{i + 1}. {result.term_label}</strong>
                 <span className="status-pill">{result.result_label}</span>
@@ -67,6 +126,10 @@ export default function LearningTargetsPage() {
         {currentStep === "learning_targets" && targets[0] ? (
           <Link className="button" href={`/learning/${targets[0].term_slug}`}>
             学習を開始
+          </Link>
+        ) : currentStep === "survey" ? (
+          <Link className="button" href="/survey">
+            アンケートへ
           </Link>
         ) : currentStep === "final_test" ? (
           <Link className="button" href="/final-test">

@@ -38,7 +38,7 @@
 
 現行の主なAPIルートは `/api/health`、`/api/participants`、`/api/experiment/{experiment_id}/pretest|retest|l0-check|final-test`、`/api/attempts`、`/api/participants/{participant_id}/diagnose-pretest`、`/api/tutor-sessions`、`/api/tutor-turns/{turn_id}/respond`、`/api/participants/{participant_id}/evaluation-summary/recalculate`、`/api/admin/*` である。管理画面から `DELETE /api/admin/participants/{participant_id}` を呼ぶと、対象参加者と関連する実験データを完全削除し、削除操作の監査記録だけを残す。frontendの `/api/*` はNext.jsのrewriteでbackendへ転送する。
 
-`GET /api/participants/{participant_id}/learning-targets` は、`current_step`、既存の未達対象一覧、事前テスト後の学習者向け結果一覧を返す。`pretest_results` は3用語を表示順に含み、`term_slug`、`term_label`、`is_correct`、`result_label`、`result_summary`、`is_learning_target` を持つ。結果は保存済み `Attempt.is_correct` を正本とし、M分類などの内部診断値は含めない。`targets` は優先度・用語表示順で並び、学習開始先を決める未達用語の一覧として維持する。`current_step=learning_targets` のとき、対象が空でも最終テストへの導線を返さない。
+`GET /api/participants/{participant_id}/learning-targets` は、`current_step`、既存の未達対象一覧、事前テスト後の互換用 `pretest_results`、直近のテスト結果 `test_results` を返す。`pretest_results` は3用語を表示順に含み、`term_slug`、`term_label`、`is_correct`、`result_label`、`result_summary`、`is_learning_target` を持つ。`test_results` は `test_round`、`test_round_label`、`results` を持ち、各結果に `term_slug`、`term_label`、`question_body`、`selected_options`（`label` と `body` のみ）、`is_correct`、`result_label`、`is_learning_target` を含める。`test_results` は保存済みの問題文・選択内容・正誤を参加者向けに投影したものであり、`correct_answer`、`expected_answer`、選択肢ごとの `is_correct`、M分類などの内部診断値は含めない。結果は保存済み `Attempt.is_correct` を正本とする。`targets` は優先度・用語表示順で並び、学習開始先を決める未達用語の一覧として維持する。`current_step=learning_targets` のとき、対象が空でも最終テストへの導線を返さない。
 
 ## Scoring
 

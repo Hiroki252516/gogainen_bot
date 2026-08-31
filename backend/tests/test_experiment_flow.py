@@ -244,6 +244,21 @@ def test_learning_targets_returns_all_pretest_results_without_internal_labels():
     assert all("misconception_type" not in result for result in results)
     assert all("M1" not in str(result) and "M3" not in str(result) for result in results)
 
+    test_results = payload["test_results"]
+    assert test_results["test_round"] == "test"
+    assert test_results["test_round_label"] == "テスト"
+    assert [result["term_slug"] for result in test_results["results"]] == list(ACTIVE_TERM_SLUGS)
+    assert all(result["question_body"] for result in test_results["results"])
+    assert [result["is_correct"] for result in test_results["results"]] == [True, False, False]
+    assert [result["result_label"] for result in test_results["results"]] == ["正解", "不正解", "不正解"]
+    assert all(result["selected_options"] for result in test_results["results"])
+    assert all(
+        "correct_answer" not in result
+        and "expected_answer" not in result
+        and all("is_correct" not in option for option in result["selected_options"])
+        for result in test_results["results"]
+    )
+
 
 def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
@@ -421,6 +436,14 @@ def test_retest_non_mastery_routes_to_first_failed_learning_session_and_blocks_f
     assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
     assert client.post(f"/api/participants/{pid}/score-final-test").status_code == 409
 
+    result_payload = client.get(f"/api/participants/{pid}/learning-targets").json()["test_results"]
+    assert result_payload["test_round"] == "retest_1"
+    assert result_payload["test_round_label"] == "再テスト1"
+    assert [result["is_correct"] for result in result_payload["results"]] == [True, False, True]
+    assert all(result["question_body"] for result in result_payload["results"])
+    assert all(result["selected_options"] for result in result_payload["results"])
+    assert all("correct_answer" not in result and "expected_answer" not in result for result in result_payload["results"])
+
     db = SessionLocal()
     try:
         final_question = db.query(Question).filter_by(phase="final_test").join(Term).filter(Term.slug == "llm_knowledge").one()
@@ -485,6 +508,14 @@ def test_incomplete_retest_keeps_unanswered_term_as_learning_target():
     assert payload["next_step"] == "learning_targets"
     assert payload["next_url"] == "/learning/memory_process"
     assert payload["learning_target_slugs"] == ["memory_process"]
+
+    result_payload = client.get(f"/api/participants/{pid}/learning-targets").json()["test_results"]
+    assert result_payload["test_round"] == "retest_1"
+    unanswered = next(result for result in result_payload["results"] if result["term_slug"] == "memory_process")
+    assert unanswered["is_correct"] is None
+    assert unanswered["result_label"] == "未回答"
+    assert unanswered["question_body"]
+    assert unanswered["selected_options"] == []
 
 
 def test_retest_mastery_skips_final_test_and_uses_retest_score():

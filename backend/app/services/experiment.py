@@ -934,6 +934,132 @@ def pretest_results(db: Session, participant_id: str) -> list[dict[str, Any]]:
     return results
 
 
+def _public_selected_options(db: Session, attempt: Attempt) -> list[dict[str, str]]:
+    """Return only the option text the participant selected for a test result."""
+    selected_ids = attempt.selected_option_ids or ([attempt.selected_option_id] if attempt.selected_option_id else [])
+    selected_ids = [option_id for option_id in selected_ids if option_id]
+    if not selected_ids:
+        return []
+
+    options = db.query(QuestionOption).filter(QuestionOption.id.in_(selected_ids)).all()
+    options_by_id = {option.id: option for option in options}
+    snapshots = {
+        row.get("option_id"): row
+        for row in (attempt.option_order_snapshot or [])
+        if isinstance(row, dict) and row.get("option_id")
+    }
+    selected: list[dict[str, str]] = []
+    for option_id in selected_ids:
+        snapshot = snapshots.get(option_id)
+        option = options_by_id.get(option_id)
+        if snapshot:
+            selected.append(
+                {
+                    "label": str(snapshot.get("label") or (option.option_label if option else "")),
+                    "body": str(snapshot.get("body") or (option.body if option else "")),
+                }
+            )
+        elif option:
+            selected.append({"label": option.option_label, "body": option.body})
+    return selected
+
+
+def _test_result_question(
+    db: Session,
+    participant: Participant,
+    term: Term,
+    test_round: str,
+    phase: str,
+) -> Question | None:
+    expected_variant: str | None = None
+    if test_round == "test":
+        expected_variant = "pretest_v1"
+    elif phase == "final_test":
+        expected_variant = "final_test_v1"
+    elif phase == "retest":
+        round_number = _round_number(test_round)
+        if round_number is not None:
+            has_final_test = db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
+            variant_number = max(1, min(4, round_number - (1 if has_final_test else 0)))
+            expected_variant = f"retest_v{variant_number}"
+
+    query = (
+        db.query(Question)
+        .filter(
+            Question.term_id == term.id,
+            Question.phase == phase,
+            Question.is_active.is_(True),
+        )
+        .order_by(Question.variant_key)
+    )
+    candidates = query.all()
+    if expected_variant:
+        return next((question for question in candidates if question.variant_key == expected_variant), candidates[0] if candidates else None)
+    return candidates[0] if candidates else None
+
+
+def latest_test_results(db: Session, participant_id: str) -> dict[str, Any]:
+    """Return the latest test round without exposing the correct answer."""
+    participant = get_participant(db, participant_id)
+    attempts = (
+        db.query(Attempt)
+        .filter(Attempt.participant_id == participant.id, Attempt.phase.in_(TEST_PHASES))
+        .all()
+    )
+    grouped: dict[str, list[Attempt]] = {}
+    for attempt in attempts:
+        grouped.setdefault(_attempt_test_round(attempt), []).append(attempt)
+    if not grouped:
+        return {"test_round": None, "test_round_label": None, "results": []}
+
+    def event_key(attempt: Attempt) -> tuple[datetime, datetime, str]:
+        return (attempt.answered_at or attempt.created_at, attempt.created_at, attempt.id)
+
+    def round_key(test_round: str) -> tuple[Any, ...]:
+        round_attempts = grouped[test_round]
+        latest = max(round_attempts, key=event_key)
+        return (*_round_sort_key(test_round, latest.phase, latest.attempt_index), event_key(latest))
+
+    selected_round = max(grouped, key=round_key)
+    selected_attempts = grouped[selected_round]
+    latest_by_term: dict[str, Attempt] = {}
+    for attempt in sorted(selected_attempts, key=event_key, reverse=True):
+        latest_by_term.setdefault(attempt.term_id, attempt)
+    latest_attempt = max(selected_attempts, key=event_key)
+    result_phase = latest_attempt.phase
+    targets_by_slug = {row["term_slug"]: row for row in learning_targets(db, participant_id)}
+    results: list[dict[str, Any]] = []
+
+    for term in _active_test_terms(db):
+        attempt = latest_by_term.get(term.id)
+        question = db.get(Question, attempt.question_id) if attempt else _test_result_question(db, participant, term, selected_round, result_phase)
+        selected_options = _public_selected_options(db, attempt) if attempt else []
+        is_correct = attempt.is_correct if attempt else None
+        if is_correct is True:
+            result_label = "正解"
+        elif is_correct is False:
+            result_label = "不正解"
+        else:
+            result_label = "未回答"
+        results.append(
+            {
+                "term_slug": term.slug,
+                "term_label": term.label,
+                "question_body": (attempt.question_body_snapshot if attempt else None) or (question.body if question else None),
+                "selected_options": selected_options,
+                "is_correct": is_correct,
+                "result_label": result_label,
+                "is_learning_target": term.slug in targets_by_slug,
+            }
+        )
+
+    return {
+        "test_round": selected_round,
+        "test_round_label": _test_round_display_label(selected_round),
+        "results": results,
+    }
+
+
 def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> TutorSession:
     participant = get_participant(db, participant_id)
     term = db.query(Term).filter_by(slug=term_slug).one_or_none()
