@@ -5,10 +5,10 @@ import { QuestionRunner } from "@/components/QuestionRunner";
 
 export default function FinalTestPage() {
   return (
-    <AppShell step="最終テスト">
+    <AppShell step="再テスト1">
       <QuestionRunner
         phase="final_test"
-        title="最終テスト"
+        title="再テスト1"
         sourcePath={(id) => `/api/experiment/${id}/final-test`}
         scorePath={(id) => `/api/participants/${id}/score-final-test`}
         nextPath="/survey"

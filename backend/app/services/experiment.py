@@ -52,6 +52,9 @@ LEARNING_STAGE_LABELS = {
     "final_feedback": "教材フィードバック",
 }
 TEST_PHASES = {"pretest", "retest", "final_test"}
+FINAL_TEST_NOT_AVAILABLE_DETAIL = "この参加者は最終テスト対象ではありません。"
+
+
 def _component_terms(term_slug: str, term_label: str) -> list[str]:
     try:
         return list(content_term(term_slug).get("component_terms") or [term_label])
@@ -451,6 +454,32 @@ def _source_question_phase(phase: str) -> str:
     return phase
 
 
+def _retest_variant_number(question: Question) -> int:
+    match = re.fullmatch(r"retest_v(\d+)", question.variant_key or "")
+    return int(match.group(1)) if match else 1
+
+
+def _test_round_key_for_question(db: Session, participant: Participant, phase: str, question: Question) -> str | None:
+    if phase == "pretest":
+        return "test"
+    if phase == "final_test":
+        return "retest_1"
+    if phase == "retest":
+        has_final_test = db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
+        offset = 1 if has_final_test else 0
+        return f"retest_{_retest_variant_number(question) + offset}"
+    return None
+
+
+def _test_round_display_label(test_round: str | None) -> str | None:
+    if test_round == "test":
+        return "テスト"
+    match = re.fullmatch(r"retest_(\d+)", test_round or "")
+    if match:
+        return f"再テスト{match.group(1)}"
+    return None
+
+
 def _question_query_for_phase(db: Session, participant: Participant, phase: str):
     source_phase = _source_question_phase(phase)
     query = db.query(Question).join(Term, Question.term_id == Term.id).filter(Question.phase == source_phase, Question.is_active.is_(True), Term.is_active.is_(True))
@@ -512,6 +541,8 @@ def _displayed_options(db: Session, participant: Participant, question: Question
 
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
     participant = get_participant(db, participant_id)
+    if phase == "final_test" and participant.current_step != "final_test":
+        raise HTTPException(status_code=409, detail=FINAL_TEST_NOT_AVAILABLE_DETAIL)
     all_questions = _question_query_for_phase(db, participant, phase).all()
     by_term: dict[str, list[Question]] = {}
     for question in all_questions:
@@ -529,6 +560,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
     for question in questions:
         term = db.get(Term, question.term_id)
         public_options = _displayed_options(db, participant, question)
+        test_round = _test_round_key_for_question(db, participant, phase, question)
         out.append(
             {
                 "question_id": question.id,
@@ -537,6 +569,8 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "body": _variant_body_for_round(db, participant.id, question, phase),
                 "question_type": question.question_type,
                 "options": public_options,
+                "test_round": test_round,
+                "test_round_label": _test_round_display_label(test_round),
                 "requires_reason": phase not in {"pretest", "retest", "final_test"},
                 **_selection_constraints(question.question_type, len(public_options)),
             }
@@ -561,6 +595,13 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
     if not question:
         raise HTTPException(status_code=404, detail="question not found")
     participant = get_participant(db, payload["participant_id"])
+    phase = payload.get("phase") or question.phase
+    if idempotency_key:
+        existing = db.query(Attempt).filter_by(participant_id=participant.id, idempotency_key=idempotency_key).one_or_none()
+        if existing:
+            return existing
+    if phase == "final_test" and participant.current_step != "final_test":
+        raise HTTPException(status_code=409, detail=FINAL_TEST_NOT_AVAILABLE_DETAIL)
     selected_option_ids = payload.get("selected_option_ids") or ([payload.get("selected_option_id")] if payload.get("selected_option_id") else [])
     selected_option_ids = [option_id for option_id in selected_option_ids if option_id]
     constraints = _selection_constraints(question.question_type, db.query(func.count(QuestionOption.id)).filter_by(question_id=question.id).scalar() or 0)
@@ -570,11 +611,6 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
             raise HTTPException(status_code=400, detail="invalid selected options")
         selected_labels = {option.option_label for option in selected_for_validation}
         _validate_multi_select_labels(selected_labels, len(selected_option_ids))
-    if idempotency_key:
-        existing = db.query(Attempt).filter_by(participant_id=participant.id, idempotency_key=idempotency_key).one_or_none()
-        if existing:
-            return existing
-    phase = payload.get("phase") or question.phase
     is_pretest = phase == "pretest"
     attempt_index = (
         db.query(func.count(Attempt.id))
@@ -587,6 +623,7 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         term_id=question.term_id,
         question_id=question.id,
         phase=phase,
+        test_round=_test_round_key_for_question(db, participant, phase, question),
         attempt_index=attempt_index,
         selected_option_id=(payload.get("selected_option_id") or (selected_option_ids[0] if selected_option_ids else None)),
         selected_option_ids=selected_option_ids or None,
@@ -801,8 +838,13 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
         db.query(TermAssignment, Term, LearnerState)
         .join(Term, TermAssignment.term_id == Term.id)
         .join(LearnerState, (LearnerState.term_id == Term.id) & (LearnerState.participant_id == participant.id))
-        .filter(TermAssignment.participant_id == participant.id, TermAssignment.is_learning_target.is_(True))
-        .order_by(TermAssignment.priority_score.desc())
+        .filter(
+            TermAssignment.participant_id == participant.id,
+            TermAssignment.is_learning_target.is_(True),
+            Term.is_active.is_(True),
+            Term.slug.in_(PRETEST_TERM_SLUGS),
+        )
+        .order_by(TermAssignment.priority_score.desc(), Term.display_order.asc())
         .all()
     )
 
@@ -1194,6 +1236,8 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
     participant = get_participant(db, participant_id)
+    if phase == "final_test" and participant.current_step != "final_test":
+        raise HTTPException(status_code=409, detail=FINAL_TEST_NOT_AVAILABLE_DETAIL)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase, is_correct=None).all()
     if not attempts:
         raise HTTPException(status_code=400, detail=f"{phase} attempts not found")
@@ -1260,17 +1304,33 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         state.current_status = "stable_correct" if attempt.is_correct else ("unknown" if attempt.misconception_type == "unknown" else "misconception")
         state.primary_misconception = None if attempt.is_correct else attempt.misconception_type
         state.last_attempt_id = attempt.id
+    learning_target_slugs: list[str] = []
+    next_url: str | None = None
     if phase == "retest":
         db.flush()
-        remaining = db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0
-        participant.current_step = "learning_targets" if remaining else "final_test"
+        learning_target_slugs = _reset_test_learning_targets(db, participant, attempts)
+        if _is_mastery_test_batch(db, attempts):
+            participant.current_step = "survey"
+            next_url = _next_url(participant.current_step)
+        else:
+            participant.current_step = "learning_targets"
+            next_url = f"/learning/{learning_target_slugs[0]}" if learning_target_slugs else _next_url(participant.current_step)
     elif phase == "l0_check":
         participant.current_step = "finish"
         participant.completed_at = now()
     elif phase == "final_test":
-        participant.current_step = "survey"
+        learning_target_slugs = _reset_test_learning_targets(db, participant, attempts)
+        if _is_mastery_test_batch(db, attempts):
+            participant.current_step = "survey"
+            next_url = _next_url(participant.current_step)
+        else:
+            participant.current_step = "learning_targets"
+            next_url = f"/learning/{learning_target_slugs[0]}" if learning_target_slugs else _next_url(participant.current_step)
     db.commit()
-    return {"status": "completed", "next_step": participant.current_step, "next_url": _next_url(participant.current_step)}
+    response: dict[str, Any] = {"status": "completed", "next_step": participant.current_step, "next_url": next_url or _next_url(participant.current_step)}
+    if phase in {"retest", "final_test"}:
+        response["learning_target_slugs"] = learning_target_slugs
+    return response
 
 
 def _next_url(step: str) -> str:
@@ -1289,35 +1349,129 @@ def _rate(items: list[Attempt], predicate) -> float | None:
     return sum(1 for item in items if predicate(item)) / len(items)
 
 
-def _attempt_sort_key(attempt: Attempt) -> tuple[int, int, str]:
-    phase_order = {"pretest": 0, "retest": 1, "final_test": 2, "l0_check": 3}
-    return (phase_order.get(attempt.phase, 99), attempt.attempt_index, attempt.created_at.isoformat())
+def _active_test_terms(db: Session) -> list[Term]:
+    return (
+        db.query(Term)
+        .filter(Term.slug.in_(PRETEST_TERM_SLUGS), Term.is_active.is_(True))
+        .order_by(Term.display_order)
+        .all()
+    )
+
+
+def _is_mastery_test_batch(db: Session, attempts: list[Attempt]) -> bool:
+    active_term_ids = {term.id for term in _active_test_terms(db)}
+    return (
+        bool(active_term_ids)
+        and len(attempts) == len(active_term_ids)
+        and {attempt.term_id for attempt in attempts} == active_term_ids
+        and all(attempt.is_correct is True for attempt in attempts)
+    )
+
+
+def _reset_test_learning_targets(db: Session, participant: Participant, attempts: list[Attempt]) -> list[str]:
+    active_terms = _active_test_terms(db)
+    active_term_ids = {term.id for term in active_terms}
+    attempts_by_term: dict[str, list[Attempt]] = {term_id: [] for term_id in active_term_ids}
+    for attempt in attempts:
+        if attempt.term_id in attempts_by_term:
+            attempts_by_term[attempt.term_id].append(attempt)
+
+    assignments = {
+        assignment.term_id: assignment
+        for assignment in db.query(TermAssignment).filter_by(participant_id=participant.id).all()
+    }
+    for term in active_terms:
+        assignment = assignments.get(term.id)
+        if not assignment:
+            assignment = TermAssignment(
+                participant_id=participant.id,
+                term_id=term.id,
+                group_condition=participant.group_condition,
+            )
+            db.add(assignment)
+            assignments[term.id] = assignment
+
+        term_attempts = attempts_by_term[term.id]
+        failed_attempt = next((attempt for attempt in term_attempts if attempt.is_correct is not True), None)
+        if len(term_attempts) == 1 and failed_attempt is None:
+            assignment.is_learning_target = False
+            assignment.priority_score = 0
+            assignment.selection_reason = "正解したため次周回から除外"
+        elif failed_attempt:
+            assignment.is_learning_target = True
+            assignment.priority_score, assignment.selection_reason = _priority(failed_attempt)
+        else:
+            assignment.is_learning_target = True
+            assignment.priority_score = 60
+            assignment.selection_reason = "再テストの確認が不完全なため学習"
+
+    db.flush()
+    return [row["term_slug"] for row in learning_targets(db, participant.id)]
+
+
+def _latest_retest_mastery_attempts(db: Session, attempts: list[Attempt]) -> list[Attempt]:
+    active_terms = _active_test_terms(db)
+    active_term_ids = {term.id for term in active_terms}
+    latest_by_term: dict[str, Attempt] = {}
+    for attempt in sorted(attempts, key=lambda item: (item.created_at, item.answered_at or item.created_at, item.id), reverse=True):
+        if attempt.term_id in active_term_ids:
+            latest_by_term.setdefault(attempt.term_id, attempt)
+    if set(latest_by_term) != active_term_ids or not all(latest_by_term[term_id].is_correct is True for term_id in active_term_ids):
+        return []
+    return [latest_by_term[term.id] for term in active_terms]
+
+
+def _round_number(test_round: str | None) -> int | None:
+    match = re.fullmatch(r"retest_(\d+)", test_round or "")
+    return int(match.group(1)) if match else None
 
 
 def _round_label(phase: str, attempt_index: int) -> str:
+    if phase == "pretest":
+        return "test"
     if phase == "retest":
         return f"retest_{attempt_index}"
+    if phase == "final_test":
+        return "retest_1"
     return phase
 
 
+def _attempt_test_round(attempt: Attempt) -> str:
+    return attempt.test_round or _round_label(attempt.phase, attempt.attempt_index)
+
+
+def _round_sort_key(test_round: str, phase: str, attempt_index: int) -> tuple[int, int, int]:
+    if test_round == "test":
+        return (0, 0, attempt_index)
+    number = _round_number(test_round)
+    if number is not None:
+        return (1, number, attempt_index)
+    phase_order = {"l0_check": 0, "transfer": 1}
+    return (2, phase_order.get(phase, 99), attempt_index)
+
+
+def _attempt_sort_key(attempt: Attempt) -> tuple[int, int, int, str]:
+    return (*_round_sort_key(_attempt_test_round(attempt), attempt.phase, attempt.attempt_index), attempt.created_at.isoformat())
+
+
 def _test_rounds(attempts: list[Attempt]) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, int], list[Attempt]] = {}
+    grouped: dict[tuple[str, str, int], list[Attempt]] = {}
     for attempt in attempts:
         if attempt.phase not in {"pretest", "retest", "final_test", "l0_check"}:
             continue
-        grouped.setdefault((attempt.phase, attempt.attempt_index), []).append(attempt)
+        grouped.setdefault((_attempt_test_round(attempt), attempt.phase, attempt.attempt_index), []).append(attempt)
 
     rows: list[dict[str, Any]] = []
     pretest_score: float | None = None
     previous_score: float | None = None
-    for phase, attempt_index in sorted(grouped, key=lambda item: ({"pretest": 0, "retest": 1, "final_test": 2, "l0_check": 3}.get(item[0], 99), item[1])):
-        items = grouped[(phase, attempt_index)]
+    for test_round, phase, attempt_index in sorted(grouped, key=lambda item: _round_sort_key(item[0], item[1], item[2])):
+        items = grouped[(test_round, phase, attempt_index)]
         score_rate = _rate(items, lambda attempt: bool(attempt.is_correct))
         if phase == "pretest" and attempt_index == 1:
             pretest_score = score_rate
         incorrect_count = sum(1 for attempt in items if attempt.is_correct is False)
         row = {
-            "round": _round_label(phase, attempt_index),
+            "round": test_round,
             "phase": phase,
             "attempt_index": attempt_index,
             "question_count": len(items),
@@ -1325,7 +1479,7 @@ def _test_rounds(attempts: list[Attempt]) -> list[dict[str, Any]]:
             "score_rate": score_rate,
             "score_delta_from_pretest_pt": None if score_rate is None or pretest_score is None else round((score_rate - pretest_score) * 100, 6),
             "score_delta_from_previous_test_pt": None if score_rate is None or previous_score is None else round((score_rate - previous_score) * 100, 6),
-            "remaining_learning_target_count": incorrect_count if phase in {"pretest", "retest"} else None,
+            "remaining_learning_target_count": incorrect_count if phase in {"pretest", "retest", "final_test"} else None,
             "event_time": _iso(max((attempt.answered_at or attempt.created_at for attempt in items), default=None)),
         }
         rows.append(row)
@@ -1379,7 +1533,7 @@ def _misconception_timeline(attempts: list[Attempt], terms: dict[str, Term]) -> 
                 "change_type": _misconception_change_type(initial, latest),
                 "events": [
                     {
-                        "round": _round_label(attempt.phase, attempt.attempt_index),
+                        "round": _attempt_test_round(attempt),
                         "phase": attempt.phase,
                         "attempt_index": attempt.attempt_index,
                         "is_correct": attempt.is_correct,
@@ -1399,7 +1553,10 @@ def _learning_burden(db: Session, participant_id: str, attempts: list[Attempt]) 
     sessions = db.query(TutorSession).filter_by(participant_id=participant_id).all()
     session_ids = [session.id for session in sessions]
     turns = db.query(TutorTurn).filter(TutorTurn.tutor_session_id.in_(session_ids or ["__none__"])).all()
-    retest_count = max((attempt.attempt_index for attempt in attempts if attempt.phase == "retest"), default=0)
+    retest_count = max(
+        (_round_number(_attempt_test_round(attempt)) or 0 for attempt in attempts if attempt.phase in {"retest", "final_test"}),
+        default=0,
+    )
     test_time = sum(attempt.response_time_sec or 0 for attempt in attempts if attempt.phase in {"pretest", "retest", "final_test", "l0_check"})
     learning_time = sum(turn.response_time_sec or 0 for turn in turns)
     retained_count = sum(1 for attempt in attempts if attempt.phase in {"pretest", "retest"} and attempt.is_correct is False)
@@ -1432,6 +1589,13 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
     attempts = db.query(Attempt).filter_by(participant_id=participant.id).all()
     by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in ["pretest", "retest", "l0_check", "final_test"]}
     final_items = by_phase["final_test"] or by_phase["l0_check"]
+    final_score_source = "final_test" if by_phase["final_test"] else ("l0_check" if by_phase["l0_check"] else None)
+    retest_mastery_items = _latest_retest_mastery_attempts(db, by_phase["retest"])
+    final_test_skipped = False
+    if not final_items and retest_mastery_items:
+        final_items = retest_mastery_items
+        final_score_source = "retest_mastery"
+        final_test_skipped = True
     initial_m = [a for a in by_phase["pretest"] if a.misconception_type in {"M1", "M3"}]
     same_rec = [a for a in by_phase["retest"] if a.recurrence_flag]
     def m_rate(m: str) -> float | None:
@@ -1441,12 +1605,22 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         rec_terms = {a.term_id for a in by_phase["retest"] if a.recurrence_flag and a.misconception_type == m}
         return len(rec_terms) / len(denom)
 
+    def final_score_value(attempt: Attempt) -> bool:
+        return bool(attempt.is_correct) if final_score_source == "retest_mastery" else bool(attempt.l0_success)
+
+    condition_check = _condition_check(db, participant, attempts)
+    condition_check.update(
+        {
+            "final_test_skipped_after_retest_mastery": final_test_skipped,
+            "final_score_source": final_score_source,
+        }
+    )
     summary = EvaluationSummary(
         participant_id=participant.id,
         group_condition=participant.group_condition,
         pretest_score=_rate(by_phase["pretest"], lambda a: bool(a.is_correct)),
         retest_score=_rate(by_phase["retest"], lambda a: bool(a.is_correct)),
-        l0_correct_rate=_rate(final_items, lambda a: bool(a.l0_success)),
+        l0_correct_rate=_rate(final_items, final_score_value),
         transfer_correct_rate=None,
         same_misconception_recurrence_rate=(len(same_rec) / len(initial_m)) if initial_m else None,
         m1_recurrence_rate=m_rate("M1"),
@@ -1455,10 +1629,14 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         m4_failure_rate=None,
         unknown_persistence_rate=None,
         learning_target_count=db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0,
-        score_timeline_json={"rounds": _test_rounds(attempts)},
+        score_timeline_json={
+            "rounds": _test_rounds(attempts),
+            "final_test_skipped_after_retest_mastery": final_test_skipped,
+            "final_score_source": final_score_source,
+        },
         misconception_timeline_json=_misconception_timeline(attempts, _term_map(db)),
         learning_burden_json=_learning_burden(db, participant.id, attempts),
-        condition_check_json=_condition_check(db, participant, attempts),
+        condition_check_json=condition_check,
         completed=participant.completed_at is not None,
     )
     db.add(summary)
@@ -1544,6 +1722,8 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 final_round = next((row for row in reversed(rounds) if row.get("phase") in {"final_test", "l0_check"}), None)
                 if final_round and final_round.get("score_delta_from_pretest_pt") is not None:
                     vals.append(final_round["score_delta_from_pretest_pt"])
+                elif (summary.score_timeline_json or {}).get("final_score_source") == "retest_mastery" and summary.pretest_score is not None and summary.l0_correct_rate is not None:
+                    vals.append(round((summary.l0_correct_rate - summary.pretest_score) * 100, 6))
             return sum(vals) / len(vals) if vals else None
         rows.append(
             {
@@ -1560,7 +1740,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
 
 EXPORTS = {
     "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at"]),
-    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "question_id", "selected_option_id", "selected_option_ids", "reason_text", "free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
+    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "selected_option_id", "selected_option_ids", "reason_text", "free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at"]),
     "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
@@ -1609,6 +1789,7 @@ def _attempt_log_row(
         "display_code": participant.display_code if participant else None,
         "group_condition": participant.group_condition if participant else None,
         "phase": attempt.phase,
+        "test_round": _attempt_test_round(attempt),
         "term_slug": term.slug if term else None,
         "term_label": term.label if term else None,
         "question_body": question.body if question else None,
@@ -1982,6 +2163,7 @@ LOG_CSV_COLUMNS = [
     "participant_id",
     "display_code",
     "phase",
+    "test_round",
     "term_slug",
     "event_time",
     "question_shown_at",
@@ -2009,7 +2191,7 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
             summary = f"{answer['term_label']} {answer['phase']} correct={answer['is_correct']} m={answer['misconception_type']}"
         else:
             summary = f"{answer['term_label']} learning turn {answer['turn_index']} stage={answer['learning_stage']} component={answer['component_term']} sufficient={answer['is_sufficient']} strategy={answer['teaching_strategy']}"
-        rows.append({**base, "record_type": "answer", "source_type": answer["source_type"], "phase": answer["phase"], "term_slug": answer["term_slug"], "event_time": _answer_event_time(answer), "question_shown_at": answer.get("question_shown_at"), "answered_at": answer.get("answered_at"), "response_time_sec": answer.get("response_time_sec"), "question_body": answer.get("question_body"), "selected_option_body": answer.get("selected_option_body"), "question_body_snapshot": answer.get("question_body_snapshot"), "option_order_snapshot": _csv_value(answer.get("option_order_snapshot")), "summary": summary, "value_json": _csv_value(answer)})
+        rows.append({**base, "record_type": "answer", "source_type": answer["source_type"], "phase": answer["phase"], "test_round": answer.get("test_round"), "term_slug": answer["term_slug"], "event_time": _answer_event_time(answer), "question_shown_at": answer.get("question_shown_at"), "answered_at": answer.get("answered_at"), "response_time_sec": answer.get("response_time_sec"), "question_body": answer.get("question_body"), "selected_option_body": answer.get("selected_option_body"), "question_body_snapshot": answer.get("question_body_snapshot"), "option_order_snapshot": _csv_value(answer.get("option_order_snapshot")), "summary": summary, "value_json": _csv_value(answer)})
     for state in logs["learner_states"]:
         rows.append({**base, "record_type": "learner_state", "phase": "state", "term_slug": state["term_slug"], "event_time": state["updated_at"], "summary": f"{state['term_label']} status={state['current_status']} stage={state['current_stage_for_display']} strategy={state['teaching_strategy']}", "value_json": _csv_value(state)})
     for session in logs["tutor_sessions"]:

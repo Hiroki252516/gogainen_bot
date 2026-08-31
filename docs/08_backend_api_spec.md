@@ -15,6 +15,8 @@
   "min_selections": 3,
   "max_selections": 3,
   "requires_reason": false,
+  "test_round": "test",
+  "test_round_label": "テスト",
   "options": []
 }
 ```
@@ -30,9 +32,13 @@
 
 `variant_key` は既存DBの `questions.variant_key` と互換に保存する。
 
+再テストの採点対象が現行の3用語を各1問ずつ含み、すべて正解だった場合は、`score-retest` が `next_step=survey`、`next_url=/survey` を返して追加の確認を省略する。不正解または未回答がある場合は、`next_step=learning_targets`、不正解・未回答用語の優先度順を入れた `learning_target_slugs`、最初の用語への `next_url=/learning/{term_slug}` を返す。`final_test` も全問正解時だけ `survey` へ進み、不正解または未回答時は次の再テスト周回の学習セッションへ戻る。対象一覧が空の異常時も `next_url=/learning-targets` に留める。最終確認省略後、非満点再テスト後、または不正解・未回答の `final_test` 後の関連APIは `409` を返す。`final_test` の参加者向け表示名は「再テスト1」である。
+
+`attempts.test_round` には初回 `pretest` を `test`、最初の学習後確認を `retest_1`、次周回を `retest_2` のように保存する。`attempts.phase` は `pretest`、`retest`、`final_test` の内部値として互換維持する。
+
 現行の主なAPIルートは `/api/health`、`/api/participants`、`/api/experiment/{experiment_id}/pretest|retest|l0-check|final-test`、`/api/attempts`、`/api/participants/{participant_id}/diagnose-pretest`、`/api/tutor-sessions`、`/api/tutor-turns/{turn_id}/respond`、`/api/participants/{participant_id}/evaluation-summary/recalculate`、`/api/admin/*` である。管理画面から `DELETE /api/admin/participants/{participant_id}` を呼ぶと、対象参加者と関連する実験データを完全削除し、削除操作の監査記録だけを残す。frontendの `/api/*` はNext.jsのrewriteでbackendへ転送する。
 
-`GET /api/participants/{participant_id}/learning-targets` は、既存の未達対象一覧に加えて、事前テスト後の学習者向け結果一覧を `pretest_results` として返す。`pretest_results` は3用語を表示順に含み、`term_slug`、`term_label`、`is_correct`、`result_label`、`result_summary`、`is_learning_target` を持つ。結果は保存済み `Attempt.is_correct` を正本とし、M分類などの内部診断値は含めない。`targets` は従来どおり学習開始先を決める未達用語の一覧として維持する。
+`GET /api/participants/{participant_id}/learning-targets` は、`current_step`、既存の未達対象一覧、事前テスト後の学習者向け結果一覧を返す。`pretest_results` は3用語を表示順に含み、`term_slug`、`term_label`、`is_correct`、`result_label`、`result_summary`、`is_learning_target` を持つ。結果は保存済み `Attempt.is_correct` を正本とし、M分類などの内部診断値は含めない。`targets` は優先度・用語表示順で並び、学習開始先を決める未達用語の一覧として維持する。`current_step=learning_targets` のとき、対象が空でも最終テストへの導線を返さない。
 
 ## Scoring
 

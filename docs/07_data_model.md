@@ -20,6 +20,14 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 - `transfer`
 - `delayed_retest`（将来対応。現行APIの主導線では未使用）
 
+### test_round (`attempts`)
+
+参加者ごとのテスト周回を記録する表示・分析用キー。`phase` は問題種別と既存API互換の内部値として残す。
+
+- `test`（初回テスト。内部 `pretest`）
+- `retest_1`（最初の学習後確認。内部 `retest` または `final_test`）
+- `retest_2` 以降（追加学習後の再テスト周回）
+
 ### question_type
 
 - `multi_select`
@@ -173,6 +181,7 @@ misconception_type values:
 - term_id TEXT(36) REFERENCES terms(id)
 - question_id TEXT(36) REFERENCES questions(id)
 - phase TEXT NOT NULL
+- test_round TEXT NULL  # test, retest_1, retest_2, ...
 - attempt_index INT NOT NULL DEFAULT 1
 - selected_option_id TEXT(36) NULL REFERENCES question_options(id)  # 旧互換列
 - selected_option_ids JSON NULL  # 現行の複数選択正本
@@ -326,7 +335,7 @@ status values:
 
 ### evaluation_summaries
 
-現行実装の評価サマリーは参加者単位の最新集計として保存する。再計算のたびに新しい行を作成し、管理画面では最新行を参照する。既存カラム名との互換性のため `l0_correct_rate` を残すが、現行MVPでは `final_test` が存在する場合に `final_test` の選択式正答率を入れる。
+現行実装の評価サマリーは参加者単位の最新集計として保存する。再計算のたびに新しい行を作成し、管理画面では最新行を参照する。既存カラム名との互換性のため `l0_correct_rate` を残すが、現行MVPでは `final_test` の選択式正答率を入れ、最終テストを省略した場合は再テスト満点を代用する。
 
 - id TEXT(36) PRIMARY KEY
 - participant_id TEXT(36) REFERENCES participants(id)
@@ -352,7 +361,7 @@ status values:
 - learning_burden_json JSON NULL
 - condition_check_json JSON NULL
 
-`score_timeline_json` は `pretest`, `retest_1`, `retest_2`, ..., `final_test` の得点率、事前比差分ポイント、直前比差分ポイント、未達項目数を保持する。`misconception_timeline_json` は用語別に `pretest -> retest_n -> final_test` の誤概念タイプ推移と `resolved`, `same_type_recurred`, `changed_type`, `unknown_persisted`, `regressed` の変化分類を保持する。既存の `pretest_score`, `retest_score`, `l0_correct_rate` は互換用に残す。
+`score_timeline_json` は `test`, `retest_1`, `retest_2`, ... の得点率、事前比差分ポイント、直前比差分ポイント、未達項目数を保持する。最終確認を省略した場合は `final_test_skipped_after_retest_mastery` と `final_score_source` も保持する。`misconception_timeline_json` は用語別に `test -> retest_n` の誤概念タイプ推移と `resolved`, `same_type_recurred`, `changed_type`, `unknown_persisted`, `regressed` の変化分類を保持する。既存の `pretest_score`, `retest_score`, `l0_correct_rate` は互換用に残す。
 
 ### export_jobs
 
