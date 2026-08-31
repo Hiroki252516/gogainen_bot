@@ -316,154 +316,149 @@ export default function LearningPage() {
               <p>段階: {learningStageLabel(turn.learning_stage, turn.learning_stage_label)}</p>
               <p>{turn.learning_stage === "enrichment" ? "不足知識を補います" : "誤った捉え方を見直します"}</p>
             </div>
-            {feedback ? (
-              <>
-                <section
-                  className={`learning-block material-block feedback-card ${feedback.is_sufficient ? "feedback-card-ok" : "feedback-card-error"}`}
-                  aria-labelledby="feedback-title"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <h2 id="feedback-title">教材フィードバック</h2>
-                  <strong className="feedback-status">
-                    {feedback.is_sufficient ? "正解です。" : "不正解です。"}
-                  </strong>
-                  <MarkdownText>{feedback.feedback}</MarkdownText>
-                  {feedback.item_results?.length ? (
-                    <div className="stack">
-                      {feedback.item_results.map((item) => (
-                        <article className={`result-card ${item.is_correct ? "correct" : "incorrect"}`} key={item.component_term}>
-                          <h3>{item.component_term}: {item.is_correct ? "正解" : "不正解"}</h3>
-                          <p>あなたの回答: {item.selected_option_body || "未選択"}</p>
-                          <p>正解: {item.correct_answer}</p>
-                          <MarkdownText className="markdown-compact">{item.feedback}</MarkdownText>
-                        </article>
-                      ))}
-                    </div>
-                  ) : null}
-                </section>
-                {submitting ? <ContinueProgress /> : null}
-                <div className="actions">
-                  <button className="secondary" onClick={() => feedback.session_completed ? router.push(nextHref) : continueLearning()} disabled={submitting}>
-                    {feedback.session_completed ? "次へ" : submitting ? "次の確認を準備中..." : "次の確認へ"}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="learning-layout">
-                  <section className="learning-block material-block" aria-labelledby="material-title">
-                    <h2 id="material-title">教材</h2>
-                    <MarkdownText>{turn.tutor_message}</MarkdownText>
-                  </section>
-                  <section className="learning-block problem-block" aria-labelledby="problem-title">
-                    <h2 id="problem-title">問題</h2>
-                    <p>{turn.practice_question?.body || turn.learner_prompt}</p>
-                    {turn.practice_question?.items?.length ? (
-                      <div className="stack">
-                        {turn.practice_question.items.map((item) => (
-                          <article className="component-question" key={item.component_term}>
-                            <h3>{item.component_term}</h3>
-                            {item.material ? <MarkdownText className="markdown-compact">{item.material}</MarkdownText> : null}
-                            <p>{item.body}</p>
-                            <div className="options">
-                              {(item.options || []).map((option) => (
-                                <label className="option" key={option.option_id}>
-                                  <input
-                                    type="radio"
-                                    name={`learning-option-${item.component_term}`}
-                                    value={option.option_id}
-                                    checked={selectedItemOptionIds[item.component_term] === option.option_id}
-                                    disabled={submitting}
-                                    onChange={() => setSelectedItemOptionIds((current) => ({ ...current, [item.component_term]: option.option_id }))}
-                                  />
-                                  <span>
-                                    <strong>{option.label}.</strong> {option.body}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    ) : turn.practice_question?.options?.length ? (
-                      <>
-                        {turn.practice_question.selection_mode === "multiple" ? (() => {
-                          const requiredSelections = turn.practice_question.min_selections ?? 3;
-                          const selectionState = multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, requiredSelections);
-                          return (
-                            <div className={`selection-status ${selectionState.isComplete ? "ok" : ""}`}>
-                              <strong>{selectionState.hasUnknown ? "わからないを選択中" : `${selectionState.normalSelectedCount}/${requiredSelections} 選択済み`}</strong>
-                              <span>
-                                {selectionState.hasUnknown
-                                  ? "わからないを選ぶ場合は単独選択です。"
-                                  : selectionState.reachedLimit
-                                    ? "上限に達しました。変更するには選択済みの項目を外してください。"
-                                    : `A〜Iから${requiredSelections}つ選ぶか、J「わからない」だけを選んでください。`}
-                              </span>
-                            </div>
-                          );
-                        })() : null}
+            <div className="learning-layout">
+              <section className="learning-block material-block" aria-labelledby="material-title">
+                <h2 id="material-title">教材</h2>
+                <MarkdownText>{turn.tutor_message}</MarkdownText>
+              </section>
+              <section className="learning-block problem-block" aria-labelledby="problem-title">
+                <h2 id="problem-title">問題</h2>
+                <p>{turn.practice_question?.body || turn.learner_prompt}</p>
+                {turn.practice_question?.items?.length ? (
+                  <div className="stack">
+                    {turn.practice_question.items.map((item) => (
+                      <article className="component-question" key={item.component_term}>
+                        <h3>{item.component_term}</h3>
+                        {item.material ? <MarkdownText className="markdown-compact">{item.material}</MarkdownText> : null}
+                        <p>{item.body}</p>
                         <div className="options">
-                          {turn.practice_question.options.map((option) => {
-                            const isMultiple = turn.practice_question?.selection_mode === "multiple";
-                            const requiredSelections = turn.practice_question?.min_selections ?? 3;
-                            const selectionState = multipleSelectionState(turn.practice_question?.options || [], selectedOptionIds, requiredSelections);
-                            const isSelected = isMultiple ? selectedOptionIds.includes(option.option_id) : selectedOptionId === option.option_id;
-                            const isUnknown = option.label === "J";
-                            const isDisabled =
-                              isMultiple &&
-                              !isSelected &&
-                              ((selectionState.hasUnknown && !isUnknown) ||
-                                (!isUnknown && selectionState.reachedLimit) ||
-                                (isUnknown && selectionState.normalSelectedCount > 0));
-                            return (
-                              <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
-                                <input
-                                  type={isMultiple ? "checkbox" : "radio"}
-                                  name="learning-option"
-                                  value={option.option_id}
-                                  checked={isSelected}
-                                  disabled={submitting || isDisabled}
-                                  onChange={() => {
-                                    if (!isMultiple) {
-                                      setSelectedOptionId(option.option_id);
-                                      return;
-                                    }
-                                    setSelectedOptionIds((currentIds) => nextMultipleSelection(turn.practice_question?.options || [], currentIds, option, requiredSelections));
-                                  }}
-                                />
-                                <span>
-                                  <strong>{option.label}.</strong> {option.body}
-                                </span>
-                              </label>
-                            );
-                          })}
+                          {(item.options || []).map((option) => (
+                            <label className="option" key={option.option_id}>
+                              <input
+                                type="radio"
+                                name={`learning-option-${item.component_term}`}
+                                value={option.option_id}
+                                checked={selectedItemOptionIds[item.component_term] === option.option_id}
+                                disabled={submitting || Boolean(feedback)}
+                                onChange={() => setSelectedItemOptionIds((current) => ({ ...current, [item.component_term]: option.option_id }))}
+                              />
+                              <span>
+                                <strong>{option.label}.</strong> {option.body}
+                              </span>
+                            </label>
+                          ))}
                         </div>
-                      </>
-                    ) : (
-                      <label>
-                        あなたの回答・自己説明
-                        <textarea disabled={submitting} value={response} onChange={(event) => setResponse(event.target.value)} />
-                      </label>
-                    )}
-                  </section>
-                </div>
-                <div className="actions">
-                  {submitting ? <SubmitProgress /> : null}
-                  <button
-                    onClick={submit}
-                    disabled={
-                      submitting ||
-                      (turn.practice_question?.selection_mode === "multiple" &&
-                        !multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, turn.practice_question.min_selections ?? 3).isComplete)
-                    }
-                  >
-                    {submitting ? "分析中..." : "回答を確認"}
-                  </button>
-                </div>
-              </>
-            )}
+                      </article>
+                    ))}
+                  </div>
+                ) : turn.practice_question?.options?.length ? (
+                  <>
+                    {turn.practice_question.selection_mode === "multiple" ? (() => {
+                      const requiredSelections = turn.practice_question.min_selections ?? 3;
+                      const selectionState = multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, requiredSelections);
+                      return (
+                        <div className={`selection-status ${selectionState.isComplete ? "ok" : ""}`}>
+                          <strong>{selectionState.hasUnknown ? "わからないを選択中" : `${selectionState.normalSelectedCount}/${requiredSelections} 選択済み`}</strong>
+                          <span>
+                            {selectionState.hasUnknown
+                              ? "わからないを選ぶ場合は単独選択です。"
+                              : selectionState.reachedLimit
+                                ? "上限に達しました。変更するには選択済みの項目を外してください。"
+                                : `A〜Iから${requiredSelections}つ選ぶか、J「わからない」だけを選んでください。`}
+                          </span>
+                        </div>
+                      );
+                    })() : null}
+                    <div className="options">
+                      {turn.practice_question.options.map((option) => {
+                        const isMultiple = turn.practice_question?.selection_mode === "multiple";
+                        const requiredSelections = turn.practice_question?.min_selections ?? 3;
+                        const selectionState = multipleSelectionState(turn.practice_question?.options || [], selectedOptionIds, requiredSelections);
+                        const isSelected = isMultiple ? selectedOptionIds.includes(option.option_id) : selectedOptionId === option.option_id;
+                        const isUnknown = option.label === "J";
+                        const isDisabled =
+                          isMultiple &&
+                          !isSelected &&
+                          ((selectionState.hasUnknown && !isUnknown) ||
+                            (!isUnknown && selectionState.reachedLimit) ||
+                            (isUnknown && selectionState.normalSelectedCount > 0));
+                        return (
+                          <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
+                            <input
+                              type={isMultiple ? "checkbox" : "radio"}
+                              name="learning-option"
+                              value={option.option_id}
+                              checked={isSelected}
+                              disabled={submitting || Boolean(feedback) || isDisabled}
+                              onChange={() => {
+                                if (!isMultiple) {
+                                  setSelectedOptionId(option.option_id);
+                                  return;
+                                }
+                                setSelectedOptionIds((currentIds) => nextMultipleSelection(turn.practice_question?.options || [], currentIds, option, requiredSelections));
+                              }}
+                            />
+                            <span>
+                              <strong>{option.label}.</strong> {option.body}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <label>
+                    あなたの回答・自己説明
+                    <textarea disabled={submitting || Boolean(feedback)} value={response} onChange={(event) => setResponse(event.target.value)} />
+                  </label>
+                )}
+              </section>
+            </div>
+            {feedback ? (
+              <section
+                className={`learning-block material-block feedback-card ${feedback.is_sufficient ? "feedback-card-ok" : "feedback-card-error"}`}
+                aria-labelledby="feedback-title"
+                role="status"
+                aria-live="polite"
+              >
+                <h2 id="feedback-title">教材フィードバック</h2>
+                <strong className="feedback-status">
+                  {feedback.is_sufficient ? "正解です。" : "不正解です。"}
+                </strong>
+                <MarkdownText>{feedback.feedback}</MarkdownText>
+                {feedback.item_results?.length ? (
+                  <div className="stack">
+                    {feedback.item_results.map((item) => (
+                      <article className={`result-card ${item.is_correct ? "correct" : "incorrect"}`} key={item.component_term}>
+                        <h3>{item.component_term}: {item.is_correct ? "正解" : "不正解"}</h3>
+                        <p>あなたの回答: {item.selected_option_body || "未選択"}</p>
+                        <p>正解: {item.correct_answer}</p>
+                        <MarkdownText className="markdown-compact">{item.feedback}</MarkdownText>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+            {submitting ? (feedback ? <ContinueProgress /> : <SubmitProgress />) : null}
+            <div className="actions">
+              {!feedback ? (
+                <button
+                  onClick={submit}
+                  disabled={
+                    submitting ||
+                    (turn.practice_question?.selection_mode === "multiple" &&
+                      !multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, turn.practice_question.min_selections ?? 3).isComplete)
+                  }
+                >
+                  {submitting ? "分析中..." : "回答を確認"}
+                </button>
+              ) : (
+                <button className="secondary" onClick={() => feedback.session_completed ? router.push(nextHref) : continueLearning()} disabled={submitting}>
+                  {feedback.session_completed ? "次へ" : submitting ? "次の確認を準備中..." : "次の確認へ"}
+                </button>
+              )}
+            </div>
           </>
         ) : error ? null : <SessionLoadProgress />}
       </section>

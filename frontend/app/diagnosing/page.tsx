@@ -13,7 +13,7 @@ export default function DiagnosingPage() {
     api<{ learning_target_count: number; next_url?: string }>(`/api/participants/${requireParticipant()}/diagnose-pretest`, { method: "POST" })
       .then((data) => {
         setMessage(`${data.learning_target_count}件の重点確認項目を作成しました。`);
-        setTimeout(() => router.push(data.next_url || "/learning-targets"), 500);
+        setTimeout(() => router.push("/learning-targets"), 500);
       })
       .catch((err) => setMessage(err.message));
   }, [router]);

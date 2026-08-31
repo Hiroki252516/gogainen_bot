@@ -60,6 +60,14 @@ for (const expectedText of ["対象概念:", "教材フィードバック", "正
     throw new Error(`learning page missing final feedback/debug update behavior: ${expectedText}`);
   }
 }
+if (learningPage.indexOf("className=\"learning-layout\"") > learningPage.indexOf("{feedback ? (")) {
+  throw new Error("learning page must keep the question layout above feedback");
+}
+for (const expectedText of ["disabled={submitting || Boolean(feedback)}", "submitting ? (feedback ? <ContinueProgress /> : <SubmitProgress />)", "!feedback ? ("]) {
+  if (!learningPage.includes(expectedText)) {
+    throw new Error(`learning page missing inline feedback behavior: ${expectedText}`);
+  }
+}
 for (const expectedText of ["SubmitProgress", "分析中です", "秒経過", "回答を記録しています", "選択内容を確認しています", "解説を生成しています", "次の教材を準備しています", "analysis-progress", "spinner"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing submit progress behavior: ${expectedText}`);
@@ -105,10 +113,10 @@ for (const removedText of ["term_understanding", "concept_understanding"]) {
 }
 
 const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
-if (!questionRunner.includes("result.next_url || nextPath")) {
-  throw new Error("QuestionRunner must follow backend next_url after scoring");
+if (!questionRunner.includes('router.push("/learning-targets")')) {
+  throw new Error("QuestionRunner must show the test result screen after scoring");
 }
-for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', "result.next_url || nextPath"]) {
+for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', 'router.push("/learning-targets")']) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`question runner missing retest transition support: ${expectedText}`);
   }
@@ -133,7 +141,7 @@ for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step
 }
 
 const learningTargetsPage = fs.readFileSync(new URL("../app/learning-targets/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["pretest_results", "今回の確認結果", "result_label", "result_summary", "is_learning_target", "pretest-result-correct", "pretest-result-incorrect"]) {
+for (const expectedText of ["pretest_results", "test_results", "今回の確認結果", "test_round_label", "question_body", "selected_options", "自分が選んだ選択肢", "result_label", "result_summary", "is_learning_target", "pretest-result-correct", "pretest-result-incorrect", "result-verdict"]) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing pretest result behavior: ${expectedText}`);
   }
@@ -143,7 +151,7 @@ for (const forbiddenText of ["misconception_type", "M1", "M2", "M3", "M4", "taxo
     throw new Error(`learning targets page must not expose internal diagnosis text: ${forbiddenText}`);
   }
 }
-for (const expectedText of ["current_step", 'currentStep === "learning_targets"', 'currentStep === "final_test"', "学習対象を確認しています。", 'href="/final-test"']) {
+for (const expectedText of ["current_step", 'currentStep === "learning_targets"', 'currentStep === "survey"', 'currentStep === "final_test"', "学習対象を確認しています。", 'href="/final-test"', 'href="/survey"']) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing guarded final-test transition: ${expectedText}`);
   }

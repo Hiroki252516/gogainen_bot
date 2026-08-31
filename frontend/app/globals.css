@@ -287,6 +287,11 @@ button:disabled {
   border-color: #f2b8b5;
 }
 
+.pretest-result-pending {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
 .pretest-result-correct .status-pill {
   background: #d9f4ee;
   color: var(--ok);
@@ -295,6 +300,27 @@ button:disabled {
 .pretest-result-incorrect .status-pill {
   background: #fde3e1;
   color: var(--danger);
+}
+
+.pretest-result-pending .status-pill {
+  background: #e2e8f0;
+  color: var(--muted);
+}
+
+.result-detail {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.result-detail ul {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.result-verdict {
+  font-weight: 700;
 }
 
 .danger {

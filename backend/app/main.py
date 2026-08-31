@@ -31,6 +31,7 @@ from app.services.experiment import (
     get_participant,
     latest_learning_misconception,
     learning_targets,
+    latest_test_results,
     participant_logs,
     pretest_results,
     question_payloads,
@@ -184,6 +185,7 @@ def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> 
         "current_step": participant.current_step,
         "targets": learning_targets(db, participant_id),
         "pretest_results": pretest_results(db, participant_id),
+        "test_results": latest_test_results(db, participant_id),
     }
 
 
