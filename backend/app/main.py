@@ -28,6 +28,7 @@ from app.services.experiment import (
     diagnose_pretest,
     export_csv,
     generate_tutor_turn,
+    get_participant,
     latest_learning_misconception,
     learning_targets,
     participant_logs,
@@ -131,8 +132,6 @@ def api_create_participant(payload: ParticipantCreate, db: Session = Depends(get
 
 @app.get("/api/participants/{participant_id}/current-step")
 def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    from app.services.experiment import get_participant
-
     participant = get_participant(db, participant_id)
     mapping = {
         "pretest": "/pretest",
@@ -180,7 +179,9 @@ async def api_diagnose_pretest(participant_id: str, db: Session = Depends(get_db
 
 @app.get("/api/participants/{participant_id}/learning-targets")
 def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    participant = get_participant(db, participant_id)
     return {
+        "current_step": participant.current_step,
         "targets": learning_targets(db, participant_id),
         "pretest_results": pretest_results(db, participant_id),
     }

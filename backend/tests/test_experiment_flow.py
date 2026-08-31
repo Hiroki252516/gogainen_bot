@@ -5,6 +5,11 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
+try:
+    import uvloop
+except ImportError:
+    uvloop = None
+
 from app.ai.backend import strategy_for
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.ai.mock_backend import MockAIBackend
@@ -20,8 +25,11 @@ from app.models import (
     LearnerState,
     Participant,
     ParticipantSurvey,
+    Question,
     QuestionDisplayOrder,
+    QuestionOption,
     RecurrenceEvent,
+    Term,
     TermAssignment,
     TutorSession,
     TutorTurn,
@@ -31,7 +39,7 @@ from app.seed.content_loader import ACTIVE_TERM_SLUGS, content_term, load_conten
 import app.services.experiment as experiment_service
 
 
-client = TestClient(app)
+client = TestClient(app, backend_options={"use_uvloop": True}) if uvloop else TestClient(app)
 QUESTION_SHOWN_AT = "2026-06-22T06:00:00"
 ANSWERED_AT = "2026-06-22T06:00:05"
 
@@ -50,7 +58,9 @@ def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
 
 
 def _submit_phase_questions(pid: str, phase: str, labels: list[str]) -> list[dict]:
-    questions = client.get(f"/api/experiment/{pid}/{phase}").json()["questions"]
+    questions_response = client.get(f"/api/experiment/{pid}/{phase.replace('_', '-')}")
+    assert questions_response.status_code == 200, questions_response.text
+    questions = questions_response.json()["questions"]
     for question in questions:
         response = client.post(
             "/api/attempts",
@@ -62,6 +72,22 @@ def _submit_phase_questions(pid: str, phase: str, labels: list[str]) -> list[dic
                 "response_time_sec": 1.25,
                 "question_shown_at": QUESTION_SHOWN_AT,
                 "answered_at": ANSWERED_AT,
+            },
+        )
+        assert response.status_code == 200, response.text
+    return questions
+
+
+def _submit_phase_questions_by_term(pid: str, phase: str, labels_by_term: dict[str, list[str]]) -> list[dict]:
+    questions = client.get(f"/api/experiment/{pid}/{phase}").json()["questions"]
+    for question in questions:
+        response = client.post(
+            "/api/attempts",
+            json={
+                "participant_id": pid,
+                "question_id": question["question_id"],
+                "phase": phase,
+                "selected_option_ids": _ids_for_labels(question, labels_by_term[question["term_slug"]]),
             },
         )
         assert response.status_code == 200, response.text
@@ -93,6 +119,8 @@ def test_pretest_returns_three_multi_select_questions_with_ten_options():
     questions = client.get(f"/api/experiment/{participant['participant_id']}/pretest").json()["questions"]
 
     assert [question["term_slug"] for question in questions] == list(ACTIVE_TERM_SLUGS)
+    assert {question["test_round"] for question in questions} == {"test"}
+    assert {question["test_round_label"] for question in questions} == {"テスト"}
     for question in questions:
         assert question["selection_mode"] == "multiple"
         assert question["min_selections"] == 3
@@ -365,8 +393,158 @@ def test_retest_uses_four_variants_then_reuses_variant_four():
             assert response.status_code == 200, response.text
         score = client.post(f"/api/participants/{pid}/score-retest")
         assert score.status_code == 200, score.text
+        assert score.json()["next_step"] == "learning_targets"
+        assert score.json()["learning_target_slugs"] == list(ACTIVE_TERM_SLUGS)
     assert len(set(observed[:4])) == 4
     assert observed[4] == observed[3]
+
+
+def test_retest_non_mastery_routes_to_first_failed_learning_session_and_blocks_final_test():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    _submit_phase_questions_by_term(
+        pid,
+        "retest",
+        {
+            "llm_knowledge": ["A", "B", "C"],
+            "multi_agent": ["D", "E", "F"],
+            "memory_process": ["A", "B", "C"],
+        },
+    )
+
+    score = client.post(f"/api/participants/{pid}/score-retest")
+    assert score.status_code == 200, score.text
+    payload = score.json()
+    assert payload["next_step"] == "learning_targets"
+    assert payload["next_url"] == "/learning/multi_agent"
+    assert payload["learning_target_slugs"] == ["multi_agent"]
+    assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "learning_targets"
+    assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
+    assert client.post(f"/api/participants/{pid}/score-final-test").status_code == 409
+
+    db = SessionLocal()
+    try:
+        final_question = db.query(Question).filter_by(phase="final_test").join(Term).filter(Term.slug == "llm_knowledge").one()
+    finally:
+        db.close()
+    blocked_attempt = client.post(
+        "/api/attempts",
+        json={
+            "participant_id": pid,
+            "question_id": final_question.id,
+            "phase": "final_test",
+            "selected_option_ids": [],
+        },
+    )
+    assert blocked_attempt.status_code == 409
+
+
+def test_retest_non_mastery_returns_failed_terms_in_priority_order():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    _submit_phase_questions_by_term(
+        pid,
+        "retest",
+        {
+            "llm_knowledge": ["A", "B", "C"],
+            "multi_agent": ["G", "H", "I"],
+            "memory_process": ["J"],
+        },
+    )
+
+    score = client.post(f"/api/participants/{pid}/score-retest")
+    assert score.status_code == 200, score.text
+    payload = score.json()
+    assert payload["next_step"] == "learning_targets"
+    assert payload["next_url"] == "/learning/multi_agent"
+    assert payload["learning_target_slugs"] == ["multi_agent", "memory_process"]
+    targets = client.get(f"/api/participants/{pid}/learning-targets")
+    assert targets.status_code == 200, targets.text
+    assert targets.json()["current_step"] == "learning_targets"
+    assert [target["term_slug"] for target in targets.json()["targets"]] == ["multi_agent", "memory_process"]
+
+
+def test_incomplete_retest_keeps_unanswered_term_as_learning_target():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+    for question in questions:
+        if question["term_slug"] == "memory_process":
+            continue
+        response = client.post(
+            "/api/attempts",
+            json={
+                "participant_id": pid,
+                "question_id": question["question_id"],
+                "phase": "retest",
+                "selected_option_ids": _ids_for_labels(question, ["A", "B", "C"]),
+            },
+        )
+        assert response.status_code == 200, response.text
+
+    score = client.post(f"/api/participants/{pid}/score-retest")
+    assert score.status_code == 200, score.text
+    payload = score.json()
+    assert payload["next_step"] == "learning_targets"
+    assert payload["next_url"] == "/learning/memory_process"
+    assert payload["learning_target_slugs"] == ["memory_process"]
+
+
+def test_retest_mastery_skips_final_test_and_uses_retest_score():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    _submit_phase_questions(pid, "retest", ["A", "B", "C"])
+
+    score = client.post(f"/api/participants/{pid}/score-retest")
+    assert score.status_code == 200, score.text
+    assert score.json()["next_step"] == "survey"
+    assert score.json()["next_url"] == "/survey"
+    assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "survey"
+
+    final_response = client.get(f"/api/experiment/{pid}/final-test")
+    assert final_response.status_code == 409
+    final_score_response = client.post(f"/api/participants/{pid}/score-final-test")
+    assert final_score_response.status_code == 409
+
+    db = SessionLocal()
+    try:
+        final_question = (
+            db.query(Question)
+            .join(Term, Question.term_id == Term.id)
+            .filter(Question.phase == "final_test", Question.is_active.is_(True), Term.slug == ACTIVE_TERM_SLUGS[0])
+            .one()
+        )
+        correct_option_ids = [
+            option.id
+            for option in db.query(QuestionOption)
+            .filter(QuestionOption.question_id == final_question.id, QuestionOption.option_label.in_(["A", "B", "C"]))
+            .order_by(QuestionOption.default_order)
+            .all()
+        ]
+    finally:
+        db.close()
+
+    blocked_attempt = client.post(
+        "/api/attempts",
+        json={
+            "participant_id": pid,
+            "question_id": final_question.id,
+            "phase": "final_test",
+            "selected_option_ids": correct_option_ids,
+        },
+    )
+    assert blocked_attempt.status_code == 409
+
+    recalculate = client.post(f"/api/participants/{pid}/evaluation-summary/recalculate")
+    assert recalculate.status_code == 200, recalculate.text
+    db = SessionLocal()
+    try:
+        summary = db.query(EvaluationSummary).filter_by(participant_id=pid).order_by(EvaluationSummary.created_at.desc()).first()
+        assert summary is not None
+        assert summary.l0_correct_rate == pytest.approx(1.0)
+        assert summary.score_timeline_json["final_test_skipped_after_retest_mastery"] is True
+        assert summary.score_timeline_json["final_score_source"] == "retest_mastery"
+        assert summary.condition_check_json["final_test_skipped_after_retest_mastery"] is True
+        assert summary.condition_check_json["final_score_source"] == "retest_mastery"
+        assert db.query(Attempt).filter_by(participant_id=pid, phase="final_test").count() == 0
+    finally:
+        db.close()
 
 
 def test_final_test_has_one_question_per_active_term():
@@ -375,6 +553,65 @@ def test_final_test_has_one_question_per_active_term():
     assert [question["term_slug"] for question in final_questions] == list(ACTIVE_TERM_SLUGS)
     assert all(question["question_type"] == "final_multi_select" for question in final_questions)
     assert all(len(question["options"]) == 10 for question in final_questions)
+    assert {question["test_round"] for question in final_questions} == {"retest_1"}
+    assert {question["test_round_label"] for question in final_questions} == {"再テスト1"}
+
+
+def test_attempts_store_test_round_one_and_two_for_repeated_retests():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    db = SessionLocal()
+    try:
+        assert {attempt.test_round for attempt in db.query(Attempt).filter_by(participant_id=pid, phase="pretest").all()} == {"test"}
+    finally:
+        db.close()
+
+    first_questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+    assert {question["test_round"] for question in first_questions} == {"retest_1"}
+    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    first_score = client.post(f"/api/participants/{pid}/score-retest")
+    assert first_score.status_code == 200, first_score.text
+
+    second_questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+    assert {question["test_round"] for question in second_questions} == {"retest_2"}
+    assert {question["test_round_label"] for question in second_questions} == {"再テスト2"}
+    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+
+    db = SessionLocal()
+    try:
+        rounds = {attempt.test_round for attempt in db.query(Attempt).filter_by(participant_id=pid, phase="retest").all()}
+        assert rounds == {"retest_1", "retest_2"}
+    finally:
+        db.close()
+
+
+def test_incorrect_final_test_routes_to_learning_session():
+    pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    _submit_phase_questions(pid, "final_test", ["D", "E", "F"])
+
+    score = client.post(f"/api/participants/{pid}/score-final-test")
+    assert score.status_code == 200, score.text
+    payload = score.json()
+    assert payload["next_step"] == "learning_targets"
+    assert payload["next_url"] == "/learning/llm_knowledge"
+    assert payload["learning_target_slugs"] == list(ACTIVE_TERM_SLUGS)
+    db = SessionLocal()
+    try:
+        assert {attempt.test_round for attempt in db.query(Attempt).filter_by(participant_id=pid, phase="final_test").all()} == {"retest_1"}
+    finally:
+        db.close()
+    assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "learning_targets"
+    assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
+    assert client.post(f"/api/participants/{pid}/score-final-test").status_code == 409
+
+
+def test_correct_final_test_still_routes_to_survey():
+    pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    _submit_phase_questions(pid, "final_test", ["A", "B", "C"])
+
+    score = client.post(f"/api/participants/{pid}/score-final-test")
+    assert score.status_code == 200, score.text
+    assert score.json()["next_step"] == "survey"
+    assert score.json()["next_url"] == "/survey"
 
 
 def test_learning_confirmation_uses_five_variants_then_reuses_variant_five():

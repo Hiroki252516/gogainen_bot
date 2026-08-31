@@ -44,6 +44,11 @@ for (const expectedText of ["今回の学習", "対象概念:", "教材", "問�
     throw new Error(`learning page missing participant-facing learning text: ${expectedText}`);
   }
 }
+for (const expectedText of ['localStorage.getItem("learning_targets")', "idx + 1 < targets.length", "`/learning/${targets[idx + 1]}`", ' : "/retest"']) {
+  if (!learningPage.includes(expectedText)) {
+    throw new Error(`learning page missing ordered target continuation: ${expectedText}`);
+  }
+}
 if (learningPage.includes("足場掛けレベル:")) {
   throw new Error("learning page must not show scaffolding level in stage-based UI");
 }
@@ -103,6 +108,29 @@ const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow backend next_url after scoring");
 }
+for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', "result.next_url || nextPath"]) {
+  if (!questionRunner.includes(expectedText)) {
+    throw new Error(`question runner missing retest transition support: ${expectedText}`);
+  }
+}
+for (const expectedText of ["test_round_label", "setDisplayTitle"]) {
+  if (!questionRunner.includes(expectedText)) {
+    throw new Error(`question runner missing test round display behavior: ${expectedText}`);
+  }
+}
+
+const pretestPage = fs.readFileSync(new URL("../app/pretest/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ['step="テスト"', 'title="テスト"']) {
+  if (!pretestPage.includes(expectedText)) {
+    throw new Error(`pretest page missing unified test label: ${expectedText}`);
+  }
+}
+const retestPage = fs.readFileSync(new URL("../app/retest/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step={roundTitle}', 'title="再テスト1"', 'onDisplayTitle={setRoundTitle}']) {
+  if (!retestPage.includes(expectedText)) {
+    throw new Error(`retest page missing round label: ${expectedText}`);
+  }
+}
 
 const learningTargetsPage = fs.readFileSync(new URL("../app/learning-targets/page.tsx", import.meta.url), "utf8");
 for (const expectedText of ["pretest_results", "今回の確認結果", "result_label", "result_summary", "is_learning_target", "pretest-result-correct", "pretest-result-incorrect"]) {
@@ -113,6 +141,11 @@ for (const expectedText of ["pretest_results", "今回の確認結果", "result_
 for (const forbiddenText of ["misconception_type", "M1", "M2", "M3", "M4", "taxonomy"]) {
   if (learningTargetsPage.includes(forbiddenText)) {
     throw new Error(`learning targets page must not expose internal diagnosis text: ${forbiddenText}`);
+  }
+}
+for (const expectedText of ["current_step", 'currentStep === "learning_targets"', 'currentStep === "final_test"', "学習対象を確認しています。", 'href="/final-test"']) {
+  if (!learningTargetsPage.includes(expectedText)) {
+    throw new Error(`learning targets page missing guarded final-test transition: ${expectedText}`);
   }
 }
 
@@ -141,10 +174,14 @@ for (const expectedText of ["selection_mode", "selectedIds", "selected_option_id
   }
 }
 const finalTestPage = fs.readFileSync(new URL("../app/final-test/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ['phase="final_test"', '/api/experiment/${id}/final-test', '/api/participants/${id}/score-final-test', 'nextPath="/survey"']) {
+for (const expectedText of ['phase="final_test"', 'step="再テスト1"', 'title="再テスト1"', '/api/experiment/${id}/final-test', '/api/participants/${id}/score-final-test', 'nextPath="/survey"']) {
   if (!finalTestPage.includes(expectedText)) {
     throw new Error(`final test page missing: ${expectedText}`);
   }
+}
+const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
+if (!surveyPage.includes("確認が完了しました")) {
+  throw new Error("survey page must support the skipped-final-test flow");
 }
 
 const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");

@@ -2,13 +2,13 @@
 
 ## 2026-06 Iterative Metrics Update
 
-反復型フローでは、途中の再テストは3用語を対象にした形成的テストとして扱う。主な到達評価は、3用語を対象にした `final_test` の正答率と、各周回で未達項目数が減ったかで見る。正解済み用語は次周回の学習対象から除外されるため、周回ごとの負担減少も分析対象にできる。
+反復型フローでは、途中の再テストは3用語を対象にした形成的テストとして扱う。主な到達評価は、3用語を対象にした `final_test` の正答率と、各周回で未達項目数が減ったかで見る。ただし、再テストの3用語がすべて正解の場合は最終テストを省略し、その再テスト満点を最終到達率相当として扱う。正解済み用語は次周回の学習対象から除外されるため、周回ごとの負担減少も分析対象にできる。
 
 現行MVPの `final_test` は、3用語を対象にしたA〜Iの9択から3つ選択、またはJ「わからない」単独選択のテストである。理由記述は要求しない。
 
 時間分析では、問題表示時刻 `question_shown_at`、回答時刻 `answered_at`、回答時間秒 `response_time_sec` を使う。`created_at` はサーバー保存時刻として扱い、所要時間の主指標にはしない。
 
-現行実装の `evaluation_summaries` は、参加者単位の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率に加えて、得点推移、誤概念推移、学習負担、条件統制のJSONを保存する。`l0_correct_rate` は互換名だが、`final_test` が存在する場合は `final_test` の正答率を入れる。`transfer_correct_rate`、`m4_failure_rate`、`unknown_persistence_rate` など固定問題や集計処理が未提供の値は `null` になり得る。
+現行実装の `evaluation_summaries` は、参加者単位の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率に加えて、`test`、`retest_1`、`retest_2` 以降の得点推移、誤概念推移、学習負担、条件統制のJSONを保存する。`l0_correct_rate` は互換名で、追加の確認が存在する場合はその正答率を入れる。再テスト満点による省略が発生した場合は、最新の再テスト3用語の正答率を `l0_correct_rate` に代用する。`score_timeline_json` と `condition_check_json` に `final_test_skipped_after_retest_mastery` と `final_score_source` を保存する。`transfer_correct_rate`、`m4_failure_rate`、`unknown_persistence_rate` など固定問題や集計処理が未提供の値は `null` になり得る。
 
 ## 現行保存値: 得点率推移・誤概念推移ログ
 
@@ -16,11 +16,11 @@
 
 保存・出力する主な値:
 
-- phase別得点率: `pretest_score_rate`, `retest_1_score_rate`, `retest_2_score_rate`, `final_test_score_rate`
+- 周回別得点率: `test_score_rate`, `retest_1_score_rate`, `retest_2_score_rate`, ...
 - 事前比得点増加量: `score_delta_from_pretest_pt`
 - 直前テスト比増加量: `score_delta_from_previous_test_pt`
 - 未達項目数推移: `remaining_learning_target_count_by_round`
-- 誤概念タイプ推移: `pretest -> retest_n -> final_test`
+- 誤概念タイプ推移: `test -> retest_n`
 
 得点増加量は相対率ではなく、差分ポイントで定義する。
 
@@ -94,7 +94,7 @@ final_test_correct_rate = final_test_correct_count / final_test_question_count
 
 - `is_correct = true`
 
-L0確認は互換・補助フェーズとして残るが、現行MVPの主到達評価は `final_test` を使う。実装上の保存先は既存互換のため `evaluation_summaries.l0_correct_rate` でよい。
+L0確認は互換・補助フェーズとして残るが、現行MVPの主到達評価は `final_test` を使う。再テスト満点で最終テストを省略した場合だけ、再テスト満点を代用する。実装上の保存先は既存互換のため `evaluation_summaries.l0_correct_rate` でよい。
 
 ## 補助指標
 
@@ -170,9 +170,9 @@ MVPでは管理画面に記述統計を表示する。
 - 平均pretest_score
 - 平均retest_score
 - 平均same_misconception_recurrence_rate
-- 平均l0_correct_rate  # 現行MVPでは final_test 正答率として扱う
+- 平均l0_correct_rate  # final_test正答率、または省略時の再テスト満点
 
-現行の管理サマリーでは、群別参加者数、同種誤答再発率、L0互換名で保存した最終テスト正答率、pretestからの最終差分を確認できる。詳細なグラフ表示や周回別の群間グラフは将来対応である。
+現行の管理サマリーでは、群別参加者数、同種誤答再発率、L0互換名で保存した最終到達率、pretestからの最終差分を確認できる。最終テスト省略者の差分は、再テスト満点を最終到達率として計算する。詳細なグラフ表示や周回別の群間グラフは将来対応である。
 
 小規模な卒研では統計検定より、参加者別・用語別の変化を説明できるCSVを重視する。必要なら外部分析で以下を行う。
 

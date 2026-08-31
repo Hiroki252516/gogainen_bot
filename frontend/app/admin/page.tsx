@@ -202,7 +202,7 @@ export default function AdminPage() {
             </div>
           </div>
           <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
-          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
           <LogList title="評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "completed", "created_at"]} />
           <LogList title="最近のAI呼び出し" rows={activeAiLogs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
         </section>
@@ -270,7 +270,7 @@ export default function AdminPage() {
                 </section>
               )}
               <ParticipantFlow logs={participantLog} />
-              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "phase", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
               <LogList title="AI呼び出しログ" rows={participantLog.ai_call_logs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
@@ -349,7 +349,11 @@ function EvaluationSummary({ summary }: { summary: any }) {
   const rounds = summary.score_timeline?.rounds || [];
   const burden = summary.learning_burden || {};
   const misconceptionTerms = summary.misconception_timeline?.terms || [];
+  const finalTestSkipped = summary.score_timeline?.final_test_skipped_after_retest_mastery === true;
   const finalRound = rounds.find((round: any) => round.phase === "final_test") || rounds[rounds.length - 1];
+  const finalDelta = finalTestSkipped && summary.pretest_score !== null && summary.pretest_score !== undefined && summary.l0_correct_rate !== null && summary.l0_correct_rate !== undefined
+    ? (summary.l0_correct_rate - summary.pretest_score) * 100
+    : finalRound?.score_delta_from_pretest_pt;
   return (
     <section className="insight-panel stack" aria-labelledby="evaluation-insight-title">
       <div className="insight-head">
@@ -357,16 +361,17 @@ function EvaluationSummary({ summary }: { summary: any }) {
           <h3 id="evaluation-insight-title">評価ログ早見</h3>
           <p className="muted">得点率の推移、誤概念の変化、学習負担をここで確認します。</p>
         </div>
-        <div className={`delta-badge ${(finalRound?.score_delta_from_pretest_pt || 0) >= 0 ? "ok" : "bad"}`}>
-          事前比 {formatPoints(finalRound?.score_delta_from_pretest_pt)}
+        <div className={`delta-badge ${(finalDelta || 0) >= 0 ? "ok" : "bad"}`}>
+          事前比 {formatPoints(finalDelta)}
         </div>
       </div>
       <div className="flow-summary">
-        <Metric label="事前テスト" value={formatRate(summary.pretest_score)} />
+        <Metric label="テスト" value={formatRate(summary.pretest_score)} />
         <Metric label="再テスト" value={formatRate(summary.retest_score)} />
-        <Metric label="最終テスト" value={formatRate(summary.l0_correct_rate)} />
+        <Metric label={finalTestSkipped ? "最終到達（再テスト満点）" : roundLabel(finalRound?.round || "再テスト1")} value={formatRate(summary.l0_correct_rate)} />
         <Metric label="再テスト回数" value={`${burden.retest_count ?? 0}回`} />
       </div>
+      {finalTestSkipped ? <p className="muted">再テスト満点のため、追加の確認を省略しています。</p> : null}
       {rounds.length ? (
         <div className="score-road" aria-label="得点率推移">
           {rounds.map((round: any) => (
@@ -432,9 +437,9 @@ function EvaluationSummary({ summary }: { summary: any }) {
 
 function roundLabel(round: string) {
   if (!round) return "-";
-  if (round === "pretest") return "事前";
-  if (round === "final_test") return "最終";
-  if (round.startsWith("retest_")) return `再${round.replace("retest_", "")}`;
+  if (round === "test" || round === "pretest") return "テスト";
+  if (round === "final_test") return "再テスト1";
+  if (round.startsWith("retest_")) return `再テスト${round.replace("retest_", "")}`;
   return round;
 }
 
@@ -494,7 +499,7 @@ function FlowCard({ row }: { row: any }) {
     <article className={`flow-card ${status.tone}`}>
       <div className="flow-card-head">
         <div>
-          <span className="phase-pill">{phaseLabel(row.phase)}</span>
+          <span className="phase-pill">{phaseLabel(row.phase, row.test_round)}</span>
           <strong>{row.term_label || row.term_slug}</strong>
           {row.component_term ? <span className="muted"> / {row.component_term}</span> : null}
         </div>
@@ -525,12 +530,15 @@ function answerStatus(value: boolean | null | undefined, okLabel: string, badLab
   return { label: "未判定", tone: "neutral" };
 }
 
-function phaseLabel(phase: string) {
+function phaseLabel(phase: string, testRound?: string) {
+  if (testRound === "test") return "テスト";
+  const retestMatch = /^retest_(\d+)$/.exec(testRound || "");
+  if (retestMatch) return `再テスト${retestMatch[1]}`;
   const labels: Record<string, string> = {
-    pretest: "事前テスト",
+    pretest: "テスト",
     learning: "学習",
     retest: "再テスト",
-    final_test: "最終テスト",
+    final_test: "再テスト1",
     l0_check: "L0確認",
   };
   return labels[phase] || phase || "-";

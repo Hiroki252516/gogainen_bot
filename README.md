@@ -14,9 +14,9 @@
 2. 最終テスト正答率
 3. 回答時間
 
-現行MVPでは、最終テストは上記3項目を対象にした選択式テストです。`l0_check` は互換・補助フェーズとして残っていますが、主導線は `/final-test` です。
+現行MVPでは、参加者向けの表示名を「テスト」「再テスト1」「再テスト2」のように統一します。内部フェーズ `final_test` はログ/API互換のため残しますが、画面上は「再テスト1」として扱います。再テストで3項目すべて正解した場合は追加の確認を省略して `/survey` へ進み、不正解・未回答がある場合は学習セッションへ戻ります。
 
-問題は `backend/app/seed/content/learning_content.yml` で管理します。事前・最終テストは各項目1問、再テストは4バリエーション（5回目以降はv4を再利用）、学習確認問題は5バリエーション（6回目以降はv5を再利用）です。各問題はA〜Jの10選択肢で、A〜Cが正答、D〜FがM1、G〜IがM3、Jが「わからない」です。
+問題は `backend/app/seed/content/learning_content.yml` で管理します。テストと再テスト1は各項目1問、再テスト周回は4バリエーション（5回目以降はv4を再利用）、学習確認問題は5バリエーション（6回目以降はv5を再利用）です。各問題はA〜Jの10選択肢で、A〜Cが正答、D〜FがM1、G〜IがM3、Jが「わからない」です。
 
 教材生成では、両群が `rag_agent_knowledge_base/` の共通RAG本文を参照します。提案群だけが学習ログ・誤概念分類・足場掛け情報を利用し、統制群には個人の履歴やtaxonomyを渡しません。LangGraph関連のチャンクは対象外です。
 
@@ -31,8 +31,9 @@
 - 被験者画面に `M1` から `M4` の内部ラベルを直接表示しない
 - 回答、出題時刻、回答時刻、回答時間、AI診断、AI応答、学習ステージ更新を研究ログとして保存する
 - 管理画面とCSVでは、テスト回答と学習ターン回答を `answer_history` として同じ回答履歴に統合する
+- 回答ログの `attempts.test_round` に `test`、`retest_1`、`retest_2` の周回名を保存し、内部処理用の `phase` と区別する
 - 実験分析に必要なCSVを出力できるようにする
-- 再テストは毎回、事前テスト対象の3項目すべてを出題し、採点後に次周回の学習対象だけを未達項目へ絞る
+- 再テストは毎回、事前テスト対象の3項目すべてを出題し、全問正解ならアンケートへ進み、それ以外は不正解・未回答項目だけを次周回の学習対象にする
 
 ## 推奨構成
 
@@ -167,6 +168,6 @@ GET /api/admin/participants/{participant_id}/logs
 GET /api/admin/participants/{participant_id}/logs.csv
 ```
 
-CSVは `record_type, source_type, participant_id, display_code, phase, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。
+CSVは `record_type, source_type, participant_id, display_code, phase, test_round, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。
 
-現行の評価サマリーは `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を中心に保存します。`l0_correct_rate` は互換名で、`final_test` がある場合は最終テスト正答率として扱います。次段の追加仕様では、事前テスト、再テスト1、再テスト2、最終テストの得点率推移、差分ポイント、誤概念推移、未達項目数推移をログ化します。
+現行の評価サマリーは `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を中心に保存します。得点推移は `test`、`retest_1`、`retest_2` の周回名で記録し、`final_test` は内部フェーズ名として必要な場合だけ保持します。再テスト3用語が全問正解した場合は追加の確認を省略し、再テスト満点を最終到達率に代用してJSONに `final_test_skipped_after_retest_mastery` と `final_score_source` を記録します。

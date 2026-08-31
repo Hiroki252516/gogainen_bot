@@ -129,6 +129,7 @@ class Attempt(Base):
     term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
     question_id: Mapped[str] = mapped_column(String(36), ForeignKey("questions.id"), nullable=False)
     phase: Mapped[str] = mapped_column(String(32), nullable=False)
+    test_round: Mapped[str | None] = mapped_column(String(32))
     attempt_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     selected_option_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("question_options.id"))
     selected_option_ids: Mapped[list | None] = mapped_column(JSON)

@@ -12,11 +12,14 @@ type Question = {
   body: string;
   question_type: string;
   options: Option[];
+  test_round?: string | null;
+  test_round_label?: string | null;
   requires_reason?: boolean;
   selection_mode?: "single" | "multiple" | "free_text";
   min_selections?: number;
   max_selections?: number;
 };
+type ScoreResult = { next_url?: string; learning_target_slugs?: string[] };
 
 function multipleSelectionState(options: Option[], selectedIds: string[], requiredSelections = 3) {
   const selectedOptions = options.filter((option) => selectedIds.includes(option.option_id));
@@ -39,13 +42,15 @@ export function QuestionRunner({
   title,
   sourcePath,
   scorePath,
-  nextPath
+  nextPath,
+  onDisplayTitle,
 }: {
   phase: string;
   title: string;
   sourcePath: (participantId: string) => string;
   scorePath?: (participantId: string) => string;
   nextPath: string;
+  onDisplayTitle?: (displayTitle: string) => void;
 }) {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -56,6 +61,7 @@ export function QuestionRunner({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [displayTitle, setDisplayTitle] = useState(title);
   const [questionStartedAt, setQuestionStartedAt] = useState(() => Date.now());
   const [questionShownAt, setQuestionShownAt] = useState(() => new Date().toISOString());
   const current = questions[index];
@@ -63,10 +69,15 @@ export function QuestionRunner({
   useEffect(() => {
     const id = requireParticipant();
     api<{ questions: Question[] }>(sourcePath(id))
-      .then((data) => setQuestions(data.questions))
+      .then((data) => {
+        setQuestions(data.questions);
+        const nextTitle = data.questions[0]?.test_round_label || title;
+        setDisplayTitle(nextTitle);
+        onDisplayTitle?.(nextTitle);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [sourcePath]);
+  }, [onDisplayTitle, sourcePath, title]);
 
   const progress = useMemo(() => (questions.length ? `${index + 1} / ${questions.length}` : ""), [index, questions.length]);
 
@@ -126,7 +137,10 @@ export function QuestionRunner({
         return;
       }
       if (scorePath) {
-        const result = await api<{ next_url?: string }>(scorePath(id), { method: "POST" });
+        const result = await api<ScoreResult>(scorePath(id), { method: "POST" });
+        if (Array.isArray(result.learning_target_slugs)) {
+          localStorage.setItem("learning_targets", JSON.stringify(result.learning_target_slugs));
+        }
         router.push(result.next_url || nextPath);
         return;
       }
@@ -149,7 +163,7 @@ export function QuestionRunner({
   return (
     <div className="panel stack">
       <div className="topbar">
-        <h1>{title}</h1>
+        <h1>{displayTitle}</h1>
         <span className="muted">{progress}</span>
       </div>
       <div className="notice">

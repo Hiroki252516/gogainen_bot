@@ -27,6 +27,7 @@ def _ensure_lightweight_schema_updates() -> None:
     datetime_type = "DATETIME" if dialect_name == "sqlite" else "TIMESTAMP"
     additions = {
         "attempts": [
+            ("test_round", "TEXT"),
             ("question_shown_at", datetime_type),
             ("answered_at", datetime_type),
             ("question_body_snapshot", "TEXT"),
@@ -55,6 +56,42 @@ def _ensure_lightweight_schema_updates() -> None:
             for name, column_type in columns:
                 if name not in existing_columns:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
+        _backfill_attempt_test_rounds(connection)
+
+
+def _backfill_attempt_test_rounds(connection) -> None:
+    """Populate round names for attempts created before the test_round column existed."""
+    rows = connection.execute(
+        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE test_round IS NULL OR test_round = ''")
+    ).mappings().all()
+    if not rows:
+        return
+
+    question_variants = dict(connection.execute(text("SELECT id, variant_key FROM questions")).all())
+    participants_with_final_test = {
+        row[0]
+        for row in connection.execute(text("SELECT DISTINCT participant_id FROM attempts WHERE phase = 'final_test'")).all()
+    }
+    for row in rows:
+        phase = row["phase"]
+        if phase == "pretest":
+            test_round = "test"
+        elif phase == "final_test":
+            test_round = "retest_1"
+        elif phase == "retest":
+            variant_key = str(question_variants.get(row["question_id"], "") or "")
+            try:
+                variant_number = int(variant_key.removeprefix("retest_v"))
+            except ValueError:
+                variant_number = 1
+            offset = 1 if row["participant_id"] in participants_with_final_test else 0
+            test_round = f"retest_{variant_number + offset}"
+        else:
+            continue
+        connection.execute(
+            text("UPDATE attempts SET test_round = :test_round WHERE id = :attempt_id"),
+            {"test_round": test_round, "attempt_id": row["id"]},
+        )
 
 
 def get_db() -> Generator[Session, None, None]:

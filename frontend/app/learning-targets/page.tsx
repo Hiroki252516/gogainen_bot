@@ -14,15 +14,22 @@ type PretestResult = {
   result_summary: string;
   is_learning_target: boolean;
 };
+type LearningTargetsResponse = {
+  current_step: string;
+  targets: Target[];
+  pretest_results: PretestResult[];
+};
 
 export default function LearningTargetsPage() {
+  const [currentStep, setCurrentStep] = useState("");
   const [targets, setTargets] = useState<Target[]>([]);
   const [pretestResults, setPretestResults] = useState<PretestResult[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api<{ targets: Target[]; pretest_results: PretestResult[] }>(`/api/participants/${requireParticipant()}/learning-targets`)
+    api<LearningTargetsResponse>(`/api/participants/${requireParticipant()}/learning-targets`)
       .then((data) => {
+        setCurrentStep(data.current_step);
         setTargets(data.targets);
         setPretestResults(data.pretest_results);
         localStorage.setItem("learning_targets", JSON.stringify(data.targets.map((t) => t.term_slug)));
@@ -57,14 +64,16 @@ export default function LearningTargetsPage() {
             </div>
           ))}
         </div>
-        {targets[0] ? (
+        {currentStep === "learning_targets" && targets[0] ? (
           <Link className="button" href={`/learning/${targets[0].term_slug}`}>
             学習を開始
           </Link>
-        ) : (
+        ) : currentStep === "final_test" ? (
           <Link className="button" href="/final-test">
-            最終テストへ
+            再テスト1へ
           </Link>
+        ) : (
+          <span className="muted">学習対象を確認しています。</span>
         )}
       </section>
     </AppShell>
