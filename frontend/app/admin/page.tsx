@@ -5,7 +5,16 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { API_BASE, api } from "@/lib/api";
 
-type Participant = { participant_id: string; display_code: string; group_condition: string; current_step: string; completed_at: string | null };
+type Participant = {
+  participant_id: string;
+  display_code: string;
+  group_condition: string;
+  current_step: string;
+  completed_at: string | null;
+  completion_reason: string | null;
+  give_up_learning_count: number;
+  give_up_experiment_count: number;
+};
 type GroupCondition = "control" | "proposed";
 
 const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
@@ -13,10 +22,50 @@ const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
   same_type_recurred: "同種再発",
   changed_type: "別タイプ化",
   unknown_persisted: "unknown継続",
-  regressed: "後戻り",
+  regressed: "誤概念",
   unclassified: "未分類"
 };
 const MISCONCEPTION_TRANSITION_TYPES = Object.keys(MISCONCEPTION_TRANSITION_LABELS);
+const LOG_FIELD_LABELS: Record<string, string> = {
+  display_code: "被験者",
+  source_type: "記録種別",
+  test_round: "周回",
+  term_slug: "用語",
+  group_condition: "群",
+  phase: "フェーズ",
+  learning_stage: "学習段階",
+  component_term: "構成要素",
+  current_status: "状態",
+  current_stage_for_display: "学習段階",
+  primary_misconception: "主な誤概念",
+  is_correct: "判定",
+  misconception_type: "誤概念",
+  learning_misconception_type: "学習時の誤概念",
+  teaching_strategy: "教授方略",
+  question_shown_at: "問題表示時刻",
+  answered_at: "回答時刻",
+  response_time_sec: "回答時間(秒)",
+  created_at: "記録時刻",
+  updated_at: "更新時刻",
+  pretest_score: "テスト正答率",
+  retest_score: "再テスト正答率",
+  l0_correct_rate: "到達正答率",
+  same_misconception_recurrence_rate: "同種再発率",
+  completed: "完了",
+  completion_reason: "終了理由",
+  actor: "実行者",
+  action: "操作",
+  purpose: "呼び出し目的",
+  status: "状態",
+  error_code: "エラーコード",
+  latency_ms: "遅延(ms)",
+  turn_index: "ターン",
+  next_learning_stage: "次の学習段階",
+  before_json: "変更前",
+  after_json: "変更後",
+  previous_misconception_type: "前回の誤概念",
+  current_misconception_type: "今回の誤概念"
+};
 
 export default function AdminPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -114,7 +163,6 @@ export default function AdminPage() {
   const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup);
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
   const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup);
-  const activeAiLogs = (overview?.recent_ai_call_logs || []).filter((row: any) => row.group_condition === activeGroup);
 
   return (
     <AppShell step="管理画面">
@@ -175,7 +223,7 @@ export default function AdminPage() {
               実験開始画面へ戻る
             </Link>
             <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview_excel.csv`}>
-              全体ログCSV Excel
+              全体ログ Excel互換CSV
             </a>
             <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview.csv`}>
               全体ログCSV UTF-8
@@ -183,7 +231,7 @@ export default function AdminPage() {
             {participantLog?.participant?.participant_id ? (
               <>
                 <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs_excel.csv`}>
-                  被験者ログCSV Excel
+                  被験者ログ Excel互換CSV
                 </a>
                 <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs.csv`}>
                   被験者ログCSV UTF-8
@@ -194,7 +242,7 @@ export default function AdminPage() {
         </section>
         <section className="panel stack">
           <h2>全体ログ</h2>
-          <p className="muted">{activeGroup}群の進捗、最近の回答履歴、AI呼び出し、再発イベントを確認します。</p>
+          <p className="muted">{activeGroup}群の進捗、回答履歴、評価サマリーを確認します。</p>
           <div className="grid">
             <div className="notice">
               <strong>被験者数</strong>
@@ -202,9 +250,8 @@ export default function AdminPage() {
             </div>
           </div>
           <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
-          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
-          <LogList title="評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "completed", "created_at"]} />
-          <LogList title="最近のAI呼び出し" rows={activeAiLogs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+          <LogList title="評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
         <section className="panel">
           <h2>{activeGroup}群の被験者一覧</h2>
@@ -215,6 +262,7 @@ export default function AdminPage() {
                 <th>条件</th>
                 <th>進捗</th>
                 <th>完了</th>
+                <th>ギブアップ回数</th>
                 <th>ログ</th>
                 <th>操作</th>
               </tr>
@@ -225,7 +273,11 @@ export default function AdminPage() {
                   <td>{p.display_code}</td>
                   <td>{p.group_condition}</td>
                   <td>{p.current_step}</td>
-                  <td>{p.completed_at ? "完了" : "未完了"}</td>
+                  <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
+                  <td>
+                    <div>学習: {p.give_up_learning_count ?? 0}回</div>
+                    <div>実験: {p.give_up_experiment_count ?? 0}回</div>
+                  </td>
                   <td>
                     <button className="secondary" onClick={() => loadParticipantLog(p.participant_id)}>
                       被験者ログを見る
@@ -255,6 +307,16 @@ export default function AdminPage() {
                 <p>
                   {participantLog.participant.group_condition} / {participantLog.participant.current_step}
                 </p>
+                <p>
+                  終了理由: {participantLog.participant.completion_reason === "give_up"
+                    ? "実験ギブアップ"
+                    : participantLog.participant.completion_reason === "completed"
+                      ? "通常終了"
+                      : "未終了"}
+                </p>
+                <p>
+                  学習ギブアップ: {participantLog.participant.give_up_learning_count ?? 0}回 / 実験ギブアップ: {participantLog.participant.give_up_experiment_count ?? 0}回
+                </p>
                 <button className="secondary" disabled={recalculating} onClick={() => recalculateParticipantSummary(participantLog.participant.participant_id)}>
                   {recalculating ? "評価サマリー再計算中..." : "評価サマリーを再計算"}
                 </button>
@@ -265,16 +327,14 @@ export default function AdminPage() {
                 <section className="insight-panel stack">
                   <div>
                     <h3>評価ログ早見</h3>
-                    <p className="muted">まだ評価サマリーがありません。上の「評価サマリーを再計算」を押すと、スコア推移・誤概念推移・学習負担が見えるようになります。</p>
+                    <p className="muted">採点済みのテスト回答がそろうと、スコア推移・誤概念推移・学習負担を自動計算します。</p>
                   </div>
                 </section>
               )}
               <ParticipantFlow logs={participantLog} />
-              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
-              <LogList title="AI呼び出しログ" rows={participantLog.ai_call_logs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
-              <LogList title="再発イベント" rows={participantLog.recurrence_events} fields={["term_slug", "previous_misconception_type", "current_misconception_type", "phase", "created_at"]} />
             </>
           ) : (
             <p className="muted">被験者一覧の「被験者ログを見る」を押すと、1人分の流れを確認できます。</p>
@@ -350,7 +410,9 @@ function EvaluationSummary({ summary }: { summary: any }) {
   const burden = summary.learning_burden || {};
   const misconceptionTerms = summary.misconception_timeline?.terms || [];
   const finalTestSkipped = summary.score_timeline?.final_test_skipped_after_retest_mastery === true;
-  const finalRound = rounds.find((round: any) => round.phase === "final_test") || rounds[rounds.length - 1];
+  const firstRetestRound = rounds.find((round: any) => String(round.round || "").startsWith("retest_"));
+  const finalRound = rounds.find((round: any) => round.phase === "final_test") || rounds.find((round: any) => round.phase === "l0_check");
+  const hasFinalOutcome = summary.l0_correct_rate !== null && summary.l0_correct_rate !== undefined;
   const finalDelta = finalTestSkipped && summary.pretest_score !== null && summary.pretest_score !== undefined && summary.l0_correct_rate !== null && summary.l0_correct_rate !== undefined
     ? (summary.l0_correct_rate - summary.pretest_score) * 100
     : finalRound?.score_delta_from_pretest_pt;
@@ -367,8 +429,8 @@ function EvaluationSummary({ summary }: { summary: any }) {
       </div>
       <div className="flow-summary">
         <Metric label="テスト" value={formatRate(summary.pretest_score)} />
-        <Metric label="再テスト" value={formatRate(summary.retest_score)} />
-        <Metric label={finalTestSkipped ? "最終到達（再テスト満点）" : roundLabel(finalRound?.round || "再テスト1")} value={formatRate(summary.l0_correct_rate)} />
+        <Metric label={roundLabel(firstRetestRound?.round || "retest_1")} value={formatRate(firstRetestRound?.score_rate ?? summary.retest_score)} />
+        {hasFinalOutcome ? <Metric label={finalTestSkipped ? "最終到達（再テスト満点）" : "最終到達"} value={formatRate(summary.l0_correct_rate)} /> : null}
         <Metric label="再テスト回数" value={`${burden.retest_count ?? 0}回`} />
       </div>
       {finalTestSkipped ? <p className="muted">再テスト満点のため、追加の確認を省略しています。</p> : null}
@@ -450,7 +512,7 @@ function changeLabel(type: string | null | undefined) {
       same_type_recurred: "同種再発",
       changed_type: "別タイプ化",
       unknown_persisted: "unknown継続",
-      regressed: "後戻り",
+      regressed: "誤概念",
       neutral: "変化なし",
     } as Record<string, string>
   )[type || "neutral"] || type || "変化なし";
@@ -459,11 +521,8 @@ function changeLabel(type: string | null | undefined) {
 function ParticipantFlow({ logs }: { logs: any }) {
   const rows = [...(logs.answer_history || [])].sort((a: any, b: any) => flowTime(a).localeCompare(flowTime(b)));
   const testRows = rows.filter((row: any) => row.source_type === "test_attempt");
-  const learningRows = rows.filter((row: any) => row.source_type === "learning_turn");
   const correctCount = testRows.filter((row: any) => row.is_correct === true).length;
   const incorrectCount = testRows.filter((row: any) => row.is_correct === false).length;
-  const sufficientCount = learningRows.filter((row: any) => row.is_sufficient === true).length;
-  const insufficientCount = learningRows.filter((row: any) => row.is_sufficient === false).length;
   return (
     <section className="flow-panel stack" aria-labelledby="participant-flow-title">
       <div>
@@ -473,8 +532,6 @@ function ParticipantFlow({ logs }: { logs: any }) {
       <div className="flow-summary">
         <Metric label="テスト正解" value={`${correctCount}件`} />
         <Metric label="テスト不正解" value={`${incorrectCount}件`} tone={incorrectCount ? "bad" : "ok"} />
-        <Metric label="学習十分" value={`${sufficientCount}件`} />
-        <Metric label="学習不十分" value={`${insufficientCount}件`} tone={insufficientCount ? "bad" : "ok"} />
       </div>
       <div className="flow-timeline">
         {rows.length ? rows.map((row: any) => <FlowCard key={row.answer_log_id || row.source_id} row={row} />) : <p className="muted">回答ログはまだありません。</p>}
@@ -494,7 +551,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
 
 function FlowCard({ row }: { row: any }) {
   const isTest = row.source_type === "test_attempt";
-  const status = isTest ? answerStatus(row.is_correct, "正解", "不正解") : answerStatus(row.is_sufficient, "十分", "不十分");
+  const status = isTest ? answerStatus(row.is_correct, "正解", "不正解") : { label: "学習回答", tone: "neutral" as const };
   return (
     <article className={`flow-card ${status.tone}`}>
       <div className="flow-card-head">
@@ -537,7 +594,7 @@ function phaseLabel(phase: string, testRound?: string) {
   const labels: Record<string, string> = {
     pretest: "テスト",
     learning: "学習",
-    retest: "再テスト",
+    retest: "再テスト1",
     final_test: "再テスト1",
     l0_check: "L0確認",
   };
@@ -561,14 +618,14 @@ function formatDateTime(value: string | null | undefined) {
 function LogList({ title, rows, fields }: { title: string; rows?: any[]; fields: string[] }) {
   const visibleRows = (rows || []).slice(0, 12);
   return (
-    <details className="notice" open={title === "最近のAI呼び出し" ? false : undefined}>
+    <details className="notice">
       <summary>{title}</summary>
       {visibleRows.length ? (
         <table className="table compact-table">
           <thead>
             <tr>
               {fields.map((field) => (
-                <th key={field}>{field}</th>
+                <th key={field}>{LOG_FIELD_LABELS[field] || field}</th>
               ))}
             </tr>
           </thead>
@@ -576,7 +633,7 @@ function LogList({ title, rows, fields }: { title: string; rows?: any[]; fields:
             {visibleRows.map((row, index) => (
               <tr key={row.id || row.attempt_id || row.tutor_turn_id || index}>
                 {fields.map((field) => (
-                  <td key={field}>{formatCell(row?.[field])}</td>
+                  <td key={field}>{formatCell(field, row?.[field])}</td>
                 ))}
               </tr>
             ))}
@@ -600,7 +657,7 @@ function SessionLog({ sessions }: { sessions: any[] }) {
               <strong>
                 {session.term_label} session {session.session_index}
               </strong>
-              <LogList title="学習ターン詳細" rows={session.turns} fields={["turn_index", "learning_stage", "component_term", "next_learning_stage", "is_sufficient", "learning_misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+              <LogList title="学習ターン詳細" rows={session.turns} fields={["turn_index", "learning_stage", "component_term", "next_learning_stage", "learning_misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               {session.turns?.slice(0, 3).map((turn: any) => (
                 <details key={turn.tutor_turn_id}>
                   <summary>turn {turn.turn_index} 詳細</summary>
@@ -617,9 +674,13 @@ function SessionLog({ sessions }: { sessions: any[] }) {
   );
 }
 
-function formatCell(value: any) {
+function formatCell(field: string, value: any) {
   if (value === null || value === undefined) return "-";
-  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "boolean") {
+    if (field === "is_correct") return value ? "正解" : "不正解";
+    if (field === "completed") return value ? "完了" : "未完了";
+    return value ? "あり" : "なし";
+  }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }

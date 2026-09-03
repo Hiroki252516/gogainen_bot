@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { GiveUpButton } from "@/components/GiveUpButton";
 import { api, requireParticipant } from "@/lib/api";
 
 type Target = { term_slug: string; term_label: string; summary_for_learner: string; current_stage_for_display: string };
@@ -41,6 +42,7 @@ export default function LearningTargetsPage() {
   const [pretestResults, setPretestResults] = useState<PretestResult[]>([]);
   const [testResults, setTestResults] = useState<TestResults>({ test_round: null, test_round_label: null, results: [] });
   const [error, setError] = useState("");
+  const isRetestResult = testResults.test_round?.startsWith("retest_") ?? false;
 
   useEffect(() => {
     api<LearningTargetsResponse>(`/api/participants/${requireParticipant()}/learning-targets`)
@@ -138,6 +140,11 @@ export default function LearningTargetsPage() {
         ) : (
           <span className="muted">学習対象を確認しています。</span>
         )}
+        {isRetestResult && currentStep !== "finish" ? (
+          <div className="give-up-footer">
+            <GiveUpButton mode="experiment" />
+          </div>
+        ) : null}
       </section>
     </AppShell>
   );

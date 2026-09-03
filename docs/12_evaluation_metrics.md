@@ -39,16 +39,17 @@ score_delta_from_previous_test_pt =
 | change_type | 意味 |
 |---|---|
 | `resolved` | 誤概念またはunknownから正答へ変化 |
-| `same_type_recurred` | 同じMタイプが再発 |
+| `same_type_recurred` | 同じ誤概念タイプが再発 |
 | `changed_type` | 別タイプの誤概念へ変化（現行固定問題ではM1とM3の間の変化を扱う） |
 | `unknown_persisted` | unknownが継続 |
-| `regressed` | 正答後に誤答へ戻った |
+| `regressed` | 正答から誤概念へ変化（管理画面の表示名: 誤概念） |
+| `unclassified` | 事前テスト後の再テスト等が未実施、または判定材料が不足 |
 
 ## 群別誤概念推移集計
 
-管理画面の `control` / `proposed` 群タブでは、保存済みの参加者別 `misconception_timeline_json` を用語ごとに集計する。集計対象は、その用語の事前テストイベントを持つ参加者とし、未受験者・途中離脱者など事前テスト結果がない参加者は `missing_count` に分ける。
+管理画面の `control` / `proposed` 群タブでは、参加者別評価サマリーを回答ログから自動計算したうえで、`misconception_timeline_json` を用語ごとに集計する。集計対象は、その用語の採点済み事前テストイベントを持つ参加者とし、未受験者・途中離脱者など事前テスト結果がない参加者は `missing_count` に分ける。
 
-群・用語ごとに `resolved`、`same_type_recurred`、`changed_type`、`unknown_persisted`、`regressed`、`unclassified` の人数と割合を返す。割合の分母は群全体ではなく、その用語の `eligible_count` とする。集計値は既存の参加者別評価サマリーから算出し、新しいDB列は追加しない。
+群・用語ごとに `resolved`、`same_type_recurred`、`changed_type`、`unknown_persisted`、`regressed`、`unclassified` の人数と割合を返す。割合の分母は群全体ではなく、その用語の `eligible_count` とする。集計値は自動更新された参加者別評価サマリーから算出し、新しいDB列は追加しない。`regressed` は研究用の内部コードを維持し、画面では「誤概念」と表示する。
 
 学習負担ログとして、再テスト回数、学習セッション数、学習ターン数、学習対象として残った回数、合計学習時間、合計テスト時間も集計候補にする。
 
@@ -200,12 +201,14 @@ MVPでは管理画面に記述統計を表示する。
 
 現行の管理画面では、テーブル別CSVを主導線にしない。代わりに以下を使う。
 
-- 全体ログ: 全参加者の進捗、最近の統合回答履歴、AI呼び出し、再発イベント、評価サマリーを見る
+- 全体ログ: 全参加者の進捗、最近の統合回答履歴、評価サマリーを見る
 - 全体ログCSV: `overview.csv`
-- 全体ログCSV Excel版: `overview_excel.csv`
-- 被験者別ログ: 1人の統合回答履歴、学習状態、学習セッション詳細、AI呼び出し、再発イベントを見る
+- 全体ログ Excel互換CSV（UTF-8 BOM付き）: `overview_excel.csv`
+- 被験者別ログ: 1人の統合回答履歴、学習状態、学習セッション詳細を見る
 - 被験者別ログCSV: 1人分のログCSV
-- 被験者別ログCSV Excel版: 1人分のUTF-8 BOM付きログCSV
+- 被験者別ログ Excel互換CSV（UTF-8 BOM付き）: 1人分のログCSV
+
+操作監査、AI呼び出し、再発イベントの詳細は管理画面には常設表示しないが、DB/API/CSVには研究ログとして保持する。ギブアップの有無と回数は管理画面の被験者一覧・詳細で確認できる。
 
 ログCSVは1ファイルにまとめ、行ごとに `record_type` を持たせる。
 
@@ -227,4 +230,6 @@ record_type, source_type, participant_id, display_code, phase, term_slug, event_
 
 ## 再計算
 
-評価指標はDB上のattempts、learner_states、recurrence_eventsから再計算可能にする。保存済みsummaryだけに依存しない。
+評価指標はDB上のattempts、learner_states、recurrence_eventsから再計算可能にする。管理画面の評価サマリー・群集計・被験者ログ・ログCSVを参照した時点で、3用語の事前テストが採点済みなら、保存済みsummaryがない場合、元ログより古い場合、または参加者の完了状態と不一致の場合に自動更新する。再計算履歴はDBと全体ログCSVに残すが、管理画面の一覧は参加者ごとの最新summaryだけを表示する。管理画面の再計算ボタンは、同じ処理を明示的に強制実行するために残す。
+
+`overview_excel.csv` と被験者別 `*_logs_excel.csv` は、Excelで開きやすいUTF-8 BOM付きCSVであり、複数シートを持つ`.xlsx`ブックではない。分析時は `record_type` と `source_type` で行を分け、詳細なJSONは `value_json` から取得する。

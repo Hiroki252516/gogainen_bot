@@ -78,10 +78,17 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 - current_step TEXT NOT NULL DEFAULT `start`
 - started_at TIMESTAMP NULL
 - completed_at TIMESTAMP NULL
+- completion_reason TEXT NULL  # `completed` または `give_up`
 - created_at TIMESTAMP NOT NULL
 - updated_at TIMESTAMP NOT NULL
 
 `display_code` は `P001` のような画面表示用ID。個人名やメールアドレスは保存しない。
+
+`current_step` は`pretest`、`learning_targets`、`retest`、`final_test`、`survey`、`l0_check`、`finish`を使用する。`retest`は学習ギブアップ直後に再テストへ進むための状態である。
+
+`completion_reason` は実験終了時の理由を保存する。通常終了は`completed`、実験ギブアップは`give_up`であり、学習セッションだけをギブアップした場合は未終了のためNULLのままとする。学習ギブアップ回数や操作時刻は`audit_events`の`give_up_learning`で記録する。
+
+`current_stage_for_display` は `learner_states.current_status` と `primary_misconception` を優先して決める。不正解・unknownはそれぞれ「概念変化」・「豊富化」とし、`scaffolding_level`は正答状態などのフォールバックにだけ使う。これにより、L2/L3の保存値だけから学習段階を逆算して誤表示しない。
 
 ### participant_surveys
 
@@ -335,7 +342,9 @@ status values:
 
 ### evaluation_summaries
 
-現行実装の評価サマリーは参加者単位の最新集計として保存する。再計算のたびに新しい行を作成し、管理画面では最新行を参照する。既存カラム名との互換性のため `l0_correct_rate` を残すが、現行MVPでは `final_test` の選択式正答率を入れ、最終テストを省略した場合は再テスト満点を代用する。
+現行実装の評価サマリーは参加者単位の最新集計として保存する。再計算のたびに履歴行を作成し、管理画面では参加者ごとの最新行だけを参照する。管理画面の評価サマリー、群集計、被験者ログ、ログCSVの参照時には、3用語の事前テストが採点済みで、保存済みsummaryがない場合、元ログより古い場合、または完了状態と不一致の場合に自動再計算する。既存カラム名との互換性のため `l0_correct_rate` を残すが、現行MVPでは `final_test` の選択式正答率を入れ、最終テストを省略した場合は再テスト満点を代用する。
+
+旧データで`finish`なのに`completion_reason`がNULLの場合は、起動時に`give_up_experiment`の監査ログを照合する。監査ログがあれば`give_up`、なければ`completed`へ補正し、全履歴サマリーの`completed`も同じ参加者状態へ同期する。
 
 - id TEXT(36) PRIMARY KEY
 - participant_id TEXT(36) REFERENCES participants(id)
@@ -354,14 +363,14 @@ status values:
 - completed BOOLEAN NOT NULL DEFAULT false
 - created_at TIMESTAMP NOT NULL
 
-以下のJSON列は現行の `EvaluationSummary` モデルと再計算処理で使用する。保存済みsummaryだけに依存せず、`attempts`、`learner_states`、`recurrence_events`から再計算できる。
+以下のJSON列は現行の `EvaluationSummary` モデルと再計算処理で使用する。保存済みsummaryだけに依存せず、`attempts`、`learner_states`、`recurrence_events`から再計算できる。内部の評価コードは研究ログとして保存し、管理画面の表示名は利用者向けに変換する。
 
 - score_timeline_json JSON NULL
 - misconception_timeline_json JSON NULL
 - learning_burden_json JSON NULL
 - condition_check_json JSON NULL
 
-`score_timeline_json` は `test`, `retest_1`, `retest_2`, ... の得点率、事前比差分ポイント、直前比差分ポイント、未達項目数を保持する。最終確認を省略した場合は `final_test_skipped_after_retest_mastery` と `final_score_source` も保持する。`misconception_timeline_json` は用語別に `test -> retest_n` の誤概念タイプ推移と `resolved`, `same_type_recurred`, `changed_type`, `unknown_persisted`, `regressed` の変化分類を保持する。既存の `pretest_score`, `retest_score`, `l0_correct_rate` は互換用に残す。
+`score_timeline_json` は `test`, `retest_1`, `retest_2`, ... の得点率、事前比差分ポイント、直前比差分ポイント、未達項目数を保持する。最終確認を省略した場合は `final_test_skipped_after_retest_mastery` と `final_score_source` も保持する。`misconception_timeline_json` は用語別に `test -> retest_n` の誤概念タイプ推移と `resolved`, `same_type_recurred`, `changed_type`, `unknown_persisted`, `regressed`, `unclassified` の変化分類を保持する。`regressed` は画面上では「誤概念」と表示する。既存の `pretest_score`, `retest_score`, `l0_correct_rate` は互換用に残す。
 
 ### export_jobs
 

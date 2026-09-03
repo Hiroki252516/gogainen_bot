@@ -351,6 +351,31 @@ button:disabled {
   align-items: center;
 }
 
+.give-up-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.give-up-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  max-width: 100%;
+}
+
+.give-up-control .danger-button {
+  max-width: 100%;
+  text-align: center;
+}
+
+.give-up-control .danger {
+  max-width: 100%;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .group-tabs {
   display: flex;
   flex-wrap: wrap;

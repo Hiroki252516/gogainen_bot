@@ -12,6 +12,7 @@ export default function FinalTestPage() {
         sourcePath={(id) => `/api/experiment/${id}/final-test`}
         scorePath={(id) => `/api/participants/${id}/score-final-test`}
         nextPath="/survey"
+        allowExperimentGiveUp
       />
     </AppShell>
   );
