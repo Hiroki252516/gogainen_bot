@@ -60,6 +60,8 @@ def _ensure_lightweight_schema_updates() -> None:
                 if name not in existing_columns:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
         _backfill_attempt_test_rounds(connection)
+        _backfill_completion_reasons(connection)
+        _backfill_evaluation_completion_flags(connection)
 
 
 def _backfill_attempt_test_rounds(connection) -> None:
@@ -95,6 +97,84 @@ def _backfill_attempt_test_rounds(connection) -> None:
             text("UPDATE attempts SET test_round = :test_round WHERE id = :attempt_id"),
             {"test_round": test_round, "attempt_id": row["id"]},
         )
+
+
+def _backfill_completion_reasons(connection) -> None:
+    """Repair completion metadata for finished participants from the audit trail."""
+    connection.execute(
+        text(
+            """
+            UPDATE participants
+            SET completion_reason = CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM audit_events
+                    WHERE audit_events.entity_type = 'participant'
+                      AND audit_events.entity_id = participants.id
+                      AND audit_events.action = 'give_up_experiment'
+                ) THEN 'give_up'
+                ELSE 'completed'
+            END
+            WHERE participants.current_step = 'finish'
+              AND participants.completed_at IS NOT NULL
+              AND (
+                  participants.completion_reason IS NULL
+                  OR participants.completion_reason = ''
+                  OR EXISTS (
+                      SELECT 1
+                      FROM audit_events
+                      WHERE audit_events.entity_type = 'participant'
+                        AND audit_events.entity_id = participants.id
+                        AND audit_events.action = 'give_up_experiment'
+                  )
+              )
+            """
+        )
+    )
+
+
+def _backfill_evaluation_completion_flags(connection) -> None:
+    """Keep every historical summary's completion flag consistent with its participant."""
+    if engine.dialect.name == "postgresql":
+        connection.execute(
+            text(
+                """
+                UPDATE evaluation_summaries AS summaries
+                SET completed = (
+                    participants.current_step = 'finish'
+                    AND participants.completed_at IS NOT NULL
+                    AND COALESCE(participants.completion_reason, '') <> 'give_up'
+                )
+                FROM participants
+                WHERE participants.id = summaries.participant_id
+                """
+            )
+        )
+        return
+
+    connection.execute(
+        text(
+            """
+            UPDATE evaluation_summaries
+            SET completed = (
+                SELECT CASE
+                    WHEN participants.current_step = 'finish'
+                     AND participants.completed_at IS NOT NULL
+                     AND COALESCE(participants.completion_reason, '') <> 'give_up'
+                    THEN 1
+                    ELSE 0
+                END
+                FROM participants
+                WHERE participants.id = evaluation_summaries.participant_id
+            )
+            WHERE EXISTS (
+                SELECT 1
+                FROM participants
+                WHERE participants.id = evaluation_summaries.participant_id
+            )
+            """
+        )
+    )
 
 
 def get_db() -> Generator[Session, None, None]:

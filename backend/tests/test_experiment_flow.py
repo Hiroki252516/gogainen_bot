@@ -15,7 +15,7 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServe
 from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY
 from app.core.config import get_settings
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, _backfill_completion_reasons, _backfill_evaluation_completion_flags, engine
 from app.main import app
 from app.models import (
     AICallLog,
@@ -203,6 +203,122 @@ def test_learning_target_display_reflects_m1_m3_and_unknown_diagnoses():
         target = next(item for item in response.json()["targets"] if item["term_slug"] == "llm_knowledge")
         assert target["summary_for_learner"] == expected_summary
         assert target["current_stage_for_display"] == expected_stage
+
+
+def test_admin_learner_state_stage_uses_diagnosis_for_misconception_and_unknown():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    db = SessionLocal()
+    try:
+        terms = {term.slug: term.id for term in db.query(Term).all()}
+        states = {state.term_id: state for state in db.query(LearnerState).filter_by(participant_id=pid).all()}
+        states[terms["llm_knowledge"]].current_status = "misconception"
+        states[terms["llm_knowledge"]].primary_misconception = "M3"
+        states[terms["llm_knowledge"]].scaffolding_level = "L3"
+        states[terms["memory_process"]].current_status = "unknown"
+        states[terms["memory_process"]].primary_misconception = "unknown"
+        states[terms["memory_process"]].scaffolding_level = "L2"
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(f"/api/admin/participants/{pid}/logs")
+    assert response.status_code == 200, response.text
+    states = {row["term_slug"]: row for row in response.json()["learner_states"]}
+    assert states["llm_knowledge"]["current_stage_for_display"] == "概念変化"
+    assert states["memory_process"]["current_stage_for_display"] == "豊富化"
+
+
+def test_admin_overview_returns_only_latest_evaluation_summary_per_participant():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    assert client.post(f"/api/participants/{pid}/evaluation-summary/recalculate").status_code == 200
+    assert client.post(f"/api/participants/{pid}/evaluation-summary/recalculate").status_code == 200
+
+    response = client.get("/api/admin/logs/overview")
+    assert response.status_code == 200, response.text
+    summaries = [row for row in response.json()["evaluation_summaries"] if row["participant_id"] == pid]
+    assert len(summaries) == 1
+
+
+def test_db_backfill_uses_give_up_audit_for_completion_metadata():
+    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    db = SessionLocal()
+    try:
+        row = db.get(Participant, pid)
+        assert row is not None
+        row.current_step = "finish"
+        row.completed_at = row.created_at
+        row.completion_reason = None
+        db.add(
+            AuditEvent(
+                actor="participant",
+                action="give_up_experiment",
+                entity_type="participant",
+                entity_id=pid,
+                before_json={"current_step": "retest"},
+                after_json={"current_step": "finish", "completion_reason": "give_up"},
+            )
+        )
+        db.add(EvaluationSummary(participant_id=pid, group_condition=row.group_condition, completed=True))
+        db.commit()
+    finally:
+        db.close()
+
+    with engine.begin() as connection:
+        _backfill_completion_reasons(connection)
+        _backfill_evaluation_completion_flags(connection)
+
+    db = SessionLocal()
+    try:
+        row = db.get(Participant, pid)
+        summary = db.query(EvaluationSummary).filter_by(participant_id=pid).one()
+        assert row is not None
+        assert row.completion_reason == "give_up"
+        assert summary.completed is False
+    finally:
+        db.close()
+
+
+def test_attempts_cannot_be_saved_for_wrong_phase_or_after_pretest():
+    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    for question in questions:
+        response = client.post(
+            "/api/attempts",
+            json={
+                "participant_id": pid,
+                "question_id": question["question_id"],
+                "phase": "pretest",
+                "selected_option_ids": _ids_for_labels(question, ["A", "B", "C"]),
+            },
+        )
+        assert response.status_code == 200, response.text
+    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
+
+    pretest_question = questions[0]
+    after_diagnosis = client.post(
+        "/api/attempts",
+        json={
+            "participant_id": pid,
+            "question_id": pretest_question["question_id"],
+            "phase": "pretest",
+            "selected_option_ids": _ids_for_labels(pretest_question, ["A", "B", "C"]),
+        },
+    )
+    assert after_diagnosis.status_code == 409
+
+    retest_question = client.get(f"/api/experiment/{pid}/final-test").json()["questions"][0]
+    wrong_phase = client.post(
+        "/api/attempts",
+        json={
+            "participant_id": pid,
+            "question_id": retest_question["question_id"],
+            "phase": "pretest",
+            "selected_option_ids": _ids_for_labels(retest_question, ["A", "B", "C"]),
+        },
+    )
+    assert wrong_phase.status_code == 400
 
 
 def test_learning_targets_returns_all_pretest_results_without_internal_labels():
@@ -613,6 +729,15 @@ def test_experiment_give_up_during_retest_finishes_and_blocks_retest_actions():
     admin_row = next(row for row in client.get("/api/admin/participants").json()["participants"] if row["participant_id"] == pid)
     assert admin_row["completion_reason"] == "give_up"
     assert admin_row["give_up_experiment_count"] == 1
+    summary_response = client.post(f"/api/participants/{pid}/evaluation-summary/recalculate")
+    assert summary_response.status_code == 200, summary_response.text
+    db = SessionLocal()
+    try:
+        summary = db.query(EvaluationSummary).filter_by(participant_id=pid).order_by(EvaluationSummary.created_at.desc()).first()
+        assert summary is not None
+        assert summary.completed is False
+    finally:
+        db.close()
     participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert participant_csv.status_code == 200
     assert "give_up_experiment" in participant_csv.text
@@ -908,6 +1033,45 @@ def test_group_misconception_transition_summary_uses_term_pretest_denominator():
     api_groups = client.get("/api/admin/evaluation-summary").json()["groups"]
     assert all("misconception_transition_summary" in group for group in api_groups)
     assert all(len(group["misconception_transition_summary"]["terms"]) == 3 for group in api_groups)
+
+
+def test_admin_summary_auto_calculates_participant_without_manual_recalculate():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+
+    db = SessionLocal()
+    try:
+        assert db.query(EvaluationSummary).filter_by(participant_id=pid).count() == 0
+    finally:
+        db.close()
+
+    response = client.get("/api/admin/evaluation-summary")
+    assert response.status_code == 200, response.text
+    proposed_group = next(group for group in response.json()["groups"] if group["group_condition"] == "proposed")
+    llm_summary = next(
+        term for term in proposed_group["misconception_transition_summary"]["terms"] if term["term_slug"] == "llm_knowledge"
+    )
+    assert llm_summary["eligible_count"] >= 1
+    assert llm_summary["counts"]["unclassified"] >= 1
+
+    db = SessionLocal()
+    try:
+        summary = db.query(EvaluationSummary).filter_by(participant_id=pid).order_by(EvaluationSummary.created_at.desc()).first()
+        assert summary is not None
+        assert summary.pretest_score == 0
+    finally:
+        db.close()
+
+    participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
+    assert participant_logs.status_code == 200, participant_logs.text
+    assert participant_logs.json()["latest_evaluation_summary"] is not None
+
+    overview = client.get("/api/admin/logs/overview")
+    assert overview.status_code == 200, overview.text
+    assert any(row["participant_id"] == pid for row in overview.json()["evaluation_summaries"])
+
+    exported = client.get(f"/api/admin/participants/{pid}/logs_excel.csv")
+    assert exported.status_code == 200, exported.text
+    assert "evaluation_summary" in exported.text
 
 
 def test_admin_can_delete_participant_and_related_data():

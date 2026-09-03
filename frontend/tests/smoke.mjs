@@ -205,20 +205,33 @@ if (!surveyPage.includes("確認が完了しました")) {
 }
 
 const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "全体ログCSV UTF-8", "全体ログCSV Excel", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログCSV Excel", "実験開始画面へ戻る", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/logs.csv", "/logs_excel.csv"]) {
+for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "ギブアップ回数", "実験開始画面へ戻る", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/logs.csv", "/logs_excel.csv"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }
 }
-for (const expectedText of ["最近の回答履歴", "recent_answer_history", "回答履歴（テスト＋学習）", "answer_history", "source_type", "is_sufficient", "学習ターン詳細", "audit_events", "最近の操作監査ログ", "操作監査ログ", "recent_audit_events", "completion_reason", "終了理由", "give_up_learning_count", "give_up_experiment_count"]) {
+for (const expectedText of ["最近の回答履歴", "recent_answer_history", "回答履歴（テスト＋学習）", "answer_history", "source_type", "学習ターン詳細", "completion_reason", "give_up_learning_count", "give_up_experiment_count", "LOG_FIELD_LABELS"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing unified answer history UI: ${expectedText}`);
+  }
+}
+for (const removedText of ["学習十分", "学習不十分", "後戻り", "最近の操作監査ログ", "操作監査ログ", "最近のAI呼び出し", "AI呼び出しログ", "再発イベント"]) {
+  if (adminPage.includes(removedText)) {
+    throw new Error(`admin page must not show outdated evaluation label: ${removedText}`);
   }
 }
 for (const expectedText of ["実験フロー", "どのフェーズで、どの問題に、何を選び", "FlowCard", "phaseLabel", "selected_option_body", "question_body_snapshot"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing visual participant flow UI: ${expectedText}`);
   }
+}
+for (const expectedText of ["firstRetestRound", 'roundLabel(firstRetestRound?.round || "retest_1")', "最終到達", 'retest: "再テスト1"']) {
+  if (!adminPage.includes(expectedText)) {
+    throw new Error(`admin page missing consistent test round summary: ${expectedText}`);
+  }
+}
+if (adminPage.includes('Metric label="再テスト"')) {
+  throw new Error("admin page must use numbered retest labels");
 }
 if (adminPage.indexOf("/api/admin/logs/overview_excel.csv") > adminPage.indexOf("/api/admin/logs/overview.csv")) {
   throw new Error("admin page must prioritize Excel overview CSV before UTF-8 CSV");
