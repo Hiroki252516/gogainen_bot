@@ -17,20 +17,22 @@
 
 ## Frontend
 
-- Main pages: `/start`, `/pretest`, `/diagnosing`, `/learning-targets`, `/learning/[termSlug]`, `/retest`, `/final-test`, `/survey`, `/l0-check`, `/finish`
+- Main pages: `/start`, `/consent`, `/pretest`, `/diagnosing`, `/learning-targets`, `/learning/[termSlug]`, `/retest`, `/final-test`, `/survey`, `/l0-check`, `/finish`
 - Test runner: `frontend/components/QuestionRunner.tsx`
 - Learning page: `frontend/app/learning/[termSlug]/page.tsx`
 
 ## Experiment flow（現行）
 
-1. 参加者作成
-2. 3用語のpretest
-3. 診断と学習対象選択
-4. 未達用語の学習・確認問題
-5. 用語ごとのretest（v1〜v4、以後v4再利用）
-6. 未達があれば `current_step=learning_targets` に戻す。追加周回はクライアントまたは研究者が再開し、自動反復ループはない
-7. 3用語のfinal_test
-8. `/survey`
+1. `/start`で実験条件を選択
+2. `/consent`で同意し、参加者作成
+3. 3用語のpretest
+4. 診断と学習対象選択
+5. 未達用語の学習・確認問題
+6. 用語ごとのretest（v1〜v4、以後v4再利用）
+7. 未達があれば `current_step=learning_targets` に戻す。追加周回はクライアントまたは研究者が再開し、自動反復ループはない
+8. 3用語のfinal_test
+9. `/survey`で仮アンケートを保存
+10. `/finish`
 
 learning確認はstage・用語ごとにv1〜v5を使う。`construct_key` と `variant_key` で既存DBモデルと互換性を保つ。
 

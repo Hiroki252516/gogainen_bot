@@ -521,6 +521,8 @@ def next_display_code(db: Session) -> str:
 
 
 def create_participant(db: Session, group_condition: str | None, assignment_method: str, consent_checked: bool) -> Participant:
+    if not consent_checked:
+        raise HTTPException(status_code=400, detail="同意書への同意が必要です。")
     if group_condition not in {"control", "proposed"}:
         group_condition = random.choice(["control", "proposed"])
         assignment_method = "random"
@@ -536,6 +538,68 @@ def create_participant(db: Session, group_condition: str | None, assignment_meth
     db.commit()
     db.refresh(participant)
     return participant
+
+
+def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Save the temporary post-experiment survey and complete the participant flow."""
+    participant = get_participant(db, participant_id)
+    existing = (
+        db.query(ParticipantSurvey)
+        .filter_by(participant_id=participant.id, phase="posttest")
+        .order_by(ParticipantSurvey.created_at.desc(), ParticipantSurvey.id.desc())
+        .first()
+    )
+    if participant.current_step == "finish" or participant.completed_at is not None:
+        if participant.completion_reason == "completed" and existing:
+            return {
+                "status": "completed",
+                "survey_id": existing.id,
+                "next_step": "finish",
+                "next_url": _next_url("finish"),
+            }
+        raise HTTPException(status_code=409, detail=EXPERIMENT_FINISHED_DETAIL)
+    if participant.current_step != "survey":
+        raise HTTPException(status_code=409, detail="この参加者はアンケート対象ではありません。")
+
+    before_step = participant.current_step
+    if existing is None:
+        existing = ParticipantSurvey(
+            participant_id=participant.id,
+            phase="posttest",
+            ai_experience_level=payload.get("ai_experience_level"),
+            programming_experience_level=payload.get("programming_experience_level"),
+            llm_usage_level=payload.get("llm_usage_level"),
+            self_rated_ai_knowledge=payload.get("self_rated_ai_knowledge"),
+            term_confidences=payload.get("term_confidences"),
+            usability_rating=payload.get("usability_rating"),
+            helpfulness_rating=payload.get("helpfulness_rating"),
+            perceived_hint_amount=payload.get("perceived_hint_amount"),
+            free_comment=payload.get("free_comment"),
+        )
+        db.add(existing)
+        db.flush()
+
+    participant.current_step = "finish"
+    participant.completed_at = participant.completed_at or now()
+    participant.completion_reason = "completed"
+    db.add(
+        AuditEvent(
+            actor="participant",
+            action="submit_survey",
+            entity_type="participant",
+            entity_id=participant.id,
+            before_json={"current_step": before_step},
+            after_json={"current_step": participant.current_step, "survey_id": existing.id},
+        )
+    )
+    db.commit()
+    db.refresh(existing)
+    return {
+        "status": "completed",
+        "survey_id": existing.id,
+        "next_step": participant.current_step,
+        "next_url": _next_url(participant.current_step),
+    }
 
 
 def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
@@ -1614,9 +1678,8 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
             participant.current_step = "learning_targets"
             next_url = f"/learning/{learning_target_slugs[0]}" if learning_target_slugs else _next_url(participant.current_step)
     elif phase == "l0_check":
-        participant.current_step = "finish"
-        participant.completed_at = now()
-        participant.completion_reason = "completed"
+        participant.current_step = "survey"
+        next_url = _next_url(participant.current_step)
     elif phase == "final_test":
         learning_target_slugs = _reset_test_learning_targets(db, participant, attempts)
         if _is_mastery_test_batch(db, attempts):
@@ -2106,6 +2169,7 @@ EXPORTS = {
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
     "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "score_timeline_json", "misconception_timeline_json", "learning_burden_json", "condition_check_json", "completed", "created_at"]),
+    "participant_surveys": (ParticipantSurvey, ["id", "participant_id", "phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "term_confidences", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]),
 }
 
 
@@ -2442,6 +2506,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     for turn in turns:
         turns_by_session.setdefault(turn.tutor_session_id, []).append(turn)
     recurrences = db.query(RecurrenceEvent).filter_by(participant_id=participant.id).order_by(RecurrenceEvent.created_at).all()
+    surveys = db.query(ParticipantSurvey).filter_by(participant_id=participant.id).order_by(ParticipantSurvey.created_at).all()
     audit_events = (
         db.query(AuditEvent)
         .filter_by(entity_type="participant", entity_id=participant.id)
@@ -2549,6 +2614,24 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             }
             for row in ai_logs
         ],
+        "surveys": [
+            {
+                "id": row.id,
+                "participant_id": row.participant_id,
+                "phase": row.phase,
+                "ai_experience_level": row.ai_experience_level,
+                "programming_experience_level": row.programming_experience_level,
+                "llm_usage_level": row.llm_usage_level,
+                "self_rated_ai_knowledge": row.self_rated_ai_knowledge,
+                "term_confidences": row.term_confidences,
+                "usability_rating": row.usability_rating,
+                "helpfulness_rating": row.helpfulness_rating,
+                "perceived_hint_amount": row.perceived_hint_amount,
+                "free_comment": row.free_comment,
+                "created_at": _iso(row.created_at),
+            }
+            for row in surveys
+        ],
         "latest_evaluation_summary": None
         if not summary
         else {
@@ -2616,6 +2699,8 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
         rows.append({**base, "record_type": "audit_event", "phase": "control", "term_slug": "", "event_time": event["created_at"], "summary": f"{event['actor']} {event['action']}", "value_json": _csv_value(event)})
     for call in logs["ai_call_logs"]:
         rows.append({**base, "record_type": "ai_call", "phase": "", "term_slug": "", "event_time": call["created_at"], "summary": f"{call['purpose']} {call['status']} {call['error_code'] or ''}".strip(), "value_json": _csv_value(call)})
+    for survey in logs["surveys"]:
+        rows.append({**base, "record_type": "survey", "source_type": "survey", "phase": survey["phase"], "term_slug": "", "event_time": survey["created_at"], "summary": "post-experiment survey", "value_json": _csv_value(survey)})
     if logs["latest_evaluation_summary"]:
         summary = logs["latest_evaluation_summary"]
         summary_label = f"latest evaluation summary completed={summary['completed']} completion_reason={summary.get('completion_reason') or '-'}"

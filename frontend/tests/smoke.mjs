@@ -2,6 +2,7 @@ import fs from "node:fs";
 
 const required = [
   "app/start/page.tsx",
+  "app/consent/page.tsx",
   "app/pretest/page.tsx",
   "app/learning/[termSlug]/page.tsx",
   "app/final-test/page.tsx",
@@ -199,9 +200,23 @@ for (const expectedText of ["window.confirm", "/give-up-learning", "/give-up", "
     throw new Error(`give-up button missing API behavior: ${expectedText}`);
   }
 }
+const startPage = fs.readFileSync(new URL("../app/start/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ['pending_group_condition', 'router.push("/consent")', "実験を開始する"]) {
+  if (!startPage.includes(expectedText)) {
+    throw new Error(`start page missing consent transition: ${expectedText}`);
+  }
+}
+const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ["研究参加同意書（仮）", "consent_checked: true", 'router.push("/pretest")', "同意してテストを開始"]) {
+  if (!consentPage.includes(expectedText)) {
+    throw new Error(`consent page missing test-start behavior: ${expectedText}`);
+  }
+}
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
-if (!surveyPage.includes("確認が完了しました")) {
-  throw new Error("survey page must support the skipped-final-test flow");
+for (const expectedText of ["実験後アンケート（仮）", "/survey", "usability_rating", "required label=\"AI利用経験\"", "required label=\"プログラミング経験\"", "required label=\"LLM利用頻度\"", "required label=\"AIに関する自己評価\"", "回答を保存して終了", 'router.push("/finish")']) {
+  if (!surveyPage.includes(expectedText)) {
+    throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
+  }
 }
 
 const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
@@ -210,7 +225,7 @@ for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "e
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }
 }
-for (const expectedText of ["最近の回答履歴", "recent_answer_history", "回答履歴（テスト＋学習）", "answer_history", "source_type", "学習ターン詳細", "completion_reason", "give_up_learning_count", "give_up_experiment_count", "LOG_FIELD_LABELS"]) {
+for (const expectedText of ["最近の回答履歴", "recent_answer_history", "回答履歴（テスト＋学習）", "アンケート回答", "answer_history", "source_type", "学習ターン詳細", "completion_reason", "give_up_learning_count", "give_up_experiment_count", "LOG_FIELD_LABELS"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing unified answer history UI: ${expectedText}`);
   }

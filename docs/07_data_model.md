@@ -92,7 +92,7 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 
 ### participant_surveys
 
-アンケート接続用の現行モデル。`/survey` 画面は暫定表示だが、DBモデルは用意されている。
+実験後アンケート用のモデル。`/survey` には仮フォームを表示し、送信時に`phase=posttest`として保存してから参加者を`finish`へ進める。
 
 - id TEXT(36) PRIMARY KEY
 - participant_id TEXT(36) REFERENCES participants(id)

@@ -2,6 +2,7 @@
 
 ## Backend
 
+- 同意なしの参加者作成は拒否され、同意画面から同意した場合だけ`pretest`へ進む。`survey`送信で`participant_surveys`が1件保存され、`current_step=finish`、`completion_reason=completed`になる。送信再実行でアンケートが重複しない。
 - YAMLにactive termが `llm_knowledge`、`multi_agent`、`memory_process` の3件だけ存在する。
 - 各固定問題がA〜Jの10選択肢で、A/B/C、M1、M3、unknownの配分が3/3/3/1になる。
 - pretest・final_testが各用語1問、retestが各用語4バリエーション、learning確認がstage・用語ごとに5バリエーションになる。
@@ -20,6 +21,7 @@
 
 ## Frontend
 
+- `/start`から同意書画面を経由してpretestへ進み、同意前には参加者を作成しない。テスト終了後は仮アンケート画面を表示し、送信後に終了画面へ進む。
 - pretest/retest/final-testで3用語が表示される。
 - 10択複数選択UIで、3つまたはJ単独以外は送信できない。
 - 学習画面にM1〜M4、unknown、LangGraph、内部教授方略を表示しない。
