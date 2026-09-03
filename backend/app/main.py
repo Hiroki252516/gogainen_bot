@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -43,6 +43,7 @@ from app.services.experiment import (
     score_phase,
     session_misconception_history,
     submit_attempt,
+    submit_survey,
 )
 
 
@@ -73,7 +74,7 @@ app.add_middleware(
 class ParticipantCreate(BaseModel):
     group_condition: str | None = None
     assignment_method: str = "manual"
-    consent_checked: bool = True
+    consent_checked: bool = False
 
 
 class AttemptPayload(BaseModel):
@@ -102,6 +103,18 @@ class TutorTurnRespond(BaseModel):
     response_time_sec: float | None = None
     question_shown_at: datetime | None = None
     answered_at: datetime | None = None
+
+
+class SurveyPayload(BaseModel):
+    ai_experience_level: int = Field(ge=1, le=5)
+    programming_experience_level: int = Field(ge=1, le=5)
+    llm_usage_level: int = Field(ge=1, le=5)
+    self_rated_ai_knowledge: int = Field(ge=1, le=5)
+    term_confidences: dict[str, int] | None = None
+    usability_rating: int = Field(ge=1, le=5)
+    helpfulness_rating: int = Field(ge=1, le=5)
+    perceived_hint_amount: int = Field(ge=1, le=5)
+    free_comment: str | None = None
 
 
 class AILoginStart(BaseModel):
@@ -201,6 +214,11 @@ def api_give_up_learning(participant_id: str, db: Session = Depends(get_db)) -> 
 @app.post("/api/participants/{participant_id}/give-up")
 def api_give_up_experiment(participant_id: str, db: Session = Depends(get_db)) -> dict:
     return give_up_experiment(db, participant_id)
+
+
+@app.post("/api/participants/{participant_id}/survey")
+def api_submit_survey(participant_id: str, payload: SurveyPayload, db: Session = Depends(get_db)) -> dict:
+    return submit_survey(db, participant_id, payload.model_dump())
 
 
 @app.post("/api/tutor-sessions")

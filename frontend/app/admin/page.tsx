@@ -64,7 +64,15 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   before_json: "変更前",
   after_json: "変更後",
   previous_misconception_type: "前回の誤概念",
-  current_misconception_type: "今回の誤概念"
+  current_misconception_type: "今回の誤概念",
+  ai_experience_level: "AI利用経験",
+  programming_experience_level: "プログラミング経験",
+  llm_usage_level: "LLM利用頻度",
+  self_rated_ai_knowledge: "AI自己評価",
+  usability_rating: "操作のしやすさ",
+  helpfulness_rating: "役立ち度",
+  perceived_hint_amount: "ヒント・説明の量",
+  free_comment: "自由記述"
 };
 
 export default function AdminPage() {
@@ -332,6 +340,7 @@ export default function AdminPage() {
                 </section>
               )}
               <ParticipantFlow logs={participantLog} />
+              <LogList title="アンケート回答" rows={participantLog.surveys} fields={["phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]} />
               <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />

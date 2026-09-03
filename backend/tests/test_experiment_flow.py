@@ -130,6 +130,13 @@ def test_pretest_returns_three_multi_select_questions_with_ten_options():
         assert question["requires_reason"] is False
 
 
+def test_participant_creation_requires_consent():
+    without_consent = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": False})
+    assert without_consent.status_code == 400
+    missing_consent = client.post("/api/participants", json={"group_condition": "proposed"})
+    assert missing_consent.status_code == 400
+
+
 def test_attempt_requires_three_from_a_to_i_or_unknown_j_only():
     participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
     pid = participant["participant_id"]
@@ -844,6 +851,58 @@ def test_retest_mastery_skips_final_test_and_uses_retest_score():
         assert db.query(Attempt).filter_by(participant_id=pid, phase="final_test").count() == 0
     finally:
         db.close()
+
+
+def test_survey_submission_saves_and_finishes_participant():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    _submit_phase_questions(pid, "retest", ["A", "B", "C"])
+    score = client.post(f"/api/participants/{pid}/score-retest")
+    assert score.status_code == 200, score.text
+    assert score.json()["next_step"] == "survey"
+
+    payload = {
+        "ai_experience_level": 3,
+        "programming_experience_level": 2,
+        "llm_usage_level": 4,
+        "self_rated_ai_knowledge": 3,
+        "usability_rating": 5,
+        "helpfulness_rating": 4,
+        "perceived_hint_amount": 3,
+        "free_comment": "仮アンケートの確認",
+    }
+    missing_required_background = {key: value for key, value in payload.items() if key != "ai_experience_level"}
+    invalid = client.post(f"/api/participants/{pid}/survey", json=missing_required_background)
+    assert invalid.status_code == 422
+
+    response = client.post(f"/api/participants/{pid}/survey", json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["next_step"] == "finish"
+    assert response.json()["next_url"] == "/finish"
+    assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "finish"
+
+    repeated = client.post(f"/api/participants/{pid}/survey", json=payload)
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["survey_id"] == response.json()["survey_id"]
+
+    db = SessionLocal()
+    try:
+        participant = db.get(Participant, pid)
+        surveys = db.query(ParticipantSurvey).filter_by(participant_id=pid).all()
+        assert participant is not None
+        assert participant.completion_reason == "completed"
+        assert len(surveys) == 1
+        assert surveys[0].phase == "posttest"
+        assert surveys[0].usability_rating == 5
+        assert surveys[0].free_comment == "仮アンケートの確認"
+    finally:
+        db.close()
+
+    logs = client.get(f"/api/admin/participants/{pid}/logs")
+    assert logs.status_code == 200, logs.text
+    assert logs.json()["surveys"][0]["helpfulness_rating"] == 4
+    exported = client.get(f"/api/admin/participants/{pid}/logs_excel.csv")
+    assert exported.status_code == 200, exported.text
+    assert "post-experiment survey" in exported.text
 
 
 def test_final_test_has_one_question_per_active_term():
