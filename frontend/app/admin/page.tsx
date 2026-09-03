@@ -5,7 +5,16 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { API_BASE, api } from "@/lib/api";
 
-type Participant = { participant_id: string; display_code: string; group_condition: string; current_step: string; completed_at: string | null };
+type Participant = {
+  participant_id: string;
+  display_code: string;
+  group_condition: string;
+  current_step: string;
+  completed_at: string | null;
+  completion_reason: string | null;
+  give_up_learning_count: number;
+  give_up_experiment_count: number;
+};
 type GroupCondition = "control" | "proposed";
 
 const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
@@ -115,6 +124,7 @@ export default function AdminPage() {
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
   const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup);
   const activeAiLogs = (overview?.recent_ai_call_logs || []).filter((row: any) => row.group_condition === activeGroup);
+  const activeAuditEvents = (overview?.recent_audit_events || []).filter((row: any) => row.group_condition === activeGroup);
 
   return (
     <AppShell step="管理画面">
@@ -204,6 +214,7 @@ export default function AdminPage() {
           <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
           <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
           <LogList title="評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "completed", "created_at"]} />
+          <LogList title="最近の操作監査ログ" rows={activeAuditEvents} fields={["display_code", "actor", "action", "created_at"]} />
           <LogList title="最近のAI呼び出し" rows={activeAiLogs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
         </section>
         <section className="panel">
@@ -215,6 +226,7 @@ export default function AdminPage() {
                 <th>条件</th>
                 <th>進捗</th>
                 <th>完了</th>
+                <th>終了理由</th>
                 <th>ログ</th>
                 <th>操作</th>
               </tr>
@@ -226,6 +238,15 @@ export default function AdminPage() {
                   <td>{p.group_condition}</td>
                   <td>{p.current_step}</td>
                   <td>{p.completed_at ? "完了" : "未完了"}</td>
+                  <td>
+                    {p.completion_reason === "give_up"
+                      ? "実験ギブアップ"
+                      : p.completion_reason === "completed"
+                        ? "通常終了"
+                        : p.give_up_learning_count > 0
+                          ? `学習ギブアップ ${p.give_up_learning_count}回`
+                          : "-"}
+                  </td>
                   <td>
                     <button className="secondary" onClick={() => loadParticipantLog(p.participant_id)}>
                       被験者ログを見る
@@ -255,6 +276,16 @@ export default function AdminPage() {
                 <p>
                   {participantLog.participant.group_condition} / {participantLog.participant.current_step}
                 </p>
+                <p>
+                  終了理由: {participantLog.participant.completion_reason === "give_up"
+                    ? "実験ギブアップ"
+                    : participantLog.participant.completion_reason === "completed"
+                      ? "通常終了"
+                      : "未終了"}
+                </p>
+                <p>
+                  学習ギブアップ: {participantLog.participant.give_up_learning_count ?? 0}回 / 実験ギブアップ: {participantLog.participant.give_up_experiment_count ?? 0}回
+                </p>
                 <button className="secondary" disabled={recalculating} onClick={() => recalculateParticipantSummary(participantLog.participant.participant_id)}>
                   {recalculating ? "評価サマリー再計算中..." : "評価サマリーを再計算"}
                 </button>
@@ -273,6 +304,7 @@ export default function AdminPage() {
               <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "is_sufficient", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
+              <LogList title="操作監査ログ" rows={participantLog.audit_events} fields={["actor", "action", "created_at", "before_json", "after_json"]} />
               <LogList title="AI呼び出しログ" rows={participantLog.ai_call_logs} fields={["purpose", "status", "error_code", "latency_ms", "created_at"]} />
               <LogList title="再発イベント" rows={participantLog.recurrence_events} fields={["term_slug", "previous_misconception_type", "current_misconception_type", "phase", "created_at"]} />
             </>

@@ -19,6 +19,7 @@ export default function RetestPage() {
         scorePath={retestScorePath}
         nextPath="/learning-targets"
         onDisplayTitle={setRoundTitle}
+        allowExperimentGiveUp
       />
     </AppShell>
   );

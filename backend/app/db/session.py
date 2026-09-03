@@ -26,6 +26,9 @@ def _ensure_lightweight_schema_updates() -> None:
     json_type = "JSON" if dialect_name == "sqlite" else "JSONB"
     datetime_type = "DATETIME" if dialect_name == "sqlite" else "TIMESTAMP"
     additions = {
+        "participants": [
+            ("completion_reason", "TEXT"),
+        ],
         "attempts": [
             ("test_round", "TEXT"),
             ("question_shown_at", datetime_type),

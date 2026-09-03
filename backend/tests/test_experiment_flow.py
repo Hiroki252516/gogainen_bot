@@ -518,6 +518,149 @@ def test_incomplete_retest_keeps_unanswered_term_as_learning_target():
     assert unanswered["selected_options"] == []
 
 
+def test_learning_give_up_routes_to_retest_and_closes_current_session():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session_response = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"})
+    assert session_response.status_code == 200, session_response.text
+    session_id = session_response.json()["tutor_session_id"]
+    turn_response = client.post(f"/api/tutor-sessions/{session_id}/turns", json={})
+    assert turn_response.status_code == 200, turn_response.text
+    turn_id = turn_response.json()["turn_id"]
+
+    give_up = client.post(f"/api/participants/{pid}/give-up-learning")
+    assert give_up.status_code == 200, give_up.text
+    assert give_up.json()["next_step"] == "retest"
+    assert give_up.json()["next_url"] == "/retest"
+    assert client.get(f"/api/participants/{pid}/current-step").json() == {"step": "retest", "next_url": "/retest"}
+    assert client.get(f"/api/experiment/{pid}/retest").status_code == 200
+    participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
+    assert participant_logs.status_code == 200, participant_logs.text
+    participant_logs_payload = participant_logs.json()
+    assert participant_logs_payload["participant"]["completion_reason"] is None
+    assert participant_logs_payload["participant"]["give_up_learning_count"] == 1
+    assert any(event["action"] == "give_up_learning" for event in participant_logs_payload["audit_events"])
+
+    admin_row = next(row for row in client.get("/api/admin/participants").json()["participants"] if row["participant_id"] == pid)
+    assert admin_row["completion_reason"] is None
+    assert admin_row["give_up_learning_count"] == 1
+    overview = client.get("/api/admin/logs/overview").json()
+    assert any(event["display_code"] == admin_row["display_code"] and event["action"] == "give_up_learning" for event in overview["recent_audit_events"])
+
+    assert client.post(f"/api/tutor-sessions/{session_id}/turns", json={}).status_code == 409
+    assert client.post(f"/api/tutor-turns/{turn_id}/respond", json={"selected_option_ids": []}).status_code == 409
+    assert client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "llm_knowledge"},
+    ).status_code == 409
+
+    db = SessionLocal()
+    try:
+        session = db.get(TutorSession, session_id)
+        assert session is not None
+        assert session.ended_at is not None
+        audit = db.query(AuditEvent).filter_by(entity_type="participant", entity_id=pid, action="give_up_learning").first()
+        assert audit is not None
+        assert audit.before_json == {"current_step": "learning_targets"}
+        assert audit.after_json["current_step"] == "retest"
+    finally:
+        db.close()
+
+
+def test_experiment_give_up_during_retest_finishes_and_blocks_retest_actions():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    questions = client.get(f"/api/experiment/{pid}/retest")
+    assert questions.status_code == 200, questions.text
+    first_question = questions.json()["questions"][0]
+
+    give_up = client.post(f"/api/participants/{pid}/give-up")
+    assert give_up.status_code == 200, give_up.text
+    assert give_up.json()["next_step"] == "finish"
+    assert give_up.json()["next_url"] == "/finish"
+    current = client.get(f"/api/participants/{pid}/current-step")
+    assert current.status_code == 200
+    assert current.json() == {"step": "finish", "next_url": "/finish"}
+
+    assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+    assert client.post(f"/api/participants/{pid}/score-retest").status_code == 409
+    blocked_attempt = client.post(
+        "/api/attempts",
+        json={
+            "participant_id": pid,
+            "question_id": first_question["question_id"],
+            "phase": "retest",
+            "selected_option_ids": _ids_for_labels(first_question, ["A", "B", "C"]),
+        },
+    )
+    assert blocked_attempt.status_code == 409
+
+    db = SessionLocal()
+    try:
+        participant = db.get(Participant, pid)
+        assert participant is not None
+        assert participant.current_step == "finish"
+        assert participant.completed_at is not None
+        assert participant.completion_reason == "give_up"
+        audit = db.query(AuditEvent).filter_by(entity_type="participant", entity_id=pid, action="give_up_experiment").first()
+        assert audit is not None
+        assert audit.after_json["current_step"] == "finish"
+        assert audit.after_json["completion_reason"] == "give_up"
+    finally:
+        db.close()
+
+    repeated = client.post(f"/api/participants/{pid}/give-up")
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["next_url"] == "/finish"
+    admin_row = next(row for row in client.get("/api/admin/participants").json()["participants"] if row["participant_id"] == pid)
+    assert admin_row["completion_reason"] == "give_up"
+    assert admin_row["give_up_experiment_count"] == 1
+    participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
+    assert participant_csv.status_code == 200
+    assert "give_up_experiment" in participant_csv.text
+
+
+def test_experiment_give_up_during_displayed_retest1_blocks_final_test_actions():
+    pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    questions = client.get(f"/api/experiment/{pid}/final-test")
+    assert questions.status_code == 200, questions.text
+    first_question = questions.json()["questions"][0]
+
+    give_up = client.post(f"/api/participants/{pid}/give-up")
+    assert give_up.status_code == 200, give_up.text
+    assert give_up.json()["next_step"] == "finish"
+    assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
+    assert client.post(f"/api/participants/{pid}/score-final-test").status_code == 409
+    blocked_attempt = client.post(
+        "/api/attempts",
+        json={
+            "participant_id": pid,
+            "question_id": first_question["question_id"],
+            "phase": "final_test",
+            "selected_option_ids": _ids_for_labels(first_question, ["A", "B", "C"]),
+        },
+    )
+    assert blocked_attempt.status_code == 409
+
+
+def test_experiment_give_up_is_available_after_retest_result_confirmation():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    score = client.post(f"/api/participants/{pid}/score-retest")
+    assert score.status_code == 200, score.text
+    assert score.json()["next_step"] == "learning_targets"
+
+    confirmation = client.get(f"/api/participants/{pid}/learning-targets")
+    assert confirmation.status_code == 200, confirmation.text
+    assert confirmation.json()["test_results"]["test_round"] == "retest_1"
+
+    give_up = client.post(f"/api/participants/{pid}/give-up")
+    assert give_up.status_code == 200, give_up.text
+    assert give_up.json()["next_step"] == "finish"
+    assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "finish"
+    participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
+    assert participant_logs.status_code == 200, participant_logs.text
+    assert any(event["action"] == "give_up_experiment" for event in participant_logs.json()["audit_events"])
+
+
 def test_retest_mastery_skips_final_test_and_uses_retest_score():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     _submit_phase_questions(pid, "retest", ["A", "B", "C"])

@@ -53,6 +53,11 @@ LEARNING_STAGE_LABELS = {
 }
 TEST_PHASES = {"pretest", "retest", "final_test"}
 FINAL_TEST_NOT_AVAILABLE_DETAIL = "この参加者は最終テスト対象ではありません。"
+RETEST_ALLOWED_STEPS = {"learning_targets", "retest"}
+LEARNING_ALLOWED_STEPS = {"learning_targets", "final_test"}
+RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではありません。"
+LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
+EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
 
 
 def _component_terms(term_slug: str, term_label: str) -> list[str]:
@@ -370,6 +375,117 @@ def get_participant(db: Session, participant_id: str) -> Participant:
     return participant
 
 
+def participant_give_up_counts(db: Session, participant_ids: list[str]) -> dict[tuple[str, str], int]:
+    if not participant_ids:
+        return {}
+    rows = (
+        db.query(AuditEvent.entity_id, AuditEvent.action, func.count(AuditEvent.id))
+        .filter(
+            AuditEvent.entity_type == "participant",
+            AuditEvent.action.in_(["give_up_learning", "give_up_experiment"]),
+            AuditEvent.entity_id.in_(participant_ids),
+        )
+        .group_by(AuditEvent.entity_id, AuditEvent.action)
+        .all()
+    )
+    return {(entity_id, action): int(count) for entity_id, action, count in rows}
+
+
+def _assert_participant_active(participant: Participant) -> None:
+    if participant.current_step == "finish" or participant.completed_at is not None:
+        raise HTTPException(status_code=409, detail=EXPERIMENT_FINISHED_DETAIL)
+
+
+def _assert_learning_available(participant: Participant) -> None:
+    _assert_participant_active(participant)
+    if participant.current_step not in LEARNING_ALLOWED_STEPS:
+        raise HTTPException(status_code=409, detail=LEARNING_NOT_AVAILABLE_DETAIL)
+
+
+def _assert_learning_give_up_available(participant: Participant) -> None:
+    _assert_participant_active(participant)
+    if participant.current_step != "learning_targets":
+        raise HTTPException(status_code=409, detail=LEARNING_NOT_AVAILABLE_DETAIL)
+
+
+def _assert_retest_available(participant: Participant) -> None:
+    _assert_participant_active(participant)
+    if participant.current_step not in RETEST_ALLOWED_STEPS:
+        raise HTTPException(status_code=409, detail=RETEST_NOT_AVAILABLE_DETAIL)
+
+
+def _close_open_tutor_sessions(db: Session, participant_id: str) -> int:
+    open_sessions = db.query(TutorSession).filter_by(participant_id=participant_id, ended_at=None).all()
+    ended_at = now()
+    for session in open_sessions:
+        session.ended_at = ended_at
+    return len(open_sessions)
+
+
+def give_up_learning(db: Session, participant_id: str) -> dict[str, Any]:
+    """Skip the current learning session and make the next step the retest."""
+    participant = get_participant(db, participant_id)
+    _assert_learning_give_up_available(participant)
+    before_step = participant.current_step
+    closed_sessions = _close_open_tutor_sessions(db, participant.id)
+    participant.current_step = "retest"
+    db.add(
+        AuditEvent(
+            actor="participant",
+            action="give_up_learning",
+            entity_type="participant",
+            entity_id=participant.id,
+            before_json={"current_step": before_step},
+            after_json={"current_step": participant.current_step, "closed_tutor_sessions": closed_sessions},
+        )
+    )
+    db.commit()
+    return {
+        "status": "completed",
+        "action": "give_up_learning",
+        "next_step": participant.current_step,
+        "next_url": _next_url(participant.current_step),
+        "closed_tutor_sessions": closed_sessions,
+    }
+
+
+def give_up_experiment(db: Session, participant_id: str) -> dict[str, Any]:
+    """End the participant's experiment and prevent all further participant actions."""
+    participant = get_participant(db, participant_id)
+    before_step = participant.current_step
+    before_completed_at = participant.completed_at.isoformat() if participant.completed_at else None
+    closed_sessions = _close_open_tutor_sessions(db, participant.id)
+    already_finished = participant.current_step == "finish" and participant.completed_at is not None
+    if not already_finished:
+        participant.current_step = "finish"
+        participant.completed_at = participant.completed_at or now()
+        participant.completion_reason = "give_up"
+        db.add(
+            AuditEvent(
+                actor="participant",
+                action="give_up_experiment",
+                entity_type="participant",
+                entity_id=participant.id,
+                before_json={"current_step": before_step, "completed_at": before_completed_at},
+                after_json={
+                    "current_step": participant.current_step,
+                    "completed_at": participant.completed_at.isoformat(),
+                    "completion_reason": participant.completion_reason,
+                    "closed_tutor_sessions": closed_sessions,
+                },
+            )
+        )
+    if not already_finished or closed_sessions:
+        db.commit()
+    return {
+        "status": "completed",
+        "action": "give_up_experiment",
+        "next_step": "finish",
+        "next_url": _next_url("finish"),
+        "closed_tutor_sessions": closed_sessions,
+    }
+
+
 def next_display_code(db: Session) -> str:
     display_codes = db.query(Participant.display_code).all()
     max_number = 0
@@ -436,6 +552,7 @@ def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
                 "group_condition": participant.group_condition,
                 "current_step": participant.current_step,
                 "deleted_counts": deleted_counts,
+                "completion_reason": participant.completion_reason,
             },
             after_json={"deleted": True},
         )
@@ -541,6 +658,9 @@ def _displayed_options(db: Session, participant: Participant, question: Question
 
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
     participant = get_participant(db, participant_id)
+    _assert_participant_active(participant)
+    if phase == "retest":
+        _assert_retest_available(participant)
     if phase == "final_test" and participant.current_step != "final_test":
         raise HTTPException(status_code=409, detail=FINAL_TEST_NOT_AVAILABLE_DETAIL)
     all_questions = _question_query_for_phase(db, participant, phase).all()
@@ -596,10 +716,13 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         raise HTTPException(status_code=404, detail="question not found")
     participant = get_participant(db, payload["participant_id"])
     phase = payload.get("phase") or question.phase
+    _assert_participant_active(participant)
     if idempotency_key:
         existing = db.query(Attempt).filter_by(participant_id=participant.id, idempotency_key=idempotency_key).one_or_none()
         if existing:
             return existing
+    if phase == "retest":
+        _assert_retest_available(participant)
     if phase == "final_test" and participant.current_step != "final_test":
         raise HTTPException(status_code=409, detail=FINAL_TEST_NOT_AVAILABLE_DETAIL)
     selected_option_ids = payload.get("selected_option_ids") or ([payload.get("selected_option_id")] if payload.get("selected_option_id") else [])
@@ -778,6 +901,7 @@ def _priority(attempt: Attempt) -> tuple[float, str]:
 
 async def diagnose_pretest(db: Session, participant_id: str) -> int:
     participant = get_participant(db, participant_id)
+    _assert_participant_active(participant)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase="pretest").all()
     if not attempts:
         raise HTTPException(status_code=400, detail="pretest attempts not found")
@@ -1065,6 +1189,7 @@ def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> Tu
     term = db.query(Term).filter_by(slug=term_slug).one_or_none()
     if not term or not term.is_active:
         raise HTTPException(status_code=404, detail="term not found")
+    _assert_learning_available(participant)
     existing = (
         db.query(TutorSession)
         .filter_by(participant_id=participant.id, term_id=term.id, ended_at=None)
@@ -1086,6 +1211,9 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
     participant = get_participant(db, session.participant_id)
+    _assert_participant_active(participant)
+    if session.ended_at is not None:
+        raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
     term = db.get(Term, session.term_id)
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one()
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
@@ -1219,9 +1347,14 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     if not turn:
         raise HTTPException(status_code=404, detail="turn not found")
     session = db.get(TutorSession, turn.tutor_session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="session not found")
+    participant = get_participant(db, session.participant_id)
+    _assert_participant_active(participant)
+    if session.ended_at is not None:
+        raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
     state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one()
     response = payload.get("learner_response") or ""
-    participant = get_participant(db, session.participant_id)
     term = db.get(Term, session.term_id)
     meta = _practice_meta(turn)
     learning_stage = meta.get("learning_stage") or "conceptual_change"
@@ -1362,6 +1495,9 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
     participant = get_participant(db, participant_id)
+    _assert_participant_active(participant)
+    if phase == "retest":
+        _assert_retest_available(participant)
     if phase == "final_test" and participant.current_step != "final_test":
         raise HTTPException(status_code=409, detail=FINAL_TEST_NOT_AVAILABLE_DETAIL)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase, is_correct=None).all()
@@ -1444,6 +1580,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
     elif phase == "l0_check":
         participant.current_step = "finish"
         participant.completed_at = now()
+        participant.completion_reason = "completed"
     elif phase == "final_test":
         learning_target_slugs = _reset_test_learning_targets(db, participant, attempts)
         if _is_mastery_test_batch(db, attempts):
@@ -1463,6 +1600,7 @@ def _next_url(step: str) -> str:
     return {
         "pretest": "/pretest",
         "learning_targets": "/learning-targets",
+        "retest": "/retest",
         "final_test": "/final-test",
         "survey": "/survey",
         "finish": "/finish",
@@ -1865,7 +2003,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at"]),
+    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at", "completion_reason"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "selected_option_id", "selected_option_ids", "reason_text", "free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at"]),
@@ -2079,6 +2217,7 @@ def _ai_log_group_condition(log: AICallLog, participants: dict[str, Participant]
 def admin_logs_overview(db: Session) -> dict[str, Any]:
     participants = db.query(Participant).order_by(Participant.created_at.desc()).all()
     participant_by_id = {participant.id: participant for participant in participants}
+    give_up_counts = participant_give_up_counts(db, list(participant_by_id))
     terms = _term_map(db)
     questions = _question_map(db)
     options = _option_map(db)
@@ -2087,6 +2226,13 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
     recent_turns = db.query(TutorTurn).order_by(TutorTurn.created_at.desc()).limit(30).all()
     ai_logs = db.query(AICallLog).order_by(AICallLog.created_at.desc()).limit(50).all()
     recurrences = db.query(RecurrenceEvent).order_by(RecurrenceEvent.created_at.desc()).limit(30).all()
+    audit_events = (
+        db.query(AuditEvent)
+        .filter(AuditEvent.entity_type == "participant")
+        .order_by(AuditEvent.created_at.desc())
+        .limit(50)
+        .all()
+    )
     summaries = db.query(EvaluationSummary).order_by(EvaluationSummary.created_at.desc()).limit(30).all()
     recent_attempt_rows = [_attempt_log_row(row, participant_by_id, terms, questions, options) for row in attempts]
     recent_turn_rows = [
@@ -2104,6 +2250,9 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "group_condition": row.group_condition,
                 "current_step": row.current_step,
                 "completed_at": _iso(row.completed_at),
+                "completion_reason": row.completion_reason,
+                "give_up_learning_count": give_up_counts.get((row.id, "give_up_learning"), 0),
+                "give_up_experiment_count": give_up_counts.get((row.id, "give_up_experiment"), 0),
                 "created_at": _iso(row.created_at),
             }
             for row in participants
@@ -2124,6 +2273,20 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "created_at": _iso(row.created_at),
             }
             for row in ai_logs
+        ],
+        "recent_audit_events": [
+            {
+                "id": row.id,
+                "participant_id": row.entity_id,
+                "display_code": participant_by_id.get(row.entity_id).display_code if participant_by_id.get(row.entity_id) else None,
+                "group_condition": participant_by_id.get(row.entity_id).group_condition if participant_by_id.get(row.entity_id) else None,
+                "actor": row.actor,
+                "action": row.action,
+                "before_json": row.before_json,
+                "after_json": row.after_json,
+                "created_at": _iso(row.created_at),
+            }
+            for row in audit_events
         ],
         "recurrence_events": [
             {
@@ -2163,6 +2326,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
 def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     participant = get_participant(db, participant_id)
     participants = {participant.id: participant}
+    give_up_counts = participant_give_up_counts(db, [participant.id])
     terms = _term_map(db)
     questions = _question_map(db)
     options = _option_map(db)
@@ -2176,6 +2340,12 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     for turn in turns:
         turns_by_session.setdefault(turn.tutor_session_id, []).append(turn)
     recurrences = db.query(RecurrenceEvent).filter_by(participant_id=participant.id).order_by(RecurrenceEvent.created_at).all()
+    audit_events = (
+        db.query(AuditEvent)
+        .filter_by(entity_type="participant", entity_id=participant.id)
+        .order_by(AuditEvent.created_at)
+        .all()
+    )
     ai_logs = [row for row in db.query(AICallLog).order_by(AICallLog.created_at).all() if _ai_log_belongs_to(row, participant.id)]
     summary = db.query(EvaluationSummary).filter_by(participant_id=participant.id).order_by(EvaluationSummary.created_at.desc()).first()
     attempt_rows = [_attempt_log_row(row, participants, terms, questions, options) for row in attempts]
@@ -2202,6 +2372,9 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "current_step": participant.current_step,
             "started_at": _iso(participant.started_at),
             "completed_at": _iso(participant.completed_at),
+            "completion_reason": participant.completion_reason,
+            "give_up_learning_count": give_up_counts.get((participant.id, "give_up_learning"), 0),
+            "give_up_experiment_count": give_up_counts.get((participant.id, "give_up_experiment"), 0),
             "created_at": _iso(participant.created_at),
         },
         "attempts": attempt_rows,
@@ -2246,6 +2419,19 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
                 "created_at": _iso(row.created_at),
             }
             for row in recurrences
+        ],
+        "audit_events": [
+            {
+                "id": row.id,
+                "actor": row.actor,
+                "action": row.action,
+                "entity_type": row.entity_type,
+                "entity_id": row.entity_id,
+                "before_json": row.before_json,
+                "after_json": row.after_json,
+                "created_at": _iso(row.created_at),
+            }
+            for row in audit_events
         ],
         "ai_call_logs": [
             {
@@ -2324,6 +2510,8 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
         rows.append({**base, "record_type": "tutor_session", "phase": "learning", "term_slug": session["term_slug"], "event_time": session["started_at"], "summary": f"{session['term_label']} session {session['session_index']}", "value_json": _csv_value({k: v for k, v in session.items() if k != "turns"})})
     for event in logs["recurrence_events"]:
         rows.append({**base, "record_type": "recurrence", "phase": event["phase"], "term_slug": event["term_slug"], "event_time": event["created_at"], "summary": f"{event['previous_misconception_type']} -> {event['current_misconception_type']}", "value_json": _csv_value(event)})
+    for event in logs["audit_events"]:
+        rows.append({**base, "record_type": "audit_event", "phase": "control", "term_slug": "", "event_time": event["created_at"], "summary": f"{event['actor']} {event['action']}", "value_json": _csv_value(event)})
     for call in logs["ai_call_logs"]:
         rows.append({**base, "record_type": "ai_call", "phase": "", "term_slug": "", "event_time": call["created_at"], "summary": f"{call['purpose']} {call['status']} {call['error_code'] or ''}".strip(), "value_json": _csv_value(call)})
     if logs["latest_evaluation_summary"]:

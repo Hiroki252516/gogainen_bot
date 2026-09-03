@@ -14,6 +14,8 @@
 - 正答時は `generate_correct_answer_summary`、誤答時は `explain_selected_distractor` が呼ばれ、解説生成の目的とpayloadが `AICallLog` に記録される。
 - `/api/participants/{participant_id}/learning-targets` が、既存の未達対象 `targets`、互換用 `pretest_results`、直近の `test_results`（周回名、問題文、本人が選んだ選択肢本文、正誤）を返す。`test_results` に正答、期待解答、選択肢ごとの正誤、M分類などの内部診断値を含めない。
 - 解説生成に失敗した場合、固定採点結果や学習状態を部分確定せず、Mockへ自動フォールバックしない。
+- 学習ギブアップAPIが開いている学習セッションを終了し、`current_step=retest`と`next_url=/retest`を返す。ギブアップした学習ターンは回答として保存しない。
+- 実験ギブアップAPIが`current_step=finish`、`completed_at`、`completion_reason=give_up`を確定し、終了後の再テスト取得・回答保存・採点・学習セッション操作を409で拒否する。学習ギブアップは`completion_reason`を変更せず、両操作を`AuditEvent`へ記録する。管理画面の参加者一覧・詳細・全体監査ログ・CSVで状態と操作時刻を確認できる。
 
 ## Frontend
 
@@ -31,6 +33,8 @@
 - 解説表示後もAPIの `item_results` フィールドと次の確認への遷移が維持される。現行の固定複数選択フローでは `item_results` は空配列であり、個別結果の表示は値がある場合に限る。
 - AIの内部思考過程、M1〜M4、誤概念taxonomyが被験者画面に表示されない。
 - 旧stage名や旧Transformerの新規導線に依存しない。
+- 学習画面のギブアップ操作は再テストへ遷移し、再テスト画面と再テスト結果確認画面のギブアップ操作は終了画面へ遷移する。確認ダイアログを表示し、事前テストには表示しない。
+- ギブアップボタンは「次へ」などの回答操作から離れた画面下部の右寄せ領域に表示される。
 
 ## Regression
 

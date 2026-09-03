@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { GiveUpButton } from "@/components/GiveUpButton";
 import { MarkdownText } from "@/components/MarkdownText";
 import { api, requireParticipant } from "@/lib/api";
 
@@ -459,6 +460,11 @@ export default function LearningPage() {
                 </button>
               )}
             </div>
+            {!feedback?.session_completed ? (
+              <div className="give-up-footer">
+                <GiveUpButton mode="learning" disabled={submitting} />
+              </div>
+            ) : null}
           </>
         ) : error ? null : <SessionLoadProgress />}
       </section>

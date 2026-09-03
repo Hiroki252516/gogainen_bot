@@ -29,10 +29,13 @@ from app.services.experiment import (
     export_csv,
     generate_tutor_turn,
     get_participant,
+    give_up_experiment,
+    give_up_learning,
     latest_learning_misconception,
     learning_targets,
     latest_test_results,
     participant_logs,
+    participant_give_up_counts,
     pretest_results,
     question_payloads,
     recalculate_evaluation,
@@ -137,6 +140,7 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
     mapping = {
         "pretest": "/pretest",
         "learning_targets": "/learning-targets",
+        "retest": "/retest",
         "final_test": "/final-test",
         "survey": "/survey",
         "l0_check": "/l0-check",
@@ -187,6 +191,16 @@ def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> 
         "pretest_results": pretest_results(db, participant_id),
         "test_results": latest_test_results(db, participant_id),
     }
+
+
+@app.post("/api/participants/{participant_id}/give-up-learning")
+def api_give_up_learning(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return give_up_learning(db, participant_id)
+
+
+@app.post("/api/participants/{participant_id}/give-up")
+def api_give_up_experiment(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return give_up_experiment(db, participant_id)
 
 
 @app.post("/api/tutor-sessions")
@@ -266,6 +280,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
     from app.models import Participant
 
     rows = db.query(Participant).order_by(Participant.created_at.desc()).all()
+    give_up_counts = participant_give_up_counts(db, [row.id for row in rows])
     return {
         "participants": [
             {
@@ -274,6 +289,9 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "group_condition": row.group_condition,
                 "current_step": row.current_step,
                 "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+                "completion_reason": row.completion_reason,
+                "give_up_learning_count": give_up_counts.get((row.id, "give_up_learning"), 0),
+                "give_up_experiment_count": give_up_counts.get((row.id, "give_up_experiment"), 0),
             }
             for row in rows
         ]

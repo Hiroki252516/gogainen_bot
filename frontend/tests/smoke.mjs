@@ -8,6 +8,7 @@ const required = [
   "app/survey/page.tsx",
   "app/admin/page.tsx",
   "components/QuestionRunner.tsx",
+  "components/GiveUpButton.tsx",
   "components/MarkdownText.tsx"
 ];
 
@@ -73,6 +74,11 @@ for (const expectedText of ["SubmitProgress", "分析中です", "秒経過", "�
     throw new Error(`learning page missing submit progress behavior: ${expectedText}`);
   }
 }
+for (const expectedText of ["GiveUpButton", 'mode="learning"', "give-up-footer"]) {
+  if (!learningPage.includes(expectedText)) {
+    throw new Error(`learning page missing learning give-up behavior: ${expectedText}`);
+  }
+}
 for (const expectedText of ["SessionLoadProgress", "ContinueProgress", "学習セッションを準備しています", "教材を生成しています", "確認問題を準備しています", "学習画面を表示しています", "aria-busy={submitting", "学習セッション読み込みの進行状況", "次の確認読み込みの進行状況"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing initial loading progress behavior: ${expectedText}`);
@@ -116,7 +122,7 @@ const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx
 if (!questionRunner.includes('router.push("/learning-targets")')) {
   throw new Error("QuestionRunner must show the test result screen after scoring");
 }
-for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', 'router.push("/learning-targets")']) {
+for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', 'router.push("/learning-targets")', "allowExperimentGiveUp", 'mode="experiment"', "give-up-footer"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`question runner missing retest transition support: ${expectedText}`);
   }
@@ -134,7 +140,7 @@ for (const expectedText of ['step="テスト"', 'title="テスト"']) {
   }
 }
 const retestPage = fs.readFileSync(new URL("../app/retest/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step={roundTitle}', 'title="再テスト1"', 'onDisplayTitle={setRoundTitle}']) {
+for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step={roundTitle}', 'title="再テスト1"', 'onDisplayTitle={setRoundTitle}', "allowExperimentGiveUp"]) {
   if (!retestPage.includes(expectedText)) {
     throw new Error(`retest page missing round label: ${expectedText}`);
   }
@@ -151,7 +157,7 @@ for (const forbiddenText of ["misconception_type", "M1", "M2", "M3", "M4", "taxo
     throw new Error(`learning targets page must not expose internal diagnosis text: ${forbiddenText}`);
   }
 }
-for (const expectedText of ["current_step", 'currentStep === "learning_targets"', 'currentStep === "survey"', 'currentStep === "final_test"', "学習対象を確認しています。", 'href="/final-test"', 'href="/survey"']) {
+for (const expectedText of ["current_step", 'currentStep === "learning_targets"', 'currentStep === "survey"', 'currentStep === "final_test"', "学習対象を確認しています。", 'href="/final-test"', 'href="/survey"', "GiveUpButton", 'startsWith("retest_")', "give-up-footer"]) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing guarded final-test transition: ${expectedText}`);
   }
@@ -182,9 +188,15 @@ for (const expectedText of ["selection_mode", "selectedIds", "selected_option_id
   }
 }
 const finalTestPage = fs.readFileSync(new URL("../app/final-test/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ['phase="final_test"', 'step="再テスト1"', 'title="再テスト1"', '/api/experiment/${id}/final-test', '/api/participants/${id}/score-final-test', 'nextPath="/survey"']) {
+for (const expectedText of ['phase="final_test"', 'step="再テスト1"', 'title="再テスト1"', '/api/experiment/${id}/final-test', '/api/participants/${id}/score-final-test', 'nextPath="/survey"', "allowExperimentGiveUp"]) {
   if (!finalTestPage.includes(expectedText)) {
     throw new Error(`final test page missing: ${expectedText}`);
+  }
+}
+const giveUpButton = fs.readFileSync(new URL("../components/GiveUpButton.tsx", import.meta.url), "utf8");
+for (const expectedText of ["window.confirm", "/give-up-learning", "/give-up", "next_url"]) {
+  if (!giveUpButton.includes(expectedText)) {
+    throw new Error(`give-up button missing API behavior: ${expectedText}`);
   }
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
@@ -198,7 +210,7 @@ for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "e
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }
 }
-for (const expectedText of ["最近の回答履歴", "recent_answer_history", "回答履歴（テスト＋学習）", "answer_history", "source_type", "is_sufficient", "学習ターン詳細"]) {
+for (const expectedText of ["最近の回答履歴", "recent_answer_history", "回答履歴（テスト＋学習）", "answer_history", "source_type", "is_sufficient", "学習ターン詳細", "audit_events", "最近の操作監査ログ", "操作監査ログ", "recent_audit_events", "completion_reason", "終了理由", "give_up_learning_count", "give_up_experiment_count"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing unified answer history UI: ${expectedText}`);
   }

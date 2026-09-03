@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GiveUpButton } from "@/components/GiveUpButton";
 import { api, requireParticipant } from "@/lib/api";
 
 type Option = { option_id: string; label: string; body: string };
@@ -44,6 +45,7 @@ export function QuestionRunner({
   scorePath,
   nextPath,
   onDisplayTitle,
+  allowExperimentGiveUp = false,
 }: {
   phase: string;
   title: string;
@@ -51,6 +53,7 @@ export function QuestionRunner({
   scorePath?: (participantId: string) => string;
   nextPath: string;
   onDisplayTitle?: (displayTitle: string) => void;
+  allowExperimentGiveUp?: boolean;
 }) {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -226,6 +229,7 @@ export function QuestionRunner({
       {error ? <div className="danger">{error}</div> : null}
       <div className="actions">
         <button
+          type="button"
           onClick={submit}
           disabled={!canSubmit}
         >
@@ -233,6 +237,11 @@ export function QuestionRunner({
         </button>
         <span className="muted">このフェーズでは正誤やヒントは表示されません。</span>
       </div>
+      {allowExperimentGiveUp ? (
+        <div className="give-up-footer">
+          <GiveUpButton mode="experiment" disabled={saving} />
+        </div>
+      ) : null}
     </div>
   );
 }

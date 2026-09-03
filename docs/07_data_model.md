@@ -78,10 +78,15 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 - current_step TEXT NOT NULL DEFAULT `start`
 - started_at TIMESTAMP NULL
 - completed_at TIMESTAMP NULL
+- completion_reason TEXT NULL  # `completed` または `give_up`
 - created_at TIMESTAMP NOT NULL
 - updated_at TIMESTAMP NOT NULL
 
 `display_code` は `P001` のような画面表示用ID。個人名やメールアドレスは保存しない。
+
+`current_step` は`pretest`、`learning_targets`、`retest`、`final_test`、`survey`、`l0_check`、`finish`を使用する。`retest`は学習ギブアップ直後に再テストへ進むための状態である。
+
+`completion_reason` は実験終了時の理由を保存する。通常終了は`completed`、実験ギブアップは`give_up`であり、学習セッションだけをギブアップした場合は未終了のためNULLのままとする。学習ギブアップ回数や操作時刻は`audit_events`の`give_up_learning`で記録する。
 
 ### participant_surveys
 
