@@ -11,6 +11,14 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 - `control`
 - `proposed`
 
+参加者向けの作成APIは群名を直接受け付けない。管理者が伝える`assignment_code`のA/Bをbackendでそれぞれ`proposed`/`control`へ変換し、参加者行へ保存する。
+
+### assignment_method
+
+- `admin_code`（現行の`POST /api/participants`でA/Bコードから割り当てた値）
+- `manual`（既存行・スキーマの互換値。現行の参加者作成画面では使用しない）
+- `random`（過去ログ互換値。現行の参加者作成APIでは使用しない）
+
 ### phase
 
 - `pretest`
@@ -87,6 +95,8 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 - updated_at TIMESTAMP NOT NULL
 
 `display_code` は `P001` のような画面表示用ID。個人名やメールアドレスは保存しない。
+
+`assignment_method`のDBデフォルト`manual`は既存データおよび直接モデル作成との互換用に残る。現行の参加者作成APIはA/Bの`assignment_code`を必須とし、正常作成時は`admin_code`を書き込む。APIの参加者向けレスポンスには`group_condition`を含めないが、管理API・ログ・評価集計では内部群として利用する。
 
 `current_step` は`pretest`、`learning_targets`、`retest`、`final_test`、`survey`、`l0_check`、`finish`を使用する。`retest`は学習ギブアップ直後に再テストへ進むための状態である。
 

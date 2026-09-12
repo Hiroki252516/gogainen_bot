@@ -72,8 +72,7 @@ app.add_middleware(
 
 
 class ParticipantCreate(BaseModel):
-    group_condition: str | None = None
-    assignment_method: str = "manual"
+    assignment_code: str | None = None
     consent_checked: bool = False
 
 
@@ -138,11 +137,10 @@ def seed(db: Session = Depends(get_db)) -> dict:
 
 @app.post("/api/participants")
 def api_create_participant(payload: ParticipantCreate, db: Session = Depends(get_db)) -> dict:
-    participant = create_participant(db, payload.group_condition, payload.assignment_method, payload.consent_checked)
+    participant = create_participant(db, payload.assignment_code, payload.consent_checked)
     return {
         "participant_id": participant.id,
         "display_code": participant.display_code,
-        "group_condition": participant.group_condition,
         "current_step": participant.current_step,
     }
 

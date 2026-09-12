@@ -520,16 +520,18 @@ def next_display_code(db: Session) -> str:
     return f"P{max_number + 1:03d}"
 
 
-def create_participant(db: Session, group_condition: str | None, assignment_method: str, consent_checked: bool) -> Participant:
+def create_participant(db: Session, assignment_code: str | None, consent_checked: bool) -> Participant:
     if not consent_checked:
         raise HTTPException(status_code=400, detail="同意書への同意が必要です。")
-    if group_condition not in {"control", "proposed"}:
-        group_condition = random.choice(["control", "proposed"])
-        assignment_method = "random"
+    normalized_code = (assignment_code or "").strip().upper()
+    group_condition_by_code = {"A": "proposed", "B": "control"}
+    group_condition = group_condition_by_code.get(normalized_code)
+    if group_condition is None:
+        raise HTTPException(status_code=400, detail="管理者から伝えられた参加コード（AまたはB）が必要です。")
     participant = Participant(
         display_code=next_display_code(db),
         group_condition=group_condition,
-        assignment_method=assignment_method,
+        assignment_method="admin_code",
         consent_checked=consent_checked,
         current_step="pretest",
         started_at=now(),

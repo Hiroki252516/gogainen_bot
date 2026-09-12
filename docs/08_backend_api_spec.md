@@ -22,6 +22,33 @@
 
 固定複数選択では`selected_option_ids: string[]`を正本とし、既存互換の`selected_option_id`も残す。A〜Iから3件ちょうど、またはJのみ1件を必須とする。JとA〜Iの混在は不可とする。自由記述の互換フェーズでは`free_text_answer`を使用する。
 
+## Participant Creation
+
+`POST /api/participants` は同意済みの参加者を作成する。参加者が群名を選択・送信することはできず、管理者から伝えられたA/Bコードを送信する。
+
+Request:
+
+```json
+{
+  "assignment_code": "A",
+  "consent_checked": true
+}
+```
+
+`assignment_code`は前後の空白を除去して大文字化し、`A`を内部の`group_condition=proposed`、`B`を`group_condition=control`へ変換する。正常作成時の`assignment_method`は`admin_code`である。コードがない、またはA/B以外の場合は400を返す。同意がない場合も400を返す。旧来の`group_condition`や`assignment_method`を参加者作成入力として利用せず、既存DB行の値だけを互換目的で保持する。
+
+Response:
+
+```json
+{
+  "participant_id": "uuid",
+  "display_code": "P001",
+  "current_step": "pretest"
+}
+```
+
+参加者向けレスポンスには内部の`group_condition`を含めない。群別の値は管理API、ログ、評価集計でのみ扱う。
+
 ## Variant policy
 
 - pretest: 用語ごとに `pretest_v1`

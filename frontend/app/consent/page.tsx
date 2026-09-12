@@ -5,21 +5,16 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/lib/api";
 
-const GROUP_LABELS: Record<string, string> = {
-  proposed: "提案群: ログ適応型AIチューター",
-  control: "統制群: 通常AIチューター",
-};
-
 export default function ConsentPage() {
   const router = useRouter();
-  const [group, setGroup] = useState("proposed");
+  const [assignmentCode, setAssignmentCode] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const pendingGroup = localStorage.getItem("pending_group_condition");
-    if (pendingGroup === "control" || pendingGroup === "proposed") setGroup(pendingGroup);
+    const pendingCode = localStorage.getItem("pending_assignment_code");
+    if (pendingCode === "A" || pendingCode === "B") setAssignmentCode(pendingCode);
   }, []);
 
   async function agreeAndStart() {
@@ -27,17 +22,20 @@ export default function ConsentPage() {
       setError("同意書を確認し、同意してください。");
       return;
     }
+    if (assignmentCode !== "A" && assignmentCode !== "B") {
+      setError("開始画面から管理者の参加コードを入力してください。");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
-      const data = await api<{ participant_id: string; display_code: string; group_condition: string }>("/api/participants", {
+      const data = await api<{ participant_id: string; display_code: string; current_step: string }>("/api/participants", {
         method: "POST",
-        body: JSON.stringify({ group_condition: group, assignment_method: "manual", consent_checked: true }),
+        body: JSON.stringify({ assignment_code: assignmentCode, consent_checked: true }),
       });
       localStorage.setItem("participant_id", data.participant_id);
       localStorage.setItem("display_code", data.display_code);
-      localStorage.setItem("group_condition", data.group_condition);
-      localStorage.removeItem("pending_group_condition");
+      localStorage.removeItem("pending_assignment_code");
       router.push("/pretest");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -58,8 +56,8 @@ export default function ConsentPage() {
           <p>参加は任意です。途中で実験を中止できます。保存された研究ログは研究目的で利用します。</p>
         </div>
         <div className="notice">
-          <strong>選択された実験条件</strong>
-          <p>{GROUP_LABELS[group] || group}</p>
+          <strong>学習方法の割り当て</strong>
+          <p>研究計画に基づき、二つの学習支援方法のいずれかに割り当てられます。参加者が学習方法を選択することはありません。</p>
         </div>
         <label className="option">
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={submitting} />
