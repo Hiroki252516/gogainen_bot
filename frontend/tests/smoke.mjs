@@ -201,15 +201,25 @@ for (const expectedText of ["window.confirm", "/give-up-learning", "/give-up", "
   }
 }
 const startPage = fs.readFileSync(new URL("../app/start/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ['pending_group_condition', 'router.push("/consent")', "実験を開始する"]) {
+for (const expectedText of ["assignmentCode", "pending_assignment_code", 'router.push("/consent")', "同意書を確認する"]) {
   if (!startPage.includes(expectedText)) {
     throw new Error(`start page missing consent transition: ${expectedText}`);
   }
 }
+for (const forbiddenText of ["pending_group_condition", "group_condition", "提案群", "統制群", "<select"]) {
+  if (startPage.includes(forbiddenText)) {
+    throw new Error(`start page must not expose participant group selection: ${forbiddenText}`);
+  }
+}
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書（仮）", "consent_checked: true", 'router.push("/pretest")', "同意してテストを開始"]) {
+for (const expectedText of ["研究参加同意書（仮）", "assignment_code", "consent_checked: true", 'router.push("/pretest")', "同意してテストを開始", "学習方法の割り当て"]) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
+  }
+}
+for (const forbiddenText of ["GROUP_LABELS", "pending_group_condition", "group_condition", "提案群", "統制群"]) {
+  if (consentPage.includes(forbiddenText)) {
+    throw new Error(`consent page must not expose participant group condition: ${forbiddenText}`);
   }
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");

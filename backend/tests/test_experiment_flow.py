@@ -44,6 +44,10 @@ QUESTION_SHOWN_AT = "2026-06-22T06:00:00"
 ANSWERED_AT = "2026-06-22T06:00:05"
 
 
+def _assignment_code_for_group(group: str) -> str:
+    return {"proposed": "A", "control": "B"}[group]
+
+
 def _latest_turn(turn_id: str) -> TutorTurn | None:
     db = SessionLocal()
     try:
@@ -95,7 +99,10 @@ def _submit_phase_questions_by_term(pid: str, phase: str, labels_by_term: dict[s
 
 
 def _create_participant_with_pretest(group: str = "proposed", labels: list[str] | None = None) -> str:
-    participant = client.post("/api/participants", json={"group_condition": group, "consent_checked": True}).json()
+    participant = client.post(
+        "/api/participants",
+        json={"assignment_code": _assignment_code_for_group(group), "consent_checked": True},
+    ).json()
     pid = participant["participant_id"]
     _submit_phase_questions(pid, "pretest", labels or ["D", "E", "F"])
     diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
@@ -115,7 +122,7 @@ def test_content_contract_has_three_terms_and_required_variant_counts():
 
 
 def test_pretest_returns_three_multi_select_questions_with_ten_options():
-    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
     questions = client.get(f"/api/experiment/{participant['participant_id']}/pretest").json()["questions"]
 
     assert [question["term_slug"] for question in questions] == list(ACTIVE_TERM_SLUGS)
@@ -131,14 +138,42 @@ def test_pretest_returns_three_multi_select_questions_with_ten_options():
 
 
 def test_participant_creation_requires_consent():
-    without_consent = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": False})
+    without_consent = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": False})
     assert without_consent.status_code == 400
-    missing_consent = client.post("/api/participants", json={"group_condition": "proposed"})
+    missing_consent = client.post("/api/participants", json={"assignment_code": "A"})
     assert missing_consent.status_code == 400
 
 
+def test_participant_creation_requires_valid_admin_assignment_code():
+    for payload in (
+        {"consent_checked": True},
+        {"assignment_code": "C", "consent_checked": True},
+        {"group_condition": "proposed", "consent_checked": True},
+    ):
+        response = client.post("/api/participants", json=payload)
+        assert response.status_code == 400, response.text
+
+
+def test_participant_creation_maps_admin_assignment_code_without_exposing_group():
+    proposed_response = client.post("/api/participants", json={"assignment_code": "a", "consent_checked": True})
+    control_response = client.post("/api/participants", json={"assignment_code": " b ", "consent_checked": True})
+    assert proposed_response.status_code == 200, proposed_response.text
+    assert control_response.status_code == 200, control_response.text
+    assert "group_condition" not in proposed_response.json()
+    assert "group_condition" not in control_response.json()
+
+    db = SessionLocal()
+    try:
+        proposed = db.get(Participant, proposed_response.json()["participant_id"])
+        control = db.get(Participant, control_response.json()["participant_id"])
+        assert proposed is not None and proposed.group_condition == "proposed" and proposed.assignment_method == "admin_code"
+        assert control is not None and control.group_condition == "control" and control.assignment_method == "admin_code"
+    finally:
+        db.close()
+
+
 def test_attempt_requires_three_from_a_to_i_or_unknown_j_only():
-    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
     pid = participant["participant_id"]
     question = client.get(f"/api/experiment/{pid}/pretest").json()["questions"][0]
 
@@ -247,7 +282,7 @@ def test_admin_overview_returns_only_latest_evaluation_summary_per_participant()
 
 
 def test_db_backfill_uses_give_up_audit_for_completion_metadata():
-    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
     pid = participant["participant_id"]
     db = SessionLocal()
     try:
@@ -287,7 +322,7 @@ def test_db_backfill_uses_give_up_audit_for_completion_metadata():
 
 
 def test_attempts_cannot_be_saved_for_wrong_phase_or_after_pretest():
-    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
     pid = participant["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:
@@ -329,7 +364,7 @@ def test_attempts_cannot_be_saved_for_wrong_phase_or_after_pretest():
 
 
 def test_learning_targets_returns_all_pretest_results_without_internal_labels():
-    participant = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
     pid = participant["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     labels_by_term = {
@@ -1045,11 +1080,11 @@ def test_admin_logs_and_csv_show_multiple_selection_labels():
 def test_group_misconception_transition_summary_uses_term_pretest_denominator():
     transition_types = ["resolved", "same_type_recurred", "changed_type", "unknown_persisted", "regressed", "unclassified"]
     control_pids = [
-        client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()["participant_id"]
+        client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()["participant_id"]
         for _ in transition_types
     ]
-    missing_pid = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()["participant_id"]
-    proposed_pid = client.post("/api/participants", json={"group_condition": "proposed", "consent_checked": True}).json()["participant_id"]
+    missing_pid = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()["participant_id"]
+    proposed_pid = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()["participant_id"]
 
     db = SessionLocal()
     try:
@@ -1187,18 +1222,18 @@ def test_admin_can_delete_participant_and_related_data():
 
 
 def test_participant_creation_uses_next_unused_display_code_after_deletion():
-    original = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
-    successor = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
+    original = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()
+    successor = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()
     assert client.delete(f"/api/admin/participants/{original['participant_id']}").status_code == 200
 
-    recreated = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True})
+    recreated = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True})
     assert recreated.status_code == 200, recreated.text
     assert recreated.json()["display_code"] != original["display_code"]
     assert int(recreated.json()["display_code"][1:]) > int(successor["display_code"][1:])
 
 
 def test_admin_participant_delete_rolls_back_on_commit_failure(monkeypatch):
-    participant = client.post("/api/participants", json={"group_condition": "control", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()
     pid = participant["participant_id"]
     db = SessionLocal()
     try:

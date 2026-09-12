@@ -1,15 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 
 export default function StartPage() {
   const router = useRouter();
-  const [group, setGroup] = useState("proposed");
+  const [assignmentCode, setAssignmentCode] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const pendingCode = localStorage.getItem("pending_assignment_code");
+    if (pendingCode === "A" || pendingCode === "B") setAssignmentCode(pendingCode);
+  }, []);
 
   function start() {
-    localStorage.setItem("pending_group_condition", group);
+    const normalizedCode = assignmentCode.trim().toUpperCase();
+    if (normalizedCode !== "A" && normalizedCode !== "B") {
+      setError("管理者から伝えられた参加コード（AまたはB）を入力してください。");
+      return;
+    }
+    localStorage.setItem("pending_assignment_code", normalizedCode);
     router.push("/consent");
   }
 
@@ -17,16 +28,29 @@ export default function StartPage() {
     <AppShell step="開始">
       <section className="panel stack">
         <h1>専門用語理解の実験を開始します</h1>
-        <p className="muted">実験条件を選択し、同意書を確認してからテストを開始します。</p>
+        <p className="muted">管理者から伝えられた参加コードを入力し、同意書を確認してからテストを開始します。</p>
         <label>
-          実験条件
-          <select value={group} onChange={(event) => setGroup(event.target.value)}>
-            <option value="proposed">提案群: ログ適応型AIチューター</option>
-            <option value="control">統制群: 通常AIチューター</option>
-          </select>
+          参加コード
+          <input
+            value={assignmentCode}
+            onChange={(event) => {
+              setAssignmentCode(event.target.value.toUpperCase());
+              setError("");
+            }}
+            maxLength={1}
+            autoCapitalize="characters"
+            autoComplete="off"
+            placeholder="A または B"
+            aria-describedby={error ? "assignment-code-error" : undefined}
+          />
         </label>
+        {error ? (
+          <div id="assignment-code-error" className="danger" role="alert">
+            {error}
+          </div>
+        ) : null}
         <div className="actions">
-          <button onClick={start}>実験を開始する</button>
+          <button onClick={start}>同意書を確認する</button>
         </div>
       </section>
     </AppShell>
