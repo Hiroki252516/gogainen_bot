@@ -4,7 +4,7 @@
 
 - 同意なしの参加者作成は拒否され、同意画面から同意した場合だけ`pretest`へ進む。`survey`送信で`participant_surveys`が1件保存され、`current_step=finish`、`completion_reason=completed`になる。送信再実行でアンケートが重複しない。
 - YAMLにactive termが `llm_knowledge`、`multi_agent`、`memory_process` の3件だけ存在する。
-- 各固定問題がA〜Jの10選択肢で、A/B/C、M1、M3、unknownの配分が3/3/3/1になる。
+- pretest・retest・final_test・学習確認の固定複数選択問題がA〜Jの10選択肢で、A/B/C、M1、M3、unknownの配分が3/3/3/1になる。`l0_check`と`transfer`はこの配分の対象外である。
 - pretest・final_testが各用語1問、retestが各用語4バリエーション、learning確認がstage・用語ごとに5バリエーションになる。
 - A/B/C完全一致だけが正解、J単独だけがunknown、M3がM1より優先される。
 - retestはv1〜v4を使い、5回目以降はv4を再利用する。
@@ -42,7 +42,7 @@
 
 ## Regression
 
-この文書の項目は現行MVPの受入観点と将来機能の回帰観点を含む。M2/M4固定問題、遅延再テスト、手動修正・削除監査、完全な転移評価は現行MVPの必須受入条件ではなく、将来対応として別途検証する。
+この文書の項目は現行MVPの受入観点と将来機能の回帰観点を含む。M2/M4固定問題、遅延再テスト、手動診断修正とその監査、完全な転移評価は現行MVPの必須受入条件ではなく、将来対応として別途検証する。参加者削除、学習・実験ギブアップとそれらの監査記録は現行MVPの受入対象である。
 
 - `AI_BACKEND=mock` で固定問題・遷移・RAG契約テストが通る。
 - `AI_BACKEND=codex_app_server` でMockへ自動フォールバックしない。

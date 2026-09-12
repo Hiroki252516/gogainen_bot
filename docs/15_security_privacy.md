@@ -18,7 +18,7 @@ MVPでは個人名・メールアドレスを収集しない。被験者IDのみ
 - ChatGPT認証情報をDBに保存しない
 - `~/.codex/auth.json` をアプリで直接読み取らない
 - app-serverの認証状態は `account/read` で確認する
-- logout API（`/api/admin/ai/logout`）を提供する。管理画面の導線から呼ぶ場合は誤操作防止の確認を入れる
+- logout API（`/api/admin/ai/logout`）を提供する。現行管理画面にはログアウトボタンを置いていない。今後導線を追加する場合は誤操作防止の確認を入れる
 
 ## app-serverの公開範囲
 
@@ -26,14 +26,14 @@ MVPでは個人名・メールアドレスを収集しない。被験者IDのみ
 - `0.0.0.0` で公開しない
 - 可能なら capability token を使う
 - 非ローカル公開はしない
-- Docker Desktop上のbackendからは、`.env`の`CODEX_APP_SERVER_URL`で指定したホスト接続先へ接続する。通常は`host.docker.internal:4500`を使う
+- 現行Composeの既定はhost networkで、backendは`.env`の`CODEX_APP_SERVER_URL=ws://127.0.0.1:4500`を使う。bridgeネットワークを選ぶ場合だけ`host.docker.internal:4500`などへ上書きする
 
 ## 実験データ
 
 保存する:
 
 - 回答
-- 理由記述
+- 理由記述（任意の互換フィールド。現行のpretest・learning画面では収集しない）
 - 自信度は事前テストと学習セッションでは収集しない
 - 回答時間
 - AI診断
@@ -51,7 +51,7 @@ MVPでは個人名・メールアドレスを収集しない。被験者IDのみ
 
 ## AI出力の注意
 
-AI診断は誤る可能性がある。現行管理画面では診断・AI call logを確認できるが、診断結果を編集する手動修正UIと監査書き込みは未実装である。
+自由回答・互換フェーズでAIが診断する場合、その診断は誤る可能性がある。固定多選択問題の正誤とM1/M3/unknown判定はYAMLとbackendが決め、AI診断で上書きしない。現行管理画面では診断・AI call logを確認できるが、診断結果を編集する手動修正UIと監査書き込みは未実装である。
 
 手動修正（将来対応）:
 
@@ -59,15 +59,15 @@ AI診断は誤る可能性がある。現行管理画面では診断・AI call l
 - 修正理由を必須にする
 - CSVで手動修正済みか判別可能にする
 
-## 削除機能（将来対応）
+## 削除機能（現行MVP）
 
-現行MVPには管理画面からデータを削除するAPIはない。将来実装する場合は以下を満たす。
+管理画面の確認ダイアログ後に `DELETE /api/admin/participants/{participant_id}` を実行できる。対象参加者に所有されるsurvey、assignment、display order、recurrence event、tutor session/turn、learner state、evaluation summary、attempt、AI call logを削除し、seedのterms・questions・question_optionsは残す。
 
-- 被験者1名分の削除
-- 全実験データの削除
-- CSVエクスポート後の確認
+削除前に`delete_participant`の`AuditEvent`を保存し、参加者削除後もその監査記録を残す。削除は被験者1名単位であり、全参加者一括削除、全実験データ削除、CSV/export file削除のAPIはない。
 
-削除操作は確認ダイアログを必須にし、`audit_events` に残す。
+## 診断結果の手動修正（将来対応）
+
+現行管理画面では診断・AI call logを確認できるが、診断結果を編集するUIと修正内容の監査書き込みは未実装である。導入時は修正前後、修正理由、CSVでの判別方法を定義する。
 
 ## ローカル用途
 

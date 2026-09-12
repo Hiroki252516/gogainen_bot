@@ -115,14 +115,18 @@ Alembicによるマイグレーション運用、非同期DBドライバ、専�
 AI呼び出しは必ず抽象化する。
 
 ```python
+from typing import Any, Protocol
+
 class AIBackend(Protocol):
-    async def diagnose_answer(self, payload: DiagnosisPayload) -> DiagnosisResult: ...
-    async def generate_tutoring_turn(self, payload: TutoringPayload) -> TutoringResult: ...
-    async def grade_response(self, payload: GradingPayload) -> GradingResult: ...
-    async def generate_feedback(self, payload: FeedbackPayload) -> FeedbackResult: ...
-    async def generate_correct_answer_summary(self, payload: FeedbackPayload) -> CorrectAnswerSummary: ...
-    async def explain_selected_distractor(self, payload: FeedbackPayload) -> DistractorExplanation: ...
-    async def summarize_learner_state(self, payload: StateSummaryPayload) -> StateSummaryResult: ...
+    provider: str
+
+    async def diagnose_answer(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+    async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+    async def grade_response(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+    async def generate_feedback(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+    async def generate_correct_answer_summary(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+    async def explain_selected_distractor(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+    async def summarize_learner_state(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 ```
 
 実装:
@@ -150,7 +154,7 @@ sequenceDiagram
   B->>Y: fixed option scoring
   Y-->>B: deterministic diagnosis
   B->>AI: diagnose_answer（自由回答・互換時のみ）
-  AI-->>B: DiagnosisResult（互換時のみ）
+  AI-->>B: JSON結果（互換時のみ）
   B->>DB: create/update attempts and learner_states
   B-->>F: diagnosis summary without internal labels
 ```
@@ -169,7 +173,7 @@ sequenceDiagram
   F->>B: POST /api/tutor-sessions/{id}/turns
   B->>DB: load learner_state/history
   B->>AI: generate_tutoring_turn(payload)
-  AI-->>B: TutoringResult
+  AI-->>B: JSON結果
   B->>DB: save tutor_turn
   B-->>F: tutor message
   F->>B: POST /api/tutor-turns/{turn_id}/respond
@@ -184,7 +188,7 @@ sequenceDiagram
 
 ### 方式A: host Codex app-server
 
-Macホスト上でCodexをログイン・起動する。Docker Desktop for Mac上のbackendはbridgeネットワークで動かし、backendから `ws://host.docker.internal:4500` へ接続する。MVPではこの方式を優先する。
+Macホスト上でCodexをログイン・起動する。現行`.env.example`の既定値は`BACKEND_NETWORK_MODE=host`と`ws://127.0.0.1:4500`で、backendはホストネットワーク上のapp-serverへ接続する。bridgeネットワークを選ぶ場合だけ、backendの接続先を`ws://host.docker.internal:4500`へ上書きし、DB接続先などもその構成に合わせる。
 
 ### 方式B: codex sidecar container
 
@@ -208,7 +212,7 @@ MVPではキューを導入しない。AI診断やCSV出力は同期APIでよい
 | `APP_ENV` | `development` | 実行環境 |
 | `DATABASE_URL` | `sqlite:///./.local/app.db` | ローカル既定DB接続。Docker ComposeではPostgreSQLを指定する |
 | `AI_BACKEND` | `codex_app_server` | 通常実行のAI実装。`mock` はテスト時のみ明示指定 |
-| `CODEX_APP_SERVER_URL` | `ws://127.0.0.1:4500` | app-server接続先。Docker Composeでは `ws://host.docker.internal:4500` を使う |
+| `CODEX_APP_SERVER_URL` | `ws://127.0.0.1:4500` | app-server接続先。現行Composeの既定はhost network。bridge構成に上書きする場合は `ws://host.docker.internal:4500` を使う |
 | `CODEX_WS_TOKEN_FILE` | optional | capability token。現行composeの既定環境では設定しない |
 | `CODEX_APP_SERVER_CWD` | `/tmp` | app-server threadの作業ディレクトリ |
 | `CODEX_TURN_TIMEOUT_SEC` | `120` | AI応答タイムアウト |
@@ -216,15 +220,15 @@ MVPではキューを導入しない。AI診断やCSV出力は同期APIでよい
 | `CODEX_REASONING_EFFORT` | `medium` | turn/startのreasoning effort |
 | `RAG_BASE_DIR` | `./rag_agent_knowledge_base` | read-only RAG資産のルート |
 | `MAX_LEARNING_TARGETS` | `3` | 学習対象数の上限。現行seedは3用語 |
-| `MAX_TURNS_PER_TERM` | `3` | 1用語あたり最大ターン数 |
+| `MAX_TURNS_PER_TERM` | `3` | 1用語あたりの目安としてAPIレスポンスに返す値。現行コードはこの値で生成回数を強制制限しない |
 | `RANDOM_SEED` | `20260525` | 再現性のあるランダム化 |
 
 ## 研究ロジックとAIの分離
 
-AIは診断・説明案・フィードバック案を出すが、以下はbackendが決める。
+AIは教材本文・回答後解説を生成し、自由回答・互換フェーズでは診断・採点・フィードバック案も返し得る。ただし、現行の固定多選択問題では採点とM1/M3/unknown判定にAIを使わず、以下はbackendが決める。
 
 - 群条件の適用
-- 問題の出し分け
+- 問題の出し分けと固定多選択問題の採点
 - 学習ステージ、構成用語インデックス、互換scaffolding_levelの最終更新
 - recurrence_flag
 - 評価指標

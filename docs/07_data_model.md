@@ -4,6 +4,8 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 
 ## Enum Values
 
+以下はコード上で使用する文字列列の論理値・互換値を整理したものであり、DBのenum制約ではない。現行のAttempt APIで受け付けるフェーズは`pretest`、`retest`、`l0_check`、`final_test`である。
+
 ### group_condition
 
 - `control`
@@ -12,12 +14,12 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 ### phase
 
 - `pretest`
-- `diagnosis`
-- `learning`
+- `diagnosis`  # AI自由回答・互換用の論理値。固定pretestの診断は`diagnose-pretest`で行う
+- `learning`  # 学習ターンの論理値。学習確認問題は`questions`行ではなく`tutor_turns.practice_question_json`に保存する
 - `retest`
 - `l0_check`  # 互換・補助フェーズ。現行MVPの主導線は final_test
 - `final_test`
-- `transfer`
+- `transfer`  # 互換・補助フェーズ。現行主導線の開始・採点APIはない
 - `delayed_retest`（将来対応。現行APIの主導線では未使用）
 
 ### test_round (`attempts`)
@@ -25,7 +27,7 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 参加者ごとのテスト周回を記録する表示・分析用キー。`phase` は問題種別と既存API互換の内部値として残す。
 
 - `test`（初回テスト。内部 `pretest`）
-- `retest_1`（最初の学習後確認。内部 `retest` または `final_test`）
+- `retest_1`（最初の学習後確認。通常は内部 `retest`。初回テストに学習対象がない場合は互換的に `final_test` を表示）
 - `retest_2` 以降（追加学習後の再テスト周回）
 
 ### question_type
@@ -63,8 +65,10 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 
 - `L3`
 - `L2`
-- `L1`  # legacy nullable/互換値。現行MVPの進行制御では使わない
-- `null`
+- `L1`  # 過去データの互換値として残り得る。現行MVPの進行制御では使わない
+- `null`  # 列定義上nullableな場合の値
+
+`transfer_ready`、`mastered`、`needs_review`は過去または互換ログで保持し得るが、現行固定問題の主導線では直接生成しない。`ambiguous`は互換AI契約の値であり、固定採点では使わない。
 
 ## Tables
 
@@ -120,7 +124,7 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 
 ### term_assignments
 
-参加者内比較を将来使う場合に備える。MVPでは参加者の `group_condition` と同じ値を保存してよい。
+現行MVPでは、診断後に学習対象として残す用語と優先度を参加者ごとに保存する。`group_condition` は参加者の条件と同じ値になる。参加者内比較で用語ごとに条件を変える用途は将来拡張である。
 
 - id TEXT(36) PRIMARY KEY
 - participant_id TEXT(36) REFERENCES participants(id)
@@ -138,7 +142,7 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 - phase TEXT NOT NULL
 - question_type TEXT NOT NULL
 - body TEXT NOT NULL
-- expected_answer TEXT
+- expected_answer TEXT NULL
 - expected_keywords JSON NULL
 - difficulty INT DEFAULT 1
 - construct_key TEXT NOT NULL
@@ -147,6 +151,8 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 - created_at TIMESTAMP NOT NULL
 
 `construct_key` は同じ構成概念を測る問題を束ねるキー。事前テストと再テストは同じ `construct_key` だが、`variant_key` と `body` は異なる。
+
+学習確認問題はseed時に`questions`へ投入しない。`generate_tutor_turn`がYAMLの学習段階・用語別定義から固定の問題・選択肢を組み立て、AI生成教材とともに`tutor_turns.practice_question_json`へ保存する。
 
 ### question_options
 
@@ -172,7 +178,7 @@ misconception_type values:
 
 ### question_display_orders
 
-選択肢ランダム化の再現性を保存する。
+複数選択以外の問題で行う選択肢ランダム化の再現性を保存する。固定複数選択のA〜J順はランダム化しない。
 
 - id TEXT(36) PRIMARY KEY
 - participant_id TEXT(36) REFERENCES participants(id)
@@ -342,7 +348,7 @@ status values:
 
 ### evaluation_summaries
 
-現行実装の評価サマリーは参加者単位の最新集計として保存する。再計算のたびに履歴行を作成し、管理画面では参加者ごとの最新行だけを参照する。管理画面の評価サマリー、群集計、被験者ログ、ログCSVの参照時には、3用語の事前テストが採点済みで、保存済みsummaryがない場合、元ログより古い場合、または完了状態と不一致の場合に自動再計算する。既存カラム名との互換性のため `l0_correct_rate` を残すが、現行MVPでは `final_test` の選択式正答率を入れ、最終テストを省略した場合は再テスト満点を代用する。
+現行実装の評価サマリーは参加者単位の最新集計として保存する。再計算のたびに履歴行を作成し、管理画面では参加者ごとの最新行だけを参照する。管理画面の評価サマリー、群集計、被験者ログ、ログCSVの参照時には、3用語の事前テストが採点済みで、保存済みsummaryがない場合、元ログより古い場合、または完了状態と不一致の場合に自動再計算する。既存カラム名との互換性のため `l0_correct_rate` を残すが、通常は `final_test` の選択式正答率、なければ互換 `l0_check` の正答率を入れる。両方がなく、再テスト満点で最終テストを省略した場合は再テスト満点を代用する。
 
 旧データで`finish`なのに`completion_reason`がNULLの場合は、起動時に`give_up_experiment`の監査ログを照合する。監査ログがあれば`give_up`、なければ`completed`へ補正し、全履歴サマリーの`completed`も同じ参加者状態へ同期する。
 
@@ -363,7 +369,7 @@ status values:
 - completed BOOLEAN NOT NULL DEFAULT false
 - created_at TIMESTAMP NOT NULL
 
-以下のJSON列は現行の `EvaluationSummary` モデルと再計算処理で使用する。保存済みsummaryだけに依存せず、`attempts`、`learner_states`、`recurrence_events`から再計算できる。内部の評価コードは研究ログとして保存し、管理画面の表示名は利用者向けに変換する。
+以下のJSON列は現行の `EvaluationSummary` モデルと再計算処理で使用する。保存済みsummaryだけに依存せず、`participants`、`attempts`、`learner_states`、`term_assignments`、`tutor_sessions`、`tutor_turns`、`recurrence_events`から再計算できる。内部の評価コードは研究ログとして保存し、管理画面の表示名は利用者向けに変換する。
 
 - score_timeline_json JSON NULL
 - misconception_timeline_json JSON NULL
@@ -392,35 +398,48 @@ status values:
 - after_json JSON NULL
 - created_at TIMESTAMP NOT NULL
 
-`AuditEvent` モデルは存在するが、管理者による手動修正・データ削除の書き込みAPIは現行MVPにない。CSV出力は `ExportJob` とログAPIで管理する。手動修正・削除の監査記録は将来対応である。
+`AuditEvent` モデルは、学習・実験ギブアップと参加者削除の操作記録に現行MVPで使う。管理者による診断結果の手動修正UIと、その修正内容の監査記録は未実装である。CSV出力は `ExportJob` とログAPIで管理する。
 
 ## Logical Search Keys and Constraints
 
-以下はAPI・集計で使う論理的な検索キーと、現行モデルで明示されている一意制約である。現行コードはこれらすべてを物理的な`Index`として宣言しているわけではないため、DBの物理インデックス一覧とは区別する。
+以下は、API・集計で使う論理的な検索キーと、現行モデルで明示された一意制約を分けて示す。現行コードは論理検索キーのすべてを物理的な`Index`として宣言しているわけではないため、DBの物理インデックス一覧とは区別する。
 
-- participants.display_code unique
-- terms.slug unique
+現行モデルで明示された一意制約:
+
+- participants.display_code
+- terms.slug
+- term_assignments.participant_id + term_id
+- question_display_orders.participant_id + question_id
+- learner_states.participant_id + term_id
+
+主な論理検索キー:
+
 - questions.term_id + phase
 - questions.construct_key
 - attempts.participant_id + phase
 - attempts.participant_id + term_id
-- learner_states.participant_id + term_id unique
 - tutor_turns.tutor_session_id + turn_index
 - recurrence_events.participant_id + term_id
 - ai_call_logs.purpose + status
 
-## 削除方針（将来運用）
+## 削除方針（現行MVPと将来運用）
 
-現行MVPには管理画面から参加者や全実験データを削除するAPIがない。データ削除を導入する場合は、物理削除の範囲、確認ダイアログ、`audit_events` 記録を別途実装する。
+現行MVPには、管理画面の確認ダイアログから `DELETE /api/admin/participants/{participant_id}` を実行して、参加者1名分の実験データを削除する機能がある。削除前に`delete_participant`の`AuditEvent`を作成し、その監査記録は参加者削除後も残す。参加者に所有されるsurvey、assignment、display order、recurrence event、tutor session/turn、learner state、evaluation summary、attempt、対象参加者のAI call logを削除するが、seedの`terms`・`questions`・`question_options`は削除しない。
 
-削除対象:
+全参加者一括削除、全実験データ削除、export file削除は現行APIにない。将来導入する場合は、物理削除の範囲、確認手順、監査記録、CSV・バックアップとの整合を別途定義する。
 
-- 参加者1名分の全データ
-- 全実験データ
-- export file
+現行APIの削除対象:
+
+- 参加者1名分の関連実験データ
+- 対象参加者のAI call log
 
 削除してはいけないもの:
 
 - seed questions
 - terms
-- migration history
+- question options
+
+将来検討する削除対象:
+
+- 全実験データ
+- export file

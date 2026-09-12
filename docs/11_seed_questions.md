@@ -16,7 +16,7 @@ LangGraphを含む見出し・セクションのチャンクは検索結果か�
 
 ## 固定問題の構成
 
-各問題はA〜Jの10選択肢を持つ。
+pretest、retest、final_testと学習確認の固定複数選択問題はA〜Jの10選択肢を持つ。`l0_check`の自由回答と`transfer`の互換問題は別形式である。
 
 - A〜C: `is_correct: true`
 - D〜F: `misconception_type: M1`
@@ -31,7 +31,9 @@ LangGraphを含む見出し・セクションのチャンクは検索結果か�
 |---|---|
 | `pretest` | 1問（`pretest_v1`） |
 | `retest` | 4問（`retest_v1`〜`retest_v4`）、5回目以降はv4再利用 |
-| learning confirmation | 各stage 5問（v1〜v5）、6回目以降はv5再利用 |
+| learning confirmation | `enrichment` / `conceptual_change`の各stageで5問（v1〜v5）、6回目以降はv5再利用 |
 | `final_test` | 1問（`final_test_v1`） |
+
+学習確認問題はDBの`questions`へseedしない。`generate_tutor_turn`がYAMLのstage・用語別定義から固定の確認問題・選択肢を組み立て、AI生成教材とともに`tutor_turns.practice_question_json`へ保存する。L3/L2は問題stageではなく、内部の`scaffolding_level`互換値である。
 
 旧Transformerなど既存DB内の問題は削除せず非アクティブ化し、新規seed・新規参加者の導線には含めない。

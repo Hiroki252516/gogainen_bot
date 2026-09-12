@@ -56,11 +56,11 @@ AIには、上記の定義に沿った教材方略だけを内部指示する。
 
 必要な場合だけ「前提用語とのつながり」「何ではないか」を追加する。教材と学習者向けフィードバックは、見出し、箇条書き、太字、短い段落を中心にする。表、HTML、コードブロック、画像、長大な連続段落、内部ラベルの露出は禁止する。既存JSON schema、DB列、CSV列は変更しない。
 
-backendは構造化JSONの形と必須フィールドを検証するが、Markdownの見出し構成を完全な文法検証器として検証しているわけではない。frontendの `MarkdownText` がraw HTML、表、画像、コードブロックを描画しない安全表示を担当する。既存のプレーンテキストは通常の段落として表示する。
+backendは最終応答からJSONオブジェクトを抽出し、構造化契約の主な制約はapp-serverへ渡した`outputSchema`で適用する。現行backendはローカルで完全なJSON Schema/型検証を行わず、各呼び出し後のキー参照に依存する。Markdownの見出し構成も完全な文法検証器として検証しているわけではない。frontendの `MarkdownText` がraw HTML、表、画像、コードブロックを描画しない安全表示を担当する。既存のプレーンテキストは通常の段落として表示する。
 
 ## 回答後解説
 
-確認問題の正誤は、AIの判定ではなく、固定YAMLの選択肢とbackendの採点ロジックを唯一の正本とする。採点結果を確定した後、DBの回答状態を更新する前に、結果に応じて解説専用のAI呼び出しを行う。
+確認問題の正誤は、AIの判定ではなく、固定YAMLの選択肢とbackendの採点ロジックを唯一の正本とする。固定YAMLで採点結果を計算した後、DBの回答状態を更新する前に、結果に応じて解説専用のAI呼び出しを行う。
 
 - 正答時は `generate_correct_answer_summary` を呼び、`{"summary": "..."}` を受け取る。
 - 誤答時は `explain_selected_distractor` を呼び、`{"feedback": "...", "remediation_focus": "...", "general_knowledge_supplement": null}` を受け取る。
@@ -69,3 +69,5 @@ backendは構造化JSONの形と必須フィールドを検証するが、Markdo
 - 誤答解説は、選択された誤答の問題点と見直す観点だけを示し、正答の本文、正答位置、正答そのものを直接漏洩しない。
 - 解説本文は教材と同じ安全なMarkdown制約に従う。HTML、表、コードブロック、画像、長大な連続段落、M1〜M4、AIの思考過程を出力しない。
 - 解説生成に失敗した場合はMockへ自動フォールバックせず、回答状態を中途半端に確定せずにAIエラーとして扱う。
+
+`generate_tutoring_turn`ではAIが教材本文（`tutor_message`）を生成するが、確認問題の構成と正誤判定はYAML・backendが管理する。新しい教材生成へ渡す`learning_stage`は`enrichment`または`conceptual_change`である。十分な回答後に返す`final_feedback`は結果表示用の状態であり、新しい教材生成の入力にはしない。L3/L2は内部の`scaffolding_level`互換値としてのみ扱う。

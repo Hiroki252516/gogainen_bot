@@ -4,7 +4,7 @@
 
 ## 実装済み
 
-- `codex/soma-three-topic-rag` ブランチ上でsomaの作業状態を引き継ぎ
+- 現行main系の実装状態を基準に仕様を整理
 - active seedを `llm_knowledge`、`multi_agent`、`memory_process` の3用語へ変更
 - YAML問題バンクと起動・seed時の形式検証
 - pretest/final_test各1問、retest v1〜v4、learning確認 v1〜v5
@@ -23,7 +23,7 @@
 
 - 実験本番データ取得前のapp-server接続確認
 - アンケート本体の設問拡張
-- 管理画面のグラフ化とフィルタ機能
+- 管理画面の詳細なグラフ化・高度なフィルタ機能
 - 手動診断修正UIとaudit_eventsの実運用導線
 - 大人数運用時のCSV出力非同期化
 - 研究本番データ用のバックアップ手順強化
