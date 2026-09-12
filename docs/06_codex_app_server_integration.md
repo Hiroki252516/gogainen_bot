@@ -14,7 +14,7 @@
 - `--ws-auth` は `capability-token` と `signed-bearer-token` を受け付ける
 - `--ws-token-file` でcapability tokenファイルを指定できる
 - `generate-json-schema --out <DIR>` でプロトコルJSON Schemaを生成できる
-- v2 schemaには `thread/start`, `turn/start`, `account/read`, `account/login/start`, `account/login/cancel` が含まれる
+- v2 schemaには `thread/start`, `turn/start`, `account/read`, `account/login/start`, `account/login/cancel`, `account/logout` が含まれる
 - `turn/start` は `outputSchema` を受け付ける
 - `item/agentMessage/delta`, `item/completed`, `turn/completed` で最終JSONを取得できる
 - `account/read` でChatGPTログイン済みアカウントとplanTypeを確認できる
@@ -28,7 +28,7 @@ app-serverは実験用LLM APIではなくCodex rich client向けプロトコル�
 1. ホストOSにCodex CLIをインストールする
 2. `codex` または `codex login` で ChatGPT にログインする
 3. ルート`.env`の`CODEX_APP_SERVER_LISTEN_URL`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`で起動する
-4. backendからルート`.env`の`CODEX_APP_SERVER_URL`へ接続する。Docker Desktopでは通常`ws://host.docker.internal:4500`を使う
+4. backendからルート`.env`の`CODEX_APP_SERVER_URL`へ接続する。現行Composeの既定はhost networkと`ws://127.0.0.1:4500`である。bridgeネットワークを選ぶ場合は`ws://host.docker.internal:4500`へ上書きする
 
 ### セキュリティ
 
@@ -64,6 +64,7 @@ codex app-server \
 ```
 
 capability tokenを使う場合は、backendコンテナに同じtokenファイルをread-only mountする。
+現行の標準Composeにはtokenファイルのmount定義がないため、Dockerでこの方式を使う場合はCompose overrideでread-only mountを追加するか、backendをローカル直接起動する。`CODEX_WS_TOKEN_FILE`だけを`.env`へ設定しても、標準Composeがホスト上のファイルを自動的に共有するわけではない。
 
 ## JSON-RPC初期化
 
@@ -96,7 +97,7 @@ capability tokenを使う場合は、backendコンテナに同じtokenファイ�
 }
 ```
 
-未ログインの場合、フロントエンドに「Codexログインが必要」と表示する。
+未ログインの場合、管理画面のAI statusに未ログイン状態を表示し、ChatGPTログインまたはデバイスコードの導線を表示する。
 
 ## ChatGPTログイン
 
@@ -205,9 +206,9 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 }
 ```
 
-`outputSchema` とプロンプトでJSON契約を指定し、backendでJSON抽出・型検証を行う。現行実装はAI出力の自動再試行を行わず、検証失敗をエラーとして扱う。
+`outputSchema` とプロンプトでJSON契約をapp-serverへ指定し、backendは最終応答からJSONオブジェクトを抽出する。現行backendはローカルで完全なJSON Schema/型検証を行わず、app-server側の`outputSchema`と各呼び出し後のキー参照に依存する。JSONオブジェクトとして解析できない場合はエラーとして扱い、自動再試行は行わない。
 
-現行実験設定の推論レベルは `medium` とする。app-server側のschemaが変わった場合は、その時点のschemaに合わせてpayloadを検証する。
+現行実験設定の推論レベルは `medium` とする。app-server側のschemaが変わった場合は、その時点のschemaに合わせて`outputSchema`と呼び出し側のpayload・キー参照を更新する。
 
 ## ストリーミング処理
 
@@ -226,9 +227,9 @@ MVPではフロントエンドにAI生成途中のストリームを見せなく
 5. turn/start
 6. turn completedまで通知を読む
 7. 最終assistant messageからJSON抽出
-8. JSONオブジェクトとして抽出し、app-serverの `outputSchema` 制約に合う出力だけを受け付ける
+8. 最終応答からJSONオブジェクトを抽出する（構造化契約の主な制約はapp-serverへ渡した `outputSchema` に委ねる）
 9. `ai_call_logs` にrequest/response/errorを保存
-10. `DiagnosisResult` などの内部型へ変換
+10. 用途ごとのJSON辞書を呼び出し側へ返す
 
 ## 失敗時の扱い
 
@@ -248,7 +249,7 @@ AI呼び出しに失敗した場合、通常実行ではMockへ自動フォー�
 | app_server_unreachable | Codex app-serverに接続できません | 起動手順を表示 |
 | not_logged_in | Codexへのログインが必要です | login startを案内 |
 | auth_failed | app-server認証に失敗しました | token確認を案内 |
-| schema_validation_failed | AI出力を検証できませんでした | ai_call_logsに保存し、APIエラーとして扱う |
+| schema_validation_failed | AI出力をJSONとして解析できませんでした | ai_call_logsに保存し、APIエラーとして扱う |
 | turn_failed | AI応答生成に失敗しました | ai_call_logsに保存 |
 | timeout | AI応答がタイムアウトしました | ai_call_logsに保存し、APIエラーとして扱う |
 

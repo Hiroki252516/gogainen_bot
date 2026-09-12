@@ -9,7 +9,6 @@
   "question_id": "uuid",
   "term_slug": "llm_knowledge",
   "term_label": "LLMに知識を与える方法",
-  "variant_key": "pretest_v1",
   "question_type": "multi_select",
   "selection_mode": "multiple",
   "min_selections": 3,
@@ -21,7 +20,7 @@
 }
 ```
 
-`selected_option_ids: string[]` を正本とし、既存互換の `selected_option_id` も残す。A〜Iから3件ちょうど、またはJのみ1件を必須とする。JとA〜Iの混在は不可とする。
+固定複数選択では`selected_option_ids: string[]`を正本とし、既存互換の`selected_option_id`も残す。A〜Iから3件ちょうど、またはJのみ1件を必須とする。JとA〜Iの混在は不可とする。自由記述の互換フェーズでは`free_text_answer`を使用する。
 
 ## Variant policy
 
@@ -30,13 +29,13 @@
 - learning: stage・用語ごとにv1〜v5。6回目以降はv5を再利用
 - final_test: 用語ごとに `final_test_v1`
 
-`variant_key` は既存DBの `questions.variant_key` と互換に保存する。
+seed済みのテスト問題は`questions.variant_key`に保存し、学習確認問題は同等の`variant_key`を`tutor_turns.practice_question_json`に保存する。後者は学習確認問題の公開レスポンスに独立フィールドとして返さない。
 
-再テストの採点対象が現行の3用語を各1問ずつ含み、すべて正解だった場合は、`score-retest` が `next_step=survey`、`next_url=/survey` を返して追加の確認を省略する。不正解または未回答がある場合は、`next_step=learning_targets`、不正解・未回答用語の優先度順を入れた `learning_target_slugs`、最初の用語への `next_url=/learning/{term_slug}` を返す。`final_test` も全問正解時だけ `survey` へ進み、不正解または未回答時は次の再テスト周回の学習セッションへ戻る。対象一覧が空の異常時も `next_url=/learning-targets` に留める。最終確認省略後、非満点再テスト後、または不正解・未回答の `final_test` 後の関連APIは `409` を返す。`final_test` の参加者向け表示名は「再テスト1」である。
+再テストの採点対象が現行の3用語を各1問ずつ含み、すべて正解だった場合は、`score-retest`が`next_step=survey`、`next_url=/survey`を返して追加の確認を省略する。不正解または未回答がある場合は、`next_step=learning_targets`、不正解・未回答用語の優先度順を入れた`learning_target_slugs`、最初の用語への`next_url=/learning/{term_slug}`を返す。`final_test`も全問正解時だけ`survey`へ進み、不正解または未回答時は`learning_targets`へ戻り、最初の学習URLを返す。次の学習・再テスト周回はクライアントまたは研究者が再導線を開始し、backendが自動反復しない。対象一覧が空の異常時も`next_url=/learning-targets`に留める。各APIは`current_step`に応じてアクセスを制限し、満点で`survey`へ進んだ後は再テスト・学習操作を`409`で拒否する。不正解・未回答で`learning_targets`へ戻った場合は対象学習と次の再テストを利用でき、`final_test`は`current_step=final_test`の場合だけ利用できる。`final_test`の参加者向け表示名は「再テスト1」である。
 
-`attempts.test_round` には初回 `pretest` を `test`、最初の学習後確認を `retest_1`、次周回を `retest_2` のように保存する。`attempts.phase` は `pretest`、`retest`、`final_test` の内部値として互換維持する。
+`attempts.test_round` には初回 `pretest` を `test`、最初の学習後確認を `retest_1`、次周回を `retest_2` のように保存する。`attempts.phase` は `pretest`、`retest`、`l0_check`、`final_test` の内部値として互換維持する。
 
-現行の主なAPIルートは `/api/health`、`/api/participants`、`/api/experiment/{experiment_id}/pretest|retest|l0-check|final-test`、`/api/attempts`、`/api/participants/{participant_id}/diagnose-pretest`、`/api/participants/{participant_id}/survey`、`/api/tutor-sessions`、`/api/tutor-turns/{turn_id}/respond`、`/api/participants/{participant_id}/give-up-learning`、`/api/participants/{participant_id}/give-up`、`/api/participants/{participant_id}/evaluation-summary/recalculate`、`/api/admin/*` である。参加者作成は`consent_checked=true`を必須とし、同意画面から実行する。`give-up-learning`は現在の学習セッションを回答なしで終了して`next_step=retest`、`next_url=/retest`を返す。`give-up`は実験を終了して`next_step=finish`、`next_url=/finish`を返す。後者の実行後は問題取得、回答保存、採点、学習セッション操作を409で拒否する。両操作は`audit_events`へ`give_up_learning`または`give_up_experiment`として記録する。`survey`は`current_step=survey`の参加者だけが送信でき、`participant_surveys`へ仮フォームの回答を保存して`current_step=finish`、`completion_reason=completed`へ進める。管理画面から `DELETE /api/admin/participants/{participant_id}` を呼ぶと、対象参加者と関連する実験データを完全削除し、削除操作の監査記録だけを残す。frontendの `/api/*` はNext.jsのrewriteでbackendへ転送する。
+現行の主なAPIルートは `/api/health`、`/api/seed`、`/api/participants`、`/api/participants/{participant_id}/current-step`、`/api/experiment/{participant_id}/pretest|retest|l0-check|final-test`、`/api/attempts`、`/api/participants/{participant_id}/diagnose-pretest`、`/api/participants/{participant_id}/learning-targets`、`/api/participants/{participant_id}/survey`、`/api/tutor-sessions`、`/api/tutor-sessions/{session_id}/turns`、`/api/tutor-turns/{turn_id}/respond`、`/api/participants/{participant_id}/score-retest`、`/api/participants/{participant_id}/score-l0-check`、`/api/participants/{participant_id}/score-final-test`、`/api/participants/{participant_id}/give-up-learning`、`/api/participants/{participant_id}/give-up`、`/api/participants/{participant_id}/evaluation-summary/recalculate`、`/api/admin/*` である。参加者作成は`consent_checked=true`を必須とし、同意画面から実行する。`give-up-learning`は現在の学習セッションを回答なしで終了して`next_step=retest`、`next_url=/retest`を返す。`give-up`は実験を終了して`next_step=finish`、`next_url=/finish`を返す。後者の実行後は問題取得、回答保存、採点、学習セッション操作を409で拒否する。両操作は`audit_events`へ`give_up_learning`または`give_up_experiment`として記録する。`survey`は`current_step=survey`の参加者だけが送信でき、`participant_surveys`へ仮フォームの回答を保存して`current_step=finish`、`completion_reason=completed`へ進める。管理画面から `DELETE /api/admin/participants/{participant_id}` を呼ぶと、対象参加者が所有する関連実験データを削除し、削除操作の監査記録を残す。seedデータは削除しない。frontendの `/api/*` はNext.jsのrewriteでbackendへ転送する。
 
 管理用の参加者情報には`completion_reason`、`give_up_learning_count`、`give_up_experiment_count`を含める。個別ログの`participant`にも同じ状態を返し、`audit_events`には操作種別・実行時刻・状態変更前後を含める。全体ログの`recent_audit_events`と参加者ログCSVにもギブアップ操作を含める。
 
@@ -48,6 +47,6 @@ A/B/Cの3つだけを選択した場合だけ正解。不正解分類はM3を最
 
 ## Learning API
 
-`learning_stage` は既存の内部値 `enrichment`、`conceptual_change`、`final_feedback` を使う。教材生成時は用語・段階・固定確認問題・共通RAG本文を両群へ渡す。proposedだけがログ・taxonomy・足場掛け情報を追加で受け取る。
+参加者向けの学習結果・表示では `learning_stage` として `enrichment`、`conceptual_change`、`final_feedback` を使う。新しい学習ターンの教材生成で受け付けるstageは `enrichment` と `conceptual_change` であり、`final_feedback` は確認問題に十分回答した後の結果表示状態で、新しい教材生成の入力にはしない。L3/L2は内部の`scaffolding_level`互換ログである。教材生成時は用語・段階・固定確認問題・共通RAG本文を両群へ渡す。proposedだけがログ・taxonomy・足場掛け情報を追加で受け取る。
 
 学習ターン回答APIのレスポンスには `item_results` フィールドを残すが、現行の固定複数選択フローでは空配列になる。個別項目結果を返す自由回答フローは将来または互換用である。

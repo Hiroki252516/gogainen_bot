@@ -4,23 +4,24 @@
 
 反復型フローでは、途中の再テストは3用語を対象にした形成的テストとして扱う。主な到達評価は、3用語を対象にした `final_test` の正答率と、各周回で未達項目数が減ったかで見る。ただし、再テストの3用語がすべて正解の場合は最終テストを省略し、その再テスト満点を最終到達率相当として扱う。正解済み用語は次周回の学習対象から除外されるため、周回ごとの負担減少も分析対象にできる。
 
-現行MVPの `final_test` は、3用語を対象にしたA〜Iの9択から3つ選択、またはJ「わからない」単独選択のテストである。理由記述は要求しない。
+現行MVPの `final_test` は、3用語を対象にしたA〜Jの10選択肢から、A〜Iの3つまたはJ「わからない」単独を選ぶテストである。理由記述は要求しない。
 
 時間分析では、問題表示時刻 `question_shown_at`、回答時刻 `answered_at`、回答時間秒 `response_time_sec` を使う。`created_at` はサーバー保存時刻として扱い、所要時間の主指標にはしない。
 
-現行実装の `evaluation_summaries` は、参加者単位の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率に加えて、`test`、`retest_1`、`retest_2` 以降の得点推移、誤概念推移、学習負担、条件統制のJSONを保存する。`l0_correct_rate` は互換名で、追加の確認が存在する場合はその正答率を入れる。再テスト満点による省略が発生した場合は、最新の再テスト3用語の正答率を `l0_correct_rate` に代用する。`score_timeline_json` と `condition_check_json` に `final_test_skipped_after_retest_mastery` と `final_score_source` を保存する。`transfer_correct_rate`、`m4_failure_rate`、`unknown_persistence_rate` など固定問題や集計処理が未提供の値は `null` になり得る。
+現行実装の `evaluation_summaries` は、参加者単位の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率に加えて、`test`、`retest_1`、`retest_2` 以降の得点推移、誤概念推移、学習負担、条件統制のJSONを保存する。`l0_correct_rate` は互換名で、通常は `final_test`、それがなければ互換 `l0_check`、さらに両方がなく再テスト満点で最終テストを省略した場合は最新の再テスト3用語の正答率を入れる。`score_timeline_json` と `condition_check_json` に `final_test_skipped_after_retest_mastery` と `final_score_source` を保存する。`transfer_correct_rate`、`m4_failure_rate`、`unknown_persistence_rate` など固定問題や集計処理が未提供の値は `null` になり得る。
 
 ## 現行保存値: 得点率推移・誤概念推移ログ
 
 現行の再計算処理は、事前テスト、再テスト、最終テスト、L0確認の既存attemptsを時系列としてまとめる。再テストの自動周回ループはなく、複数回分が存在する場合に保存済み回答を周回順に集計する。
 
-保存・出力する主な値:
+`score_timeline_json["rounds"]`の各要素へ、次のキーを保存・出力する。固定のトップレベルキー（`test_score_rate`など）を別々に作る形式ではない。
 
-- 周回別得点率: `test_score_rate`, `retest_1_score_rate`, `retest_2_score_rate`, ...
-- 事前比得点増加量: `score_delta_from_pretest_pt`
-- 直前テスト比増加量: `score_delta_from_previous_test_pt`
-- 未達項目数推移: `remaining_learning_target_count_by_round`
-- 誤概念タイプ推移: `test -> retest_n`
+- 周回識別: `round`、`phase`、`attempt_index`
+- 問題数・正答数・得点率: `question_count`、`correct_count`、`score_rate`
+- 事前比・直前テスト比の差分ポイント: `score_delta_from_pretest_pt`、`score_delta_from_previous_test_pt`
+- 未達項目数: `remaining_learning_target_count`
+- 回答時刻: `event_time`
+- 誤概念タイプ推移: 別の`misconception_timeline_json`に`test -> retest_n`として保存
 
 得点増加量は相対率ではなく、差分ポイントで定義する。
 
@@ -51,9 +52,10 @@ score_delta_from_previous_test_pt =
 
 群・用語ごとに `resolved`、`same_type_recurred`、`changed_type`、`unknown_persisted`、`regressed`、`unclassified` の人数と割合を返す。割合の分母は群全体ではなく、その用語の `eligible_count` とする。集計値は自動更新された参加者別評価サマリーから算出し、新しいDB列は追加しない。`regressed` は研究用の内部コードを維持し、画面では「誤概念」と表示する。
 
-学習負担ログとして、再テスト回数、学習セッション数、学習ターン数、学習対象として残った回数、合計学習時間、合計テスト時間も集計候補にする。
+学習負担ログとして、再テスト回数、学習セッション数、学習ターン数、学習対象として残った回数、合計学習時間、合計テスト時間も集計候補にする。`remaining_learning_target_count`は、現行の再計算処理では各テスト周回の不正解件数を記録しており、`TermAssignment`の現在件数を直接参照する値ではない。
 
-条件統制チェックとして、control群で `teaching_strategy = general_explanation` が維持されたか、proposed群で誤概念タイプ・過去ログ・学習ステージが教授方略に使われたか、`forbidden_help_given` や `requires_manual_review` が発生したかをCSVで判別できるようにする。
+条件統制チェックとして、control群では `control_general_explanation_maintained` により`teaching_strategy = general_explanation`の維持を確認し、proposed群では`proposed_adaptive_strategy_used`、`strategy_changed_count`、`forbidden_help_count`、`manual_review_count`を保存する。誤概念タイプ・過去ログ・学習ステージなど、実際に渡されたpayloadの詳細は`AICallLog`のrequest payloadで確認する。評価サマリーの条件統制JSONだけで、payload内の各入力項目の利用を個別に証明するわけではない。
+現行の新規学習ターンでは`TutorTurn.strategy_changed`が常に`false`の互換項目として保存されるため、`strategy_changed_count`は通常0になる。将来、方略変更を実装した場合にこの指標を再利用できる。
 
 ## 主評価指標
 
@@ -95,7 +97,7 @@ final_test_correct_rate = final_test_correct_count / final_test_question_count
 
 - `is_correct = true`
 
-L0確認は互換・補助フェーズとして残るが、現行MVPの主到達評価は `final_test` を使う。再テスト満点で最終テストを省略した場合だけ、再テスト満点を代用する。実装上の保存先は既存互換のため `evaluation_summaries.l0_correct_rate` でよい。
+L0確認は互換・補助フェーズとして残るが、現行MVPの主到達評価は `final_test` を使う。`final_test` がない場合は互換 `l0_check` を使い、両方がなく再テスト満点で最終テストを省略した場合だけ、再テスト満点を代用する。実装上の保存先は既存互換のため `evaluation_summaries.l0_correct_rate` でよい。
 
 ## 補助指標
 
@@ -162,18 +164,18 @@ initial_scaffolding_numeric - final_scaffolding_numeric
 - L3 = 3
 - L2 = 2
 
-現行運用では `scaffolding_level` は `L3/L2` のみを使う。ただし、`scaffolding_reduction` を評価サマリーへ自動保存する処理は未実装であり、`L3 -> L2` の変化量は将来指標として扱う。
+現行運用では `scaffolding_level` は内部互換・ログ値として `L3/L2` を使う。ただし、`scaffolding_reduction` を評価サマリーへ自動保存する処理は未実装であり、`L3 -> L2` の変化量は将来指標として扱う。参加者向けの学習段階は`enrichment`、`conceptual_change`、`final_feedback`で表す。
+
 ## 群別比較
 
-MVPでは管理画面に記述統計を表示する。
+現行MVPの管理サマリーでは、群別に次の集計を表示する。
 
 - group_condition別 participant_count
-- 平均pretest_score
-- 平均retest_score
 - 平均same_misconception_recurrence_rate
-- 平均l0_correct_rate  # final_test正答率、または省略時の再テスト満点
+- 平均l0_correct_rate  # final_test正答率（通常）、互換l0_check正答率、または最終テスト省略時の再テスト満点
+- 平均score_delta_from_pretest_pt  # 最終テストまたはL0確認の事前比差分。再テスト満点で最終テストを省略した場合はその再テストを使用
 
-現行の管理サマリーでは、群別参加者数、同種誤答再発率、L0互換名で保存した最終到達率、pretestからの最終差分を確認できる。最終テスト省略者の差分は、再テスト満点を最終到達率として計算する。詳細なグラフ表示や周回別の群間グラフは将来対応である。
+参加者別の評価サマリーとCSVには`pretest_score`、`retest_score`も保存・出力されるが、現行の群別管理サマリーにはこれらの平均値を含めない。詳細なグラフ表示や周回別の群間グラフは将来対応である。
 
 小規模な卒研では統計検定より、参加者別・用語別の変化を説明できるCSVを重視する。必要なら外部分析で以下を行う。
 
@@ -226,10 +228,10 @@ record_type, source_type, participant_id, display_code, phase, term_slug, event_
 - 途中離脱参加者は `completed = false`
 - 指標の分母が0の場合はnull
 - AI失敗による未診断はAPIエラーと `ai_call_logs.status=failed` で追跡する。手動レビュー状態へ自動移行するとは限らない
-- 管理者手動修正と `audit_events` への書き込みは将来対応である
+- 管理者による診断結果の手動修正UIと、その修正内容の `audit_events` への書き込みは将来対応である。ギブアップ・参加者削除の監査記録は現行実装で保存する
 
 ## 再計算
 
-評価指標はDB上のattempts、learner_states、recurrence_eventsから再計算可能にする。管理画面の評価サマリー・群集計・被験者ログ・ログCSVを参照した時点で、3用語の事前テストが採点済みなら、保存済みsummaryがない場合、元ログより古い場合、または参加者の完了状態と不一致の場合に自動更新する。再計算履歴はDBと全体ログCSVに残すが、管理画面の一覧は参加者ごとの最新summaryだけを表示する。管理画面の再計算ボタンは、同じ処理を明示的に強制実行するために残す。
+評価指標はDB上の`participants`、`attempts`、`learner_states`、`term_assignments`、`tutor_sessions`、`tutor_turns`、`recurrence_events`から再計算可能にする。管理画面の評価サマリー・群集計・被験者ログ・ログCSVを参照した時点で、3用語の事前テストが採点済みなら、保存済みsummaryがない場合、元ログより古い場合、または参加者の完了状態と不一致の場合に自動更新する。再計算履歴はDBと全体ログCSVに残すが、管理画面の一覧は参加者ごとの最新summaryだけを表示する。管理画面の再計算ボタンは、同じ処理を明示的に強制実行するために残す。
 
 `overview_excel.csv` と被験者別 `*_logs_excel.csv` は、Excelで開きやすいUTF-8 BOM付きCSVであり、複数シートを持つ`.xlsx`ブックではない。分析時は `record_type` と `source_type` で行を分け、詳細なJSONは `value_json` から取得する。

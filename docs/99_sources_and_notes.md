@@ -28,7 +28,7 @@
 |---|---|
 | M1 | 誤信念型 |
 | M2 | 欠陥メンタルモデル型 |
-| M3 | カテゴリー錯誤型 |
+| M3 | カテゴリー誤り型 |
 | M4 | 欠如したスキーマ型 |
 | unknown | 知識不足 |
 
@@ -39,11 +39,11 @@
 | フェーズ | 使う問題 |
 |---|---|
 | 事前テスト | 定義問題・識別問題 |
-| 学習セッション | 用語理解・概念理解の固定確認問題 |
+| 学習セッション | `enrichment` / `conceptual_change`の固定確認問題 |
 | 即時再テスト | 各用語4バリエーション。5回目以降はv4を再利用 |
 | 最終テスト | 各用語1問。理由・ヒント・即時正解表示なし |
 
-このため、実装では `construct_key` と `variant_key` を持たせる。現行MVPでは `backend/app/seed/content/learning_content.yml` を唯一の固定問題バンクとし、事前・最終テストは各用語1問、再テストはv1〜v4、学習確認は各学習段階・各用語v1〜v5で管理する。上限を超えた場合は最後のバリアントを再利用する。
+このため、実装ではテスト問題に `construct_key` と `variant_key` を持たせ、学習確認は `TutorTurn.practice_question_json.variant_key` で管理する。現行MVPでは `backend/app/seed/content/learning_content.yml` を唯一の固定問題バンクとし、事前・最終テストは各用語1問、再テストはv1〜v4、学習確認は各学習段階・各用語v1〜v5で管理する。上限を超えた場合は最後のバリアントを再利用する。
 
 ### Main metrics
 
@@ -107,7 +107,7 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 - `--ws-auth capability-token`
 - `--ws-token-file`
 - `generate-json-schema --experimental --out <dir>`
-- v2 schemaに `thread/start`, `turn/start`, `account/read`, `account/login/start`, `account/login/cancel`
+- v2 schemaに `thread/start`, `turn/start`, `account/read`, `account/login/start`, `account/login/cancel`, `account/logout`
 - `turn/start` に `outputSchema`
 
 実装時はその時点のschemaを再生成して確認する。
@@ -116,9 +116,9 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 
 ### 現行MVPと将来設計の区別
 
-現行MVPとは、`codex/soma-three-topic-rag` のコード、YAML、Docker設定、API、画面で現在実行できる範囲を指す。実装済みと書く機能は、対応するコードまたはAPIの存在だけでなく、現行の主導線から実行できることを確認する。研究計画上必要でも、API・画面・集計処理がない機能は「将来対応」「未実装」と明記する。
+現行MVPとは、現行main系チェックアウトのコード、YAML、Docker設定、API、画面で現在実行できる範囲を指す。実装済みと書く機能は、対応するコードまたはAPIの存在だけでなく、現行の主導線から実行できることを確認する。研究計画上必要でも、API・画面・集計処理がない機能は「将来対応」「未実装」と明記する。ブランチ名や過去の作業時点だけを根拠に実装済みとは扱わない。
 
-この基準により、遅延再テスト、完全な転移評価、M2/M4固定診断問題、理解度差分・足場掛け削減量、管理者手動修正・削除・監査操作、詳細な群間グラフは将来設計として扱う。評価モデルに互換列やJSON列が存在することだけで、指標が算出済みとはみなさない。
+この基準により、遅延再テスト、完全な転移評価、M2/M4固定診断問題、理解度差分・足場掛け削減量、管理者による手動診断修正とその監査、詳細な群間グラフは将来設計として扱う。参加者削除、学習・実験ギブアップ、これらの操作監査は現行実装である。評価モデルに互換列やJSON列が存在することだけで、指標が算出済みとはみなさない。
 
 - MVPは参加者単位の群間比較を基本にする
 - 参加者数が少ない場合、用語単位の被験者内比較へ拡張可能にする
@@ -127,7 +127,7 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 - 再テストAPIは事前テスト対象の3件を扱える。現行backendは1回の採点呼び出し後、未達用語を `learning_targets` に戻すが、学習・再テストの自動周回は実装していない。
 - 事前テスト、学習、再テスト、最終テストはYAMLで定義した3項目を基本にする
 - Transformer、Attention、事前学習、事後学習など旧用語は過去ログ・DB互換用として非アクティブ化する
-- RAGは `rag_agent_knowledge_base/` の用語別セクションを共通参照し、LangGraph関連チャンクは除外する
+- RAGは通常 `rag_agent_knowledge_base/` の用語別セクションを共通参照する。アクティブなRAGルートに`chunks.jsonl`がない場合だけ、互換用の `rag_ready_教材/` へフォールバックする。LangGraph関連チャンクは除外する
 - 遅延再テストは任意拡張であり、現行の開始API/UI・集計は未実装
 - MockAIBackendをテスト・切り分け用に維持する
 
@@ -135,7 +135,7 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 
 7月22日PPTXと8月21日更新仕様を受け、古いTransformer固有のM1/M3判定は新規フローから外し、3項目共通のA〜C正解、D〜F=M1、G〜I=M3、J=unknownのYAML判定へ統一した。M2/M4は実行時taxonomyに保持する。
 
-5月18日PPTXではH0の表記があったが、現在の実装では固定3ターンの足場掛け制ではなく、用語理解段階と概念理解段階のステージ制に統一する。L1/L2/L3相当の値は互換ログ用に残す。
+5月18日PPTXではH0の表記があったが、現在の実装では固定3ターンの足場掛け制ではなく、`enrichment`（豊富化）、`conceptual_change`（概念変化）、`final_feedback`（教材フィードバック）の`learning_stage`を使う。1つの学習確認に十分回答すると当該`TutorSession`を終了する。L3/L2相当の値は内部`scaffolding_level`互換・ログ用に残すもので、参加者向けの段階名やL3からL2へ進む別個の学習段階ではない。
 
 ## Implementation Non-goals
 

@@ -33,7 +33,7 @@
 6. 3用語を各1問ずつ採点して全問正解なら追加の確認を省略し、アンケート画面へ進む
 7. 1問でも不正解または未回答なら、返された学習対象順に追加学習を再開（backendの自動ループはない）
 8. 追加学習後に再テストへ戻る
-9. 再テスト満点でない限り、次の再テスト周回へ進む
+9. 再テスト満点でない限り、`learning_targets`へ戻った対象を再学習し、クライアントまたは研究者が次の再テスト周回を開始する（自動遷移はない）
 10. 初回テストで学習対象がない場合も、内部 `final_test` を「再テスト1」として表示する
 11. 仮アンケートを送信する
 12. 終了
@@ -53,7 +53,7 @@
 
 - `/admin` の進捗
 - AI診断失敗
-- AI call logの失敗・未接続状態。手動診断修正UIとAuditEvent書き込みは将来対応
+- AI call logの失敗・未接続状態。手動診断修正UIと修正内容のAuditEvent書き込みは将来対応
 - app-server接続状態
 
 ## If AI Fails
@@ -77,7 +77,7 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 
 - AI診断信頼度が低い
 - 選択肢と理由が矛盾する
-- AI出力schema validationに失敗した
+- AI出力をJSONとして解析できなかった、またはapp-serverの契約エラーが出た
 - forbidden_help_given = true
 
 手動修正UIを将来追加する場合:
@@ -97,9 +97,9 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 5. `evaluation_summaries` の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率を確認する。用語別variant_keyも必要に応じて確認する
 6. 必要に応じて全体ログCSVまたは被験者別ログCSVを出力する
 7. exportsフォルダを研究分析用に保管する
-8. 必要なら被験者データを削除する（現行MVPには削除APIがないため、運用上はDBバックアップと保存方針に従う）
+8. 必要なら、管理画面の確認ダイアログから `DELETE /api/admin/participants/{participant_id}` で被験者データを削除する。削除前に`delete_participant`のAuditEventが残るが、seedデータとexport fileは削除されないため、DBバックアップと保存方針も確認する
 
-`l0_correct_rate` は互換名であり、現行MVPでは `final_test` が存在する場合に最終テスト正答率として読む。再テスト満点で最終テストを省略した場合は、再テスト満点を代用し、`final_score_source=retest_mastery` として判別する。得点率・誤概念・負担・条件統制の推移は現行 `evaluation_summaries` のJSONとCSVの `value_json` に保存される。自動周回のない参加者では存在するattemptsだけが集計対象になる。
+`l0_correct_rate` は互換名であり、通常は `final_test` の正答率、なければ互換 `l0_check` の正答率として読む。両方がなく、再テスト満点で最終テストを省略した場合は再テスト満点を代用し、`final_score_source=retest_mastery` として判別する。得点率・誤概念・負担・条件統制の推移は現行 `evaluation_summaries` のJSONとCSVの `value_json` に保存される。自動周回のない参加者では存在するattemptsだけが集計対象になる。
 
 ## Delayed Retest Optional Operation（将来対応）
 

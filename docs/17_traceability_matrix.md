@@ -12,9 +12,9 @@
 | AIを使うかではなくログで支援を変えるかを比較 | `01_research_requirements.md` | group_condition control/proposed |
 | 学習ログは次の支援を決める診断材料 | `05_system_architecture.md`, `07_data_model.md` | learner_states, tutor_turns |
 | 誤概念タイプで支援を変える | `03_misconception_taxonomy.md`, `04_scaffolding_and_tutoring.md` | teaching_strategy |
-| 足場掛けは支えるだけでなく段階を記録する | `04_scaffolding_and_tutoring.md` | learning_stage, scaffolding_level L3/L2互換ログ |
-| 同じ誤概念が再発したら方略変更 | `02_experiment_flow.md`, `04_scaffolding_and_tutoring.md` | recurrence_events, strategy_changed |
-| YAMLの問題variantを段階ごとに使う | `11_seed_questions.md` | construct_key, variant_key |
+| 足場掛けは支えるだけでなく段階を記録する | `04_scaffolding_and_tutoring.md` | semanticな`learning_stage`、内部互換の`scaffolding_level` L3/L2ログ |
+| 同じ誤概念が再発したら状態方略を再計算 | `02_experiment_flow.md`, `04_scaffolding_and_tutoring.md` | `recurrence_events`、`learner_states.teaching_strategy`。現行の新規`TutorTurn.strategy_changed`は`false`の互換項目で、方略変更量の評価は将来対応 |
+| YAMLの問題variantを段階ごとに使う | `11_seed_questions.md` | テスト問題の`construct_key`/`variant_key`、学習確認の`tutor_turns.practice_question_json.variant_key` |
 | 遅延再テストも可能 | `02_experiment_flow.md`, `07_data_model.md` | DB互換の `delayed_retest` 値。実行導線・集計は将来対応 |
 | ログDBとCSVで分析する | `07_data_model.md`, `12_evaluation_metrics.md` | export endpoints |
 
@@ -33,7 +33,7 @@
 
 - M1: 誤信念型
 - M2: 欠陥メンタルモデル型
-- M3: カテゴリー錯誤型
+- M3: カテゴリー誤り型
 - M4: 欠如したスキーマ型
 - unknown: 知識不足
 
@@ -65,7 +65,7 @@
 
 必要データ:
 
-- scaffolding_level history
+- semanticな`learning_stage`と内部`scaffolding_level` history
 - final_test attempts
 - l0_check attempts  # 互換・補助
 - l0_success
@@ -74,7 +74,7 @@
 主要出力:
 
 - l0_correct_rate
-- scaffolding_reduction（将来指標。現行サマリーでは未算出）
+- scaffolding_reduction（将来指標。現行サマリーでは未算出。L3/L2は内部互換ログ）
 
 ### RQ3
 
@@ -89,10 +89,10 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 主要出力:
 
 - term x misconception_type count
-
-現行固定問題で直接集計できる誤概念タイプはM1/M3であり、M2/M4の件数・再発率は将来の診断問題または別の観測手段を追加した場合に集計する。
 - term x recurrence rate
 - unknown persistence rate
+
+現行固定問題で直接集計できる誤概念タイプはM1/M3であり、M2/M4の件数・再発率とunknown persistence rateは、将来の診断問題または別の観測手段を追加した場合に集計する。
 
 ## Implementation Traceability
 
@@ -115,8 +115,9 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 | AI explanation | general only | misconception-specific |
 | Uses pretest log for tutoring | no | yes |
 | Uses M type for tutoring | no | yes |
-| Dynamic scaffolding | no | yes |
-| Strategy changes on recurrence | no | retestのM1/M3再発時に状態方略を更新 |
+| ログ適応型の教授方略・個別化 | no | yes |
+| 内部`scaffolding_level`の保存 | yes | yes |
+| Strategy recalculation on recurrence | no | retestのM1/M3再発時に`learner_states`の方略を再計算し、`recurrence_events`へ記録。現行の`TutorTurn.strategy_changed`は新規ターンで`false` |
 | Stores diagnosis | yes | yes |
 | Stores AI logs | yes | yes |
 | Includes in evaluation | yes | yes |
