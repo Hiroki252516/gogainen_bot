@@ -231,7 +231,7 @@ for (const forbiddenText of ["pending_group_condition", "group_condition", "提�
   }
 }
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書（仮）", "assignment_code", "consent_checked: true", 'router.push("/pretest")', "同意してテストを開始", "学習方法の割り当て"]) {
+for (const expectedText of ["研究参加同意書（仮）", "assignment_code", "consent_checked: true", 'router.push("/pretest")', "同意してテストを開始", "学習方法の割り当て", "timeoutMs: 15000", 'role="alert"']) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
   }
@@ -239,6 +239,12 @@ for (const expectedText of ["研究参加同意書（仮）", "assignment_code",
 for (const forbiddenText of ["GROUP_LABELS", "pending_group_condition", "group_condition", "提案群", "統制群"]) {
   if (consentPage.includes(forbiddenText)) {
     throw new Error(`consent page must not expose participant group condition: ${forbiddenText}`);
+  }
+}
+const apiHelper = fs.readFileSync(new URL("../lib/api.ts", import.meta.url), "utf8");
+for (const expectedText of ["type ApiRequestInit", "AbortController", "timeoutMs", "サーバーからの応答がありません。接続を確認して、もう一度お試しください。"]) {
+  if (!apiHelper.includes(expectedText)) {
+    throw new Error(`api helper missing request timeout behavior: ${expectedText}`);
   }
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");

@@ -3,6 +3,7 @@
 ## Backend
 
 - A/Bの有効な参加コードがない参加者作成は拒否され、Aは内部`proposed`、Bは内部`control`へ変換される。正常作成時は`assignment_method=admin_code`を保存し、参加者向けレスポンスに`group_condition`を含めない。同意なしの参加者作成も拒否され、同意画面から同意した場合だけ`pretest`へ進む。`survey`送信で`participant_surveys`が1件保存され、`current_step=finish`、`completion_reason=completed`になる。送信再実行でアンケートが重複しない。
+- 同意画面の参加者作成が15秒以内に完了しない場合はタイムアウトエラーを表示し、「開始しています...」のまま操作不能にならない。DB接続障害はAPIの503と利用者向けエラーとして確認できる。
 - YAMLにactive termが `llm_knowledge`、`multi_agent`、`memory_process` の3件だけ存在する。
 - pretest・retest・final_test・学習確認の固定複数選択問題がA〜Jの10選択肢で、A/B/C、M1、M3、unknownの配分が3/3/3/1になる。`l0_check`と`transfer`はこの配分の対象外である。
 - pretest・final_testが各用語1問、retestが各用語4バリエーション、learning確認がstage・用語ごとに5バリエーションになる。
