@@ -9,6 +9,7 @@ from typing import Any, Callable
 import websockets
 
 from app.core.config import get_settings
+from app.core.runtime_config import normalize_reasoning_effort
 
 
 class CodexAppServerError(RuntimeError):
@@ -98,8 +99,10 @@ class _CodexRpcClient:
 class CodexAppServerBackend:
     provider = "codex_app_server"
 
-    def __init__(self) -> None:
+    def __init__(self, reasoning_effort: str | None = None) -> None:
         self.settings = get_settings()
+        configured_effort = reasoning_effort or self.settings.codex_reasoning_effort
+        self.reasoning_effort = normalize_reasoning_effort(configured_effort)
 
     async def status(self) -> dict[str, Any]:
         try:
@@ -515,7 +518,7 @@ class CodexAppServerBackend:
                         "approvalPolicy": "never",
                         "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
                         "model": self.settings.codex_model or None,
-                        "effort": self.settings.codex_reasoning_effort,
+                        "effort": self.reasoning_effort,
                     },
                     notification_handler=on_event,
                 )
