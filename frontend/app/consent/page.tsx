@@ -31,6 +31,7 @@ export default function ConsentPage() {
     try {
       const data = await api<{ participant_id: string; display_code: string; current_step: string }>("/api/participants", {
         method: "POST",
+        timeoutMs: 15000,
         body: JSON.stringify({ assignment_code: assignmentCode, consent_checked: true }),
       });
       localStorage.setItem("participant_id", data.participant_id);
@@ -63,7 +64,7 @@ export default function ConsentPage() {
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={submitting} />
           <span>上記を確認し、研究参加と研究用ログの保存に同意します。</span>
         </label>
-        {error ? <div className="danger">{error}</div> : null}
+        {error ? <div className="danger" role="alert">{error}</div> : null}
         <div className="actions">
           <button className="secondary" type="button" onClick={() => router.push("/start")} disabled={submitting}>
             戻る

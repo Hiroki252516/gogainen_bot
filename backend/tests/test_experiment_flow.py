@@ -38,6 +38,7 @@ from app.models import (
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, content_term, load_content
 import app.services.experiment as experiment_service
+from app import main as main_module
 
 
 client = TestClient(app, backend_options={"use_uvloop": True}) if uvloop else TestClient(app)
@@ -143,6 +144,39 @@ def test_participant_creation_requires_consent():
     assert without_consent.status_code == 400
     missing_consent = client.post("/api/participants", json={"assignment_code": "A"})
     assert missing_consent.status_code == 400
+
+
+def test_participant_creation_reports_database_unavailable(monkeypatch):
+    def raise_database_error(*_args, **_kwargs):
+        from sqlalchemy.exc import OperationalError
+
+        raise OperationalError("INSERT", {}, ConnectionError("database is unavailable"))
+
+    monkeypatch.setattr(main_module, "create_participant", raise_database_error)
+
+    response = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "データベースに接続できません。管理者に確認してください。"}
+
+
+def test_health_reports_database_unavailable(monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    class BrokenSession:
+        rolled_back = False
+
+        def execute(self, *_args, **_kwargs):
+            raise OperationalError("SELECT 1", {}, ConnectionError("database is unavailable"))
+
+        def rollback(self):
+            self.rolled_back = True
+
+    with pytest.raises(Exception) as raised:
+        main_module.health(BrokenSession())
+
+    assert raised.value.status_code == 503
+    assert raised.value.detail == "データベースに接続できません。管理者に確認してください。"
 
 
 def test_participant_creation_requires_valid_admin_assignment_code():
