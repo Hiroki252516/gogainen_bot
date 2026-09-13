@@ -234,7 +234,7 @@ for (const expectedText of ['phase="final_test"', 'step="再テスト1"', 'title
   }
 }
 const giveUpButton = fs.readFileSync(new URL("../components/GiveUpButton.tsx", import.meta.url), "utf8");
-for (const expectedText of ["window.confirm", "/give-up-learning", "/give-up", "next_url"]) {
+for (const expectedText of ["window.confirm", "/give-up-learning", "/give-up", "next_url", "router.replace(result.next_url ||"]) {
   if (!giveUpButton.includes(expectedText)) {
     throw new Error(`give-up button missing API behavior: ${expectedText}`);
   }
