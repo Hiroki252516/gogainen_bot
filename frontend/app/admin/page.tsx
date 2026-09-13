@@ -16,6 +16,21 @@ type Participant = {
   give_up_experiment_count: number;
 };
 type GroupCondition = "control" | "proposed";
+const REASONING_EFFORTS = ["low", "medium", "high"] as const;
+type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+type AiStatus = {
+  ai_backend: string;
+  account_label?: string;
+  app_server_reachable?: boolean | null;
+  logged_in?: boolean | null;
+  last_error?: string | null;
+  model?: string;
+  reasoning_effort?: ReasoningEffort;
+  allowed_reasoning_efforts?: ReasoningEffort[];
+  can_change_reasoning_effort?: boolean;
+  reasoning_effort_change_block_reason?: string | null;
+  reasoning_effort_applies?: boolean;
+};
 
 const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
   resolved: "解消",
@@ -81,9 +96,11 @@ export default function AdminPage() {
   const [summary, setSummary] = useState<any>(null);
   const [overview, setOverview] = useState<any>(null);
   const [participantLog, setParticipantLog] = useState<any>(null);
-  const [ai, setAi] = useState<any>(null);
+  const [ai, setAi] = useState<AiStatus | null>(null);
   const [login, setLogin] = useState<any>(null);
   const [loginError, setLoginError] = useState("");
+  const [reasoningEffortSaving, setReasoningEffortSaving] = useState(false);
+  const [reasoningEffortError, setReasoningEffortError] = useState("");
   const [logError, setLogError] = useState("");
   const [recalculating, setRecalculating] = useState(false);
   const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null);
@@ -92,7 +109,7 @@ export default function AdminPage() {
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants));
     api("/api/admin/evaluation-summary").then(setSummary);
     api("/api/admin/logs/overview").then(setOverview);
-    api("/api/admin/ai/status").then(setAi);
+    api<AiStatus>("/api/admin/ai/status").then(setAi);
   }, []);
 
   useEffect(() => {
@@ -113,6 +130,31 @@ export default function AdminPage() {
       }
     } catch (err) {
       setLoginError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function updateReasoningEffort(reasoningEffort: ReasoningEffort) {
+    if (
+      reasoningEffortSaving ||
+      !ai ||
+      ai.ai_backend !== "codex_app_server" ||
+      ai.reasoning_effort === reasoningEffort
+    ) {
+      return;
+    }
+
+    setReasoningEffortError("");
+    setReasoningEffortSaving(true);
+    try {
+      const result = await api<AiStatus>("/api/admin/ai/reasoning-effort", {
+        method: "POST",
+        body: JSON.stringify({ reasoning_effort: reasoningEffort })
+      });
+      setAi((current) => ({ ...current, ...result }));
+    } catch (err) {
+      setReasoningEffortError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReasoningEffortSaving(false);
     }
   }
 
@@ -216,6 +258,34 @@ export default function AdminPage() {
                 </p>
               ) : null}
               {loginError ? <p className="danger">{loginError}</p> : null}
+              {ai ? (
+                <div className="reasoning-effort-control" aria-labelledby="reasoning-effort-title">
+                  <strong id="reasoning-effort-title">推論レベル</strong>
+                  <div className="reasoning-effort-buttons" role="group" aria-label="Codex推論レベル">
+                    {REASONING_EFFORTS.map((effort) => (
+                      <button
+                        key={effort}
+                        type="button"
+                        className={ai.reasoning_effort === effort ? "reasoning-effort-button active" : "reasoning-effort-button"}
+                        aria-pressed={ai.reasoning_effort === effort}
+                        disabled={
+                          reasoningEffortSaving ||
+                          ai.ai_backend !== "codex_app_server"
+                        }
+                        onClick={() => updateReasoningEffort(effort)}
+                      >
+                        {effort}
+                      </button>
+                    ))}
+                  </div>
+                  {reasoningEffortSaving ? <p className="muted">保存中...</p> : null}
+                  <p className="muted">管理画面からは実験中でも変更できます。次回のCodex app-server呼び出しから適用されます。</p>
+                  {ai.ai_backend !== "codex_app_server" ? (
+                    <p className="muted">AI_BACKEND=mockのため、推論レベルはCodex app-serverには適用されません。</p>
+                  ) : null}
+                  {reasoningEffortError ? <p className="danger">{reasoningEffortError}</p> : null}
+                </div>
+              ) : null}
             </div>
             {activeGroupSummary ? (
               <div className="notice">

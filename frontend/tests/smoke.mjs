@@ -27,6 +27,20 @@ for (const expectedText of ['"control", "proposed"', "role=\"tablist\"", "active
     throw new Error(`admin page missing group filtering behavior: ${expectedText}`);
   }
 }
+for (const expectedText of [
+  "REASONING_EFFORTS",
+  '"low", "medium", "high"',
+  "reasoning-effort-buttons",
+  "aria-pressed",
+  "/api/admin/ai/reasoning-effort",
+  "保存中...",
+  "実験中でも変更できます",
+  "AI_BACKEND=mock"
+]) {
+  if (!groupAdminPage.includes(expectedText)) {
+    throw new Error(`admin page missing reasoning effort control: ${expectedText}`);
+  }
+}
 if (groupAdminPage.includes("条件統制チェック")) {
   throw new Error("admin page must not show the condition control check card");
 }
