@@ -998,19 +998,22 @@ def test_learning_give_up_routes_to_retest_and_closes_current_session():
         db.close()
 
 
-def test_experiment_give_up_during_retest_finishes_and_blocks_retest_actions():
+def test_experiment_give_up_during_retest_routes_to_survey_and_blocks_retest_actions():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    give_up_learning = client.post(f"/api/participants/{pid}/give-up-learning")
+    assert give_up_learning.status_code == 200, give_up_learning.text
+    assert give_up_learning.json()["next_step"] == "retest"
     questions = client.get(f"/api/experiment/{pid}/retest")
     assert questions.status_code == 200, questions.text
     first_question = questions.json()["questions"][0]
 
     give_up = client.post(f"/api/participants/{pid}/give-up")
     assert give_up.status_code == 200, give_up.text
-    assert give_up.json()["next_step"] == "finish"
-    assert give_up.json()["next_url"] == "/finish"
+    assert give_up.json()["next_step"] == "survey"
+    assert give_up.json()["next_url"] == "/survey"
     current = client.get(f"/api/participants/{pid}/current-step")
     assert current.status_code == 200
-    assert current.json() == {"step": "finish", "next_url": "/finish"}
+    assert current.json() == {"step": "survey", "next_url": "/survey"}
 
     assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
     assert client.post(f"/api/participants/{pid}/score-retest").status_code == 409
@@ -1029,13 +1032,53 @@ def test_experiment_give_up_during_retest_finishes_and_blocks_retest_actions():
     try:
         participant = db.get(Participant, pid)
         assert participant is not None
-        assert participant.current_step == "finish"
+        assert participant.current_step == "survey"
         assert participant.completed_at is not None
         assert participant.completion_reason == "give_up"
+        completed_at_at_give_up = participant.completed_at
         audit = db.query(AuditEvent).filter_by(entity_type="participant", entity_id=pid, action="give_up_experiment").first()
         assert audit is not None
-        assert audit.after_json["current_step"] == "finish"
+        assert audit.after_json["current_step"] == "survey"
         assert audit.after_json["completion_reason"] == "give_up"
+    finally:
+        db.close()
+
+    survey_payload = {
+        "ai_experience_level": 3,
+        "programming_experience_level": 2,
+        "llm_usage_level": 4,
+        "self_rated_ai_knowledge": 3,
+        "usability_rating": 5,
+        "helpfulness_rating": 4,
+        "perceived_hint_amount": 3,
+        "free_comment": "再テストギブアップ後アンケートの確認",
+    }
+    survey_key = f"survey-after-retest-give-up:{pid}"
+    survey = client.post(
+        f"/api/participants/{pid}/survey",
+        json=survey_payload,
+        headers={"Idempotency-Key": survey_key},
+    )
+    assert survey.status_code == 200, survey.text
+    assert survey.json()["next_step"] == "finish"
+    assert survey.json()["next_url"] == "/finish"
+    repeated_survey = client.post(
+        f"/api/participants/{pid}/survey",
+        json=survey_payload,
+        headers={"Idempotency-Key": survey_key},
+    )
+    assert repeated_survey.status_code == 200, repeated_survey.text
+    assert repeated_survey.json()["survey_id"] == survey.json()["survey_id"]
+
+    db = SessionLocal()
+    try:
+        participant = db.get(Participant, pid)
+        surveys = db.query(ParticipantSurvey).filter_by(participant_id=pid).all()
+        assert participant is not None
+        assert participant.current_step == "finish"
+        assert participant.completed_at == completed_at_at_give_up
+        assert participant.completion_reason == "give_up"
+        assert len(surveys) == 1
     finally:
         db.close()
 
@@ -1057,9 +1100,10 @@ def test_experiment_give_up_during_retest_finishes_and_blocks_retest_actions():
     participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert participant_csv.status_code == 200
     assert "give_up_experiment" in participant_csv.text
+    assert "post-experiment survey" in participant_csv.text
 
 
-def test_experiment_give_up_during_displayed_retest1_blocks_final_test_actions():
+def test_experiment_give_up_during_final_test_routes_to_survey_and_blocks_final_test_actions():
     pid = _create_participant_with_pretest(labels=["A", "B", "C"])
     questions = client.get(f"/api/experiment/{pid}/final-test")
     assert questions.status_code == 200, questions.text
@@ -1067,7 +1111,11 @@ def test_experiment_give_up_during_displayed_retest1_blocks_final_test_actions()
 
     give_up = client.post(f"/api/participants/{pid}/give-up")
     assert give_up.status_code == 200, give_up.text
-    assert give_up.json()["next_step"] == "finish"
+    assert give_up.json()["next_step"] == "survey"
+    assert give_up.json()["next_url"] == "/survey"
+    current = client.get(f"/api/participants/{pid}/current-step")
+    assert current.status_code == 200
+    assert current.json() == {"step": "survey", "next_url": "/survey"}
     assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
     assert client.post(f"/api/participants/{pid}/score-final-test").status_code == 409
     blocked_attempt = client.post(
@@ -1080,6 +1128,70 @@ def test_experiment_give_up_during_displayed_retest1_blocks_final_test_actions()
         },
     )
     assert blocked_attempt.status_code == 409
+
+    db = SessionLocal()
+    try:
+        participant = db.get(Participant, pid)
+        assert participant is not None
+        assert participant.current_step == "survey"
+        assert participant.completed_at is not None
+        assert participant.completion_reason == "give_up"
+        completed_at_at_give_up = participant.completed_at
+        audit = db.query(AuditEvent).filter_by(entity_type="participant", entity_id=pid, action="give_up_experiment").one()
+        assert audit.after_json["current_step"] == "survey"
+        assert audit.after_json["completion_reason"] == "give_up"
+    finally:
+        db.close()
+
+    survey_payload = {
+        "ai_experience_level": 3,
+        "programming_experience_level": 2,
+        "llm_usage_level": 4,
+        "self_rated_ai_knowledge": 3,
+        "usability_rating": 5,
+        "helpfulness_rating": 4,
+        "perceived_hint_amount": 3,
+        "free_comment": "ギブアップ後アンケートの確認",
+    }
+    survey_key = f"survey-after-give-up:{pid}"
+    survey = client.post(
+        f"/api/participants/{pid}/survey",
+        json=survey_payload,
+        headers={"Idempotency-Key": survey_key},
+    )
+    assert survey.status_code == 200, survey.text
+    assert survey.json()["next_step"] == "finish"
+    assert survey.json()["next_url"] == "/finish"
+    repeated = client.post(
+        f"/api/participants/{pid}/survey",
+        json=survey_payload,
+        headers={"Idempotency-Key": survey_key},
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["survey_id"] == survey.json()["survey_id"]
+
+    db = SessionLocal()
+    try:
+        participant = db.get(Participant, pid)
+        surveys = db.query(ParticipantSurvey).filter_by(participant_id=pid).all()
+        assert participant is not None
+        assert participant.current_step == "finish"
+        assert participant.completed_at == completed_at_at_give_up
+        assert participant.completion_reason == "give_up"
+        assert len(surveys) == 1
+        assert surveys[0].phase == "posttest"
+    finally:
+        db.close()
+
+    logs = client.get(f"/api/admin/participants/{pid}/logs")
+    assert logs.status_code == 200, logs.text
+    assert any(event["action"] == "give_up_experiment" for event in logs.json()["audit_events"])
+    assert any(event["action"] == "submit_survey" for event in logs.json()["audit_events"])
+    assert len(logs.json()["surveys"]) == 1
+    exported = client.get(f"/api/admin/participants/{pid}/logs.csv")
+    assert exported.status_code == 200, exported.text
+    assert "give_up_experiment" in exported.text
+    assert "post-experiment survey" in exported.text
 
 
 def test_experiment_give_up_is_available_after_retest_result_confirmation():

@@ -17,7 +17,7 @@
 - `/api/participants/{participant_id}/learning-targets` が、既存の未達対象 `targets`、互換用 `pretest_results`、直近の `test_results`（周回名、問題文、本人が選んだ選択肢本文、正誤）を返す。`test_results` に正答、期待解答、選択肢ごとの正誤、M分類などの内部診断値を含めない。
 - 解説生成に失敗した場合、固定採点結果や学習状態を部分確定せず、Mockへ自動フォールバックしない。
 - 学習ギブアップAPIが開いている学習セッションを終了し、`current_step=retest`と`next_url=/retest`を返す。ギブアップした学習ターンは回答として保存しない。
-- 実験ギブアップAPIが`current_step=finish`、`completed_at`、`completion_reason=give_up`を確定し、終了後の再テスト取得・回答保存・採点・学習セッション操作を409で拒否する。学習ギブアップは`completion_reason`を変更せず、両操作を`AuditEvent`へ記録する。管理画面の参加者一覧・詳細とCSVで状態・回数・操作時刻を確認できる。
+- 実験ギブアップAPIが、`current_step=retest`または`final_test`では`current_step=survey`、`next_url=/survey`、学習対象確認中などそれ以外では`current_step=finish`、`next_url=/finish`を返し、`completed_at`、`completion_reason=give_up`を確定する。retestまたはfinal_testギブアップ後は問題の取得・回答保存・採点・学習セッション操作を409で拒否し、アンケート送信後に`current_step=finish`へ進む。アンケート送信後も`completion_reason=give_up`とギブアップ時の`completed_at`を保持する。学習ギブアップは`completion_reason`を変更せず、両操作を`AuditEvent`へ記録する。管理画面の参加者一覧・詳細とCSVで状態・回数・操作時刻を確認できる。
 - 同じ`Idempotency-Key`・同じ本文の参加者向けPOST再送が保存済みレスポンスを返し、回答、アンケート、学習ターン、監査イベント、AI呼び出しを重複させない。
 - 同じ`Idempotency-Key`で本文を変更した場合は`409 idempotency_key_conflict`、別キーで同じ周回の回答済み問題へ送信した場合は`409 answer_already_submitted`となり、元の回答を維持する。
 - 学習ターン生成の初回と各「次の確認へ」が別の論理キーで管理され、次ターン取得中に戻って再開しても同じ教材・確認問題を二重生成せず、前ターン回答済みエラーにもならない。
@@ -45,7 +45,7 @@
 - AIの内部思考過程、M1〜M4、誤概念taxonomyが被験者画面に表示されない。
 - 旧stage名や旧Transformerの新規導線に依存しない。
 - ブラウザ履歴から過去フェーズへ戻った場合、現在の正規画面へ履歴を増やさずに置き換え、同意・診断・採点・学習開始のPOSTを重複実行しない。
-- 学習画面のギブアップ操作は再テストへ遷移し、再テスト画面と再テスト結果確認画面のギブアップ操作は終了画面へ遷移する。確認ダイアログを表示し、事前テストには表示しない。
+- 学習画面のギブアップ操作は再テストへ遷移し、再テスト画面・`final_test`画面のギブアップ操作はアンケートへ遷移して送信後に終了画面へ進む。再テスト結果確認画面・学習対象確認画面のギブアップ操作は終了画面へ遷移する。確認ダイアログを表示し、事前テストには表示しない。
 - ギブアップボタンは「次へ」などの回答操作から離れた画面下部の右寄せ領域に表示される。
 - 管理画面の誤概念推移では`regressed`を「誤概念」と表示し、学習回答に「学習十分」「学習不十分」の集計カードを表示しない。
 

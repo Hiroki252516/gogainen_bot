@@ -488,38 +488,60 @@ def give_up_learning(db: Session, participant_id: str) -> dict[str, Any]:
 
 
 def give_up_experiment(db: Session, participant_id: str) -> dict[str, Any]:
-    """End the participant's experiment and prevent all further participant actions."""
+    """End the participant's experiment and route test users to the survey."""
     participant = get_participant(db, participant_id, for_update=True)
     before_step = participant.current_step
     before_completed_at = participant.completed_at.isoformat() if participant.completed_at else None
-    closed_sessions = _close_open_tutor_sessions(db, participant.id)
     already_finished = participant.current_step == "finish" and participant.completed_at is not None
-    if not already_finished:
-        participant.current_step = "finish"
-        participant.completed_at = participant.completed_at or now()
-        participant.completion_reason = "give_up"
-        db.add(
-            AuditEvent(
-                actor="participant",
-                action="give_up_experiment",
-                entity_type="participant",
-                entity_id=participant.id,
-                before_json={"current_step": before_step, "completed_at": before_completed_at},
-                after_json={
-                    "current_step": participant.current_step,
-                    "completed_at": participant.completed_at.isoformat(),
-                    "completion_reason": participant.completion_reason,
-                    "closed_tutor_sessions": closed_sessions,
-                },
-            )
+
+    if already_finished:
+        closed_sessions = _close_open_tutor_sessions(db, participant.id)
+        if closed_sessions:
+            _commit(db)
+        return {
+            "status": "completed",
+            "action": "give_up_experiment",
+            "next_step": participant.current_step,
+            "next_url": _next_url(participant.current_step),
+            "closed_tutor_sessions": closed_sessions,
+        }
+
+    if before_step == "survey":
+        if participant.completion_reason == "give_up":
+            return {
+                "status": "completed",
+                "action": "give_up_experiment",
+                "next_step": participant.current_step,
+                "next_url": _next_url(participant.current_step),
+                "closed_tutor_sessions": 0,
+            }
+        raise HTTPException(status_code=409, detail="この参加者はアンケート対象です。")
+
+    closed_sessions = _close_open_tutor_sessions(db, participant.id)
+    participant.current_step = "survey" if before_step in {"retest", "final_test"} else "finish"
+    participant.completed_at = participant.completed_at or now()
+    participant.completion_reason = "give_up"
+    db.add(
+        AuditEvent(
+            actor="participant",
+            action="give_up_experiment",
+            entity_type="participant",
+            entity_id=participant.id,
+            before_json={"current_step": before_step, "completed_at": before_completed_at},
+            after_json={
+                "current_step": participant.current_step,
+                "completed_at": participant.completed_at.isoformat(),
+                "completion_reason": participant.completion_reason,
+                "closed_tutor_sessions": closed_sessions,
+            },
         )
-    if not already_finished or closed_sessions:
-        _commit(db)
+    )
+    _commit(db)
     return {
         "status": "completed",
         "action": "give_up_experiment",
-        "next_step": "finish",
-        "next_url": _next_url("finish"),
+        "next_step": participant.current_step,
+        "next_url": _next_url(participant.current_step),
         "closed_tutor_sessions": closed_sessions,
     }
 
@@ -565,8 +587,8 @@ def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> 
         .order_by(ParticipantSurvey.created_at.desc(), ParticipantSurvey.id.desc())
         .first()
     )
-    if participant.current_step == "finish" or participant.completed_at is not None:
-        if participant.completion_reason == "completed" and existing:
+    if participant.current_step == "finish":
+        if participant.completion_reason in {"completed", "give_up"} and existing:
             return {
                 "status": "completed",
                 "survey_id": existing.id,
@@ -597,7 +619,8 @@ def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> 
 
     participant.current_step = "finish"
     participant.completed_at = participant.completed_at or now()
-    participant.completion_reason = "completed"
+    if participant.completion_reason != "give_up":
+        participant.completion_reason = "completed"
     db.add(
         AuditEvent(
             actor="participant",
@@ -605,7 +628,11 @@ def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> 
             entity_type="participant",
             entity_id=participant.id,
             before_json={"current_step": before_step},
-            after_json={"current_step": participant.current_step, "survey_id": existing.id},
+            after_json={
+                "current_step": participant.current_step,
+                "completion_reason": participant.completion_reason,
+                "survey_id": existing.id,
+            },
         )
     )
     _commit(db)
