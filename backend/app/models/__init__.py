@@ -53,6 +53,25 @@ class ParticipantSurvey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
+class IdempotencyRecord(Base):
+    __tablename__ = "idempotency_records"
+    __table_args__ = (UniqueConstraint("scope", "idempotency_key", name="uq_idempotency_scope_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    scope: Mapped[str] = mapped_column(String(255), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    participant_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    response_status: Mapped[int | None] = mapped_column(Integer)
+    response_json: Mapped[dict | list | None] = mapped_column(JSON)
+    owner_token: Mapped[str | None] = mapped_column(String(36))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class Term(Base):
     __tablename__ = "terms"
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import LearnerState, Term, TutorSession
+from app.models import LearnerState, Term, TutorSession, TutorTurn
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
@@ -45,6 +45,7 @@ from app.services.experiment import (
     submit_attempt,
     submit_survey,
 )
+from app.services.idempotency import run_idempotent
 
 
 settings = get_settings()
@@ -136,13 +137,27 @@ def seed(db: Session = Depends(get_db)) -> dict:
 
 
 @app.post("/api/participants")
-def api_create_participant(payload: ParticipantCreate, db: Session = Depends(get_db)) -> dict:
-    participant = create_participant(db, payload.assignment_code, payload.consent_checked)
-    return {
-        "participant_id": participant.id,
-        "display_code": participant.display_code,
-        "current_step": participant.current_step,
-    }
+async def api_create_participant(
+    payload: ParticipantCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    def operation() -> dict:
+        participant = create_participant(db, payload.assignment_code, payload.consent_checked)
+        return {
+            "participant_id": participant.id,
+            "display_code": participant.display_code,
+            "current_step": participant.current_step,
+        }
+
+    return await run_idempotent(
+        db,
+        scope="participant:create",
+        key=idempotency_key,
+        participant_id=None,
+        request_data=payload.model_dump(mode="json"),
+        operation=operation,
+    )
 
 
 @app.get("/api/participants/{participant_id}/current-step")
@@ -181,16 +196,44 @@ def get_final_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
 
 
 @app.post("/api/attempts")
-def api_submit_attempt(payload: AttemptPayload, idempotency_key: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
-    attempt = submit_attempt(db, payload.model_dump(), idempotency_key)
-    return {"attempt_id": attempt.id, "saved": True, "is_complete_for_question": True}
+async def api_submit_attempt(
+    payload: AttemptPayload,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    def operation() -> dict:
+        attempt = submit_attempt(db, payload.model_dump(), idempotency_key)
+        return {"attempt_id": attempt.id, "saved": True, "is_complete_for_question": True}
+
+    return await run_idempotent(
+        db,
+        scope=f"attempt:{payload.participant_id}:{payload.question_id}:{payload.phase or 'auto'}",
+        key=idempotency_key,
+        participant_id=payload.participant_id,
+        request_data=payload.model_dump(mode="json"),
+        operation=operation,
+    )
 
 
 @app.post("/api/participants/{participant_id}/diagnose-pretest")
-async def api_diagnose_pretest(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    count = await diagnose_pretest(db, participant_id)
-    next_step = "learning_targets" if count else "final_test"
-    return {"status": "completed", "learning_target_count": count, "next_step": next_step, "next_url": "/learning-targets" if count else "/final-test"}
+async def api_diagnose_pretest(
+    participant_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    async def operation() -> dict:
+        count = await diagnose_pretest(db, participant_id)
+        next_step = "learning_targets" if count else "final_test"
+        return {"status": "completed", "learning_target_count": count, "next_step": next_step, "next_url": "/learning-targets" if count else "/final-test"}
+
+    return await run_idempotent(
+        db,
+        scope=f"diagnose_pretest:{participant_id}",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data={"participant_id": participant_id},
+        operation=operation,
+    )
 
 
 @app.get("/api/participants/{participant_id}/learning-targets")
@@ -205,79 +248,192 @@ def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> 
 
 
 @app.post("/api/participants/{participant_id}/give-up-learning")
-def api_give_up_learning(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return give_up_learning(db, participant_id)
+async def api_give_up_learning(
+    participant_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await run_idempotent(
+        db,
+        scope=f"give_up_learning:{participant_id}",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data={"participant_id": participant_id},
+        operation=lambda: give_up_learning(db, participant_id),
+    )
 
 
 @app.post("/api/participants/{participant_id}/give-up")
-def api_give_up_experiment(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return give_up_experiment(db, participant_id)
+async def api_give_up_experiment(
+    participant_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await run_idempotent(
+        db,
+        scope=f"give_up_experiment:{participant_id}",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data={"participant_id": participant_id},
+        operation=lambda: give_up_experiment(db, participant_id),
+    )
 
 
 @app.post("/api/participants/{participant_id}/survey")
-def api_submit_survey(participant_id: str, payload: SurveyPayload, db: Session = Depends(get_db)) -> dict:
-    return submit_survey(db, participant_id, payload.model_dump())
+async def api_submit_survey(
+    participant_id: str,
+    payload: SurveyPayload,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await run_idempotent(
+        db,
+        scope=f"survey:{participant_id}",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data=payload.model_dump(mode="json"),
+        operation=lambda: submit_survey(db, participant_id, payload.model_dump()),
+    )
 
 
 @app.post("/api/tutor-sessions")
-def api_create_tutor_session(payload: TutorSessionCreate, db: Session = Depends(get_db)) -> dict:
-    session = create_tutor_session(db, payload.participant_id, payload.term_slug)
-    return {"tutor_session_id": session.id, "session_index": session.session_index, "max_turns": settings.max_turns_per_term}
+async def api_create_tutor_session(
+    payload: TutorSessionCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    def operation() -> dict:
+        session = create_tutor_session(db, payload.participant_id, payload.term_slug)
+        return {"tutor_session_id": session.id, "session_index": session.session_index, "max_turns": settings.max_turns_per_term}
+
+    return await run_idempotent(
+        db,
+        scope=f"tutor_session:{payload.participant_id}:{payload.term_slug}",
+        key=idempotency_key,
+        participant_id=payload.participant_id,
+        request_data=payload.model_dump(mode="json"),
+        operation=operation,
+    )
 
 
 @app.post("/api/tutor-sessions/{session_id}/turns")
-async def api_generate_tutor_turn(session_id: str, db: Session = Depends(get_db)) -> dict:
-    turn = await generate_tutor_turn(db, session_id)
+async def api_generate_tutor_turn(
+    session_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
     session = db.get(TutorSession, session_id)
-    term = db.get(Term, session.term_id) if session else None
-    state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one() if session else None
-    stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
-    history = session_misconception_history(db, session_id)
-    latest_learning = latest_learning_misconception(db, session_id)
-    return {
-        "turn_id": turn.id,
-        "term_slug": term.slug if term else None,
-        "term_label": term.label if term else None,
-        "tutor_message": turn.tutor_message,
-        "learner_prompt": turn.learner_prompt,
-        "practice_question": turn.practice_question_json,
-        "requires_learner_response": True,
-        "turn_index": turn.turn_index,
-        "max_turns": settings.max_turns_per_term,
-        "learning_stage": stage_meta.get("learning_stage"),
-        "learning_stage_label": stage_meta.get("learning_stage_label"),
-        "component_term": stage_meta.get("component_term"),
-        "component_index": stage_meta.get("component_index"),
-        "component_total": stage_meta.get("component_total"),
-        "stage_completed": False,
-        "scaffolding_level": turn.scaffolding_level,
-        "initial_misconception_type": state.primary_misconception if state else None,
-        "misconception_type": state.primary_misconception if state else None,
-        "latest_learning_misconception_type": latest_learning.get("misconception_type") if latest_learning else None,
-        "latest_learning_misconception_reason": latest_learning.get("reason") if latest_learning else None,
-        "session_misconception_history": history,
-        "teaching_strategy": turn.teaching_strategy,
-    }
+    participant_id = session.participant_id if session else None
+
+    async def operation() -> dict:
+        turn = await generate_tutor_turn(db, session_id)
+        current_session = db.get(TutorSession, session_id)
+        term = db.get(Term, current_session.term_id) if current_session else None
+        state = db.query(LearnerState).filter_by(participant_id=current_session.participant_id, term_id=current_session.term_id).one() if current_session else None
+        stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
+        history = session_misconception_history(db, session_id)
+        latest_learning = latest_learning_misconception(db, session_id)
+        return {
+            "turn_id": turn.id,
+            "term_slug": term.slug if term else None,
+            "term_label": term.label if term else None,
+            "tutor_message": turn.tutor_message,
+            "learner_prompt": turn.learner_prompt,
+            "practice_question": turn.practice_question_json,
+            "requires_learner_response": True,
+            "turn_index": turn.turn_index,
+            "max_turns": settings.max_turns_per_term,
+            "learning_stage": stage_meta.get("learning_stage"),
+            "learning_stage_label": stage_meta.get("learning_stage_label"),
+            "component_term": stage_meta.get("component_term"),
+            "component_index": stage_meta.get("component_index"),
+            "component_total": stage_meta.get("component_total"),
+            "stage_completed": False,
+            "scaffolding_level": turn.scaffolding_level,
+            "initial_misconception_type": state.primary_misconception if state else None,
+            "misconception_type": state.primary_misconception if state else None,
+            "latest_learning_misconception_type": latest_learning.get("misconception_type") if latest_learning else None,
+            "latest_learning_misconception_reason": latest_learning.get("reason") if latest_learning else None,
+            "session_misconception_history": history,
+            "teaching_strategy": turn.teaching_strategy,
+        }
+
+    return await run_idempotent(
+        db,
+        scope=f"tutor_turn_generate:{session_id}",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data={"session_id": session_id},
+        operation=operation,
+    )
 
 
 @app.post("/api/tutor-turns/{turn_id}/respond")
-async def api_respond_tutor_turn(turn_id: str, payload: TutorTurnRespond, db: Session = Depends(get_db)) -> dict:
-    return await respond_tutor_turn(db, turn_id, payload.model_dump())
+async def api_respond_tutor_turn(
+    turn_id: str,
+    payload: TutorTurnRespond,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    turn = db.get(TutorTurn, turn_id)
+    session = db.get(TutorSession, turn.tutor_session_id) if turn else None
+    participant_id = session.participant_id if session else None
+    return await run_idempotent(
+        db,
+        scope=f"tutor_turn_respond:{turn_id}",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data=payload.model_dump(mode="json"),
+        operation=lambda: respond_tutor_turn(db, turn_id, payload.model_dump()),
+    )
 
 
 @app.post("/api/participants/{participant_id}/score-retest")
-async def api_score_retest(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return await score_phase(db, participant_id, "retest")
+async def api_score_retest(
+    participant_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await run_idempotent(
+        db,
+        scope=f"score:{participant_id}:retest",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data={"participant_id": participant_id, "phase": "retest"},
+        operation=lambda: score_phase(db, participant_id, "retest"),
+    )
 
 
 @app.post("/api/participants/{participant_id}/score-l0-check")
-async def api_score_l0(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return await score_phase(db, participant_id, "l0_check")
+async def api_score_l0(
+    participant_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await run_idempotent(
+        db,
+        scope=f"score:{participant_id}:l0_check",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data={"participant_id": participant_id, "phase": "l0_check"},
+        operation=lambda: score_phase(db, participant_id, "l0_check"),
+    )
 
 
 @app.post("/api/participants/{participant_id}/score-final-test")
-async def api_score_final_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return await score_phase(db, participant_id, "final_test")
+async def api_score_final_test(
+    participant_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await run_idempotent(
+        db,
+        scope=f"score:{participant_id}:final_test",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data={"participant_id": participant_id, "phase": "final_test"},
+        operation=lambda: score_phase(db, participant_id, "final_test"),
+    )
 
 
 @app.post("/api/participants/{participant_id}/evaluation-summary/recalculate")

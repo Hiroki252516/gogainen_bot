@@ -10,6 +10,7 @@ const required = [
   "app/admin/page.tsx",
   "components/QuestionRunner.tsx",
   "components/GiveUpButton.tsx",
+  "components/ParticipantFlowGuard.tsx",
   "components/MarkdownText.tsx"
 ];
 
@@ -44,6 +45,11 @@ for (const forbiddenText of ["<strong>デバッグ</strong>", "事前テスト�
 for (const expectedText of ["今回の学習", "対象概念:", "教材", "問題", "分析中..."]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing participant-facing learning text: ${expectedText}`);
+  }
+}
+for (const expectedText of [":initial`,", ":after:${completedTurnId}`"]) {
+  if (!learningPage.includes(expectedText)) {
+    throw new Error(`learning page must use a distinct idempotency key per turn generation: ${expectedText}`);
   }
 }
 for (const expectedText of ['localStorage.getItem("learning_targets")', "idx + 1 < targets.length", "`/learning/${targets[idx + 1]}`", ' : "/retest"']) {
@@ -120,10 +126,10 @@ for (const removedText of ["term_understanding", "concept_understanding"]) {
 }
 
 const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
-if (!questionRunner.includes('router.push("/learning-targets")')) {
-  throw new Error("QuestionRunner must show the test result screen after scoring");
+if (!questionRunner.includes("result.next_url || nextPath")) {
+  throw new Error("QuestionRunner must follow the backend transition after scoring");
 }
-for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', 'router.push("/learning-targets")', "allowExperimentGiveUp", 'mode="experiment"', "give-up-footer"]) {
+for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', "result.next_url || nextPath", "router.replace(result.next_url || nextPath)", "allowExperimentGiveUp", 'mode="experiment"', "give-up-footer"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`question runner missing retest transition support: ${expectedText}`);
   }
@@ -131,6 +137,25 @@ for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("lear
 for (const expectedText of ["test_round_label", "setDisplayTitle"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`question runner missing test round display behavior: ${expectedText}`);
+  }
+}
+for (const expectedText of ["answer_status", "submitted_answer", "回答済み・変更不可", "次の問題へ", "option-selected-locked", "displayedSelectedIds", "postIdempotent", "clearPendingIdempotency"]) {
+  if (!questionRunner.includes(expectedText)) {
+    throw new Error(`question runner missing immutable answer behavior: ${expectedText}`);
+  }
+}
+
+const apiClient = fs.readFileSync(new URL("../lib/api.ts", import.meta.url), "utf8");
+for (const expectedText of ["class ApiError", "postIdempotent", "clearParticipantSession", "sessionStorage", "Idempotency-Key", "PendingIdempotentRequest"]) {
+  if (!apiClient.includes(expectedText)) {
+    throw new Error(`API client missing idempotency behavior: ${expectedText}`);
+  }
+}
+
+const flowGuard = fs.readFileSync(new URL("../components/ParticipantFlowGuard.tsx", import.meta.url), "utf8");
+for (const expectedText of ["/current-step", "ParticipantEntryGuard", "useLearningTargetFlowGuard", "router.replace", "Do not expose a stale page", "もう一度確認"]) {
+  if (!flowGuard.includes(expectedText)) {
+    throw new Error(`flow guard missing browser-back protection: ${expectedText}`);
   }
 }
 
@@ -158,7 +183,7 @@ for (const forbiddenText of ["misconception_type", "M1", "M2", "M3", "M4", "taxo
     throw new Error(`learning targets page must not expose internal diagnosis text: ${forbiddenText}`);
   }
 }
-for (const expectedText of ["current_step", 'currentStep === "learning_targets"', 'currentStep === "survey"', 'currentStep === "final_test"', "学習対象を確認しています。", 'href="/final-test"', 'href="/survey"', "GiveUpButton", 'startsWith("retest_")', "give-up-footer"]) {
+for (const expectedText of ["current_step", 'currentStep === "learning_targets"', "学習対象を確認しています。", "GiveUpButton", 'startsWith("retest_")', "give-up-footer"]) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing guarded final-test transition: ${expectedText}`);
   }
@@ -183,7 +208,7 @@ if (!questionRunner.includes("responseTimeSec") || !questionRunner.includes("que
 if (!questionRunner.includes("questionShownAt") || !questionRunner.includes("question_shown_at: questionShownAt") || !questionRunner.includes("answered_at: answeredAt")) {
   throw new Error("QuestionRunner must send question timing timestamps");
 }
-for (const expectedText of ["selection_mode", "selectedIds", "selected_option_ids", "type={isMultipleQuestion ? \"checkbox\" : \"radio\"}", "min_selections", "max_selections", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "disabled={isDisabled}", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
+for (const expectedText of ["selection_mode", "selectedIds", "selected_option_ids", "type={isMultipleQuestion ? \"checkbox\" : \"radio\"}", "min_selections", "max_selections", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "disabled={isAnswered || isDisabled}", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`QuestionRunner missing multiple-selection behavior: ${expectedText}`);
   }
@@ -212,7 +237,7 @@ for (const forbiddenText of ["pending_group_condition", "group_condition", "提�
   }
 }
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書（仮）", "assignment_code", "consent_checked: true", 'router.push("/pretest")', "同意してテストを開始", "学習方法の割り当て"]) {
+for (const expectedText of ["研究参加同意書（仮）", "assignment_code", "consent_checked: true", 'router.replace("/pretest")', "同意してテストを開始", "学習方法の割り当て"]) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
   }
@@ -223,13 +248,23 @@ for (const forbiddenText of ["GROUP_LABELS", "pending_group_condition", "group_c
   }
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["実験後アンケート（仮）", "/survey", "usability_rating", "required label=\"AI利用経験\"", "required label=\"プログラミング経験\"", "required label=\"LLM利用頻度\"", "required label=\"AIに関する自己評価\"", "回答を保存して終了", 'router.push("/finish")']) {
+for (const expectedText of ["実験後アンケート（仮）", "/survey", "usability_rating", "required label=\"AI利用経験\"", "required label=\"プログラミング経験\"", "required label=\"LLM利用頻度\"", "required label=\"AIに関する自己評価\"", "回答を保存して終了", 'router.replace("/finish")']) {
   if (!surveyPage.includes(expectedText)) {
     throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
   }
 }
 
+const finishPage = fs.readFileSync(new URL("../app/finish/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ["clearParticipantSession", "新しい実験を開始", 'router.replace("/start")']) {
+  if (!finishPage.includes(expectedText)) {
+    throw new Error(`finish page missing new experiment reset behavior: ${expectedText}`);
+  }
+}
+
 const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
+if (!adminPage.includes("clearParticipantSession") || !adminPage.includes("participantId()")) {
+  throw new Error("admin page must clear a deleted participant's browser session");
+}
 for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "ギブアップ回数", "実験開始画面へ戻る", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/logs.csv", "/logs_excel.csv"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing log UI: ${expectedText}`);

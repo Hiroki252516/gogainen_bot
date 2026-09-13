@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, requireParticipant } from "@/lib/api";
+import { postIdempotent, requireParticipant } from "@/lib/api";
 
 type GiveUpButtonProps = {
   mode: "learning" | "experiment";
@@ -30,13 +30,14 @@ export function GiveUpButton({ mode, disabled = false }: GiveUpButtonProps) {
     setError("");
     try {
       const participantId = requireParticipant();
-      const result = await api<GiveUpResponse>(
+      const result = await postIdempotent<GiveUpResponse>(
         isLearning
           ? `/api/participants/${participantId}/give-up-learning`
           : `/api/participants/${participantId}/give-up`,
-        { method: "POST" },
+        {},
+        `give_up:${participantId}:${mode}`,
       );
-      router.push(result.next_url || (isLearning ? "/retest" : "/finish"));
+      router.replace(result.next_url || (isLearning ? "/retest" : "/finish"));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setSaving(false);

@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { GiveUpButton } from "@/components/GiveUpButton";
-import { api, requireParticipant } from "@/lib/api";
+import { ParticipantFlowGuard } from "@/components/ParticipantFlowGuard";
+import { api, participantId } from "@/lib/api";
+
+const LEARNING_TARGETS_STEPS = ["learning_targets"] as const;
 
 type Target = { term_slug: string; term_label: string; summary_for_learner: string; current_stage_for_display: string };
 type PretestResult = {
@@ -45,7 +48,9 @@ export default function LearningTargetsPage() {
   const isRetestResult = testResults.test_round?.startsWith("retest_") ?? false;
 
   useEffect(() => {
-    api<LearningTargetsResponse>(`/api/participants/${requireParticipant()}/learning-targets`)
+    const id = participantId();
+    if (!id) return;
+    api<LearningTargetsResponse>(`/api/participants/${id}/learning-targets`)
       .then((data) => {
         setCurrentStep(data.current_step);
         setTargets(data.targets);
@@ -57,8 +62,9 @@ export default function LearningTargetsPage() {
   }, []);
 
   return (
-    <AppShell step="学習対象">
-      <section className="panel stack">
+    <ParticipantFlowGuard allowedSteps={LEARNING_TARGETS_STEPS}>
+      <AppShell step="学習対象">
+        <section className="panel stack">
         <h1>{testResults.test_round_label ? `${testResults.test_round_label}の確認結果` : "今回の確認結果"}</h1>
         {error ? <div className="danger">{error}</div> : null}
         <div className="stack">
@@ -129,14 +135,6 @@ export default function LearningTargetsPage() {
           <Link className="button" href={`/learning/${targets[0].term_slug}`}>
             学習を開始
           </Link>
-        ) : currentStep === "survey" ? (
-          <Link className="button" href="/survey">
-            アンケートへ
-          </Link>
-        ) : currentStep === "final_test" ? (
-          <Link className="button" href="/final-test">
-            再テスト1へ
-          </Link>
         ) : (
           <span className="muted">学習対象を確認しています。</span>
         )}
@@ -145,7 +143,8 @@ export default function LearningTargetsPage() {
             <GiveUpButton mode="experiment" />
           </div>
         ) : null}
-      </section>
-    </AppShell>
+        </section>
+      </AppShell>
+    </ParticipantFlowGuard>
   );
 }

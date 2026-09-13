@@ -4,7 +4,8 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { api, requireParticipant } from "@/lib/api";
+import { ParticipantFlowGuard } from "@/components/ParticipantFlowGuard";
+import { postIdempotent, requireParticipant } from "@/lib/api";
 
 type SurveyValues = {
   ai_experience_level: string;
@@ -29,6 +30,7 @@ const INITIAL_VALUES: SurveyValues = {
 };
 
 const RATING_OPTIONS = [1, 2, 3, 4, 5];
+const SURVEY_STEPS = ["survey"] as const;
 
 export default function SurveyPage() {
   const router = useRouter();
@@ -45,20 +47,23 @@ export default function SurveyPage() {
     setSubmitting(true);
     setError("");
     try {
-      await api(`/api/participants/${requireParticipant()}/survey`, {
-        method: "POST",
-        body: JSON.stringify({
-          ai_experience_level: numberOrNull(values.ai_experience_level),
-          programming_experience_level: numberOrNull(values.programming_experience_level),
-          llm_usage_level: numberOrNull(values.llm_usage_level),
-          self_rated_ai_knowledge: numberOrNull(values.self_rated_ai_knowledge),
-          usability_rating: Number(values.usability_rating),
-          helpfulness_rating: Number(values.helpfulness_rating),
-          perceived_hint_amount: Number(values.perceived_hint_amount),
-          free_comment: values.free_comment.trim() || null,
-        }),
-      });
-      router.push("/finish");
+      const participantId = requireParticipant();
+      const surveyBody = {
+        ai_experience_level: numberOrNull(values.ai_experience_level),
+        programming_experience_level: numberOrNull(values.programming_experience_level),
+        llm_usage_level: numberOrNull(values.llm_usage_level),
+        self_rated_ai_knowledge: numberOrNull(values.self_rated_ai_knowledge),
+        usability_rating: Number(values.usability_rating),
+        helpfulness_rating: Number(values.helpfulness_rating),
+        perceived_hint_amount: Number(values.perceived_hint_amount),
+        free_comment: values.free_comment.trim() || null,
+      };
+      await postIdempotent(
+        `/api/participants/${participantId}/survey`,
+        surveyBody,
+        `survey:${participantId}`,
+      );
+      router.replace("/finish");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setSubmitting(false);
@@ -66,8 +71,9 @@ export default function SurveyPage() {
   }
 
   return (
-    <AppShell step="アンケート">
-      <form className="panel stack" onSubmit={submit}>
+    <ParticipantFlowGuard allowedSteps={SURVEY_STEPS}>
+      <AppShell step="アンケート">
+        <form className="panel stack" onSubmit={submit}>
         <h1>実験後アンケート（仮）</h1>
         <p className="muted">テストと学習セッションについて、感じたことを回答してください。</p>
 
@@ -91,8 +97,9 @@ export default function SurveyPage() {
             {submitting ? "保存しています..." : "回答を保存して終了"}
           </button>
         </div>
-      </form>
-    </AppShell>
+        </form>
+      </AppShell>
+    </ParticipantFlowGuard>
   );
 }
 
