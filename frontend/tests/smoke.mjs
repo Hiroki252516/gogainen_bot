@@ -261,6 +261,12 @@ for (const forbiddenText of ["GROUP_LABELS", "pending_group_condition", "group_c
     throw new Error(`consent page must not expose participant group condition: ${forbiddenText}`);
   }
 }
+const apiHelper = fs.readFileSync(new URL("../lib/api.ts", import.meta.url), "utf8");
+for (const expectedText of ["type ApiRequestInit", "AbortController", "timeoutMs", "サーバーからの応答がありません。接続を確認して、もう一度お試しください。"]) {
+  if (!apiHelper.includes(expectedText)) {
+    throw new Error(`api helper missing request timeout behavior: ${expectedText}`);
+  }
+}
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
 for (const expectedText of ["実験後アンケート（仮）", "/survey", "usability_rating", "required label=\"AI利用経験\"", "required label=\"プログラミング経験\"", "required label=\"LLM利用頻度\"", "required label=\"AIに関する自己評価\"", "回答を保存して終了", 'router.replace("/finish")']) {
   if (!surveyPage.includes(expectedText)) {

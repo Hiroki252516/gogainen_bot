@@ -40,8 +40,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       message = text;
     }
     throw new ApiError(message || `API ${res.status}`, res.status, code, detail);
+    return res.json() as Promise<T>;
   }
-  return res.json() as Promise<T>;
 }
 
 type PendingIdempotentRequest = {

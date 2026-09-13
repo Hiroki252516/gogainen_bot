@@ -7,6 +7,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -145,8 +147,20 @@ class ReasoningEffortPayload(BaseModel):
     reasoning_effort: Literal["low", "medium", "high"]
 
 
+DATABASE_UNAVAILABLE_DETAIL = "データベースに接続できません。管理者に確認してください。"
+
+
+def _raise_database_unavailable(db: Session, exc: OperationalError) -> None:
+    db.rollback()
+    raise HTTPException(status_code=503, detail=DATABASE_UNAVAILABLE_DETAIL) from exc
+
+
 @app.get("/api/health")
-def health() -> dict:
+def health(db: Session = Depends(get_db)) -> dict:
+    try:
+        db.execute(text("SELECT 1"))
+    except OperationalError as exc:
+        _raise_database_unavailable(db, exc)
     return {"status": "ok"}
 
 
