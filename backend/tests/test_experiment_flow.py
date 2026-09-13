@@ -15,6 +15,7 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServe
 from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY
 from app.core.config import get_settings
+from app.core.runtime_config import reset_reasoning_effort_override, set_reasoning_effort
 from app.db.session import SessionLocal, _backfill_completion_reasons, _backfill_evaluation_completion_flags, engine
 from app.main import app
 from app.models import (
@@ -677,7 +678,7 @@ def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda: FailingBackend())
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: FailingBackend())
     response = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
         json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["A", "D", "G"])},
@@ -1514,3 +1515,129 @@ def test_model_and_reasoning_settings_are_updated():
     backend = CodexAppServerBackend()
     assert backend.settings.codex_model == "gpt-5.6-luna"
     assert backend.settings.codex_reasoning_effort == "medium"
+
+
+def test_admin_reasoning_effort_status_and_updates():
+    reset_reasoning_effort_override()
+    try:
+        status = client.get("/api/admin/ai/status")
+        assert status.status_code == 200, status.text
+        assert status.json()["reasoning_effort"] == "medium"
+        assert status.json()["allowed_reasoning_efforts"] == ["low", "medium", "high"]
+        assert status.json()["can_change_reasoning_effort"] is True
+
+        for effort in ("low", "medium", "high"):
+            response = client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": effort})
+            assert response.status_code == 200, response.text
+            assert response.json()["reasoning_effort"] == effort
+
+        invalid = client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": "xhigh"})
+        assert invalid.status_code == 422, invalid.text
+    finally:
+        reset_reasoning_effort_override()
+
+
+def test_admin_reasoning_effort_update_is_allowed_while_participant_is_active():
+    reset_reasoning_effort_override()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    try:
+        status = client.get("/api/admin/ai/status")
+        assert status.status_code == 200, status.text
+        assert status.json()["can_change_reasoning_effort"] is True
+        assert status.json()["reasoning_effort_change_block_reason"] is None
+
+        response = client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": "high"})
+        assert response.status_code == 200, response.text
+        assert response.json()["reasoning_effort"] == "high"
+    finally:
+        db = SessionLocal()
+        try:
+            row = db.get(Participant, participant["participant_id"])
+            assert row is not None
+            row.current_step = "finish"
+            row.completed_at = row.started_at
+            row.completion_reason = "give_up"
+            db.commit()
+        finally:
+            db.close()
+            reset_reasoning_effort_override()
+
+
+def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
+    backend = CodexAppServerBackend(reasoning_effort="low")
+
+    class FakeRpc:
+        def __init__(self):
+            self.calls = []
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def call(self, method, params=None, notification_handler=None):
+            self.calls.append((method, params))
+            if method == "account/read":
+                return {"account": {"id": "test-account"}}
+            if method == "thread/start":
+                return {"thread": {"id": "thread-id"}}
+            if method == "turn/start":
+                notification_handler(
+                    {
+                        "method": "item/completed",
+                        "params": {
+                            "turnId": "turn-id",
+                            "item": {"type": "agentMessage", "text": '{"ok": true}'},
+                        },
+                    }
+                )
+                return {"turn": {"id": "turn-id"}}
+            return {}
+
+        async def recv(self, _notification_handler=None):
+            return {"method": "turn/completed", "params": {"turn": {"id": "turn-id", "status": "completed"}}}
+
+    rpc = FakeRpc()
+    monkeypatch.setattr(backend, "_client", lambda: rpc)
+    result = asyncio.run(backend._run_structured_turn("test", "prompt", {"type": "object"}))
+
+    assert result == {"ok": True}
+    turn_start = next(params for method, params in rpc.calls if method == "turn/start")
+    assert turn_start["model"] == "gpt-5.6-luna"
+    assert turn_start["effort"] == "low"
+
+
+def test_ai_call_logs_effective_reasoning_effort(monkeypatch):
+    reset_reasoning_effort_override()
+    set_reasoning_effort("high")
+
+    class FakeBackend:
+        provider = "test_backend"
+
+        async def test_reasoning_effort_logging(self, payload):
+            assert payload["marker"] == "runtime-effort-test"
+            return {"ok": True}
+
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: FakeBackend())
+    db = SessionLocal()
+    try:
+        result = asyncio.run(
+            experiment_service._ai_call(
+                db,
+                "test_reasoning_effort_logging",
+                {"marker": "runtime-effort-test"},
+            )
+        )
+        log = (
+            db.query(AICallLog)
+            .filter_by(purpose="test_reasoning_effort_logging")
+            .order_by(AICallLog.created_at.desc())
+            .first()
+        )
+        assert result == {"ok": True}
+        assert log is not None
+        assert log.request_payload["reasoning_effort"] == "high"
+    finally:
+        db.close()
+        reset_reasoning_effort_override()

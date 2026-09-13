@@ -98,17 +98,6 @@ export default function LearningTargetsPage() {
               <p className="result-verdict">
                 {result.is_correct === true ? "この問題は正解です。" : result.is_correct === false ? "この問題は不正解です。" : "この問題は未回答です。"}
               </p>
-              {result.is_learning_target ? (
-                <>
-                  <span className="muted">この用語を学習します。</span>
-                  {(() => {
-                    const target = targets.find((item) => item.term_slug === result.term_slug);
-                    return target ? <span className="muted">学習段階: {target.current_stage_for_display}</span> : null;
-                  })()}
-                </>
-              ) : (
-                <span className="muted">この用語は今回の学習対象ではありません。</span>
-              )}
             </div>
           )) : pretestResults.map((result, i) => (
             <div className={`notice pretest-result ${result.is_correct === true ? "pretest-result-correct" : "pretest-result-incorrect"}`} key={result.term_slug}>
@@ -117,17 +106,6 @@ export default function LearningTargetsPage() {
                 <span className="status-pill">{result.result_label}</span>
               </div>
               <p>{result.result_summary}</p>
-              {result.is_learning_target ? (
-                <>
-                  <span className="muted">この用語を学習します。</span>
-                  {(() => {
-                    const target = targets.find((item) => item.term_slug === result.term_slug);
-                    return target ? <span className="muted">学習段階: {target.current_stage_for_display}</span> : null;
-                  })()}
-                </>
-              ) : (
-                <span className="muted">この用語は今回の学習対象ではありません。</span>
-              )}
             </div>
           ))}
         </div>

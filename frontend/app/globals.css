@@ -408,6 +408,39 @@ button:disabled {
   color: white;
 }
 
+.reasoning-effort-control {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #b9d7ff;
+}
+
+.reasoning-effort-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.reasoning-effort-button {
+  min-width: 0;
+  border-color: #b9d7ff;
+  background: #fff;
+  color: var(--primary);
+  overflow-wrap: anywhere;
+}
+
+.reasoning-effort-button.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.reasoning-effort-control p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .learning-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -863,6 +896,10 @@ button:disabled {
 
   .analysis-progress {
     padding: 12px;
+  }
+
+  .reasoning-effort-buttons {
+    grid-template-columns: 1fr;
   }
 
   .insight-head,

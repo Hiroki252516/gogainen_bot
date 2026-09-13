@@ -28,6 +28,20 @@ for (const expectedText of ['"control", "proposed"', "role=\"tablist\"", "active
     throw new Error(`admin page missing group filtering behavior: ${expectedText}`);
   }
 }
+for (const expectedText of [
+  "REASONING_EFFORTS",
+  '"low", "medium", "high"',
+  "reasoning-effort-buttons",
+  "aria-pressed",
+  "/api/admin/ai/reasoning-effort",
+  "保存中...",
+  "実験中でも変更できます",
+  "AI_BACKEND=mock"
+]) {
+  if (!groupAdminPage.includes(expectedText)) {
+    throw new Error(`admin page missing reasoning effort control: ${expectedText}`);
+  }
+}
 if (groupAdminPage.includes("条件統制チェック")) {
   throw new Error("admin page must not show the condition control check card");
 }
@@ -173,7 +187,7 @@ for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step
 }
 
 const learningTargetsPage = fs.readFileSync(new URL("../app/learning-targets/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["pretest_results", "test_results", "今回の確認結果", "test_round_label", "question_body", "selected_options", "自分が選んだ選択肢", "result_label", "result_summary", "is_learning_target", "pretest-result-correct", "pretest-result-incorrect", "result-verdict"]) {
+for (const expectedText of ["pretest_results", "test_results", "今回の確認結果", "test_round_label", "question_body", "selected_options", "自分が選んだ選択肢", "result_label", "result_summary", "is_learning_target", "current_stage_for_display", "pretest-result-correct", "pretest-result-incorrect", "result-verdict"]) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing pretest result behavior: ${expectedText}`);
   }

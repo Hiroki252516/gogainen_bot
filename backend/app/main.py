@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +14,11 @@ from app.models import LearnerState, Term, TutorSession, TutorTurn
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
+from app.core.runtime_config import (
+    ALLOWED_REASONING_EFFORTS,
+    current_reasoning_effort,
+    set_reasoning_effort,
+)
 from app.db.session import get_db, init_db
 from app.seed.seed_questions import seed_database
 from app.services.experiment import (
@@ -49,6 +55,16 @@ from app.services.idempotency import run_idempotent
 
 
 settings = get_settings()
+
+
+def _reasoning_effort_status() -> dict:
+    return {
+        "reasoning_effort": current_reasoning_effort(),
+        "allowed_reasoning_efforts": list(ALLOWED_REASONING_EFFORTS),
+        "can_change_reasoning_effort": True,
+        "reasoning_effort_change_block_reason": None,
+        "reasoning_effort_applies": settings.ai_backend == "codex_app_server",
+    }
 
 
 @asynccontextmanager
@@ -123,6 +139,10 @@ class AILoginStart(BaseModel):
 
 class AILoginCancel(BaseModel):
     login_id: str
+
+
+class ReasoningEffortPayload(BaseModel):
+    reasoning_effort: Literal["low", "medium", "high"]
 
 
 @app.get("/api/health")
@@ -517,10 +537,34 @@ def api_export_csv(name: str, db: Session = Depends(get_db)):
 
 @app.get("/api/admin/ai/status")
 async def api_ai_status() -> dict:
+    reasoning_status = _reasoning_effort_status()
     if settings.ai_backend == "codex_app_server":
         status = await CodexAppServerBackend().status()
-        return {"ai_backend": settings.ai_backend, **status}
-    return {"ai_backend": "mock", "app_server_reachable": None, "logged_in": None, "account_label": "MockAIBackend (test only)", "last_error": None}
+        return {
+            "ai_backend": settings.ai_backend,
+            "model": settings.codex_model,
+            **status,
+            **reasoning_status,
+        }
+    return {
+        "ai_backend": "mock",
+        "model": settings.codex_model,
+        "app_server_reachable": None,
+        "logged_in": None,
+        "account_label": "MockAIBackend (test only)",
+        "last_error": None,
+        **reasoning_status,
+    }
+
+
+@app.post("/api/admin/ai/reasoning-effort")
+def api_set_reasoning_effort(payload: ReasoningEffortPayload) -> dict:
+    set_reasoning_effort(payload.reasoning_effort)
+    return {
+        "ai_backend": "codex_app_server" if settings.ai_backend == "codex_app_server" else "mock",
+        "model": settings.codex_model,
+        **_reasoning_effort_status(),
+    }
 
 
 @app.post("/api/admin/ai/login/start")

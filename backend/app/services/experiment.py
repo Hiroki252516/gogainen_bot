@@ -18,6 +18,7 @@ from app.ai.backend import lower_level, normalize_level, raise_level, strategy_f
 from app.ai.factory import get_ai_backend
 from app.ai.misconception_taxonomy import taxonomy_for_prompt
 from app.core.config import get_settings
+from app.core.runtime_config import current_reasoning_effort
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import content_term, learning_question_spec, load_content
 from app.models import (
@@ -970,7 +971,9 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
 
 
 async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[str, Any]:
-    backend = get_ai_backend()
+    reasoning_effort = current_reasoning_effort()
+    backend = get_ai_backend(reasoning_effort=reasoning_effort)
+    logged_payload = {**payload, "reasoning_effort": reasoning_effort}
     started = datetime.now(UTC)
     try:
         result = await getattr(backend, purpose)(payload)
@@ -981,7 +984,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
                 provider=backend.provider,
                 fallback_provider=result.pop("_fallback_provider", None),
                 purpose=purpose,
-                request_payload=payload,
+                request_payload=logged_payload,
                 response_payload=result,
                 status="success",
                 latency_ms=latency,
@@ -995,7 +998,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
             AICallLog(
                 provider=getattr(backend, "provider", "unknown"),
                 purpose=purpose,
-                request_payload=payload,
+                request_payload=logged_payload,
                 status="failed",
                 error_code=exc.code,
                 error_message=exc.detail,
