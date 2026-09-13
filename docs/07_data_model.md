@@ -233,6 +233,26 @@ misconception_type values:
 
 `question_shown_at` と `answered_at` はクライアントが送るISO時刻を保存する。`created_at` はサーバーが回答を保存した時刻であり、回答所要時間の分析には `response_time_sec` を優先する。`question_body_snapshot` と `option_order_snapshot` は、seedや表示順が後で変わっても当時の出題内容を復元するために保存する。
 
+### idempotency_records
+
+参加者向けPOSTの再送を同一操作として扱うための記録である。`(scope, idempotency_key)` に一意制約を持ち、処理中の重複実行を防ぐ。
+
+- id TEXT(36) PRIMARY KEY
+- scope TEXT(255) NOT NULL
+- idempotency_key TEXT(128) NOT NULL
+- participant_id TEXT(36) NULL
+- request_hash TEXT(64) NOT NULL
+- status TEXT NOT NULL  # in_progress, completed, failed
+- response_status INT NULL
+- response_json JSON NULL
+- owner_token TEXT(36) NULL
+- lease_expires_at TIMESTAMP NULL
+- completed_at TIMESTAMP NULL
+- created_at TIMESTAMP NOT NULL
+- updated_at TIMESTAMP NOT NULL
+
+同一`scope`・同一キー・同一リクエストハッシュの完了済み処理は`response_json`を再返却する。同一キーでリクエストハッシュが異なる場合は`409 idempotency_key_conflict`、処理中の場合は`409 idempotency_in_progress`とする。参加者削除時は当該`participant_id`のレコードも削除する。
+
 ### learner_states
 
 - id TEXT(36) PRIMARY KEY
@@ -431,6 +451,7 @@ status values:
 - tutor_turns.tutor_session_id + turn_index
 - recurrence_events.participant_id + term_id
 - ai_call_logs.purpose + status
+- idempotency_records.scope + idempotency_key
 
 ## 削除方針（現行MVPと将来運用）
 

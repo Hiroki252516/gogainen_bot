@@ -27,6 +27,7 @@ from app.models import (
     Attempt,
     EvaluationSummary,
     ExportJob,
+    IdempotencyRecord,
     LearnerState,
     Participant,
     ParticipantSurvey,
@@ -40,6 +41,7 @@ from app.models import (
     TutorTurn,
     now,
 )
+from app.services.idempotency import idempotency_error
 
 
 PUBLIC_LEVEL = {"L3": "豊富化", "L2": "概念変化"}
@@ -60,6 +62,14 @@ LEARNING_ALLOWED_STEPS = {"learning_targets", "final_test"}
 RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではありません。"
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
+
+
+def _commit(db: Session) -> None:
+    """Commit normally, or flush when an idempotent route owns the transaction."""
+    if db.info.get("defer_commits"):
+        db.flush()
+    else:
+        db.commit()
 
 
 def _component_terms(term_slug: str, term_label: str) -> list[str]:
@@ -378,8 +388,11 @@ def _rag_context(term_slug: str, *parts: str | None) -> dict[str, Any]:
     )
 
 
-def get_participant(db: Session, participant_id: str) -> Participant:
-    participant = db.get(Participant, participant_id)
+def get_participant(db: Session, participant_id: str, *, for_update: bool = False) -> Participant:
+    query = db.query(Participant).filter_by(id=participant_id)
+    if for_update:
+        query = query.with_for_update()
+    participant = query.one_or_none()
     if not participant:
         raise HTTPException(status_code=404, detail="participant not found")
     return participant
@@ -449,7 +462,7 @@ def _close_open_tutor_sessions(db: Session, participant_id: str) -> int:
 
 def give_up_learning(db: Session, participant_id: str) -> dict[str, Any]:
     """Skip the current learning session and make the next step the retest."""
-    participant = get_participant(db, participant_id)
+    participant = get_participant(db, participant_id, for_update=True)
     _assert_learning_give_up_available(participant)
     before_step = participant.current_step
     closed_sessions = _close_open_tutor_sessions(db, participant.id)
@@ -464,7 +477,7 @@ def give_up_learning(db: Session, participant_id: str) -> dict[str, Any]:
             after_json={"current_step": participant.current_step, "closed_tutor_sessions": closed_sessions},
         )
     )
-    db.commit()
+    _commit(db)
     return {
         "status": "completed",
         "action": "give_up_learning",
@@ -476,7 +489,7 @@ def give_up_learning(db: Session, participant_id: str) -> dict[str, Any]:
 
 def give_up_experiment(db: Session, participant_id: str) -> dict[str, Any]:
     """End the participant's experiment and prevent all further participant actions."""
-    participant = get_participant(db, participant_id)
+    participant = get_participant(db, participant_id, for_update=True)
     before_step = participant.current_step
     before_completed_at = participant.completed_at.isoformat() if participant.completed_at else None
     closed_sessions = _close_open_tutor_sessions(db, participant.id)
@@ -501,7 +514,7 @@ def give_up_experiment(db: Session, participant_id: str) -> dict[str, Any]:
             )
         )
     if not already_finished or closed_sessions:
-        db.commit()
+        _commit(db)
     return {
         "status": "completed",
         "action": "give_up_experiment",
@@ -538,14 +551,14 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         started_at=now(),
     )
     db.add(participant)
-    db.commit()
+    _commit(db)
     db.refresh(participant)
     return participant
 
 
 def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Save the temporary post-experiment survey and complete the participant flow."""
-    participant = get_participant(db, participant_id)
+    participant = get_participant(db, participant_id, for_update=True)
     existing = (
         db.query(ParticipantSurvey)
         .filter_by(participant_id=participant.id, phase="posttest")
@@ -595,7 +608,7 @@ def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> 
             after_json={"current_step": participant.current_step, "survey_id": existing.id},
         )
     )
-    db.commit()
+    _commit(db)
     db.refresh(existing)
     return {
         "status": "completed",
@@ -626,6 +639,7 @@ def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
         delete_by_participant(LearnerState)
         delete_by_participant(EvaluationSummary)
         delete_by_participant(Attempt)
+        delete_by_participant(IdempotencyRecord)
 
         ai_logs = db.query(AICallLog).all()
         participant_ai_logs = [log for log in ai_logs if (log.request_payload or {}).get("participant_id") == participant.id]
@@ -649,7 +663,7 @@ def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
         )
         db.add(audit)
         db.delete(participant)
-        db.commit()
+        _commit(db)
     except Exception:
         db.rollback()
         raise
@@ -738,7 +752,7 @@ def _displayed_options(db: Session, participant: Participant, question: Question
         rng.shuffle(option_ids)
         display = QuestionDisplayOrder(participant_id=participant.id, question_id=question.id, option_order=option_ids, random_seed=seed)
         db.add(display)
-        db.commit()
+        _commit(db)
     option_by_id = {option.id: option for option in options}
     public_options = []
     for index, option_id in enumerate(display.option_order):
@@ -764,11 +778,32 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
         questions,
         key=lambda question: PRETEST_TERM_ORDER.get(db.get(Term, question.term_id).slug, 99),
     )
+    submitted_attempts_by_question: dict[str, Attempt] = {}
+    submitted_attempts = (
+        db.query(Attempt)
+        .filter(
+            Attempt.participant_id == participant.id,
+            Attempt.phase == phase,
+            Attempt.is_correct.is_(None),
+        )
+        .order_by(Attempt.created_at.asc(), Attempt.id.asc())
+        .all()
+    )
+    for attempt in submitted_attempts:
+        submitted_attempts_by_question.setdefault(attempt.question_id, attempt)
     out = []
     for question in questions:
         term = db.get(Term, question.term_id)
         public_options = _displayed_options(db, participant, question)
         test_round = _test_round_key_for_question(db, participant, phase, question)
+        submitted_attempt = submitted_attempts_by_question.get(question.id)
+        submitted_option_ids = [
+            str(option_id)
+            for option_id in (submitted_attempt.selected_option_ids or [])
+            if option_id
+        ] if submitted_attempt else []
+        if submitted_attempt and not submitted_option_ids and submitted_attempt.selected_option_id:
+            submitted_option_ids = [str(submitted_attempt.selected_option_id)]
         out.append(
             {
                 "question_id": question.id,
@@ -779,6 +814,17 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "options": public_options,
                 "test_round": test_round,
                 "test_round_label": _test_round_display_label(test_round),
+                "answer_status": "submitted" if submitted_attempt else "unanswered",
+                "submitted_answer": (
+                    {
+                        "selected_option_id": submitted_attempt.selected_option_id,
+                        "selected_option_ids": submitted_option_ids,
+                        "free_text_answer": submitted_attempt.free_text_answer,
+                        "reason_text": submitted_attempt.reason_text,
+                    }
+                    if submitted_attempt
+                    else None
+                ),
                 "requires_reason": phase not in {"pretest", "retest", "final_test"},
                 **_selection_constraints(question.question_type, len(public_options)),
             }
@@ -798,11 +844,39 @@ def _naive_datetime(value: datetime | None) -> datetime | None:
     return value.astimezone(UTC).replace(tzinfo=None)
 
 
+def _selected_ids_from_payload(payload: dict[str, Any]) -> list[str]:
+    selected_option_ids = payload.get("selected_option_ids") or []
+    if not selected_option_ids and payload.get("selected_option_id"):
+        selected_option_ids = [payload["selected_option_id"]]
+    return [str(option_id) for option_id in selected_option_ids if option_id]
+
+
+def _attempt_answer_matches_payload(attempt: Attempt, payload: dict[str, Any]) -> bool:
+    stored_ids = [str(option_id) for option_id in (attempt.selected_option_ids or []) if option_id]
+    if not stored_ids and attempt.selected_option_id:
+        stored_ids = [str(attempt.selected_option_id)]
+    return (
+        attempt.question_id == payload.get("question_id")
+        and attempt.phase == (payload.get("phase") or attempt.phase)
+        and stored_ids == _selected_ids_from_payload(payload)
+        and (attempt.free_text_answer or None) == (payload.get("free_text_answer") or None)
+        and (attempt.reason_text or None) == (payload.get("reason_text") or None)
+    )
+
+
 def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | None = None) -> Attempt:
+    normalized_idempotency_key = (idempotency_key or "").strip() or None
     question = db.get(Question, payload["question_id"])
     if not question:
         raise HTTPException(status_code=404, detail="question not found")
-    participant = get_participant(db, payload["participant_id"])
+    participant = (
+        db.query(Participant)
+        .filter_by(id=payload["participant_id"])
+        .with_for_update()
+        .one_or_none()
+    )
+    if not participant:
+        raise HTTPException(status_code=404, detail="participant not found")
     phase = payload.get("phase") or question.phase
     _assert_participant_active(participant)
     if phase not in ATTEMPT_PHASES:
@@ -814,11 +888,39 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         raise HTTPException(status_code=404, detail="question not found")
     if phase in TEST_PHASES and term.slug not in PRETEST_TERM_SLUGS:
         raise HTTPException(status_code=400, detail="question is outside the active experiment terms")
-    if idempotency_key:
-        existing = db.query(Attempt).filter_by(participant_id=participant.id, idempotency_key=idempotency_key).one_or_none()
+    if normalized_idempotency_key:
+        existing = (
+            db.query(Attempt)
+            .filter_by(participant_id=participant.id, idempotency_key=normalized_idempotency_key)
+            .order_by(Attempt.created_at.asc(), Attempt.id.asc())
+            .first()
+        )
         if existing:
-            return existing
+            if _attempt_answer_matches_payload(existing, payload):
+                return existing
+            raise idempotency_error(
+                "idempotency_key_conflict",
+                "同じIdempotency-Keyで別の回答が送信されました。元の回答を維持します。",
+                attempt_id=existing.id,
+            )
     _assert_phase_available(participant, phase)
+    pending = (
+        db.query(Attempt)
+        .filter(
+            Attempt.participant_id == participant.id,
+            Attempt.question_id == question.id,
+            Attempt.phase == phase,
+            Attempt.is_correct.is_(None),
+        )
+        .order_by(Attempt.created_at.asc(), Attempt.id.asc())
+        .first()
+    )
+    if pending:
+        raise idempotency_error(
+            "answer_already_submitted",
+            "この問題はすでに回答済みです。回答は変更できません。",
+            attempt_id=pending.id,
+        )
     selected_option_ids = payload.get("selected_option_ids") or ([payload.get("selected_option_id")] if payload.get("selected_option_id") else [])
     selected_option_ids = [option_id for option_id in selected_option_ids if option_id]
     if len(selected_option_ids) != len(set(selected_option_ids)):
@@ -860,10 +962,10 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         answered_at=_naive_datetime(payload.get("answered_at")),
         question_body_snapshot=_variant_body_for_round(db, participant.id, question, phase),
         option_order_snapshot=_displayed_options(db, participant, question),
-        idempotency_key=idempotency_key,
+        idempotency_key=normalized_idempotency_key,
     )
     db.add(attempt)
-    db.commit()
+    _commit(db)
     db.refresh(attempt)
     return attempt
 
@@ -876,7 +978,8 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
     try:
         result = await getattr(backend, purpose)(payload)
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
-        db.add(
+        _record_ai_log(
+            db,
             AICallLog(
                 provider=backend.provider,
                 fallback_provider=result.pop("_fallback_provider", None),
@@ -885,13 +988,13 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
                 response_payload=result,
                 status="success",
                 latency_ms=latency,
-            )
+            ),
         )
-        db.commit()
         return result
     except CodexAppServerError as exc:
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
-        db.add(
+        _record_ai_log(
+            db,
             AICallLog(
                 provider=getattr(backend, "provider", "unknown"),
                 purpose=purpose,
@@ -900,9 +1003,8 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
                 error_code=exc.code,
                 error_message=exc.detail,
                 latency_ms=latency,
-            )
+            ),
         )
-        db.commit()
         raise HTTPException(
             status_code=503,
             detail={
@@ -912,9 +1014,27 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
             },
         ) from exc
     except Exception as exc:
-        db.add(AICallLog(provider=getattr(backend, "provider", "unknown"), purpose=purpose, request_payload=logged_payload, status="failed", error_code="ai_call_failed", error_message=str(exc)))
-        db.commit()
+        _record_ai_log(
+            db,
+            AICallLog(
+                provider=getattr(backend, "provider", "unknown"),
+                purpose=purpose,
+                request_payload=payload,
+                status="failed",
+                error_code="ai_call_failed",
+                error_message=str(exc),
+            ),
+        )
         raise
+
+
+def _record_ai_log(db: Session, log: AICallLog) -> None:
+    """Keep AI logs in the owning idempotent transaction when one is active."""
+    if db.info.get("defer_commits"):
+        db.info.setdefault("deferred_ai_logs", []).append(log)
+        return
+    db.add(log)
+    db.commit()
 
 
 def _selected_option(db: Session, attempt: Attempt) -> QuestionOption | None:
@@ -1004,7 +1124,7 @@ def _priority(attempt: Attempt) -> tuple[float, str]:
 
 
 async def diagnose_pretest(db: Session, participant_id: str) -> int:
-    participant = get_participant(db, participant_id)
+    participant = get_participant(db, participant_id, for_update=True)
     _assert_participant_active(participant)
     _assert_phase_available(participant, "pretest")
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase="pretest").all()
@@ -1038,7 +1158,7 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
             state = LearnerState(participant_id=participant.id, term_id=attempt.term_id, current_status=result["diagnosed_status"], primary_misconception=result["misconception_type"], secondary_misconception=result["secondary_misconception_type"], scaffolding_level=result["recommended_initial_scaffolding_level"], teaching_strategy=result["recommended_teaching_strategy"], last_attempt_id=attempt.id, state_summary=result["natural_language_diagnosis"])
             db.add(state)
         scored_attempts.append(attempt)
-    db.commit()
+    _commit(db)
 
     for attempt in scored_attempts:
         existing = db.query(TermAssignment).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
@@ -1048,7 +1168,7 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
         else:
             existing.priority_score = score
             existing.selection_reason = reason
-    db.commit()
+    _commit(db)
 
     assignments = (
         db.query(TermAssignment)
@@ -1062,7 +1182,7 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
         assignment.is_learning_target = bool(latest_attempt and not latest_attempt.is_correct and index < get_settings().max_learning_targets)
     remaining = sum(1 for assignment in assignments if assignment.is_learning_target)
     participant.current_step = "learning_targets" if remaining else "final_test"
-    db.commit()
+    _commit(db)
     return remaining
 
 
@@ -1291,11 +1411,14 @@ def latest_test_results(db: Session, participant_id: str) -> dict[str, Any]:
 
 
 def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> TutorSession:
-    participant = get_participant(db, participant_id)
+    participant = get_participant(db, participant_id, for_update=True)
     term = db.query(Term).filter_by(slug=term_slug).one_or_none()
     if not term or not term.is_active:
         raise HTTPException(status_code=404, detail="term not found")
     _assert_learning_available(participant)
+    assignment = db.query(TermAssignment).filter_by(participant_id=participant.id, term_id=term.id).one_or_none()
+    if participant.current_step == "learning_targets" and (not assignment or not assignment.is_learning_target):
+        raise HTTPException(status_code=409, detail="この用語は現在の学習対象ではありません。")
     existing = (
         db.query(TutorSession)
         .filter_by(participant_id=participant.id, term_id=term.id, ended_at=None)
@@ -1307,7 +1430,7 @@ def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> Tu
     count = db.query(func.count(TutorSession.id)).filter_by(participant_id=participant.id, term_id=term.id).scalar() or 0
     session = TutorSession(participant_id=participant.id, term_id=term.id, session_index=count + 1, group_condition=participant.group_condition)
     db.add(session)
-    db.commit()
+    _commit(db)
     db.refresh(session)
     return session
 
@@ -1316,7 +1439,10 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     session = db.get(TutorSession, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
-    participant = get_participant(db, session.participant_id)
+    participant = get_participant(db, session.participant_id, for_update=True)
+    session = db.query(TutorSession).filter_by(id=session_id).with_for_update().one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="session not found")
     _assert_participant_active(participant)
     if session.ended_at is not None:
         raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
@@ -1444,7 +1570,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         forbidden_help_given=False,
     )
     db.add(turn)
-    db.commit()
+    _commit(db)
     db.refresh(turn)
     return turn
 
@@ -1455,10 +1581,22 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     session = db.get(TutorSession, turn.tutor_session_id)
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
-    participant = get_participant(db, session.participant_id)
+    participant = get_participant(db, session.participant_id, for_update=True)
+    turn = db.query(TutorTurn).filter_by(id=turn_id).with_for_update().one_or_none()
+    if not turn:
+        raise HTTPException(status_code=404, detail="turn not found")
+    session = db.get(TutorSession, turn.tutor_session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="session not found")
     _assert_participant_active(participant)
     if session.ended_at is not None:
         raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
+    if turn.learner_response is not None:
+        raise idempotency_error(
+            "answer_already_submitted",
+            "この確認問題はすでに回答済みです。回答は変更できません。",
+            turn_id=turn.id,
+        )
     state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one()
     response = payload.get("learner_response") or ""
     term = db.get(Term, session.term_id)
@@ -1575,9 +1713,23 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     state.primary_misconception = None if is_sufficient else learning_misconception_type
     state.updated_reason = result["state_update_reason"]
     state.last_tutor_turn_id = turn.id
+    next_url: str | None = None
     if session_completed:
         session.ended_at = now()
-    db.commit()
+        assignment = db.query(TermAssignment).filter_by(participant_id=participant.id, term_id=session.term_id).one_or_none()
+        if assignment and assignment.is_learning_target:
+            assignment.is_learning_target = False
+            assignment.priority_score = 0
+            assignment.selection_reason = "学習セッション完了"
+        db.flush()
+        remaining_targets = learning_targets(db, participant.id)
+        if remaining_targets:
+            participant.current_step = "learning_targets"
+            next_url = f"/learning/{remaining_targets[0]['term_slug']}"
+        else:
+            participant.current_step = "retest"
+            next_url = "/retest"
+    _commit(db)
     return {
         "feedback": turn.ai_feedback,
         "next_action": next_action,
@@ -1597,10 +1749,11 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "turn_index": turn.turn_index,
         "max_turns": get_settings().max_turns_per_term,
         "item_results": [],
+        "next_url": next_url,
     }
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
-    participant = get_participant(db, participant_id)
+    participant = get_participant(db, participant_id, for_update=True)
     _assert_participant_active(participant)
     if phase not in {"retest", "l0_check", "final_test"}:
         raise HTTPException(status_code=400, detail="unsupported score phase")
@@ -1693,7 +1846,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         else:
             participant.current_step = "learning_targets"
             next_url = f"/learning/{learning_target_slugs[0]}" if learning_target_slugs else _next_url(participant.current_step)
-    db.commit()
+    _commit(db)
     response: dict[str, Any] = {"status": "completed", "next_step": participant.current_step, "next_url": next_url or _next_url(participant.current_step)}
     if phase in {"retest", "final_test"}:
         response["learning_target_slugs"] = learning_target_slugs
@@ -2011,7 +2164,7 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         completed=participant.completed_at is not None and participant.completion_reason != "give_up",
     )
     db.add(summary)
-    db.commit()
+    _commit(db)
     db.refresh(summary)
     return summary
 
@@ -2765,5 +2918,5 @@ def export_csv(db: Session, name: str) -> Path:
         for row in rows:
             writer.writerow({col: _csv_value(getattr(row, col)) if isinstance(getattr(row, col), (dict, list)) else getattr(row, col) for col in columns})
     db.add(ExportJob(export_name=name, file_path=str(path), status="success", row_count=len(rows)))
-    db.commit()
+    _commit(db)
     return path

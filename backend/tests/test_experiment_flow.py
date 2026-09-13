@@ -23,6 +23,7 @@ from app.models import (
     AuditEvent,
     Attempt,
     EvaluationSummary,
+    IdempotencyRecord,
     LearnerState,
     Participant,
     ParticipantSurvey,
@@ -139,6 +140,67 @@ def test_pretest_returns_three_multi_select_questions_with_ten_options():
         assert question["requires_reason"] is False
 
 
+def test_idempotency_replays_same_attempt_and_rejects_changed_or_duplicate_answers():
+    participant_response = client.post(
+        "/api/participants",
+        json={"assignment_code": "A", "consent_checked": True},
+        headers={"Idempotency-Key": "participant-idempotency-test"},
+    )
+    assert participant_response.status_code == 200, participant_response.text
+    repeated_participant_response = client.post(
+        "/api/participants",
+        json={"assignment_code": "A", "consent_checked": True},
+        headers={"Idempotency-Key": "participant-idempotency-test"},
+    )
+    assert repeated_participant_response.status_code == 200, repeated_participant_response.text
+    assert repeated_participant_response.json() == participant_response.json()
+
+    pid = participant_response.json()["participant_id"]
+    question = client.get(f"/api/experiment/{pid}/pretest").json()["questions"][0]
+    body = {
+        "participant_id": pid,
+        "question_id": question["question_id"],
+        "phase": "pretest",
+        "selected_option_ids": _ids_for_labels(question, ["A", "B", "C"]),
+        "response_time_sec": 1.25,
+        "question_shown_at": QUESTION_SHOWN_AT,
+        "answered_at": ANSWERED_AT,
+    }
+    first = client.post("/api/attempts", json=body, headers={"Idempotency-Key": "attempt-idempotency-test"})
+    assert first.status_code == 200, first.text
+    replay = client.post("/api/attempts", json=body, headers={"Idempotency-Key": "attempt-idempotency-test"})
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == first.json()
+
+    changed_body = {**body, "selected_option_ids": _ids_for_labels(question, ["D", "E", "F"])}
+    changed = client.post(
+        "/api/attempts",
+        json=changed_body,
+        headers={"Idempotency-Key": "attempt-idempotency-test"},
+    )
+    assert changed.status_code == 409, changed.text
+    assert changed.json()["detail"]["error_code"] == "idempotency_key_conflict"
+
+    duplicate = client.post(
+        "/api/attempts",
+        json=changed_body,
+        headers={"Idempotency-Key": "attempt-idempotency-new-test"},
+    )
+    assert duplicate.status_code == 409, duplicate.text
+    assert duplicate.json()["detail"]["error_code"] == "answer_already_submitted"
+
+    questions_after_submit = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    assert questions_after_submit[0]["answer_status"] == "submitted"
+    assert questions_after_submit[0]["submitted_answer"]["selected_option_ids"] == body["selected_option_ids"]
+    assert questions_after_submit[0]["submitted_answer"]["reason_text"] is None
+    db = SessionLocal()
+    try:
+        assert db.query(Attempt).filter_by(participant_id=pid, question_id=question["question_id"], phase="pretest").count() == 1
+        assert db.query(IdempotencyRecord).filter_by(participant_id=pid).count() >= 1
+    finally:
+        db.close()
+
+
 def test_participant_creation_requires_consent():
     without_consent = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": False})
     assert without_consent.status_code == 400
@@ -158,6 +220,76 @@ def test_participant_creation_reports_database_unavailable(monkeypatch):
 
     assert response.status_code == 503
     assert response.json() == {"detail": "データベースに接続できません。管理者に確認してください。"}
+
+
+def test_participant_creation_with_idempotency_key_replays_database_failure(monkeypatch):
+    def raise_database_error(*_args, **_kwargs):
+        from sqlalchemy.exc import OperationalError
+
+        raise OperationalError("INSERT", {}, ConnectionError("database is unavailable"))
+
+    monkeypatch.setattr(main_module, "create_participant", raise_database_error)
+    headers = {"Idempotency-Key": "participant-db-error-replay"}
+
+    first = client.post(
+        "/api/participants",
+        json={"assignment_code": "A", "consent_checked": True},
+        headers=headers,
+    )
+    replay = client.post(
+        "/api/participants",
+        json={"assignment_code": "A", "consent_checked": True},
+        headers=headers,
+    )
+
+    assert first.status_code == 503, first.text
+    assert replay.status_code == 503, replay.text
+    assert replay.json() == first.json()
+    db = SessionLocal()
+    try:
+        record = db.query(IdempotencyRecord).filter_by(scope="participant:create", idempotency_key=headers["Idempotency-Key"]).one()
+        assert record.status == "failed"
+        assert record.response_status == 503
+    finally:
+        db.close()
+
+
+def test_participant_creation_retry_after_database_error_does_not_duplicate(monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    original_create_participant = main_module.create_participant
+    call_count = 0
+
+    def fail_once(db, assignment_code, consent_checked):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise OperationalError("INSERT", {}, ConnectionError("database is unavailable"))
+        return original_create_participant(db, assignment_code, consent_checked)
+
+    monkeypatch.setattr(main_module, "create_participant", fail_once)
+    headers = {"Idempotency-Key": "participant-db-error-retry"}
+    payload = {"assignment_code": "B", "consent_checked": True}
+
+    first = client.post("/api/participants", json=payload, headers=headers)
+    retry = client.post("/api/participants", json=payload, headers=headers)
+    replay = client.post("/api/participants", json=payload, headers=headers)
+
+    assert first.status_code == 503, first.text
+    assert retry.status_code == 200, retry.text
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == retry.json()
+    assert call_count == 2
+
+    participant_id = retry.json()["participant_id"]
+    db = SessionLocal()
+    try:
+        assert db.query(Participant).filter_by(id=participant_id).count() == 1
+        record = db.query(IdempotencyRecord).filter_by(scope="participant:create", idempotency_key=headers["Idempotency-Key"]).one()
+        assert record.status == "completed"
+        assert record.response_status == 200
+    finally:
+        db.close()
 
 
 def test_health_reports_database_unavailable(monkeypatch):
@@ -486,6 +618,106 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     assert saved_turn.response_time_sec == 2.5
     assert saved_turn.grading_json["selected_option_ids"] == ["A", "B", "C"]
 
+    assert correct["next_url"] == "/learning/multi_agent"
+    assert client.get(f"/api/participants/{pid}/current-step").json() == {
+        "step": "learning_targets",
+        "next_url": "/learning-targets",
+    }
+    targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
+    assert [target["term_slug"] for target in targets] == ["multi_agent", "memory_process"]
+    stale_session = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "llm_knowledge"},
+    )
+    assert stale_session.status_code == 409
+    assert "現在の学習対象ではありません" in stale_session.text
+
+
+def test_idempotency_replays_learning_session_turn_and_feedback_without_duplicates():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session_body = {"participant_id": pid, "term_slug": "llm_knowledge"}
+    session = client.post(
+        "/api/tutor-sessions",
+        json=session_body,
+        headers={"Idempotency-Key": "learning-session-idempotency-test"},
+    )
+    assert session.status_code == 200, session.text
+    repeated_session = client.post(
+        "/api/tutor-sessions",
+        json=session_body,
+        headers={"Idempotency-Key": "learning-session-idempotency-test"},
+    )
+    assert repeated_session.status_code == 200, repeated_session.text
+    assert repeated_session.json() == session.json()
+
+    session_id = session.json()["tutor_session_id"]
+    turn = client.post(
+        f"/api/tutor-sessions/{session_id}/turns",
+        json={},
+        headers={"Idempotency-Key": "learning-turn-idempotency-test"},
+    )
+    assert turn.status_code == 200, turn.text
+    repeated_turn = client.post(
+        f"/api/tutor-sessions/{session_id}/turns",
+        json={},
+        headers={"Idempotency-Key": "learning-turn-idempotency-test"},
+    )
+    assert repeated_turn.status_code == 200, repeated_turn.text
+    assert repeated_turn.json() == turn.json()
+
+    turn_id = turn.json()["turn_id"]
+    response_body = {"selected_option_ids": _ids_for_labels(turn.json()["practice_question"], ["A", "D", "G"])}
+    response = client.post(
+        f"/api/tutor-turns/{turn_id}/respond",
+        json=response_body,
+        headers={"Idempotency-Key": "learning-response-idempotency-test"},
+    )
+    assert response.status_code == 200, response.text
+    repeated_response = client.post(
+        f"/api/tutor-turns/{turn_id}/respond",
+        json=response_body,
+        headers={"Idempotency-Key": "learning-response-idempotency-test"},
+    )
+    assert repeated_response.status_code == 200, repeated_response.text
+    assert repeated_response.json() == response.json()
+
+    next_turn = client.post(
+        f"/api/tutor-sessions/{session_id}/turns",
+        json={},
+        headers={"Idempotency-Key": "learning-next-turn-idempotency-test"},
+    )
+    assert next_turn.status_code == 200, next_turn.text
+    assert next_turn.json()["turn_id"] != turn_id
+    assert next_turn.json()["turn_index"] == turn.json()["turn_index"] + 1
+    repeated_next_turn = client.post(
+        f"/api/tutor-sessions/{session_id}/turns",
+        json={},
+        headers={"Idempotency-Key": "learning-next-turn-idempotency-test"},
+    )
+    assert repeated_next_turn.status_code == 200, repeated_next_turn.text
+    assert repeated_next_turn.json() == next_turn.json()
+
+    db = SessionLocal()
+    try:
+        before_ai_log_count = db.query(AICallLog).filter(AICallLog.request_payload["participant_id"].as_string() == pid).count()
+    finally:
+        db.close()
+    duplicate_response = client.post(
+        f"/api/tutor-turns/{turn_id}/respond",
+        json={"selected_option_ids": _ids_for_labels(turn.json()["practice_question"], ["A", "B", "C"])},
+        headers={"Idempotency-Key": "learning-response-another-key"},
+    )
+    assert duplicate_response.status_code == 409, duplicate_response.text
+    assert duplicate_response.json()["detail"]["error_code"] == "answer_already_submitted"
+
+    db = SessionLocal()
+    try:
+        assert db.query(TutorSession).filter_by(participant_id=pid).count() == 1
+        assert db.query(TutorTurn).filter_by(tutor_session_id=session_id).count() == 2
+        assert db.query(AICallLog).filter(AICallLog.request_payload["participant_id"].as_string() == pid).count() == before_ai_log_count
+    finally:
+        db.close()
+
 
 def test_learning_answer_generates_feedback_with_group_specific_payloads():
     proposed_pid = _create_participant_with_pretest(labels=["D", "E", "F"])
@@ -554,6 +786,7 @@ def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch
     response = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
         json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["A", "D", "G"])},
+        headers={"Idempotency-Key": "learning-failure-idempotency-test"},
     )
     assert response.status_code == 503
     saved_turn = _latest_turn(turn["turn_id"])
@@ -571,6 +804,12 @@ def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch
         )
         assert failed_log is not None
         assert failed_log.request_payload["participant_id"] == pid
+        record = db.query(IdempotencyRecord).filter_by(
+            scope=f"tutor_turn_respond:{turn['turn_id']}",
+            idempotency_key="learning-failure-idempotency-test",
+        ).one()
+        assert record.status == "failed"
+        assert record.response_status == 503
     finally:
         db.close()
 

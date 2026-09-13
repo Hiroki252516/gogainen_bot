@@ -49,6 +49,8 @@ Response:
 
 参加者向けレスポンスには内部の`group_condition`を含めない。群別の値は管理API、ログ、評価集計でのみ扱う。
 
+参加者作成中にDB接続障害が発生した場合は、Idempotency-Keyの有無にかかわらず`503`と「データベースに接続できません。管理者に確認してください。」を返す。キー付きリクエストで保存処理に到達しなかった場合、DB復旧後に同じキー・同じ本文を再送でき、参加者を二重作成しない。
+
 ## Variant policy
 
 - pretest: 用語ごとに `pretest_v1`
@@ -62,7 +64,24 @@ seed済みのテスト問題は`questions.variant_key`に保存し、学習確�
 
 `attempts.test_round` には初回 `pretest` を `test`、最初の学習後確認を `retest_1`、次周回を `retest_2` のように保存する。`attempts.phase` は `pretest`、`retest`、`l0_check`、`final_test` の内部値として互換維持する。
 
-現行の主なAPIルートは `/api/health`、`/api/seed`、`/api/participants`、`/api/participants/{participant_id}/current-step`、`/api/experiment/{participant_id}/pretest|retest|l0-check|final-test`、`/api/attempts`、`/api/participants/{participant_id}/diagnose-pretest`、`/api/participants/{participant_id}/learning-targets`、`/api/participants/{participant_id}/survey`、`/api/tutor-sessions`、`/api/tutor-sessions/{session_id}/turns`、`/api/tutor-turns/{turn_id}/respond`、`/api/participants/{participant_id}/score-retest`、`/api/participants/{participant_id}/score-l0-check`、`/api/participants/{participant_id}/score-final-test`、`/api/participants/{participant_id}/give-up-learning`、`/api/participants/{participant_id}/give-up`、`/api/participants/{participant_id}/evaluation-summary/recalculate`、`/api/admin/*` である。参加者作成は`consent_checked=true`を必須とし、同意画面から実行する。`give-up-learning`は現在の学習セッションを回答なしで終了して`next_step=retest`、`next_url=/retest`を返す。`give-up`は実験を終了して`next_step=finish`、`next_url=/finish`を返す。後者の実行後は問題取得、回答保存、採点、学習セッション操作を409で拒否する。両操作は`audit_events`へ`give_up_learning`または`give_up_experiment`として記録する。`survey`は`current_step=survey`の参加者だけが送信でき、`participant_surveys`へ仮フォームの回答を保存して`current_step=finish`、`completion_reason=completed`へ進める。管理画面から `DELETE /api/admin/participants/{participant_id}` を呼ぶと、対象参加者が所有する関連実験データを削除し、削除操作の監査記録を残す。seedデータは削除しない。frontendの `/api/*` はNext.jsのrewriteでbackendへ転送する。
+学習回答が十分と判定された場合は、その`TermAssignment.is_learning_target`を`false`に更新する。残りの学習対象があれば`current_step=learning_targets`と次の用語への`next_url`、すべて完了していれば`current_step=retest`と`next_url=/retest`を、学習回答・学習状態・AIログと同じトランザクションで確定する。`learning_targets`中にない用語の学習セッション開始は409で拒否し、旧互換として`current_step=final_test`からの直接呼び出しだけは既存APIの動作を維持する。
+
+## Idempotency-Key
+
+参加者向けの状態変更POSTでは、フロントエンドが`Idempotency-Key`ヘッダーを送る。API側ではヘッダーを任意とし、旧クライアントとの互換性を維持する。キーは1つの論理操作にだけ使い、通信失敗やレスポンス欠落時の再送では同じキーと同じ本文を使う。学習ターン生成では初回生成と各ターン後の次ターン生成に別キーを発行し、戻る操作後の再開でも前のターンの結果を誤って再利用しない。
+
+対象は参加者作成、回答保存、事前テスト診断、学習セッション・ターン生成・学習回答、再テスト/L0/最終テスト採点、アンケート、学習ギブアップ、実験ギブアップである。GET、seed、管理者APIは対象外とする。
+
+- 同一スコープ・同一キー・同一本文: 保存済みのレスポンスを返し、業務処理・AI呼び出し・監査イベントを再実行しない
+- 同一スコープ・同一キー・別本文: `409`、`detail.error_code=idempotency_key_conflict`
+- 同じ操作を処理中: `409`、`detail.error_code=idempotency_in_progress`
+- 現在の問題に未採点の回答がすでにある: `409`、`detail.error_code=answer_already_submitted`。元の回答は変更せず、追加の`attempts`を作らない
+
+`GET /api/experiment/{participant_id}/pretest|retest|l0-check|final-test`の各問題には`answer_status`（`unanswered`または`submitted`）を含める。`submitted`の問題には本人が送信した`submitted_answer`（選択した`option_id`、理由・自由記述）も含め、画面で選択済み状態を復元する。`submitted`の問題は回答変更不可として扱う。再テストで過去周回の回答が採点済みになった後の新しい周回は、新しい問題インスタンスとして回答できる。
+
+`GET /api/participants/{participant_id}/current-step`は、ブラウザの戻る操作で古い画面が表示されたときの正規遷移確認にも使う。GET自体はデータを変更しない。参加者の現在フェーズと異なる画面からの状態変更POSTは、処理を行わず409を返し、既存の回答・学習状態・監査ログを変更しない。
+
+現行の主なAPIルートは `/api/health`、`/api/seed`、`/api/participants`、`/api/participants/{participant_id}/current-step`、`/api/experiment/{participant_id}/pretest|retest|l0-check|final-test`、`/api/attempts`、`/api/participants/{participant_id}/diagnose-pretest`、`/api/participants/{participant_id}/learning-targets`、`/api/participants/{participant_id}/survey`、`/api/tutor-sessions`、`/api/tutor-sessions/{session_id}/turns`、`/api/tutor-turns/{turn_id}/respond`、`/api/participants/{participant_id}/score-retest`、`/api/participants/{participant_id}/score-l0-check`、`/api/participants/{participant_id}/score-final-test`、`/api/participants/{participant_id}/give-up-learning`、`/api/participants/{participant_id}/give-up`、`/api/participants/{participant_id}/evaluation-summary/recalculate`、`/api/admin/*` である。参加者作成は`consent_checked=true`を必須とし、同意画面から実行する。参加者向け状態変更POSTの再送は`Idempotency-Key`で保護し、キー競合の409は参加者の終了や実験中断を意味しない。`give-up-learning`は現在の学習セッションを回答なしで終了して`next_step=retest`、`next_url=/retest`を返す。`give-up`は実験を終了して`next_step=finish`、`next_url=/finish`を返す。後者の実行後は問題取得、回答保存、採点、学習セッション操作を409で拒否する。両操作は`audit_events`へ`give_up_learning`または`give_up_experiment`として記録する。`survey`は`current_step=survey`の参加者だけが送信でき、`participant_surveys`へ仮フォームの回答を保存して`current_step=finish`、`completion_reason=completed`へ進める。管理画面から `DELETE /api/admin/participants/{participant_id}` を呼ぶと、対象参加者が所有する関連実験データとIdempotencyレコードを削除し、削除操作の監査記録を残す。seedデータは削除しない。frontendの `/api/*` はNext.jsのrewriteでbackendへ転送する。
 
 管理用の参加者情報には`completion_reason`、`give_up_learning_count`、`give_up_experiment_count`を含める。個別ログの`participant`にも同じ状態を返し、`audit_events`には操作種別・実行時刻・状態変更前後を含める。全体ログの`recent_audit_events`と参加者ログCSVにもギブアップ操作を含める。
 

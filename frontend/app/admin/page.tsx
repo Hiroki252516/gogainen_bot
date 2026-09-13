@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { API_BASE, api } from "@/lib/api";
+import { API_BASE, api, clearParticipantSession, participantId } from "@/lib/api";
 
 type Participant = {
   participant_id: string;
@@ -191,6 +191,9 @@ export default function AdminPage() {
     setDeletingParticipantId(participant.participant_id);
     try {
       await api(`/api/admin/participants/${participant.participant_id}`, { method: "DELETE" });
+      if (participantId() === participant.participant_id) {
+        clearParticipantSession();
+      }
       if (participantLog?.participant?.participant_id === participant.participant_id) {
         setParticipantLog(null);
       }

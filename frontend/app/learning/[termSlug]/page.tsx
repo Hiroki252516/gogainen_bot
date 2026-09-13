@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { GiveUpButton } from "@/components/GiveUpButton";
 import { MarkdownText } from "@/components/MarkdownText";
-import { api, requireParticipant } from "@/lib/api";
+import { CheckingFlow, useLearningTargetFlowGuard } from "@/components/ParticipantFlowGuard";
+import { postIdempotent, requireParticipant } from "@/lib/api";
 
 type Option = { option_id: string; label: string; body: string };
 type PracticeItem = {
@@ -63,6 +64,7 @@ type Feedback = {
   turn_index: number;
   max_turns: number;
   item_results?: ItemResult[];
+  next_url?: string;
 };
 
 function learningStageLabel(stage?: string, backendLabel?: string) {
@@ -188,6 +190,8 @@ export default function LearningPage() {
   const [error, setError] = useState("");
   const bootedTermRef = useRef<string | null>(null);
   const actionInFlightRef = useRef(false);
+  const flow = useLearningTargetFlowGuard(termSlug);
+  const flowReady = flow.ready;
 
   const nextHref = useMemo(() => {
     if (typeof window === "undefined") return "/retest";
@@ -198,6 +202,7 @@ export default function LearningPage() {
 
   useEffect(() => {
     async function boot() {
+      if (!flowReady) return;
       if (bootedTermRef.current === termSlug) return;
       bootedTermRef.current = termSlug;
       setSessionId("");
@@ -209,12 +214,18 @@ export default function LearningPage() {
       setSelectedItemOptionIds({});
       setError("");
       try {
-        const session = await api<{ tutor_session_id: string }>("/api/tutor-sessions", {
-          method: "POST",
-          body: JSON.stringify({ participant_id: requireParticipant(), term_slug: termSlug })
-        });
+        const participantId = requireParticipant();
+        const session = await postIdempotent<{ tutor_session_id: string }>(
+          "/api/tutor-sessions",
+          { participant_id: participantId, term_slug: termSlug },
+          `tutor_session:${participantId}:${termSlug}`,
+        );
         setSessionId(session.tutor_session_id);
-        const data = await api<Turn>(`/api/tutor-sessions/${session.tutor_session_id}/turns`, { method: "POST", body: JSON.stringify({}) });
+        const data = await postIdempotent<Turn>(
+          `/api/tutor-sessions/${session.tutor_session_id}/turns`,
+          {},
+          `tutor_turn_generate:${session.tutor_session_id}:initial`,
+        );
         setTurn(data);
         setTurnStartedAt(Date.now());
         setTurnShownAt(new Date().toISOString());
@@ -224,7 +235,7 @@ export default function LearningPage() {
       }
     }
     boot();
-  }, [termSlug]);
+  }, [flowReady, termSlug]);
 
   async function submit() {
     if (!turn || actionInFlightRef.current) return;
@@ -253,18 +264,20 @@ export default function LearningPage() {
       const selectedOptions = options.filter((option) => selectedOptionIds.includes(option.option_id));
       const answeredAt = new Date().toISOString();
       const responseTimeSec = Math.max(0.001, (Date.now() - turnStartedAt) / 1000);
-      const data = await api<Feedback>(`/api/tutor-turns/${turn.turn_id}/respond`, {
-        method: "POST",
-        body: JSON.stringify({
-          selected_option_id: isMultiple ? (selectedOptionIds[0] || null) : (selectedOptionId || null),
-          selected_option_ids: isMultiple ? selectedOptionIds : null,
-          selected_item_option_ids: items.length ? selectedItemOptionIds : null,
-          learner_response: isMultiple ? selectedOptions.map((option) => option.label).join(" / ") : (selectedOption?.body || response),
-          response_time_sec: responseTimeSec,
-          question_shown_at: turnShownAt,
-          answered_at: answeredAt
-        })
-      });
+      const responseBody = {
+        selected_option_id: isMultiple ? (selectedOptionIds[0] || null) : (selectedOptionId || null),
+        selected_option_ids: isMultiple ? selectedOptionIds : null,
+        selected_item_option_ids: items.length ? selectedItemOptionIds : null,
+        learner_response: isMultiple ? selectedOptions.map((option) => option.label).join(" / ") : (selectedOption?.body || response),
+        response_time_sec: responseTimeSec,
+        question_shown_at: turnShownAt,
+        answered_at: answeredAt,
+      };
+      const data = await postIdempotent<Feedback>(
+        `/api/tutor-turns/${turn.turn_id}/respond`,
+        responseBody,
+        `tutor_turn_respond:${turn.turn_id}`,
+      );
       const updatedTurn = {
         ...turn,
         scaffolding_level: data.next_scaffolding_level,
@@ -283,11 +296,17 @@ export default function LearningPage() {
 
   async function continueLearning() {
     if (!sessionId || actionInFlightRef.current) return;
+    const completedTurnId = turn?.turn_id;
+    if (!completedTurnId) return;
     actionInFlightRef.current = true;
     setSubmitting(true);
     setError("");
     try {
-      const next = await api<Turn>(`/api/tutor-sessions/${sessionId}/turns`, { method: "POST", body: JSON.stringify({}) });
+      const next = await postIdempotent<Turn>(
+        `/api/tutor-sessions/${sessionId}/turns`,
+        {},
+        `tutor_turn_generate:${sessionId}:after:${completedTurnId}`,
+      );
       setTurn(next);
       setTurnStartedAt(Date.now());
       setTurnShownAt(new Date().toISOString());
@@ -303,6 +322,8 @@ export default function LearningPage() {
       setSubmitting(false);
     }
   }
+
+  if (!flowReady) return <CheckingFlow error={flow.error} onRetry={flow.retry} />;
 
   return (
     <AppShell step="学習セッション">
@@ -455,7 +476,7 @@ export default function LearningPage() {
                   {submitting ? "分析中..." : "回答を確認"}
                 </button>
               ) : (
-                <button className="secondary" onClick={() => feedback.session_completed ? router.push(nextHref) : continueLearning()} disabled={submitting}>
+                <button className="secondary" onClick={() => feedback.session_completed ? router.replace(feedback.next_url || nextHref) : continueLearning()} disabled={submitting}>
                   {feedback.session_completed ? "次へ" : submitting ? "次の確認を準備中..." : "次の確認へ"}
                 </button>
               )}

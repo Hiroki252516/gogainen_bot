@@ -257,6 +257,16 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.option.option-selected-locked {
+  border-color: #6aa7e8;
+  background: #eef6ff;
+  cursor: not-allowed;
+}
+
+.option.option-selected-locked input {
+  cursor: not-allowed;
+}
+
 .muted {
   color: var(--muted);
 }
