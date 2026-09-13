@@ -148,7 +148,7 @@ for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step
 }
 
 const learningTargetsPage = fs.readFileSync(new URL("../app/learning-targets/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["pretest_results", "test_results", "今回の確認結果", "test_round_label", "question_body", "selected_options", "自分が選んだ選択肢", "result_label", "result_summary", "is_learning_target", "pretest-result-correct", "pretest-result-incorrect", "result-verdict"]) {
+for (const expectedText of ["pretest_results", "test_results", "今回の確認結果", "test_round_label", "question_body", "selected_options", "自分が選んだ選択肢", "result_label", "result_summary", "is_learning_target", "current_stage_for_display", "pretest-result-correct", "pretest-result-incorrect", "result-verdict"]) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing pretest result behavior: ${expectedText}`);
   }
@@ -156,6 +156,11 @@ for (const expectedText of ["pretest_results", "test_results", "今回の確認�
 for (const forbiddenText of ["misconception_type", "M1", "M2", "M3", "M4", "taxonomy"]) {
   if (learningTargetsPage.includes(forbiddenText)) {
     throw new Error(`learning targets page must not expose internal diagnosis text: ${forbiddenText}`);
+  }
+}
+for (const forbiddenText of ["この用語は今回の学習対象ではありません。", "この用語を学習します。", "学習段階:"]) {
+  if (learningTargetsPage.includes(forbiddenText)) {
+    throw new Error(`learning targets page must not expose target metadata: ${forbiddenText}`);
   }
 }
 for (const expectedText of ["current_step", 'currentStep === "learning_targets"', 'currentStep === "survey"', 'currentStep === "final_test"', "学習対象を確認しています。", 'href="/final-test"', 'href="/survey"', "GiveUpButton", 'startsWith("retest_")', "give-up-footer"]) {
