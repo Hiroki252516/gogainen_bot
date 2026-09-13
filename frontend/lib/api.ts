@@ -14,39 +14,59 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {})
-    }
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    let message = "";
-    let code: string | undefined;
-    let detail: unknown;
-    try {
-      const parsed = JSON.parse(text);
-      detail = parsed.detail;
-      if (typeof detail === "string") message = detail;
-      if (detail && typeof detail === "object") {
-        const errorDetail = detail as { message?: unknown; error_code?: unknown };
-        if (typeof errorDetail.message === "string") message = errorDetail.message;
-        if (typeof errorDetail.error_code === "string") code = errorDetail.error_code;
+type ApiRequestInit = RequestInit & { timeoutMs?: number };
+
+export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
+  const { timeoutMs, ...requestInit } = init ?? {};
+  const controller = timeoutMs === undefined ? undefined : new AbortController();
+  const timeoutHandle = timeoutMs === undefined ? undefined : setTimeout(() => controller?.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...requestInit,
+      signal: controller?.signal ?? requestInit.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(requestInit.headers || {})
       }
-    } catch {
-      message = text;
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      let message = "";
+      let code: string | undefined;
+      let detail: unknown;
+      try {
+        const parsed = JSON.parse(text);
+        detail = parsed.detail;
+        if (typeof detail === "string") message = detail;
+        if (detail && typeof detail === "object") {
+          const errorDetail = detail as { message?: unknown; error_code?: unknown };
+          if (typeof errorDetail.message === "string") message = errorDetail.message;
+          if (typeof errorDetail.error_code === "string") code = errorDetail.error_code;
+        }
+      } catch {
+        message = text;
+      }
+      throw new ApiError(message || `API ${res.status}`, res.status, code, detail);
     }
-    throw new ApiError(message || `API ${res.status}`, res.status, code, detail);
     return res.json() as Promise<T>;
+  } catch (error) {
+    if (controller?.signal.aborted) {
+      throw new Error("サーバーからの応答がありません。接続を確認して、もう一度お試しください。");
+    }
+    throw error;
+  } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
   }
 }
 
 type PendingIdempotentRequest = {
   key: string;
   body: string;
+};
+
+type IdempotentRequestOptions = {
+  timeoutMs?: number;
 };
 
 function newIdempotencyKey(): string {
@@ -65,9 +85,14 @@ export function clearPendingIdempotency(scope: string): void {
   window.sessionStorage.removeItem(pendingStorageKey(scope));
 }
 
-export async function postIdempotent<T>(path: string, body: unknown, scope: string): Promise<T> {
+export async function postIdempotent<T>(
+  path: string,
+  body: unknown,
+  scope: string,
+  options?: IdempotentRequestOptions,
+): Promise<T> {
   if (typeof window === "undefined") {
-    return api<T>(path, { method: "POST", body: JSON.stringify(body) });
+    return api<T>(path, { method: "POST", body: JSON.stringify(body), timeoutMs: options?.timeoutMs });
   }
 
   const bodyText = JSON.stringify(body);
@@ -91,6 +116,7 @@ export async function postIdempotent<T>(path: string, body: unknown, scope: stri
       method: "POST",
       body: pending.body,
       headers: { "Idempotency-Key": pending.key },
+      timeoutMs: options?.timeoutMs,
     });
     window.sessionStorage.removeItem(storageKey);
     return result;

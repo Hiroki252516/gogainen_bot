@@ -160,7 +160,7 @@ for (const expectedText of ["answer_status", "submitted_answer", "回答済み�
 }
 
 const apiClient = fs.readFileSync(new URL("../lib/api.ts", import.meta.url), "utf8");
-for (const expectedText of ["class ApiError", "postIdempotent", "clearParticipantSession", "sessionStorage", "Idempotency-Key", "PendingIdempotentRequest"]) {
+for (const expectedText of ["class ApiError", "postIdempotent", "clearParticipantSession", "sessionStorage", "Idempotency-Key", "PendingIdempotentRequest", "type ApiRequestInit", "AbortController", "timeoutMs: options?.timeoutMs"]) {
   if (!apiClient.includes(expectedText)) {
     throw new Error(`API client missing idempotency behavior: ${expectedText}`);
   }
@@ -251,7 +251,7 @@ for (const forbiddenText of ["pending_group_condition", "group_condition", "提�
   }
 }
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書（仮）", "assignment_code", "consent_checked: true", 'router.replace("/pretest")', "同意してテストを開始", "学習方法の割り当て"]) {
+for (const expectedText of ["研究参加同意書（仮）", "assignment_code", "consent_checked: true", 'router.replace("/pretest")', "同意してテストを開始", "学習方法の割り当て", "timeoutMs: 15000", 'role="alert"']) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
   }

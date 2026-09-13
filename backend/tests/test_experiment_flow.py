@@ -222,6 +222,76 @@ def test_participant_creation_reports_database_unavailable(monkeypatch):
     assert response.json() == {"detail": "データベースに接続できません。管理者に確認してください。"}
 
 
+def test_participant_creation_with_idempotency_key_replays_database_failure(monkeypatch):
+    def raise_database_error(*_args, **_kwargs):
+        from sqlalchemy.exc import OperationalError
+
+        raise OperationalError("INSERT", {}, ConnectionError("database is unavailable"))
+
+    monkeypatch.setattr(main_module, "create_participant", raise_database_error)
+    headers = {"Idempotency-Key": "participant-db-error-replay"}
+
+    first = client.post(
+        "/api/participants",
+        json={"assignment_code": "A", "consent_checked": True},
+        headers=headers,
+    )
+    replay = client.post(
+        "/api/participants",
+        json={"assignment_code": "A", "consent_checked": True},
+        headers=headers,
+    )
+
+    assert first.status_code == 503, first.text
+    assert replay.status_code == 503, replay.text
+    assert replay.json() == first.json()
+    db = SessionLocal()
+    try:
+        record = db.query(IdempotencyRecord).filter_by(scope="participant:create", idempotency_key=headers["Idempotency-Key"]).one()
+        assert record.status == "failed"
+        assert record.response_status == 503
+    finally:
+        db.close()
+
+
+def test_participant_creation_retry_after_database_error_does_not_duplicate(monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    original_create_participant = main_module.create_participant
+    call_count = 0
+
+    def fail_once(db, assignment_code, consent_checked):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise OperationalError("INSERT", {}, ConnectionError("database is unavailable"))
+        return original_create_participant(db, assignment_code, consent_checked)
+
+    monkeypatch.setattr(main_module, "create_participant", fail_once)
+    headers = {"Idempotency-Key": "participant-db-error-retry"}
+    payload = {"assignment_code": "B", "consent_checked": True}
+
+    first = client.post("/api/participants", json=payload, headers=headers)
+    retry = client.post("/api/participants", json=payload, headers=headers)
+    replay = client.post("/api/participants", json=payload, headers=headers)
+
+    assert first.status_code == 503, first.text
+    assert retry.status_code == 200, retry.text
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == retry.json()
+    assert call_count == 2
+
+    participant_id = retry.json()["participant_id"]
+    db = SessionLocal()
+    try:
+        assert db.query(Participant).filter_by(id=participant_id).count() == 1
+        record = db.query(IdempotencyRecord).filter_by(scope="participant:create", idempotency_key=headers["Idempotency-Key"]).one()
+        assert record.status == "completed"
+        assert record.response_status == 200
+    finally:
+        db.close()
+
+
 def test_health_reports_database_unavailable(monkeypatch):
     from sqlalchemy.exc import OperationalError
 

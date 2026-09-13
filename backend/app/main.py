@@ -177,21 +177,27 @@ async def api_create_participant(
     db: Session = Depends(get_db),
 ) -> dict:
     def operation() -> dict:
-        participant = create_participant(db, payload.assignment_code, payload.consent_checked)
+        try:
+            participant = create_participant(db, payload.assignment_code, payload.consent_checked)
+        except OperationalError as exc:
+            _raise_database_unavailable(db, exc)
         return {
             "participant_id": participant.id,
             "display_code": participant.display_code,
             "current_step": participant.current_step,
         }
 
-    return await run_idempotent(
-        db,
-        scope="participant:create",
-        key=idempotency_key,
-        participant_id=None,
-        request_data=payload.model_dump(mode="json"),
-        operation=operation,
-    )
+    try:
+        return await run_idempotent(
+            db,
+            scope="participant:create",
+            key=idempotency_key,
+            participant_id=None,
+            request_data=payload.model_dump(mode="json"),
+            operation=operation,
+        )
+    except OperationalError as exc:
+        _raise_database_unavailable(db, exc)
 
 
 @app.get("/api/participants/{participant_id}/current-step")
