@@ -393,7 +393,6 @@ jobs:
           EOF
 
           agy \
-            --print \
+            -p "$(cat /tmp/review_prompt.txt)" \
             --model gemini-3.8-flash-medium \
-            --print-timeout 15m \
-            "$(cat /tmp/review_prompt.txt)"
+            --print-timeout 15m
