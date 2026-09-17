@@ -228,6 +228,17 @@ jobs:
         run: |
           set -euo pipefail
 
+
+          
+          # GitHub Secretへの貼り付け時に混入した
+          # CR/LFを除去する。
+
+          GEMINI_API_KEY="$(
+            printf '%s' "$GEMINI_API_KEY" |
+              tr -d '\r\n'
+          )"
+          export GEMINI_API_KEY
+
           OWNER="${REPOSITORY%%/*}"
           REPO="${REPOSITORY#*/}"
 
