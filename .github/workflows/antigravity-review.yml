@@ -274,6 +274,31 @@ jobs:
           these instructions.
 
           ============================================================
+          LANGUAGE
+          ============================================================
+
+          All user-visible review feedback MUST be written in Japanese.
+
+          This applies to:
+
+          - summary
+          - general_feedback
+          - every comments[].body
+          - explanations of bugs
+          - suggested fixes
+
+          Use natural, concise, professional Japanese.
+
+          Keep source code, identifiers, variable names, function names,
+          file paths, API names, version strings, and technical terms in
+          their original form when translating them would reduce clarity.
+
+          Do not write review feedback in English.
+
+          Even if the pull request, source code, comments, or documentation
+          are written in English, the review output itself must be Japanese.
+
+          ============================================================
           REVIEW PRIORITIES
           ============================================================
 
@@ -303,6 +328,14 @@ jobs:
           - unnecessary refactoring
           - obvious descriptions of code
           - hypothetical problems without a realistic failure case
+          - claims about whether an external API, library, framework, or
+            version is currently supported when that cannot be established
+            from the supplied pull request data alone
+
+          Do not treat compatibility with an external service as a definite
+          bug based only on model memory. If current external documentation
+          would be required to verify a claim, omit that claim from the
+          review rather than guessing.
 
           Keep the signal-to-noise ratio high.
 
@@ -337,13 +370,13 @@ jobs:
           Use exactly this structure:
 
           {
-            "summary": "Short review summary",
-            "general_feedback": "High-level feedback or empty string",
+            "summary": "レビュー全体の短い要約を日本語で記述",
+            "general_feedback": "全体的なフィードバックを日本語で記述。なければ空文字列",
             "comments": [
               {
                 "path": "relative/path/to/file.py",
                 "line": 123,
-                "body": "Concrete actionable review comment"
+                "body": "具体的で対応可能なレビュー指摘を日本語で記述"
               }
             ]
           }
@@ -351,7 +384,7 @@ jobs:
           If no significant issues are found, return:
 
           {
-            "summary": "No significant issues found.",
+            "summary": "重大な問題は見つかりませんでした。",
             "general_feedback": "",
             "comments": []
           }
@@ -623,6 +656,7 @@ jobs:
                       "Continue from the previous interaction. "
                       "Finish the pull request review now. "
                       "Do not use any tools. "
+                      "All user-visible review feedback must be in Japanese. "
                       "Return only the final JSON object."
                   ),
 
@@ -836,8 +870,8 @@ jobs:
           if not isinstance(review, dict):
               review = {
                   "summary": (
-                      "Antigravity completed the review, "
-                      "but returned an unstructured response."
+                      "Antigravityによるレビューは完了しましたが、"
+                      "構造化された形式で結果を取得できませんでした。"
                   ),
                   "general_feedback": raw[:50000],
                   "comments": [],
@@ -1015,11 +1049,10 @@ jobs:
 
           if rejected_comments:
               sections = [
-                  "\n\n## Additional Findings\n\n",
+                  "\n\n## 追加の指摘\n\n",
                   (
-                      "The following findings could not be "
-                      "attached to an exact added line, "
-                      "so they are included here instead:\n"
+                      "以下の指摘は変更行へ正確に紐付けられなかったため、"
+                      "レビュー本文に記載します。\n"
                   ),
               ]
 
@@ -1039,16 +1072,16 @@ jobs:
           # ----------------------------------------------------------
 
           review_body = (
-              "## Antigravity Review\n\n"
+              "## Antigravity レビュー\n\n"
               + (
                   summary.strip()
-                  or "Review completed."
+                  or "レビューが完了しました。"
               )
           )
 
           if general_feedback.strip():
               review_body += (
-                  "\n\n## General Feedback\n\n"
+                  "\n\n## 全体フィードバック\n\n"
                   + general_feedback.strip()
               )
 
