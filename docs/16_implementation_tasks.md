@@ -17,6 +17,7 @@
 - frontendの参加者画面から内部debug・M分類表示を除去
 - MockAIBackend、backend pytest、frontend smoke/build
 - 学習教材・回答解説のMarkdown表示、正誤カード、初回読み込み・回答送信の動的進捗UI
+- テスト結果の正誤色分け、学習画面の研究者向け段階表示の削除、アンケート必須表示、各画面の設問進捗表示
 - 現行の評価JSON、管理サマリー、全体・被験者別CSV出力
 
 ## 残タスク

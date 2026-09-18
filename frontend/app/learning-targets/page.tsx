@@ -9,6 +9,9 @@ import { api, participantId } from "@/lib/api";
 
 const LEARNING_TARGETS_STEPS = ["learning_targets"] as const;
 
+const toFullWidthDigits = (value: number) =>
+  String(value).replace(/\d/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 0xfee0));
+
 type Target = { term_slug: string; term_label: string; summary_for_learner: string; current_stage_for_display: string };
 type PretestResult = {
   term_slug: string;
@@ -74,13 +77,12 @@ export default function LearningTargetsPage() {
               key={result.term_slug}
             >
               <div className="term-row-head">
-                <strong>{i + 1}. {result.term_label}</strong>
+                <span className="question-heading">
+                  問{toFullWidthDigits(i + 1)}：<strong>{result.term_label}</strong>
+                </span>
                 <span className="status-pill">{result.result_label}</span>
               </div>
-              <div className="result-detail">
-                <strong>問題</strong>
-                <p>{result.question_body || "問題文を確認できません。"}</p>
-              </div>
+              <p>{result.question_body || "問題文を確認できません。"}</p>
               <div className="result-detail">
                 <strong>自分が選んだ選択肢</strong>
                 {result.selected_options.length ? (
@@ -102,10 +104,12 @@ export default function LearningTargetsPage() {
           )) : pretestResults.map((result, i) => (
             <div className={`notice pretest-result ${result.is_correct === true ? "pretest-result-correct" : "pretest-result-incorrect"}`} key={result.term_slug}>
               <div className="term-row-head">
-                <strong>{i + 1}. {result.term_label}</strong>
+                <span className="question-heading">
+                  問{toFullWidthDigits(i + 1)}：<strong>{result.term_label}</strong>
+                </span>
                 <span className="status-pill">{result.result_label}</span>
               </div>
-              <p>{result.result_summary}</p>
+              <p className="result-verdict">{result.result_summary}</p>
             </div>
           ))}
         </div>

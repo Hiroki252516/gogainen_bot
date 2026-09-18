@@ -115,8 +115,11 @@ function RatingSelect({
   required?: boolean;
 }) {
   return (
-    <label>
-      {label}
+    <label className="survey-rating-field">
+      <span className="survey-rating-label">
+        <span>{label}</span>
+        {required ? <span className="required-indicator">必須選択</span> : null}
+      </span>
       <select value={value} onChange={(event) => onChange(event.target.value)} required={required}>
         <option value="">選択してください</option>
         {RATING_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}

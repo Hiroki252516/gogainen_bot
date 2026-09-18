@@ -46,6 +46,9 @@ function nextMultipleSelection(options: Option[], selectedIds: string[], option:
   return withoutUnknown.length >= requiredSelections ? selectedIds : [...withoutUnknown, option.option_id];
 }
 
+const toFullWidthDigits = (value: number) =>
+  String(value).replace(/\d/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 0xfee0));
+
 export function QuestionRunner({
   phase,
   title,
@@ -90,7 +93,10 @@ export function QuestionRunner({
       .finally(() => setLoading(false));
   }, [onDisplayTitle, sourcePath, title]);
 
-  const progress = useMemo(() => (questions.length ? `${index + 1} / ${questions.length}` : ""), [index, questions.length]);
+  const progress = useMemo(
+    () => (questions.length ? `${index + 1} / ${questions.length}` : ""),
+    [index, questions.length],
+  );
 
   useEffect(() => {
     setQuestionStartedAt(Date.now());
@@ -237,10 +243,13 @@ export function QuestionRunner({
     <div className="panel stack">
       <div className="topbar">
         <h1>{displayTitle}</h1>
-        <span className="muted">{progress}</span>
+        <span className="muted question-progress" aria-label={progress}>{progress}</span>
       </div>
       <div className="notice">
-        <strong>{current.term_label}</strong>
+        <div className="question-heading">
+          <span>問{toFullWidthDigits(index + 1)}：</span>
+          <strong>{current.term_label}</strong>
+        </div>
         <p>{current.body}</p>
       </div>
       {isAnswered ? (
