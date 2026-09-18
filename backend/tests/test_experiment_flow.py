@@ -864,6 +864,7 @@ def test_control_group_logs_same_stage_but_uses_general_explanation():
 
     assert turn["learning_stage"] == "conceptual_change"
     assert turn["teaching_strategy"] == "general_explanation"
+    assert turn["tutor_message"]
     assert turn["practice_question"]["selection_mode"] == "multiple"
 
 

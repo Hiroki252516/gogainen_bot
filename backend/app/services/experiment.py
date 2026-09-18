@@ -1498,6 +1498,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "variant_key": spec["variant_key"],
         "learning_variant_index": learning_variant_index,
     }
+    tutor_message = spec["material"]
     teaching_strategy = effective_strategy
     material_source = "ai"
     material_generation_ms = None
