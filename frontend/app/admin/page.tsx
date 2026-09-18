@@ -40,7 +40,11 @@ const ADMIN_RESUME_DISPLAY_CODE_KEY = "admin_resume_display_code";
 function rememberAdminResumeParticipant(id: string) {
   localStorage.setItem(ADMIN_RESUME_PARTICIPANT_ID_KEY, id);
   const displayCode = localStorage.getItem("display_code");
-  if (displayCode) localStorage.setItem(ADMIN_RESUME_DISPLAY_CODE_KEY, displayCode);
+  if (displayCode) {
+    localStorage.setItem(ADMIN_RESUME_DISPLAY_CODE_KEY, displayCode);
+  } else {
+    localStorage.removeItem(ADMIN_RESUME_DISPLAY_CODE_KEY);
+  }
 }
 
 function clearAdminResumeParticipant(id?: string) {
@@ -164,7 +168,11 @@ export default function AdminPage() {
         ? localStorage.getItem("display_code")
         : localStorage.getItem(ADMIN_RESUME_DISPLAY_CODE_KEY);
       localStorage.setItem("participant_id", resumeParticipantId);
-      if (displayCode) localStorage.setItem("display_code", displayCode);
+      if (displayCode) {
+        localStorage.setItem("display_code", displayCode);
+      } else {
+        localStorage.removeItem("display_code");
+      }
       localStorage.removeItem("pending_assignment_code");
       clearAdminResumeParticipant(resumeParticipantId);
       router.push(current.next_url || "/start");
@@ -364,7 +372,7 @@ export default function AdminPage() {
           </div>
           {flowNavigationError ? <p className="danger" role="alert">{flowNavigationError}</p> : null}
           <div className="actions">
-            <button className="secondary" type="button" onClick={returnToExperimentStart}>
+            <button className="secondary" type="button" onClick={returnToExperimentStart} disabled={resumingExperiment}>
               実験開始画面へ戻る
             </button>
             <button className="secondary" type="button" onClick={resumeExperiment} disabled={resumingExperiment}>
