@@ -141,7 +141,10 @@ export function QuestionRunner({
       if (Array.isArray(result.learning_target_slugs)) {
         localStorage.setItem("learning_targets", JSON.stringify(result.learning_target_slugs));
       }
-      router.replace(result.next_url || nextPath);
+      // Test results are reviewed before moving to the next phase. The review
+      // page reads the participant's current step to render the right action.
+      const reviewRequired = phase === "retest" || phase === "final_test";
+      router.replace(reviewRequired ? "/learning-targets" : (result.next_url || nextPath));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setSaving(false);

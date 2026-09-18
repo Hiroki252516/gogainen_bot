@@ -7,7 +7,7 @@ import { GiveUpButton } from "@/components/GiveUpButton";
 import { ParticipantFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, participantId } from "@/lib/api";
 
-const LEARNING_TARGETS_STEPS = ["learning_targets"] as const;
+const RESULT_REVIEW_STEPS = ["learning_targets", "final_test", "survey"] as const;
 
 const toFullWidthDigits = (value: number) =>
   String(value).replace(/\d/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 0xfee0));
@@ -65,7 +65,7 @@ export default function LearningTargetsPage() {
   }, []);
 
   return (
-    <ParticipantFlowGuard allowedSteps={LEARNING_TARGETS_STEPS}>
+    <ParticipantFlowGuard allowedSteps={RESULT_REVIEW_STEPS}>
       <AppShell step="学習対象">
         <section className="panel stack">
         <h1>{testResults.test_round_label ? `${testResults.test_round_label}の確認結果` : "今回の確認結果"}</h1>
@@ -117,10 +117,18 @@ export default function LearningTargetsPage() {
           <Link className="button" href={`/learning/${targets[0].term_slug}`}>
             学習を開始
           </Link>
+        ) : currentStep === "final_test" ? (
+          <Link className="button" href="/final-test">
+            次のテストへ
+          </Link>
+        ) : currentStep === "survey" ? (
+          <Link className="button" href="/survey">
+            アンケートへ進む
+          </Link>
         ) : (
           <span className="muted">学習対象を確認しています。</span>
         )}
-        {isRetestResult && currentStep !== "finish" ? (
+        {isRetestResult && currentStep === "learning_targets" ? (
           <div className="give-up-footer">
             <GiveUpButton mode="experiment" />
           </div>

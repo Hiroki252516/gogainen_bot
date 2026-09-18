@@ -154,7 +154,7 @@ const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow the backend transition after scoring");
 }
-for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', "result.next_url || nextPath", "router.replace(result.next_url || nextPath)", "allowExperimentGiveUp", 'mode="experiment"', "give-up-footer"]) {
+for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', "result.next_url || nextPath", 'phase === "retest" || phase === "final_test"', 'router.replace(reviewRequired ? "/learning-targets"', "allowExperimentGiveUp", 'mode="experiment"', "give-up-footer"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`question runner missing retest transition support: ${expectedText}`);
   }
@@ -222,7 +222,7 @@ for (const forbiddenText of ["misconception_type", "M1", "M2", "M3", "M4", "taxo
     throw new Error(`learning targets page must not expose internal diagnosis text: ${forbiddenText}`);
   }
 }
-for (const expectedText of ["current_step", 'currentStep === "learning_targets"', "学習対象を確認しています。", "GiveUpButton", 'startsWith("retest_")', "give-up-footer"]) {
+for (const expectedText of ["current_step", 'RESULT_REVIEW_STEPS = ["learning_targets", "final_test", "survey"]', 'currentStep === "learning_targets"', 'currentStep === "final_test"', 'currentStep === "survey"', "次のテストへ", "アンケートへ進む", "学習対象を確認しています。", "GiveUpButton", 'startsWith("retest_")', "give-up-footer"]) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing guarded final-test transition: ${expectedText}`);
   }
