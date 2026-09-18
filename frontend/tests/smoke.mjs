@@ -56,7 +56,7 @@ for (const forbiddenText of ["<strong>デバッグ</strong>", "事前テスト�
     throw new Error(`learning page must not expose internal debug text: ${forbiddenText}`);
   }
 }
-for (const expectedText of ["今回の学習", "対象概念:", "教材", "問題", "分析中..."]) {
+for (const expectedText of ["学習内容：", "教材", "問題", "分析中..."]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing participant-facing learning text: ${expectedText}`);
   }
@@ -77,7 +77,7 @@ if (learningPage.includes("足場掛けレベル:")) {
 if (learningPage.includes("ターン: {turn.turn_index}")) {
   throw new Error("learning page must not show fixed turn progress in stage-based UI");
 }
-for (const expectedText of ["対象概念:", "教材フィードバック", "正解です。", "不正解です。", "feedback-card-ok", "feedback-card-error", "item_results", "次の確認へ", "次の確認を準備中..."]) {
+for (const expectedText of ["学習内容：", "教材フィードバック", "正解です。", "不正解です。", "feedback-card-ok", "feedback-card-error", "item_results", "次の確認へ", "次の確認を準備中..."]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing final feedback/debug update behavior: ${expectedText}`);
   }
@@ -128,9 +128,20 @@ if (learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") |
 if (!learningPage.includes("turnShownAt") || !learningPage.includes("question_shown_at: turnShownAt") || !learningPage.includes("answered_at: answeredAt")) {
   throw new Error("learning page must send turn timing timestamps");
 }
-for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "概念変化", "豊富化", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
+for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "question-progress", "turn.turn_index", "turn.max_turns", "{turn.turn_index} / {turn.max_turns}", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
   if (!learningPage.includes(expectedText)) {
-    throw new Error(`learning page missing multiple-selection/new-stage behavior: ${expectedText}`);
+    throw new Error(`learning page missing multiple-selection/progress behavior: ${expectedText}`);
+  }
+}
+if (learningPage.includes("toFullWidthDigits") || learningPage.includes("問{toFullWidthDigits")) {
+  throw new Error("learning session must keep its existing question display format");
+}
+if (learningPage.includes("問{turn.turn_index} / {turn.max_turns}")) {
+  throw new Error("learning session progress must not include the 問 prefix");
+}
+for (const removedText of ["今回の学習", "対象概念:", "段階:", "概念変化", "豊富化", "誤った捉え方を見直します", "不足知識を補います"]) {
+  if (learningPage.includes(removedText)) {
+    throw new Error(`learning page must not expose researcher-facing stage guidance: ${removedText}`);
   }
 }
 for (const removedText of ["term_understanding", "concept_understanding"]) {
@@ -152,6 +163,14 @@ for (const expectedText of ["test_round_label", "setDisplayTitle"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`question runner missing test round display behavior: ${expectedText}`);
   }
+}
+for (const expectedText of ["${index + 1} / ${questions.length}", "question-heading", "問{toFullWidthDigits(index + 1)}：", "<strong>{current.term_label}</strong>", "<p>{current.body}</p>", "className=\"muted question-progress\""]) {
+  if (!questionRunner.includes(expectedText)) {
+    throw new Error(`QuestionRunner missing question progress display: ${expectedText}`);
+  }
+}
+if (questionRunner.includes("問${toFullWidthDigits(index + 1)} /")) {
+  throw new Error("test and retest progress must not include the 問 prefix");
 }
 for (const expectedText of ["answer_status", "submitted_answer", "回答済み・変更不可", "次の問題へ", "option-selected-locked", "displayedSelectedIds", "postIdempotent", "clearPendingIdempotency"]) {
   if (!questionRunner.includes(expectedText)) {
@@ -187,9 +206,15 @@ for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step
 }
 
 const learningTargetsPage = fs.readFileSync(new URL("../app/learning-targets/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["pretest_results", "test_results", "今回の確認結果", "test_round_label", "question_body", "selected_options", "自分が選んだ選択肢", "result_label", "result_summary", "is_learning_target", "current_stage_for_display", "pretest-result-correct", "pretest-result-incorrect", "result-verdict"]) {
+for (const expectedText of ["pretest_results", "test_results", "今回の確認結果", "test_round_label", "className=\"question-heading\"", "問{toFullWidthDigits(i + 1)}：<strong>{result.term_label}</strong>", "question_body", 'result.question_body || "問題文を確認できません。"', "selected_options", "自分が選んだ選択肢", "result_label", "result_summary", "is_learning_target", "current_stage_for_display", "pretest-result-correct", "pretest-result-incorrect", "result-verdict"]) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing pretest result behavior: ${expectedText}`);
+  }
+}
+const globalStyles = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+for (const expectedText of [".pretest-result-correct .result-verdict {\n  color: var(--ok);", ".pretest-result-incorrect .result-verdict {\n  color: var(--danger);", ".question-heading {\n  font-family: inherit;\n  font-size: 1rem;", ".question-heading strong {\n  font: inherit;\n  font-weight: 700;"]) {
+  if (!globalStyles.includes(expectedText)) {
+    throw new Error(`test result page missing correct/incorrect color styling: ${expectedText}`);
   }
 }
 for (const forbiddenText of ["misconception_type", "M1", "M2", "M3", "M4", "taxonomy"]) {
@@ -268,7 +293,7 @@ for (const expectedText of ["type ApiRequestInit", "AbortController", "timeoutMs
   }
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["実験後アンケート（仮）", "/survey", "usability_rating", "required label=\"AI利用経験\"", "required label=\"プログラミング経験\"", "required label=\"LLM利用頻度\"", "required label=\"AIに関する自己評価\"", "回答を保存して終了", 'router.replace("/finish")']) {
+for (const expectedText of ["実験後アンケート（仮）", "/survey", "usability_rating", "required label=\"AI利用経験\"", "required label=\"プログラミング経験\"", "required label=\"LLM利用頻度\"", "required label=\"AIに関する自己評価\"", "{required ? <span className=\"required-indicator\">必須選択</span> : null}", "回答を保存して終了", 'router.replace("/finish")']) {
   if (!surveyPage.includes(expectedText)) {
     throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
   }

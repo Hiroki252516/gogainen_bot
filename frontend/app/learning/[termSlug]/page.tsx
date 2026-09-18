@@ -67,14 +67,6 @@ type Feedback = {
   next_url?: string;
 };
 
-function learningStageLabel(stage?: string, backendLabel?: string) {
-  if (backendLabel) return backendLabel;
-  if (stage === "enrichment") return "豊富化";
-  if (stage === "conceptual_change") return "概念変化";
-  if (stage === "final_feedback") return "教材フィードバック";
-  return "概念変化";
-}
-
 function componentDisplay(turn: Turn) {
   const items = turn.practice_question?.items || [];
   if (items.length) {
@@ -328,15 +320,19 @@ export default function LearningPage() {
   return (
     <AppShell step="学習セッション">
       <section className="panel stack" aria-busy={submitting || (!turn && !error)}>
-        <h1>学習セッション</h1>
+        <div className="topbar learning-topbar">
+          <h1>学習セッション</h1>
+          {turn ? (
+            <span className="muted question-progress" aria-label={`${turn.turn_index} / ${turn.max_turns}`}>
+              {turn.turn_index} / {turn.max_turns}
+            </span>
+          ) : null}
+        </div>
         {error ? <div className="danger">{error}</div> : null}
         {turn ? (
           <>
             <div className="notice">
-              <strong>今回の学習</strong>
-              <p>対象概念: {turn.term_label || termSlug}</p>
-              <p>段階: {learningStageLabel(turn.learning_stage, turn.learning_stage_label)}</p>
-              <p>{turn.learning_stage === "enrichment" ? "不足知識を補います" : "誤った捉え方を見直します"}</p>
+              <strong>学習内容：{turn.term_label || termSlug}</strong>
             </div>
             <div className="learning-layout">
               <section className="learning-block material-block" aria-labelledby="material-title">
