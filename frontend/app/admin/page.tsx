@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { API_BASE, api, clearParticipantSession, participantId } from "@/lib/api";
+import { API_BASE, ApiError, api, clearParticipantSession, participantId } from "@/lib/api";
 
 type Participant = {
   participant_id: string;
@@ -18,6 +19,7 @@ type Participant = {
 type GroupCondition = "control" | "proposed";
 const REASONING_EFFORTS = ["low", "medium", "high"] as const;
 type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+type CurrentStepResponse = { step: string; next_url: string };
 type AiStatus = {
   ai_backend: string;
   account_label?: string;
@@ -31,6 +33,22 @@ type AiStatus = {
   reasoning_effort_change_block_reason?: string | null;
   reasoning_effort_applies?: boolean;
 };
+
+const ADMIN_RESUME_PARTICIPANT_ID_KEY = "admin_resume_participant_id";
+const ADMIN_RESUME_DISPLAY_CODE_KEY = "admin_resume_display_code";
+
+function rememberAdminResumeParticipant(id: string) {
+  localStorage.setItem(ADMIN_RESUME_PARTICIPANT_ID_KEY, id);
+  const displayCode = localStorage.getItem("display_code");
+  if (displayCode) localStorage.setItem(ADMIN_RESUME_DISPLAY_CODE_KEY, displayCode);
+}
+
+function clearAdminResumeParticipant(id?: string) {
+  if (!id || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_ID_KEY) === id) {
+    localStorage.removeItem(ADMIN_RESUME_PARTICIPANT_ID_KEY);
+    localStorage.removeItem(ADMIN_RESUME_DISPLAY_CODE_KEY);
+  }
+}
 
 const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
   resolved: "解消",
@@ -91,6 +109,7 @@ const LOG_FIELD_LABELS: Record<string, string> = {
 };
 
 export default function AdminPage() {
+  const router = useRouter();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activeGroup, setActiveGroup] = useState<GroupCondition>("control");
   const [summary, setSummary] = useState<any>(null);
@@ -104,8 +123,12 @@ export default function AdminPage() {
   const [logError, setLogError] = useState("");
   const [recalculating, setRecalculating] = useState(false);
   const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null);
+  const [resumingExperiment, setResumingExperiment] = useState(false);
+  const [flowNavigationError, setFlowNavigationError] = useState("");
 
   useEffect(() => {
+    const activeParticipantId = participantId();
+    if (activeParticipantId) rememberAdminResumeParticipant(activeParticipantId);
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants));
     api("/api/admin/evaluation-summary").then(setSummary);
     api("/api/admin/logs/overview").then(setOverview);
@@ -116,6 +139,45 @@ export default function AdminPage() {
     setParticipantLog(null);
     setLogError("");
   }, [activeGroup]);
+
+  function returnToExperimentStart() {
+    const activeParticipantId = participantId();
+    if (activeParticipantId) rememberAdminResumeParticipant(activeParticipantId);
+    setFlowNavigationError("");
+    clearParticipantSession();
+    router.push("/start");
+  }
+
+  async function resumeExperiment() {
+    const activeParticipantId = participantId();
+    const resumeParticipantId = activeParticipantId || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_ID_KEY);
+    if (!resumeParticipantId) {
+      setFlowNavigationError("このブラウザで再開できる実験が見つかりません。");
+      return;
+    }
+
+    setFlowNavigationError("");
+    setResumingExperiment(true);
+    try {
+      const current = await api<CurrentStepResponse>(`/api/participants/${resumeParticipantId}/current-step`);
+      const displayCode = activeParticipantId
+        ? localStorage.getItem("display_code")
+        : localStorage.getItem(ADMIN_RESUME_DISPLAY_CODE_KEY);
+      localStorage.setItem("participant_id", resumeParticipantId);
+      if (displayCode) localStorage.setItem("display_code", displayCode);
+      localStorage.removeItem("pending_assignment_code");
+      clearAdminResumeParticipant(resumeParticipantId);
+      router.push(current.next_url || "/start");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        clearAdminResumeParticipant(resumeParticipantId);
+        if (participantId() === resumeParticipantId) clearParticipantSession();
+      }
+      setFlowNavigationError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setResumingExperiment(false);
+    }
+  }
 
   async function startLogin(type: "chatgpt" | "chatgptDeviceCode") {
     setLoginError("");
@@ -194,6 +256,7 @@ export default function AdminPage() {
       if (participantId() === participant.participant_id) {
         clearParticipantSession();
       }
+      clearAdminResumeParticipant(participant.participant_id);
       if (participantLog?.participant?.participant_id === participant.participant_id) {
         setParticipantLog(null);
       }
@@ -299,10 +362,14 @@ export default function AdminPage() {
               </div>
             ) : null}
           </div>
+          {flowNavigationError ? <p className="danger" role="alert">{flowNavigationError}</p> : null}
           <div className="actions">
-            <Link className="button secondary" href="/start">
+            <button className="secondary" type="button" onClick={returnToExperimentStart}>
               実験開始画面へ戻る
-            </Link>
+            </button>
+            <button className="secondary" type="button" onClick={resumeExperiment} disabled={resumingExperiment}>
+              {resumingExperiment ? "実験途中を確認中..." : "実験途中に戻る"}
+            </button>
             <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview_excel.csv`}>
               全体ログ Excel互換CSV
             </a>

@@ -310,7 +310,7 @@ const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.u
 if (!adminPage.includes("clearParticipantSession") || !adminPage.includes("participantId()")) {
   throw new Error("admin page must clear a deleted participant's browser session");
 }
-for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "ギブアップ回数", "実験開始画面へ戻る", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/logs.csv", "/logs_excel.csv"]) {
+for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "ギブアップ回数", "実験開始画面へ戻る", "実験途中に戻る", "returnToExperimentStart", "resumeExperiment", "ADMIN_RESUME_PARTICIPANT_ID_KEY", "clearParticipantSession();", "current-step`", "router.push(\"/start\")", "router.push(current.next_url || \"/start\")", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/logs.csv", "/logs_excel.csv"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }
