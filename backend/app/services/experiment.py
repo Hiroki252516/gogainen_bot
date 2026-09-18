@@ -229,29 +229,6 @@ def _feedback_text_from_item_results(item_results: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _previous_turn_prefix(previous_turn: TutorTurn | None) -> str:
-    if not previous_turn:
-        return ""
-    parts = []
-    previous_question = (previous_turn.practice_question_json or {}).get("body")
-    if previous_question:
-        parts.append(f"前の問題: {previous_question}")
-    if previous_turn.learner_response:
-        parts.append(f"あなたの回答: {previous_turn.learner_response}")
-    if previous_turn.ai_feedback:
-        parts.append(f"前の回答を踏まえて、{previous_turn.ai_feedback}")
-    return "\n".join(parts) + ("\n\n" if parts else "")
-
-
-def _practice_question_text(practice_question: dict[str, Any] | None) -> str:
-    if not practice_question:
-        return ""
-    if practice_question.get("body"):
-        return practice_question["body"]
-    items = practice_question.get("items") or []
-    return " / ".join(item.get("body", "") for item in items if item.get("body"))
-
-
 def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
     return {
         "M1": "単一の誤った命題を明示し、反証と正しい説明を対比して信念を置き換えさせる。",
@@ -1476,7 +1453,6 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     term = db.get(Term, session.term_id)
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one()
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
-    previous_turn = db.get(TutorTurn, state.last_tutor_turn_id) if state.last_tutor_turn_id else None
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
     latest_open_turn = (
         db.query(TutorTurn)
@@ -1522,7 +1498,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "variant_key": spec["variant_key"],
         "learning_variant_index": learning_variant_index,
     }
-    tutor_message = _previous_turn_prefix(previous_turn) + spec["material"]
+    tutor_message = spec["material"]
     teaching_strategy = effective_strategy
     material_source = "ai"
     material_generation_ms = None
@@ -1567,9 +1543,6 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             },
             "previous_answer": previous_attempt.reason_text if previous_attempt else "",
             "previous_diagnosis_for_learner": state.state_summary,
-            "previous_practice_question": _practice_question_text(previous_turn.practice_question_json if previous_turn else None),
-            "previous_learner_response": previous_turn.learner_response if previous_turn else "",
-            "previous_feedback_for_learner": previous_turn.ai_feedback if previous_turn else "",
             "previous_learning_misconception": previous_learning_misconception,
             "session_misconception_history": misconception_history,
             "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(effective_misconception),

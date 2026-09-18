@@ -772,6 +772,49 @@ def test_learning_answer_generates_feedback_with_group_specific_payloads():
         db.close()
 
 
+def test_next_learning_material_excludes_previous_confirmation_question_answer_and_feedback():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
+    first_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    first_result = client.post(
+        f"/api/tutor-turns/{first_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+    )
+    assert first_result.status_code == 200, first_result.text
+    previous_turn = _latest_turn(first_turn["turn_id"])
+    assert previous_turn is not None
+    assert previous_turn.ai_feedback == first_result.json()["feedback"]
+
+    next_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+    assert next_turn.status_code == 200, next_turn.text
+    next_material = next_turn.json()["tutor_message"]
+    assert first_turn["practice_question"]["body"] not in next_material
+    assert previous_turn.learner_response not in next_material
+    assert previous_turn.ai_feedback not in next_material
+    assert "前の問題:" not in next_material
+    assert "あなたの回答:" not in next_material
+    assert "振り返り:" not in next_material
+
+    db = SessionLocal()
+    try:
+        next_generation_log = (
+            db.query(AICallLog)
+            .filter_by(purpose="generate_tutoring_turn")
+            .order_by(AICallLog.created_at.desc())
+            .all()
+        )
+        next_generation_log = next(
+            log for log in next_generation_log if log.request_payload.get("participant_id") == pid
+        )
+        assert "previous_practice_question" not in next_generation_log.request_payload
+        assert "previous_learner_response" not in next_generation_log.request_payload
+        assert "previous_feedback_for_learner" not in next_generation_log.request_payload
+        assert next_generation_log.request_payload["previous_learning_misconception"]["misconception_type"] == "M3"
+        assert next_generation_log.request_payload["session_misconception_history"]
+    finally:
+        db.close()
+
+
 def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch):
     class FailingBackend:
         provider = "codex_app_server"
@@ -821,6 +864,7 @@ def test_control_group_logs_same_stage_but_uses_general_explanation():
 
     assert turn["learning_stage"] == "conceptual_change"
     assert turn["teaching_strategy"] == "general_explanation"
+    assert turn["tutor_message"]
     assert turn["practice_question"]["selection_mode"] == "multiple"
 
 
@@ -1650,6 +1694,47 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     assert "generate_correct_answer_summary" in text
     assert "explain_selected_distractor" in text
     assert "正答の選択肢本文、正答位置、正答そのものを直接示さない" in text
+
+
+def test_tutoring_prompt_keeps_previous_learning_feedback_out_of_material(monkeypatch):
+    backend = CodexAppServerBackend()
+    captured_prompt: dict[str, str] = {}
+
+    async def capture_prompt(purpose, prompt, output_schema):
+        captured_prompt["text"] = prompt
+        return {
+            "tutor_message": "## マルチエージェント\n\n### 要点\n- 役割を分担して課題を処理します。\n\n### 具体例\n- 複数の担当が連携します。\n\n### 注意点\n- 単なる複数AIの集合ではありません。",
+            "teaching_strategy": "foundational_explanation",
+            "scaffolding_level": "L3",
+            "requires_learner_response": True,
+            "learner_prompt": "説明してください。",
+            "practice_question": {"body": "確認問題", "expected_answer": "説明", "question_type": "learning_multi_select"},
+            "forbidden_help_given": False,
+        }
+
+    monkeypatch.setattr(backend, "_run_structured_turn", capture_prompt)
+    result = asyncio.run(
+        backend.generate_tutoring_turn(
+            {
+                "group_condition": "proposed",
+                "term": {"slug": "multi_agent", "label": "マルチエージェント", "description": "複数のエージェントが役割を分担する方式。"},
+                "learning_stage": "conceptual_change",
+                "fixed_practice_question": {"body": "確認問題", "expected_answer": "説明"},
+                "learner_state": {"teaching_strategy": "foundational_explanation", "scaffolding_level": "L3"},
+                "previous_learning_misconception": {"misconception_type": "M3"},
+                "session_misconception_history": [{"misconception_type": "M3"}],
+            }
+        )
+    )
+
+    prompt = captured_prompt["text"]
+    assert "tutor_message には現在の用語を説明する教材本文だけを含める" in prompt
+    assert "前の問題文、学習者の回答、過去のフィードバックや振り返りを転載・要約しない" in prompt
+    assert "過去の問題・回答・フィードバックを学習者向け本文に出さない" in prompt
+    assert "前の問題: ..." not in prompt
+    assert "tutor_message の冒頭に『あなたの回答:" not in prompt
+    assert "前の問題: " not in result["tutor_message"]
+    assert "振り返り:" not in result["tutor_message"]
 
 
 def test_mock_tutoring_and_feedback_use_markdown_contract():
