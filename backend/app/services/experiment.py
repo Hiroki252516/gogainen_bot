@@ -235,6 +235,28 @@ def _feedback_text_from_item_results(item_results: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _previous_turn_prefix(previous_turn: TutorTurn | None) -> str:
+    if not previous_turn:
+        return ""
+    parts = []
+    previous_question = _practice_question_text(previous_turn.practice_question_json)
+    if previous_question:
+        parts.append(f"前の問題: {previous_question}")
+    previous_response = previous_turn.learner_response or ""
+    if previous_response:
+        parts.append(f"あなたの回答: {previous_response}")
+    return "\n".join(parts) + ("\n\n" if parts else "")
+
+
+def _practice_question_text(practice_question: dict[str, Any] | None) -> str:
+    if not practice_question:
+        return ""
+    if practice_question.get("body"):
+        return practice_question["body"]
+    items = practice_question.get("items") or []
+    return " / ".join(item.get("body", "") for item in items if item.get("body"))
+
+
 def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
     return {
         "M1": "単一の誤った命題を明示し、誤った考え、正しい考え、反例、誤りの理由をこの順で教材本文へ含める。",
@@ -1505,6 +1527,15 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one()
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
+    previous_turn = None
+    if participant.group_condition == "proposed" and turn_count:
+        previous_turn = (
+            db.query(TutorTurn)
+            .filter_by(tutor_session_id=session.id)
+            .filter(TutorTurn.learner_response.is_not(None))
+            .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
+            .first()
+        )
     latest_open_turn = (
         db.query(TutorTurn)
         .filter_by(tutor_session_id=session.id, learner_response=None)
@@ -1605,6 +1636,8 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             },
             "previous_answer": previous_attempt.reason_text if previous_attempt else "",
             "previous_diagnosis_for_learner": state.state_summary,
+            "previous_practice_question": _practice_question_text(previous_turn.practice_question_json if previous_turn else None),
+            "previous_learner_response": (previous_turn.learner_response or "") if previous_turn else "",
             "previous_learning_misconception": previous_learning_misconception,
             "session_misconception_history": misconception_history,
             "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(active_misconception_type),
@@ -1621,7 +1654,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     started = perf_counter()
     result, mandatory_validation = await _generate_validated_tutoring_turn(db, payload)
     material_generation_ms = int((perf_counter() - started) * 1000)
-    tutor_message = result["tutor_message"]
+    tutor_message = _previous_turn_prefix(previous_turn) + result["tutor_message"]
     teaching_strategy = result["teaching_strategy"]
 
     turn = TutorTurn(
