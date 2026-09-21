@@ -1837,8 +1837,18 @@ def test_mock_tutoring_and_feedback_use_markdown_contract():
     }
 
     turn = asyncio.run(backend.generate_tutoring_turn(payload))
-    for heading in ("## マルチエージェント", "### 要点", "### 具体例", "### 注意点"):
+    for heading in (
+        "## マルチエージェント",
+        "### 定義",
+        "### 構成要素",
+        "### 役割",
+        "### 判断基準",
+        "### 正例",
+        "### 非例",
+    ):
         assert heading in turn["tutor_message"]
+    for heading in ("### 要点", "### 具体例", "### 注意点"):
+        assert heading not in turn["tutor_message"]
 
     correct_feedback = asyncio.run(
         backend.generate_feedback({**payload, "learner_response": "役割を分担します。"})

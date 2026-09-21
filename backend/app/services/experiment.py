@@ -16,6 +16,11 @@ from sqlalchemy.orm import Session
 from app.ai.codex_app_server_backend import CodexAppServerError
 from app.ai.backend import lower_level, normalize_level, raise_level, strategy_for
 from app.ai.factory import get_ai_backend
+from app.ai.mandatory_elements import (
+    MANDATORY_MISCONCEPTION_TYPES,
+    mandatory_element_requirements,
+    validate_mandatory_elements,
+)
 from app.ai.misconception_taxonomy import taxonomy_for_prompt
 from app.core.config import get_settings
 from app.core.runtime_config import current_reasoning_effort
@@ -62,6 +67,7 @@ LEARNING_ALLOWED_STEPS = {"learning_targets", "final_test"}
 RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではありません。"
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
+MANDATORY_ELEMENT_MAX_ATTEMPTS = 2
 
 
 def _commit(db: Session) -> None:
@@ -253,12 +259,57 @@ def _practice_question_text(practice_question: dict[str, Any] | None) -> str:
 
 def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
     return {
-        "M1": "単一の誤った命題を明示し、反証と正しい説明を対比して信念を置き換えさせる。",
+        "M1": "単一の誤った命題を明示し、誤った考え、正しい考え、反例、誤りの理由をこの順で教材本文へ含める。",
         "M2": "複数の信念がつながった説明モデルを確認し、中核前提を修正してモデル全体を再構成させる。",
-        "M3": "対象概念を誤った上位カテゴリーに置いていることへ気づかせ、正しいカテゴリーへ再分類させる。",
+        "M3": "対象概念の誤カテゴリー、正カテゴリー、境界基準、近いカテゴリーとの比較をこの順で教材本文へ含める。",
         "M4": "不足しているカテゴリーや関係のスキーマを具体例から構築し、新しい知識構造へ接続させる。",
-        "unknown": "基礎定義と構成要素を短く確認し、最小限の判断基準を示す。",
+        "unknown": "誤概念を推測せず、基礎定義、主要構成要素、役割、最小限の判断基準、正例、非例を必ず教材本文へ含める。",
     }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
+
+
+async def _generate_validated_tutoring_turn(
+    db: Session,
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Generate proposed-group material and enforce the MVP operation contract."""
+    expected_type = payload.get("active_misconception_type")
+    if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
+        result = await _ai_call(db, "generate_tutoring_turn", payload)
+        return result, {
+            "required": False,
+            "valid": True,
+            "expected_type": expected_type,
+            "actual_type": None,
+            "required_fields": [],
+            "missing": [],
+            "attempts": 1,
+        }
+
+    term_label = (payload.get("term") or {}).get("label")
+    request_payload = payload
+    validation: dict[str, Any] = {}
+    for attempt in range(1, MANDATORY_ELEMENT_MAX_ATTEMPTS + 1):
+        result = await _ai_call(db, "generate_tutoring_turn", request_payload)
+        validation = validate_mandatory_elements(result, expected_type, term_label)
+        if validation["valid"]:
+            return result, {**validation, "attempts": attempt}
+        if attempt < MANDATORY_ELEMENT_MAX_ATTEMPTS:
+            request_payload = {
+                **payload,
+                "mandatory_element_retry": {
+                    "attempt": attempt + 1,
+                    "missing": validation["missing"],
+                },
+            }
+
+    raise HTTPException(
+        status_code=503,
+        detail={
+            "error_code": "mandatory_elements_missing",
+            "message": "教材の必須教授要素を生成できませんでした。",
+            "missing": validation.get("missing", []),
+        },
+    )
 
 
 def _practice_meta(turn: TutorTurn | None) -> dict[str, Any]:
@@ -1505,6 +1556,9 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     effective_strategy = strategy_for(effective_misconception, effective_status, participant.group_condition)
     if participant.group_condition == "control":
         effective_strategy = "general_explanation"
+    active_misconception_type = effective_misconception
+    if not active_misconception_type and position["learning_stage"] == "enrichment":
+        active_misconception_type = "unknown"
 
     existing_turns = db.query(TutorTurn).filter_by(tutor_session_id=session.id).all()
     stage_turn_count = sum(
@@ -1563,6 +1617,14 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         ),
     }
     if participant.group_condition == "proposed":
+        diagnostic_options = [
+            {
+                "label": option.option_label,
+                "body": option.body,
+                "initial_misconception_type": option.misconception_type,
+            }
+            for option in _selected_options(db, previous_attempt)
+        ] if previous_attempt else []
         payload = {
             **common_payload,
             "learner_state": {
@@ -1578,13 +1640,19 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "previous_learner_response": (previous_turn.learner_response or "") if previous_turn else "",
             "previous_learning_misconception": previous_learning_misconception,
             "session_misconception_history": misconception_history,
-            "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(effective_misconception),
+            "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(active_misconception_type),
             "misconception_taxonomy": taxonomy_for_prompt(),
+            "active_misconception_type": active_misconception_type,
+            "mandatory_teaching_elements": mandatory_element_requirements(active_misconception_type),
+            "diagnostic_evidence": {
+                "selected_options": diagnostic_options,
+                "diagnosed_type": active_misconception_type,
+            },
         }
     else:
         payload = common_payload
     started = perf_counter()
-    result = await _ai_call(db, "generate_tutoring_turn", payload)
+    result, mandatory_validation = await _generate_validated_tutoring_turn(db, payload)
     material_generation_ms = int((perf_counter() - started) * 1000)
     tutor_message = _previous_turn_prefix(previous_turn) + result["tutor_message"]
     teaching_strategy = result["teaching_strategy"]
@@ -1599,7 +1667,12 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         tutor_message=tutor_message,
         learner_prompt=spec["body"],
         practice_question_json=_merge_stage_meta(practice_question, position),
-        diagnosis_json={"material_source": material_source, "material_generation_ms": material_generation_ms},
+        diagnosis_json={
+            "material_source": material_source,
+            "material_generation_ms": material_generation_ms,
+            "mandatory_elements": result.get("mandatory_elements"),
+            "mandatory_elements_validation": mandatory_validation,
+        },
         forbidden_help_given=False,
     )
     db.add(turn)
@@ -2450,6 +2523,8 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "next_learning_stage": grading.get("next_learning_stage"),
         "teaching_strategy": turn.teaching_strategy,
         "strategy_changed": turn.strategy_changed,
+        "mandatory_elements": (turn.diagnosis_json or {}).get("mandatory_elements"),
+        "mandatory_elements_validation": (turn.diagnosis_json or {}).get("mandatory_elements_validation"),
         "tutor_message": turn.tutor_message,
         "learner_prompt": turn.learner_prompt,
         "question_body": practice_question.get("body"),

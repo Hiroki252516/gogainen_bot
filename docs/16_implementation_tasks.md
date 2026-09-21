@@ -13,6 +13,8 @@
 - ローカルRAG packの読み込み、用語別section制限、LangGraph除外
 - control/proposedの共通RAGと個別化payloadの分離
 - 最新M1〜M4/unknown taxonomyを `backend/app/ai/misconception_taxonomy.py` から実行時注入
+- 提案群M1/M3/unknownの必須教授要素、本文内証拠検証、最大2回の同一AIバックエンド再生成
+- 必須教授要素の研究ログ保存と管理ログ・CSVへの出力
 - Codex app-server設定 `gpt-5.6-luna` / `medium`
 - frontendの参加者画面から内部debug・M分類表示を除去
 - MockAIBackend、backend pytest、frontend smoke/build

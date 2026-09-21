@@ -10,6 +10,12 @@ import websockets
 
 from app.core.config import get_settings
 from app.core.runtime_config import normalize_reasoning_effort
+from app.ai.mandatory_elements import (
+    expected_mandatory_type,
+    mandatory_element_prompt,
+    mandatory_element_headings,
+    mandatory_elements_schema,
+)
 
 
 class CodexAppServerError(RuntimeError):
@@ -196,6 +202,7 @@ class CodexAppServerBackend:
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
         group = payload.get("group_condition", "proposed")
         prompt_payload = payload if group == "proposed" else self._control_tutoring_payload(payload)
+        expected_type = expected_mandatory_type(prompt_payload)
         schema = {
             "type": "object",
             "properties": {
@@ -227,6 +234,9 @@ class CodexAppServerBackend:
             ],
             "additionalProperties": False,
         }
+        if expected_type:
+            schema["properties"]["mandatory_elements"] = mandatory_elements_schema(expected_type)
+            schema["required"].append("mandatory_elements")
         term_label = (payload.get("term") or {}).get("label", "この用語")
         rules = [
             "学習セッション用の短い日本語チュータ発話を、安全なMarkdownとして作る。",
@@ -237,12 +247,12 @@ class CodexAppServerBackend:
             "misconception_scaffolding_guidance があれば、その方略を最優先で教材本文へ反映する。",
             "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
             "rag_context.chunks がある場合は、その教材コンテキストを優先して教材と問題を作る。教材にない内容は推測で断定しない。",
-            "previous_practice_question と previous_learner_response は、提案群で教授方略を決める文脈としてのみ使い、AI生成の tutor_message へ転載しない。backend が教材本文の前に別途表示する。",
-            "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず、現在の用語の教材だけを生成する。",
-            "tutor_message は教材本文であり、必ず『## 用語名』『### 要点』『### 具体例』『### 注意点』の順に構成する。前問・回答の表示ブロックはbackendが教材本文の前に付加する。",
+            "tutor_message には現在の用語を説明する教材本文だけを含める。前の問題文、学習者の回答、過去のフィードバックや振り返りを転載・要約しない。",
+            "previous_practice_question と previous_learner_response は教授方略の選択にだけ使い、AI生成の tutor_message へ転載しない。",
+            "固定確認問題の本文と選択肢はbackend が教材本文の前に別途表示する。",
+            "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず、AI生成の tutor_message へ転載しない。",
+            "提案群の過去ログは教授方略の選択にだけ使い、過去の問題・回答・フィードバックを学習者向け本文に出さない。",
             "教材本文には、現在の主題の定義、役割、よくある誤解との違い、短い具体例または判断基準を必ず含める。",
-            "各セクションは2〜4個程度の簡潔な箇条書き、または短い段落で書く。重要語は **太字** にしてよい。",
-            "内容上必要な場合だけ『### 前提用語とのつながり』『### 何ではないか』を追加する。",
             "教材Markdownでは見出し、箇条書き、太字、短い段落だけを使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
             "問題文は、教材で説明した内容を学習者が自分の言葉で再説明する記述問題にする。答えだけの丸写しではなく、役割や判断基準を含めて説明させる。",
             "通常群と提案群で教材量の差が主効果にならないよう、指定されたL3/L2教材量の条件を守る。",
@@ -251,12 +261,37 @@ class CodexAppServerBackend:
             "再テスト、確認テストの具体的な正解を先取りして出さない。",
             "tutor_message, learner_prompt, practice_question.body に M1〜M4 という内部ラベルを絶対に書かない。",
         ]
+        if expected_type:
+            headings = mandatory_element_headings(expected_type)
+            heading_order = "、".join(f"### {heading}" for heading in headings.values())
+            rules.extend(
+                [
+                    f"tutor_message は必ず『## {term_label}』の後に {heading_order} の順で構成する。",
+                    "M1/M3/unknownでは『### 要点』『### 具体例』『### 注意点』を使わず、タイプ別の見出しを教材構造そのものにする。",
+                    "各タイプ別セクションには対応する必須教授要素を置き、他のタイプの必須要素や不要なセクションを追加しない。",
+                ]
+            )
+        else:
+            rules.extend(
+                [
+                    "tutor_message は必ず『## 用語名』『### 要点』『### 具体例』『### 注意点』の順に構成する。",
+                    "各セクションは2〜4個程度の簡潔な箇条書き、または短い段落で書く。重要語は **太字** にしてよい。",
+                    "内容上必要な場合だけ『### 前提用語とのつながり』『### 何ではないか』を追加する。",
+                ]
+            )
+        if expected_type:
+            rules.append(mandatory_element_prompt(expected_type))
+        if prompt_payload.get("mandatory_element_retry"):
+            rules.append(
+                "前回生成で必須教授要素が不足した。入力JSONの mandatory_element_retry.missing にある項目をすべて補い、証拠文を教材本文へそのまま含める。"
+            )
         if group == "control":
             rules.append("統制群なので、過去ログ、誤概念タイプ、足場掛け履歴に適応しない通常AIチューターとして説明する。teaching_strategy は general_explanation に固定する。")
             rules.append("統制群では、L3相当の基礎教材とL2相当の観点教材を両方tutor_messageに含める。ただし質問はL2相当の1問だけにし、L3質問は出さない。")
         else:
             rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
             rules.append("入力payloadのmisconception_taxonomyにあるM1〜M4の定義と教授方略を厳守する。M3ならカテゴリー再分類、M2なら説明モデルの再構成、M1なら誤信念の反証、M4なら不足スキーマの構築、unknownなら基礎知識の豊富化を優先する。")
+            rules.append("diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置き、学習者が示していない誤概念を創作しない。unknownでは誤った考えを推測しない。")
             rules.append("提案群では、unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)
