@@ -788,6 +788,8 @@ def test_next_learning_material_retains_previous_context_but_excludes_feedback()
     next_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
     assert next_turn.status_code == 200, next_turn.text
     next_material = next_turn.json()["tutor_message"]
+    assert f"前の問題: {first_turn['practice_question']['body']}" in next_material
+    assert f"あなたの回答: {previous_turn.learner_response}" in next_material
     assert previous_turn.ai_feedback not in next_material
     assert "振り返り:" not in next_material
 
@@ -810,6 +812,58 @@ def test_next_learning_material_retains_previous_context_but_excludes_feedback()
         assert next_generation_log.request_payload["session_misconception_history"]
     finally:
         db.close()
+
+
+def test_new_tutor_session_does_not_reuse_previous_session_context():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    first_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
+    first_turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
+    answer = client.post(
+        f"/api/tutor-turns/{first_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+    )
+    assert answer.status_code == 200, answer.text
+
+    db = SessionLocal()
+    try:
+        stored_session = db.get(TutorSession, first_session["tutor_session_id"])
+        assert stored_session is not None
+        stored_session.ended_at = stored_session.started_at
+        db.commit()
+    finally:
+        db.close()
+
+    second_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
+    assert second_session["tutor_session_id"] != first_session["tutor_session_id"]
+    second_turn = client.post(f"/api/tutor-sessions/{second_session['tutor_session_id']}/turns", json={})
+    assert second_turn.status_code == 200, second_turn.text
+    second_material = second_turn.json()["tutor_message"]
+    assert "前の問題:" not in second_material
+    assert "あなたの回答:" not in second_material
+
+    db = SessionLocal()
+    try:
+        generation_log = (
+            db.query(AICallLog)
+            .filter_by(purpose="generate_tutoring_turn")
+            .order_by(AICallLog.created_at.desc())
+            .first()
+        )
+        assert generation_log is not None
+        assert generation_log.request_payload["participant_id"] == pid
+        assert generation_log.request_payload["previous_practice_question"] == ""
+        assert generation_log.request_payload["previous_learner_response"] == ""
+    finally:
+        db.close()
+
+
+def test_previous_turn_prefix_supports_items_and_missing_response():
+    previous_turn = SimpleNamespace(
+        practice_question_json={"items": [{"body": "第一問"}, {"body": "第二問"}]},
+        learner_response=None,
+    )
+
+    assert experiment_service._previous_turn_prefix(previous_turn) == "前の問題: 第一問 / 第二問\n\n"
 
 
 def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch):
@@ -1759,8 +1813,9 @@ def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatc
     )
 
     prompt = captured_prompt["text"]
-    assert "previous_practice_question が空でなければ" in prompt
-    assert "previous_learner_response が空でなければ" in prompt
+    assert "previous_practice_question と previous_learner_response" in prompt
+    assert "AI生成の tutor_message へ転載しない" in prompt
+    assert "backend が教材本文の前に別途表示する" in prompt
     assert "前回の確認問題の内容" in prompt
     assert "前回の学習者の回答" in prompt
     assert "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず" in prompt
