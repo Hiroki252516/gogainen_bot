@@ -238,8 +238,6 @@ def _previous_turn_prefix(previous_turn: TutorTurn | None) -> str:
         parts.append(f"前の問題: {previous_question}")
     if previous_turn.learner_response:
         parts.append(f"あなたの回答: {previous_turn.learner_response}")
-    if previous_turn.ai_feedback:
-        parts.append(f"前の回答を踏まえて、{previous_turn.ai_feedback}")
     return "\n".join(parts) + ("\n\n" if parts else "")
 
 
@@ -1569,7 +1567,6 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "previous_diagnosis_for_learner": state.state_summary,
             "previous_practice_question": _practice_question_text(previous_turn.practice_question_json if previous_turn else None),
             "previous_learner_response": previous_turn.learner_response if previous_turn else "",
-            "previous_feedback_for_learner": previous_turn.ai_feedback if previous_turn else "",
             "previous_learning_misconception": previous_learning_misconception,
             "session_misconception_history": misconception_history,
             "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(effective_misconception),

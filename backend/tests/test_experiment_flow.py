@@ -1441,6 +1441,36 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         db.close()
 
 
+def test_next_tutoring_material_excludes_previous_check_feedback():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
+    first_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    wrong_response = client.post(
+        f"/api/tutor-turns/{first_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+    )
+    assert wrong_response.status_code == 200, wrong_response.text
+    previous_feedback = wrong_response.json()["feedback"]
+    assert previous_feedback
+
+    next_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+    assert next_turn.status_code == 200, next_turn.text
+    assert previous_feedback not in next_turn.json()["tutor_message"]
+
+    db = SessionLocal()
+    try:
+        tutoring_log = (
+            db.query(AICallLog)
+            .filter_by(purpose="generate_tutoring_turn")
+            .order_by(AICallLog.created_at.desc())
+            .first()
+        )
+        assert tutoring_log is not None
+        assert "previous_feedback_for_learner" not in tutoring_log.request_payload
+    finally:
+        db.close()
+
+
 def test_admin_logs_and_csv_show_multiple_selection_labels():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     logs = client.get(f"/api/admin/participants/{pid}/logs").json()
@@ -1647,6 +1677,8 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     assert "### 具体例" in text
     assert "### 注意点" in text
     assert "feedback は安全なMarkdownとして返す" in text
+    assert "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず" in text
+    assert "previous_feedback_for_learner" not in text
     assert "generate_correct_answer_summary" in text
     assert "explain_selected_distractor" in text
     assert "正答の選択肢本文、正答位置、正答そのものを直接示さない" in text

@@ -239,7 +239,7 @@ class CodexAppServerBackend:
             "rag_context.chunks がある場合は、その教材コンテキストを優先して教材と問題を作る。教材にない内容は推測で断定しない。",
             "previous_practice_question が空でなければ、tutor_message の冒頭に『前の問題: ...』を短いMarkdown段落として入れる。",
             "previous_learner_response が空でなければ、tutor_message の冒頭に『あなたの回答: ...』を短いMarkdown段落として入れる。",
-            "previous_feedback_for_learner が空でなければ、前の問題・回答の後に短いMarkdown段落で振り返りを入れる。",
+            "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず、現在の用語の教材だけを生成する。",
             "tutor_message は必ず『## 用語名』『### 要点』『### 具体例』『### 注意点』の順に構成する。",
             "教材本文には、現在の主題の定義、役割、よくある誤解との違い、短い具体例または判断基準を必ず含める。",
             "各セクションは2〜4個程度の簡潔な箇条書き、または短い段落で書く。重要語は **太字** にしてよい。",
