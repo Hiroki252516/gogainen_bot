@@ -69,6 +69,8 @@ volumes:
 
 `.env.example`の初期値は`BACKEND_NETWORK_MODE=host`、`DATABASE_URL=postgresql+psycopg://app:app@127.0.0.1:5432/ai_tutor`、`CODEX_APP_SERVER_URL=ws://127.0.0.1:4500`、`FRONTEND_PORT=3000`、`POSTGRES_PORT=5432`である。host networkではbackendがホストの127.0.0.1上のPostgreSQLとapp-serverへ接続する。bridgeネットワークへ変更する場合は、backendからホストへ接続する設定（通常`host.docker.internal`）とDB接続先を合わせて上書きする。通常実行のAI初期値は `AI_BACKEND=codex_app_server` で、Mockは `AI_BACKEND=mock` を明示したテスト・切り分け用途に限定する。
 
+AI教材生成はapp-serverの応答に数十秒かかる場合があるため、frontendのNext.js rewrite proxyには`experimental.proxyTimeout=300000`（5分）を設定している。Next.jsのproxy既定値30秒のままでは、backendで教材生成と保存が成功していても、画面側だけが`socket hang up`になる。
+
 通常のRAG参照先は`RAG_BASE_DIR=/rag_agent_knowledge_base`である。ここに`chunks.jsonl`がない場合だけ、retrieverは互換用のlegacyディレクトリ`rag_ready_教材`へフォールバックする。Composeでは両方をread-only mountする。
 
 ## Codex app-server

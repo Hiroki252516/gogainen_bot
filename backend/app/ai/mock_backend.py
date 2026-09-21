@@ -3,6 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from app.ai.backend import initial_level, strategy_for
+from app.ai.mandatory_elements import (
+    expected_mandatory_type,
+    mandatory_element_headings,
+    mock_mandatory_elements,
+)
 
 
 class MockAIBackend:
@@ -30,7 +35,19 @@ class MockAIBackend:
         group = payload.get("group_condition", "proposed")
         fixed_question = payload.get("fixed_practice_question") or {}
         question_body = fixed_question.get("body") or f"{label}について、適切な説明をすべて選びなさい。"
-        if stage == "enrichment":
+        mandatory_type = expected_mandatory_type(payload)
+        mandatory_elements = None
+        if mandatory_type:
+            mandatory_elements = mock_mandatory_elements(label, description, mandatory_type)
+            headings = mandatory_element_headings(mandatory_type)
+            message = (
+                f"## {label}\n\n"
+                + "\n\n".join(
+                    f"### {headings[field]}\n- {mandatory_elements[field]}"
+                    for field in headings
+                )
+            )
+        elif stage == "enrichment":
             message = (
                 f"## {label}\n\n"
                 "### 要点\n"
@@ -53,7 +70,7 @@ class MockAIBackend:
                 "- 似た仕組みとの違いを、表面的な言葉ではなく構造から確認します。"
             )
         learner_state = payload.get("learner_state") or {}
-        return {
+        result = {
             "tutor_message": message,
             "teaching_strategy": "general_explanation" if group == "control" else learner_state.get("teaching_strategy") or "foundational_explanation",
             "scaffolding_level": learner_state.get("scaffolding_level") or "L3",
@@ -66,6 +83,9 @@ class MockAIBackend:
             },
             "forbidden_help_given": False,
         }
+        if mandatory_elements:
+            result["mandatory_elements"] = mandatory_elements
+        return result
 
     async def grade_response(self, payload: dict[str, Any]) -> dict[str, Any]:
         result = _fixed_result(payload)
