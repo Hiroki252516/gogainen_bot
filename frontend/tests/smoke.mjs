@@ -66,7 +66,7 @@ for (const expectedText of [":initial`,", ":after:${completedTurnId}`"]) {
     throw new Error(`learning page must use a distinct idempotency key per turn generation: ${expectedText}`);
   }
 }
-for (const expectedText of ['localStorage.getItem("learning_targets")', "idx + 1 < targets.length", "`/learning/${targets[idx + 1]}`", ' : "/retest"']) {
+for (const expectedText of ['localStorage.getItem("learning_targets")', "readLearningTargetSlugs", "term_slug", "idx + 1 < targets.length", "`/learning/${targets[idx + 1]}`", ' : "/retest"']) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing ordered target continuation: ${expectedText}`);
   }
@@ -128,7 +128,7 @@ if (learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") |
 if (!learningPage.includes("turnShownAt") || !learningPage.includes("question_shown_at: turnShownAt") || !learningPage.includes("answered_at: answeredAt")) {
   throw new Error("learning page must send turn timing timestamps");
 }
-for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "learning-progress-summary", "学習セッションの進捗", "この問題の残り挑戦回数", "questionProgress", "ATTEMPTS_PER_PROBLEM", "progressForNewQuestion(termSlug", "remainingAttempts", "remaining_attempts", "progress.current", "progress.total", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
+for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "learning-progress-summary", "学習セッションの進捗", "この問題の残り挑戦回数", "questionProgress", "ATTEMPTS_PER_PROBLEM", "progressForNewQuestion(termSlug", "maxAttempts", "maxAttempts - turnIndex + 1", "remainingAttempts", "remaining_attempts", "progress.current", "progress.total", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing multiple-selection/progress behavior: ${expectedText}`);
   }

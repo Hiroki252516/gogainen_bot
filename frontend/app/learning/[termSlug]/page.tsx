@@ -74,22 +74,35 @@ type QuestionProgress = { current: number; total: number; remainingAttempts: num
 
 const ATTEMPTS_PER_PROBLEM = 3;
 
-function progressForNewQuestion(termSlug: string, turn: Pick<Turn, "turn_index" | "max_turns">): QuestionProgress {
-  let targets: string[] = [];
-  if (typeof window !== "undefined") {
-    try {
-      const storedTargets = JSON.parse(localStorage.getItem("learning_targets") || "[]");
-      targets = Array.isArray(storedTargets) ? storedTargets.filter((target): target is string => typeof target === "string") : [];
-    } catch {
-      targets = [];
-    }
+function readLearningTargetSlugs(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem("learning_targets") || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((target) => {
+        if (typeof target === "string") return target;
+        if (target && typeof target === "object" && "term_slug" in target) {
+          const slug = (target as { term_slug?: unknown }).term_slug;
+          return typeof slug === "string" ? slug : null;
+        }
+        return null;
+      })
+      .filter((slug): slug is string => Boolean(slug));
+  } catch {
+    return [];
   }
+}
+
+function progressForNewQuestion(termSlug: string, turn: Pick<Turn, "turn_index" | "max_turns">): QuestionProgress {
+  const targets = readLearningTargetSlugs();
   const turnIndex = Math.max(turn.turn_index, 1);
+  const maxAttempts = Math.max(turn.max_turns || ATTEMPTS_PER_PROBLEM, 1);
   const targetIndex = targets.indexOf(termSlug);
   return {
     current: targetIndex >= 0 ? targetIndex + 1 : 1,
-    total: targets.length || turn.max_turns,
-    remainingAttempts: Math.max(ATTEMPTS_PER_PROBLEM - turnIndex, 0),
+    total: targets.length || 1,
+    remainingAttempts: Math.max(maxAttempts - turnIndex + 1, 0),
   };
 }
 
@@ -213,8 +226,7 @@ export default function LearningPage() {
   const flowReady = flow.ready;
 
   const nextHref = useMemo(() => {
-    if (typeof window === "undefined") return "/retest";
-    const targets = JSON.parse(localStorage.getItem("learning_targets") || "[]") as string[];
+    const targets = readLearningTargetSlugs();
     const idx = targets.indexOf(termSlug);
     return idx >= 0 && idx + 1 < targets.length ? `/learning/${targets[idx + 1]}` : "/retest";
   }, [termSlug]);

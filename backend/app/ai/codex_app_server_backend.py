@@ -710,9 +710,9 @@ def _parse_json_object(raw_text: str) -> dict[str, Any]:
 
 
 def _strip_internal_labels(text: str) -> str:
-    cleaned = re.sub(r"\bM[1-4]\b", "内部分類", text or "")
+    cleaned = re.sub(r"(?<![A-Za-z0-9])M[1-4](?![A-Za-z0-9])", "内部分類", text or "")
     return re.sub(
-        r"(?m)(^|。|\n)\s*(?:target_claim_id|addressed_claim_ids|refutation_mode|corrected_claim|mechanism_explanation|contrast_example|transfer_check|mandatory_elements|definition|components|role|decision_criterion|positive_example|non_example)\s*:\s*",
+        r"(?m)(^|。|\n)\s*(?:target_claim_id|addressed_claim_ids|refutation_mode|corrected_claim|mechanism_explanation|contrast_example|transfer_check|mandatory_elements|definition|components|role|decision_criterion|positive_example|non_example|wrong_belief|correct_belief|counterexample|reason|wrong_category|correct_category|boundary_criterion)\s*[:：]\s*",
         r"\1",
         cleaned,
     )

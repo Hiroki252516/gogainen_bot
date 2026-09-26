@@ -86,11 +86,29 @@ def test_codex_evidence_reconciliation_uses_visible_unknown_sections():
     assert result["teaching_contract"]["transfer_check"] in result["tutor_message"]
 
 
+def test_codex_evidence_reconciliation_fills_empty_values():
+    backend = MockAIBackend()
+    payload = _payload("unknown", "enrichment")
+    result = asyncio.run(backend.generate_tutoring_turn(payload))
+    result["mandatory_elements"]["components"] = ""
+
+    reconcile_mandatory_elements(result, "unknown")
+
+    validation = validate_mandatory_elements(result, "unknown", payload["term"]["label"])
+    assert validation["valid"], validation
+    assert result["mandatory_elements"]["components"]
+
+
 def test_codex_strips_contract_field_labels_from_learner_material():
     backend = CodexAppServerBackend()
     payload = _payload("unknown", "enrichment")
     result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
-    result["tutor_message"] += "\n\nmechanism_explanation: 仕組みを確認します。\ntransfer_check: 新しい例に適用します。"
+    result["tutor_message"] += (
+        "\n\nmechanism_explanation：仕組みを確認します。"
+        "\ntransfer_check: 新しい例に適用します。"
+        "\nM1誤概念"
+        "\nwrong_belief：誤った考え"
+    )
 
     async def capture(purpose, prompt, output_schema):
         return result
@@ -98,8 +116,10 @@ def test_codex_strips_contract_field_labels_from_learner_material():
     backend._run_structured_turn = capture
     normalized = asyncio.run(backend.generate_tutoring_turn(payload))
 
-    assert "mechanism_explanation:" not in normalized["tutor_message"]
+    assert "mechanism_explanation：" not in normalized["tutor_message"]
     assert "transfer_check:" not in normalized["tutor_message"]
+    assert "M1誤概念" not in normalized["tutor_message"]
+    assert "wrong_belief：" not in normalized["tutor_message"]
 
 
 def test_validator_rejects_evidence_not_present_in_visible_material():

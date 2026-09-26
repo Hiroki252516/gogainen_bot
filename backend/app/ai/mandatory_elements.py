@@ -274,10 +274,8 @@ def reconcile_mandatory_elements(result: dict[str, Any], misconception_type: str
         section = _heading_section(message, heading, tuple(headings.values()))
         evidence = _first_section_evidence(section)
         current = repaired.get(field)
-        if evidence and (
-            not isinstance(current, str)
-            or _normalize_evidence(current) not in _normalize_evidence(section)
-        ):
+        normalized_current = _normalize_evidence(current) if isinstance(current, str) else ""
+        if evidence and (not normalized_current or normalized_current not in _normalize_evidence(section)):
             repaired[field] = evidence
     result["mandatory_elements"] = repaired
     return result

@@ -113,7 +113,9 @@ export function useLearningTargetFlowGuard(termSlug: string) {
 
         const data = await api<LearningTargetsResponse>(`/api/participants/${id}/learning-targets`);
         if (!active) return;
-        if (data.targets.some((target) => target.term_slug === termSlug)) {
+        const targetSlugs = data.targets.map((target) => target.term_slug);
+        localStorage.setItem("learning_targets", JSON.stringify(targetSlugs));
+        if (targetSlugs.includes(termSlug)) {
           setReady(true);
         } else {
           router.replace("/learning-targets");
