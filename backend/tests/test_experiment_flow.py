@@ -586,6 +586,26 @@ def test_learning_targets_returns_all_pretest_results_without_internal_labels():
     )
 
 
+def test_learning_targets_follow_pretest_order_not_diagnosis_priority():
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    pid = participant["participant_id"]
+    _submit_phase_questions_by_term(
+        pid,
+        "pretest",
+        {
+            "llm_knowledge": ["J"],
+            "multi_agent": ["G", "H", "I"],
+            "memory_process": ["D", "E", "F"],
+        },
+    )
+    diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
+    assert diagnosis.status_code == 200, diagnosis.text
+
+    response = client.get(f"/api/participants/{pid}/learning-targets")
+    assert response.status_code == 200, response.text
+    assert [target["term_slug"] for target in response.json()["targets"]] == list(ACTIVE_TERM_SLUGS)
+
+
 def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
@@ -989,15 +1009,15 @@ def test_retest_non_mastery_routes_to_first_failed_learning_session_and_blocks_f
     assert blocked_attempt.status_code == 409
 
 
-def test_retest_non_mastery_returns_failed_terms_in_priority_order():
+def test_retest_non_mastery_returns_failed_terms_in_pretest_order():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     _submit_phase_questions_by_term(
         pid,
         "retest",
         {
-            "llm_knowledge": ["A", "B", "C"],
+            "llm_knowledge": ["J"],
             "multi_agent": ["G", "H", "I"],
-            "memory_process": ["J"],
+            "memory_process": ["D", "E", "F"],
         },
     )
 
@@ -1005,12 +1025,12 @@ def test_retest_non_mastery_returns_failed_terms_in_priority_order():
     assert score.status_code == 200, score.text
     payload = score.json()
     assert payload["next_step"] == "learning_targets"
-    assert payload["next_url"] == "/learning/multi_agent"
-    assert payload["learning_target_slugs"] == ["multi_agent", "memory_process"]
+    assert payload["next_url"] == "/learning/llm_knowledge"
+    assert payload["learning_target_slugs"] == list(ACTIVE_TERM_SLUGS)
     targets = client.get(f"/api/participants/{pid}/learning-targets")
     assert targets.status_code == 200, targets.text
     assert targets.json()["current_step"] == "learning_targets"
-    assert [target["term_slug"] for target in targets.json()["targets"]] == ["multi_agent", "memory_process"]
+    assert [target["term_slug"] for target in targets.json()["targets"]] == list(ACTIVE_TERM_SLUGS)
 
 
 def test_incomplete_retest_keeps_unanswered_term_as_learning_target():
@@ -1489,26 +1509,122 @@ def test_correct_final_test_still_routes_to_survey():
     assert score.json()["next_url"] == "/survey"
 
 
-def test_learning_confirmation_uses_five_variants_then_reuses_variant_five():
+def test_learning_session_moves_to_next_target_after_three_incorrect_turns():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
-    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
-    observed: list[str] = []
-    for _ in range(6):
-        turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-        observed.append(turn["practice_question"]["variant_key"])
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
+    for attempt_index in range(3):
+        turn_response = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+        assert turn_response.status_code == 200, turn_response.text
+        turn = turn_response.json()
+        assert turn["turn_index"] == attempt_index + 1
         response = client.post(
             f"/api/tutor-turns/{turn['turn_id']}/respond",
             json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["D", "E", "F"])},
         )
         assert response.status_code == 200, response.text
-    assert observed == [
-        "learning_conceptual_change_v1",
-        "learning_conceptual_change_v2",
-        "learning_conceptual_change_v3",
-        "learning_conceptual_change_v4",
-        "learning_conceptual_change_v5",
-        "learning_conceptual_change_v5",
-    ]
+        payload = response.json()
+        if attempt_index < 2:
+            assert payload["session_completed"] is False
+            assert payload["next_url"] is None
+        else:
+            assert payload["session_completed"] is True
+            assert payload["is_sufficient"] is False
+            assert payload["session_ended_by_attempt_limit"] is True
+            assert payload["remaining_attempts"] == 0
+            assert payload["next_url"] == "/learning/multi_agent"
+
+    ended_session_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+    assert ended_session_turn.status_code == 409
+
+    next_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"})
+    assert next_session.status_code == 200, next_session.text
+    next_session_id = next_session.json()["tutor_session_id"]
+    for attempt_index in range(3):
+        next_turn = client.post(f"/api/tutor-sessions/{next_session_id}/turns", json={})
+        assert next_turn.status_code == 200, next_turn.text
+        next_turn_payload = next_turn.json()
+        assert next_turn_payload["term_slug"] == "multi_agent"
+        assert next_turn_payload["turn_index"] == attempt_index + 1
+        next_response = client.post(
+            f"/api/tutor-turns/{next_turn_payload['turn_id']}/respond",
+            json={"selected_option_ids": _ids_for_labels(next_turn_payload["practice_question"], ["D", "E", "F"])},
+        )
+        assert next_response.status_code == 200, next_response.text
+        if attempt_index == 2:
+            assert next_response.json()["next_url"] == "/learning/memory_process"
+
+
+def test_learning_session_skips_exhausted_prior_targets_and_retests_after_last_success():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+
+    first_session = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "llm_knowledge"},
+    ).json()
+    for _ in range(3):
+        turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
+        response = client.post(
+            f"/api/tutor-turns/{turn['turn_id']}/respond",
+            json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["D", "E", "F"])},
+        )
+        assert response.status_code == 200, response.text
+
+    second_session = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "multi_agent"},
+    ).json()
+    second_turn = client.post(f"/api/tutor-sessions/{second_session['tutor_session_id']}/turns", json={}).json()
+    second_response = client.post(
+        f"/api/tutor-turns/{second_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(second_turn["practice_question"], ["A", "B", "C"])},
+    )
+    assert second_response.status_code == 200, second_response.text
+    second_payload = second_response.json()
+    assert second_payload["is_sufficient"] is True
+    assert second_payload["remaining_attempts"] == 0
+    assert second_payload["next_url"] == "/learning/memory_process"
+
+    third_session = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "memory_process"},
+    ).json()
+    third_turn = client.post(f"/api/tutor-sessions/{third_session['tutor_session_id']}/turns", json={}).json()
+    third_response = client.post(
+        f"/api/tutor-turns/{third_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(third_turn["practice_question"], ["A", "B", "C"])},
+    )
+    assert third_response.status_code == 200, third_response.text
+    third_payload = third_response.json()
+    assert third_payload["is_sufficient"] is True
+    assert third_payload["remaining_attempts"] == 0
+    assert third_payload["next_url"] == "/retest"
+
+
+def test_learning_question_order_stays_fixed_when_adaptive_stage_changes():
+    pid = _create_participant_with_pretest(labels=["J"])
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
+
+    first = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+    assert first.status_code == 200, first.text
+    first_payload = first.json()
+    assert first_payload["practice_question"]["variant_key"] == "learning_enrichment_v1"
+    assert first_payload["turn_index"] == 1
+
+    wrong = client.post(
+        f"/api/tutor-turns/{first_payload['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(first_payload["practice_question"], ["A", "D", "G"])},
+    )
+    assert wrong.status_code == 200, wrong.text
+    wrong_payload = wrong.json()
+    # A wrong answer is feedback for the current problem, not a new problem.
+    assert wrong_payload["turn_index"] == first_payload["turn_index"]
+
+    second = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+    assert second.status_code == 200, second.text
+    second_payload = second.json()
+    assert second_payload["learning_stage"] == "conceptual_change"
+    assert second_payload["practice_question"]["variant_key"] == "learning_conceptual_change_v2"
+    assert second_payload["turn_index"] == first_payload["turn_index"] + 1
 
 
 def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():

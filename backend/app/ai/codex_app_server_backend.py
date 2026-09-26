@@ -15,8 +15,9 @@ from app.ai.mandatory_elements import (
     mandatory_element_prompt,
     mandatory_element_headings,
     mandatory_elements_schema,
+    reconcile_mandatory_elements,
 )
-from app.ai.teaching_contract import teaching_contract_schema
+from app.ai.teaching_contract import reconcile_teaching_contract, teaching_contract_schema
 
 
 class CodexAppServerError(RuntimeError):
@@ -283,6 +284,7 @@ class CodexAppServerBackend:
                     f"tutor_message は必ず『## {term_label}』の後に {heading_order} の順で構成する。",
                     "M1/M3/unknownでは『### 要点』『### 具体例』『### 注意点』を使わず、タイプ別の見出しを教材構造そのものにする。",
                     "各タイプ別セクションには対応する必須教授要素を置き、他のタイプの必須要素や不要なセクションを追加しない。",
+                    "teaching_contractやmandatory_elementsのフィールド名（mechanism_explanation、transfer_check、definitionなど）をtutor_message本文に書かない。",
                 ]
             )
             if expected_type in {"M1", "M3"}:
@@ -335,6 +337,8 @@ class CodexAppServerBackend:
             for field in ("corrected_claim", "mechanism_explanation", "contrast_example", "transfer_check"):
                 if isinstance(result["teaching_contract"].get(field), str):
                     result["teaching_contract"][field] = _strip_internal_labels(result["teaching_contract"][field])
+        result = reconcile_mandatory_elements(result, expected_type)
+        result = reconcile_teaching_contract(result, expected_type)
         if group == "control":
             result["teaching_strategy"] = "general_explanation"
         return result
@@ -706,7 +710,12 @@ def _parse_json_object(raw_text: str) -> dict[str, Any]:
 
 
 def _strip_internal_labels(text: str) -> str:
-    return re.sub(r"\bM[1-4]\b", "内部分類", text or "")
+    cleaned = re.sub(r"(?<![A-Za-z0-9])M[1-4](?![A-Za-z0-9])", "内部分類", text or "")
+    return re.sub(
+        r"(?m)(^|。|\n)\s*(?:target_claim_id|addressed_claim_ids|refutation_mode|corrected_claim|mechanism_explanation|contrast_example|transfer_check|mandatory_elements|definition|components|role|decision_criterion|positive_example|non_example|wrong_belief|correct_belief|counterexample|reason|wrong_category|correct_category|boundary_criterion)\s*[:：]\s*",
+        r"\1",
+        cleaned,
+    )
 
 
 def _strip_pretest_input_mentions(text: str) -> str:

@@ -18,6 +18,7 @@ from app.ai.backend import lower_level, normalize_level, raise_level, strategy_f
 from app.ai.factory import get_ai_backend
 from app.ai.mandatory_elements import (
     MANDATORY_MISCONCEPTION_TYPES,
+    expected_mandatory_type,
     mandatory_element_requirements,
     validate_mandatory_elements,
 )
@@ -279,7 +280,7 @@ async def _generate_validated_tutoring_turn(
     forbidden_strings: list[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Generate proposed-group material and enforce the MVP operation contract."""
-    expected_type = payload.get("active_misconception_type")
+    expected_type = expected_mandatory_type(payload)
     if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
         request_payload = payload
         validation: dict[str, Any] = {}
@@ -1333,8 +1334,13 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
 
     assignments = (
         db.query(TermAssignment)
-        .filter_by(participant_id=participant.id)
-        .order_by(TermAssignment.priority_score.desc())
+        .join(Term, TermAssignment.term_id == Term.id)
+        .filter(
+            TermAssignment.participant_id == participant.id,
+            Term.is_active.is_(True),
+            Term.slug.in_(PRETEST_TERM_SLUGS),
+        )
+        .order_by(Term.display_order.asc())
         .all()
     )
     latest_attempt_by_term = {attempt.term_id: attempt for attempt in scored_attempts}
@@ -1359,7 +1365,9 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
             Term.is_active.is_(True),
             Term.slug.in_(PRETEST_TERM_SLUGS),
         )
-        .order_by(TermAssignment.priority_score.desc(), Term.display_order.asc())
+        # Priority remains an analysis/selection value, but the participant
+        # follows the same term order as the pretest and retest.
+        .order_by(Term.display_order.asc())
         .all()
     )
 
@@ -1650,11 +1658,13 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if not active_misconception_type and position["learning_stage"] == "enrichment":
         active_misconception_type = "unknown"
 
-    existing_turns = db.query(TutorTurn).filter_by(tutor_session_id=session.id).all()
-    stage_turn_count = sum(
-        1 for turn in existing_turns if _practice_meta(turn).get("learning_stage") == position["learning_stage"]
-    )
-    learning_variant_index = min(stage_turn_count + 1, 5)
+    # The learning question order is session-scoped.  Counting only turns in
+    # the current stage reset the variant sequence whenever the adaptive stage
+    # changed, which made the fixed question bank appear randomly ordered.
+    # ``turn_count`` is also the displayed problem position and advances only
+    # when a new TutorTurn is generated, never when the current answer is
+    # graded.
+    learning_variant_index = min(turn_count + 1, 5)
     spec = _learning_question_spec(
         term.slug,
         position["learning_stage"],
@@ -1843,8 +1853,17 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     next_level = normalize_level(lower_level(state.scaffolding_level) if is_sufficient else raise_level(state.scaffolding_level))
     stage_completed = is_sufficient
     next_learning_stage = "final_feedback" if is_sufficient else _learning_stage_for_misconception(learning_misconception_type, diagnosed_status)
-    session_completed = is_sufficient
-    next_action = "move_next" if is_sufficient else "continue"
+    answered_turn_count = (
+        db.query(TutorTurn)
+        .filter_by(tutor_session_id=session.id)
+        .filter(TutorTurn.learner_response.is_not(None))
+        .count()
+    )
+    attempts_used = answered_turn_count + 1
+    attempt_limit_reached = not is_sufficient and attempts_used >= get_settings().max_turns_per_term
+    session_completed = is_sufficient or attempt_limit_reached
+    next_action = "move_next" if session_completed else "continue"
+    target_rows_before_completion = learning_targets(db, participant.id) if session_completed else []
 
     selected_explanation_options = [
         option for option in selected_options if is_sufficient or not option.get("is_correct")
@@ -1927,7 +1946,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     }
     state.scaffolding_level = next_level
     state.stable_correct_count += 1 if is_sufficient else 0
-    state.current_status = "stable_correct" if session_completed else diagnosed_status
+    state.current_status = "stable_correct" if is_sufficient else diagnosed_status
     state.primary_misconception = None if is_sufficient else learning_misconception_type
     state.updated_reason = result["state_update_reason"]
     state.last_tutor_turn_id = turn.id
@@ -1935,12 +1954,26 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     if session_completed:
         session.ended_at = now()
         assignment = db.query(TermAssignment).filter_by(participant_id=participant.id, term_id=session.term_id).one_or_none()
-        if assignment and assignment.is_learning_target:
+        if is_sufficient and assignment and assignment.is_learning_target:
             assignment.is_learning_target = False
             assignment.priority_score = 0
             assignment.selection_reason = "学習セッション完了"
         db.flush()
-        remaining_targets = learning_targets(db, participant.id)
+        current_target_index = next(
+            (index for index, target in enumerate(target_rows_before_completion) if target["term_slug"] == term.slug),
+            -1,
+        )
+        if current_target_index >= 0:
+            # Use the pre-completion order: a successful current term is
+            # removed from learning_targets() before the next URL is chosen.
+            remaining_targets = target_rows_before_completion[current_target_index + 1:]
+        else:
+            current_order = PRETEST_TERM_ORDER.get(term.slug, -1)
+            remaining_targets = [
+                target
+                for target in target_rows_before_completion
+                if PRETEST_TERM_ORDER.get(target["term_slug"], -1) > current_order
+            ]
         if remaining_targets:
             participant.current_step = "learning_targets"
             next_url = f"/learning/{remaining_targets[0]['term_slug']}"
@@ -1966,6 +1999,9 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "next_scaffolding_level": next_level,
         "turn_index": turn.turn_index,
         "max_turns": get_settings().max_turns_per_term,
+        "attempts_used": attempts_used,
+        "remaining_attempts": 0 if is_sufficient else max(get_settings().max_turns_per_term - attempts_used, 0),
+        "session_ended_by_attempt_limit": attempt_limit_reached,
         "item_results": [],
         "next_url": next_url,
     }

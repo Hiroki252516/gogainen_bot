@@ -60,11 +60,11 @@ Response:
 
 seed済みのテスト問題は`questions.variant_key`に保存し、学習確認問題は同等の`variant_key`を`tutor_turns.practice_question_json`に保存する。後者は学習確認問題の公開レスポンスに独立フィールドとして返さない。
 
-再テストの採点対象が現行の3用語を各1問ずつ含み、すべて正解だった場合は、`score-retest`が`next_step=survey`、`next_url=/survey`を返して追加の確認を省略する。不正解または未回答がある場合は、`next_step=learning_targets`、不正解・未回答用語の優先度順を入れた`learning_target_slugs`、最初の用語への`next_url=/learning/{term_slug}`を返す。`final_test`も全問正解時だけ`survey`へ進み、不正解または未回答時は`learning_targets`へ戻り、最初の学習URLを返す。次の学習・再テスト周回はクライアントまたは研究者が再導線を開始し、backendが自動反復しない。対象一覧が空の異常時も`next_url=/learning-targets`に留める。各APIは`current_step`に応じてアクセスを制限し、満点で`survey`へ進んだ後は再テスト・学習操作を`409`で拒否する。不正解・未回答で`learning_targets`へ戻った場合は対象学習と次の再テストを利用でき、`final_test`は`current_step=final_test`の場合だけ利用できる。`final_test`の参加者向け表示名は「再テスト1」である。
+再テストの採点対象が現行の3用語を各1問ずつ含み、すべて正解だった場合は、`score-retest`が`next_step=survey`、`next_url=/survey`を返して追加の確認を省略する。不正解または未回答がある場合は、`next_step=learning_targets`、不正解・未回答用語をテストの出題順に入れた`learning_target_slugs`、最初の用語への`next_url=/learning/{term_slug}`を返す。診断の`priority_score`は分析用に保存するが、参加者向けの学習対象の表示・遷移順には使わない。`final_test`も全問正解時だけ`survey`へ進み、不正解または未回答時は`learning_targets`へ戻り、最初の学習URLを返す。次の学習・再テスト周回はクライアントまたは研究者が再導線を開始し、backendが自動反復しない。対象一覧が空の異常時も`next_url=/learning-targets`に留める。各APIは`current_step`に応じてアクセスを制限し、満点で`survey`へ進んだ後は再テスト・学習操作を`409`で拒否する。不正解・未回答で`learning_targets`へ戻った場合は対象学習と次の再テストを利用でき、`final_test`は`current_step=final_test`の場合だけ利用できる。`final_test`の参加者向け表示名は「再テスト1」である。
 
 `attempts.test_round` には初回 `pretest` を `test`、最初の学習後確認を `retest_1`、次周回を `retest_2` のように保存する。`attempts.phase` は `pretest`、`retest`、`l0_check`、`final_test` の内部値として互換維持する。
 
-学習回答が十分と判定された場合は、その`TermAssignment.is_learning_target`を`false`に更新する。残りの学習対象があれば`current_step=learning_targets`と次の用語への`next_url`、すべて完了していれば`current_step=retest`と`next_url=/retest`を、学習回答・学習状態・AIログと同じトランザクションで確定する。`learning_targets`中にない用語の学習セッション開始は409で拒否し、旧互換として`current_step=final_test`からの直接呼び出しだけは既存APIの動作を維持する。
+学習回答が十分と判定された場合は、その`TermAssignment.is_learning_target`を`false`に更新する。1用語で3回不正解になった場合は学習対象を未達のまま残して現在の用語セッションを終了し、次のテスト出題順の学習対象へ進める。残りの学習対象があれば`current_step=learning_targets`と次の用語への`next_url`、すべての対象を処理した場合は`current_step=retest`と`next_url=/retest`を、学習回答・学習状態・AIログと同じトランザクションで確定する。回答レスポンスには`attempts_used`、`remaining_attempts`、`session_ended_by_attempt_limit`を含める。`learning_targets`中にない用語の学習セッション開始は409で拒否し、旧互換として`current_step=final_test`からの直接呼び出しだけは既存APIの動作を維持する。
 
 ## Idempotency-Key
 
@@ -85,7 +85,7 @@ seed済みのテスト問題は`questions.variant_key`に保存し、学習確�
 
 管理用の参加者情報には`completion_reason`、`give_up_learning_count`、`give_up_experiment_count`を含める。個別ログの`participant`にも同じ状態を返し、`audit_events`には操作種別・実行時刻・状態変更前後を含める。全体ログの`recent_audit_events`と参加者ログCSVにもギブアップ操作を含める。
 
-`GET /api/participants/{participant_id}/learning-targets` は、`current_step`、既存の未達対象一覧、事前テスト後の互換用 `pretest_results`、直近のテスト結果 `test_results` を返す。`pretest_results` は3用語を表示順に含み、`term_slug`、`term_label`、`is_correct`、`result_label`、`result_summary`、`is_learning_target` を持つ。`test_results` は `test_round`、`test_round_label`、`results` を持ち、各結果に `term_slug`、`term_label`、`question_body`、`selected_options`（`label` と `body` のみ）、`is_correct`、`result_label`、`is_learning_target` を含める。`test_results` は保存済みの問題文・選択内容・正誤を参加者向けに投影したものであり、`correct_answer`、`expected_answer`、選択肢ごとの `is_correct`、M分類などの内部診断値は含めない。結果は保存済み `Attempt.is_correct` を正本とする。`targets` は優先度・用語表示順で並び、学習開始先を決める未達用語の一覧として維持する。`current_step=learning_targets` のとき、対象が空でも最終テストへの導線を返さない。
+`GET /api/participants/{participant_id}/learning-targets` は、`current_step`、既存の未達対象一覧、事前テスト後の互換用 `pretest_results`、直近のテスト結果 `test_results` を返す。`pretest_results` は3用語を表示順に含み、`term_slug`、`term_label`、`is_correct`、`result_label`、`result_summary`、`is_learning_target` を持つ。`test_results` は `test_round`、`test_round_label`、`results` を持ち、各結果に `term_slug`、`term_label`、`question_body`、`selected_options`（`label` と `body` のみ）、`is_correct`、`result_label`、`is_learning_target` を含める。`test_results` は保存済みの問題文・選択内容・正誤を参加者向けに投影したものであり、`correct_answer`、`expected_answer`、選択肢ごとの `is_correct`、M分類などの内部診断値は含めない。結果は保存済み `Attempt.is_correct` を正本とする。`targets` はテストの出題順で並び、学習開始先を決める未達用語の一覧として維持する。`priority_score`は分析用の保存値であり、参加者向けの並び順には使わない。`current_step=learning_targets` のとき、対象が空でも最終テストへの導線を返さない。
 
 ## Scoring
 

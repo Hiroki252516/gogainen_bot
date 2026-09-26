@@ -48,6 +48,10 @@ if (groupAdminPage.includes("条件統制チェック")) {
 
 
 const learningPage = fs.readFileSync(new URL("../app/learning/[termSlug]/page.tsx", import.meta.url), "utf8");
+const flowGuard = fs.readFileSync(new URL("../components/ParticipantFlowGuard.tsx", import.meta.url), "utf8");
+if (flowGuard.includes('localStorage.setItem("learning_targets", JSON.stringify(targetSlugs))')) {
+  throw new Error("learning target guard must not overwrite the full ordered target list with remaining targets");
+}
 if (learningPage.includes("{feedback ? <div className=\"notice\">{feedback.feedback}</div>")) {
   throw new Error("learning page must not show standalone feedback after submit");
 }
@@ -66,7 +70,7 @@ for (const expectedText of [":initial`,", ":after:${completedTurnId}`"]) {
     throw new Error(`learning page must use a distinct idempotency key per turn generation: ${expectedText}`);
   }
 }
-for (const expectedText of ['localStorage.getItem("learning_targets")', "idx + 1 < targets.length", "`/learning/${targets[idx + 1]}`", ' : "/retest"']) {
+for (const expectedText of ['localStorage.getItem("learning_targets")', "readLearningTargetSlugs", "term_slug", "idx + 1 < targets.length", "`/learning/${targets[idx + 1]}`", ' : "/retest"']) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing ordered target continuation: ${expectedText}`);
   }
@@ -128,10 +132,18 @@ if (learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") |
 if (!learningPage.includes("turnShownAt") || !learningPage.includes("question_shown_at: turnShownAt") || !learningPage.includes("answered_at: answeredAt")) {
   throw new Error("learning page must send turn timing timestamps");
 }
-for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "question-progress", "turn.turn_index", "turn.max_turns", "{turn.turn_index} / {turn.max_turns}", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
+for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type={isMultiple ? \"checkbox\" : \"radio\"}", "learning-progress-summary", "学習セッションの進捗", "この問題の残り挑戦回数", "questionProgress", "ATTEMPTS_PER_PROBLEM", "progressForNewQuestion(termSlug", "maxAttempts", "maxAttempts - turnIndex, 0", "remainingAttempts", "remaining_attempts", "progress.current", "progress.total", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing multiple-selection/progress behavior: ${expectedText}`);
   }
+}
+const responseHandlerStart = learningPage.indexOf("const updatedTurn =");
+const responseHandlerEnd = learningPage.indexOf("async function continueLearning");
+if (responseHandlerStart < 0 || responseHandlerEnd < responseHandlerStart) {
+  throw new Error("learning page response handler markers are missing");
+}
+if (!learningPage.slice(responseHandlerStart, responseHandlerEnd).includes("remainingAttempts")) {
+  throw new Error("learning page must update remaining challenge count after answer feedback");
 }
 if (learningPage.includes("toFullWidthDigits") || learningPage.includes("問{toFullWidthDigits")) {
   throw new Error("learning session must keep its existing question display format");
@@ -185,7 +197,6 @@ for (const expectedText of ["class ApiError", "postIdempotent", "clearParticipan
   }
 }
 
-const flowGuard = fs.readFileSync(new URL("../components/ParticipantFlowGuard.tsx", import.meta.url), "utf8");
 for (const expectedText of ["/current-step", "ParticipantEntryGuard", "useLearningTargetFlowGuard", "router.replace", "Do not expose a stale page", "もう一度確認"]) {
   if (!flowGuard.includes(expectedText)) {
     throw new Error(`flow guard missing browser-back protection: ${expectedText}`);

@@ -70,9 +70,12 @@ def expected_mandatory_type(payload: dict[str, Any]) -> str | None:
     if payload.get("group_condition") != "proposed":
         return None
 
-    active_type = payload.get("active_misconception_type")
-    if active_type in MANDATORY_MISCONCEPTION_TYPES:
-        return active_type
+    # An explicitly supplied active type is authoritative, including an
+    # unsupported/non-MVP value.  Falling back from M2/M4/None to an older
+    # learner-state diagnosis would apply the wrong mandatory schema.
+    if "active_misconception_type" in payload:
+        active_type = payload.get("active_misconception_type")
+        return active_type if isinstance(active_type, str) and active_type in MANDATORY_MISCONCEPTION_TYPES else None
 
     if payload.get("learning_stage") == "enrichment":
         return "unknown"
@@ -169,23 +172,25 @@ def validate_mandatory_elements(
         missing.append(f"type:expected_{expected_type}_got_{actual_type or 'empty'}")
 
     message = result.get("tutor_message") or ""
-    if term_label and f"## {term_label}" not in message:
+    if not isinstance(message, str):
+        message = ""
+    if term_label and not _heading_matches(message, "##", term_label):
         missing.append("tutor_message:term_heading_missing")
     headings = mandatory_element_headings(expected_type)
     heading_positions: list[int] = []
     for heading in headings.values():
         marker = f"### {heading}"
-        position = message.find(marker)
-        if position < 0:
+        matches = _heading_matches(message, "###", heading)
+        if not matches:
             missing.append(f"tutor_message:heading_missing:{marker}")
         else:
-            heading_positions.append(position)
+            heading_positions.append(matches[0].start())
     if heading_positions != sorted(heading_positions):
         missing.append("tutor_message:heading_order_invalid")
     for heading in _GENERIC_HEADINGS:
         if re.search(rf"(?m)^###\s+{re.escape(heading)}\s*$", message):
             missing.append(f"tutor_message:generic_heading_forbidden:### {heading}")
-    if re.search(r"\bM[1-4]\b", message):
+    if re.search(r"(?<![A-Za-z0-9])M[1-4](?![A-Za-z0-9])", message):
         missing.append("tutor_message:internal_label_exposed")
 
     normalized_message = _normalize_evidence(message)
@@ -198,7 +203,7 @@ def validate_mandatory_elements(
             missing.append(f"{field}:evidence_not_in_tutor_message")
             continue
         section = _heading_section(message, value_heading, tuple(headings.values()))
-        if section and _normalize_evidence(value) not in _normalize_evidence(section):
+        if not section or _normalize_evidence(value) not in _normalize_evidence(section):
             missing.append(f"{field}:evidence_not_in_section")
 
     return {
@@ -245,16 +250,49 @@ def mock_mandatory_elements(
     }
 
 
+def reconcile_mandatory_elements(result: dict[str, Any], misconception_type: str | None) -> dict[str, Any]:
+    """Synchronize AI evidence fields with the visible Markdown sections.
+
+    Codex sometimes writes a semantically equivalent paraphrase into the
+    research-only JSON field instead of copying the visible sentence exactly.
+    The learner-facing material is the source of truth, so recover a short
+    evidence span from the corresponding non-empty section before validation.
+    Missing headings or empty sections are intentionally left invalid.
+    """
+    if misconception_type not in MANDATORY_MISCONCEPTION_TYPES:
+        return result
+    message = result.get("tutor_message")
+    if not isinstance(message, str):
+        return result
+    elements = result.get("mandatory_elements")
+    if not isinstance(elements, dict):
+        return result
+
+    headings = mandatory_element_headings(misconception_type)
+    repaired = dict(elements)
+    for field, heading in headings.items():
+        section = _heading_section(message, heading, tuple(headings.values()))
+        evidence = _first_section_evidence(section)
+        current = repaired.get(field)
+        normalized_current = _normalize_evidence(current) if isinstance(current, str) else ""
+        if evidence and (not normalized_current or normalized_current not in _normalize_evidence(section)):
+            repaired[field] = evidence
+    result["mandatory_elements"] = repaired
+    return result
+
+
 def _heading_section(message: str, heading: str, headings: tuple[str, ...]) -> str:
-    marker = f"### {heading}"
-    start = message.find(marker)
-    if start < 0:
+    matches = _heading_matches(message, "###", heading)
+    if not matches:
         return ""
-    content_start = start + len(marker)
+    current = matches[0]
+    content_start = current.end()
     following = [
-        message.find(f"### {candidate}", content_start)
+        following_match.start()
         for candidate in headings
-        if candidate != heading and message.find(f"### {candidate}", content_start) >= 0
+        if candidate != heading
+        for following_match in _heading_matches(message, "###", candidate)
+        if following_match.start() >= content_start
     ]
     content_end = min(following) if following else len(message)
     return message[content_start:content_end]
@@ -262,3 +300,17 @@ def _heading_section(message: str, heading: str, headings: tuple[str, ...]) -> s
 
 def _normalize_evidence(value: str) -> str:
     return re.sub(r"[\s*_`#>\[\]]+", "", value or "")
+
+
+def _first_section_evidence(section: str) -> str:
+    for line in section.splitlines():
+        candidate = re.sub(r"^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s+)", "", line).strip()
+        if candidate and not candidate.startswith("#"):
+            return candidate
+    return ""
+
+
+def _heading_matches(message: str, prefix: str, heading: str) -> list[re.Match[str]]:
+    """Find exact Markdown heading lines, never inline heading-like text."""
+    pattern = rf"(?m)^{re.escape(prefix)}\s+{re.escape(heading)}\s*$"
+    return list(re.finditer(pattern, message))

@@ -38,4 +38,6 @@ pretest、retest、final_testと学習確認の固定複数選択問題はA〜J�
 
 学習確認問題はDBの`questions`へseedしない。`generate_tutor_turn`がYAMLのstage・用語別定義から固定の確認問題・選択肢を組み立て、AI生成教材とともに`tutor_turns.practice_question_json`へ保存する。L3/L2は問題stageではなく、内部の`scaffolding_level`互換値である。
 
+学習確認のvariantは、学習セッション内で新しく取得した教材の順に`v1`、`v2`、`v3`を使う。誤答後に`learning_stage`が変わってもこの順序をリセットしない。現行の標準フローでは1用語あたり3回目の不正解で次の学習対象へ進むため、`v4`、`v5`は将来の上限設定や既存ログ互換のために保持する。現在の問題への回答結果表示は新しい教材取得ではないため、画面の用語進捗分子を進めない。
+
 旧Transformerなど既存DB内の問題は削除せず非アクティブ化し、新規seed・新規参加者の導線には含めない。

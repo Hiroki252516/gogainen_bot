@@ -24,7 +24,7 @@ type Turn = {
   term_label?: string;
   tutor_message: string;
   learner_prompt: string;
-  practice_question: { body: string; options?: Option[]; items?: PracticeItem[]; selection_mode?: "single" | "multiple"; min_selections?: number; max_selections?: number };
+  practice_question: { body: string; options?: Option[]; items?: PracticeItem[]; selection_mode?: "single" | "multiple"; min_selections?: number; max_selections?: number; learning_variant_index?: number };
   turn_index: number;
   max_turns: number;
   learning_stage?: string;
@@ -63,9 +63,48 @@ type Feedback = {
   next_scaffolding_level: string;
   turn_index: number;
   max_turns: number;
+  attempts_used?: number;
+  remaining_attempts?: number;
+  session_ended_by_attempt_limit?: boolean;
   item_results?: ItemResult[];
   next_url?: string;
 };
+
+type QuestionProgress = { current: number; total: number; remainingAttempts: number };
+
+const ATTEMPTS_PER_PROBLEM = 3;
+
+function readLearningTargetSlugs(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem("learning_targets") || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((target) => {
+        if (typeof target === "string") return target;
+        if (target && typeof target === "object" && "term_slug" in target) {
+          const slug = (target as { term_slug?: unknown }).term_slug;
+          return typeof slug === "string" ? slug : null;
+        }
+        return null;
+      })
+      .filter((slug): slug is string => Boolean(slug));
+  } catch {
+    return [];
+  }
+}
+
+function progressForNewQuestion(termSlug: string, turn: Pick<Turn, "turn_index" | "max_turns">): QuestionProgress {
+  const targets = readLearningTargetSlugs();
+  const turnIndex = Math.max(turn.turn_index, 1);
+  const maxAttempts = Math.max(turn.max_turns || ATTEMPTS_PER_PROBLEM, 1);
+  const targetIndex = targets.indexOf(termSlug);
+  return {
+    current: targetIndex >= 0 ? targetIndex + 1 : 1,
+    total: targets.length || 1,
+    remainingAttempts: Math.max(maxAttempts - turnIndex, 0),
+  };
+}
 
 function componentDisplay(turn: Turn) {
   const items = turn.practice_question?.items || [];
@@ -177,6 +216,7 @@ export default function LearningPage() {
   const [selectedItemOptionIds, setSelectedItemOptionIds] = useState<Record<string, string>>({});
   const [turnStartedAt, setTurnStartedAt] = useState(() => Date.now());
   const [turnShownAt, setTurnShownAt] = useState(() => new Date().toISOString());
+  const [questionProgress, setQuestionProgress] = useState<QuestionProgress | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -186,8 +226,7 @@ export default function LearningPage() {
   const flowReady = flow.ready;
 
   const nextHref = useMemo(() => {
-    if (typeof window === "undefined") return "/retest";
-    const targets = JSON.parse(localStorage.getItem("learning_targets") || "[]") as string[];
+    const targets = readLearningTargetSlugs();
     const idx = targets.indexOf(termSlug);
     return idx >= 0 && idx + 1 < targets.length ? `/learning/${targets[idx + 1]}` : "/retest";
   }, [termSlug]);
@@ -199,6 +238,7 @@ export default function LearningPage() {
       bootedTermRef.current = termSlug;
       setSessionId("");
       setTurn(null);
+      setQuestionProgress(null);
       setFeedback(null);
       setResponse("");
       setSelectedOptionId("");
@@ -219,6 +259,7 @@ export default function LearningPage() {
           `tutor_turn_generate:${session.tutor_session_id}:initial`,
         );
         setTurn(data);
+        setQuestionProgress(progressForNewQuestion(termSlug, data));
         setTurnStartedAt(Date.now());
         setTurnShownAt(new Date().toISOString());
       } catch (err) {
@@ -276,6 +317,12 @@ export default function LearningPage() {
         learning_stage: data.next_learning_stage || turn.learning_stage,
         component_index: data.next_component_index ?? turn.component_index,
       };
+      // Grading feedback belongs to the current problem.  Keep its position
+      // unchanged while the next retry is still part of the same problem.
+      setQuestionProgress((previous) => previous ? {
+        ...previous,
+        remainingAttempts: data.is_sufficient ? 0 : (data.remaining_attempts ?? Math.max(previous.remainingAttempts - 1, 0)),
+      } : previous);
       setTurn(updatedTurn);
       setFeedback(data);
     } catch (err) {
@@ -300,6 +347,7 @@ export default function LearningPage() {
         `tutor_turn_generate:${sessionId}:after:${completedTurnId}`,
       );
       setTurn(next);
+      setQuestionProgress(progressForNewQuestion(termSlug, next));
       setTurnStartedAt(Date.now());
       setTurnShownAt(new Date().toISOString());
       setResponse("");
@@ -317,15 +365,25 @@ export default function LearningPage() {
 
   if (!flowReady) return <CheckingFlow error={flow.error} onRetry={flow.retry} />;
 
+  const progress = questionProgress || (turn ? progressForNewQuestion(termSlug, turn) : null);
+  const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;
+
   return (
     <AppShell step="学習セッション">
       <section className="panel stack" aria-busy={submitting || (!turn && !error)}>
         <div className="topbar learning-topbar">
           <h1>学習セッション</h1>
-          {turn ? (
-            <span className="muted question-progress" aria-label={`${turn.turn_index} / ${turn.max_turns}`}>
-              {turn.turn_index} / {turn.max_turns}
-            </span>
+          {progress && displayedProgress !== null ? (
+            <div className="learning-progress-summary" aria-label="学習セッションの進捗">
+              <div className="learning-progress-row">
+                <span>学習セッションの進捗</span>
+                <strong>{displayedProgress} / {progress.total}</strong>
+              </div>
+              <div className="learning-progress-row">
+                <span>この問題の残り挑戦回数</span>
+                <strong>{progress.remainingAttempts}回</strong>
+              </div>
+            </div>
           ) : null}
         </div>
         {error ? <div className="danger">{error}</div> : null}
