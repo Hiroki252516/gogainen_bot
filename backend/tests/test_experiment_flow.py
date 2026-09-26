@@ -1554,6 +1554,52 @@ def test_learning_session_moves_to_next_target_after_three_incorrect_turns():
             assert next_response.json()["next_url"] == "/learning/memory_process"
 
 
+def test_learning_session_skips_exhausted_prior_targets_and_retests_after_last_success():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+
+    first_session = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "llm_knowledge"},
+    ).json()
+    for _ in range(3):
+        turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
+        response = client.post(
+            f"/api/tutor-turns/{turn['turn_id']}/respond",
+            json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["D", "E", "F"])},
+        )
+        assert response.status_code == 200, response.text
+
+    second_session = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "multi_agent"},
+    ).json()
+    second_turn = client.post(f"/api/tutor-sessions/{second_session['tutor_session_id']}/turns", json={}).json()
+    second_response = client.post(
+        f"/api/tutor-turns/{second_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(second_turn["practice_question"], ["A", "B", "C"])},
+    )
+    assert second_response.status_code == 200, second_response.text
+    second_payload = second_response.json()
+    assert second_payload["is_sufficient"] is True
+    assert second_payload["remaining_attempts"] == 0
+    assert second_payload["next_url"] == "/learning/memory_process"
+
+    third_session = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "memory_process"},
+    ).json()
+    third_turn = client.post(f"/api/tutor-sessions/{third_session['tutor_session_id']}/turns", json={}).json()
+    third_response = client.post(
+        f"/api/tutor-turns/{third_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(third_turn["practice_question"], ["A", "B", "C"])},
+    )
+    assert third_response.status_code == 200, third_response.text
+    third_payload = third_response.json()
+    assert third_payload["is_sufficient"] is True
+    assert third_payload["remaining_attempts"] == 0
+    assert third_payload["next_url"] == "/retest"
+
+
 def test_learning_question_order_stays_fixed_when_adaptive_stage_changes():
     pid = _create_participant_with_pretest(labels=["J"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()

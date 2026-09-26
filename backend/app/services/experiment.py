@@ -1863,6 +1863,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     attempt_limit_reached = not is_sufficient and attempts_used >= get_settings().max_turns_per_term
     session_completed = is_sufficient or attempt_limit_reached
     next_action = "move_next" if session_completed else "continue"
+    target_rows_before_completion = learning_targets(db, participant.id) if session_completed else []
 
     selected_explanation_options = [
         option for option in selected_options if is_sufficient or not option.get("is_correct")
@@ -1958,12 +1959,21 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
             assignment.priority_score = 0
             assignment.selection_reason = "学習セッション完了"
         db.flush()
-        target_rows = learning_targets(db, participant.id)
         current_target_index = next(
-            (index for index, target in enumerate(target_rows) if target["term_slug"] == term.slug),
+            (index for index, target in enumerate(target_rows_before_completion) if target["term_slug"] == term.slug),
             -1,
         )
-        remaining_targets = target_rows[current_target_index + 1:] if current_target_index >= 0 else target_rows
+        if current_target_index >= 0:
+            # Use the pre-completion order: a successful current term is
+            # removed from learning_targets() before the next URL is chosen.
+            remaining_targets = target_rows_before_completion[current_target_index + 1:]
+        else:
+            current_order = PRETEST_TERM_ORDER.get(term.slug, -1)
+            remaining_targets = [
+                target
+                for target in target_rows_before_completion
+                if PRETEST_TERM_ORDER.get(target["term_slug"], -1) > current_order
+            ]
         if remaining_targets:
             participant.current_step = "learning_targets"
             next_url = f"/learning/{remaining_targets[0]['term_slug']}"
@@ -1990,7 +2000,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "turn_index": turn.turn_index,
         "max_turns": get_settings().max_turns_per_term,
         "attempts_used": attempts_used,
-        "remaining_attempts": max(get_settings().max_turns_per_term - attempts_used, 0),
+        "remaining_attempts": 0 if is_sufficient else max(get_settings().max_turns_per_term - attempts_used, 0),
         "session_ended_by_attempt_limit": attempt_limit_reached,
         "item_results": [],
         "next_url": next_url,

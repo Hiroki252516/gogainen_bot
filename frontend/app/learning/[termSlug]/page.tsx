@@ -309,7 +309,7 @@ export default function LearningPage() {
       // unchanged while the next retry is still part of the same problem.
       setQuestionProgress((previous) => previous ? {
         ...previous,
-        remainingAttempts: data.remaining_attempts ?? (data.is_sufficient ? 0 : Math.max(previous.remainingAttempts - 1, 0)),
+        remainingAttempts: data.is_sufficient ? 0 : (data.remaining_attempts ?? Math.max(previous.remainingAttempts - 1, 0)),
       } : previous);
       setTurn(updatedTurn);
       setFeedback(data);
