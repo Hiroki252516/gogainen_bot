@@ -1,8 +1,10 @@
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 try:
@@ -2128,7 +2130,7 @@ def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
                         "method": "item/completed",
                         "params": {
                             "turnId": "turn-id",
-                            "item": {"type": "agentMessage", "text": '{"ok": true}'},
+                            "item": {"type": "agentMessage", "text": '\n{"ok": true}\n'},
                         },
                     }
                 )
@@ -2143,6 +2145,7 @@ def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
     result = asyncio.run(backend._run_structured_turn("test", "prompt", {"type": "object"}))
 
     assert result == {"ok": True}
+    assert result.raw_text == '\n{"ok": true}\n'
     turn_start = next(params for method, params in rpc.calls if method == "turn/start")
     assert turn_start["model"] == "gpt-5.6-luna"
     assert turn_start["effort"] == "low"
@@ -2181,3 +2184,126 @@ def test_ai_call_logs_effective_reasoning_effort(monkeypatch):
     finally:
         db.close()
         reset_reasoning_effort_override()
+
+
+def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
+    participant = client.post(
+        "/api/participants",
+        json={"assignment_code": "A", "consent_checked": True},
+    ).json()
+    pid = participant["participant_id"]
+    payload = {
+        "participant_id": pid,
+        "group_condition": "proposed",
+        "active_misconception_type": "M1",
+        "learning_stage": "conceptual_change",
+        "term": {
+            "slug": "memory_process",
+            "label": "記憶プロセス",
+            "description": "情報を保存し、検索して現在の処理へ渡し、必要に応じて更新する仕組みです。",
+        },
+        "fixed_practice_question": {"body": "適切な説明を選びなさい。"},
+    }
+    raw_model_response = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    raw_model_response["teaching_contract"]["corrected_claim"] = "生出力にだけ含まれた未検証の訂正文です。"
+    raw_text = json.dumps(raw_model_response, ensure_ascii=False)
+    backend = CodexAppServerBackend()
+
+    class FakeRpc:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def call(self, method, params=None, notification_handler=None):
+            if method == "account/read":
+                return {"account": {"id": "test-account"}}
+            if method == "thread/start":
+                return {"thread": {"id": "thread-id"}}
+            if method == "turn/start":
+                notification_handler(
+                    {
+                        "method": "item/completed",
+                        "params": {
+                            "turnId": "turn-id",
+                            "item": {"type": "agentMessage", "text": raw_text},
+                        },
+                    }
+                )
+                return {"turn": {"id": "turn-id"}}
+            return {}
+
+        async def recv(self, _notification_handler=None):
+            return {"method": "turn/completed", "params": {"turn": {"id": "turn-id", "status": "completed"}}}
+
+    monkeypatch.setattr(backend, "_client", lambda: FakeRpc())
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: backend)
+
+    db = SessionLocal()
+    try:
+        normalized_response = asyncio.run(
+            experiment_service._ai_call(db, "generate_tutoring_turn", payload)
+        )
+        log = (
+            db.query(AICallLog)
+            .filter_by(purpose="generate_tutoring_turn")
+            .order_by(AICallLog.created_at.desc())
+            .first()
+        )
+        assert log is not None
+        assert log.raw_text == raw_text
+        assert "未検証の訂正文" in log.raw_text
+        assert log.response_payload == normalized_response
+        assert log.response_payload["teaching_contract"]["corrected_claim"] == log.response_payload[
+            "mandatory_elements"
+        ]["correct_belief"]
+        assert "未検証の訂正文" not in log.response_payload["teaching_contract"]["corrected_claim"]
+
+        participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
+        assert participant_logs.status_code == 200, participant_logs.text
+        logged_ai_call = next(
+            row
+            for row in participant_logs.json()["ai_call_logs"]
+            if row["id"] == log.id
+        )
+        assert logged_ai_call["raw_text"] == raw_text
+        assert logged_ai_call["response_payload"] == normalized_response
+
+        participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
+        assert participant_csv.status_code == 200, participant_csv.text
+        assert "未検証の訂正文" in participant_csv.text
+    finally:
+        db.close()
+
+
+def test_codex_json_parse_failure_keeps_raw_response_in_ai_log(monkeypatch):
+    raw_text = "モデル出力はJSONではありません。"
+
+    class FakeBackend:
+        provider = "codex_app_server"
+
+        async def invalid_output(self, _payload):
+            raise CodexAppServerError(
+                "schema_validation_failed",
+                "AI応答を解析できませんでした。",
+                raw_text,
+                raw_text=raw_text,
+            )
+
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: FakeBackend())
+    db = SessionLocal()
+    try:
+        with pytest.raises(HTTPException):
+            asyncio.run(experiment_service._ai_call(db, "invalid_output", {"marker": "raw-error-test"}))
+        log = (
+            db.query(AICallLog)
+            .filter_by(purpose="invalid_output")
+            .order_by(AICallLog.created_at.desc())
+            .first()
+        )
+        assert log is not None
+        assert log.status == "failed"
+        assert log.raw_text == raw_text
+    finally:
+        db.close()

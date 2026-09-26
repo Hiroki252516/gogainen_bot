@@ -21,11 +21,27 @@ from app.ai.teaching_contract import reconcile_teaching_contract, teaching_contr
 
 
 class CodexAppServerError(RuntimeError):
-    def __init__(self, code: str, user_message: str, detail: str | None = None) -> None:
+    def __init__(
+        self,
+        code: str,
+        user_message: str,
+        detail: str | None = None,
+        *,
+        raw_text: str | None = None,
+    ) -> None:
         super().__init__(detail or user_message)
         self.code = code
         self.user_message = user_message
         self.detail = detail or user_message
+        self.raw_text = raw_text
+
+
+class _StructuredModelResponse(dict):
+    """Parsed model output that retains its exact app-server text for audit logs."""
+
+    def __init__(self, value: dict[str, Any], raw_text: str) -> None:
+        super().__init__(value)
+        self.raw_text = raw_text
 
 
 class _CodexRpcClient:
@@ -613,10 +629,14 @@ class CodexAppServerBackend:
         except OSError as exc:
             raise CodexAppServerError("app_server_unreachable", "Codex app-serverに接続できません。", str(exc)) from exc
 
-        raw_text = (completed_texts[-1] if completed_texts else "".join(text_chunks)).strip()
-        if not raw_text:
-            raise CodexAppServerError("empty_response", "Codex app-serverから空のAI応答が返りました。")
-        return _parse_json_object(raw_text)
+        raw_text = completed_texts[-1] if completed_texts else "".join(text_chunks)
+        if not raw_text.strip():
+            raise CodexAppServerError(
+                "empty_response",
+                "Codex app-serverから空のAI応答が返りました。",
+                raw_text=raw_text,
+            )
+        return _StructuredModelResponse(_parse_json_object(raw_text), raw_text)
 
     def _prompt(self, purpose: str, payload: dict[str, Any], rules: list[str]) -> str:
         prompt_parts = [
@@ -702,10 +722,28 @@ def _parse_json_object(raw_text: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw_text, flags=re.DOTALL)
         if not match:
-            raise CodexAppServerError("schema_validation_failed", "AI出力からJSONオブジェクトを抽出できませんでした。", raw_text)
-        value = json.loads(match.group(0))
+            raise CodexAppServerError(
+                "schema_validation_failed",
+                "AI出力からJSONオブジェクトを抽出できませんでした。",
+                raw_text,
+                raw_text=raw_text,
+            )
+        try:
+            value = json.loads(match.group(0))
+        except json.JSONDecodeError as exc:
+            raise CodexAppServerError(
+                "schema_validation_failed",
+                "AI出力からJSONオブジェクトを抽出できませんでした。",
+                raw_text,
+                raw_text=raw_text,
+            ) from exc
     if not isinstance(value, dict):
-        raise CodexAppServerError("schema_validation_failed", "AI出力がJSONオブジェクトではありません。", raw_text)
+        raise CodexAppServerError(
+            "schema_validation_failed",
+            "AI出力がJSONオブジェクトではありません。",
+            raw_text,
+            raw_text=raw_text,
+        )
     return value
 
 

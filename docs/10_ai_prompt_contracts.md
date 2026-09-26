@@ -134,6 +134,8 @@ backendはclaim IDの対応、M1/M3/unknownごとの方略、契約フィール�
 
 backendは最終応答からJSONオブジェクトを抽出し、構造化契約の主な制約はapp-serverへ渡した`outputSchema`で適用する。現行MVPの提案群教材については、必須教授要素とその本文内証拠をローカルでも検証する。その他のMarkdown文法は完全な検証器ではなく、frontendの `MarkdownText` がraw HTML、表、画像、コードブロックを描画しない安全表示を担当する。既存のプレーンテキストは通常の段落として表示する。
 
+Codex app-serverの応答ログでは、`AICallLog.raw_text`にapp-serverが返したJSON文字列をそのまま保持し、`AICallLog.response_payload`には内部ラベル除去・必須要素との整合後にbackendが利用した値を保持する。これにより、生の構造化出力と補正後の値を比較できる。JSON解析に失敗した場合も取得済みの応答テキストを`raw_text`へ保存する。Mock backendはモデル生出力を持たないため、この列はNULLとなる。
+
 ## 回答後解説
 
 確認問題の正誤は、AIの判定ではなく、固定YAMLの選択肢とbackendの採点ロジックを唯一の正本とする。固定YAMLで採点結果を計算した後、DBの回答状態を更新する前に、結果に応じて解説専用のAI呼び出しを行う。
