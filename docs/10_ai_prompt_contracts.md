@@ -2,14 +2,14 @@
 
 ## 共通契約
 
-AI教材生成は `AIBackend` 経由で行い、実行時の教材根拠としてローカルRAG本文を使う。RAG検索クエリは対象用語、共通説明、構成要素だけで組み立て、学習段階や個人の誤答履歴によって検索対象の章を変えない。教材生成契約の版は `tutoring-teaching-contract-v1`、taxonomyの版は `m1-m3-unknown-v1` としてpayloadとログへ保存する。
+AI教材生成は `AIBackend` 経由で行い、実行時の教材根拠としてローカルRAG本文を使う。RAG検索クエリは対象用語、共通説明、構成要素だけで組み立て、学習段階や個人の誤答履歴によって検索対象の章を変えない。教材生成契約の版は `tutoring-teaching-contract-v2-control-isolation`、taxonomyの版は `m1-m3-unknown-v1` としてpayloadとログへ保存する。
 
 両群へ渡す共通payload:
 
 - term slug / 表示名
 - 構成要素
-- YAMLで固定した確認問題の本文・選択肢（正答文字列は除外）
 - 用語に対応するRAG本文と対象section
+- 教材本文は450〜850字程度を目安にし、文字数・段落数・箇条書き数を計測する。範囲外を理由とした再生成はしない
 
 proposedだけへ追加する情報:
 
@@ -23,7 +23,11 @@ proposedだけへ追加する情報:
 - `pretest_target` / `pretest_targets`（claim_id、選択肢本文、研究者確認済みの訂正文、仕組み、対比例）
 - `taxonomy_version` / `prompt_contract_version`
 
-control payloadには `learning_stage`、`misconception_taxonomy`、誤答主張、診断履歴、learner state、足場掛け履歴、過去回答を含めない。用語・共通構成要素・固定問題・診断に依存しないRAG本文だけを使い、controlの `teaching_strategy` は `general_explanation` に固定する。両群のRAG本文と検索条件は同一にする。
+固定問題、選択肢、正答、参加者ID、群名は両群のモデルpromptへ含めない。これらはアプリ内の出題・採点・ログ照合に限る。
+
+control payloadには `learning_stage`、`misconception_taxonomy`、誤答主張、診断履歴、learner state、足場掛け履歴、過去回答を含めない。用語・共通構成要素・診断に依存しないRAG本文だけを使い、`teaching_strategy` は `general_explanation` に固定する。一般的な誤解を正確に説明したり訂正したりすることは許容するが、特定学習者の状態を推測・反映しない。両群のRAG query、allowed section、chunk ID、本文は同一にする。
+
+教材生成の出力Schemaは `tutor_message` と `teaching_strategy` のみを基本とし、提案群の現行MVPのみ`mandatory_elements`と`teaching_contract`を追加する。確認問題、選択肢、learner prompt等はAIへ生成させず、YAML/backendが引き続き表示・採点する。
 
 ## 内部taxonomy
 
@@ -143,11 +147,13 @@ Codex app-serverの応答ログでは、`AICallLog.raw_text`にapp-serverが返�
 - 正答時は `generate_correct_answer_summary` を呼び、`{"summary": "..."}` を受け取る。
 - 誤答時は `explain_selected_distractor` を呼び、`{"feedback": "...", "remediation_focus": "...", "general_knowledge_supplement": null}` を受け取る。
 - どちらの呼び出しも既存の `_ai_call` 経由で行い、目的、payload、応答、遅延を `AICallLog` に記録する。
-- proposedには誤概念taxonomy、今回の誤概念タイプ、具体的な事前テスト対象、学習履歴、足場掛け情報を追加する。controlには用語、共通構成要素、固定問題、教材、RAG本文だけを渡し、taxonomy・診断対象・learning stage・誤概念履歴・学習者履歴を渡さない。
+- proposedには誤概念taxonomy、今回の誤概念タイプ、具体的な事前テスト対象、学習履歴、足場掛け情報を追加する。controlには用語、共通構成要素、現在の問題・選択内容、表示済み教材、RAG本文だけを渡し、taxonomy・診断対象・learning stage・誤概念履歴・学習者履歴を渡さない。正答要約と誤答解説の双方で同じallowlistを適用する。
 - 誤答解説は、選択された誤答の問題点と見直す観点だけを示し、正答の本文、正答位置、正答そのものを直接漏洩しない。
 - 解説本文は教材と同じ安全なMarkdown制約に従う。HTML、表、コードブロック、画像、長大な連続段落、M1〜M4、AIの思考過程を出力しない。
 - 解説生成に失敗した場合はMockへ自動フォールバックせず、回答状態を中途半端に確定せずにAIエラーとして扱う。
 
-`generate_tutoring_turn`ではAIが教材本文（`tutor_message`）を生成するが、確認問題の構成と正誤判定はYAML・backendが管理する。AI入力には確認問題の`expected_answer`を含めない。新しい教材生成へ渡す`learning_stage`は提案群だけで`enrichment`または`conceptual_change`である。十分な回答後に返す`final_feedback`は結果表示用の状態であり、新しい教材生成の入力にはしない。L3/L2は内部の`scaffolding_level`互換値としてのみ扱う。
+`generate_tutoring_turn`ではAIが教材本文（`tutor_message`）と方略名を生成するが、確認問題の本文・選択肢・正答・構成と正誤判定はYAML/backendが管理する。これらの問題情報は両群とも教材生成AIに渡さない。`learning_stage`は提案群だけに含め、十分な回答後の`final_feedback`は新しい教材生成入力にしない。L3/L2は内部の`scaffolding_level`互換値としてのみ扱う。
 
 提案群では、直前の確認問題と学習者の回答を次の教材生成の文脈としてAIへ渡す。AI生成の教材本文には転載させず、backendが教材本文の前に別の文脈ブロックとして簡潔に表示する。前回の採点結果、AI解説、振り返りは次の教材生成へ渡さず、教材本文にも再掲しない。誤概念履歴などのログは教授方略を選ぶために使い、回答後のフィードバックは教材と分けて表示する。
+
+Codex app-serverのAIログは、既存`AICallLog.request_payload`の関連情報に加えて`effective_request`へ実送信した`thread/start`設定、`turn/start`全文prompt、JSON Schema、モデル、推論レベル、prompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、生成試行番号、送信段階を保存する。認証情報は保存せず、Mock呼び出しには実送信監査を付けない。教材出力には文字数・段落数・箇条書き数を記録する。全文promptや選択内容を含むログは研究者限定で扱い、DB列・CSV固定列は変更しない。

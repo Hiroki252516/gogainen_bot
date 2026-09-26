@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -1648,6 +1649,10 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert proposed_log.request_payload["misconception_taxonomy"] == MISCONCEPTION_TAXONOMY
         assert proposed_log.request_payload["taxonomy_version"] == TAXONOMY_VERSION
         assert proposed_log.request_payload["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
+        assert proposed_log.request_payload["generation_attempt"] == 1
+        assert proposed_log.response_payload["generation_validation"]["valid"] is True
+        assert control_log.request_payload["generation_attempt"] == 1
+        assert control_log.response_payload["generation_validation"]["valid"] is True
         assert {target["claim_id"] for target in proposed_log.request_payload["pretest_targets"]} == {
             "llm_knowledge:pretest:D",
             "llm_knowledge:pretest:E",
@@ -1662,8 +1667,12 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert "learner_state" not in control_log.request_payload
         assert "session_misconception_history" not in control_log.request_payload
         assert "learning_stage" not in control_log.request_payload
-        assert "expected_answer" not in control_log.request_payload["fixed_practice_question"]
-        assert "expected_answer" not in proposed_log.request_payload["fixed_practice_question"]
+        assert "fixed_practice_question" not in control_log.request_payload
+        assert "fixed_practice_question_items" not in control_log.request_payload
+        assert "fixed_practice_question" not in proposed_log.request_payload
+        assert "fixed_practice_question_items" not in proposed_log.request_payload
+        assert "effective_request" not in control_log.request_payload
+        assert "effective_request" not in proposed_log.request_payload
         assert proposed_log.request_payload["rag_context"] == control_log.request_payload["rag_context"]
         proposed_turn_row = db.get(TutorTurn, proposed_turn["turn_id"])
         assert proposed_turn_row.diagnosis_json["taxonomy_version"] == TAXONOMY_VERSION
@@ -1908,16 +1917,16 @@ def test_admin_participant_delete_rolls_back_on_commit_failure(monkeypatch):
 def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonomy():
     prompt_source = Path(__file__).resolve().parents[1] / "app" / "ai" / "codex_app_server_backend.py"
     text = prompt_source.read_text(encoding="utf-8")
-    assert "learning_stage が enrichment" in text
-    assert "learning_stage が conceptual_change" in text
     assert "misconception_taxonomy" in text
     assert "M4なら不足スキーマの構築" in text
-    assert "fixed_practice_question" in text
+    assert "450〜850字程度を目安" in text
+    assert "固定問題バンクが表示・採点" in text
+    assert "fixed_practice_question_items" not in text
     assert "### 要点" in text
     assert "### 具体例" in text
     assert "### 注意点" in text
     assert "feedback は安全なMarkdownとして返す" in text
-    assert "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず" in text
+    assert "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず" not in text
     assert "previous_feedback_for_learner" not in text
     assert "generate_correct_answer_summary" in text
     assert "explain_selected_distractor" in text
@@ -1928,16 +1937,11 @@ def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatc
     backend = CodexAppServerBackend()
     captured_prompt: dict[str, str] = {}
 
-    async def capture_prompt(purpose, prompt, output_schema):
+    async def capture_prompt(purpose, prompt, output_schema, **kwargs):
         captured_prompt["text"] = prompt
         return {
             "tutor_message": "## マルチエージェント\n\n### 要点\n- 役割を分担して課題を処理します。\n\n### 具体例\n- 複数の担当が連携します。\n\n### 注意点\n- 単なる複数AIの集合ではありません。",
             "teaching_strategy": "foundational_explanation",
-            "scaffolding_level": "L3",
-            "requires_learner_response": True,
-            "learner_prompt": "説明してください。",
-            "practice_question": {"body": "確認問題", "expected_answer": "説明", "question_type": "learning_multi_select"},
-            "forbidden_help_given": False,
         }
 
     monkeypatch.setattr(backend, "_run_structured_turn", capture_prompt)
@@ -1947,7 +1951,7 @@ def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatc
                 "group_condition": "proposed",
                 "term": {"slug": "multi_agent", "label": "マルチエージェント", "description": "複数のエージェントが役割を分担する方式。"},
                 "learning_stage": "conceptual_change",
-                "fixed_practice_question": {"body": "確認問題", "expected_answer": "説明"},
+                "fixed_practice_question": {"body": "CURRENT_FIXED_QUESTION_DO_NOT_SEND", "expected_answer": "説明"},
                 "learner_state": {"teaching_strategy": "foundational_explanation", "scaffolding_level": "L3"},
                 "previous_practice_question": "前回の確認問題の内容",
                 "previous_learner_response": "前回の学習者の回答",
@@ -1958,12 +1962,9 @@ def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatc
     )
 
     prompt = captured_prompt["text"]
-    assert "previous_practice_question と previous_learner_response" in prompt
-    assert "AI生成の tutor_message へ転載しない" in prompt
-    assert "backend が教材本文の前に別途表示する" in prompt
     assert "前回の確認問題の内容" in prompt
     assert "前回の学習者の回答" in prompt
-    assert "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず" in prompt
+    assert "CURRENT_FIXED_QUESTION_DO_NOT_SEND" not in prompt
     assert "previous_feedback_for_learner" not in prompt
     assert result["tutor_message"].startswith("## マルチエージェント")
 
@@ -2118,8 +2119,10 @@ def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
         async def __aexit__(self, *_args):
             return None
 
-        async def call(self, method, params=None, notification_handler=None):
+        async def call(self, method, params=None, notification_handler=None, on_sent=None):
             self.calls.append((method, params))
+            if on_sent:
+                on_sent()
             if method == "account/read":
                 return {"account": {"id": "test-account"}}
             if method == "thread/start":
@@ -2149,6 +2152,9 @@ def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
     turn_start = next(params for method, params in rpc.calls if method == "turn/start")
     assert turn_start["model"] == "gpt-5.6-luna"
     assert turn_start["effort"] == "low"
+    assert result.request_audit["transmission"]["turn_start_sent"] is True
+    assert result.request_audit["transmission"]["turn_completed"] is True
+    assert result.request_audit["output_schema_sha256"]
 
 
 def test_ai_call_logs_effective_reasoning_effort(monkeypatch):
@@ -2202,6 +2208,13 @@ def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
             "label": "記憶プロセス",
             "description": "情報を保存し、検索して現在の処理へ渡し、必要に応じて更新する仕組みです。",
         },
+        "rag_context": {
+            "source": "test-rag",
+            "topic_slug": "memory_process",
+            "query": "memory process shared query",
+            "allowed_sections": ["5.1", "5.2"],
+            "chunks": [{"chunk_id": "chunk-audit-1", "text": "RAG audit text"}],
+        },
         "fixed_practice_question": {"body": "適切な説明を選びなさい。"},
     }
     raw_model_response = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
@@ -2216,7 +2229,9 @@ def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
         async def __aexit__(self, *_args):
             return None
 
-        async def call(self, method, params=None, notification_handler=None):
+        async def call(self, method, params=None, notification_handler=None, on_sent=None):
+            if on_sent:
+                on_sent()
             if method == "account/read":
                 return {"account": {"id": "test-account"}}
             if method == "thread/start":
@@ -2259,6 +2274,27 @@ def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
             "mandatory_elements"
         ]["correct_belief"]
         assert "未検証の訂正文" not in log.response_payload["teaching_contract"]["corrected_claim"]
+        audit = log.request_payload["effective_request"]
+        assert audit["model"] == "gpt-5.6-luna"
+        assert audit["reasoning_effort"] == log.request_payload["reasoning_effort"]
+        assert audit["generation_attempt"] == 1
+        assert audit["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
+        assert audit["output_schema_sha256"]
+        assert audit["rag_retrieval"]["query"] == "memory process shared query"
+        assert audit["rag_retrieval"]["allowed_sections"] == ["5.1", "5.2"]
+        assert audit["rag_retrieval"]["chunks"] == [
+            {
+                "chunk_id": "chunk-audit-1",
+                "text_sha256": hashlib.sha256(b"RAG audit text").hexdigest(),
+            }
+        ]
+        assert "participant_id" not in audit["prompt"]
+        assert '"group_condition"' not in audit["prompt"]
+        assert "fixed_practice_question" not in audit["prompt"]
+        assert audit["transmission"]["turn_start_sent"] is True
+        assert log.response_payload["output_metrics"]["character_count"] == len(
+            normalized_response["tutor_message"]
+        )
 
         participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
         assert participant_logs.status_code == 200, participant_logs.text
@@ -2273,6 +2309,66 @@ def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
         participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
         assert participant_csv.status_code == 200, participant_csv.text
         assert "未検証の訂正文" in participant_csv.text
+    finally:
+        db.close()
+
+
+def test_codex_failed_send_is_audited_as_not_sent(monkeypatch):
+    backend = CodexAppServerBackend()
+
+    class FakeRpc:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def call(self, method, params=None, notification_handler=None, on_sent=None):
+            if method == "account/read":
+                return {"account": {"id": "test-account"}}
+            if method == "thread/start":
+                if on_sent:
+                    on_sent()
+                return {"thread": {"id": "thread-audit"}}
+            if method == "turn/start":
+                raise CodexAppServerError("turn_start_rejected", "test rejection")
+            return {}
+
+        async def recv(self, _notification_handler=None):
+            raise AssertionError("turn/start was rejected before a response was expected")
+
+    monkeypatch.setattr(backend, "_client", lambda: FakeRpc())
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: backend)
+    db = SessionLocal()
+    try:
+        with pytest.raises(HTTPException) as error:
+            asyncio.run(
+                experiment_service._ai_call(
+                    db,
+                    "generate_tutoring_turn",
+                    {
+                        "participant_id": "P-AUDIT",
+                        "group_condition": "control",
+                        "term": {"slug": "memory_process", "label": "記憶プロセス", "description": "情報を保存して検索します。"},
+                        "rag_context": {"query": "common query", "allowed_sections": ["3.2"], "chunks": []},
+                    },
+                )
+            )
+        assert error.value.status_code == 503
+        log = (
+            db.query(AICallLog)
+            .filter_by(purpose="generate_tutoring_turn", status="failed")
+            .order_by(AICallLog.created_at.desc())
+            .first()
+        )
+        assert log is not None
+        audit = log.request_payload["effective_request"]
+        assert audit["transmission"]["thread_start_sent"] is True
+        assert audit["transmission"]["turn_start_attempted"] is True
+        assert audit["transmission"]["turn_start_sent"] is False
+        assert "記憶プロセス" in audit["prompt"]
+        assert "P-AUDIT" not in audit["prompt"]
+        assert "Bearer" not in json.dumps(audit)
     finally:
         db.close()
 

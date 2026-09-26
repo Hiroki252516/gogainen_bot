@@ -42,10 +42,12 @@ learning確認は`enrichment` / `conceptual_change`のstage・用語ごとにv1�
 ### 誤概念対応教材の生成経路
 
 1. `content_loader.py`がYAMLの`teaching_targets`を検証し、事前テストの誤答選択肢からclaim IDと訂正メタデータを復元する。
-2. proposedだけに`pretest_target(s)`、learner state、誤概念履歴、taxonomy、足場掛け方略を追加する。controlは用語・共通構成要素・固定問題・共通RAGだけを受け取る。
-3. Codex app-serverの`generate_tutoring_turn`出力へ`teaching_contract`を追加し、service側でclaim対応、M1/M3/unknownの方略、本文内証拠、正答漏えいを検証する。
-4. 欠落時は同じbackendへ最大2回再生成する。失敗時はMockへフォールバックせず503とし、`AICallLog`へ失敗payloadを残す。
-5. `TutorTurn.diagnosis_json`と`AICallLog.request_payload`に`teaching_contract`、`taxonomy_version`、`prompt_contract_version`をJSONとして保存する。既存DB列・採点ロジック・実験遷移は変更しない。
+2. 両群に用語・共通構成要素・同一検索条件のRAGを渡す。固定問題、選択肢、正答、参加者ID、群名は教材生成モデルへ渡さない。controlは一般的な通常AIチューターとして説明し、診断・学習段階・履歴・回答を参照しない。proposedだけに`pretest_target(s)`、learner state、誤概念履歴、taxonomy、足場掛け方略を追加する。
+3. Codex app-serverの`generate_tutoring_turn`出力では、proposedの`teaching_contract`と`mandatory_elements`をservice側で検証し、claim対応、M1/M3/unknownの方略、本文内証拠、正答漏えいを確認する。両群の教材本文は450〜850字程度を目安とし、文字数・段落数・箇条書き数を記録するが、長さだけを理由に再生成しない。
+4. 契約・安全性の欠落時は同じbackendへ最大2回再生成する。各AIログへ生成試行番号と検証結果を記録し、失敗時はMockへフォールバックせず503とする。
+5. `TutorTurn.diagnosis_json`には最終契約・検証・出力長指標を、`AICallLog.request_payload.effective_request`にはCodexへ実送信した`thread/start`・`turn/start`設定と全文prompt/schema、モデル・推論レベル、prompt/taxonomy版、RAG照合情報、送信状態を保存する。認証情報は保存しない。既存DB列・CSV固定列・採点ロジック・実験遷移は変更しない。
+
+統制群の正答要約・誤答解説も同じallowlist projectionを通し、現在の問題、選択内容、表示済み教材、共通RAGだけを残す。学習段階・診断・履歴・識別子は入力しない。前の確認問題の解説を次の教材生成へ持ち越さない。
 
 ## RAG
 
@@ -54,3 +56,5 @@ learning確認は`enrichment` / `conceptual_change`のstage・用語ごとにv1�
 ## AI backend
 
 通常実行は `AI_BACKEND=codex_app_server`、モデルは `gpt-5.6-luna`、推論レベルは `medium` とする。OpenAI APIキーやOpenAI SDKの直接呼び出しは使わない。app-server未接続時はMockへフォールバックせず、失敗をAPIエラーと `ai_call_logs` に残す。管理者による手動診断修正とその監査、遅延再テスト、完全な転移評価は将来対応である。参加者削除とギブアップ監査は現行実装である。
+
+実験運用では、参加者ログの`ai_call_logs.request_payload.effective_request`を使い、Codexへ渡った実prompt/schemaと統制群の入力分離を確認する。全文promptには回答・履歴等が含まれ得るため、この監査ログは研究者だけが閲覧する。Mockの自動テストにはCodex実送信監査を付けない。

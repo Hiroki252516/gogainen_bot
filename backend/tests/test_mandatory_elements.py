@@ -221,7 +221,7 @@ def test_codex_strips_contract_field_labels_from_learner_material():
         "\nwrong_belief：誤った考え"
     )
 
-    async def capture(purpose, prompt, output_schema):
+    async def capture(purpose, prompt, output_schema, **kwargs):
         return result
 
     backend._run_structured_turn = capture
@@ -348,7 +348,7 @@ def test_codex_prompt_schema_requires_m1_evidence(monkeypatch):
     captured: dict[str, object] = {}
     mock_result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
 
-    async def capture(purpose, prompt, output_schema):
+    async def capture(purpose, prompt, output_schema, **kwargs):
         captured["purpose"] = purpose
         captured["prompt"] = prompt
         captured["schema"] = output_schema
@@ -363,7 +363,8 @@ def test_codex_prompt_schema_requires_m1_evidence(monkeypatch):
     assert "teaching_contract" in schema["properties"]
     assert "teaching_contract" in schema["required"]
     assert set(schema["properties"]["teaching_contract"]["required"]) == set(teaching_contract_schema()["properties"])
-    assert "expected_answer" not in schema["properties"]["practice_question"]["properties"]
+    assert "practice_question" not in schema["properties"]
+    assert "learner_prompt" not in schema["properties"]
     nested_schema = schema["properties"]["mandatory_elements"]
     assert set(nested_schema["required"]) == set(nested_schema["properties"])
     assert "wrong_category" not in nested_schema["properties"]
@@ -380,7 +381,7 @@ def test_codex_unknown_prompt_has_empty_claim_contract(monkeypatch):
     captured: dict[str, object] = {}
     mock_result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
 
-    async def capture(purpose, prompt, output_schema):
+    async def capture(purpose, prompt, output_schema, **kwargs):
         captured["prompt"] = prompt
         captured["schema"] = output_schema
         return mock_result
@@ -393,6 +394,97 @@ def test_codex_unknown_prompt_has_empty_claim_contract(monkeypatch):
     assert "pretest_targetsの全claim_idをaddressed_claim_idsへ入れる" not in prompt
     assert "memory_process:pretest:D" not in prompt
     assert "teaching_contract" in captured["schema"]["properties"]
+
+
+def test_control_tutoring_prompt_is_independent_of_participant_diagnostics_and_fixed_questions(monkeypatch):
+    backend = CodexAppServerBackend()
+    shared_rag = {
+        "query": "記憶プロセス 保存 検索",
+        "topic_slug": "memory_process",
+        "allowed_sections": ["3.2"],
+        "chunks": [{"chunk_id": "chunk-1", "text": "保存した情報を検索して利用する。"}],
+    }
+    prompts: list[str] = []
+
+    async def capture(purpose, prompt, output_schema, **kwargs):
+        prompts.append(prompt)
+        return {"tutor_message": "## 記憶プロセス\n\n### 要点\n- 情報を保存し検索します。", "teaching_strategy": "general_explanation"}
+
+    monkeypatch.setattr(backend, "_run_structured_turn", capture)
+    common = {
+        "group_condition": "control",
+        "term": {"slug": "memory_process", "label": "記憶プロセス", "description": "情報を保存し、必要な時に検索する仕組みです。"},
+        "component_term": "検索",
+        "component_index": 1,
+        "component_total": 1,
+        "component_terms": ["記憶プロセス"],
+        "rag_context": shared_rag,
+    }
+    first = {
+        **common,
+        "participant_id": "P-ONE",
+        "learning_stage": "STAGE-ONE",
+        "learner_state": {"primary_misconception": "M1-PRIVATE"},
+        "previous_learner_response": "RESPONSE-ONE",
+        "fixed_practice_question": {"body": "QUESTION-ONE", "options": ["OPTION-ONE"], "expected_answer": "ANSWER-ONE"},
+    }
+    second = {
+        **common,
+        "participant_id": "P-TWO",
+        "learning_stage": "STAGE-TWO",
+        "learner_state": {"primary_misconception": "M3-PRIVATE"},
+        "previous_learner_response": "RESPONSE-TWO",
+        "fixed_practice_question": {"body": "QUESTION-TWO", "options": ["OPTION-TWO"], "expected_answer": "ANSWER-TWO"},
+        "session_misconception_history": ["HISTORY-TWO"],
+    }
+
+    asyncio.run(backend.generate_tutoring_turn(first))
+    asyncio.run(backend.generate_tutoring_turn(second))
+
+    assert prompts[0] == prompts[1]
+    for private_value in ("P-ONE", "P-TWO", "control", "STAGE-ONE", "STAGE-TWO", "M1-PRIVATE", "M3-PRIVATE", "QUESTION-ONE", "QUESTION-TWO", "OPTION-ONE", "ANSWER-TWO", "RESPONSE-ONE", "HISTORY-TWO"):
+        assert private_value not in prompts[0]
+    assert "記憶プロセス" in prompts[0]
+    assert "chunk-1" in prompts[0]
+    assert "通常のAIチューター" in prompts[0]
+
+
+def test_control_feedback_uses_only_current_feedback_context_for_both_outcomes(monkeypatch):
+    backend = CodexAppServerBackend()
+    prompts: list[str] = []
+
+    async def capture(purpose, prompt, output_schema, **kwargs):
+        prompts.append(prompt)
+        if purpose == "generate_correct_answer_summary":
+            return {"summary": "## 今回の要点\n- 説明します。"}
+        return {"feedback": "## どこが違うか\n- 確認します。", "remediation_focus": "仕組みを確認する。", "general_knowledge_supplement": None}
+
+    monkeypatch.setattr(backend, "_run_structured_turn", capture)
+    payload = {
+        "participant_id": "P-FEEDBACK",
+        "group_condition": "control",
+        "term": {"slug": "memory_process", "label": "記憶プロセス", "description": "情報を保存し検索する仕組みです。"},
+        "learning_stage": "STAGE-PRIVATE",
+        "component_term": "検索",
+        "question_body": "CURRENT_QUESTION",
+        "selected_option_body": "CURRENT_SELECTION",
+        "selected_option_bodies": ["CURRENT_SELECTION"],
+        "material": "CURRENT_MATERIAL",
+        "rag_context": {"query": "COMMON_QUERY", "allowed_sections": ["3.2"], "chunks": [{"chunk_id": "current-chunk", "text": "COMMON_RAG_TEXT"}]},
+        "learner_state": {"primary_misconception": "PRIVATE_DIAGNOSIS"},
+        "misconception_taxonomy": {"M1": "PRIVATE_TAXONOMY"},
+        "session_misconception_history": ["PRIVATE_HISTORY"],
+    }
+
+    asyncio.run(backend.generate_correct_answer_summary(payload))
+    asyncio.run(backend.explain_selected_distractor(payload))
+
+    assert len(prompts) == 2
+    for prompt in prompts:
+        for private_value in ("P-FEEDBACK", "control", "STAGE-PRIVATE", "PRIVATE_DIAGNOSIS", "PRIVATE_TAXONOMY", "PRIVATE_HISTORY"):
+            assert private_value not in prompt
+        for current_value in ("CURRENT_QUESTION", "CURRENT_SELECTION", "CURRENT_MATERIAL", "COMMON_QUERY", "COMMON_RAG_TEXT"):
+            assert current_value in prompt
 
 
 def test_teaching_contract_rejects_unknown_claim_and_empty_refutation():

@@ -34,8 +34,6 @@ class MockAIBackend:
         description = term.get("description") or f"{label}の基本的な定義と役割を確認します。"
         stage = payload.get("learning_stage") or "conceptual_change"
         group = payload.get("group_condition", "proposed")
-        fixed_question = payload.get("fixed_practice_question") or {}
-        question_body = fixed_question.get("body") or f"{label}について、適切な説明をすべて選びなさい。"
         mandatory_type = expected_mandatory_type(payload)
         mandatory_elements = None
         teaching_contract = None
@@ -126,14 +124,6 @@ class MockAIBackend:
         result = {
             "tutor_message": message,
             "teaching_strategy": "general_explanation" if group == "control" else learner_state.get("teaching_strategy") or "foundational_explanation",
-            "scaffolding_level": learner_state.get("scaffolding_level") or "L3",
-            "requires_learner_response": True,
-            "learner_prompt": question_body,
-            "practice_question": {
-                "body": question_body,
-                "question_type": fixed_question.get("question_type") or "learning_multi_select",
-            },
-            "forbidden_help_given": False,
         }
         if mandatory_elements:
             result["mandatory_elements"] = mandatory_elements

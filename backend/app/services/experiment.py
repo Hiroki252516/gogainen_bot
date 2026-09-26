@@ -282,7 +282,7 @@ async def _generate_validated_tutoring_turn(
     """Generate proposed-group material and enforce the MVP operation contract."""
     expected_type = expected_mandatory_type(payload)
     if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
-        request_payload = payload
+        request_payload = {**payload, "generation_attempt": 1}
         validation: dict[str, Any] = {}
         for attempt in range(1, MANDATORY_ELEMENT_MAX_ATTEMPTS + 1):
             result = await _ai_call(db, "generate_tutoring_turn", request_payload)
@@ -298,12 +298,15 @@ async def _generate_validated_tutoring_turn(
                 "missing": missing,
                 "teaching_contract": contract_validation,
                 "material_safety": safety_validation,
+                "attempt": attempt,
             }
+            _attach_generation_validation(db, request_payload, validation)
             if validation["valid"]:
                 return result, {**validation, "attempts": attempt}
             if attempt < MANDATORY_ELEMENT_MAX_ATTEMPTS:
                 request_payload = {
                     **payload,
+                    "generation_attempt": attempt + 1,
                     "mandatory_element_retry": {
                         "attempt": attempt + 1,
                         "missing": missing,
@@ -319,7 +322,7 @@ async def _generate_validated_tutoring_turn(
         )
 
     term_label = (payload.get("term") or {}).get("label")
-    request_payload = payload
+    request_payload = {**payload, "generation_attempt": 1}
     validation: dict[str, Any] = {}
     for attempt in range(1, MANDATORY_ELEMENT_MAX_ATTEMPTS + 1):
         result = await _ai_call(db, "generate_tutoring_turn", request_payload)
@@ -337,12 +340,15 @@ async def _generate_validated_tutoring_turn(
             "missing": missing,
             "teaching_contract": contract_validation,
             "material_safety": safety_validation,
+            "attempt": attempt,
         }
+        _attach_generation_validation(db, request_payload, validation)
         if validation["valid"]:
             return result, {**validation, "attempts": attempt}
         if attempt < MANDATORY_ELEMENT_MAX_ATTEMPTS:
             request_payload = {
                 **payload,
+                "generation_attempt": attempt + 1,
                 "mandatory_element_retry": {
                     "attempt": attempt + 1,
                     "missing": missing,
@@ -357,6 +363,48 @@ async def _generate_validated_tutoring_turn(
             "missing": validation.get("missing", []),
         },
     )
+
+
+def _attach_generation_validation(
+    db: Session | None,
+    request_payload: dict[str, Any],
+    validation: dict[str, Any],
+) -> None:
+    """Attach server-side validation to the matching existing AI-call log."""
+    if db is None:
+        return
+
+    participant_id = request_payload.get("participant_id")
+    attempt = request_payload.get("generation_attempt", 1)
+
+    def matches(log: AICallLog) -> bool:
+        logged = log.request_payload or {}
+        return (
+            log.purpose == "generate_tutoring_turn"
+            and logged.get("participant_id") == participant_id
+            and logged.get("generation_attempt", 1) == attempt
+        )
+
+    deferred_logs = db.info.get("deferred_ai_logs", [])
+    log = next((candidate for candidate in reversed(deferred_logs) if matches(candidate)), None)
+    if log is None:
+        candidates = (
+            db.query(AICallLog)
+            .filter_by(purpose="generate_tutoring_turn")
+            .order_by(AICallLog.created_at.desc(), AICallLog.id.desc())
+            .limit(50)
+            .all()
+        )
+        log = next((candidate for candidate in candidates if matches(candidate)), None)
+    if log is None:
+        raise RuntimeError("tutoring generation validation has no matching AI-call log")
+
+    log.response_payload = {
+        **(log.response_payload or {}),
+        "generation_validation": validation,
+    }
+    if not db.info.get("defer_commits"):
+        db.commit()
 
 
 def _practice_meta(turn: TutorTurn | None) -> dict[str, Any]:
@@ -1132,6 +1180,15 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
     return attempt
 
 
+def _tutoring_output_metrics(result: dict[str, Any]) -> dict[str, int]:
+    material = str(result.get("tutor_message") or "")
+    return {
+        "character_count": len(material),
+        "paragraph_count": len([block for block in re.split(r"\n\s*\n", material.strip()) if block.strip()]),
+        "bullet_count": len(re.findall(r"(?m)^\s*(?:[-*+] |\d+[.)] )", material)),
+    }
+
+
 async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[str, Any]:
     reasoning_effort = current_reasoning_effort()
     backend = get_ai_backend(reasoning_effort=reasoning_effort)
@@ -1140,8 +1197,13 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
     try:
         result = await getattr(backend, purpose)(payload)
         raw_text = getattr(result, "raw_text", None)
+        request_audit = getattr(result, "request_audit", None)
         result = dict(result)
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
+        if purpose == "generate_tutoring_turn":
+            result["output_metrics"] = _tutoring_output_metrics(result)
+        if request_audit is not None:
+            logged_payload["effective_request"] = request_audit
         _record_ai_log(
             db,
             AICallLog(
@@ -1158,6 +1220,8 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
         return result
     except CodexAppServerError as exc:
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
+        if exc.request_audit is not None:
+            logged_payload["effective_request"] = exc.request_audit
         _record_ai_log(
             db,
             AICallLog(
@@ -1180,6 +1244,9 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
             },
         ) from exc
     except Exception as exc:
+        request_audit = getattr(exc, "request_audit", None)
+        if request_audit is not None:
+            logged_payload["effective_request"] = request_audit
         _record_ai_log(
             db,
             AICallLog(
@@ -1700,16 +1767,6 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "component_total": position["component_total"],
         "component_terms": _component_terms(term.slug, term.label),
         "prompt_contract_version": PROMPT_CONTRACT_VERSION,
-        "fixed_practice_question": {
-            "body": spec["body"],
-            "question_type": question_type,
-            "options": _public_learning_options(spec),
-            "selection_mode": practice_question.get("selection_mode"),
-            "min_selections": practice_question.get("min_selections"),
-            "max_selections": practice_question.get("max_selections"),
-            "variant_key": spec["variant_key"],
-        },
-        "fixed_practice_question_items": _public_learning_options(spec),
         "rag_context": _rag_context(
             term.slug,
             term.label,
@@ -1797,6 +1854,9 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "mandatory_elements_validation": mandatory_validation,
             "teaching_contract": result.get("teaching_contract"),
             "teaching_contract_validation": mandatory_validation.get("teaching_contract"),
+            "generation_attempts": mandatory_validation.get("attempts"),
+            "tutoring_output_metrics": result.get("output_metrics") or _tutoring_output_metrics(result),
+            "group_condition": participant.group_condition,
             "taxonomy_version": payload.get("taxonomy_version"),
             "prompt_contract_version": payload.get("prompt_contract_version"),
         },
@@ -1877,7 +1937,6 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "term": {"slug": term.slug, "label": term.label, "description": term.description},
-        "learning_stage": learning_stage,
         "component_term": component_term,
         "question_body": spec["body"],
         "selected_option_body": " / ".join(selected_explanation_bodies),
@@ -1893,6 +1952,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     if participant.group_condition == "proposed":
         explanation_payload.update(
             {
+                "learning_stage": learning_stage,
                 "learner_state": {
                     "current_status": state.current_status,
                     "primary_misconception": state.primary_misconception,
