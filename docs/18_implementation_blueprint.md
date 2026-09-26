@@ -11,6 +11,7 @@
 - Codex backend: `backend/app/ai/codex_app_server_backend.py`
 - Mock backend: `backend/app/ai/mock_backend.py`
 - Runtime taxonomy: `backend/app/ai/misconception_taxonomy.py`
+- Teaching contract: `backend/app/ai/teaching_contract.py`
 - RAG retriever: `backend/app/rag/retriever.py`
 
 `init_db()` とseed処理は既存DB・既存ログを削除しない。旧Termは非アクティブ化し、新規のTerm/question queryから除外する。
@@ -37,6 +38,14 @@
 10. `/finish`
 
 learning確認は`enrichment` / `conceptual_change`のstage・用語ごとにv1〜v5を使う。確認問題は`questions`へseedせず、`TutorTurn.practice_question_json`に保存する。学習確認では`variant_key`を保存し、テスト問題が使う`construct_key`/`variant_key`の命名と互換性を保つ。L3/L2は内部`scaffolding_level`互換値であり、参加者向けstageではない。
+
+### 誤概念対応教材の生成経路
+
+1. `content_loader.py`がYAMLの`teaching_targets`を検証し、事前テストの誤答選択肢からclaim IDと訂正メタデータを復元する。
+2. proposedだけに`pretest_target(s)`、learner state、誤概念履歴、taxonomy、足場掛け方略を追加する。controlは用語・共通構成要素・固定問題・共通RAGだけを受け取る。
+3. Codex app-serverの`generate_tutoring_turn`出力へ`teaching_contract`を追加し、service側でclaim対応、M1/M3/unknownの方略、本文内証拠、正答漏えいを検証する。
+4. 欠落時は同じbackendへ最大2回再生成する。失敗時はMockへフォールバックせず503とし、`AICallLog`へ失敗payloadを残す。
+5. `TutorTurn.diagnosis_json`と`AICallLog.request_payload`に`teaching_contract`、`taxonomy_version`、`prompt_contract_version`をJSONとして保存する。既存DB列・採点ロジック・実験遷移は変更しない。
 
 ## RAG
 

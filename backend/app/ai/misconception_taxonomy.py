@@ -4,6 +4,9 @@ from copy import deepcopy
 from typing import Any
 
 
+TAXONOMY_VERSION = "m1-m3-unknown-v1"
+
+
 MISCONCEPTION_TAXONOMY: dict[str, Any] = {
     "M1": {
         "label": "誤信念型",

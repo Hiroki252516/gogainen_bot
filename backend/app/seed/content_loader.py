@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,34 @@ def _validate_option_set(name: str, options: Any) -> None:
         raise ValueError(f"{name} must not mention LangGraph")
 
 
+def _validate_teaching_targets(content: dict[str, Any]) -> None:
+    targets = content.get("teaching_targets") or {}
+    for term in content.get("terms") or []:
+        slug = term["slug"]
+        option_targets = targets.get(slug) or {}
+        pretest_variants = (term.get("questions") or {}).get("pretest") or []
+        first_pretest = (
+            pretest_variants[0]
+            if isinstance(pretest_variants, list) and pretest_variants and isinstance(pretest_variants[0], dict)
+            else {}
+        )
+        options = first_pretest.get("options") or []
+        for option in options:
+            label = option.get("label")
+            misconception_type = option.get("misconception_type")
+            target = option_targets.get(label)
+            if misconception_type in {"M1", "M3"}:
+                if not isinstance(target, dict):
+                    raise ValueError(f"teaching_targets.{slug}.{label} is required")
+                required = {"corrected_claim", "mechanism_explanation", "contrast_example"}
+                if misconception_type == "M3":
+                    required |= {"wrong_category", "correct_category", "boundary_criterion"}
+                if any(not str(target.get(field) or "").strip() for field in required):
+                    raise ValueError(f"teaching_targets.{slug}.{label} is incomplete")
+            elif target is not None:
+                raise ValueError(f"teaching_targets.{slug}.{label} must not target {misconception_type}")
+
+
 def _validate_variant(term_slug: str, phase: str, variant: Any) -> None:
     if not isinstance(variant, dict) or not variant.get("variant_key") or not variant.get("body"):
         raise ValueError(f"{term_slug}.{phase} contains an invalid variant")
@@ -68,6 +97,8 @@ def _validate_content(content: dict[str, Any]) -> None:
 
     for name, options in (content.get("option_sets") or {}).items():
         _validate_option_set(f"option_sets.{name}", options)
+
+    _validate_teaching_targets(content)
 
     for term in content["terms"]:
         slug = term["slug"]
@@ -117,6 +148,12 @@ def load_content() -> dict[str, Any]:
 
 def content_term(term_slug: str) -> dict[str, Any]:
     return next(term for term in load_content()["terms"] if term["slug"] == term_slug)
+
+
+def teaching_target_for_option(term_slug: str, option_label: str) -> dict[str, Any] | None:
+    targets = (load_content().get("teaching_targets") or {}).get(term_slug) or {}
+    target = targets.get(option_label)
+    return deepcopy(target) if isinstance(target, dict) else None
 
 
 def learning_question_spec(term_slug: str, learning_stage: str, variant_index: int = 1) -> dict[str, Any]:
