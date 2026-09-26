@@ -372,6 +372,26 @@ def test_codex_prompt_schema_requires_m1_evidence(monkeypatch):
     assert "counterexample" in captured["prompt"]
 
 
+def test_missing_group_condition_uses_proposed_contract_in_codex_backend(monkeypatch):
+    backend = CodexAppServerBackend()
+    payload = _payload("M1", "conceptual_change")
+    payload.pop("group_condition")
+    captured: dict[str, object] = {}
+    mock_result = asyncio.run(
+        MockAIBackend().generate_tutoring_turn({**payload, "group_condition": "proposed"})
+    )
+
+    async def capture(purpose, prompt, output_schema, **kwargs):
+        captured.update(purpose=purpose, prompt=prompt, schema=output_schema, **kwargs)
+        return mock_result
+
+    monkeypatch.setattr(backend, "_run_structured_turn", capture)
+    asyncio.run(backend.generate_tutoring_turn(payload))
+
+    assert "mandatory_elements" in captured["schema"]["properties"]
+    assert "teaching_contract" in captured["schema"]["properties"]
+
+
 def test_control_tutoring_never_uses_proposed_mandatory_contract(monkeypatch):
     backend = CodexAppServerBackend()
     payload = _payload("M1", "conceptual_change")
@@ -427,6 +447,30 @@ def test_service_control_validation_skips_proposed_type_resolution(monkeypatch):
     assert validation["expected_type"] is None
     assert calls[0]["generation_attempt"] == 1
     assert result["teaching_strategy"] == "general_explanation"
+
+
+def test_missing_group_condition_uses_proposed_contract_in_service(monkeypatch):
+    payload = _payload("M1", "conceptual_change")
+    payload.pop("group_condition")
+    calls: list[dict] = []
+
+    async def fake_ai_call(_db, purpose, request_payload):
+        assert purpose == "generate_tutoring_turn"
+        calls.append(request_payload)
+        return await MockAIBackend().generate_tutoring_turn(
+            {**request_payload, "group_condition": "proposed"}
+        )
+
+    monkeypatch.setattr(experiment_service, "_ai_call", fake_ai_call)
+    result, validation = asyncio.run(
+        experiment_service._generate_validated_tutoring_turn(None, payload)
+    )
+
+    assert validation["valid"]
+    assert validation["expected_type"] == "M1"
+    assert validation["required"] is True
+    assert calls[0]["generation_attempt"] == 1
+    assert result["mandatory_elements"]["type"] == "M1"
 
 
 def test_control_audit_keeps_original_contract_and_generation_attempt(monkeypatch):
@@ -544,9 +588,11 @@ def test_control_tutoring_prompt_is_independent_of_participant_diagnostics_and_f
 def test_control_feedback_uses_only_current_feedback_context_for_both_outcomes(monkeypatch):
     backend = CodexAppServerBackend()
     prompts: list[str] = []
+    audit_contexts: list[dict] = []
 
     async def capture(purpose, prompt, output_schema, **kwargs):
         prompts.append(prompt)
+        audit_contexts.append(kwargs["audit_context"])
         if purpose == "generate_correct_answer_summary":
             return {"summary": "## 今回の要点\n- 説明します。"}
         return {"feedback": "## どこが違うか\n- 確認します。", "remediation_focus": "仕組みを確認する。", "general_knowledge_supplement": None}
@@ -555,6 +601,8 @@ def test_control_feedback_uses_only_current_feedback_context_for_both_outcomes(m
     payload = {
         "participant_id": "P-FEEDBACK",
         "group_condition": "control",
+        "prompt_contract_version": "feedback-prompt-v9",
+        "taxonomy_version": "feedback-taxonomy-v6",
         "term": {"slug": "memory_process", "label": "記憶プロセス", "description": "情報を保存し検索する仕組みです。"},
         "learning_stage": "STAGE-PRIVATE",
         "component_term": "検索",
@@ -573,10 +621,23 @@ def test_control_feedback_uses_only_current_feedback_context_for_both_outcomes(m
 
     assert len(prompts) == 2
     for prompt in prompts:
-        for private_value in ("P-FEEDBACK", "control", "STAGE-PRIVATE", "PRIVATE_DIAGNOSIS", "PRIVATE_TAXONOMY", "PRIVATE_HISTORY"):
+        for private_value in (
+            "P-FEEDBACK",
+            "control",
+            "STAGE-PRIVATE",
+            "PRIVATE_DIAGNOSIS",
+            "PRIVATE_TAXONOMY",
+            "PRIVATE_HISTORY",
+            "feedback-prompt-v9",
+            "feedback-taxonomy-v6",
+        ):
             assert private_value not in prompt
         for current_value in ("CURRENT_QUESTION", "CURRENT_SELECTION", "CURRENT_MATERIAL", "COMMON_QUERY", "COMMON_RAG_TEXT"):
             assert current_value in prompt
+    assert len(audit_contexts) == 2
+    for audit_context in audit_contexts:
+        assert audit_context["prompt_contract_version"] == "feedback-prompt-v9"
+        assert audit_context["taxonomy_version"] == "feedback-taxonomy-v6"
 
 
 def test_teaching_contract_rejects_unknown_claim_and_empty_refutation():

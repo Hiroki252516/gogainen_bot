@@ -229,8 +229,8 @@ class CodexAppServerBackend:
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
         group = payload.get("group_condition", "proposed")
         expected_type = (
-            expected_mandatory_type(payload)
-            if payload.get("group_condition") == "proposed"
+            expected_mandatory_type({**payload, "group_condition": group})
+            if group == "proposed"
             else None
         )
         prompt_payload = (
@@ -464,7 +464,7 @@ class CodexAppServerBackend:
                 ],
             ),
             schema,
-            audit_context=self._audit_context(prompt_payload),
+            audit_context=self._audit_context(payload),
         )
         result["summary"] = _strip_internal_labels(result["summary"])
         return result
@@ -502,7 +502,7 @@ class CodexAppServerBackend:
                 ],
             ),
             schema,
-            audit_context=self._audit_context(prompt_payload),
+            audit_context=self._audit_context(payload),
         )
         result["feedback"] = _strip_internal_labels(result["feedback"])
         result["remediation_focus"] = _strip_internal_labels(result["remediation_focus"])

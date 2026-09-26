@@ -280,9 +280,10 @@ async def _generate_validated_tutoring_turn(
     forbidden_strings: list[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Generate proposed-group material and enforce the MVP operation contract."""
+    group = payload.get("group_condition", "proposed")
     expected_type = (
-        expected_mandatory_type(payload)
-        if payload.get("group_condition") == "proposed"
+        expected_mandatory_type({**payload, "group_condition": group})
+        if group == "proposed"
         else None
     )
     if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
