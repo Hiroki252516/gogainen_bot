@@ -250,6 +250,39 @@ def mock_mandatory_elements(
     }
 
 
+def reconcile_mandatory_elements(result: dict[str, Any], misconception_type: str | None) -> dict[str, Any]:
+    """Synchronize AI evidence fields with the visible Markdown sections.
+
+    Codex sometimes writes a semantically equivalent paraphrase into the
+    research-only JSON field instead of copying the visible sentence exactly.
+    The learner-facing material is the source of truth, so recover a short
+    evidence span from the corresponding non-empty section before validation.
+    Missing headings or empty sections are intentionally left invalid.
+    """
+    if misconception_type not in MANDATORY_MISCONCEPTION_TYPES:
+        return result
+    message = result.get("tutor_message")
+    if not isinstance(message, str):
+        return result
+    elements = result.get("mandatory_elements")
+    if not isinstance(elements, dict):
+        return result
+
+    headings = mandatory_element_headings(misconception_type)
+    repaired = dict(elements)
+    for field, heading in headings.items():
+        section = _heading_section(message, heading, tuple(headings.values()))
+        evidence = _first_section_evidence(section)
+        current = repaired.get(field)
+        if evidence and (
+            not isinstance(current, str)
+            or _normalize_evidence(current) not in _normalize_evidence(section)
+        ):
+            repaired[field] = evidence
+    result["mandatory_elements"] = repaired
+    return result
+
+
 def _heading_section(message: str, heading: str, headings: tuple[str, ...]) -> str:
     matches = _heading_matches(message, "###", heading)
     if not matches:
@@ -269,6 +302,14 @@ def _heading_section(message: str, heading: str, headings: tuple[str, ...]) -> s
 
 def _normalize_evidence(value: str) -> str:
     return re.sub(r"[\s*_`#>\[\]]+", "", value or "")
+
+
+def _first_section_evidence(section: str) -> str:
+    for line in section.splitlines():
+        candidate = re.sub(r"^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s+)", "", line).strip()
+        if candidate and not candidate.startswith("#"):
+            return candidate
+    return ""
 
 
 def _heading_matches(message: str, prefix: str, heading: str) -> list[re.Match[str]]:

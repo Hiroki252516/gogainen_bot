@@ -7,10 +7,12 @@ from app.ai.mandatory_elements import (
     expected_mandatory_type,
     mandatory_element_headings,
     mandatory_elements_schema,
+    reconcile_mandatory_elements,
     validate_mandatory_elements,
 )
 from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.ai.mock_backend import MockAIBackend
+from app.ai.teaching_contract import reconcile_teaching_contract, validate_teaching_contract
 
 
 def _payload(misconception_type: str | None, stage: str) -> dict:
@@ -62,6 +64,42 @@ def test_mock_proposed_material_contains_all_mandatory_evidence():
         assert "### 注意点" not in result["tutor_message"]
         for heading in mandatory_element_headings(misconception_type).values():
             assert f"### {heading}" in result["tutor_message"]
+
+
+def test_codex_evidence_reconciliation_uses_visible_unknown_sections():
+    backend = MockAIBackend()
+    payload = _payload("unknown", "enrichment")
+    result = asyncio.run(backend.generate_tutoring_turn(payload))
+    result["mandatory_elements"]["components"] = "AIが返した別の要約です。"
+    result["teaching_contract"]["mechanism_explanation"] = "AIが返した別の仕組みです。"
+    result["teaching_contract"]["transfer_check"] = "AIが返した別の適用確認です。"
+
+    reconcile_mandatory_elements(result, "unknown")
+    reconcile_teaching_contract(result, "unknown")
+
+    mandatory_validation = validate_mandatory_elements(result, "unknown", payload["term"]["label"])
+    contract_validation = validate_teaching_contract(result, "unknown", payload, payload["term"]["label"])
+    assert mandatory_validation["valid"], mandatory_validation
+    assert contract_validation["valid"], contract_validation
+    assert result["mandatory_elements"]["components"] in result["tutor_message"]
+    assert result["teaching_contract"]["mechanism_explanation"] in result["tutor_message"]
+    assert result["teaching_contract"]["transfer_check"] in result["tutor_message"]
+
+
+def test_codex_strips_contract_field_labels_from_learner_material():
+    backend = CodexAppServerBackend()
+    payload = _payload("unknown", "enrichment")
+    result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    result["tutor_message"] += "\n\nmechanism_explanation: 仕組みを確認します。\ntransfer_check: 新しい例に適用します。"
+
+    async def capture(purpose, prompt, output_schema):
+        return result
+
+    backend._run_structured_turn = capture
+    normalized = asyncio.run(backend.generate_tutoring_turn(payload))
+
+    assert "mechanism_explanation:" not in normalized["tutor_message"]
+    assert "transfer_check:" not in normalized["tutor_message"]
 
 
 def test_validator_rejects_evidence_not_present_in_visible_material():

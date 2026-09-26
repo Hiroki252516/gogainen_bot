@@ -148,6 +148,57 @@ def validate_teaching_contract(
     }
 
 
+def reconcile_teaching_contract(result: dict[str, Any], expected_type: str | None) -> dict[str, Any]:
+    """Use visible material as the source of truth for contract evidence.
+
+    The structured contract is research metadata.  When an AI response
+    paraphrases a sentence in that metadata, copy an exact span from the
+    already-generated material instead of discarding an otherwise valid
+    lesson.  Structural contract violations and missing transfer evidence are
+    still rejected by ``validate_teaching_contract``.
+    """
+    if expected_type not in TEACHING_CONTRACT_TYPES:
+        return result
+    contract = result.get("teaching_contract")
+    message = result.get("tutor_message")
+    elements = result.get("mandatory_elements")
+    if not isinstance(contract, dict) or not isinstance(message, str) or not isinstance(elements, dict):
+        return result
+
+    repaired = dict(contract)
+    element_fields = {
+        "M1": {
+            "corrected_claim": "correct_belief",
+            "mechanism_explanation": "reason",
+            "contrast_example": "counterexample",
+        },
+        "M3": {
+            "corrected_claim": "correct_category",
+            "mechanism_explanation": "boundary_criterion",
+            "contrast_example": "contrast_example",
+        },
+        "unknown": {
+            "mechanism_explanation": "decision_criterion",
+        },
+    }[expected_type]
+    for contract_field, element_field in element_fields.items():
+        current = repaired.get(contract_field)
+        if isinstance(current, str) and current.strip() and _normalize(current) in _normalize(message):
+            continue
+        candidate = elements.get(element_field)
+        if isinstance(candidate, str) and candidate.strip() and _normalize(candidate) in _normalize(message):
+            repaired[contract_field] = candidate
+
+    current_transfer = repaired.get("transfer_check")
+    if not isinstance(current_transfer, str) or not current_transfer.strip() or _normalize(current_transfer) not in _normalize(message):
+        transfer_evidence = _find_transfer_evidence(message)
+        if transfer_evidence:
+            repaired["transfer_check"] = transfer_evidence
+
+    result["teaching_contract"] = repaired
+    return result
+
+
 def validate_tutoring_material_safety(
     result: dict[str, Any],
     forbidden_strings: list[str] | None = None,
@@ -185,3 +236,13 @@ def mock_teaching_contract(
 
 def _normalize(value: str) -> str:
     return re.sub(r"\s+", "", value)
+
+
+def _find_transfer_evidence(message: str) -> str:
+    for raw_line in message.splitlines():
+        candidate = re.sub(r"^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s+)", "", raw_line).strip()
+        if not candidate or candidate.startswith("#"):
+            continue
+        if any(keyword in candidate for keyword in ("別の", "新しい", "適用", "応用", "事例", "場面")):
+            return candidate
+    return ""
