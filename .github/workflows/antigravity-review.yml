@@ -367,6 +367,9 @@ jobs:
 
           Do not write explanations before or after the JSON.
 
+          Escape quotation marks, backslashes, and newlines inside JSON
+          strings according to the JSON standard.
+
           Use exactly this structure:
 
           {
@@ -392,6 +395,41 @@ jobs:
           Once the JSON has been produced, the task is complete.
           Do nothing else.
           """
+
+          # Geminiにレビュー結果のJSON構造を強制する。
+          # system_instructionだけでは、文字列内の引用符が
+          # エスケープされずJSON解析に失敗することがある。
+          review_schema = {
+              "type": "object",
+              "properties": {
+                  "summary": {"type": "string"},
+                  "general_feedback": {"type": "string"},
+                  "comments": {
+                      "type": "array",
+                      "maxItems": 20,
+                      "items": {
+                          "type": "object",
+                          "properties": {
+                              "path": {"type": "string"},
+                              "line": {"type": "integer", "minimum": 1},
+                              "body": {"type": "string"},
+                          },
+                          "required": ["path", "line", "body"],
+                          "additionalProperties": False,
+                      },
+                  },
+              },
+              "required": ["summary", "general_feedback", "comments"],
+              "additionalProperties": False,
+          }
+
+          response_format = [
+              {
+                  "type": "text",
+                  "mime_type": "application/json",
+                  "schema": review_schema,
+              }
+          ]
 
           # ----------------------------------------------------------
           # HTTP helper
@@ -535,6 +573,72 @@ jobs:
                   ),
               )
 
+          def extract_model_output(result):
+              """Return only the last model text from an interaction."""
+              for step in reversed(result.get("steps", [])):
+                  if step.get("type") != "model_output":
+                      continue
+
+                  text_parts = []
+                  for content in step.get("content", []):
+                      if content.get("type") == "text" and content.get("text"):
+                          text_parts.append(content["text"])
+
+                  if text_parts:
+                      return "".join(text_parts).strip()
+
+              return ""
+
+          def is_valid_review_shape(review):
+              """Validate the fields used by the GitHub review API."""
+              if not isinstance(review, dict):
+                  return False
+
+              if set(review) != {
+                  "summary",
+                  "general_feedback",
+                  "comments",
+              }:
+                  return False
+
+              if not isinstance(review["summary"], str):
+                  return False
+
+              if not isinstance(review["general_feedback"], str):
+                  return False
+
+              comments = review["comments"]
+              if not isinstance(comments, list) or len(comments) > 20:
+                  return False
+
+              for comment in comments:
+                  if not isinstance(comment, dict):
+                      return False
+
+                  if set(comment) != {"path", "line", "body"}:
+                      return False
+
+                  if (
+                      not isinstance(comment["path"], str)
+                      or not comment["path"].strip()
+                      or not isinstance(comment["line"], int)
+                      or isinstance(comment["line"], bool)
+                      or comment["line"] < 1
+                      or not isinstance(comment["body"], str)
+                      or not comment["body"].strip()
+                  ):
+                      return False
+
+              return True
+
+          def parse_review_output(output):
+              try:
+                  review = json.loads(output)
+              except json.JSONDecodeError:
+                  return None
+
+              return review if is_valid_review_shape(review) else None
+
           # ----------------------------------------------------------
           # First interaction
           # ----------------------------------------------------------
@@ -545,6 +649,9 @@ jobs:
               "system_instruction": system_instruction,
 
               "input": pr_context,
+
+              # JSONの構文とフィールド構造をAPI側で強制する。
+              "response_format": response_format,
 
               # sandbox自体はremoteを利用するが、
               # 外部ネットワークは完全に無効化する。
@@ -652,6 +759,9 @@ jobs:
                       system_instruction
                   ),
 
+                  # 継続interactionにも必ず同じSchemaを渡す。
+                  "response_format": response_format,
+
                   "input": (
                       "Continue from the previous interaction. "
                       "Finish the pull request review now. "
@@ -739,32 +849,7 @@ jobs:
           # Agentの途中経過やthoughtはレビュー本文に混ぜない。
           # ----------------------------------------------------------
 
-          output = ""
-
-          for step in reversed(
-              result.get("steps", [])
-          ):
-              if step.get("type") != "model_output":
-                  continue
-
-              text_parts = []
-
-              for content in step.get(
-                  "content",
-                  [],
-              ):
-                  if content.get("type") == "text":
-                      text = content.get("text")
-
-                      if text:
-                          text_parts.append(text)
-
-              if text_parts:
-                  output = "".join(
-                      text_parts
-                  ).strip()
-
-                  break
+          output = extract_model_output(result)
 
           if not output:
               print(
@@ -782,9 +867,68 @@ jobs:
 
               raise SystemExit(1)
 
-          Path(
-              "/tmp/antigravity_output.txt"
-          ).write_text(
+          # response_format適用後も、Workflow側で一度検証する。
+          # 不正な応答は同じ条件で1回だけ再生成する。
+          if parse_review_output(output) is None:
+              print(
+                  "Antigravity output failed local validation; retrying once."
+              )
+
+              retry_payload = {
+                  "agent": "antigravity-preview-05-2026",
+                  "system_instruction": system_instruction,
+                  "input": (
+                      pr_context
+                      + "\n\n"
+                      + "The previous response did not satisfy the required "
+                      + "JSON schema. Return the review again as one valid "
+                      + "JSON object only. Do not use Markdown fences."
+                  ),
+                  "response_format": response_format,
+                  "environment": {
+                      "type": "remote",
+                      "network": "disabled",
+                  },
+                  "tools": [],
+                  "agent_config": {
+                      "type": "antigravity",
+                      "max_total_tokens": 30000,
+                  },
+                  "background": True,
+              }
+
+              retry_interaction = request_json(
+                  API_BASE,
+                  method="POST",
+                  data=retry_payload,
+              )
+
+              retry_id = retry_interaction.get("id")
+              if not retry_id:
+                  print("::error::No retry interaction ID returned.")
+                  raise SystemExit(1)
+
+              print("Retry interaction started:", retry_id)
+              result = wait_for_interaction(retry_interaction)
+              print_usage(result, "Retry interaction")
+
+              if result.get("status") != "completed":
+                  print(
+                      "::error::Antigravity retry did not complete successfully. "
+                      f"status={result.get('status')}"
+                  )
+                  raise SystemExit(1)
+
+              output = extract_model_output(result)
+
+              if not output or parse_review_output(output) is None:
+                  print(
+                      "::error::Antigravity returned invalid JSON after one retry."
+                  )
+                  print(output[:10000])
+                  raise SystemExit(1)
+
+          Path("/tmp/antigravity_output.txt").write_text(
               output,
               encoding="utf-8",
           )
@@ -801,9 +945,8 @@ jobs:
       # ============================================================
       # 4. AntigravityのJSONを検証
       #
-      # Antigravity Managed Agentはstructured outputを
-      # ネイティブサポートしていないため、
-      # GitHub Actions側で検証する。
+      # API側のresponse_formatに加えて、
+      # GitHub Actions側でも型とフィールドを検証する。
       #
       # inline commentは実際のdiffに存在する追加行だけ許可する。
       # ============================================================
@@ -828,83 +971,92 @@ jobs:
               errors="replace",
           ).strip()
 
-          # ----------------------------------------------------------
-          # JSONを取り出す
-          # ----------------------------------------------------------
-
-          candidate = raw
-
-          if candidate.startswith("```"):
-              candidate = re.sub(
-                  r"^```(?:json)?\s*",
-                  "",
-                  candidate,
-                  flags=re.IGNORECASE,
-              )
-
-              candidate = re.sub(
-                  r"\s*```$",
-                  "",
-                  candidate,
-              )
-
           try:
-              review = json.loads(candidate)
+              review = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              print("::error::Antigravity output is not valid JSON.")
+              print(raw[:10000])
+              raise SystemExit(1) from exc
 
-          except json.JSONDecodeError:
-              start = candidate.find("{")
-              end = candidate.rfind("}")
+          validation_errors = []
 
-              if start >= 0 and end > start:
-                  try:
-                      review = json.loads(
-                          candidate[start:end + 1]
-                      )
-                  except json.JSONDecodeError:
-                      review = None
-              else:
-                  review = None
-
-          # JSON形式を守らなかった場合でも、
-          # Review自体を完全に捨てない。
           if not isinstance(review, dict):
-              review = {
-                  "summary": (
-                      "Antigravityによるレビューは完了しましたが、"
-                      "構造化された形式で結果を取得できませんでした。"
-                  ),
-                  "general_feedback": raw[:50000],
-                  "comments": [],
-              }
+              validation_errors.append("review must be an object")
+          else:
+              if set(review) != {
+                  "summary",
+                  "general_feedback",
+                  "comments",
+              }:
+                  validation_errors.append(
+                      "review must contain only summary, general_feedback, comments"
+                  )
 
-          summary = review.get(
-              "summary",
-              "",
-          )
+              if not isinstance(review.get("summary"), str):
+                  validation_errors.append("summary must be a string")
 
-          if not isinstance(summary, str):
-              summary = str(summary)
+              if not isinstance(review.get("general_feedback"), str):
+                  validation_errors.append(
+                      "general_feedback must be a string"
+                  )
 
-          general_feedback = review.get(
-              "general_feedback",
-              "",
-          )
+              comments = review.get("comments")
+              if not isinstance(comments, list):
+                  validation_errors.append("comments must be an array")
+                  comments = []
+              elif len(comments) > 20:
+                  validation_errors.append(
+                      "comments must contain at most 20 items"
+                  )
 
-          if not isinstance(
-              general_feedback,
-              str,
-          ):
-              general_feedback = str(
-                  general_feedback
-              )
+              for index, item in enumerate(comments):
+                  if not isinstance(item, dict):
+                      validation_errors.append(
+                          f"comments[{index}] must be an object"
+                      )
+                      continue
 
-          comments = review.get(
-              "comments",
-              [],
-          )
+                  if set(item) != {"path", "line", "body"}:
+                      validation_errors.append(
+                          f"comments[{index}] has unexpected fields"
+                      )
 
-          if not isinstance(comments, list):
-              comments = []
+                  line = item.get("line")
+                  if (
+                      not isinstance(item.get("path"), str)
+                      or not item.get("path", "").strip()
+                  ):
+                      validation_errors.append(
+                          f"comments[{index}].path must be a non-empty string"
+                      )
+
+                  if (
+                      not isinstance(line, int)
+                      or isinstance(line, bool)
+                      or line < 1
+                  ):
+                      validation_errors.append(
+                          f"comments[{index}].line must be a positive integer"
+                      )
+
+                  if (
+                      not isinstance(item.get("body"), str)
+                      or not item.get("body", "").strip()
+                  ):
+                      validation_errors.append(
+                          f"comments[{index}].body must be a non-empty string"
+                      )
+
+          if validation_errors:
+              print("::error::Antigravity review schema validation failed.")
+              for error in validation_errors:
+                  print(f"::error::{error}")
+              print(raw[:10000])
+              raise SystemExit(1)
+
+          summary = review["summary"]
+          general_feedback = review["general_feedback"]
+          comments = review["comments"]
 
           # ----------------------------------------------------------
           # unified diffから、
