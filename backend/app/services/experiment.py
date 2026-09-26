@@ -280,7 +280,11 @@ async def _generate_validated_tutoring_turn(
     forbidden_strings: list[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Generate proposed-group material and enforce the MVP operation contract."""
-    expected_type = expected_mandatory_type(payload)
+    expected_type = (
+        expected_mandatory_type(payload)
+        if payload.get("group_condition") == "proposed"
+        else None
+    )
     if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
         request_payload = {**payload, "generation_attempt": 1}
         validation: dict[str, Any] = {}
@@ -375,13 +379,19 @@ def _attach_generation_validation(
         return
 
     participant_id = request_payload.get("participant_id")
+    term_slug = (request_payload.get("term") or {}).get("slug")
     attempt = request_payload.get("generation_attempt", 1)
+    if not participant_id or not term_slug:
+        raise RuntimeError(
+            "tutoring generation validation requires participant and term identifiers"
+        )
 
     def matches(log: AICallLog) -> bool:
         logged = log.request_payload or {}
         return (
             log.purpose == "generate_tutoring_turn"
             and logged.get("participant_id") == participant_id
+            and (logged.get("term") or {}).get("slug") == term_slug
             and logged.get("generation_attempt", 1) == attempt
         )
 

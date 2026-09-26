@@ -372,6 +372,98 @@ def test_codex_prompt_schema_requires_m1_evidence(monkeypatch):
     assert "counterexample" in captured["prompt"]
 
 
+def test_control_tutoring_never_uses_proposed_mandatory_contract(monkeypatch):
+    backend = CodexAppServerBackend()
+    payload = _payload("M1", "conceptual_change")
+    payload.update(
+        {
+            "group_condition": "control",
+            "pretest_target": {"claim_id": "private-claim", "observed_claim": "private claim"},
+            "prompt_contract_version": "private-contract-version",
+            "generation_attempt": 2,
+        }
+    )
+    captured: dict[str, object] = {}
+
+    def unexpected_mandatory_type(_payload):
+        raise AssertionError("control generation must not resolve a proposed-group type")
+
+    async def capture(purpose, prompt, output_schema, **kwargs):
+        captured.update(purpose=purpose, prompt=prompt, schema=output_schema, **kwargs)
+        return {"tutor_message": "## 記憶プロセス\n\n### 要点\n- 情報を保存し検索します。", "teaching_strategy": "adaptive_scaffolding"}
+
+    monkeypatch.setattr("app.ai.codex_app_server_backend.expected_mandatory_type", unexpected_mandatory_type)
+    monkeypatch.setattr(backend, "_run_structured_turn", capture)
+    result = asyncio.run(backend.generate_tutoring_turn(payload))
+
+    assert "mandatory_elements" not in captured["schema"]["properties"]
+    assert "teaching_contract" not in captured["schema"]["properties"]
+    assert "private-claim" not in captured["prompt"]
+    assert "private-contract-version" not in captured["prompt"]
+    assert result["teaching_strategy"] == "general_explanation"
+
+
+def test_service_control_validation_skips_proposed_type_resolution(monkeypatch):
+    payload = _payload("M1", "conceptual_change")
+    payload["group_condition"] = "control"
+    calls: list[dict] = []
+
+    def unexpected_mandatory_type(_payload):
+        raise AssertionError("control validation must not resolve a proposed-group type")
+
+    async def fake_ai_call(_db, purpose, request_payload):
+        assert purpose == "generate_tutoring_turn"
+        calls.append(request_payload)
+        return {
+            "tutor_message": "## 記憶プロセス\n\n### 要点\n- 情報を保存し検索します。",
+            "teaching_strategy": "general_explanation",
+        }
+
+    monkeypatch.setattr(experiment_service, "expected_mandatory_type", unexpected_mandatory_type)
+    monkeypatch.setattr(experiment_service, "_ai_call", fake_ai_call)
+    result, validation = asyncio.run(experiment_service._generate_validated_tutoring_turn(None, payload))
+
+    assert validation["valid"]
+    assert validation["expected_type"] is None
+    assert calls[0]["generation_attempt"] == 1
+    assert result["teaching_strategy"] == "general_explanation"
+
+
+def test_control_audit_keeps_original_contract_and_generation_attempt(monkeypatch):
+    backend = CodexAppServerBackend()
+    payload = {
+        "group_condition": "control",
+        "term": {"slug": "memory_process", "label": "記憶プロセス", "description": "情報を保存し検索する仕組みです。"},
+        "prompt_contract_version": "audit-contract-v7",
+        "taxonomy_version": "audit-taxonomy-v4",
+        "generation_attempt": 3,
+        "mandatory_element_retry": {"attempt": 2, "missing": ["private-validation-detail"]},
+        "learner_state": {"primary_misconception": "PRIVATE-M1"},
+        "rag_context": {"query": "common query", "allowed_sections": ["3.2"], "chunks": []},
+    }
+    captured: dict[str, object] = {}
+
+    async def capture(purpose, prompt, output_schema, **kwargs):
+        captured.update(purpose=purpose, prompt=prompt, schema=output_schema, **kwargs)
+        return {"tutor_message": "## 記憶プロセス\n\n### 要点\n- 情報を保存し検索します。", "teaching_strategy": "general_explanation"}
+
+    monkeypatch.setattr(backend, "_run_structured_turn", capture)
+    asyncio.run(backend.generate_tutoring_turn(payload))
+
+    assert "PRIVATE-M1" not in captured["prompt"]
+    assert "audit-contract-v7" not in captured["prompt"]
+    assert "private-validation-detail" not in captured["prompt"]
+    audit_context = captured["audit_context"]
+    assert audit_context["prompt_contract_version"] == "audit-contract-v7"
+    assert audit_context["taxonomy_version"] == "audit-taxonomy-v4"
+    assert audit_context["generation_attempt"] == 3
+    assert audit_context["rag_retrieval"]["query"] == "common query"
+    retry_only_audit = backend._audit_context(
+        {"mandatory_element_retry": {"attempt": 2}}, generation=True
+    )
+    assert retry_only_audit["generation_attempt"] == 2
+
+
 def test_codex_unknown_prompt_has_empty_claim_contract(monkeypatch):
     backend = CodexAppServerBackend()
     payload = _payload("unknown", "enrichment")

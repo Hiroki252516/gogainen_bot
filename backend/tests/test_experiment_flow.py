@@ -1690,6 +1690,63 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         db.close()
 
 
+def test_generation_validation_matches_participant_term_and_attempt():
+    participant_id = "generation-validation-join-test"
+    matching = AICallLog(
+        provider="test",
+        purpose="generate_tutoring_turn",
+        request_payload={
+            "participant_id": participant_id,
+            "generation_attempt": 2,
+            "term": {"slug": "memory_process"},
+        },
+        response_payload={"marker": "matching"},
+        status="success",
+    )
+    other_term = AICallLog(
+        provider="test",
+        purpose="generate_tutoring_turn",
+        request_payload={
+            "participant_id": participant_id,
+            "generation_attempt": 2,
+            "term": {"slug": "multi_agent"},
+        },
+        response_payload={"marker": "other-term"},
+        status="success",
+    )
+    db = SessionLocal()
+    try:
+        db.add_all([matching, other_term])
+        db.commit()
+
+        experiment_service._attach_generation_validation(
+            db,
+            {
+                "participant_id": participant_id,
+                "generation_attempt": 2,
+                "term": {"slug": "memory_process"},
+            },
+            {"valid": True, "attempt": 2},
+        )
+
+        db.refresh(matching)
+        db.refresh(other_term)
+        assert matching.response_payload["generation_validation"] == {"valid": True, "attempt": 2}
+        assert "generation_validation" not in other_term.response_payload
+
+        with pytest.raises(RuntimeError, match="participant and term identifiers"):
+            experiment_service._attach_generation_validation(
+                db,
+                {"generation_attempt": 2},
+                {"valid": True, "attempt": 2},
+            )
+    finally:
+        db.delete(matching)
+        db.delete(other_term)
+        db.commit()
+        db.close()
+
+
 def test_next_tutoring_material_excludes_previous_check_feedback():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()

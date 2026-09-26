@@ -228,7 +228,11 @@ class CodexAppServerBackend:
 
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
         group = payload.get("group_condition", "proposed")
-        expected_type = expected_mandatory_type(payload)
+        expected_type = (
+            expected_mandatory_type(payload)
+            if payload.get("group_condition") == "proposed"
+            else None
+        )
         prompt_payload = (
             self._proposed_tutoring_payload(payload)
             if group == "proposed"
@@ -329,7 +333,8 @@ class CodexAppServerBackend:
             "generate_tutoring_turn",
             self._prompt("tutoring_turn", prompt_payload, rules),
             schema,
-            audit_context=self._audit_context(prompt_payload, generation=True),
+            # Audit metadata comes from the full request; model input stays allowlisted.
+            audit_context=self._audit_context(payload, generation=True),
         )
         result["tutor_message"] = _strip_internal_labels(result["tutor_message"])
         if isinstance(result.get("teaching_contract"), dict):
@@ -738,7 +743,10 @@ class CodexAppServerBackend:
 
     def _audit_context(self, payload: dict[str, Any], *, generation: bool = False) -> dict[str, Any]:
         rag = payload.get("rag_context") or {}
-        attempt = (payload.get("mandatory_element_retry") or {}).get("attempt", 1)
+        retry_attempt = (payload.get("mandatory_element_retry") or {}).get("attempt")
+        attempt = payload.get("generation_attempt")
+        if attempt is None:
+            attempt = retry_attempt if retry_attempt is not None else 1
         return {
             "prompt_contract_version": payload.get("prompt_contract_version") or PROMPT_CONTRACT_VERSION,
             "taxonomy_version": payload.get("taxonomy_version") or (TAXONOMY_VERSION if payload.get("misconception_taxonomy") else None),
