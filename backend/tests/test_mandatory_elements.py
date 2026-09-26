@@ -13,7 +13,7 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.ai.mock_backend import MockAIBackend
 
 
-def _payload(misconception_type: str, stage: str) -> dict:
+def _payload(misconception_type: str | None, stage: str) -> dict:
     return {
         "group_condition": "proposed",
         "active_misconception_type": misconception_type,
@@ -30,6 +30,15 @@ def test_mvp_types_resolve_to_mandatory_operations():
     assert expected_mandatory_type(_payload("M1", "conceptual_change")) == "M1"
     assert expected_mandatory_type(_payload("M3", "conceptual_change")) == "M3"
     assert expected_mandatory_type(_payload("unknown", "enrichment")) == "unknown"
+
+
+def test_explicit_non_mvp_type_does_not_fall_back_to_previous_diagnosis():
+    for active_type in ("M2", "M4", None):
+        payload = _payload(active_type, "conceptual_change")
+        payload["previous_learning_misconception"] = {"misconception_type": "M1"}
+        payload["learner_state"] = {"primary_misconception": "M3"}
+
+        assert expected_mandatory_type(payload) is None
 
 
 def test_mock_proposed_material_contains_all_mandatory_evidence():
@@ -65,6 +74,76 @@ def test_validator_rejects_evidence_not_present_in_visible_material():
 
     assert not validation["valid"]
     assert "counterexample:evidence_not_in_tutor_message" in validation["missing"]
+
+
+def test_validator_requires_markdown_heading_lines_not_inline_markers():
+    backend = MockAIBackend()
+    payload = _payload("M1", "conceptual_change")
+    result = asyncio.run(backend.generate_tutoring_turn(payload))
+    result["tutor_message"] = result["tutor_message"].replace(
+        "### 正しい考え",
+        "本文中で ### 正しい考え と表記します。",
+        1,
+    )
+
+    validation = validate_mandatory_elements(result, "M1", payload["term"]["label"])
+
+    assert not validation["valid"]
+    assert "tutor_message:heading_missing:### 正しい考え" in validation["missing"]
+    assert "correct_belief:evidence_not_in_section" in validation["missing"]
+
+
+def test_validator_ignores_inline_heading_mentions_when_finding_section_end():
+    backend = MockAIBackend()
+    payload = _payload("M1", "conceptual_change")
+    result = asyncio.run(backend.generate_tutoring_turn(payload))
+    elements = result["mandatory_elements"]
+    headings = mandatory_element_headings("M1")
+    sections = ["## 記憶プロセス"]
+    for field, heading in headings.items():
+        evidence = elements[field]
+        if field == "correct_belief":
+            evidence = f"本文では ### 反例 と表記する説明も含める。\n- {evidence}"
+        sections.append(f"### {heading}\n- {evidence}")
+    result["tutor_message"] = "\n\n".join(sections)
+
+    validation = validate_mandatory_elements(result, "M1", payload["term"]["label"])
+
+    assert validation["valid"], validation
+
+
+def test_validator_rejects_evidence_in_an_empty_heading_section():
+    backend = MockAIBackend()
+    payload = _payload("M1", "conceptual_change")
+    result = asyncio.run(backend.generate_tutoring_turn(payload))
+    elements = result["mandatory_elements"]
+    headings = mandatory_element_headings("M1")
+    sections = ["## 記憶プロセス"]
+    for field, heading in headings.items():
+        evidence = ""
+        if field == "correct_belief":
+            evidence = f"- {elements['wrong_belief']}\n- {elements[field]}"
+        elif field != "wrong_belief":
+            evidence = f"- {elements[field]}"
+        sections.append(f"### {heading}\n{evidence}")
+    result["tutor_message"] = "\n\n".join(sections)
+
+    validation = validate_mandatory_elements(result, "M1", payload["term"]["label"])
+
+    assert not validation["valid"]
+    assert "wrong_belief:evidence_not_in_section" in validation["missing"]
+
+
+def test_validator_detects_internal_labels_adjacent_to_japanese_text():
+    backend = MockAIBackend()
+    payload = _payload("M1", "conceptual_change")
+    result = asyncio.run(backend.generate_tutoring_turn(payload))
+    result["tutor_message"] += "\n\nこの説明はM1誤概念を示すものではありません。"
+
+    validation = validate_mandatory_elements(result, "M1", payload["term"]["label"])
+
+    assert not validation["valid"]
+    assert "tutor_message:internal_label_exposed" in validation["missing"]
 
 
 def test_service_retries_same_backend_when_mandatory_evidence_is_missing(monkeypatch):

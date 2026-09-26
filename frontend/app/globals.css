@@ -352,6 +352,27 @@ button:disabled {
   margin-bottom: 0;
 }
 
+.learning-progress-summary {
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.learning-progress-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.learning-progress-row strong {
+  color: var(--text);
+  white-space: nowrap;
+}
+
 .result-detail {
   display: grid;
   gap: 4px;
