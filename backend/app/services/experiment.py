@@ -512,6 +512,16 @@ def _pretest_teaching_targets(term_slug: str, options: list[QuestionOption]) -> 
     return targets
 
 
+def _primary_pretest_target(targets: list[dict[str, Any]], misconception_type: str | None) -> dict[str, Any] | None:
+    """Select only an observed target for the active M1/M3 teaching strategy."""
+    if misconception_type not in {"M1", "M3"}:
+        return None
+    return next(
+        (target for target in targets if target.get("misconception_type") == misconception_type),
+        None,
+    )
+
+
 def get_participant(db: Session, participant_id: str, *, for_update: bool = False) -> Participant:
     query = db.query(Participant).filter_by(id=participant_id)
     if for_update:
@@ -1696,10 +1706,7 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if participant.group_condition == "proposed":
         selected_pretest_options = _selected_options(db, pretest_attempt) if pretest_attempt else []
         pretest_targets = _pretest_teaching_targets(term.slug, selected_pretest_options)
-        primary_pretest_target = next(
-            (target for target in pretest_targets if target.get("misconception_type") == active_misconception_type),
-            pretest_targets[0] if pretest_targets else None,
-        )
+        primary_pretest_target = _primary_pretest_target(pretest_targets, active_misconception_type)
         diagnostic_options = [
             {
                 "label": option.option_label,

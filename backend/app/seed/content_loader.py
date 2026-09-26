@@ -57,7 +57,13 @@ def _validate_teaching_targets(content: dict[str, Any]) -> None:
     for term in content.get("terms") or []:
         slug = term["slug"]
         option_targets = targets.get(slug) or {}
-        options = (term.get("questions") or {}).get("pretest", [{}])[0].get("options") or []
+        pretest_variants = (term.get("questions") or {}).get("pretest") or []
+        first_pretest = (
+            pretest_variants[0]
+            if isinstance(pretest_variants, list) and pretest_variants and isinstance(pretest_variants[0], dict)
+            else {}
+        )
+        options = first_pretest.get("options") or []
         for option in options:
             label = option.get("label")
             misconception_type = option.get("misconception_type")

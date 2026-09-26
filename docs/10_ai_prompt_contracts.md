@@ -128,7 +128,7 @@ M1/M3/unknownの提案群出力には、`teaching_contract`を必須化する。
 | `transfer_check` | 新しい事例へ適用する確認 |
 | `target_addressed` | 対象を扱ったことの明示 |
 
-backendはclaim IDの対応、M1/M3/unknownごとの方略、契約フィールドが`tutor_message`に現れること、内部ラベルの露出、固定確認問題の正答・問題文の転載を検証する。欠落時は同じAI backendで最大2回再生成し、それでも失敗したら503を返す。Codex app-serverが使用できない場合にMockへフォールバックしない。
+backendはclaim IDの対応、M1/M3/unknownごとの方略、契約フィールドが`tutor_message`に現れること、内部ラベルの露出、固定確認問題の正答・問題文の転載を検証する。M1/M3で現在のタイプに一致する研究者確認済みtargetがない場合は、claimを創作せず `target_claim_id=null`、`addressed_claim_ids=[]` を許可する。unknownではtargetをAI入力から除外し、`target_claim_id=null`、`addressed_claim_ids=[]`、`corrected_claim=null`、`contrast_example=null` とする。欠落時は同じAI backendで最大2回再生成し、それでも失敗したら503を返す。Codex app-serverが使用できない場合にMockへフォールバックしない。
 
 教材と学習者向けフィードバックは、見出し、箇条書き、太字、短い段落を中心にする。表、HTML、コードブロック、画像、長大な連続段落、内部ラベルの露出は禁止する。既存JSON schema、DB列、CSV列は変更しない。
 

@@ -40,7 +40,23 @@ class MockAIBackend:
         mandatory_elements = None
         teaching_contract = None
         if mandatory_type:
-            target = payload.get("pretest_target") or next(iter(payload.get("pretest_targets") or []), None)
+            target = None
+            if mandatory_type in {"M1", "M3"}:
+                requested_target = payload.get("pretest_target")
+                if (
+                    isinstance(requested_target, dict)
+                    and requested_target.get("misconception_type") in {None, mandatory_type}
+                ):
+                    target = requested_target
+                else:
+                    target = next(
+                        (
+                            item
+                            for item in payload.get("pretest_targets") or []
+                            if isinstance(item, dict) and item.get("misconception_type") in {None, mandatory_type}
+                        ),
+                        None,
+                    )
             mandatory_elements = mock_mandatory_elements(label, description, mandatory_type, target)
             headings = mandatory_element_headings(mandatory_type)
             transfer_check = (
@@ -74,11 +90,14 @@ class MockAIBackend:
                 contrast_example=contrast,
                 transfer_check=transfer_check,
             )
-            teaching_contract["addressed_claim_ids"] = [
-                item["claim_id"]
-                for item in payload.get("pretest_targets") or []
-                if isinstance(item, dict) and item.get("claim_id")
-            ] or teaching_contract["addressed_claim_ids"]
+            if mandatory_type in {"M1", "M3"}:
+                teaching_contract["addressed_claim_ids"] = [
+                    item["claim_id"]
+                    for item in payload.get("pretest_targets") or []
+                    if isinstance(item, dict)
+                    and item.get("misconception_type") in {None, mandatory_type}
+                    and item.get("claim_id")
+                ] or teaching_contract["addressed_claim_ids"]
             if mandatory_type == "unknown":
                 message += "\n- 定義から構成要素と役割へつなげて、新しい例に適用します。"
         elif stage == "enrichment":

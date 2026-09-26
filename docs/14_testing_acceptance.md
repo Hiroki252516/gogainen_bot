@@ -15,6 +15,7 @@
 - `teaching_targets`が3用語のM1/M3選択肢すべてに存在し、M1のE選択時に選択肢本文、`llm_knowledge:pretest:E`、研究者確認済みの「プロンプトだけでは重みを更新しない」という訂正がproposed payloadへ入る。
 - proposedの`pretest_target(s)`、`taxonomy_version`、`prompt_contract_version`が`AICallLog.request_payload`へ保存され、`TutorTurn.diagnosis_json`にも契約と検証結果が保存される。controlにはtaxonomy、誤答主張、診断履歴、learner state、learning stage、過去回答を入れない。
 - M1/M3/unknownの`teaching_contract`がclaim ID、方略、訂正、仕組み、対比例、転移確認を満たし、本文と一致する。欠落・不正claim・誤った方略は同じbackendで最大2回再生成後に503となる。
+- M1/M3が混在する事前テスト、事前targetのない学習中M1/M3、staleなM1/M3 targetを含むunknownで、claimの混在・捏造・503が発生しない。日本語に隣接した内部ラベルと改行を含む証拠文も検証する。
 - AI入力と出力に固定確認問題の`expected_answer`を含めず、生成教材へ固定問題本文・正答・直前フィードバックを転載しない。RAGの検索条件は段階・診断に依存せず両群で同一である。
 - app-server payloadが `gpt-5.6-luna` / `medium` を使う。
 - 正答時は `generate_correct_answer_summary`、誤答時は `explain_selected_distractor` が呼ばれ、解説生成の目的とpayloadが `AICallLog` に記録される。

@@ -204,6 +204,18 @@ class CodexAppServerBackend:
         group = payload.get("group_condition", "proposed")
         prompt_payload = payload if group == "proposed" else self._control_tutoring_payload(payload)
         expected_type = expected_mandatory_type(prompt_payload)
+        if group == "proposed" and expected_type == "unknown":
+            # Keep the raw request in AICallLog, but prevent stale M1/M3
+            # observations from becoming an unknown learner's AI target.
+            prompt_payload = {
+                **payload,
+                "pretest_target": None,
+                "pretest_targets": [],
+                "diagnostic_evidence": {
+                    **(payload.get("diagnostic_evidence") or {}),
+                    "pretest_targets": [],
+                },
+            }
         schema = {
             "type": "object",
             "properties": {
@@ -271,11 +283,25 @@ class CodexAppServerBackend:
                     f"tutor_message は必ず『## {term_label}』の後に {heading_order} の順で構成する。",
                     "M1/M3/unknownでは『### 要点』『### 具体例』『### 注意点』を使わず、タイプ別の見出しを教材構造そのものにする。",
                     "各タイプ別セクションには対応する必須教授要素を置き、他のタイプの必須要素や不要なセクションを追加しない。",
-                    "teaching_contract を必ず返し、pretest_targetsの全claim_idをaddressed_claim_idsへ入れる。target_claim_idは主対象のclaim_idにする。",
-                    "teaching_contractのcorrected_claim、mechanism_explanation、contrast_example、transfer_checkは、tutor_message本文にそのまま含める。",
-                    "teaching_contractのtarget_addressedはtrueにする。M1のrefutation_modeはexplicitを標準とし、M3はcategory_comparison、unknownはnoneにする。",
                 ]
             )
+            if expected_type in {"M1", "M3"}:
+                rules.extend(
+                    [
+                        "teaching_contractを必ず返し、現在のタイプに一致するpretest_targetsがある場合は、そのclaim_idだけをaddressed_claim_idsへ入れる。target_claim_idは主対象のclaim_idにする。",
+                        "現在のタイプに一致するpretest_targetsがない場合は、target_claim_idをnull、addressed_claim_idsを空配列にし、研究者確認済みでない具体的な誤答主張を創作しない。",
+                        "teaching_contractのcorrected_claim、mechanism_explanation、contrast_example、transfer_checkは、tutor_message本文にそのまま含める。",
+                        "teaching_contractのtarget_addressedはtrueにする。M1のrefutation_modeはexplicitを標準とし、M3はcategory_comparisonにする。",
+                    ]
+                )
+            else:
+                rules.extend(
+                    [
+                        "unknownのteaching_contractはtarget_claim_idをnull、addressed_claim_idsを空配列、corrected_claimとcontrast_exampleをnullにする。",
+                        "unknownでは反駁対象を創作せず、mechanism_explanationとtransfer_checkだけを教材本文に含め、refutation_modeはnoneにする。",
+                        "teaching_contractのtarget_addressedはtrueにする。",
+                    ]
+                )
         else:
             rules.extend(
                 [
@@ -298,7 +324,7 @@ class CodexAppServerBackend:
             rules.append("入力payloadのmisconception_taxonomyにあるM1〜M4の定義と教授方略を厳守する。M3ならカテゴリー再分類、M2なら説明モデルの再構成、M1なら誤信念の反証、M4なら不足スキーマの構築、unknownなら基礎知識の豊富化を優先する。")
             rules.append("diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置き、学習者が示していない誤概念を創作しない。unknownでは誤った考えを推測しない。")
             rules.append("pretest_targetまたはpretest_targetsがある場合、それを今回の教授目標として優先する。観察された選択を確定した信念とは断定せず、選択された説明として扱う。")
-            rules.append("M1は対象の誤った命題、正しい命題、誤りの仕組み、対比例、別事例への適用確認を明示する。M3は誤カテゴリー、正カテゴリー、境界、対比例、別事例への適用確認を明示する。unknownは反駁せず、定義・構成要素・役割・正例・非例と適用確認を示す。")
+            rules.append("M1は対象がある場合はその誤った命題を、対象がない場合は一般的な誤りの型を、正しい命題、誤りの仕組み、対比例、別事例への適用確認とともに明示する。M3も対象がある場合はその誤カテゴリーを、対象がない場合は一般的なカテゴリー境界を、正カテゴリー、境界、対比例、別事例への適用確認とともに明示する。unknownは反駁せず、定義・構成要素・役割・正例・非例と適用確認を示す。")
             rules.append("提案群では、unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)

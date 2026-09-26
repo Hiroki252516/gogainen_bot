@@ -29,9 +29,17 @@ def teaching_contract_schema() -> dict[str, Any]:
     }
 
 
-def target_claim_ids(payload: dict[str, Any]) -> list[str]:
+def target_claim_ids(payload: dict[str, Any], expected_type: str | None = None) -> list[str]:
     targets = payload.get("pretest_targets") or []
-    return [str(target["claim_id"]) for target in targets if isinstance(target, dict) and target.get("claim_id")]
+    if expected_type not in {"M1", "M3"}:
+        return []
+    return [
+        str(target["claim_id"])
+        for target in targets
+        if isinstance(target, dict)
+        and target.get("misconception_type") in {None, expected_type}
+        and target.get("claim_id")
+    ]
 
 
 def validate_teaching_contract(
@@ -55,20 +63,26 @@ def validate_teaching_contract(
         contract = {}
         missing.append("teaching_contract:missing")
 
-    expected_ids = target_claim_ids(payload)
+    expected_ids = target_claim_ids(payload, expected_type)
     target_claim_id = contract.get("target_claim_id")
     addressed_ids = contract.get("addressed_claim_ids")
     if not isinstance(addressed_ids, list) or any(not isinstance(value, str) for value in addressed_ids):
         missing.append("addressed_claim_ids:invalid")
         addressed_ids = []
     if expected_type in {"M1", "M3"}:
-        if not expected_ids:
-            missing.append("pretest_targets:missing")
-        if target_claim_id not in expected_ids:
-            missing.append(f"target_claim_id:expected_one_of_{','.join(expected_ids) or 'empty'}")
-        for claim_id in expected_ids:
-            if claim_id not in addressed_ids:
-                missing.append(f"addressed_claim_ids:missing:{claim_id}")
+        if expected_ids:
+            if target_claim_id not in expected_ids:
+                missing.append(f"target_claim_id:expected_one_of_{','.join(expected_ids)}")
+            for claim_id in expected_ids:
+                if claim_id not in addressed_ids:
+                    missing.append(f"addressed_claim_ids:missing:{claim_id}")
+        else:
+            # A later learning response may reveal M1/M3 without a
+            # researcher-verified pretest claim. Do not let the model invent one.
+            if target_claim_id is not None:
+                missing.append("target_claim_id:no_observed_target_must_be_null")
+            if addressed_ids:
+                missing.append("addressed_claim_ids:no_observed_target_must_be_empty")
     else:
         if target_claim_id is not None:
             missing.append("target_claim_id:unknown_must_be_null")
@@ -102,7 +116,7 @@ def validate_teaching_contract(
     message = str(result.get("tutor_message") or "")
     if term_label and f"## {term_label}" not in message:
         missing.append("tutor_message:term_heading_missing")
-    if re.search(r"\bM[1-4]\b", message):
+    if re.search(r"(?<![A-Za-z0-9])M[1-4](?![A-Za-z0-9])", message):
         missing.append("tutor_message:internal_label_exposed")
     normalized_message = _normalize(message)
     for field, value in (
@@ -156,7 +170,7 @@ def mock_teaching_contract(
     contrast_example: str | None,
     transfer_check: str,
 ) -> dict[str, Any]:
-    claim_id = target.get("claim_id") if target else None
+    claim_id = target.get("claim_id") if expected_type in {"M1", "M3"} and target else None
     return {
         "target_claim_id": claim_id,
         "addressed_claim_ids": [claim_id] if claim_id else [],
@@ -170,4 +184,4 @@ def mock_teaching_contract(
 
 
 def _normalize(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
+    return re.sub(r"\s+", "", value)

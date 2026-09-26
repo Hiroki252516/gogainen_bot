@@ -12,7 +12,7 @@ from app.ai.mandatory_elements import (
 from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.ai.mock_backend import MockAIBackend
 from app.ai.teaching_contract import teaching_contract_schema, validate_teaching_contract
-from app.seed.content_loader import ACTIVE_TERM_SLUGS, load_content, teaching_target_for_option
+from app.seed.content_loader import ACTIVE_TERM_SLUGS, _validate_teaching_targets, load_content, teaching_target_for_option
 
 
 def _payload(misconception_type: str, stage: str) -> dict:
@@ -74,6 +74,78 @@ def test_seed_has_researcher_verified_targets_for_all_m1_and_m3_options():
                     assert target["wrong_category"]
                     assert target["correct_category"]
                     assert target["boundary_criterion"]
+
+
+def test_primary_target_does_not_cross_types_or_fallback_to_unknown():
+    targets = [
+        {"claim_id": "memory_process:pretest:D", "misconception_type": "M1"},
+        {"claim_id": "memory_process:pretest:G", "misconception_type": "M3"},
+    ]
+
+    assert experiment_service._primary_pretest_target(targets, "M1")["claim_id"] == "memory_process:pretest:D"
+    assert experiment_service._primary_pretest_target(targets, "M3")["claim_id"] == "memory_process:pretest:G"
+    assert experiment_service._primary_pretest_target(targets, "unknown") is None
+
+
+def test_unknown_contract_ignores_stale_pretest_targets():
+    payload = _payload("unknown", "enrichment")
+    stale_target = {
+        "claim_id": "memory_process:pretest:D",
+        "misconception_type": "M1",
+        "observed_claim": "誤った説明",
+    }
+    payload["pretest_target"] = stale_target
+    payload["pretest_targets"] = [stale_target]
+
+    result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    validation = validate_teaching_contract(result, "unknown", payload, payload["term"]["label"])
+
+    assert validation["valid"], validation
+    assert result["teaching_contract"]["target_claim_id"] is None
+    assert result["teaching_contract"]["addressed_claim_ids"] == []
+
+
+def test_m1_or_m3_without_observed_target_uses_generic_contract():
+    for misconception_type in ("M1", "M3"):
+        payload = _payload(misconception_type, "conceptual_change")
+        payload.pop("pretest_target")
+        payload.pop("pretest_targets")
+        result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+
+        validation = validate_teaching_contract(result, misconception_type, payload, payload["term"]["label"])
+
+        assert validation["valid"], validation
+        assert result["teaching_contract"]["target_claim_id"] is None
+        assert result["teaching_contract"]["addressed_claim_ids"] == []
+
+
+def test_teaching_contract_handles_japanese_labels_and_line_breaks():
+    payload = _payload("M1", "conceptual_change")
+    result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    corrected_claim = result["teaching_contract"]["corrected_claim"]
+    result["tutor_message"] = result["tutor_message"].replace(
+        corrected_claim,
+        corrected_claim.replace("検証して", "検証して\n"),
+    ) + "\n誤概念M1について説明します。"
+
+    validation = validate_teaching_contract(result, "M1", payload, payload["term"]["label"])
+
+    assert not validation["valid"]
+    assert "tutor_message:internal_label_exposed" in validation["missing"]
+    assert "corrected_claim:evidence_not_in_tutor_message" not in validation["missing"]
+
+
+def test_empty_pretest_variants_are_safe_during_teaching_target_validation():
+    _validate_teaching_targets(
+        {
+            "terms": [
+                {
+                    "slug": "memory_process",
+                    "questions": {"pretest": []},
+                }
+            ]
+        }
+    )
 
 
 def test_mock_proposed_material_contains_all_mandatory_evidence():
@@ -168,6 +240,27 @@ def test_codex_prompt_schema_requires_m1_evidence(monkeypatch):
     assert "wrong_category" not in nested_schema["properties"]
     assert "wrong_belief" in captured["prompt"]
     assert "counterexample" in captured["prompt"]
+
+
+def test_codex_unknown_prompt_has_empty_claim_contract(monkeypatch):
+    backend = CodexAppServerBackend()
+    payload = _payload("unknown", "enrichment")
+    payload["pretest_targets"] = [{"claim_id": "memory_process:pretest:D", "misconception_type": "M1"}]
+    captured: dict[str, object] = {}
+    mock_result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+
+    async def capture(purpose, prompt, output_schema):
+        captured["prompt"] = prompt
+        captured["schema"] = output_schema
+        return mock_result
+
+    monkeypatch.setattr(backend, "_run_structured_turn", capture)
+    asyncio.run(backend.generate_tutoring_turn(payload))
+
+    prompt = captured["prompt"]
+    assert "unknownのteaching_contractはtarget_claim_idをnull" in prompt
+    assert "pretest_targetsの全claim_idをaddressed_claim_idsへ入れる" not in prompt
+    assert "memory_process:pretest:D" not in prompt
 
 
 def test_teaching_contract_rejects_unknown_claim_and_empty_refutation():
