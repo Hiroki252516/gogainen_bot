@@ -85,6 +85,8 @@ seed済みのテスト問題は`questions.variant_key`に保存し、学習確�
 
 管理用の参加者情報には`completion_reason`、`give_up_learning_count`、`give_up_experiment_count`を含める。個別ログの`participant`にも同じ状態を返し、`audit_events`には操作種別・実行時刻・状態変更前後を含める。全体ログの`recent_audit_events`と参加者ログCSVにもギブアップ操作を含める。
 
+参加者ログAPIの`ai_call_logs`は、AI入力の`request_payload`、backendが利用した`response_payload`、取得可能な場合の`raw_text`を返す。Codex app-serverでは`raw_text`が補正前の生JSON文字列、`response_payload`がJSON解析後に内部ラベル除去や教材契約補正を行った結果である。参加者ログCSVでは両方を`value_json`に含める。CSVの固定列は変更しない。
+
 `GET /api/participants/{participant_id}/learning-targets` は、`current_step`、既存の未達対象一覧、事前テスト後の互換用 `pretest_results`、直近のテスト結果 `test_results` を返す。`pretest_results` は3用語を表示順に含み、`term_slug`、`term_label`、`is_correct`、`result_label`、`result_summary`、`is_learning_target` を持つ。`test_results` は `test_round`、`test_round_label`、`results` を持ち、各結果に `term_slug`、`term_label`、`question_body`、`selected_options`（`label` と `body` のみ）、`is_correct`、`result_label`、`is_learning_target` を含める。`test_results` は保存済みの問題文・選択内容・正誤を参加者向けに投影したものであり、`correct_answer`、`expected_answer`、選択肢ごとの `is_correct`、M分類などの内部診断値は含めない。結果は保存済み `Attempt.is_correct` を正本とする。`targets` はテストの出題順で並び、学習開始先を決める未達用語の一覧として維持する。`priority_score`は分析用の保存値であり、参加者向けの並び順には使わない。`current_step=learning_targets` のとき、対象が空でも最終テストへの導線を返さない。
 
 ## Scoring

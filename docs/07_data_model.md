@@ -360,6 +360,8 @@ Unique:
 - latency_ms INT NULL
 - created_at TIMESTAMP NOT NULL
 
+Codex app-serverの成功応答では、`raw_text`にapp-serverが返したJSON文字列を解析・内部ラベル除去・契約補正する前の状態で保存する。`response_payload`には、補正後にbackendが利用した応答オブジェクトを保存する。JSON解析に失敗した場合も取得できた生テキストを`raw_text`へ保存する。Mock backendでは実AIの生出力がないためNULLとする。
+
 purpose values:
 
 - diagnose_answer

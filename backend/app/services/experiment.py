@@ -1139,6 +1139,8 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
     started = datetime.now(UTC)
     try:
         result = await getattr(backend, purpose)(payload)
+        raw_text = getattr(result, "raw_text", None)
+        result = dict(result)
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
         _record_ai_log(
             db,
@@ -1148,6 +1150,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
                 purpose=purpose,
                 request_payload=logged_payload,
                 response_payload=result,
+                raw_text=raw_text,
                 status="success",
                 latency_ms=latency,
             ),
@@ -1161,6 +1164,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
                 provider=getattr(backend, "provider", "unknown"),
                 purpose=purpose,
                 request_payload=logged_payload,
+                raw_text=exc.raw_text,
                 status="failed",
                 error_code=exc.code,
                 error_message=exc.detail,
@@ -3028,6 +3032,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
                 "latency_ms": row.latency_ms,
                 "request_payload": row.request_payload,
                 "response_payload": row.response_payload,
+                "raw_text": row.raw_text,
                 "created_at": _iso(row.created_at),
             }
             for row in ai_logs

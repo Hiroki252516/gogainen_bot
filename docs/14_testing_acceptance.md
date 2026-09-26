@@ -14,6 +14,7 @@
 - controlとproposedのRAG本文が共通で、proposedだけにtaxonomy・履歴・足場掛け情報が入る。
 - `teaching_targets`が3用語のM1/M3選択肢すべてに存在し、M1のE選択時に選択肢本文、`llm_knowledge:pretest:E`、研究者確認済みの「プロンプトだけでは重みを更新しない」という訂正がproposed payloadへ入る。
 - proposedの`pretest_target(s)`、`taxonomy_version`、`prompt_contract_version`が`AICallLog.request_payload`へ保存され、`TutorTurn.diagnosis_json`にも契約と検証結果が保存される。controlにはtaxonomy、誤答主張、診断履歴、learner state、learning stage、過去回答を入れない。
+- Codex app-serverが返した補正前のJSON文字列が`AICallLog.raw_text`に保存され、`response_payload`には補正後の利用値が保存される。参加者ログAPIとCSVの`value_json`から両方を比較できる。
 - M1/M3/unknownの`teaching_contract`がclaim ID、方略、訂正、仕組み、対比例、転移確認を満たし、本文と一致する。欠落・不正claim・誤った方略は同じbackendで最大2回再生成後に503となる。
 - M1/M3が混在する事前テスト、事前targetのない学習中M1/M3、staleなM1/M3 targetを含むunknownで、claimの混在・捏造・503が発生しない。日本語に隣接した内部ラベルと改行を含む証拠文も検証する。
 - AI入力と出力に固定確認問題の`expected_answer`を含めず、生成教材へ固定問題本文・正答・直前フィードバックを転載しない。RAGの検索条件は段階・診断に依存せず両群で同一である。
@@ -66,6 +67,7 @@
 - `AI_BACKEND=mock` で固定問題・遷移・RAG契約テストが通る。
 - `AI_BACKEND=codex_app_server` でMockへ自動フォールバックしない。
 - `AI_BACKEND=codex_app_server`でM1、M3、unknownの代表ケースをブラウザから生成し、participant logの`AICallLog` payloadと`tutor_turns.diagnosis_json`で対象claim・契約・版を確認する。
+- 教材契約回帰として、全M1/M3選択肢の研究者確認済みtarget、M1/M3のtarget混在防止、unknownへのstale target非混入、target未観測時の汎用契約、日本語・改行を含む証拠検証、空のpretestバリアントを検証する。
 - 既存の単一選択API互換、DB列、CSV列、過去ログを壊さない。
 - `Idempotency-Key`なしの既存API呼び出しが動作し、既存の重複データを削除しない。
 

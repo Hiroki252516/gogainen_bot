@@ -12,7 +12,13 @@ from app.ai.mandatory_elements import (
 )
 from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.ai.mock_backend import MockAIBackend
-from app.ai.teaching_contract import reconcile_teaching_contract, validate_teaching_contract
+from app.ai.teaching_contract import (
+    reconcile_teaching_contract,
+    teaching_contract_schema,
+    validate_teaching_contract,
+    validate_tutoring_material_safety,
+)
+from app.seed.content_loader import ACTIVE_TERM_SLUGS, _validate_teaching_targets, load_content, teaching_target_for_option
 
 
 def _payload(misconception_type: str | None, stage: str) -> dict:
@@ -32,6 +38,97 @@ def test_mvp_types_resolve_to_mandatory_operations():
     assert expected_mandatory_type(_payload("M1", "conceptual_change")) == "M1"
     assert expected_mandatory_type(_payload("M3", "conceptual_change")) == "M3"
     assert expected_mandatory_type(_payload("unknown", "enrichment")) == "unknown"
+
+
+def test_seed_has_researcher_verified_targets_for_all_m1_and_m3_options():
+    content = load_content()
+    assert tuple(term["slug"] for term in content["terms"]) == ACTIVE_TERM_SLUGS
+    for term in content["terms"]:
+        options = term["questions"]["pretest"][0]["options"]
+        for option in options:
+            if option.get("misconception_type") not in {"M1", "M3"}:
+                continue
+            target = teaching_target_for_option(term["slug"], option["label"])
+            assert target is not None
+            assert target["corrected_claim"]
+            assert target["mechanism_explanation"]
+            assert target["contrast_example"]
+            if option["misconception_type"] == "M3":
+                assert target["wrong_category"]
+                assert target["correct_category"]
+                assert target["boundary_criterion"]
+
+
+def test_primary_target_does_not_cross_types_or_fallback_to_unknown():
+    targets = [
+        {"claim_id": "memory_process:pretest:D", "misconception_type": "M1"},
+        {"claim_id": "memory_process:pretest:G", "misconception_type": "M3"},
+    ]
+
+    assert experiment_service._primary_pretest_target(targets, "M1")["claim_id"] == "memory_process:pretest:D"
+    assert experiment_service._primary_pretest_target(targets, "M3")["claim_id"] == "memory_process:pretest:G"
+    assert experiment_service._primary_pretest_target(targets, "unknown") is None
+
+
+def test_unknown_contract_ignores_stale_pretest_targets():
+    payload = _payload("unknown", "enrichment")
+    stale_target = {
+        "claim_id": "memory_process:pretest:D",
+        "misconception_type": "M1",
+        "observed_claim": "誤った説明",
+    }
+    payload["pretest_target"] = stale_target
+    payload["pretest_targets"] = [stale_target]
+
+    result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    validation = validate_teaching_contract(result, "unknown", payload, payload["term"]["label"])
+
+    assert validation["valid"], validation
+    assert result["teaching_contract"]["target_claim_id"] is None
+    assert result["teaching_contract"]["addressed_claim_ids"] == []
+
+
+def test_m1_or_m3_without_observed_target_uses_generic_contract():
+    for misconception_type in ("M1", "M3"):
+        payload = _payload(misconception_type, "conceptual_change")
+        result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+
+        validation = validate_teaching_contract(result, misconception_type, payload, payload["term"]["label"])
+
+        assert validation["valid"], validation
+        assert result["teaching_contract"]["target_claim_id"] is None
+        assert result["teaching_contract"]["addressed_claim_ids"] == []
+
+
+def test_teaching_contract_handles_japanese_labels_and_line_breaks():
+    payload = _payload("M1", "conceptual_change")
+    result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    corrected_claim = result["teaching_contract"]["corrected_claim"]
+    split_at = len(corrected_claim) // 2
+    result["tutor_message"] = result["tutor_message"].replace(
+        corrected_claim,
+        f"{corrected_claim[:split_at]}\n{corrected_claim[split_at:]}",
+        1,
+    ) + "\n誤概念M1について説明します。"
+
+    validation = validate_teaching_contract(result, "M1", payload, payload["term"]["label"])
+
+    assert not validation["valid"]
+    assert "tutor_message:internal_label_exposed" in validation["missing"]
+    assert "corrected_claim:evidence_not_in_tutor_message" not in validation["missing"]
+
+
+def test_empty_pretest_variants_are_safe_during_teaching_target_validation():
+    _validate_teaching_targets(
+        {
+            "terms": [
+                {
+                    "slug": "memory_process",
+                    "questions": {"pretest": []},
+                }
+            ]
+        }
+    )
 
 
 def test_explicit_non_mvp_type_does_not_fall_back_to_previous_diagnosis():
@@ -263,11 +360,75 @@ def test_codex_prompt_schema_requires_m1_evidence(monkeypatch):
     schema = captured["schema"]
     assert "mandatory_elements" in schema["properties"]
     assert "mandatory_elements" in schema["required"]
+    assert "teaching_contract" in schema["properties"]
+    assert "teaching_contract" in schema["required"]
+    assert set(schema["properties"]["teaching_contract"]["required"]) == set(teaching_contract_schema()["properties"])
+    assert "expected_answer" not in schema["properties"]["practice_question"]["properties"]
     nested_schema = schema["properties"]["mandatory_elements"]
     assert set(nested_schema["required"]) == set(nested_schema["properties"])
     assert "wrong_category" not in nested_schema["properties"]
     assert "wrong_belief" in captured["prompt"]
     assert "counterexample" in captured["prompt"]
+
+
+def test_codex_unknown_prompt_has_empty_claim_contract(monkeypatch):
+    backend = CodexAppServerBackend()
+    payload = _payload("unknown", "enrichment")
+    payload["pretest_targets"] = [
+        {"claim_id": "memory_process:pretest:D", "misconception_type": "M1"}
+    ]
+    captured: dict[str, object] = {}
+    mock_result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+
+    async def capture(purpose, prompt, output_schema):
+        captured["prompt"] = prompt
+        captured["schema"] = output_schema
+        return mock_result
+
+    monkeypatch.setattr(backend, "_run_structured_turn", capture)
+    asyncio.run(backend.generate_tutoring_turn(payload))
+
+    prompt = captured["prompt"]
+    assert "unknownのteaching_contractはtarget_claim_idをnull" in prompt
+    assert "pretest_targetsの全claim_idをaddressed_claim_idsへ入れる" not in prompt
+    assert "memory_process:pretest:D" not in prompt
+    assert "teaching_contract" in captured["schema"]["properties"]
+
+
+def test_teaching_contract_rejects_unknown_claim_and_empty_refutation():
+    payload = _payload("M1", "conceptual_change")
+    target = {
+        "claim_id": "memory_process:pretest:E",
+        "misconception_type": "M1",
+        "observed_claim": "保存した情報は常に正しい。",
+        "corrected_claim": "保存した情報は検証して使う。",
+        "mechanism_explanation": "保存情報の誤りや古さを確認するためです。",
+        "contrast_example": "根拠を確認して使う場合と無条件で信じる場合を比べます。",
+    }
+    payload["pretest_target"] = target
+    payload["pretest_targets"] = [target]
+    result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    result["teaching_contract"]["target_claim_id"] = "memory_process:pretest:D"
+    result["teaching_contract"]["corrected_claim"] = ""
+
+    validation = validate_teaching_contract(result, "M1", payload, payload["term"]["label"])
+
+    assert not validation["valid"]
+    assert "target_claim_id:expected_one_of_memory_process:pretest:E" in validation["missing"]
+    assert "corrected_claim:empty" in validation["missing"]
+
+
+def test_material_safety_rejects_fixed_answer_text():
+    payload = _payload("M1", "conceptual_change")
+    result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    answer_text = "A、B、Cをすべて選択し、それ以外を選ばない。"
+
+    validation = validate_tutoring_material_safety(result, [answer_text])
+    assert validation["valid"]
+
+    result["tutor_message"] += f"\n{answer_text}"
+    validation = validate_tutoring_material_safety(result, [answer_text])
+    assert not validation["valid"]
 
 
 def test_mandatory_schema_is_strict_for_each_type():
