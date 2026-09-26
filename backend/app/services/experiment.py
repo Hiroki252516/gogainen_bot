@@ -22,11 +22,16 @@ from app.ai.mandatory_elements import (
     mandatory_element_requirements,
     validate_mandatory_elements,
 )
-from app.ai.misconception_taxonomy import taxonomy_for_prompt
+from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
+from app.ai.teaching_contract import (
+    PROMPT_CONTRACT_VERSION,
+    validate_tutoring_material_safety,
+    validate_teaching_contract,
+)
 from app.core.config import get_settings
 from app.core.runtime_config import current_reasoning_effort
 from app.rag.retriever import retrieve_rag_context
-from app.seed.content_loader import content_term, learning_question_spec, load_content
+from app.seed.content_loader import content_term, learning_question_spec, load_content, teaching_target_for_option
 from app.models import (
     AICallLog,
     AuditEvent,
@@ -271,27 +276,68 @@ def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
 async def _generate_validated_tutoring_turn(
     db: Session,
     payload: dict[str, Any],
+    *,
+    forbidden_strings: list[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Generate proposed-group material and enforce the MVP operation contract."""
     expected_type = expected_mandatory_type(payload)
     if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
-        result = await _ai_call(db, "generate_tutoring_turn", payload)
-        return result, {
-            "required": False,
-            "valid": True,
-            "expected_type": expected_type,
-            "actual_type": None,
-            "required_fields": [],
-            "missing": [],
-            "attempts": 1,
-        }
+        request_payload = payload
+        validation: dict[str, Any] = {}
+        for attempt in range(1, MANDATORY_ELEMENT_MAX_ATTEMPTS + 1):
+            result = await _ai_call(db, "generate_tutoring_turn", request_payload)
+            contract_validation = validate_teaching_contract(result, expected_type, payload)
+            safety_validation = validate_tutoring_material_safety(result, forbidden_strings)
+            missing = [*contract_validation.get("missing", []), *safety_validation.get("missing", [])]
+            validation = {
+                "required": False,
+                "valid": contract_validation["valid"] and safety_validation["valid"],
+                "expected_type": expected_type,
+                "actual_type": None,
+                "required_fields": [],
+                "missing": missing,
+                "teaching_contract": contract_validation,
+                "material_safety": safety_validation,
+            }
+            if validation["valid"]:
+                return result, {**validation, "attempts": attempt}
+            if attempt < MANDATORY_ELEMENT_MAX_ATTEMPTS:
+                request_payload = {
+                    **payload,
+                    "mandatory_element_retry": {
+                        "attempt": attempt + 1,
+                        "missing": missing,
+                    },
+                }
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": "teaching_contract_invalid",
+                "message": "教材の安全な生成契約を満たす教材を生成できませんでした。",
+                "missing": validation.get("missing", []),
+            },
+        )
 
     term_label = (payload.get("term") or {}).get("label")
     request_payload = payload
     validation: dict[str, Any] = {}
     for attempt in range(1, MANDATORY_ELEMENT_MAX_ATTEMPTS + 1):
         result = await _ai_call(db, "generate_tutoring_turn", request_payload)
-        validation = validate_mandatory_elements(result, expected_type, term_label)
+        mandatory_validation = validate_mandatory_elements(result, expected_type, term_label)
+        contract_validation = validate_teaching_contract(result, expected_type, payload, term_label)
+        safety_validation = validate_tutoring_material_safety(result, forbidden_strings)
+        missing = [
+            *mandatory_validation.get("missing", []),
+            *contract_validation.get("missing", []),
+            *safety_validation.get("missing", []),
+        ]
+        validation = {
+            **mandatory_validation,
+            "valid": mandatory_validation["valid"] and contract_validation["valid"] and safety_validation["valid"],
+            "missing": missing,
+            "teaching_contract": contract_validation,
+            "material_safety": safety_validation,
+        }
         if validation["valid"]:
             return result, {**validation, "attempts": attempt}
         if attempt < MANDATORY_ELEMENT_MAX_ATTEMPTS:
@@ -299,15 +345,15 @@ async def _generate_validated_tutoring_turn(
                 **payload,
                 "mandatory_element_retry": {
                     "attempt": attempt + 1,
-                    "missing": validation["missing"],
+                    "missing": missing,
                 },
             }
 
     raise HTTPException(
         status_code=503,
         detail={
-            "error_code": "mandatory_elements_missing",
-            "message": "教材の必須教授要素を生成できませんでした。",
+            "error_code": "teaching_contract_invalid",
+            "message": "教材の誤概念対応契約を満たす教材を生成できませんでした。",
             "missing": validation.get("missing", []),
         },
     )
@@ -436,6 +482,44 @@ def _rag_context(term_slug: str, *parts: str | None) -> dict[str, Any]:
         top_k=3,
         allowed_sections=term_config.get("rag_sections") or [],
         topic_slug=term_slug,
+    )
+
+
+def _pretest_teaching_targets(term_slug: str, options: list[QuestionOption]) -> list[dict[str, Any]]:
+    """Build proposal-only targets from selected pretest distractors and seed metadata."""
+    targets: list[dict[str, Any]] = []
+    for option in sorted(options, key=lambda item: item.option_label):
+        if option.is_correct or option.misconception_type not in {"M1", "M3"}:
+            continue
+        metadata = teaching_target_for_option(term_slug, option.option_label)
+        if not metadata:
+            continue
+        target = {
+            "claim_id": f"{term_slug}:pretest:{option.option_label}",
+            "term_slug": term_slug,
+            "option_label": option.option_label,
+            "observed_claim": option.body,
+            "corrected_claim": metadata["corrected_claim"],
+            "mechanism_explanation": metadata["mechanism_explanation"],
+            "contrast_example": metadata["contrast_example"],
+            "misconception_type": option.misconception_type,
+            "evidence_source": "pretest_selected_option",
+            "interpretation": "observed_choice_not_confirmed_belief",
+        }
+        for field in ("wrong_category", "correct_category", "boundary_criterion"):
+            if metadata.get(field):
+                target[field] = metadata[field]
+        targets.append(target)
+    return targets
+
+
+def _primary_pretest_target(targets: list[dict[str, Any]], misconception_type: str | None) -> dict[str, Any] | None:
+    """Select only an observed target for the active M1/M3 teaching strategy."""
+    if misconception_type not in {"M1", "M3"}:
+        return None
+    return next(
+        (target for target in targets if target.get("misconception_type") == misconception_type),
+        None,
     )
 
 
@@ -1097,7 +1181,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
             AICallLog(
                 provider=getattr(backend, "provider", "unknown"),
                 purpose=purpose,
-                request_payload=payload,
+                request_payload=logged_payload,
                 status="failed",
                 error_code="ai_call_failed",
                 error_message=str(exc),
@@ -1534,6 +1618,12 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     term = db.get(Term, session.term_id)
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one()
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
+    pretest_attempt = (
+        db.query(Attempt)
+        .filter_by(participant_id=participant.id, term_id=term.id, phase="pretest")
+        .order_by(Attempt.created_at.desc(), Attempt.attempt_index.desc())
+        .first()
+    )
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
     previous_turn = None
     if participant.group_condition == "proposed" and turn_count:
@@ -1601,15 +1691,13 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "term": {"slug": term.slug, "label": term.label, "description": term.description},
-        "learning_stage": position["learning_stage"],
-        "learning_stage_label": position["learning_stage_label"],
         "component_term": position["component_term"],
         "component_index": position["component_index"],
         "component_total": position["component_total"],
         "component_terms": _component_terms(term.slug, term.label),
+        "prompt_contract_version": PROMPT_CONTRACT_VERSION,
         "fixed_practice_question": {
             "body": spec["body"],
-            "expected_answer": spec["expected_answer"],
             "question_type": question_type,
             "options": _public_learning_options(spec),
             "selection_mode": practice_question.get("selection_mode"),
@@ -1622,21 +1710,33 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             term.slug,
             term.label,
             term.description,
-            position["learning_stage_label"],
             position["component_term"],
         ),
     }
     if participant.group_condition == "proposed":
+        selected_pretest_options = _selected_options(db, pretest_attempt) if pretest_attempt else []
+        pretest_targets = _pretest_teaching_targets(term.slug, selected_pretest_options)
+        primary_pretest_target = _primary_pretest_target(pretest_targets, active_misconception_type)
         diagnostic_options = [
             {
                 "label": option.option_label,
                 "body": option.body,
                 "initial_misconception_type": option.misconception_type,
+                "claim_id": next(
+                    (target["claim_id"] for target in pretest_targets if target["option_label"] == option.option_label),
+                    None,
+                ),
             }
-            for option in _selected_options(db, previous_attempt)
-        ] if previous_attempt else []
+            for option in selected_pretest_options
+        ] if pretest_attempt else []
         payload = {
             **common_payload,
+            "learning_stage": position["learning_stage"],
+            "learning_stage_label": position["learning_stage_label"],
+            "taxonomy_version": TAXONOMY_VERSION,
+            "prompt_contract_version": PROMPT_CONTRACT_VERSION,
+            "pretest_target": primary_pretest_target,
+            "pretest_targets": pretest_targets,
             "learner_state": {
                 "current_status": state.current_status,
                 "primary_misconception": state.primary_misconception,
@@ -1657,12 +1757,21 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "diagnostic_evidence": {
                 "selected_options": diagnostic_options,
                 "diagnosed_type": active_misconception_type,
+                "pretest_targets": pretest_targets,
             },
         }
     else:
         payload = common_payload
     started = perf_counter()
-    result, mandatory_validation = await _generate_validated_tutoring_turn(db, payload)
+    forbidden_material = [spec["expected_answer"], spec["body"]]
+    forbidden_material.extend(
+        option["body"] for option in spec.get("options") or [] if option.get("is_correct")
+    )
+    result, mandatory_validation = await _generate_validated_tutoring_turn(
+        db,
+        payload,
+        forbidden_strings=forbidden_material,
+    )
     material_generation_ms = int((perf_counter() - started) * 1000)
     tutor_message = _previous_turn_prefix(previous_turn) + result["tutor_message"]
     teaching_strategy = result["teaching_strategy"]
@@ -1682,6 +1791,10 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "material_generation_ms": material_generation_ms,
             "mandatory_elements": result.get("mandatory_elements"),
             "mandatory_elements_validation": mandatory_validation,
+            "teaching_contract": result.get("teaching_contract"),
+            "teaching_contract_validation": mandatory_validation.get("teaching_contract"),
+            "taxonomy_version": payload.get("taxonomy_version"),
+            "prompt_contract_version": payload.get("prompt_contract_version"),
         },
         forbidden_help_given=False,
     )
@@ -1769,7 +1882,6 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
             term.slug,
             term.label,
             term.description,
-            LEARNING_STAGE_LABELS.get(learning_stage, learning_stage),
             component_term,
         ),
     }
@@ -2551,6 +2663,10 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "strategy_changed": turn.strategy_changed,
         "mandatory_elements": (turn.diagnosis_json or {}).get("mandatory_elements"),
         "mandatory_elements_validation": (turn.diagnosis_json or {}).get("mandatory_elements_validation"),
+        "teaching_contract": (turn.diagnosis_json or {}).get("teaching_contract"),
+        "teaching_contract_validation": (turn.diagnosis_json or {}).get("teaching_contract_validation"),
+        "taxonomy_version": (turn.diagnosis_json or {}).get("taxonomy_version"),
+        "prompt_contract_version": (turn.diagnosis_json or {}).get("prompt_contract_version"),
         "tutor_message": turn.tutor_message,
         "learner_prompt": turn.learner_prompt,
         "question_body": practice_question.get("body"),

@@ -8,6 +8,7 @@ from app.ai.mandatory_elements import (
     mandatory_element_headings,
     mock_mandatory_elements,
 )
+from app.ai.teaching_contract import mock_teaching_contract
 
 
 class MockAIBackend:
@@ -37,16 +38,68 @@ class MockAIBackend:
         question_body = fixed_question.get("body") or f"{label}について、適切な説明をすべて選びなさい。"
         mandatory_type = expected_mandatory_type(payload)
         mandatory_elements = None
+        teaching_contract = None
         if mandatory_type:
-            mandatory_elements = mock_mandatory_elements(label, description, mandatory_type)
+            target = None
+            if mandatory_type in {"M1", "M3"}:
+                requested_target = payload.get("pretest_target")
+                if (
+                    isinstance(requested_target, dict)
+                    and requested_target.get("misconception_type") in {None, mandatory_type}
+                ):
+                    target = requested_target
+                else:
+                    target = next(
+                        (
+                            item
+                            for item in payload.get("pretest_targets") or []
+                            if isinstance(item, dict) and item.get("misconception_type") in {None, mandatory_type}
+                        ),
+                        None,
+                    )
+            mandatory_elements = mock_mandatory_elements(label, description, mandatory_type, target)
             headings = mandatory_element_headings(mandatory_type)
+            transfer_check = (
+                f"新しい例でも、{(target or {}).get('corrected_claim') or description}に当てはまるかを説明します。"
+            )
             message = (
                 f"## {label}\n\n"
                 + "\n\n".join(
                     f"### {headings[field]}\n- {mandatory_elements[field]}"
                     for field in headings
                 )
+                + f"\n\n### 適用確認\n- {transfer_check}"
             )
+            mechanism = (
+                (target or {}).get("mechanism_explanation")
+                or mandatory_elements.get("reason")
+                or mandatory_elements.get("boundary_criterion")
+                or mandatory_elements.get("role")
+                or "構成要素と役割の関係を確認します。"
+            )
+            contrast = (target or {}).get("contrast_example") or mandatory_elements.get("counterexample") or mandatory_elements.get("contrast_example")
+            if mandatory_type in {"M1", "M3"}:
+                message += f"\n- 仕組み: {mechanism}"
+                if mandatory_type == "M3" and (target or {}).get("corrected_claim"):
+                    message += f"\n- 正しい説明: {(target or {})['corrected_claim']}"
+            teaching_contract = mock_teaching_contract(
+                mandatory_type,
+                target,
+                corrected_claim=mandatory_elements.get("correct_belief") or mandatory_elements.get("correct_category"),
+                mechanism_explanation=mechanism,
+                contrast_example=contrast,
+                transfer_check=transfer_check,
+            )
+            if mandatory_type in {"M1", "M3"}:
+                teaching_contract["addressed_claim_ids"] = [
+                    item["claim_id"]
+                    for item in payload.get("pretest_targets") or []
+                    if isinstance(item, dict)
+                    and item.get("misconception_type") in {None, mandatory_type}
+                    and item.get("claim_id")
+                ] or teaching_contract["addressed_claim_ids"]
+            if mandatory_type == "unknown":
+                message += "\n- 定義から構成要素と役割へつなげて、新しい例に適用します。"
         elif stage == "enrichment":
             message = (
                 f"## {label}\n\n"
@@ -78,13 +131,13 @@ class MockAIBackend:
             "learner_prompt": question_body,
             "practice_question": {
                 "body": question_body,
-                "expected_answer": fixed_question.get("expected_answer") or "A、B、Cをすべて選択し、それ以外を選ばない。",
                 "question_type": fixed_question.get("question_type") or "learning_multi_select",
             },
             "forbidden_help_given": False,
         }
         if mandatory_elements:
             result["mandatory_elements"] = mandatory_elements
+            result["teaching_contract"] = teaching_contract
         return result
 
     async def grade_response(self, payload: dict[str, Any]) -> dict[str, Any]:

@@ -13,7 +13,8 @@ except ImportError:
 from app.ai.backend import strategy_for
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.ai.mock_backend import MockAIBackend
-from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY
+from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY, TAXONOMY_VERSION
+from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION
 from app.core.config import get_settings
 from app.core.runtime_config import reset_reasoning_effort_override, set_reasoning_effort
 from app.db.session import SessionLocal, _backfill_completion_reasons, _backfill_evaluation_completion_flags, engine
@@ -1597,11 +1598,37 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         proposed_log = next(log for log in reversed(tutoring_logs) if log.request_payload.get("participant_id") == proposed_pid)
         control_log = next(log for log in reversed(tutoring_logs) if log.request_payload.get("participant_id") == control_pid)
         assert proposed_log.request_payload["misconception_taxonomy"] == MISCONCEPTION_TAXONOMY
+        assert proposed_log.request_payload["taxonomy_version"] == TAXONOMY_VERSION
+        assert proposed_log.request_payload["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
+        assert {target["claim_id"] for target in proposed_log.request_payload["pretest_targets"]} == {
+            "llm_knowledge:pretest:D",
+            "llm_knowledge:pretest:E",
+            "llm_knowledge:pretest:F",
+        }
+        e_target = next(target for target in proposed_log.request_payload["pretest_targets"] if target["option_label"] == "E")
+        assert "プロンプトエンジニアリングは入力文脈や指示を工夫する方法" in e_target["corrected_claim"]
         assert "session_misconception_history" in proposed_log.request_payload
         assert "misconception_taxonomy" not in control_log.request_payload
+        assert "taxonomy_version" not in control_log.request_payload
+        assert "pretest_targets" not in control_log.request_payload
         assert "learner_state" not in control_log.request_payload
         assert "session_misconception_history" not in control_log.request_payload
+        assert "learning_stage" not in control_log.request_payload
+        assert "expected_answer" not in control_log.request_payload["fixed_practice_question"]
+        assert "expected_answer" not in proposed_log.request_payload["fixed_practice_question"]
         assert proposed_log.request_payload["rag_context"] == control_log.request_payload["rag_context"]
+        proposed_turn_row = db.get(TutorTurn, proposed_turn["turn_id"])
+        assert proposed_turn_row.diagnosis_json["taxonomy_version"] == TAXONOMY_VERSION
+        assert proposed_turn_row.diagnosis_json["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
+        assert proposed_turn_row.diagnosis_json["teaching_contract"]["target_claim_id"]
+        assert proposed_turn_row.diagnosis_json["teaching_contract_validation"]["valid"] is True
+        participant_log = client.get(f"/api/admin/participants/{proposed_pid}/logs")
+        assert participant_log.status_code == 200, participant_log.text
+        logged_turn = participant_log.json()["tutor_sessions"][0]["turns"][0]
+        assert logged_turn["taxonomy_version"] == TAXONOMY_VERSION
+        assert logged_turn["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
+        assert logged_turn["teaching_contract"]["target_claim_id"] == "llm_knowledge:pretest:D"
+        assert logged_turn["teaching_contract_validation"]["valid"] is True
     finally:
         db.close()
 
