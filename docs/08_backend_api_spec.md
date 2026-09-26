@@ -85,7 +85,7 @@ seed済みのテスト問題は`questions.variant_key`に保存し、学習確�
 
 管理用の参加者情報には`completion_reason`、`give_up_learning_count`、`give_up_experiment_count`を含める。個別ログの`participant`にも同じ状態を返し、`audit_events`には操作種別・実行時刻・状態変更前後を含める。全体ログの`recent_audit_events`と参加者ログCSVにもギブアップ操作を含める。
 
-参加者ログAPIの`ai_call_logs`は、AI入力の`request_payload`、backendが利用した`response_payload`、取得可能な場合の`raw_text`を返す。Codex app-serverでは`raw_text`が補正前の生JSON文字列、`response_payload`がJSON解析後に内部ラベル除去や教材契約補正を行った結果である。参加者ログCSVでは両方を`value_json`に含める。CSVの固定列は変更しない。
+参加者ログAPIの`ai_call_logs`は、AI入力の`request_payload`、backendが利用した`response_payload`、取得可能な場合の`raw_text`を返す。Codex app-serverでは`request_payload.effective_request`に実際の`thread/start`と`turn/start`設定、全文prompt、JSON Schema、モデル・推論レベル、prompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、生成試行番号、送信段階を含む。認証情報は保存しない。Codex実送信がないMock呼び出しには`effective_request`を付けない。`raw_text`は補正前の生JSON文字列、`response_payload`はJSON解析後に内部ラベル除去や教材契約補正を行った結果であり、教材生成では本文長・段落数・箇条書き数も含む。全文promptには学習者の回答や履歴が含まれる場合があるため、ログAPI・CSVは研究者限定で扱う。CSVではpayloadを既存の`value_json`へ含め、固定列は変更しない。
 
 `GET /api/participants/{participant_id}/learning-targets` は、`current_step`、既存の未達対象一覧、事前テスト後の互換用 `pretest_results`、直近のテスト結果 `test_results` を返す。`pretest_results` は3用語を表示順に含み、`term_slug`、`term_label`、`is_correct`、`result_label`、`result_summary`、`is_learning_target` を持つ。`test_results` は `test_round`、`test_round_label`、`results` を持ち、各結果に `term_slug`、`term_label`、`question_body`、`selected_options`（`label` と `body` のみ）、`is_correct`、`result_label`、`is_learning_target` を含める。`test_results` は保存済みの問題文・選択内容・正誤を参加者向けに投影したものであり、`correct_answer`、`expected_answer`、選択肢ごとの `is_correct`、M分類などの内部診断値は含めない。結果は保存済み `Attempt.is_correct` を正本とする。`targets` はテストの出題順で並び、学習開始先を決める未達用語の一覧として維持する。`priority_score`は分析用の保存値であり、参加者向けの並び順には使わない。`current_step=learning_targets` のとき、対象が空でも最終テストへの導線を返さない。
 
@@ -95,6 +95,6 @@ A/B/Cの3つだけを選択した場合だけ正解。不正解分類はM3を最
 
 ## Learning API
 
-参加者向けの学習結果・表示では `learning_stage` として `enrichment`、`conceptual_change`、`final_feedback` を使う。新しい学習ターンの教材生成で受け付けるstageは `enrichment` と `conceptual_change` であり、`final_feedback` は確認問題に十分回答した後の結果表示状態で、新しい教材生成の入力にはしない。L3/L2は内部の`scaffolding_level`互換ログである。教材生成時は用語・段階・固定確認問題・共通RAG本文を両群へ渡す。proposedだけがログ・taxonomy・足場掛け情報を追加で受け取る。
+参加者向けの学習結果・表示では `learning_stage` として `enrichment`、`conceptual_change`、`final_feedback` を使う。新しい学習ターンの教材生成で受け付けるstageは `enrichment` と `conceptual_change` であり、`final_feedback` は確認問題に十分回答した後の結果表示状態で、新しい教材生成の入力にはしない。L3/L2は内部の`scaffolding_level`互換ログである。教材生成では両群に用語・共通構成要素・同一条件のRAG本文だけを共有し、固定確認問題・選択肢・正答はYAML/backendの責務としてAIへ渡さない。`control`には学習段階・診断・履歴を渡さず、`proposed`だけが診断target・taxonomy・足場掛け情報を追加で受け取る。参加者IDと群名はルーティング・ログ照合専用で、モデルpromptから除く。
 
 学習ターン回答APIのレスポンスには `item_results` フィールドを残すが、現行の固定複数選択フローでは空配列になる。個別項目結果を返す自由回答フローは将来または互換用である。

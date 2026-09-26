@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -17,7 +18,8 @@ from app.ai.mandatory_elements import (
     mandatory_elements_schema,
     reconcile_mandatory_elements,
 )
-from app.ai.teaching_contract import reconcile_teaching_contract, teaching_contract_schema
+from app.ai.misconception_taxonomy import TAXONOMY_VERSION
+from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION, reconcile_teaching_contract, teaching_contract_schema
 
 
 class CodexAppServerError(RuntimeError):
@@ -28,20 +30,23 @@ class CodexAppServerError(RuntimeError):
         detail: str | None = None,
         *,
         raw_text: str | None = None,
+        request_audit: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(detail or user_message)
         self.code = code
         self.user_message = user_message
         self.detail = detail or user_message
         self.raw_text = raw_text
+        self.request_audit = request_audit
 
 
 class _StructuredModelResponse(dict):
     """Parsed model output that retains its exact app-server text for audit logs."""
 
-    def __init__(self, value: dict[str, Any], raw_text: str) -> None:
+    def __init__(self, value: dict[str, Any], raw_text: str, request_audit: dict[str, Any]) -> None:
         super().__init__(value)
         self.raw_text = raw_text
+        self.request_audit = request_audit
 
 
 class _CodexRpcClient:
@@ -86,6 +91,7 @@ class _CodexRpcClient:
         method: str,
         params: dict[str, Any] | None = None,
         notification_handler: Callable[[dict[str, Any]], None] | None = None,
+        on_sent: Callable[[], None] | None = None,
     ) -> Any:
         request_id = self._next_id
         self._next_id += 1
@@ -93,6 +99,8 @@ class _CodexRpcClient:
         if params is not None:
             request["params"] = params
         await self._ws.send(json.dumps(request, ensure_ascii=False))
+        if on_sent:
+            on_sent()
 
         while True:
             message = await self.recv(notification_handler)
@@ -207,11 +215,12 @@ class CodexAppServerBackend:
                 "natural_language_diagnosis では、入力欄の有無や未入力であることに絶対に触れず、選択内容から見える理解状態だけを書く。",
                 "誤概念タイプの内部ラベルは、入力payloadのtaxonomy定義に従う。M1〜M4は学習者向け文面に出さない。",
                 "natural_language_diagnosis には M1〜M4 という内部ラベルを絶対に書かない。",
-                "統制群でも分類は保存してよいが、教授方略に使う推薦は general_explanation にする。",
                 f"recommended_teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。",
             ],
         )
-        result = await self._run_structured_turn("diagnose_answer", prompt, schema)
+        result = await self._run_structured_turn(
+            "diagnose_answer", prompt, schema, audit_context=self._audit_context(payload)
+        )
         if payload.get("group_condition") == "control":
             result["recommended_teaching_strategy"] = "general_explanation"
         result["natural_language_diagnosis"] = _strip_pretest_input_mentions(_strip_internal_labels(result["natural_language_diagnosis"]))
@@ -219,17 +228,24 @@ class CodexAppServerBackend:
 
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
         group = payload.get("group_condition", "proposed")
-        prompt_payload = payload if group == "proposed" else self._control_tutoring_payload(payload)
-        expected_type = expected_mandatory_type(prompt_payload)
+        expected_type = (
+            expected_mandatory_type({**payload, "group_condition": group})
+            if group == "proposed"
+            else None
+        )
+        prompt_payload = (
+            self._proposed_tutoring_payload(payload)
+            if group == "proposed"
+            else self._control_tutoring_payload(payload)
+        )
         if group == "proposed" and expected_type == "unknown":
-            # Keep the raw request in AICallLog, but prevent stale M1/M3
-            # observations from becoming an unknown learner's AI target.
+            # Prevent stale M1/M3 observations from becoming an unknown learner's target.
             prompt_payload = {
-                **payload,
+                **prompt_payload,
                 "pretest_target": None,
                 "pretest_targets": [],
                 "diagnostic_evidence": {
-                    **(payload.get("diagnostic_evidence") or {}),
+                    **(prompt_payload.get("diagnostic_evidence") or {}),
                     "pretest_targets": [],
                 },
             }
@@ -238,29 +254,8 @@ class CodexAppServerBackend:
             "properties": {
                 "tutor_message": {"type": "string"},
                 "teaching_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
-                "scaffolding_level": {"type": "string", "enum": ["L2", "L3"]},
-                "requires_learner_response": {"type": "boolean"},
-                "learner_prompt": {"type": "string"},
-                "practice_question": {
-                    "type": "object",
-                    "properties": {
-                        "body": {"type": "string"},
-                        "question_type": {"type": "string"},
-                    },
-                    "required": ["body", "question_type"],
-                    "additionalProperties": False,
-                },
-                "forbidden_help_given": {"type": "boolean"},
             },
-            "required": [
-                "tutor_message",
-                "teaching_strategy",
-                "scaffolding_level",
-                "requires_learner_response",
-                "learner_prompt",
-                "practice_question",
-                "forbidden_help_given",
-            ],
+            "required": ["tutor_message", "teaching_strategy"],
             "additionalProperties": False,
         }
         if expected_type:
@@ -270,27 +265,16 @@ class CodexAppServerBackend:
             schema["required"].append("teaching_contract")
         term_label = (payload.get("term") or {}).get("label", "この用語")
         rules = [
-            "学習セッション用の短い日本語チュータ発話を、安全なMarkdownとして作る。",
-            "足場掛けレベルは L3/L2 のみを使い、指定外のレベルは使わない。",
-            f"教材、問い返し、practice_question は必ず現在の用語『{term_label}』だけを主題にする。",
-            "入力JSONの learning_stage が enrichment の場合は、不足知識を補う基礎教材として説明する。",
-            "入力JSONの learning_stage が conceptual_change の場合は、誤信念またはカテゴリー錯誤を修正する教材として説明する。",
-            "misconception_scaffolding_guidance があれば、その方略を最優先で教材本文へ反映する。",
+            "学習セッション用の正確で読みやすい日本語教材を安全なMarkdownで作る。",
+            f"教材の主題は現在の用語『{term_label}』とし、入力された用語説明を中心にする。",
             "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
-            "rag_context.chunks がある場合は、その教材コンテキストを優先して教材と問題を作る。教材にない内容は推測で断定しない。",
-            "tutor_message には現在の用語を説明する教材本文だけを含める。前の問題文、学習者の回答、過去のフィードバックや振り返りを転載・要約しない。",
-            "previous_practice_question と previous_learner_response は教授方略の選択にだけ使い、AI生成の tutor_message へ転載しない。",
-            "固定確認問題の本文と選択肢はbackend が教材本文の前に別途表示する。",
-            "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず、AI生成の tutor_message へ転載しない。",
-            "提案群の過去ログは教授方略の選択にだけ使い、過去の問題・回答・フィードバックを学習者向け本文に出さない。",
-            "教材本文には、現在の主題の定義、役割、よくある誤解との違い、短い具体例または判断基準を必ず含める。",
-            "教材Markdownでは見出し、箇条書き、太字、短い段落だけを使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
-            "問題文は、教材で説明した内容を学習者が自分の言葉で再説明する記述問題にする。答えだけの丸写しではなく、役割や判断基準を含めて説明させる。",
-            "通常群と提案群で教材量の差が主効果にならないよう、指定されたL3/L2教材量の条件を守る。",
-            "practice_question.body はbackend固定問題の補助として短く書く。L3の実際の複数確認問題と選択肢は fixed_practice_question_items をbackendが表示する。",
-            "practice_question に expected_answer を含めない。確認問題の正答はbackendの固定YAMLだけで管理する。",
-            "再テスト、確認テストの具体的な正解を先取りして出さない。",
-            "tutor_message, learner_prompt, practice_question.body に M1〜M4 という内部ラベルを絶対に書かない。",
+            "rag_context.chunks がある場合は同じ用語の教材コンテキストを参照し、根拠のない断定を避ける。",
+            "tutor_message には現在の用語の教材だけを書く。問題文、選択肢、正答、過去の回答やフィードバックは含めない。",
+            "学習確認問題はbackendの固定問題バンクが表示・採点するため、問題や選択肢を生成しない。",
+            "教材には定義、仕組みまたは役割、具体例、注意点を含める。一般的な誤解を正確に説明・訂正してよい。",
+            "教材本文はMarkdown記号を含めて450〜850字程度を目安にする。これは目安であり、文字数だけを理由に内容を水増ししたり作り直したりしない。",
+            "見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
+            "被験者ID、群名、内部識別子、M1〜M4などの内部ラベルを学習者向け本文に書かない。",
         ]
         if expected_type:
             headings = mandatory_element_headings(expected_type)
@@ -324,7 +308,7 @@ class CodexAppServerBackend:
             rules.extend(
                 [
                     "tutor_message は必ず『## 用語名』『### 要点』『### 具体例』『### 注意点』の順に構成する。",
-                    "各セクションは2〜4個程度の簡潔な箇条書き、または短い段落で書く。重要語は **太字** にしてよい。",
+                    "各セクションは内容に応じた簡潔な箇条書き、または短い段落で書く。重要語は **太字** にしてよい。",
                     "内容上必要な場合だけ『### 前提用語とのつながり』『### 何ではないか』を追加する。",
                 ]
             )
@@ -335,20 +319,24 @@ class CodexAppServerBackend:
                 "前回生成で必須教授要素またはteaching_contractが不足した。入力JSONの mandatory_element_retry.missing にある項目をすべて補い、契約フィールドの証拠文を教材本文へそのまま含める。"
             )
         if group == "control":
-            rules.append("統制群なので、過去ログ、誤概念タイプ、足場掛け履歴に適応しない通常AIチューターとして説明する。teaching_strategy は general_explanation に固定する。")
-            rules.append("統制群では、L3相当の基礎教材とL2相当の観点教材を両方tutor_messageに含める。ただし質問はL2相当の1問だけにし、L3質問は出さない。")
+            rules.append("通常のAIチューターとして、入力された共通の用語情報と教材コンテキストだけから一般向けの説明を作る。個人の回答・診断・履歴・学習段階を推測したり前提にしたりしない。")
+            rules.append("teaching_strategy は general_explanation に固定する。")
         else:
-            rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
+            rules.append("入力された事前診断、誤答対象、学習履歴を教授方略の選択に利用する。")
             rules.append("入力payloadのmisconception_taxonomyにあるM1〜M4の定義と教授方略を厳守する。M3ならカテゴリー再分類、M2なら説明モデルの再構成、M1なら誤信念の反証、M4なら不足スキーマの構築、unknownなら基礎知識の豊富化を優先する。")
             rules.append("diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置き、学習者が示していない誤概念を創作しない。unknownでは誤った考えを推測しない。")
             rules.append("pretest_targetまたはpretest_targetsがある場合、それを今回の教授目標として優先する。観察された選択を確定した信念とは断定せず、選択された説明として扱う。")
             rules.append("M1は対象がある場合はその誤った命題を、対象がない場合は一般的な誤りの型を、正しい命題、誤りの仕組み、対比例、別事例への適用確認とともに明示する。M3も対象がある場合はその誤カテゴリーを、対象がない場合は一般的なカテゴリー境界を、正カテゴリー、境界、対比例、別事例への適用確認とともに明示する。unknownは反駁せず、定義・構成要素・役割・正例・非例と適用確認を示す。")
-            rules.append("提案群では、unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
+            rules.append("unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
-        result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)
+        result = await self._run_structured_turn(
+            "generate_tutoring_turn",
+            self._prompt("tutoring_turn", prompt_payload, rules),
+            schema,
+            # Audit metadata comes from the full request; model input stays allowlisted.
+            audit_context=self._audit_context(payload, generation=True),
+        )
         result["tutor_message"] = _strip_internal_labels(result["tutor_message"])
-        result["learner_prompt"] = _strip_internal_labels(result["learner_prompt"])
-        result["practice_question"]["body"] = _strip_internal_labels(result["practice_question"]["body"])
         if isinstance(result.get("teaching_contract"), dict):
             for field in ("corrected_claim", "mechanism_explanation", "contrast_example", "transfer_check"):
                 if isinstance(result["teaching_contract"].get(field), str):
@@ -399,6 +387,7 @@ class CodexAppServerBackend:
                 ],
             ),
             schema,
+            audit_context=self._audit_context(payload),
         )
         result["feedback_for_log"] = _strip_internal_labels(result["feedback_for_log"])
         return result
@@ -441,6 +430,7 @@ class CodexAppServerBackend:
                 ],
             ),
             schema,
+            audit_context=self._audit_context(payload),
         )
         result["feedback"] = _strip_internal_labels(result["feedback"])
         result["learning_misconception_reason"] = _strip_internal_labels(result["learning_misconception_reason"])
@@ -454,11 +444,16 @@ class CodexAppServerBackend:
             "required": ["summary"],
             "additionalProperties": False,
         }
+        prompt_payload = (
+            self._proposed_feedback_payload(payload)
+            if payload.get("group_condition") == "proposed"
+            else self._control_feedback_payload(payload)
+        )
         result = await self._run_structured_turn(
             "generate_correct_answer_summary",
             self._prompt(
                 "correct_answer_summary",
-                payload,
+                prompt_payload,
                 [
                     "固定YAMLの採点結果は正答済みである。正答選択肢の本文をそのまま繰り返さず、学習上の要点だけを短く説明する。",
                     "summary は学習者向けの安全なMarkdownにする。冒頭に ## 今回の要点 を置き、箇条書き、**太字**、短い段落だけを使う。",
@@ -469,6 +464,7 @@ class CodexAppServerBackend:
                 ],
             ),
             schema,
+            audit_context=self._audit_context(payload),
         )
         result["summary"] = _strip_internal_labels(result["summary"])
         return result
@@ -484,7 +480,11 @@ class CodexAppServerBackend:
             "required": ["feedback", "remediation_focus", "general_knowledge_supplement"],
             "additionalProperties": False,
         }
-        prompt_payload = payload if payload.get("group_condition") == "proposed" else self._control_feedback_payload(payload)
+        prompt_payload = (
+            self._proposed_feedback_payload(payload)
+            if payload.get("group_condition") == "proposed"
+            else self._control_feedback_payload(payload)
+        )
         result = await self._run_structured_turn(
             "explain_selected_distractor",
             self._prompt(
@@ -495,13 +495,14 @@ class CodexAppServerBackend:
                     "正答の選択肢本文、正答位置、正答そのものを直接示さない。",
                     "feedback は ## どこが違うか と ## 見直す観点を中心に、箇条書き、**太字**、短い段落だけを使う安全なMarkdownにする。",
                     "remediation_focus は学習者が次に確認する観点を一文で返し、general_knowledge_supplement は追加説明が不要なら null にする。",
-                    "提案群でtaxonomyや誤概念タイプが入力されている場合は教授方略の判断に使うが、M1〜M4などのラベルを出力しない。",
+                    "taxonomyや誤概念タイプが入力されている場合は教授方略の判断に使うが、M1〜M4などのラベルを出力しない。",
                     "HTML、表、コードブロック、画像、長大な連続段落、AIの思考過程は出力しない。",
                     "rag_context.chunks がある場合はその本文を優先し、本文にない内容を推測で断定しない。",
                     "選択内容が空なら、前提知識不足として定義と判断基準の確認を促す。",
                 ],
             ),
             schema,
+            audit_context=self._audit_context(payload),
         )
         result["feedback"] = _strip_internal_labels(result["feedback"])
         result["remediation_focus"] = _strip_internal_labels(result["remediation_focus"])
@@ -532,6 +533,7 @@ class CodexAppServerBackend:
                 ],
             ),
             schema,
+            audit_context=self._audit_context(payload),
         )
         result["summary_for_learner"] = _strip_internal_labels(result["summary_for_learner"])
         return result
@@ -563,10 +565,66 @@ class CodexAppServerBackend:
             raise CodexAppServerError("not_logged_in", "Codex app-serverでChatGPT/Codexログインが確認できません。")
         return account
 
-    async def _run_structured_turn(self, purpose: str, prompt: str, output_schema: dict[str, Any]) -> dict[str, Any]:
+    async def _run_structured_turn(
+        self,
+        purpose: str,
+        prompt: str,
+        output_schema: dict[str, Any],
+        *,
+        audit_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         text_chunks: list[str] = []
         completed_texts: list[str] = []
         turn_id: str | None = None
+        thread_start_params = {
+            "ephemeral": True,
+            "cwd": self.settings.codex_app_server_cwd,
+            "approvalPolicy": "never",
+            "sandbox": "read-only",
+            "baseInstructions": _BASE_INSTRUCTIONS,
+            "model": self.settings.codex_model or None,
+        }
+        turn_start_params: dict[str, Any] = {
+            "threadId": None,
+            "input": [{"type": "text", "text": prompt}],
+            "outputSchema": output_schema,
+            "approvalPolicy": "never",
+            "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
+            "model": self.settings.codex_model or None,
+            "effort": self.reasoning_effort,
+        }
+        audit = {
+            "purpose": purpose,
+            "thread_start_method": "thread/start",
+            "turn_start_method": "turn/start",
+            "prompt_contract_version": (audit_context or {}).get("prompt_contract_version"),
+            "taxonomy_version": (audit_context or {}).get("taxonomy_version"),
+            "generation_attempt": (audit_context or {}).get("generation_attempt"),
+            "model": self.settings.codex_model,
+            "reasoning_effort": self.reasoning_effort,
+            "thread_start_params": thread_start_params,
+            "turn_start_params": turn_start_params,
+            "prompt": prompt,
+            "output_schema": output_schema,
+            "output_schema_sha256": hashlib.sha256(
+                json.dumps(output_schema, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest(),
+            "rag_retrieval": (audit_context or {}).get("rag_retrieval"),
+            "transmission": {
+                "websocket_connected": False,
+                "initialize_completed": False,
+                "account_verified": False,
+                "thread_start_attempted": False,
+                "thread_start_sent": False,
+                "thread_started": False,
+                "thread_id": None,
+                "turn_start_attempted": False,
+                "turn_start_sent": False,
+                "turn_started": False,
+                "turn_id": None,
+                "turn_completed": False,
+            },
+        }
 
         def on_event(message: dict[str, Any]) -> None:
             method = message.get("method")
@@ -585,35 +643,36 @@ class CodexAppServerBackend:
 
         try:
             async with self._client() as rpc:
+                audit["transmission"]["websocket_connected"] = True
                 await self._initialize(rpc)
+                audit["transmission"]["initialize_completed"] = True
                 await self._ensure_logged_in(rpc)
+                audit["transmission"]["account_verified"] = True
+
+                def thread_sent() -> None:
+                    audit["transmission"]["thread_start_sent"] = True
+
+                audit["transmission"]["thread_start_attempted"] = True
                 thread = await rpc.call(
-                    "thread/start",
-                    {
-                        "ephemeral": True,
-                        "cwd": self.settings.codex_app_server_cwd,
-                        "approvalPolicy": "never",
-                        "sandbox": "read-only",
-                        "baseInstructions": _BASE_INSTRUCTIONS,
-                        "model": self.settings.codex_model or None,
-                    },
-                    notification_handler=on_event,
+                    "thread/start", thread_start_params,
+                    notification_handler=on_event, on_sent=thread_sent,
                 )
                 thread_id = thread["thread"]["id"]
+                audit["transmission"]["thread_started"] = True
+                audit["transmission"]["thread_id"] = thread_id
+                turn_start_params["threadId"] = thread_id
+
+                def turn_sent() -> None:
+                    audit["transmission"]["turn_start_sent"] = True
+
+                audit["transmission"]["turn_start_attempted"] = True
                 turn = await rpc.call(
-                    "turn/start",
-                    {
-                        "threadId": thread_id,
-                        "input": [{"type": "text", "text": prompt}],
-                        "outputSchema": output_schema,
-                        "approvalPolicy": "never",
-                        "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
-                        "model": self.settings.codex_model or None,
-                        "effort": self.reasoning_effort,
-                    },
-                    notification_handler=on_event,
+                    "turn/start", turn_start_params,
+                    notification_handler=on_event, on_sent=turn_sent,
                 )
                 turn_id = turn["turn"]["id"]
+                audit["transmission"]["turn_started"] = True
+                audit["transmission"]["turn_id"] = turn_id
                 while True:
                     message = await rpc.recv(on_event)
                     if message.get("method") != "turn/completed":
@@ -621,22 +680,32 @@ class CodexAppServerBackend:
                     completed_turn = (message.get("params") or {}).get("turn") or {}
                     if completed_turn.get("id") != turn_id:
                         continue
+                    audit["transmission"]["turn_completed"] = True
                     if completed_turn.get("status") == "failed":
                         raise CodexAppServerError("turn_failed", "Codex app-serverのAI応答生成が失敗しました。", json.dumps(completed_turn.get("error"), ensure_ascii=False))
                     break
         except asyncio.TimeoutError as exc:
-            raise CodexAppServerError("timeout", "Codex app-serverのAI応答がタイムアウトしました。", purpose) from exc
+            raise CodexAppServerError("timeout", "Codex app-serverのAI応答がタイムアウトしました。", purpose, request_audit=audit) from exc
         except OSError as exc:
-            raise CodexAppServerError("app_server_unreachable", "Codex app-serverに接続できません。", str(exc)) from exc
+            raise CodexAppServerError("app_server_unreachable", "Codex app-serverに接続できません。", str(exc), request_audit=audit) from exc
+        except CodexAppServerError as exc:
+            exc.request_audit = audit
+            raise
+        except Exception as exc:
+            setattr(exc, "request_audit", audit)
+            raise
 
         raw_text = completed_texts[-1] if completed_texts else "".join(text_chunks)
         if not raw_text.strip():
             raise CodexAppServerError(
-                "empty_response",
-                "Codex app-serverから空のAI応答が返りました。",
-                raw_text=raw_text,
+                "empty_response", "Codex app-serverから空のAI応答が返りました。", raw_text=raw_text, request_audit=audit
             )
-        return _StructuredModelResponse(_parse_json_object(raw_text), raw_text)
+        try:
+            parsed = _parse_json_object(raw_text)
+        except CodexAppServerError as exc:
+            exc.request_audit = audit
+            raise
+        return _StructuredModelResponse(parsed, raw_text, audit)
 
     def _prompt(self, purpose: str, payload: dict[str, Any], rules: list[str]) -> str:
         prompt_parts = [
@@ -653,40 +722,81 @@ class CodexAppServerBackend:
             prompt_parts.extend(
                 [
                     "",
-                    "提案群専用の内部taxonomy。診断と教授方略の判断にだけ使い、学習者向け出力へ転載しない:",
+                    "内部taxonomy。診断と教授方略の判断にだけ使い、学習者向け出力へ転載しない:",
                     json.dumps(payload["misconception_taxonomy"], ensure_ascii=False, indent=2),
                 ]
             )
-        prompt_parts.extend(["", "入力JSON:", json.dumps(payload, ensure_ascii=False, indent=2)])
+        prompt_payload = self._remove_routing_metadata(payload)
+        prompt_parts.extend(["", "入力JSON:", json.dumps(prompt_payload, ensure_ascii=False, indent=2)])
         return "\n".join(prompt_parts)
 
-    def _control_tutoring_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        term = payload.get("term") or {}
+    def _remove_routing_metadata(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: self._remove_routing_metadata(item)
+                for key, item in value.items()
+                if key not in {"participant_id", "group_condition", "participant_code"}
+            }
+        if isinstance(value, list):
+            return [self._remove_routing_metadata(item) for item in value]
+        return value
+
+    def _audit_context(self, payload: dict[str, Any], *, generation: bool = False) -> dict[str, Any]:
+        rag = payload.get("rag_context") or {}
+        retry_attempt = (payload.get("mandatory_element_retry") or {}).get("attempt")
+        attempt = payload.get("generation_attempt")
+        if attempt is None:
+            attempt = retry_attempt if retry_attempt is not None else 1
         return {
-            "participant_id": payload.get("participant_id"),
-            "group_condition": "control",
-            "term": term,
-            "component_term": payload.get("component_term"),
-            "component_index": payload.get("component_index"),
-            "component_total": payload.get("component_total"),
-            "component_terms": payload.get("component_terms"),
-            "fixed_practice_question": payload.get("fixed_practice_question"),
-            "fixed_practice_question_items": payload.get("fixed_practice_question_items"),
-            "rag_context": payload.get("rag_context"),
+            "prompt_contract_version": payload.get("prompt_contract_version") or PROMPT_CONTRACT_VERSION,
+            "taxonomy_version": payload.get("taxonomy_version") or (TAXONOMY_VERSION if payload.get("misconception_taxonomy") else None),
+            "generation_attempt": attempt if generation else None,
+            "rag_retrieval": {
+                "source": rag.get("source"),
+                "topic_slug": rag.get("topic_slug"),
+                "query": rag.get("query"),
+                "allowed_sections": rag.get("allowed_sections"),
+                "chunks": [
+                    {
+                        "chunk_id": chunk.get("chunk_id"),
+                        "text_sha256": hashlib.sha256(str(chunk.get("text") or "").encode("utf-8")).hexdigest(),
+                    }
+                    for chunk in rag.get("chunks") or []
+                ],
+            } if rag else None,
         }
 
-    def _control_feedback_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "group_condition": "control",
-            "term": payload.get("term"),
-            "learning_stage": payload.get("learning_stage"),
-            "component_term": payload.get("component_term"),
-            "question_body": payload.get("question_body"),
-            "selected_option_body": payload.get("selected_option_body"),
-            "selected_option_bodies": payload.get("selected_option_bodies"),
-            "material": payload.get("material"),
-            "rag_context": payload.get("rag_context"),
+    def _proposed_tutoring_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        allowed = {
+            "term", "learning_stage", "learning_stage_label", "component_term", "component_index",
+            "component_total", "component_terms", "prompt_contract_version", "taxonomy_version",
+            "pretest_target", "pretest_targets", "learner_state", "previous_answer",
+            "previous_diagnosis_for_learner", "previous_practice_question", "previous_learner_response",
+            "previous_learning_misconception", "session_misconception_history",
+            "misconception_scaffolding_guidance", "misconception_taxonomy", "active_misconception_type",
+            "mandatory_teaching_elements", "diagnostic_evidence", "rag_context", "mandatory_element_retry",
         }
+        return {key: payload[key] for key in allowed if key in payload}
+
+    def _control_tutoring_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        allowed = {"term", "component_term", "component_index", "component_total", "component_terms", "rag_context"}
+        return {key: payload[key] for key in allowed if key in payload}
+
+    def _proposed_feedback_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        allowed = {
+            "term", "learning_stage", "component_term", "question_body", "selected_option_body",
+            "selected_option_bodies", "material", "rag_context", "learner_state",
+            "learning_misconception_type", "misconception_scaffolding_guidance", "misconception_taxonomy",
+            "session_misconception_history",
+        }
+        return {key: payload[key] for key in allowed if key in payload}
+
+    def _control_feedback_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        allowed = {
+            "term", "component_term", "question_body", "selected_option_body",
+            "selected_option_bodies", "material", "rag_context",
+        }
+        return {key: payload[key] for key in allowed if key in payload}
 
     def _account_label(self, account: dict[str, Any] | None) -> str:
         if not account:
