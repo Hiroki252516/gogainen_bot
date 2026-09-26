@@ -102,7 +102,7 @@ function progressForNewQuestion(termSlug: string, turn: Pick<Turn, "turn_index" 
   return {
     current: targetIndex >= 0 ? targetIndex + 1 : 1,
     total: targets.length || 1,
-    remainingAttempts: Math.max(maxAttempts - turnIndex + 1, 0),
+    remainingAttempts: Math.max(maxAttempts - turnIndex, 0),
   };
 }
 

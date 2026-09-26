@@ -99,6 +99,20 @@ def test_codex_evidence_reconciliation_fills_empty_values():
     assert result["mandatory_elements"]["components"]
 
 
+def test_codex_m3_contract_reconciliation_uses_contrast_example():
+    backend = MockAIBackend()
+    payload = _payload("M3", "conceptual_change")
+    result = asyncio.run(backend.generate_tutoring_turn(payload))
+    result["teaching_contract"]["contrast_example"] = "AIが返した別のカテゴリー比較です。"
+
+    reconcile_mandatory_elements(result, "M3")
+    reconcile_teaching_contract(result, "M3")
+
+    validation = validate_teaching_contract(result, "M3", payload, payload["term"]["label"])
+    assert validation["valid"], validation
+    assert result["teaching_contract"]["contrast_example"] in result["tutor_message"]
+
+
 def test_codex_strips_contract_field_labels_from_learner_material():
     backend = CodexAppServerBackend()
     payload = _payload("unknown", "enrichment")
