@@ -211,23 +211,28 @@ def validate_mandatory_elements(
     }
 
 
-def mock_mandatory_elements(term_label: str, description: str, misconception_type: str) -> dict[str, str]:
+def mock_mandatory_elements(
+    term_label: str,
+    description: str,
+    misconception_type: str,
+    target: dict[str, Any] | None = None,
+) -> dict[str, str]:
     """Create deterministic evidence spans for MockAIBackend tests only."""
     if misconception_type == "M1":
         return {
             "type": "M1",
-            "wrong_belief": f"{term_label}は、用語名だけで判断できる単純な情報である。",
-            "correct_belief": f"{term_label}は、{description}",
-            "counterexample": f"{term_label}の名前に似た処理でも、同じ役割を持たない場合がある。",
-            "reason": "この反例は、用語名だけで役割を決める考えでは処理の違いを説明できないことを示す。",
+            "wrong_belief": (target or {}).get("observed_claim") or f"{term_label}は、用語名だけで判断できる単純な情報である。",
+            "correct_belief": (target or {}).get("corrected_claim") or f"{term_label}は、{description}",
+            "counterexample": (target or {}).get("contrast_example") or f"{term_label}の名前に似た処理でも、同じ役割を持たない場合がある。",
+            "reason": (target or {}).get("mechanism_explanation") or "この反例は、用語名だけで役割を決める考えでは処理の違いを説明できないことを示す。",
         }
     if misconception_type == "M3":
         return {
             "type": "M3",
-            "wrong_category": f"{term_label}を、関連するすべてのAI処理と同じ種類に分類する。",
-            "correct_category": f"{term_label}は、{description}",
-            "boundary_criterion": "何を処理し、どの役割を担う仕組みかでカテゴリーを分ける。",
-            "contrast_example": f"{term_label}と名前が似ていても、役割や情報の流れが異なる処理は別カテゴリーである。",
+            "wrong_category": (target or {}).get("wrong_category") or f"{term_label}を、関連するすべてのAI処理と同じ種類に分類する。",
+            "correct_category": (target or {}).get("correct_category") or (target or {}).get("corrected_claim") or f"{term_label}は、{description}",
+            "boundary_criterion": (target or {}).get("boundary_criterion") or "何を処理し、どの役割を担う仕組みかでカテゴリーを分ける。",
+            "contrast_example": (target or {}).get("contrast_example") or f"{term_label}と名前が似ていても、役割や情報の流れが異なる処理は別カテゴリーである。",
         }
     return {
         "type": "unknown",

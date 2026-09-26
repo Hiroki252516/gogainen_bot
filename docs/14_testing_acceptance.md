@@ -12,6 +12,10 @@
 - learning確認はv1〜v5を使い、6回目以降はv5を再利用する。
 - RAGは用語別の指定sectionだけを検索し、LangGraphチャンクを返さない。
 - controlとproposedのRAG本文が共通で、proposedだけにtaxonomy・履歴・足場掛け情報が入る。
+- `teaching_targets`が3用語のM1/M3選択肢すべてに存在し、M1のE選択時に選択肢本文、`llm_knowledge:pretest:E`、研究者確認済みの「プロンプトだけでは重みを更新しない」という訂正がproposed payloadへ入る。
+- proposedの`pretest_target(s)`、`taxonomy_version`、`prompt_contract_version`が`AICallLog.request_payload`へ保存され、`TutorTurn.diagnosis_json`にも契約と検証結果が保存される。controlにはtaxonomy、誤答主張、診断履歴、learner state、learning stage、過去回答を入れない。
+- M1/M3/unknownの`teaching_contract`がclaim ID、方略、訂正、仕組み、対比例、転移確認を満たし、本文と一致する。欠落・不正claim・誤った方略は同じbackendで最大2回再生成後に503となる。
+- AI入力と出力に固定確認問題の`expected_answer`を含めず、生成教材へ固定問題本文・正答・直前フィードバックを転載しない。RAGの検索条件は段階・診断に依存せず両群で同一である。
 - app-server payloadが `gpt-5.6-luna` / `medium` を使う。
 - 正答時は `generate_correct_answer_summary`、誤答時は `explain_selected_distractor` が呼ばれ、解説生成の目的とpayloadが `AICallLog` に記録される。
 - `/api/participants/{participant_id}/learning-targets` が、既存の未達対象 `targets`、互換用 `pretest_results`、直近の `test_results`（周回名、問題文、本人が選んだ選択肢本文、正誤）を返す。`test_results` に正答、期待解答、選択肢ごとの正誤、M分類などの内部診断値を含めない。
@@ -60,6 +64,7 @@
 
 - `AI_BACKEND=mock` で固定問題・遷移・RAG契約テストが通る。
 - `AI_BACKEND=codex_app_server` でMockへ自動フォールバックしない。
+- `AI_BACKEND=codex_app_server`でM1、M3、unknownの代表ケースをブラウザから生成し、participant logの`AICallLog` payloadと`tutor_turns.diagnosis_json`で対象claim・契約・版を確認する。
 - 既存の単一選択API互換、DB列、CSV列、過去ログを壊さない。
 - `Idempotency-Key`なしの既存API呼び出しが動作し、既存の重複データを削除しない。
 

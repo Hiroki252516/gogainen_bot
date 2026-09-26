@@ -23,7 +23,9 @@ pretest、retest、final_testと学習確認の固定複数選択問題はA〜J�
 - G〜I: `misconception_type: M3`
 - J: `misconception_type: unknown`
 
-正解はA/B/Cの3つだけを選択した場合に限定し、Jは単独選択だけを有効とする。YAMLローダーは選択肢数、配分、variant数、LangGraph混入を検証する。
+正解はA/B/Cの3つだけを選択した場合に限定し、Jは単独選択だけを有効とする。YAMLローダーは選択肢数、配分、variant数、LangGraph混入を検証する。M1/M3のD〜Iには、`teaching_targets`として研究者確認済みの`corrected_claim`、`mechanism_explanation`、`contrast_example`を置き、M3には`wrong_category`、`correct_category`、`boundary_criterion`も置く。選択肢本文は既存の`QuestionOption.body`を正本とし、claim IDは`{term_slug}:pretest:{option_label}`から実行時に作る。
+
+`teaching_targets`は採点用データではない。`Attempt.is_correct`、`diagnosed_status`、`misconception_type`を変更せず、提案群の教材生成payloadを具体化するためだけに使う。J「わからない」には誤った主張のtargetを作らず、unknownの基礎説明へ分岐する。
 
 ## Variant policy
 

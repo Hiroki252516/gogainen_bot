@@ -2,14 +2,13 @@
 
 ## 共通契約
 
-AI教材生成は `AIBackend` 経由で行い、実行時の教材根拠としてローカルRAG本文を使う。RAG検索クエリは対象用語、学習段階、構成要素だけで組み立て、個人の誤答履歴によって検索対象の章を変えない。
+AI教材生成は `AIBackend` 経由で行い、実行時の教材根拠としてローカルRAG本文を使う。RAG検索クエリは対象用語、共通説明、構成要素だけで組み立て、学習段階や個人の誤答履歴によって検索対象の章を変えない。教材生成契約の版は `tutoring-teaching-contract-v1`、taxonomyの版は `m1-m3-unknown-v1` としてpayloadとログへ保存する。
 
 両群へ渡す共通payload:
 
 - term slug / 表示名
-- learning stage
 - 構成要素
-- YAMLで固定した確認問題・選択肢
+- YAMLで固定した確認問題の本文・選択肢（正答文字列は除外）
 - 用語に対応するRAG本文と対象section
 
 proposedだけへ追加する情報:
@@ -21,8 +20,10 @@ proposedだけへ追加する情報:
 - 現在のMVP教授タイプ（M1/M3/unknown）
 - タイプ別の必須教授要素一覧
 - 診断で選択された選択肢本文（M1/M3の必須要素を診断根拠に接地するため）
+- `pretest_target` / `pretest_targets`（claim_id、選択肢本文、研究者確認済みの訂正文、仕組み、対比例）
+- `taxonomy_version` / `prompt_contract_version`
 
-control payloadには `misconception_taxonomy`、誤概念履歴、学習者履歴を含めない。controlの `teaching_strategy` は `general_explanation` に固定する。
+control payloadには `learning_stage`、`misconception_taxonomy`、誤答主張、診断履歴、learner state、足場掛け履歴、過去回答を含めない。用語・共通構成要素・固定問題・診断に依存しないRAG本文だけを使い、controlの `teaching_strategy` は `general_explanation` に固定する。両群のRAG本文と検索条件は同一にする。
 
 ## 内部taxonomy
 
@@ -112,6 +113,23 @@ M1、M3、unknownの教材本文は、次のタイプ別Markdown構成を必須�
 
 M2、M4、統制群など必須教授要素の対象外では、従来の共通構造を使う。
 
+## 構造化された教材生成契約
+
+M1/M3/unknownの提案群出力には、`teaching_contract`を必須化する。これは研究ログ専用であり、被験者画面には表示しない。
+
+| フィールド | 内容 |
+| --- | --- |
+| `target_claim_id` | 主対象のclaim ID。unknownはnull |
+| `addressed_claim_ids` | 教材で扱った全対象のclaim ID |
+| `refutation_mode` | M1は`explicit`/`implicit`、M3は`category_comparison`、unknownは`none` |
+| `corrected_claim` | M1/M3の正しい説明。unknownはnull |
+| `mechanism_explanation` | 誤りまたは概念の仕組み |
+| `contrast_example` | M1/M3の対比例。unknownはnull |
+| `transfer_check` | 新しい事例へ適用する確認 |
+| `target_addressed` | 対象を扱ったことの明示 |
+
+backendはclaim IDの対応、M1/M3/unknownごとの方略、契約フィールドが`tutor_message`に現れること、内部ラベルの露出、固定確認問題の正答・問題文の転載を検証する。欠落時は同じAI backendで最大2回再生成し、それでも失敗したら503を返す。Codex app-serverが使用できない場合にMockへフォールバックしない。
+
 教材と学習者向けフィードバックは、見出し、箇条書き、太字、短い段落を中心にする。表、HTML、コードブロック、画像、長大な連続段落、内部ラベルの露出は禁止する。既存JSON schema、DB列、CSV列は変更しない。
 
 backendは最終応答からJSONオブジェクトを抽出し、構造化契約の主な制約はapp-serverへ渡した`outputSchema`で適用する。現行MVPの提案群教材については、必須教授要素とその本文内証拠をローカルでも検証する。その他のMarkdown文法は完全な検証器ではなく、frontendの `MarkdownText` がraw HTML、表、画像、コードブロックを描画しない安全表示を担当する。既存のプレーンテキストは通常の段落として表示する。
@@ -123,11 +141,11 @@ backendは最終応答からJSONオブジェクトを抽出し、構造化契約
 - 正答時は `generate_correct_answer_summary` を呼び、`{"summary": "..."}` を受け取る。
 - 誤答時は `explain_selected_distractor` を呼び、`{"feedback": "...", "remediation_focus": "...", "general_knowledge_supplement": null}` を受け取る。
 - どちらの呼び出しも既存の `_ai_call` 経由で行い、目的、payload、応答、遅延を `AICallLog` に記録する。
-- proposedには誤概念taxonomy、今回の誤概念タイプ、学習履歴、足場掛け情報を追加する。controlには用語、学習段階、問題、教材、RAG本文、選択内容だけを渡し、taxonomy・誤概念履歴・学習者履歴を渡さない。
+- proposedには誤概念taxonomy、今回の誤概念タイプ、具体的な事前テスト対象、学習履歴、足場掛け情報を追加する。controlには用語、共通構成要素、固定問題、教材、RAG本文だけを渡し、taxonomy・診断対象・learning stage・誤概念履歴・学習者履歴を渡さない。
 - 誤答解説は、選択された誤答の問題点と見直す観点だけを示し、正答の本文、正答位置、正答そのものを直接漏洩しない。
 - 解説本文は教材と同じ安全なMarkdown制約に従う。HTML、表、コードブロック、画像、長大な連続段落、M1〜M4、AIの思考過程を出力しない。
 - 解説生成に失敗した場合はMockへ自動フォールバックせず、回答状態を中途半端に確定せずにAIエラーとして扱う。
 
-`generate_tutoring_turn`ではAIが教材本文（`tutor_message`）を生成するが、確認問題の構成と正誤判定はYAML・backendが管理する。新しい教材生成へ渡す`learning_stage`は`enrichment`または`conceptual_change`である。十分な回答後に返す`final_feedback`は結果表示用の状態であり、新しい教材生成の入力にはしない。L3/L2は内部の`scaffolding_level`互換値としてのみ扱う。
+`generate_tutoring_turn`ではAIが教材本文（`tutor_message`）を生成するが、確認問題の構成と正誤判定はYAML・backendが管理する。AI入力には確認問題の`expected_answer`を含めない。新しい教材生成へ渡す`learning_stage`は提案群だけで`enrichment`または`conceptual_change`である。十分な回答後に返す`final_feedback`は結果表示用の状態であり、新しい教材生成の入力にはしない。L3/L2は内部の`scaffolding_level`互換値としてのみ扱う。
 
 提案群では、直前の確認問題と学習者の回答を次の教材生成の文脈としてAIへ渡す。AI生成の教材本文には転載させず、backendが教材本文の前に別の文脈ブロックとして簡潔に表示する。前回の採点結果、AI解説、振り返りは次の教材生成へ渡さず、教材本文にも再掲しない。誤概念履歴などのログは教授方略を選ぶために使い、回答後のフィードバックは教材と分けて表示する。

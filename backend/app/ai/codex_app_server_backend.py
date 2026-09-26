@@ -16,6 +16,7 @@ from app.ai.mandatory_elements import (
     mandatory_element_headings,
     mandatory_elements_schema,
 )
+from app.ai.teaching_contract import teaching_contract_schema
 
 
 class CodexAppServerError(RuntimeError):
@@ -215,10 +216,9 @@ class CodexAppServerBackend:
                     "type": "object",
                     "properties": {
                         "body": {"type": "string"},
-                        "expected_answer": {"type": "string"},
                         "question_type": {"type": "string"},
                     },
-                    "required": ["body", "expected_answer", "question_type"],
+                    "required": ["body", "question_type"],
                     "additionalProperties": False,
                 },
                 "forbidden_help_given": {"type": "boolean"},
@@ -237,6 +237,8 @@ class CodexAppServerBackend:
         if expected_type:
             schema["properties"]["mandatory_elements"] = mandatory_elements_schema(expected_type)
             schema["required"].append("mandatory_elements")
+            schema["properties"]["teaching_contract"] = teaching_contract_schema()
+            schema["required"].append("teaching_contract")
         term_label = (payload.get("term") or {}).get("label", "この用語")
         rules = [
             "学習セッション用の短い日本語チュータ発話を、安全なMarkdownとして作る。",
@@ -257,7 +259,7 @@ class CodexAppServerBackend:
             "問題文は、教材で説明した内容を学習者が自分の言葉で再説明する記述問題にする。答えだけの丸写しではなく、役割や判断基準を含めて説明させる。",
             "通常群と提案群で教材量の差が主効果にならないよう、指定されたL3/L2教材量の条件を守る。",
             "practice_question.body はbackend固定問題の補助として短く書く。L3の実際の複数確認問題と選択肢は fixed_practice_question_items をbackendが表示する。",
-            "practice_question.expected_answer は現在の用語の期待回答にする。",
+            "practice_question に expected_answer を含めない。確認問題の正答はbackendの固定YAMLだけで管理する。",
             "再テスト、確認テストの具体的な正解を先取りして出さない。",
             "tutor_message, learner_prompt, practice_question.body に M1〜M4 という内部ラベルを絶対に書かない。",
         ]
@@ -269,6 +271,9 @@ class CodexAppServerBackend:
                     f"tutor_message は必ず『## {term_label}』の後に {heading_order} の順で構成する。",
                     "M1/M3/unknownでは『### 要点』『### 具体例』『### 注意点』を使わず、タイプ別の見出しを教材構造そのものにする。",
                     "各タイプ別セクションには対応する必須教授要素を置き、他のタイプの必須要素や不要なセクションを追加しない。",
+                    "teaching_contract を必ず返し、pretest_targetsの全claim_idをaddressed_claim_idsへ入れる。target_claim_idは主対象のclaim_idにする。",
+                    "teaching_contractのcorrected_claim、mechanism_explanation、contrast_example、transfer_checkは、tutor_message本文にそのまま含める。",
+                    "teaching_contractのtarget_addressedはtrueにする。M1のrefutation_modeはexplicitを標準とし、M3はcategory_comparison、unknownはnoneにする。",
                 ]
             )
         else:
@@ -283,7 +288,7 @@ class CodexAppServerBackend:
             rules.append(mandatory_element_prompt(expected_type))
         if prompt_payload.get("mandatory_element_retry"):
             rules.append(
-                "前回生成で必須教授要素が不足した。入力JSONの mandatory_element_retry.missing にある項目をすべて補い、証拠文を教材本文へそのまま含める。"
+                "前回生成で必須教授要素またはteaching_contractが不足した。入力JSONの mandatory_element_retry.missing にある項目をすべて補い、契約フィールドの証拠文を教材本文へそのまま含める。"
             )
         if group == "control":
             rules.append("統制群なので、過去ログ、誤概念タイプ、足場掛け履歴に適応しない通常AIチューターとして説明する。teaching_strategy は general_explanation に固定する。")
@@ -292,12 +297,18 @@ class CodexAppServerBackend:
             rules.append("提案群なので、誤概念タイプ、過去ログ、足場掛けレベルを教授方略へ反映する。")
             rules.append("入力payloadのmisconception_taxonomyにあるM1〜M4の定義と教授方略を厳守する。M3ならカテゴリー再分類、M2なら説明モデルの再構成、M1なら誤信念の反証、M4なら不足スキーマの構築、unknownなら基礎知識の豊富化を優先する。")
             rules.append("diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置き、学習者が示していない誤概念を創作しない。unknownでは誤った考えを推測しない。")
+            rules.append("pretest_targetまたはpretest_targetsがある場合、それを今回の教授目標として優先する。観察された選択を確定した信念とは断定せず、選択された説明として扱う。")
+            rules.append("M1は対象の誤った命題、正しい命題、誤りの仕組み、対比例、別事例への適用確認を明示する。M3は誤カテゴリー、正カテゴリー、境界、対比例、別事例への適用確認を明示する。unknownは反駁せず、定義・構成要素・役割・正例・非例と適用確認を示す。")
             rules.append("提案群では、unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
         rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。")
         result = await self._run_structured_turn("generate_tutoring_turn", self._prompt("tutoring_turn", prompt_payload, rules), schema)
         result["tutor_message"] = _strip_internal_labels(result["tutor_message"])
         result["learner_prompt"] = _strip_internal_labels(result["learner_prompt"])
         result["practice_question"]["body"] = _strip_internal_labels(result["practice_question"]["body"])
+        if isinstance(result.get("teaching_contract"), dict):
+            for field in ("corrected_claim", "mechanism_explanation", "contrast_example", "transfer_check"):
+                if isinstance(result["teaching_contract"].get(field), str):
+                    result["teaching_contract"][field] = _strip_internal_labels(result["teaching_contract"][field])
         if group == "control":
             result["teaching_strategy"] = "general_explanation"
         return result
@@ -605,8 +616,6 @@ class CodexAppServerBackend:
             "participant_id": payload.get("participant_id"),
             "group_condition": "control",
             "term": term,
-            "learning_stage": payload.get("learning_stage"),
-            "learning_stage_label": payload.get("learning_stage_label"),
             "component_term": payload.get("component_term"),
             "component_index": payload.get("component_index"),
             "component_total": payload.get("component_total"),
