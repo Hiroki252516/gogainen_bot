@@ -60,6 +60,8 @@ Response:
 
 seed済みのテスト問題は`questions.variant_key`に保存し、学習確認問題は同等の`variant_key`を`tutor_turns.practice_question_json`に保存する。後者は学習確認問題の公開レスポンスに独立フィールドとして返さない。
 
+初回教材のレスポンス後に作る先行生成は、現在より後の未達用語についてだけ実行し、先行生成分のvariantは常に各用語のv1とする。これは通常の学習variant policyを変更するものではなく、後続用語の最初の確認問題を先に作るための内部予約である。
+
 再テストの採点対象が現行の3用語を各1問ずつ含み、すべて正解だった場合は、`score-retest`が`next_step=survey`、`next_url=/survey`を返して追加の確認を省略する。不正解または未回答がある場合は、`next_step=learning_targets`、不正解・未回答用語をテストの出題順に入れた`learning_target_slugs`、最初の用語への`next_url=/learning/{term_slug}`を返す。診断の`priority_score`は分析用に保存するが、参加者向けの学習対象の表示・遷移順には使わない。`final_test`も全問正解時だけ`survey`へ進み、不正解または未回答時は`learning_targets`へ戻り、最初の学習URLを返す。次の学習・再テスト周回はクライアントまたは研究者が再導線を開始し、backendが自動反復しない。対象一覧が空の異常時も`next_url=/learning-targets`に留める。各APIは`current_step`に応じてアクセスを制限し、満点で`survey`へ進んだ後は再テスト・学習操作を`409`で拒否する。不正解・未回答で`learning_targets`へ戻った場合は対象学習と次の再テストを利用でき、`final_test`は`current_step=final_test`の場合だけ利用できる。`final_test`の参加者向け表示名は「再テスト1」である。
 
 `attempts.test_round` には初回 `pretest` を `test`、最初の学習後確認を `retest_1`、次周回を `retest_2` のように保存する。`attempts.phase` は `pretest`、`retest`、`l0_check`、`final_test` の内部値として互換維持する。
@@ -106,3 +108,10 @@ A/B/Cの3つだけを選択した場合だけ正解。不正解分類はM3を最
 `POST /api/tutor-sessions/{session_id}/turns` は、同セッションに先行生成があれば完了または失敗まで待つ。成功済みの未回答`TutorTurn`があればそれを返し、二重にAI生成しない。先行生成の失敗・プロセス再起動・保留状態の消失時だけ通常の同期生成へ進む。公開APIのパス、レスポンス形式、`Idempotency-Key`の意味は変わらない。
 
 解説AIが失敗した場合は現在の回答・学習状態・次教材を確定せず、先行生成も破棄する。次教材生成だけの失敗は回答を失敗させず、次ターン取得時の同期生成へフォールバックする。学習ギブアップは保留タスクを中止し、終了済みセッションへ新しいターンを保存しない。DBスキーマ、CSV固定列、AI promptの内容はこの仕組みのためには変更しない。
+### 学習教材の先行生成（内部動作）
+
+`POST /api/tutor-sessions` と `POST /api/tutor-sessions/{id}/turns` の公開レスポンス形式は変更しない。初回turnの保存後、backendが後続の未達用語の`TutorSession`を待機状態で作り、同じ教材契約、必須教授要素検証、RAG条件、control/proposed入力分離を使ってv1教材を生成する。次の用語でturn生成APIを呼ぶと、`ready`の未回答turnを新規AI呼び出しなしで返す。
+
+参加者が先にその用語へ進み、状態が`pending`または`generating`の場合は、待機結果を破棄して通常の同期生成を行う。先行AIの失敗は参加者向けエラーにせず、`AICallLog`と`failed`状態に残して通常生成へフォールバックする。ギブアップ、実験終了、再テスト後の新しい学習周回では未使用の先行生成を破棄する。参加者画面には先行生成状態、M分類、RAG、内部方略を表示しない。
+
+先行生成の内部キーは`prefetch_tutor_turn:{session_id}`と`initial-v1`で重複生成を防ぐ。アプリ再起動で`pending`または`generating`が残っても、後続用語への到達時に同期生成へ切り替えるため、耐久キューへの依存や新しい公開APIはない。

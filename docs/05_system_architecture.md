@@ -102,6 +102,7 @@ Alembicによるマイグレーション運用、非同期DBドライバ、専�
 | Service | 責務 |
 |---|---|
 | `backend/app/services/experiment.py` | 参加者作成、問題取得、回答保存、診断、学習状態、再発、学習ターン、評価再計算 |
+| `backend/app/services/prefetch.py` | 初回教材レスポンス後の後続用語v1先行生成ワーカー、独立DBセッション、best-effortの待機管理 |
 | `backend/app/seed/content_loader.py` / `seed_questions.py` | YAML検証と問題seed |
 | `backend/app/ai/backend.py` | AIBackendプロトコル、方略・段階の互換ロジック |
 | `backend/app/ai/codex_app_server_backend.py` | Codex app-server呼び出し、構造化JSON、教材・解説生成 |
@@ -184,6 +185,14 @@ sequenceDiagram
   B-->>F: feedback and next action
 ```
 
+### #97 学習教材の先行生成
+
+現在の用語の初回教材を参加者へ返した後、backendのresponse-after workerが、`PRETEST_TERM_ORDER`で現在より後にある未達用語すべてについて、各用語の学習確認問題v1と教材を先行生成する。対象用語ごとに独立したDBセッションを使い、AI待機中は参加者行・対象`TutorSession`のロックを保持しない。
+
+先行生成用の`TutorSession`は`pending`→`generating`→`ready`と進み、次の用語の既存APIが`ready`の未回答`TutorTurn`をそのまま返して`consumed`へ進める。利用者が先に次の用語へ進んだ場合、workerの結果は`discarded`として保存し、現在のリクエストは従来の同期生成へ切り替える。AI失敗は`failed`と`AICallLog`へ記録し、参加者には返さず、次の用語で通常生成する。内部`IdempotencyRecord`のキーで同じ先行生成を二重実行しない。
+
+現在用語の不正解は先行生成済みの後続用語へ影響させず、現在用語の次ターンだけが既存の`previous_learning_misconception`と履歴で適応される。ギブアップ、実験終了、再テスト後の新しい学習周回では未使用の先行生成を破棄する。先行生成状態は参加者レスポンスや画面へ追加せず、`TutorTurn.diagnosis_json`、`AICallLog`、管理者ログで監査する。未使用の教材は回答履歴と学習負担の実績値へ算入しない。
+
 ## app-server起動方式
 
 ### 方式A: host Codex app-server
@@ -196,7 +205,7 @@ Codex CLIを含むコンテナを起動し、device code flowでChatGPTログイ
 
 ## 非同期処理
 
-MVPではキューを導入しない。AI診断やCSV出力は同期APIでよい。ただし以下の処理は将来キュー化できるよう、サービス境界を分ける。
+MVPでは耐久キューを導入しない。#97の先行教材だけは、レスポンス後のbackend内ワーカーで実行し、DBに保存した状態を正しさの基準にする。プロセス再起動で`pending`または`generating`が残っても、利用者が到達した時点で同期生成へフォールバックする。AI診断やCSV出力は同期APIでよい。ただし以下の処理は将来キュー化できるよう、サービス境界を分ける。
 
 - 大量CSV出力
 - 全参加者の評価再計算

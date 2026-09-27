@@ -212,6 +212,19 @@ class TutorSession(Base):
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # ``none`` is the normal interactive-session state.  The other values
+    # describe a first-turn material prepared for a later learning target.
+    # These columns are intentionally kept on the session rather than exposed
+    # by the participant API so the prefetch lifecycle remains an audit detail.
+    prefetch_state: Mapped[str] = mapped_column(String(32), default="none", nullable=False)
+    prefetch_source_session_id: Mapped[str | None] = mapped_column(String(36))
+    prefetch_requested_at: Mapped[datetime | None] = mapped_column(DateTime)
+    prefetch_generating_at: Mapped[datetime | None] = mapped_column(DateTime)
+    prefetch_ready_at: Mapped[datetime | None] = mapped_column(DateTime)
+    prefetch_consumed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    prefetch_failed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    prefetch_discarded_at: Mapped[datetime | None] = mapped_column(DateTime)
+    prefetch_error_code: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
