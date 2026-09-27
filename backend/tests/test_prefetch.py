@@ -194,6 +194,24 @@ def test_prefetch_failure_falls_back_to_normal_generation(monkeypatch: pytest.Mo
         generated = db.get(TutorTurn, next_turn.json()["turn_id"])
         assert fallback_session.prefetch_state == "failed"
         assert generated.diagnosis_json["generation_origin"] == "interactive_fallback"
+
+        # A synchronous fallback keeps this session active.  Cleanup for a
+        # new round/experiment must not mistake it for an untouched prefetch.
+        experiment_service.discard_unconsumed_prefetches(db, pid, reason="test_cleanup")
+        db.commit()
+        db.refresh(fallback_session)
+        assert fallback_session.ended_at is None
+
+        follow_up_answer = client.post(
+            f"/api/tutor-turns/{generated.id}/respond",
+            json={"selected_option_ids": _ids_for_labels(generated.practice_question_json, ["A", "D", "G"])},
+        )
+        assert follow_up_answer.status_code == 200, follow_up_answer.text
+        follow_up = client.post(f"/api/tutor-sessions/{fallback_session.id}/turns", json={})
+        assert follow_up.status_code == 200, follow_up.text
+        follow_up_turn = db.get(TutorTurn, follow_up.json()["turn_id"])
+        assert follow_up_turn.diagnosis_json["generation_origin"] == "interactive"
+        assert follow_up_turn.diagnosis_json["prefetch"]["state"] == "not_applicable"
     finally:
         db.close()
 
@@ -253,5 +271,32 @@ def test_give_up_discards_unused_prefetched_sessions():
         assert prefetched
         assert all(session.prefetch_state == "discarded" for session in prefetched)
         assert all(session.ended_at is not None for session in prefetched)
+    finally:
+        db.close()
+
+
+def test_give_up_marks_failed_prefetch_as_discarded(monkeypatch: pytest.MonkeyPatch):
+    original = experiment_service._generate_validated_tutoring_turn
+
+    async def fail_prefetch(db, payload, *, forbidden_strings=None):
+        audit = payload.get("_generation_audit") or {}
+        if audit.get("origin") == "prefetch" and (payload.get("term") or {}).get("slug") == "multi_agent":
+            raise RuntimeError("test prefetch failure")
+        return await original(db, payload, forbidden_strings=forbidden_strings)
+
+    monkeypatch.setattr(experiment_service, "_generate_validated_tutoring_turn", fail_prefetch)
+    pid = _create_participant_with_pretest()
+    _start_first_turn(pid)
+    wait_for_prefetch_tasks()
+
+    result = client.post(f"/api/participants/{pid}/give-up-learning")
+    assert result.status_code == 200, result.text
+
+    db = SessionLocal()
+    try:
+        failed_session = _term_session(db, pid, "multi_agent")
+        assert failed_session.prefetch_state == "discarded"
+        assert failed_session.prefetch_error_code == "participant_session_closed"
+        assert failed_session.ended_at is not None
     finally:
         db.close()
