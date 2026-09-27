@@ -86,14 +86,19 @@ class TutorPrefetchRegistry:
         handle = self._active_job(session_id)
         if handle is None or handle._task is None:
             return
+        task = handle._task
         # A cancelled client request must not cancel the worker that is still
         # responsible for either publishing or discarding its generated turn.
         try:
-            await asyncio.shield(handle._task)
+            await asyncio.shield(task)
         except asyncio.CancelledError:
-            # Give-up cancellation is a normal fallback path for the next
-            # request, not an error that should escape the public API.
-            return
+            # ``shield`` keeps the worker alive when the waiting request is
+            # cancelled. Only cancellation of the worker itself is a normal
+            # completion; cancellation of the caller must propagate so the
+            # route does not start a duplicate synchronous generation.
+            if task.cancelled():
+                return
+            raise
 
     async def cancel_for_participant(self, participant_id: str) -> None:
         handles = [handle for handle in self._jobs.values() if handle.participant_id == participant_id]

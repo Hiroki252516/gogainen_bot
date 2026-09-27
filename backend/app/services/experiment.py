@@ -1786,7 +1786,9 @@ def _tutoring_generation_context(
             *misconception_history,
             _predicted_history_entry(predicted_answer["turn"], predicted_answer),
         ]
-        predicted_stage = predicted_answer["next_learning_stage"]
+        predicted_stage = predicted_answer.get("next_learning_stage")
+        if predicted_stage not in {"enrichment", "conceptual_change"}:
+            raise HTTPException(status_code=400, detail="invalid next learning stage")
         position = {
             **position,
             "learning_stage": predicted_stage,
@@ -1949,7 +1951,7 @@ def _build_tutor_turn_plan(
         group_condition=participant.group_condition,
         turn_index=context["turn_count"] + 1,
         scaffolding_level=context["current_level"],
-        previous_teaching_strategy=context["state"].previous_teaching_strategy,
+        previous_teaching_strategy=predicted_answer["turn"].teaching_strategy,
         tutor_message_prefix=_previous_turn_prefix(context["previous_turn"]),
         learner_prompt=context["spec"]["body"],
         practice_question=_merge_stage_meta(context["practice_question"], context["position"]),
@@ -2179,7 +2181,6 @@ async def _run_tutor_turn_prefetch(handle: PrefetchHandle, plan: TutorTurnGenera
         )
         db.add(turn)
         db.commit()
-        db.refresh(turn)
     except asyncio.CancelledError:
         db.rollback()
         raise

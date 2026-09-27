@@ -369,12 +369,11 @@ async def api_generate_tutor_turn(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
+    # Wait before touching the request-scoped SQLAlchemy session. The worker
+    # may be waiting on an external AI call for several seconds.
+    await tutor_prefetch_registry.wait_for(session_id)
     session = db.get(TutorSession, session_id)
     participant_id = session.participant_id if session else None
-    await tutor_prefetch_registry.wait_for(session_id)
-    db.expire_all()
-    session = db.get(TutorSession, session_id)
-    participant_id = session.participant_id if session else participant_id
 
     async def operation() -> dict:
         turn = await generate_tutor_turn(db, session_id)

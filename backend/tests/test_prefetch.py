@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 
@@ -11,9 +12,36 @@ from app.main import app
 from app.models import AICallLog, EvaluationSummary, Term, TutorSession, TutorTurn
 import app.services.experiment as experiment_service
 from app.services.prefetch import wait_for_prefetch_tasks
+from app.services.tutor_prefetch import TutorPrefetchRegistry
 
 
 client = TestClient(app)
+
+
+def test_prefetch_wait_propagates_caller_cancellation():
+    async def scenario() -> None:
+        registry = TutorPrefetchRegistry()
+        started = asyncio.Event()
+
+        async def worker(_handle) -> None:
+            started.set()
+            await asyncio.Event().wait()
+
+        handle = registry.prepare("session", "participant")
+        assert handle.start(worker)
+        waiter = asyncio.create_task(registry.wait_for("session"))
+        await asyncio.wait_for(started.wait(), timeout=1)
+
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+        assert handle._task is not None
+        assert not handle._task.done()
+
+        handle.abort()
+        await asyncio.gather(handle._task, return_exceptions=True)
+
+    asyncio.run(scenario())
 
 
 def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
@@ -112,6 +140,9 @@ def test_wrong_current_turn_keeps_prefetch_and_current_second_turn_uses_m3():
             (log.request_payload.get("previous_learning_misconception") or {}).get("misconception_type") == "M3"
             for log in current_logs
         )
+        current_turn = db.get(TutorTurn, turn["turn_id"])
+        second_turn = db.get(TutorTurn, second.json()["turn_id"])
+        assert second_turn.previous_teaching_strategy == current_turn.teaching_strategy
     finally:
         db.close()
 
