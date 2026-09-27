@@ -12,6 +12,12 @@ M1〜M4は、誤概念を学習者の知識構造上の粒度で分類する内�
 
 AIには研究名やMラベルを被験者向け本文へ出力させない。controlにはtaxonomyを渡さず、一般的な説明だけを生成させる。
 
+## 条件別の教材系列
+
+`proposed`は事前テスト、学習履歴、誤概念、足場掛け状態を使って教材方略と学習stageを適応させる。`control`は診断結果を評価ログへ保存しても教授には使わず、用語と学習ターン番号だけで決まる`control-fixed-v1`の固定系列（現行は`conceptual_change`教材のv1〜v5）を使う。したがって、controlの事前テスト回答、過去回答、誤概念分類、`LearnerState`を変更しても同じ用語・同じターンの教材と確認問題は変わらない。
+
+controlの固定系列、生成元、実際のAI入力は`TutorTurn.diagnosis_json`と`AICallLog.request_payload.generation_audit`へJSONで保存する。これらの監査値は被験者画面へ表示せず、Mラベルを教材本文へ出力しない。
+
 ## 固定問題の判定
 
 各用語のpretest、retest、final_test、learning確認問題はYAMLで管理する。

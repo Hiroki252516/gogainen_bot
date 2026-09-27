@@ -328,7 +328,7 @@ Unique:
 
 学習ターンの `question_shown_at`、`answered_at`、`response_time_sec` は、学習セッション内問題の表示から回答までの時間分析に使う。問題本文と選択肢は `practice_question_json` に保存する。
 
-`diagnosis_json`には`generation_origin`（`interactive`、`interactive_fallback`、`prefetch`）と先行生成の状態、source session、v1方針、再利用・破棄時刻を内部監査情報として保存する。先行生成された未回答turnは`learner_response`と`grading_json`を持たず、回答履歴ビューから除外する。実際に再利用されたturnは`consumed`へ遷移してから回答履歴・実績負担の対象になる。
+`diagnosis_json`には`generation_origin`（`interactive`、`interactive_fallback`、`prefetch`）と先行生成の状態、source session、v1方針、再利用・破棄時刻を内部監査情報として保存する。教材系列については`instruction_route`（`proposed_adaptive`または`control_fixed`）、`fixed_sequence_key`、用語・session/turn・variant、実際の構造化AI入力の投影を`instruction_audit`へ保存する。先行生成された未回答turnは`learner_response`と`grading_json`を持たず、回答履歴ビューから除外する。実際に再利用されたturnは`consumed`へ遷移してから回答履歴・実績負担の対象になる。
 
 ## 調査用統合回答履歴
 
@@ -377,7 +377,7 @@ Codex app-serverの成功応答では、`raw_text`にapp-serverが返したJSON�
 
 Codex app-serverの実送信監査は、既存`request_payload`の内容を保ったまま`effective_request`以下へJSONで追加する。実際の`thread/start`設定、`turn/start`の全文入力とoutput schema、モデル・推論レベル、Schema SHA-256、prompt/taxonomy版、RAG検索条件とchunk本文SHA-256、生成試行番号、送信段階を含む。認証情報は含めない。Mock backendの入力はCodexへの送信として記録しない。教材生成時は`response_payload.output_metrics`に本文文字数、700文字の目標値、600〜800文字の許容範囲、範囲内判定、段落数、箇条書き数を保存し、`TutorTurn.diagnosis_json.material_length_validation`に最終検証結果を保存する。これらは既存JSON列への追加であり、DBスキーマ変更ではない。
 
-先行生成のAIログには`request_payload.generation_audit`（source session、対象session、内部生成キー、variant policy）と、確定時の`response_payload.prefetch_audit`（`ready`、`failed`、`discarded`）を追加する。controlのpayloadには個人の診断・履歴・足場掛けを追加せず、proposedだけが既存の適応情報を受け取る点は通常生成と同じである。
+先行生成のAIログには`request_payload.generation_audit`（source session、対象session、内部生成キー、variant policy）と、確定時の`response_payload.prefetch_audit`（`ready`、`failed`、`discarded`）を追加する。教材生成ログには同じJSON内へ`instruction_route`、`fixed_sequence_key`、`actual_ai_input`を保存する。controlの`actual_ai_input`には個人の診断・履歴・足場掛けを追加せず、proposedだけが既存の適応情報を受け取る点は通常生成と同じである。固定列・CSV列は追加せず、既存JSON監査を正本とする。
 
 purpose values:
 

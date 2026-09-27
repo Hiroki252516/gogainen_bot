@@ -110,7 +110,7 @@ A/B/Cの3つだけを選択した場合だけ正解。不正解分類はM3を最
 解説AIが失敗した場合は現在の回答・学習状態・次教材を確定せず、先行生成も破棄する。次教材生成だけの失敗は回答を失敗させず、次ターン取得時の同期生成へフォールバックする。学習ギブアップは保留タスクを中止し、終了済みセッションへ新しいターンを保存しない。DBスキーマ、CSV固定列、AI promptの内容はこの仕組みのためには変更しない。
 ### 学習教材の先行生成（内部動作）
 
-`POST /api/tutor-sessions` と `POST /api/tutor-sessions/{id}/turns` の公開レスポンス形式は変更しない。初回turnの保存後、backendが後続の未達用語の`TutorSession`を待機状態で作り、同じ教材契約、必須教授要素検証、RAG条件、control/proposed入力分離を使ってv1教材を生成する。次の用語でturn生成APIを呼ぶと、`ready`の未回答turnを新規AI呼び出しなしで返す。
+`POST /api/tutor-sessions` と `POST /api/tutor-sessions/{id}/turns` の公開レスポンス形式は変更しない。初回turnの保存後、backendが後続の未達用語の`TutorSession`を待機状態で作り、同じ教材契約、必須教授要素検証、RAG条件、control/proposed入力分離を使ってv1教材を生成する。controlの教材・確認問題は用語とsession内turn_indexだけで決まる`control-fixed-v1`固定系列であり、pretest、`LearnerState`、誤概念、履歴では変わらない。次の用語でturn生成APIを呼ぶと、`ready`の未回答turnを新規AI呼び出しなしで返す。
 
 参加者が先にその用語へ進み、状態が`pending`または`generating`の場合は、待機結果を破棄して通常の同期生成を行う。先行AIの失敗は参加者向けエラーにせず、`AICallLog`と`failed`状態に残して通常生成へフォールバックする。ギブアップ、実験終了、再テスト後の新しい学習周回では未使用の先行生成を破棄する。参加者画面には先行生成状態、M分類、RAG、内部方略を表示しない。
 

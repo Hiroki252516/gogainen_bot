@@ -140,6 +140,12 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 
 先行生成turnは未回答の間、調査用回答履歴と学習負担の実績値に算入しない。再利用時は同じ`turn_id`を返し、`diagnosis_json`とAIログに生成元・待機・再利用・失敗・破棄を記録する。`failed`/`discarded`後に同期フォールバックでinteractive turnが保存されたセッションは実学習として扱い、未使用prefetchの整理では強制終了しない。これは参加者画面の表示仕様、YAML問題文・選択肢・採点、AIBackend契約を変更しない。
 
+## Issue #102 統制群の固定教材シーケンス
+
+2026-09-27時点の実装では、controlの教材・確認問題選択を`control-fixed-v1`へ分離した。対象用語と同一`TutorSession`内のturn_indexから`conceptual_change`のv1〜v5を決め、pretest、`LearnerState`、誤概念、回答履歴、診断stageによって変更しない。proposedは既存の`_learning_position`と履歴・target・足場掛けによる適応経路を維持する。
+
+controlの診断結果は採点・評価・監査には保存するが教授へは使わない。`TutorTurn.diagnosis_json`と`AICallLog.request_payload.generation_audit`へ`instruction_route`、`fixed_sequence_key`、用語・session/turn・variant、`actual_ai_input`を追加し、Codex app-serverの`effective_request`にも実送信promptと照合できる形で記録する。`actual_ai_input`はcontrolでは用語・共通構成要素・共通RAGだけを含み、参加者ID、群名、診断、履歴、学習stageを含めない。DB/CSVの固定列、公開API、参加者UI、YAML問題文・選択肢・採点は変更しない。
+
 ## Issue #107 教材文字数の共通化メモ
 
 両群の`generate_tutoring_turn`教材本文は、Markdown記号を含む文字数で700文字を目標とし、600〜800文字を許容範囲とする。control/proposedのRAG、入力分離、必須教授要素、固定問題・採点は変更しない。backendは生成後に文字数を検証し、範囲外なら初回生成後に同じAI backendで最大2回再生成し、最大3試行とする。再生成時は前回の実測文字数をAIへの調整指示へ含める。文字数検証の実測値、目標・許容範囲、試行回数、最終結果は`AICallLog.response_payload.generation_validation`と`TutorTurn.diagnosis_json.material_length_validation`、`output_metrics`へ保存する。許容範囲外のままの場合は参加者へ教材を確定せず、既存のAI失敗処理へ送る.
