@@ -82,8 +82,8 @@ LEARNING_ALLOWED_STEPS = {"learning_targets", "final_test"}
 RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではありません。"
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
-MANDATORY_ELEMENT_MAX_ATTEMPTS = 2
-# Includes the initial generation: initial generation + up to two retries.
+# Both validation paths include the initial generation plus up to two retries.
+MANDATORY_ELEMENT_MAX_ATTEMPTS = 3
 MATERIAL_LENGTH_MAX_ATTEMPTS = 3
 PREFETCH_STATES = {"pending", "generating", "ready", "consumed", "failed", "discarded"}
 PREFETCH_WAITING_STATES = {"pending", "generating", "ready"}
