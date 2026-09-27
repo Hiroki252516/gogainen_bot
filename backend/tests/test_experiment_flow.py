@@ -1399,6 +1399,7 @@ def test_control_sequence_is_independent_of_pretest_and_learning_history():
                 if log.request_payload.get("participant_id") == pid
                 and (log.request_payload.get("term") or {}).get("slug") == "llm_knowledge"
                 and (log.request_payload.get("generation_audit") or {}).get("origin") == "interactive"
+                and (log.request_payload.get("generation_audit") or {}).get("turn_index") == 1
             )
             audit = log.request_payload["generation_audit"]
             assert audit["instruction_route"] == "control_fixed"
