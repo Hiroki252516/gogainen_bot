@@ -187,7 +187,7 @@ sequenceDiagram
 
 ### #97 学習教材の先行生成
 
-現在の用語の初回教材を参加者へ返した後、backendのresponse-after workerが、`PRETEST_TERM_ORDER`で現在より後にある未達用語すべてについて、各用語の学習確認問題v1と教材を先行生成する。対象用語ごとに独立したDBセッションを使い、AI待機中は参加者行・対象`TutorSession`のロックを保持しない。
+現在の用語の初回教材を参加者へ返した後、backendのresponse-after workerが、`PRETEST_TERM_ORDER`で現在より後にある未達用語すべてについて、各用語の学習確認問題の初回variantと教材を先行生成する。参加者に固定された学習確認問題バンクの版に従い、既存参加者にはv1のvariant、新規参加者にはv2のvariantを使う。対象用語ごとに独立したDBセッションを使い、AI待機中は参加者行・対象`TutorSession`のロックを保持しない。
 
 先行生成用の`TutorSession`は`pending`→`generating`→`ready`と進み、次の用語の既存APIが`ready`の未回答`TutorTurn`をそのまま返して`consumed`へ進める。利用者が先に次の用語へ進んだ場合、workerの結果は`discarded`として保存し、現在のリクエストは従来の同期生成へ切り替える。AI失敗は`failed`と`AICallLog`へ記録し、参加者には返さず、次の用語で通常生成する。内部`IdempotencyRecord`のキーで同じ先行生成を二重実行しない。
 

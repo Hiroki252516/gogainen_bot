@@ -28,6 +28,7 @@ def _ensure_lightweight_schema_updates() -> None:
     additions = {
         "participants": [
             ("completion_reason", "TEXT"),
+            ("learning_content_version", "INTEGER"),
         ],
         "attempts": [
             ("test_round", "TEXT"),

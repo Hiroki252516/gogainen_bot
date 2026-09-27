@@ -8,7 +8,7 @@
 2. ルート`.env`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動する
 3. `codex` または管理画面のログイン導線でChatGPT/Codexログインを確認する
 4. `docker compose up --build` を実行する
-5. `learning_content.yml` を検証してseed questionsがbackend起動時に自動投入される
+5. `learning_content.yml` と `learning_questions_v2.yml` の形式検証がbackend起動時に自動実行されることを確認する。固定テスト問題はseedされ、学習確認問題は参加者に固定された版からターン生成時に組み立てられる
 6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する（AI status APIは `/api/admin/ai/status`）
 7. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
 
@@ -58,7 +58,7 @@ Dockerの再ビルド・再起動では、ブラウザの`localStorage`に保存
 
 現行MVPのテスト・再テスト対象は、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語である。`attempts.test_round` に `test`、`retest_1`、`retest_2` 以降を保存する。`/survey` は仮フォームで、送信時に`participant_surveys`へ保存する。
 
-問題はYAMLで管理される。テスト・再テスト1は各用語1問、再テスト2以降はv1〜v4（以後v4再利用）、学習確認はv1〜v5（以後v5再利用）である。LangGraphはRAG検索結果に含めない。
+問題はYAMLで管理される。テスト・再テスト1は各用語1問、再テスト2以降はv1〜v4（以後v4再利用）。学習確認は参加者作成時に版を固定し、新規参加者は場面判断型v2、版未記録を含む既存参加者はv1を使い、それぞれv1〜v5（以後v5再利用）である。v2ではA〜Iの正解/M1/M3役割がvariantごとに変わるため、画面上の文字ラベルでは採点結果を推測できず、サーバーが問題の保存metadataで採点する。参加者向け問題APIは正答キーと誤概念metadataを返さない。LangGraphはRAG検索結果に含めない。
 
 研究者が見るもの:
 

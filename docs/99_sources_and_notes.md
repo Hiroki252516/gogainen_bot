@@ -43,7 +43,7 @@
 | 即時再テスト | 各用語4バリエーション。5回目以降はv4を再利用 |
 | 最終テスト | 各用語1問。理由・ヒント・即時正解表示なし |
 
-このため、実装ではテスト問題に `construct_key` と `variant_key` を持たせ、学習確認は `TutorTurn.practice_question_json.variant_key` で管理する。現行MVPでは `backend/app/seed/content/learning_content.yml` を唯一の固定問題バンクとし、事前・最終テストは各用語1問、再テストはv1〜v4、学習確認は各学習段階・各用語v1〜v5で管理する。上限を超えた場合は最後のバリアントを再利用する。
+このため、実装ではテスト問題に `construct_key` と `variant_key` を持たせ、学習確認は `TutorTurn.practice_question_json.variant_key` で管理する。テスト系は `backend/app/seed/content/learning_content.yml`、学習確認v2は `backend/app/seed/content/learning_questions_v2.yml` を用いる。事前・最終テストは各用語1問、再テストはv1〜v4、学習確認は各学習段階・各用語5 variantで管理し、上限を超えた場合は最後のvariantを再利用する。既存参加者はNULL版をv1として継続し、新規参加者はv2へ固定する。
 
 ### Main metrics
 
@@ -134,7 +134,7 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 
 ## Issue #97 先行教材生成の実装メモ
 
-2026-09-27時点の実装では、初回教材のレスポンス後にbackend内のresponse-after workerが後続の未達用語すべての初回教材を先行生成する。順序は`PRETEST_TERM_ORDER`、固定確認問題のvariantはv1、生成契約・RAG・control/proposedの入力分離は通常の教材生成と同じである。耐久キューは導入せず、`TutorSession.prefetch_state`をDB上の監査状態として保存する。
+2026-09-27時点の実装では、初回教材のレスポンス後にbackend内のresponse-after workerが後続の未達用語すべての初回教材を先行生成する。順序は`PRETEST_TERM_ORDER`、固定確認問題は参加者のコンテンツ版に対応する初回variant、生成契約・RAG・control/proposedの入力分離は通常の教材生成と同じである。耐久キューは導入せず、`TutorSession.prefetch_state`をDB上の監査状態として保存する。
 
 `pending`/`generating`中に参加者が先に到達した場合は待機結果を破棄し、同期生成へ切り替える。AI失敗は`failed`と`AICallLog`へ記録して参加者へ返さず、`codex_app_server`からMockへフォールバックしない。現在用語の不正解は後続待機turnに影響させず、現在用語の2問目だけが既存の誤概念履歴で適応される。ギブアップ、実験終了、再テスト後の新周回では未使用turnを破棄する。
 
@@ -142,7 +142,7 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 
 ## Known Deck Inconsistencies and Resolution
 
-7月22日PPTXと8月21日更新仕様を受け、古いTransformer固有のM1/M3判定は新規フローから外し、3項目共通のA〜C正解、D〜F=M1、G〜I=M3、J=unknownのYAML判定へ統一した。M2/M4は実行時taxonomyに保持する。
+7月22日PPTXと8月21日更新仕様を受け、古いTransformer固有のM1/M3判定は新規フローから外した。テスト系と学習確認v1では3項目共通のA〜C正解、D〜F=M1、G〜I=M3、J=unknownを使う。新規参加者向け学習確認v2では各設問の正解・M1・M3役割をA〜Iへ均等に分散し、問題ごとの選択肢メタデータで採点する。M2/M4は実行時taxonomyに保持する。
 
 5月18日PPTXではH0の表記があったが、現在の実装では固定3ターンの足場掛け制ではなく、`enrichment`（豊富化）、`conceptual_change`（概念変化）、`final_feedback`（教材フィードバック）の`learning_stage`を使う。1つの学習確認に十分回答すると当該`TutorSession`を終了する。L3/L2相当の値は内部`scaffolding_level`互換・ログ用に残すもので、参加者向けの段階名やL3からL2へ進む別個の学習段階ではない。
 

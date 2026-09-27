@@ -88,6 +88,7 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 - assignment_method TEXT NOT NULL DEFAULT `manual`
 - consent_checked BOOLEAN NOT NULL DEFAULT false
 - current_step TEXT NOT NULL DEFAULT `start`
+- learning_content_version INTEGER NULL  # 学習確認問題版。NULLは既存参加者用v1、参加者作成時はv2
 - started_at TIMESTAMP NULL
 - completed_at TIMESTAMP NULL
 - completion_reason TEXT NULL  # `completed` または `give_up`
@@ -101,6 +102,8 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 `current_step` は`pretest`、`learning_targets`、`retest`、`final_test`、`survey`、`l0_check`、`finish`を使用する。`retest`は学習ギブアップ直後に再テストへ進むための状態である。
 
 `completion_reason` は実験終了時の理由を保存する。通常終了は`completed`、実験ギブアップは`give_up`であり、学習セッションだけをギブアップした場合は未終了のためNULLのままとする。学習ギブアップ回数や操作時刻は`audit_events`の`give_up_learning`で記録する。
+
+`learning_content_version`は参加者単位で学習確認問題セットを固定する。既存DBへの列追加はnullableで行い、既存行のNULLはv1として扱う。新規参加者は作成時にv2を保存する。各`TutorTurn.diagnosis_json`にも実際に提示した版を記録し、回答時は参加者列ではなく提示ターンの版を優先して採点する。pretest、retest、final_testの問題セットには適用しない。
 
 `current_stage_for_display` は `learner_states.current_status` と `primary_misconception` を優先して決める。不正解・unknownはそれぞれ「概念変化」・「豊富化」とし、`scaffolding_level`は正答状態などのフォールバックにだけ使う。これにより、L2/L3の保存値だけから学習段階を逆算して誤表示しない。
 
@@ -162,7 +165,7 @@ Docker ComposeではPostgreSQL 16、ローカル直接起動ではSQLiteを使�
 
 `construct_key` は同じ構成概念を測る問題を束ねるキー。事前テストと再テストは同じ `construct_key` だが、`variant_key` と `body` は異なる。
 
-学習確認問題はseed時に`questions`へ投入しない。`generate_tutor_turn`がYAMLの学習段階・用語別定義から固定の問題・選択肢を組み立て、AI生成教材とともに`tutor_turns.practice_question_json`へ保存する。
+学習確認問題はseed時に`questions`へ投入しない。`generate_tutor_turn`が参加者の`learning_content_version`に対応するYAMLの学習段階・用語別定義から固定の問題・選択肢を組み立て、AI生成教材とともに`tutor_turns.practice_question_json`へ保存する。既存参加者のNULL版はv1として扱い、新規参加者は作成時にv2へ固定する。回答採点では、参加者列よりも提示済みターンに記録した版を優先する。
 
 ### question_options
 

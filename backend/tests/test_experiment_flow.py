@@ -42,7 +42,15 @@ from app.models import (
     TutorTurn,
 )
 from app.rag.retriever import retrieve_rag_context
-from app.seed.content_loader import ACTIVE_TERM_SLUGS, content_term, load_content
+from app.seed.content_loader import (
+    ACTIVE_TERM_SLUGS,
+    CURRENT_LEARNING_CONTENT_VERSION,
+    LEGACY_LEARNING_CONTENT_VERSION,
+    content_term,
+    learning_question_spec,
+    load_content,
+    load_learning_v2_content,
+)
 import app.services.experiment as experiment_service
 from app import main as main_module
 
@@ -67,6 +75,37 @@ def _latest_turn(turn_id: str) -> TutorTurn | None:
 def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
     by_label = {option["label"]: option["option_id"] for option in question["options"]}
     return [by_label[label] for label in labels]
+
+
+def _ids_for_learning_role(question: dict, term_slug: str, learning_stage: str, role: str) -> list[str]:
+    spec = learning_question_spec(
+        term_slug,
+        learning_stage,
+        question.get("learning_variant_index", 1),
+        CURRENT_LEARNING_CONTENT_VERSION,
+    )
+    if role == "correct":
+        labels = [option["label"] for option in spec["options"] if option["is_correct"]]
+    else:
+        labels = [option["label"] for option in spec["options"] if option["misconception_type"] == role]
+    return _ids_for_labels(question, labels)
+
+
+def _ids_for_learning_role_mix(question: dict, term_slug: str, learning_stage: str) -> list[str]:
+    spec = learning_question_spec(
+        term_slug,
+        learning_stage,
+        question.get("learning_variant_index", 1),
+        CURRENT_LEARNING_CONTENT_VERSION,
+    )
+    labels = []
+    for role in ("correct", "M1", "M3"):
+        labels.append(next(
+            option["label"]
+            for option in spec["options"]
+            if (option["is_correct"] if role == "correct" else option["misconception_type"] == role)
+        ))
+    return _ids_for_labels(question, labels)
 
 
 def _submit_phase_questions(pid: str, phase: str, labels: list[str]) -> list[dict]:
@@ -127,6 +166,50 @@ def test_content_contract_has_three_terms_and_required_variant_counts():
         assert len(term["questions"]["final_test"]) == 1
         assert len(term["learning"]["enrichment"]["variants"]) == 5
         assert len(term["learning"]["conceptual_change"]["variants"]) == 5
+
+
+def test_learning_v2_bank_has_scenario_roles_and_balanced_labels():
+    content = load_learning_v2_content()
+    role_counts = {label: {role: 0 for role in ("correct", "M1", "M3")} for label in "ABCDEFGHI"}
+    variant_count = 0
+
+    for term_slug in ACTIVE_TERM_SLUGS:
+        for stage in ("enrichment", "conceptual_change"):
+            variants = content["terms"][term_slug][stage]["variants"]
+            assert len(variants) == 5
+            assert [variant["scenario_type"] for variant in variants] == [
+                "application", "prediction", "comparison", "boundary", "diagnosis"
+            ]
+            for variant_index, variant in enumerate(variants, start=1):
+                spec = learning_question_spec(
+                    term_slug, stage, variant_index, CURRENT_LEARNING_CONTENT_VERSION
+                )
+                assert spec["body"] == f"{variant['scenario']}\n\n{variant['task']}"
+                assert len(spec["options"]) == 10
+                assert sum(option["is_correct"] for option in spec["options"]) == 3
+                assert sum(option["misconception_type"] == "M1" for option in spec["options"]) == 3
+                assert sum(option["misconception_type"] == "M3" for option in spec["options"]) == 3
+                assert spec["options"][-1] == {
+                    "label": "J", "body": "わからない。", "is_correct": False,
+                    "misconception_type": "unknown", "option_id": "J",
+                }
+                for option in spec["options"][:9]:
+                    role = "correct" if option["is_correct"] else option["misconception_type"]
+                    role_counts[option["label"]][role] += 1
+                variant_count += 1
+
+    assert variant_count == 30
+    assert all(counts == {"correct": 10, "M1": 10, "M3": 10} for counts in role_counts.values())
+
+
+def test_legacy_learning_bank_and_test_question_roles_remain_unchanged():
+    legacy = learning_question_spec(
+        "llm_knowledge", "enrichment", 1, LEGACY_LEARNING_CONTENT_VERSION
+    )
+    assert [option["label"] for option in legacy["options"] if option["is_correct"]] == ["A", "B", "C"]
+    assert [option["label"] for option in legacy["options"] if option["misconception_type"] == "M1"] == ["D", "E", "F"]
+    assert [option["label"] for option in legacy["options"] if option["misconception_type"] == "M3"] == ["G", "H", "I"]
+    assert load_content()["terms"][0]["questions"]["pretest"][0]["variant_key"] == "pretest_v1"
 
 
 def test_pretest_returns_three_multi_select_questions_with_ten_options():
@@ -623,7 +706,7 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
 
     wrong = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["A", "D", "G"])},
+        json={"selected_option_ids": _ids_for_learning_role_mix(turn["practice_question"], "llm_knowledge", turn["learning_stage"])},
     ).json()
     assert wrong["is_sufficient"] is False
     assert wrong["next_learning_stage"] == "conceptual_change"
@@ -633,7 +716,7 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     assert retry["learning_stage"] == "conceptual_change"
     correct = client.post(
         f"/api/tutor-turns/{retry['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(retry["practice_question"], ["A", "B", "C"]), "response_time_sec": 2.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
+        json={"selected_option_ids": _ids_for_learning_role(retry["practice_question"], "llm_knowledge", retry["learning_stage"], "correct"), "response_time_sec": 2.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
     ).json()
     assert correct["is_sufficient"] is True
     assert correct["session_completed"] is True
@@ -656,6 +739,170 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     )
     assert stale_session.status_code == 409
     assert "現在の学習対象ではありません" in stale_session.text
+
+
+def test_learning_v2_scores_presented_roles_and_keeps_m3_priority():
+    correct_pid = _create_participant_with_pretest(labels=["J"])
+    correct_session = client.post(
+        "/api/tutor-sessions", json={"participant_id": correct_pid, "term_slug": "multi_agent"}
+    ).json()
+    correct_turn_response = client.post(
+        f"/api/tutor-sessions/{correct_session['tutor_session_id']}/turns", json={}
+    )
+    assert correct_turn_response.status_code == 200, correct_turn_response.text
+    correct_turn = correct_turn_response.json()
+    correct_ids = _ids_for_learning_role(
+        correct_turn["practice_question"], "multi_agent", correct_turn["learning_stage"], "correct"
+    )
+    assert [option["label"] for option in correct_turn["practice_question"]["options"] if option["option_id"] in correct_ids] == ["D", "E", "F"]
+    db = SessionLocal()
+    try:
+        participant = db.get(Participant, correct_pid)
+        assert participant is not None
+        assert participant.learning_content_version == CURRENT_LEARNING_CONTENT_VERSION
+        participant.learning_content_version = None
+        db.commit()
+    finally:
+        db.close()
+    correct_result = client.post(
+        f"/api/tutor-turns/{correct_turn['turn_id']}/respond",
+        json={"selected_option_ids": correct_ids},
+    )
+    assert correct_result.status_code == 200, correct_result.text
+    assert correct_result.json()["is_sufficient"] is True
+    saved_correct_turn = _latest_turn(correct_turn["turn_id"])
+    assert saved_correct_turn is not None
+    assert saved_correct_turn.grading_json["selected_option_ids"] == correct_ids
+    assert saved_correct_turn.diagnosis_json["learning_content_version"] == CURRENT_LEARNING_CONTENT_VERSION
+
+    duplicate_pid = _create_participant_with_pretest(labels=["J"])
+    duplicate_session = client.post(
+        "/api/tutor-sessions", json={"participant_id": duplicate_pid, "term_slug": "multi_agent"}
+    ).json()
+    duplicate_turn = client.post(
+        f"/api/tutor-sessions/{duplicate_session['tutor_session_id']}/turns", json={}
+    ).json()
+    duplicate_option = _ids_for_learning_role(
+        duplicate_turn["practice_question"], "multi_agent", duplicate_turn["learning_stage"], "correct"
+    )[0]
+    duplicate_result = client.post(
+        f"/api/tutor-turns/{duplicate_turn['turn_id']}/respond",
+        json={"selected_option_ids": [duplicate_option] * 3},
+    )
+    assert duplicate_result.status_code == 400
+
+    unknown_pid = _create_participant_with_pretest(labels=["J"])
+    unknown_session = client.post(
+        "/api/tutor-sessions", json={"participant_id": unknown_pid, "term_slug": "multi_agent"}
+    ).json()
+    unknown_turn = client.post(
+        f"/api/tutor-sessions/{unknown_session['tutor_session_id']}/turns", json={}
+    ).json()
+    unknown_result = client.post(
+        f"/api/tutor-turns/{unknown_turn['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(unknown_turn["practice_question"], ["J"])},
+    )
+    assert unknown_result.status_code == 200, unknown_result.text
+    assert unknown_result.json()["learning_misconception_type"] == "unknown"
+
+    mixed_pid = _create_participant_with_pretest(labels=["J"])
+    mixed_session = client.post(
+        "/api/tutor-sessions", json={"participant_id": mixed_pid, "term_slug": "llm_knowledge"}
+    ).json()
+    mixed_turn = client.post(
+        f"/api/tutor-sessions/{mixed_session['tutor_session_id']}/turns", json={}
+    ).json()
+    mixed_ids = _ids_for_learning_role_mix(
+        mixed_turn["practice_question"], "llm_knowledge", mixed_turn["learning_stage"]
+    )
+    mixed_result = client.post(
+        f"/api/tutor-turns/{mixed_turn['turn_id']}/respond",
+        json={"selected_option_ids": mixed_ids},
+    )
+    assert mixed_result.status_code == 200, mixed_result.text
+    assert mixed_result.json()["is_sufficient"] is False
+    assert mixed_result.json()["learning_misconception_type"] == "M3"
+
+
+def test_old_participant_without_learning_version_stays_on_legacy_bank():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    db = SessionLocal()
+    try:
+        participant = db.get(Participant, pid)
+        assert participant is not None
+        participant.learning_content_version = None
+        db.commit()
+    finally:
+        db.close()
+
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
+    response = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+    assert response.status_code == 200, response.text
+    turn_payload = response.json()
+    assert turn_payload["practice_question"]["variant_key"] == "learning_conceptual_change_v1"
+    assert [option["label"] for option in turn_payload["practice_question"]["options"][:3]] == ["A", "B", "C"]
+    saved_turn = _latest_turn(turn_payload["turn_id"])
+    assert saved_turn is not None
+    assert saved_turn.diagnosis_json["learning_content_version"] == LEGACY_LEARNING_CONTENT_VERSION
+    legacy_correct = client.post(
+        f"/api/tutor-turns/{turn_payload['turn_id']}/respond",
+        json={"selected_option_ids": _ids_for_labels(turn_payload["practice_question"], ["A", "B", "C"])},
+    )
+    assert legacy_correct.status_code == 200, legacy_correct.text
+    assert legacy_correct.json()["is_sufficient"] is True
+
+
+def test_participant_turn_api_hides_answer_keys_on_new_and_cached_responses():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
+    key = "learning-turn-public-projection"
+    url = f"/api/tutor-sessions/{session['tutor_session_id']}/turns"
+    first = client.post(url, json={}, headers={"Idempotency-Key": key})
+    assert first.status_code == 200, first.text
+
+    def collect_keys(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                yield key
+                yield from collect_keys(item)
+        elif isinstance(value, list):
+            for item in value:
+                yield from collect_keys(item)
+
+    forbidden_keys = {
+        "expected_answer", "correct_answer", "expected_keywords", "is_correct",
+        "misconception_type", "initial_misconception_type", "stage_meta",
+        "session_misconception_history", "teaching_strategy",
+    }
+    assert not (forbidden_keys & set(collect_keys(first.json())))
+    assert all(set(option) == {"option_id", "label", "body"} for option in first.json()["practice_question"]["options"])
+
+    db = SessionLocal()
+    try:
+        record = db.query(IdempotencyRecord).filter_by(
+            scope=f"tutor_turn_generate:{session['tutor_session_id']}", idempotency_key=key
+        ).one()
+        stale = dict(record.response_json)
+        stale_question = dict(stale["practice_question"])
+        stale_question["expected_answer"] = "A、B、C"
+        stale_question["stage_meta"] = {"misconception_type": "M1"}
+        stale_options = [dict(option) for option in stale_question["options"]]
+        stale_options[0]["is_correct"] = True
+        stale_options[0]["misconception_type"] = "M1"
+        stale_question["options"] = stale_options
+        stale["practice_question"] = stale_question
+        stale["misconception_type"] = "M1"
+        stale["session_misconception_history"] = [{"misconception_type": "M1"}]
+        stale["teaching_strategy"] = "diagnostic"
+        record.response_json = stale
+        db.commit()
+    finally:
+        db.close()
+
+    replay = client.post(url, json={}, headers={"Idempotency-Key": key})
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == first.json()
+    assert not (forbidden_keys & set(collect_keys(replay.json())))
 
 
 def test_idempotency_replays_learning_session_turn_and_feedback_without_duplicates():
@@ -691,7 +938,11 @@ def test_idempotency_replays_learning_session_turn_and_feedback_without_duplicat
     assert repeated_turn.json() == turn.json()
 
     turn_id = turn.json()["turn_id"]
-    response_body = {"selected_option_ids": _ids_for_labels(turn.json()["practice_question"], ["A", "D", "G"])}
+    response_body = {
+        "selected_option_ids": _ids_for_learning_role_mix(
+            turn.json()["practice_question"], "llm_knowledge", turn.json()["learning_stage"]
+        )
+    }
     response = client.post(
         f"/api/tutor-turns/{turn_id}/respond",
         json=response_body,
@@ -760,7 +1011,7 @@ def test_learning_answer_generates_feedback_with_group_specific_payloads():
     proposed_turn = client.post(f"/api/tutor-sessions/{proposed_session['tutor_session_id']}/turns", json={}).json()
     proposed_wrong = client.post(
         f"/api/tutor-turns/{proposed_turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(proposed_turn["practice_question"], ["A", "D", "G"])},
+        json={"selected_option_ids": _ids_for_learning_role(proposed_turn["practice_question"], "multi_agent", proposed_turn["learning_stage"], "M1")},
     )
     assert proposed_wrong.status_code == 200, proposed_wrong.text
     assert "## どこが違うか" in proposed_wrong.json()["feedback"]
@@ -770,7 +1021,7 @@ def test_learning_answer_generates_feedback_with_group_specific_payloads():
     control_turn = client.post(f"/api/tutor-sessions/{control_session['tutor_session_id']}/turns", json={}).json()
     control_wrong = client.post(
         f"/api/tutor-turns/{control_turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(control_turn["practice_question"], ["A", "D", "G"])},
+        json={"selected_option_ids": _ids_for_learning_role(control_turn["practice_question"], "multi_agent", control_turn["learning_stage"], "M1")},
     )
     assert control_wrong.status_code == 200, control_wrong.text
 
@@ -779,7 +1030,7 @@ def test_learning_answer_generates_feedback_with_group_specific_payloads():
     correct_turn = client.post(f"/api/tutor-sessions/{correct_session['tutor_session_id']}/turns", json={}).json()
     correct = client.post(
         f"/api/tutor-turns/{correct_turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(correct_turn["practice_question"], ["A", "B", "C"])},
+        json={"selected_option_ids": _ids_for_learning_role(correct_turn["practice_question"], "memory_process", correct_turn["learning_stage"], "correct")},
     )
     assert correct.status_code == 200, correct.text
     assert "## 今回の要点" in correct.json()["feedback"]
@@ -863,7 +1114,7 @@ def test_wrong_learning_answer_prefetches_next_turn_and_reuses_one_open_turn(mon
         def submit_answer():
             result["response"] = prefetch_client.post(
                 f"/api/tutor-turns/{first_turn['turn_id']}/respond",
-                json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+                json={"selected_option_ids": _ids_for_learning_role_mix(first_turn["practice_question"], "multi_agent", first_turn["learning_stage"])},
                 headers={"Idempotency-Key": "prefetch-concurrency-test"},
             )
 
@@ -919,7 +1170,7 @@ def test_prefetch_failure_keeps_answer_successful_and_falls_back_to_sync_generat
     with response_client:
         response = response_client.post(
             f"/api/tutor-turns/{first_turn['turn_id']}/respond",
-            json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+            json={"selected_option_ids": _ids_for_learning_role_mix(first_turn["practice_question"], "multi_agent", first_turn["learning_stage"])},
             headers={"Idempotency-Key": "prefetch-failure-test"},
         )
         assert response.status_code == 200, response.text
@@ -940,7 +1191,7 @@ def test_next_learning_material_retains_previous_context_but_excludes_feedback()
     first_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     first_result = client.post(
         f"/api/tutor-turns/{first_turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+        json={"selected_option_ids": _ids_for_learning_role_mix(first_turn["practice_question"], "multi_agent", first_turn["learning_stage"])},
     )
     assert first_result.status_code == 200, first_result.text
     previous_turn = _latest_turn(first_turn["turn_id"])
@@ -982,7 +1233,7 @@ def test_new_tutor_session_does_not_reuse_previous_session_context():
     first_turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
     answer = client.post(
         f"/api/tutor-turns/{first_turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+        json={"selected_option_ids": _ids_for_learning_role_mix(first_turn["practice_question"], "multi_agent", first_turn["learning_stage"])},
     )
     assert answer.status_code == 200, answer.text
 
@@ -1041,7 +1292,7 @@ def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch
     monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: FailingBackend())
     response = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["A", "D", "G"])},
+        json={"selected_option_ids": _ids_for_learning_role_mix(turn["practice_question"], "llm_knowledge", turn["learning_stage"])},
         headers={"Idempotency-Key": "learning-failure-idempotency-test"},
     )
     assert response.status_code == 503
@@ -1076,9 +1327,11 @@ def test_control_group_logs_same_stage_but_uses_general_explanation():
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
 
     assert turn["learning_stage"] == "conceptual_change"
-    assert turn["teaching_strategy"] == "general_explanation"
     assert turn["tutor_message"]
     assert turn["practice_question"]["selection_mode"] == "multiple"
+    saved_turn = _latest_turn(turn["turn_id"])
+    assert saved_turn is not None
+    assert saved_turn.teaching_strategy == "general_explanation"
 
 
 def test_retest_uses_four_variants_then_reuses_variant_four():
@@ -1660,7 +1913,7 @@ def test_learning_session_moves_to_next_target_after_three_incorrect_turns():
         assert turn["turn_index"] == attempt_index + 1
         response = client.post(
             f"/api/tutor-turns/{turn['turn_id']}/respond",
-            json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["D", "E", "F"])},
+            json={"selected_option_ids": _ids_for_learning_role(turn["practice_question"], "llm_knowledge", turn["learning_stage"], "M1")},
         )
         assert response.status_code == 200, response.text
         payload = response.json()
@@ -1688,7 +1941,7 @@ def test_learning_session_moves_to_next_target_after_three_incorrect_turns():
         assert next_turn_payload["turn_index"] == attempt_index + 1
         next_response = client.post(
             f"/api/tutor-turns/{next_turn_payload['turn_id']}/respond",
-            json={"selected_option_ids": _ids_for_labels(next_turn_payload["practice_question"], ["D", "E", "F"])},
+            json={"selected_option_ids": _ids_for_learning_role(next_turn_payload["practice_question"], "multi_agent", next_turn_payload["learning_stage"], "M1")},
         )
         assert next_response.status_code == 200, next_response.text
         if attempt_index == 2:
@@ -1706,7 +1959,7 @@ def test_learning_session_skips_exhausted_prior_targets_and_retests_after_last_s
         turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
         response = client.post(
             f"/api/tutor-turns/{turn['turn_id']}/respond",
-            json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["D", "E", "F"])},
+            json={"selected_option_ids": _ids_for_learning_role(turn["practice_question"], "llm_knowledge", turn["learning_stage"], "M1")},
         )
         assert response.status_code == 200, response.text
 
@@ -1717,7 +1970,7 @@ def test_learning_session_skips_exhausted_prior_targets_and_retests_after_last_s
     second_turn = client.post(f"/api/tutor-sessions/{second_session['tutor_session_id']}/turns", json={}).json()
     second_response = client.post(
         f"/api/tutor-turns/{second_turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(second_turn["practice_question"], ["A", "B", "C"])},
+        json={"selected_option_ids": _ids_for_learning_role(second_turn["practice_question"], "multi_agent", second_turn["learning_stage"], "correct")},
     )
     assert second_response.status_code == 200, second_response.text
     second_payload = second_response.json()
@@ -1732,7 +1985,7 @@ def test_learning_session_skips_exhausted_prior_targets_and_retests_after_last_s
     third_turn = client.post(f"/api/tutor-sessions/{third_session['tutor_session_id']}/turns", json={}).json()
     third_response = client.post(
         f"/api/tutor-turns/{third_turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(third_turn["practice_question"], ["A", "B", "C"])},
+        json={"selected_option_ids": _ids_for_learning_role(third_turn["practice_question"], "memory_process", third_turn["learning_stage"], "correct")},
     )
     assert third_response.status_code == 200, third_response.text
     third_payload = third_response.json()
@@ -1753,7 +2006,7 @@ def test_learning_question_order_stays_fixed_when_adaptive_stage_changes():
 
     wrong = client.post(
         f"/api/tutor-turns/{first_payload['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(first_payload["practice_question"], ["A", "D", "G"])},
+        json={"selected_option_ids": _ids_for_learning_role_mix(first_payload["practice_question"], "llm_knowledge", first_payload["learning_stage"])},
     )
     assert wrong.status_code == 200, wrong.text
     wrong_payload = wrong.json()
@@ -1901,7 +2154,7 @@ def test_next_tutoring_material_excludes_previous_check_feedback():
     first_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     wrong_response = client.post(
         f"/api/tutor-turns/{first_turn['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+        json={"selected_option_ids": _ids_for_learning_role_mix(first_turn["practice_question"], "multi_agent", first_turn["learning_stage"])},
     )
     assert wrong_response.status_code == 200, wrong_response.text
     previous_feedback = wrong_response.json()["feedback"]
