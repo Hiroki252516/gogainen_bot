@@ -54,6 +54,7 @@ from app.services.experiment import (
     submit_survey,
 )
 from app.services.idempotency import run_idempotent
+from app.services.prefetch import prefetch_coordinator, schedule_prefetch
 
 
 settings = get_settings()
@@ -77,7 +78,10 @@ async def lifespan(_: FastAPI):
         seed_database(db)
     finally:
         db.close()
-    yield
+    try:
+        yield
+    finally:
+        prefetch_coordinator.shutdown()
 
 
 app = FastAPI(title="Learning Log AI Tutor", lifespan=lifespan)
@@ -398,7 +402,7 @@ async def api_generate_tutor_turn(
             "teaching_strategy": turn.teaching_strategy,
         }
 
-    return await run_idempotent(
+    response = await run_idempotent(
         db,
         scope=f"tutor_turn_generate:{session_id}",
         key=idempotency_key,
@@ -406,6 +410,15 @@ async def api_generate_tutor_turn(
         request_data={"session_id": session_id},
         operation=operation,
     )
+    # Schedule only after the interactive response transaction has completed.
+    # A reused prefetched turn carries its origin in the private diagnosis
+    # audit and must not start another prefetch batch.
+    if participant_id and isinstance(response, dict) and response.get("turn_index") == 1:
+        turn = db.get(TutorTurn, response.get("turn_id"))
+        origin = (turn.diagnosis_json or {}).get("generation_origin") if turn else None
+        if origin in {"interactive", "interactive_fallback"}:
+            schedule_prefetch(participant_id, session_id)
+    return response
 
 
 @app.post("/api/tutor-turns/{turn_id}/respond")

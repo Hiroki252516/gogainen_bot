@@ -132,6 +132,14 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 - 遅延再テストは任意拡張であり、現行の開始API/UI・集計は未実装
 - MockAIBackendをテスト・切り分け用に維持する
 
+## Issue #97 先行教材生成の実装メモ
+
+2026-09-27時点の実装では、初回教材のレスポンス後にbackend内のresponse-after workerが後続の未達用語すべての初回教材を先行生成する。順序は`PRETEST_TERM_ORDER`、固定確認問題のvariantはv1、生成契約・RAG・control/proposedの入力分離は通常の教材生成と同じである。耐久キューは導入せず、`TutorSession.prefetch_state`をDB上の監査状態として保存する。
+
+`pending`/`generating`中に参加者が先に到達した場合は待機結果を破棄し、同期生成へ切り替える。AI失敗は`failed`と`AICallLog`へ記録して参加者へ返さず、`codex_app_server`からMockへフォールバックしない。現在用語の不正解は後続待機turnに影響させず、現在用語の2問目だけが既存の誤概念履歴で適応される。ギブアップ、実験終了、再テスト後の新周回では未使用turnを破棄する。
+
+先行生成turnは未回答の間、調査用回答履歴と学習負担の実績値に算入しない。再利用時は同じ`turn_id`を返し、`diagnosis_json`とAIログに生成元・待機・再利用・失敗・破棄を記録する。これは参加者画面の表示仕様、YAML問題文・選択肢・採点、AIBackend契約を変更しない。
+
 ## Known Deck Inconsistencies and Resolution
 
 7月22日PPTXと8月21日更新仕様を受け、古いTransformer固有のM1/M3判定は新規フローから外し、3項目共通のA〜C正解、D〜F=M1、G〜I=M3、J=unknownのYAML判定へ統一した。M2/M4は実行時taxonomyに保持する。

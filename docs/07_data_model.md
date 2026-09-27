@@ -288,7 +288,18 @@ Unique:
 - group_condition TEXT NOT NULL
 - started_at TIMESTAMP NOT NULL
 - ended_at TIMESTAMP NULL
+- prefetch_state TEXT NOT NULL DEFAULT 'none'  # pending, generating, ready, consumed, failed, discarded
+- prefetch_source_session_id TEXT(36) NULL
+- prefetch_requested_at TIMESTAMP NULL
+- prefetch_generating_at TIMESTAMP NULL
+- prefetch_ready_at TIMESTAMP NULL
+- prefetch_consumed_at TIMESTAMP NULL
+- prefetch_failed_at TIMESTAMP NULL
+- prefetch_discarded_at TIMESTAMP NULL
+- prefetch_error_code TEXT(80) NULL
 - created_at TIMESTAMP NOT NULL
+
+`prefetch_state=none`は通常の対話生成、`ready`は後続用語の未回答v1教材が待機中、`consumed`はその教材を参加者へ再利用済みを表す。`failed`はAI失敗後に通常生成へ切り替え可能な状態、`discarded`は先行生成結果を利用しなかった状態である。既存DBへは列を追加し、過去行を`none`へ補正する。未使用の`pending`、`generating`、`ready`、`failed`、`discarded`は新周回やギブアップ時に再利用せず終了する。
 
 ### tutor_turns
 
@@ -316,6 +327,8 @@ Unique:
 - updated_at TIMESTAMP NOT NULL
 
 学習ターンの `question_shown_at`、`answered_at`、`response_time_sec` は、学習セッション内問題の表示から回答までの時間分析に使う。問題本文と選択肢は `practice_question_json` に保存する。
+
+`diagnosis_json`には`generation_origin`（`interactive`、`interactive_fallback`、`prefetch`）と先行生成の状態、source session、v1方針、再利用・破棄時刻を内部監査情報として保存する。先行生成された未回答turnは`learner_response`と`grading_json`を持たず、回答履歴ビューから除外する。実際に再利用されたturnは`consumed`へ遷移してから回答履歴・実績負担の対象になる。
 
 ## 調査用統合回答履歴
 
@@ -363,6 +376,8 @@ Unique:
 Codex app-serverの成功応答では、`raw_text`にapp-serverが返したJSON文字列を解析・内部ラベル除去・契約補正する前の状態で保存する。`response_payload`には、補正後にbackendが利用した応答オブジェクトを保存する。JSON解析に失敗した場合も取得できた生テキストを`raw_text`へ保存する。Mock backendでは実AIの生出力がないためNULLとする。
 
 Codex app-serverの実送信監査は、既存`request_payload`の内容を保ったまま`effective_request`以下へJSONで追加する。実際の`thread/start`設定、`turn/start`の全文入力とoutput schema、モデル・推論レベル、Schema SHA-256、prompt/taxonomy版、RAG検索条件とchunk本文SHA-256、生成試行番号、送信段階を含む。認証情報は含めない。Mock backendの入力はCodexへの送信として記録しない。教材生成時は`response_payload.output_metrics`に本文文字数、段落数、箇条書き数を保存する。これらは既存JSON列への追加であり、DBスキーマ変更ではない。
+
+先行生成のAIログには`request_payload.generation_audit`（source session、対象session、内部生成キー、variant policy）と、確定時の`response_payload.prefetch_audit`（`ready`、`failed`、`discarded`）を追加する。controlのpayloadには個人の診断・履歴・足場掛けを追加せず、proposedだけが既存の適応情報を受け取る点は通常生成と同じである。
 
 purpose values:
 

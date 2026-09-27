@@ -42,6 +42,17 @@ def _ensure_lightweight_schema_updates() -> None:
             ("answered_at", datetime_type),
             ("response_time_sec", "FLOAT"),
         ],
+        "tutor_sessions": [
+            ("prefetch_state", "VARCHAR(32)"),
+            ("prefetch_source_session_id", "VARCHAR(36)"),
+            ("prefetch_requested_at", datetime_type),
+            ("prefetch_generating_at", datetime_type),
+            ("prefetch_ready_at", datetime_type),
+            ("prefetch_consumed_at", datetime_type),
+            ("prefetch_failed_at", datetime_type),
+            ("prefetch_discarded_at", datetime_type),
+            ("prefetch_error_code", "VARCHAR(80)"),
+        ],
         "evaluation_summaries": [
             ("score_timeline_json", json_type),
             ("misconception_timeline_json", json_type),
@@ -62,6 +73,7 @@ def _ensure_lightweight_schema_updates() -> None:
         _backfill_attempt_test_rounds(connection)
         _backfill_completion_reasons(connection)
         _backfill_evaluation_completion_flags(connection)
+        _backfill_tutor_prefetch_states(connection)
 
 
 def _backfill_attempt_test_rounds(connection) -> None:
@@ -172,6 +184,24 @@ def _backfill_evaluation_completion_flags(connection) -> None:
                 FROM participants
                 WHERE participants.id = evaluation_summaries.participant_id
             )
+            """
+        )
+    )
+
+
+def _backfill_tutor_prefetch_states(connection) -> None:
+    """Make historical tutor sessions explicit normal sessions.
+
+    Older databases have no prefetch lifecycle.  A nullable column is added
+    during the lightweight migration, then all existing rows are normalized to
+    ``none`` so application code can treat the state as non-null.
+    """
+    connection.execute(
+        text(
+            """
+            UPDATE tutor_sessions
+            SET prefetch_state = 'none'
+            WHERE prefetch_state IS NULL OR prefetch_state = ''
             """
         )
     )
