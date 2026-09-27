@@ -13,7 +13,6 @@ type PracticeItem = {
   component_term: string;
   material?: string;
   body: string;
-  expected_answer?: string;
   question_type?: string;
   options?: Option[];
 };

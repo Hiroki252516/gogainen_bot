@@ -9,9 +9,15 @@ import yaml
 
 
 CONTENT_PATH = Path(__file__).with_name("content") / "learning_content.yml"
+LEARNING_V2_CONTENT_PATH = Path(__file__).with_name("content") / "learning_questions_v2.yml"
 ACTIVE_TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
 QUESTION_PHASES = ("pretest", "retest", "final_test")
 LEARNING_STAGES = ("enrichment", "conceptual_change")
+LEGACY_LEARNING_CONTENT_VERSION = 1
+CURRENT_LEARNING_CONTENT_VERSION = 2
+LEARNING_OPTION_ROLES = ("correct", "M1", "M3")
+LEARNING_SCENARIO_TYPES = ("application", "prediction", "comparison", "boundary", "diagnosis")
+UNKNOWN_OPTION = {"label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"}
 
 
 def _contains_langgraph(value: Any) -> bool:
@@ -136,6 +142,107 @@ def _validate_content(content: dict[str, Any]) -> None:
             raise ValueError(f"{slug} must not mention LangGraph")
 
 
+def _v2_options(variant: dict[str, Any], rotation: int) -> list[dict[str, Any]]:
+    choices = variant["choices"]
+    options = []
+    role_slots = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
+    for label_index, label in enumerate("ABCDEFGHI"):
+        slot = (label_index - rotation) % 9
+        role = role_slots[slot]
+        role_index = slot % 3
+        options.append(
+            {
+                "label": label,
+                "body": choices[role][role_index],
+                "is_correct": role == "correct",
+                "misconception_type": None if role == "correct" else role,
+            }
+        )
+    options.append(dict(UNKNOWN_OPTION))
+    return options
+
+
+def _validate_v2_content(content: dict[str, Any], legacy_content: dict[str, Any]) -> None:
+    if content.get("version") != CURRENT_LEARNING_CONTENT_VERSION:
+        raise ValueError("learning_questions_v2.yml must have version 2")
+    terms = content.get("terms") or {}
+    if tuple(terms) != ACTIVE_TERM_SLUGS:
+        raise ValueError(f"learning v2 terms must be exactly {ACTIVE_TERM_SLUGS}")
+
+    legacy_options = {
+        option["body"]
+        for options in (legacy_content.get("option_sets") or {}).values()
+        for option in options
+    }
+    legacy_bodies = {
+        variant["body"]
+        for term in legacy_content["terms"]
+        for phase in QUESTION_PHASES
+        for variant in (term.get("questions") or {}).get(phase, [])
+    }
+    role_counts = {label: {role: 0 for role in LEARNING_OPTION_ROLES} for label in "ABCDEFGHI"}
+    variant_count = 0
+    rotation = 0
+
+    for term_slug in ACTIVE_TERM_SLUGS:
+        stage_data = terms.get(term_slug) or {}
+        if tuple(stage_data) != LEARNING_STAGES:
+            raise ValueError(f"learning v2 stages for {term_slug} must be {LEARNING_STAGES}")
+        for stage in LEARNING_STAGES:
+            variants = (stage_data.get(stage) or {}).get("variants") or []
+            if len(variants) != 5:
+                raise ValueError(f"{term_slug}.{stage} must contain five v2 variants")
+            expected_keys = [f"learning_{stage}_v{index}" for index in range(1, 6)]
+            if [variant.get("variant_key") for variant in variants] != expected_keys:
+                raise ValueError(f"{term_slug}.{stage} must use variant keys {expected_keys}")
+            if [variant.get("scenario_type") for variant in variants] != list(LEARNING_SCENARIO_TYPES):
+                raise ValueError(f"{term_slug}.{stage} must cover each scenario type once in order")
+
+            for variant in variants:
+                if not str(variant.get("scenario") or "").strip() or not str(variant.get("task") or "").strip():
+                    raise ValueError(f"{term_slug}.{stage}.{variant.get('variant_key')} needs scenario and task")
+                choices = variant.get("choices") or {}
+                if tuple(choices) != LEARNING_OPTION_ROLES:
+                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} must define correct, M1, and M3 choices")
+                all_choice_bodies = []
+                for role in LEARNING_OPTION_ROLES:
+                    texts = choices.get(role)
+                    if not isinstance(texts, list) or len(texts) != 3 or any(not str(text).strip() for text in texts):
+                        raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} needs three nonempty {role} choices")
+                    all_choice_bodies.extend(str(text).strip() for text in texts)
+                lengths = [len(text) for text in all_choice_bodies]
+                if min(lengths) < 20 or max(lengths) > min(lengths) * 1.8 or max(lengths) - min(lengths) > 32:
+                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} has a conspicuous option-length spread")
+                if len(set(all_choice_bodies)) != 9:
+                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} has duplicate choices")
+                if any(body in legacy_options or body in legacy_bodies for body in all_choice_bodies):
+                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} copies fixed test wording")
+                if _contains_langgraph(variant):
+                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} must not mention LangGraph")
+
+                for label_index, label in enumerate("ABCDEFGHI"):
+                    slot = (label_index - rotation) % 9
+                    role = LEARNING_OPTION_ROLES[slot // 3]
+                    role_counts[label][role] += 1
+                rotation = (rotation + 3) % 9
+                variant_count += 1
+
+    if variant_count != 30:
+        raise ValueError("learning v2 bank must contain exactly 30 variants")
+    if any(counts != {role: 10 for role in LEARNING_OPTION_ROLES} for counts in role_counts.values()):
+        raise ValueError("learning v2 labels must be assigned each role exactly ten times")
+
+
+@lru_cache(maxsize=1)
+def load_learning_v2_content() -> dict[str, Any]:
+    with LEARNING_V2_CONTENT_PATH.open("r", encoding="utf-8") as handle:
+        content = yaml.safe_load(handle)
+    if not isinstance(content, dict):
+        raise ValueError("learning_questions_v2.yml must contain a mapping")
+    _validate_v2_content(content, load_content())
+    return content
+
+
 @lru_cache(maxsize=1)
 def load_content() -> dict[str, Any]:
     with CONTENT_PATH.open("r", encoding="utf-8") as handle:
@@ -156,22 +263,47 @@ def teaching_target_for_option(term_slug: str, option_label: str) -> dict[str, A
     return deepcopy(target) if isinstance(target, dict) else None
 
 
-def learning_question_spec(term_slug: str, learning_stage: str, variant_index: int = 1) -> dict[str, Any]:
+def learning_question_spec(
+    term_slug: str,
+    learning_stage: str,
+    variant_index: int = 1,
+    content_version: int = LEGACY_LEARNING_CONTENT_VERSION,
+) -> dict[str, Any]:
     term = content_term(term_slug)
     stage = learning_stage if learning_stage in LEARNING_STAGES else "conceptual_change"
-    stage_data = term["learning"][stage]
-    variants = stage_data["variants"]
+    if content_version == LEGACY_LEARNING_CONTENT_VERSION:
+        stage_data = term["learning"][stage]
+        variants = stage_data["variants"]
+        rotation = 0
+    elif content_version == CURRENT_LEARNING_CONTENT_VERSION:
+        stage_data = load_learning_v2_content()["terms"][term_slug][stage]
+        variants = stage_data["variants"]
+        term_index = ACTIVE_TERM_SLUGS.index(term_slug)
+        stage_index = LEARNING_STAGES.index(stage)
+        index = min(max(variant_index, 1), len(variants)) - 1
+        ordinal = term_index * len(LEARNING_STAGES) * 5 + stage_index * 5 + index
+        rotation = (ordinal * 3) % 9
+    else:
+        raise ValueError(f"unsupported learning content version: {content_version}")
     index = min(max(variant_index, 1), len(variants)) - 1
     variant = dict(variants[index])
-    variant["material"] = stage_data["material"]
+    if content_version == CURRENT_LEARNING_CONTENT_VERSION:
+        variant["body"] = f"{variant['scenario']}\n\n{variant['task']}"
+        variant["options"] = _v2_options(variant, rotation)
+        variant.pop("choices", None)
+        variant.pop("scenario", None)
+        variant.pop("task", None)
+    variant["material"] = term["learning"][stage]["material"]
     variant["options"] = [
         {**option, "option_id": option["label"]} for option in variant.get("options") or []
     ]
     variant["question_type"] = "learning_multi_select"
-    variant["expected_answer"] = "A、B、Cをすべて選択し、それ以外を選ばない。"
+    correct_labels = [option["label"] for option in variant["options"] if option.get("is_correct")]
+    variant["expected_answer"] = f"{'、'.join(correct_labels)}をすべて選択し、それ以外を選ばない。"
     variant["selection_mode"] = "multiple"
     variant["min_selections"] = 3
     variant["max_selections"] = 3
+    variant["_content_version"] = content_version
     return variant
 
 

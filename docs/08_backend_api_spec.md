@@ -93,11 +93,13 @@ seed済みのテスト問題は`questions.variant_key`に保存し、学習確�
 
 ## Scoring
 
-A/B/Cの3つだけを選択した場合だけ正解。不正解分類はM3を最優先し、次にM1、J単独または判定材料なしはunknownとする。採点・遷移はbackendが決定し、AI出力で上書きしない。
+テスト系と学習確認v1はA/B/Cの3つだけを選択した場合だけ正解。学習確認v2は提示variantの正解metadataに基づき、正解3選択肢を重複なくすべて選んだ場合だけ正解。不正解分類はM3を最優先し、次にM1、J単独または判定材料なしはunknownとする。採点・遷移はbackendが決定し、AI出力で上書きしない。
 
 ## Learning API
 
 参加者向けの学習結果・表示では `learning_stage` として `enrichment`、`conceptual_change`、`final_feedback` を使う。新しい学習ターンの教材生成で受け付けるstageは `enrichment` と `conceptual_change` であり、`final_feedback` は確認問題に十分回答した後の結果表示状態で、新しい教材生成の入力にはしない。L3/L2は内部の`scaffolding_level`互換ログである。教材生成では両群に用語・共通構成要素・同一条件のRAG本文だけを共有し、固定確認問題・選択肢・正答はYAML/backendの責務としてAIへ渡さない。`control`には学習段階・診断・履歴を渡さず、`proposed`だけが診断target・taxonomy・足場掛け情報を追加で受け取る。参加者IDと群名はルーティング・ログ照合専用で、モデルpromptから除く。
+
+参加者作成時に`learning_content_version=2`を保存する。v2は場面判断型の固定学習確認問題で、両群に同じ問題を提示する。既存参加者で版がNULLの場合はv1を使い、各ターンの`diagnosis_json.learning_content_version`に提示版を記録する。回答時もそのターンの版で採点する。pretest/retest/final_testの問題版や採点には影響しない。`POST /api/tutor-sessions/{session_id}/turns`の参加者向けレスポンスには問題文、選択肢、選択数制約だけを含め、`expected_answer`、選択肢ごとの正誤・M分類、内部ステージ情報は返さない。冪等再取得時も同じ公開projectionを適用する。
 
 学習ターン回答APIのレスポンスには `item_results` フィールドを残すが、現行の固定複数選択フローでは空配列になる。個別項目結果を返す自由回答フローは将来または互換用である。
 

@@ -28,6 +28,7 @@ class Participant(Base):
     assignment_method: Mapped[str] = mapped_column(String(32), default="manual", nullable=False)
     consent_checked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     current_step: Mapped[str] = mapped_column(String(64), default="start", nullable=False)
+    learning_content_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completion_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
