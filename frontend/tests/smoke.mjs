@@ -36,7 +36,7 @@ for (const expectedText of [
 }
 
 const groupAdminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ['"control", "proposed"', "role=\"tablist\"", "activeGroup", "group_condition"]) {
+for (const expectedText of ['"proposed", "control"', "role=\"tablist\"", "activeGroup", "group_condition"]) {
   if (!groupAdminPage.includes(expectedText)) {
     throw new Error(`admin page missing group filtering behavior: ${expectedText}`);
   }
