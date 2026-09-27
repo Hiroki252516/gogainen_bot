@@ -83,7 +83,8 @@ RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではあり�
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
 MANDATORY_ELEMENT_MAX_ATTEMPTS = 2
-MATERIAL_LENGTH_MAX_ATTEMPTS = 2
+# Includes the initial generation: initial generation + up to two retries.
+MATERIAL_LENGTH_MAX_ATTEMPTS = 3
 PREFETCH_STATES = {"pending", "generating", "ready", "consumed", "failed", "discarded"}
 PREFETCH_WAITING_STATES = {"pending", "generating", "ready"}
 
