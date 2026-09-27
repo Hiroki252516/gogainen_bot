@@ -24,7 +24,7 @@
 - AI入力と出力に固定確認問題・選択肢・正答を含めず、生成教材へ直前フィードバックを転載しない。RAGの検索条件は段階・診断に依存せず両群で同一である。
 - Codex成功・失敗ログの`effective_request`から実送信prompt、Schema、model、effort、prompt/taxonomy版、RAG query/section/chunk ID/本文hash、試行番号、送信状態を追跡でき、認証情報を含まない。送信前失敗は未送信と区別でき、Mock logにはCodex実送信監査がない。
 - 提案群の教材再生成を行った場合、各`AICallLog.response_payload.generation_validation`に試行単位の契約・安全性検証結果を残し、最終`TutorTurn.diagnosis_json`にも総試行数と最終検証を保存する。
-- 教材文字数・段落数・箇条書き数を記録し、本文450〜850字は両群共通の目安として扱う。長さだけで再生成しない。
+- 教材文字数・段落数・箇条書き数を記録し、本文700文字前後（600〜800文字）を両群共通の許容範囲として検証する。範囲外の場合は同じAI backendで最大2回まで再生成し、最終検証結果をAIログとTutorTurnへ保存する。
 - app-server payloadが `gpt-5.6-luna` / `medium` を使う。
 - 正答時は `generate_correct_answer_summary`、誤答時は `explain_selected_distractor` が呼ばれ、解説生成の目的とpayloadが `AICallLog` に記録される。
 - `/api/participants/{participant_id}/learning-targets` が、既存の未達対象 `targets`、互換用 `pretest_results`、直近の `test_results`（周回名、問題文、本人が選んだ選択肢本文、正誤）を返す。`test_results` に正答、期待解答、選択肢ごとの正誤、M分類などの内部診断値を含めない。
@@ -47,6 +47,7 @@
 
 ## Frontend
 
+- 参加者向け画面のヘッダーで「管理画面」を押すと、実験画面から移動する確認と「実験データは削除されない」旨を表示し、キャンセル時は遷移しない。管理画面自身からの同リンクでは確認を表示しない。
 - `/start`で参加コードを入力し、同意書画面を経由してpretestへ進む。同意前や不正コードでは参加者を作成せず、被験者画面に群名・内部群の対応を表示しない。テスト終了後は仮アンケート画面を表示し、送信後に終了画面へ進む。
 - 管理画面の「実験開始画面へ戻る」は参加者情報をブラウザから外して`/start`を表示し、サーバーの実験データは削除しない。「実験途中に戻る」は保存済み参加者の`current-step`から正規の続き画面へ戻る。
 - pretest/retest/final-testで3用語が表示される。

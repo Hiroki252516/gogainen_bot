@@ -19,7 +19,14 @@ from app.ai.mandatory_elements import (
     reconcile_mandatory_elements,
 )
 from app.ai.misconception_taxonomy import TAXONOMY_VERSION
-from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION, reconcile_teaching_contract, teaching_contract_schema
+from app.ai.teaching_contract import (
+    MATERIAL_MAX_CHARACTERS,
+    MATERIAL_MIN_CHARACTERS,
+    MATERIAL_TARGET_CHARACTERS,
+    PROMPT_CONTRACT_VERSION,
+    reconcile_teaching_contract,
+    teaching_contract_schema,
+)
 
 
 class CodexAppServerError(RuntimeError):
@@ -272,7 +279,7 @@ class CodexAppServerBackend:
             "tutor_message には現在の用語の教材だけを書く。問題文、選択肢、正答、過去の回答やフィードバックは含めない。",
             "学習確認問題はbackendの固定問題バンクが表示・採点するため、問題や選択肢を生成しない。",
             "教材には定義、仕組みまたは役割、具体例、注意点を含める。一般的な誤解を正確に説明・訂正してよい。",
-            "教材本文はMarkdown記号を含めて450〜850字程度を目安にする。これは目安であり、文字数だけを理由に内容を水増ししたり作り直したりしない。",
+            f"教材本文はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に統一する。定義、仕組み、具体例、注意点を保ち、不要な繰り返しで水増ししない。",
             "見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
             "被験者ID、群名、内部識別子、M1〜M4などの内部ラベルを学習者向け本文に書かない。",
         ]

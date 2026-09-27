@@ -8,7 +8,10 @@ from app.ai.mandatory_elements import (
     mandatory_element_headings,
     mock_mandatory_elements,
 )
-from app.ai.teaching_contract import mock_teaching_contract
+from app.ai.teaching_contract import (
+    MATERIAL_TARGET_CHARACTERS,
+    mock_teaching_contract,
+)
 
 
 class MockAIBackend:
@@ -122,7 +125,7 @@ class MockAIBackend:
             )
         learner_state = payload.get("learner_state") or {}
         result = {
-            "tutor_message": message,
+            "tutor_message": _pad_tutoring_material(message),
             "teaching_strategy": "general_explanation" if group == "control" else learner_state.get("teaching_strategy") or "foundational_explanation",
         }
         if mandatory_elements:
@@ -207,6 +210,20 @@ class MockAIBackend:
             "risk_flags": [],
             "recommended_next_focus": f"{label}の定義と構成要素の役割を確認する",
         }
+
+
+def _pad_tutoring_material(message: str) -> str:
+    """Keep deterministic mock material inside the production contract range."""
+    additions = (
+        "定義だけでなく、構成要素がどの役割を担い、情報がどの順で処理されるかを確認します。",
+        "具体例では入力、処理、出力を対応付け、似た概念と違う点を言葉にします。",
+        "最後に別の場面へ当てはめ、同じ判断基準で説明できるかを確かめます。",
+    )
+    index = 0
+    while len(message) < MATERIAL_TARGET_CHARACTERS:
+        message += f"\n\n{additions[index % len(additions)]}"
+        index += 1
+    return message
 
 
 def _fixed_result(payload: dict[str, Any]) -> dict[str, Any]:

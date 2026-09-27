@@ -964,7 +964,9 @@ def test_next_learning_material_retains_previous_context_but_excludes_feedback()
             .all()
         )
         next_generation_log = next(
-            log for log in next_generation_log if log.request_payload.get("participant_id") == pid
+            log for log in next_generation_log
+            if log.request_payload.get("participant_id") == pid
+            and (log.request_payload.get("term") or {}).get("slug") == "multi_agent"
         )
         assert next_generation_log.request_payload["previous_practice_question"] == first_turn["practice_question"]["body"]
         assert next_generation_log.request_payload["previous_learner_response"] == previous_turn.learner_response
@@ -2124,7 +2126,9 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     text = prompt_source.read_text(encoding="utf-8")
     assert "misconception_taxonomy" in text
     assert "M4なら不足スキーマの構築" in text
-    assert "450〜850字程度を目安" in text
+    assert "MATERIAL_TARGET_CHARACTERS" in text
+    assert "MATERIAL_MIN_CHARACTERS" in text
+    assert "MATERIAL_MAX_CHARACTERS" in text
     assert "固定問題バンクが表示・採点" in text
     assert "fixed_practice_question_items" not in text
     assert "### 要点" in text
