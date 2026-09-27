@@ -27,6 +27,10 @@ proposedだけへ追加する情報:
 
 control payloadには `learning_stage`、`misconception_taxonomy`、誤答主張、診断履歴、learner state、足場掛け履歴、過去回答を含めない。用語・共通構成要素・診断に依存しないRAG本文だけを使い、`teaching_strategy` は `general_explanation` に固定する。一般的な誤解を正確に説明したり訂正したりすることは許容するが、特定学習者の状態を推測・反映しない。両群のRAG query、allowed section、chunk ID、本文は同一にする。
 
+controlの教材・確認問題の系列も診断非依存とする。backendは`control-fixed-v1`として、対象用語と当該`TutorSession`のターン番号から固定stageとYAMLのvariant（v1〜v5、上限後はv5）を選び、`LearnerState`、pretest、過去回答、誤概念、履歴によって変更しない。`fixed_sequence_key`と`instruction_route=control_fixed`はモデル入力ではなく監査JSONにだけ保存する。提案群は従来どおり適応経路を使い、`instruction_route=proposed_adaptive`として監査する。
+
+`AICallLog.request_payload.generation_audit.actual_ai_input`は、providerのルーティング用payloadと区別した実質的な構造化入力の投影である。controlでは用語、共通構成要素、共通RAGだけを記録し、参加者ID、群名、stage、診断、pretest、履歴、`LearnerState`を含めない。Codex app-serverを使った場合は同じroute監査値を`effective_request`にも結合し、実送信promptと照合できる。
+
 教材生成の出力Schemaは `tutor_message` と `teaching_strategy` のみを基本とし、提案群の現行MVPのみ`mandatory_elements`と`teaching_contract`を追加する。確認問題、選択肢、learner prompt等はAIへ生成させず、YAML/backendが引き続き表示・採点する。
 
 ## 内部taxonomy

@@ -1341,6 +1341,86 @@ def test_control_group_logs_same_stage_but_uses_general_explanation():
     assert saved_turn.teaching_strategy == "general_explanation"
 
 
+def test_control_sequence_is_independent_of_pretest_and_learning_history():
+    unknown_pid = _create_participant_with_pretest(group="control", labels=["J"])
+    misconception_pid = _create_participant_with_pretest(group="control", labels=["D", "E", "F"])
+    sessions = {
+        pid: client.post(
+            "/api/tutor-sessions",
+            json={"participant_id": pid, "term_slug": "llm_knowledge"},
+        ).json()["tutor_session_id"]
+        for pid in (unknown_pid, misconception_pid)
+    }
+
+    first_turns = {
+        pid: client.post(f"/api/tutor-sessions/{session_id}/turns", json={}).json()
+        for pid, session_id in sessions.items()
+    }
+    first_unknown = first_turns[unknown_pid]
+    first_misconception = first_turns[misconception_pid]
+    assert first_unknown["learning_stage"] == "conceptual_change"
+    assert first_misconception["learning_stage"] == "conceptual_change"
+    assert first_unknown["practice_question"] == first_misconception["practice_question"]
+
+    for pid, labels in ((unknown_pid, ["A", "D", "G"]), (misconception_pid, ["A", "E", "H"])):
+        response = client.post(
+            f"/api/tutor-turns/{first_turns[pid]['turn_id']}/respond",
+            json={"selected_option_ids": _ids_for_labels(first_turns[pid]["practice_question"], labels)},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["next_learning_stage"] == "conceptual_change"
+
+    second_turns = {
+        pid: client.post(f"/api/tutor-sessions/{session_id}/turns", json={}).json()
+        for pid, session_id in sessions.items()
+    }
+    second_unknown = second_turns[unknown_pid]
+    second_misconception = second_turns[misconception_pid]
+    assert second_unknown["practice_question"] == second_misconception["practice_question"]
+    assert second_unknown["practice_question"]["variant_key"] == "learning_conceptual_change_v2"
+
+    db = SessionLocal()
+    try:
+        turns = {
+            pid: db.get(TutorTurn, first_turns[pid]["turn_id"])
+            for pid in (unknown_pid, misconception_pid)
+        }
+        for pid, turn in turns.items():
+            assert turn.diagnosis_json["instruction_route"] == "control_fixed"
+            assert turn.diagnosis_json["fixed_sequence_key"] == "control-fixed-v1:llm_knowledge:turn-1:v1"
+            logs = (
+                db.query(AICallLog)
+                .filter_by(purpose="generate_tutoring_turn")
+                .all()
+            )
+            log = next(
+                log
+                for log in reversed(logs)
+                if log.request_payload.get("participant_id") == pid
+                and (log.request_payload.get("term") or {}).get("slug") == "llm_knowledge"
+                and (log.request_payload.get("generation_audit") or {}).get("origin") == "interactive"
+                and (log.request_payload.get("generation_audit") or {}).get("turn_index") == 1
+            )
+            audit = log.request_payload["generation_audit"]
+            assert audit["instruction_route"] == "control_fixed"
+            assert audit["fixed_sequence_key"] == "control-fixed-v1:llm_knowledge:turn-1:v1"
+            assert set(audit["actual_ai_input"]) == {
+                "term",
+                "component_term",
+                "component_index",
+                "component_total",
+                "component_terms",
+                "rag_context",
+            }
+            assert "participant_id" not in audit["actual_ai_input"]
+            assert "group_condition" not in audit["actual_ai_input"]
+            assert "learning_stage" not in audit["actual_ai_input"]
+            assert "learner_state" not in audit["actual_ai_input"]
+            assert "session_misconception_history" not in audit["actual_ai_input"]
+    finally:
+        db.close()
+
+
 def test_retest_uses_four_variants_then_reuses_variant_four():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     observed: list[str] = []

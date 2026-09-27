@@ -81,6 +81,19 @@ LEARNING_STAGE_LABELS = {
     "conceptual_change": "概念変化",
     "final_feedback": "教材フィードバック",
 }
+# The control condition is a normal tutor with a deterministic, diagnosis-
+# independent sequence.  Keep the version in the audit log so a later change
+# to the fixed route cannot silently mix sequences in the experiment data.
+CONTROL_FIXED_SEQUENCE_VERSION = "control-fixed-v1"
+CONTROL_FIXED_LEARNING_STAGE = "conceptual_change"
+CONTROL_TUTORING_INPUT_KEYS = (
+    "term",
+    "component_term",
+    "component_index",
+    "component_total",
+    "component_terms",
+    "rag_context",
+)
 TEST_PHASES = {"pretest", "retest", "final_test"}
 ATTEMPT_PHASES = TEST_PHASES | {"l0_check"}
 FINAL_TEST_NOT_AVAILABLE_DETAIL = "この参加者は最終テスト対象ではありません。"
@@ -554,6 +567,46 @@ def _learning_position(db: Session, session: TutorSession, term: Term, participa
         "component_total": 1,
         "component_terms": _component_terms(term.slug, term.label),
     }
+
+
+def _control_fixed_sequence_key(term_slug: str, turn_index: int, variant_index: int) -> str:
+    return f"{CONTROL_FIXED_SEQUENCE_VERSION}:{term_slug}:turn-{turn_index}:v{variant_index}"
+
+
+def _control_fixed_position(term: Term, turn_index: int, variant_index: int) -> dict[str, Any]:
+    """Return the control route without consulting learner state or history."""
+    return {
+        "learning_stage": CONTROL_FIXED_LEARNING_STAGE,
+        "learning_stage_label": LEARNING_STAGE_LABELS[CONTROL_FIXED_LEARNING_STAGE],
+        "component_term": None,
+        "component_index": 0,
+        "component_total": 1,
+        "component_terms": _component_terms(term.slug, term.label),
+        "instruction_route": "control_fixed",
+        "fixed_sequence_key": _control_fixed_sequence_key(term.slug, turn_index, variant_index),
+    }
+
+
+def _actual_tutoring_input(payload: dict[str, Any], group_condition: str) -> dict[str, Any]:
+    """Capture the structured input that can reach the tutoring model.
+
+    Routing identifiers remain on the backend payload for provider selection
+    and log joins, but the control model projection is deliberately limited to
+    this allowlist.  Keeping the same projection in the service audit makes
+    the distinction explicit even when the test Mock backend is used.
+    """
+    if group_condition == "control":
+        return {
+            key: payload[key]
+            for key in CONTROL_TUTORING_INPUT_KEYS
+            if key in payload
+        }
+    return {
+        key: value
+        for key, value in payload.items()
+        if key not in {"participant_id", "group_condition", "_generation_audit"}
+    }
+
 
 def _merge_stage_meta(practice_question: dict[str, Any], position: dict[str, Any]) -> dict[str, Any]:
     practice_question = dict(practice_question or {})
@@ -1305,6 +1358,28 @@ def _tutoring_output_metrics(result: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def _effective_request_with_instruction_audit(
+    request_audit: dict[str, Any],
+    generation_audit: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Join provider-side prompt audit with the server-side route audit."""
+    effective_request = dict(request_audit)
+    if generation_audit:
+        for key in (
+            "instruction_route",
+            "fixed_sequence_key",
+            "term_slug",
+            "session_index",
+            "turn_index",
+            "problem_variant_key",
+            "problem_variant_index",
+            "actual_ai_input",
+        ):
+            if key in generation_audit:
+                effective_request[key] = generation_audit[key]
+    return effective_request
+
+
 async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[str, Any]:
     reasoning_effort = current_reasoning_effort()
     backend = get_ai_backend(reasoning_effort=reasoning_effort)
@@ -1326,7 +1401,10 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
         if purpose == "generate_tutoring_turn":
             result["output_metrics"] = _tutoring_output_metrics(result)
         if request_audit is not None:
-            logged_payload["effective_request"] = request_audit
+            logged_payload["effective_request"] = _effective_request_with_instruction_audit(
+                request_audit,
+                generation_audit if isinstance(generation_audit, dict) else None,
+            )
         _record_ai_log(
             db,
             AICallLog(
@@ -1344,7 +1422,10 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
     except CodexAppServerError as exc:
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
         if exc.request_audit is not None:
-            logged_payload["effective_request"] = exc.request_audit
+            logged_payload["effective_request"] = _effective_request_with_instruction_audit(
+                exc.request_audit,
+                generation_audit if isinstance(generation_audit, dict) else None,
+            )
         _record_ai_log(
             db,
             AICallLog(
@@ -1369,7 +1450,10 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
     except Exception as exc:
         request_audit = getattr(exc, "request_audit", None)
         if request_audit is not None:
-            logged_payload["effective_request"] = request_audit
+            logged_payload["effective_request"] = _effective_request_with_instruction_audit(
+                request_audit,
+                generation_audit if isinstance(generation_audit, dict) else None,
+            )
         _record_ai_log(
             db,
             AICallLog(
@@ -1830,14 +1914,20 @@ def _tutoring_generation_context(
     if not term:
         raise HTTPException(status_code=404, detail="term not found")
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one()
-    previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
-    pretest_attempt = (
-        db.query(Attempt)
-        .filter_by(participant_id=participant.id, term_id=term.id, phase="pretest")
-        .order_by(Attempt.created_at.desc(), Attempt.attempt_index.desc())
-        .first()
-    )
+    previous_attempt = None
+    if participant.group_condition == "proposed" and state.last_attempt_id:
+        previous_attempt = db.get(Attempt, state.last_attempt_id)
+    pretest_attempt = None
+    if participant.group_condition == "proposed":
+        pretest_attempt = (
+            db.query(Attempt)
+            .filter_by(participant_id=participant.id, term_id=term.id, phase="pretest")
+            .order_by(Attempt.created_at.desc(), Attempt.attempt_index.desc())
+            .first()
+        )
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
+    turn_index = turn_count + 1
+    learning_variant_index = 1 if generation_origin == "prefetch" else min(turn_index, 5)
     previous_turn = None
     if participant.group_condition == "proposed" and turn_count:
         previous_turn = (
@@ -1847,8 +1937,12 @@ def _tutoring_generation_context(
             .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
             .first()
         )
-    position = _learning_position(db, session, term, participant)
-    misconception_history = session_misconception_history(db, session.id)
+    if participant.group_condition == "control":
+        position = _control_fixed_position(term, turn_index, learning_variant_index)
+        misconception_history: list[dict[str, Any]] = []
+    else:
+        position = _learning_position(db, session, term, participant)
+        misconception_history = session_misconception_history(db, session.id)
     current_level = normalize_level(state.scaffolding_level)
     state_current_status = state.current_status
     state_primary_misconception = state.primary_misconception
@@ -1856,21 +1950,23 @@ def _tutoring_generation_context(
     if predicted_answer is not None:
         # Project the fixed grading result without writing it before feedback
         # generation succeeds. The detached turn is used only for prompt text.
-        misconception_history = [
-            *misconception_history,
-            _predicted_history_entry(predicted_answer["turn"], predicted_answer),
-        ]
-        predicted_stage = predicted_answer.get("next_learning_stage")
-        if predicted_stage not in {"enrichment", "conceptual_change"}:
-            raise HTTPException(status_code=400, detail="invalid next learning stage")
-        position = {
-            **position,
-            "learning_stage": predicted_stage,
-            "learning_stage_label": LEARNING_STAGE_LABELS[predicted_stage],
-        }
+        if participant.group_condition == "proposed":
+            misconception_history = [
+                *misconception_history,
+                _predicted_history_entry(predicted_answer["turn"], predicted_answer),
+            ]
+            predicted_stage = predicted_answer.get("next_learning_stage")
+            if predicted_stage not in {"enrichment", "conceptual_change"}:
+                raise HTTPException(status_code=400, detail="invalid next learning stage")
+            position = {
+                **position,
+                "learning_stage": predicted_stage,
+                "learning_stage_label": LEARNING_STAGE_LABELS[predicted_stage],
+            }
         current_level = predicted_answer["next_level"]
-        state_current_status = predicted_answer["diagnosed_status"]
-        state_primary_misconception = predicted_answer["learning_misconception_type"]
+        if participant.group_condition == "proposed":
+            state_current_status = predicted_answer["diagnosed_status"]
+            state_primary_misconception = predicted_answer["learning_misconception_type"]
         if participant.group_condition == "proposed":
             previous_turn = SimpleNamespace(
                 id=predicted_answer["turn"].id,
@@ -1882,19 +1978,21 @@ def _tutoring_generation_context(
     if position["learning_stage"] == "final_feedback":
         raise HTTPException(status_code=400, detail="learning session already completed")
 
-    previous_learning_misconception = misconception_history[-1] if misconception_history else None
-    effective_misconception = (previous_learning_misconception or {}).get("misconception_type") or state_primary_misconception
-    effective_status = "unknown" if effective_misconception == "unknown" else ("misconception" if effective_misconception else state_current_status)
-    effective_strategy = strategy_for(effective_misconception, effective_status, participant.group_condition)
     if participant.group_condition == "control":
+        previous_learning_misconception = None
+        effective_misconception = None
+        effective_status = None
         effective_strategy = "general_explanation"
-    active_misconception_type = effective_misconception
-    if not active_misconception_type and position["learning_stage"] == "enrichment":
-        active_misconception_type = "unknown"
+        active_misconception_type = None
+    else:
+        previous_learning_misconception = misconception_history[-1] if misconception_history else None
+        effective_misconception = (previous_learning_misconception or {}).get("misconception_type") or state_primary_misconception
+        effective_status = "unknown" if effective_misconception == "unknown" else ("misconception" if effective_misconception else state_current_status)
+        effective_strategy = strategy_for(effective_misconception, effective_status, participant.group_condition)
+        active_misconception_type = effective_misconception
+        if not active_misconception_type and position["learning_stage"] == "enrichment":
+            active_misconception_type = "unknown"
 
-    # Prefetch is always the first fixed question (v1).  Interactive turns
-    # retain the existing session-scoped sequence and adaptive stage behavior.
-    learning_variant_index = 1 if generation_origin == "prefetch" else min(turn_count + 1, 5)
     learning_content_version = _participant_learning_content_version(participant)
     spec = _learning_question_spec(
         term.slug,
@@ -1979,9 +2077,18 @@ def _tutoring_generation_context(
         }
     else:
         payload = common_payload
+    instruction_route = "proposed_adaptive" if participant.group_condition == "proposed" else "control_fixed"
     payload["_generation_audit"] = {
         "origin": generation_origin,
         "prefetch": prefetch_audit,
+        "instruction_route": instruction_route,
+        "fixed_sequence_key": position.get("fixed_sequence_key"),
+        "term_slug": term.slug,
+        "session_index": session.session_index,
+        "turn_index": turn_index,
+        "problem_variant_key": spec["variant_key"],
+        "problem_variant_index": learning_variant_index,
+        "actual_ai_input": _actual_tutoring_input(payload, participant.group_condition),
         "learning_content_version": learning_content_version,
     }
     forbidden_material = [spec["expected_answer"], spec["body"]]
@@ -1999,6 +2106,7 @@ def _tutoring_generation_context(
         "payload": payload,
         "forbidden_material": forbidden_material,
         "turn_count": turn_count,
+        "turn_index": turn_index,
         "previous_turn": previous_turn,
         "current_level": current_level,
         "generation_origin": generation_origin,
@@ -2076,6 +2184,7 @@ def _tutor_turn_from_generation(
         prefetch_audit = context.get("prefetch_audit")
         payload = context["payload"]
         learning_content_version = context["learning_content_version"]
+    instruction_audit = dict(payload.get("_generation_audit") or {})
     diagnosis = {
         "material_source": "ai",
         "material_generation_ms": material_generation_ms,
@@ -2092,6 +2201,9 @@ def _tutor_turn_from_generation(
         "learning_content_version": learning_content_version,
         "generation_origin": generation_origin,
         "prefetch": prefetch_audit or {"state": "not_applicable", "reused": False},
+        "instruction_route": instruction_audit.get("instruction_route"),
+        "fixed_sequence_key": instruction_audit.get("fixed_sequence_key"),
+        "instruction_audit": instruction_audit,
     }
     return TutorTurn(
         tutor_session_id=session_id,
@@ -2634,6 +2746,10 @@ async def respond_tutor_turn(
     next_level = normalize_level(lower_level(state.scaffolding_level) if is_sufficient else raise_level(state.scaffolding_level))
     stage_completed = is_sufficient
     next_learning_stage = "final_feedback" if is_sufficient else _learning_stage_for_misconception(learning_misconception_type, diagnosed_status)
+    if participant.group_condition == "control" and not is_sufficient:
+        # Control diagnosis remains available for audit/evaluation, but never
+        # selects the next material or question.
+        next_learning_stage = CONTROL_FIXED_LEARNING_STAGE
     answered_turn_count = (
         db.query(TutorTurn)
         .filter_by(tutor_session_id=session.id)
@@ -2663,6 +2779,10 @@ async def respond_tutor_turn(
         "learning_misconception_type": learning_misconception_type,
         "learning_misconception_confidence": learning_misconception_confidence,
         "learning_misconception_reason": learning_misconception_reason,
+        "instruction_route": (turn.diagnosis_json or {}).get("instruction_route") or (
+            "proposed_adaptive" if participant.group_condition == "proposed" else "control_fixed"
+        ),
+        "fixed_sequence_key": (turn.diagnosis_json or {}).get("fixed_sequence_key"),
         "ai_next_action": result.get("next_action"),
         "response_time_sec": payload.get("response_time_sec"),
         "material_source": (turn.diagnosis_json or {}).get("material_source"),

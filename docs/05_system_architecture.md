@@ -193,6 +193,10 @@ sequenceDiagram
 
 現在用語の不正解は先行生成済みの後続用語へ影響させず、現在用語の次ターンだけが既存の`previous_learning_misconception`と履歴で適応される。ギブアップ、実験終了、再テスト後の新しい学習周回では未使用の先行生成を破棄する。先行生成状態は参加者レスポンスや画面へ追加せず、`TutorTurn.diagnosis_json`、`AICallLog`、管理者ログで監査する。未使用の教材は回答履歴と学習負担の実績値へ算入しない。
 
+### #102 統制群の固定教材系列
+
+controlの教材・問題選択は、`control-fixed-v1`として用語とsession内turn_indexから決める。`LearnerState`、pretest、誤概念、過去回答、履歴はcontrolの教材段階・variant・確認問題の選択に使わない。診断結果は評価のために保存するが、教材生成AIの実質入力には含めない。route、固定キー、実際の入力投影は`TutorTurn.diagnosis_json`とAIログのJSON監査へ保存し、参加者向けレスポンスの形と画面表示は変えない。
+
 ## app-server起動方式
 
 ### 方式A: host Codex app-server

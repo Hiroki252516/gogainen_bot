@@ -15,11 +15,13 @@
 - RAGは用語別の指定sectionだけを検索し、LangGraphチャンクを返さない。
 - 同じ用語・同じ構成要素についてcontrolとproposedのRAG query、allowed section、chunk ID、chunk本文が一致し、検索に学習段階・診断・履歴を使わない。
 - 教材生成のcontrol有効promptは、参加者ID・群名・固定問題・選択肢・正答・診断・学習段階・履歴を含まず、学習者の回答や履歴だけを変えたmetamorphic testでも同一になる。
+- controlの`generate_tutoring_turn`は`control-fixed-v1`の固定系列を使い、事前テスト、`LearnerState`、過去回答、誤概念を変えても同じ用語・同じturn_indexの教材、variant、問題文、選択肢になる。controlの不正解後も`next_learning_stage`は固定系列を示し、診断値は教材選択へ使わない。
 - 両群の教材生成に固定問題・選択肢・正答を含めない。表示と採点はYAML/backendが担い、生成Schemaに問題・選択肢用fieldを含めない。
 - controlの正答要約・誤答解説は同じprojectionを使い、学習段階・診断・履歴・識別子を除きつつ、現在の問題・選択内容・表示済み教材・共通RAGを保つ。一般的な誤解の説明・訂正は許容する。
 - controlとproposedのRAG本文・検索条件は共通であり、proposedだけにtaxonomy・履歴・足場掛け情報が入る。
 - `teaching_targets`が3用語のM1/M3選択肢すべてに存在し、M1のE選択時に選択肢本文、`llm_knowledge:pretest:E`、研究者確認済みの「プロンプトだけでは重みを更新しない」という訂正がproposed payloadへ入る。
 - proposedの`pretest_target(s)`、`taxonomy_version`、`prompt_contract_version`が`AICallLog.request_payload`へ保存され、`TutorTurn.diagnosis_json`にも契約と検証結果が保存される。controlにはtaxonomy、誤答主張、診断履歴、learner state、learning stage、過去回答を入れない。
+- `TutorTurn.diagnosis_json`と`AICallLog.request_payload.generation_audit`に`instruction_route`、`fixed_sequence_key`、用語・session/turn・variant、`actual_ai_input`が保存される。controlの`actual_ai_input`に識別子、群名、stage、診断、pretest、履歴がなく、Codex実行時は`effective_request`にも同じ監査情報がある。
 - Codex app-serverが返した補正前のJSON文字列が`AICallLog.raw_text`に保存され、`response_payload`には補正後の利用値が保存される。参加者ログAPIとCSVの`value_json`から両方を比較できる。
 - M1/M3/unknownの`teaching_contract`がclaim ID、方略、訂正、仕組み、対比例、転移確認を満たし、本文と一致する。欠落・不正claim・誤った方略は同じbackendで初回を含む最大3試行（再生成は最大2回）後に503となる。
 - M1/M3が混在する事前テスト、事前targetのない学習中M1/M3、staleなM1/M3 targetを含むunknownで、claimの混在・捏造・503が発生しない。日本語に隣接した内部ラベルと改行を含む証拠文も検証する。
