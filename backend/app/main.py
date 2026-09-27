@@ -54,6 +54,7 @@ from app.services.experiment import (
     submit_survey,
 )
 from app.services.idempotency import run_idempotent
+from app.services.tutor_prefetch import tutor_prefetch_registry
 
 
 settings = get_settings()
@@ -293,6 +294,7 @@ async def api_give_up_learning(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
+    await tutor_prefetch_registry.cancel_for_participant(participant_id)
     return await run_idempotent(
         db,
         scope=f"give_up_learning:{participant_id}",
@@ -309,6 +311,7 @@ async def api_give_up_experiment(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
+    await tutor_prefetch_registry.cancel_for_participant(participant_id)
     return await run_idempotent(
         db,
         scope=f"give_up_experiment:{participant_id}",
@@ -364,6 +367,10 @@ async def api_generate_tutor_turn(
 ) -> dict:
     session = db.get(TutorSession, session_id)
     participant_id = session.participant_id if session else None
+    await tutor_prefetch_registry.wait_for(session_id)
+    db.expire_all()
+    session = db.get(TutorSession, session_id)
+    participant_id = session.participant_id if session else participant_id
 
     async def operation() -> dict:
         turn = await generate_tutor_turn(db, session_id)
@@ -418,14 +425,33 @@ async def api_respond_tutor_turn(
     turn = db.get(TutorTurn, turn_id)
     session = db.get(TutorSession, turn.tutor_session_id) if turn else None
     participant_id = session.participant_id if session else None
-    return await run_idempotent(
-        db,
-        scope=f"tutor_turn_respond:{turn_id}",
-        key=idempotency_key,
-        participant_id=participant_id,
-        request_data=payload.model_dump(mode="json"),
-        operation=lambda: respond_tutor_turn(db, turn_id, payload.model_dump()),
+    prefetch_handle = (
+        tutor_prefetch_registry.prepare(session.id, participant_id)
+        if session is not None and participant_id is not None
+        else None
     )
+    try:
+        result = await run_idempotent(
+            db,
+            scope=f"tutor_turn_respond:{turn_id}",
+            key=idempotency_key,
+            participant_id=participant_id,
+            request_data=payload.model_dump(mode="json"),
+            operation=lambda: respond_tutor_turn(
+                db,
+                turn_id,
+                payload.model_dump(),
+                prefetch_handle=prefetch_handle,
+            ),
+        )
+    except BaseException:
+        if prefetch_handle is not None:
+            prefetch_handle.abort()
+        raise
+    else:
+        if prefetch_handle is not None:
+            prefetch_handle.confirm()
+        return result
 
 
 @app.post("/api/participants/{participant_id}/score-retest")

@@ -49,6 +49,12 @@ learning確認は`enrichment` / `conceptual_change`のstage・用語ごとにv1�
 
 統制群の正答要約・誤答解説も同じallowlist projectionを通し、現在の問題、選択内容、表示済み教材、共通RAGだけを残す。学習段階・診断・履歴・識別子は入力しない。前の確認問題の解説を次の教材生成へ持ち越さない。
 
+### 学習回答後の先行生成
+
+`TutorTurn`の回答確定処理は固定採点の結果から次ターン用の不変な生成計画を作る。計画は現在のDBオブジェクトを先に変更せず、次段階、回答、履歴の投影、固定問題の次variant、群別payloadを保持する。これを使って次教材AIを別タスクで開始し、解説AIと並行させる。
+
+`backend/app/services/tutor_prefetch.py`のプロセス内レジストリはセッションごとに1つの先行生成を管理する。先行生成タスクはAI応答を得ても回答リクエストの成功通知までは保存ゲートで待機し、成功後にだけ別DBセッションから未回答`TutorTurn`を保存する。回答失敗、ギブアップ、タスクキャンセル時は結果を破棄する。次ターンAPIはレジストリの完了を待ち、保存済みターンを通常の生成サービスが再利用する。
+
 ## RAG
 
 `rag_agent_knowledge_base/` はDockerからread-onlyで参照する。`retriever.py` は `chunks.jsonl`、`embeddings_sparse.npz`、`retrieval_model.joblib` を読み、用語ごとのallowed sectionとLangGraph除外を適用する。

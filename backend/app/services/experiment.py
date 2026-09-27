@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import json
 import random
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException
@@ -30,6 +33,7 @@ from app.ai.teaching_contract import (
 )
 from app.core.config import get_settings
 from app.core.runtime_config import current_reasoning_effort
+from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import content_term, learning_question_spec, load_content, teaching_target_for_option
 from app.models import (
@@ -53,6 +57,7 @@ from app.models import (
     now,
 )
 from app.services.idempotency import idempotency_error
+from app.services.tutor_prefetch import PrefetchHandle
 
 
 PUBLIC_LEVEL = {"L3": "豊富化", "L2": "概念変化"}
@@ -74,6 +79,22 @@ RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではあり�
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
 MANDATORY_ELEMENT_MAX_ATTEMPTS = 2
+
+
+@dataclass
+class TutorTurnGenerationPlan:
+    session_id: str
+    participant_id: str
+    group_condition: str
+    turn_index: int
+    scaffolding_level: str
+    previous_teaching_strategy: str | None
+    tutor_message_prefix: str
+    learner_prompt: str
+    practice_question: dict[str, Any]
+    position: dict[str, Any]
+    payload: dict[str, Any]
+    forbidden_material: list[str]
 
 
 def _commit(db: Session) -> None:
@@ -1686,17 +1707,32 @@ def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> Tu
     return session
 
 
-async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
-    session = db.get(TutorSession, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="session not found")
-    participant = get_participant(db, session.participant_id, for_update=True)
-    session = db.query(TutorSession).filter_by(id=session_id).with_for_update().one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="session not found")
-    _assert_participant_active(participant)
-    if session.ended_at is not None:
-        raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
+def _predicted_history_entry(turn: TutorTurn, predicted_answer: dict[str, Any]) -> dict[str, Any]:
+    meta = _practice_meta(turn)
+    grading = predicted_answer["grading_json"]
+    stage = grading.get("learning_stage") or meta.get("learning_stage") or "conceptual_change"
+    return {
+        "turn_id": turn.id,
+        "turn_index": turn.turn_index,
+        "learning_stage": stage,
+        "label": grading.get("component_term") or meta.get("component_term") or LEARNING_STAGE_LABELS.get(stage, "概念変化"),
+        "component_term": grading.get("component_term") or meta.get("component_term"),
+        "component_index": grading.get("component_index", meta.get("component_index")),
+        "misconception_type": grading.get("learning_misconception_type"),
+        "confidence": grading.get("learning_misconception_confidence"),
+        "reason": grading.get("learning_misconception_reason"),
+        "is_sufficient": grading.get("is_sufficient"),
+    }
+
+
+def _build_tutor_turn_plan(
+    db: Session,
+    session: TutorSession,
+    participant: Participant,
+    *,
+    predicted_answer: dict[str, Any] | None = None,
+) -> TutorTurnGenerationPlan:
+    """Build one generation request without mutating the answer transaction."""
     term = db.get(Term, session.term_id)
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one()
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
@@ -1716,23 +1752,43 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
             .first()
         )
-    latest_open_turn = (
-        db.query(TutorTurn)
-        .filter_by(tutor_session_id=session.id, learner_response=None)
-        .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
-        .first()
-    )
-    if latest_open_turn:
-        return latest_open_turn
+
     position = _learning_position(db, session, term, participant)
+    misconception_history = session_misconception_history(db, session.id)
+    current_level = normalize_level(state.scaffolding_level)
+    state_current_status = state.current_status
+    state_primary_misconception = state.primary_misconception
+
+    if predicted_answer is not None:
+        # Project the fixed grading result without writing it before feedback
+        # generation succeeds. The detached turn is used only for prompt text.
+        misconception_history = [
+            *misconception_history,
+            _predicted_history_entry(predicted_answer["turn"], predicted_answer),
+        ]
+        predicted_stage = predicted_answer["next_learning_stage"]
+        position = {
+            **position,
+            "learning_stage": predicted_stage,
+            "learning_stage_label": LEARNING_STAGE_LABELS[predicted_stage],
+        }
+        current_level = predicted_answer["next_level"]
+        state_current_status = predicted_answer["diagnosed_status"]
+        state_primary_misconception = predicted_answer["learning_misconception_type"]
+        if participant.group_condition == "proposed":
+            previous_turn = SimpleNamespace(
+                id=predicted_answer["turn"].id,
+                turn_index=predicted_answer["turn"].turn_index,
+                practice_question_json=predicted_answer["turn"].practice_question_json,
+                learner_response=predicted_answer["response"],
+            )
+
     if position["learning_stage"] == "final_feedback":
         raise HTTPException(status_code=400, detail="learning session already completed")
 
-    current_level = normalize_level(state.scaffolding_level)
-    misconception_history = session_misconception_history(db, session.id)
     previous_learning_misconception = misconception_history[-1] if misconception_history else None
-    effective_misconception = (previous_learning_misconception or {}).get("misconception_type") or state.primary_misconception
-    effective_status = "unknown" if effective_misconception == "unknown" else ("misconception" if effective_misconception else state.current_status)
+    effective_misconception = (previous_learning_misconception or {}).get("misconception_type") or state_primary_misconception
+    effective_status = "unknown" if effective_misconception == "unknown" else ("misconception" if effective_misconception else state_current_status)
     effective_strategy = strategy_for(effective_misconception, effective_status, participant.group_condition)
     if participant.group_condition == "control":
         effective_strategy = "general_explanation"
@@ -1740,12 +1796,8 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if not active_misconception_type and position["learning_stage"] == "enrichment":
         active_misconception_type = "unknown"
 
-    # The learning question order is session-scoped.  Counting only turns in
-    # the current stage reset the variant sequence whenever the adaptive stage
-    # changed, which made the fixed question bank appear randomly ordered.
-    # ``turn_count`` is also the displayed problem position and advances only
-    # when a new TutorTurn is generated, never when the current answer is
-    # graded.
+    # The learning question order is session-scoped and advances only when a
+    # new TutorTurn is generated, never when the current answer is graded.
     learning_variant_index = min(turn_count + 1, 5)
     spec = _learning_question_spec(
         term.slug,
@@ -1765,10 +1817,6 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "variant_key": spec["variant_key"],
         "learning_variant_index": learning_variant_index,
     }
-    tutor_message = spec["material"]
-    teaching_strategy = effective_strategy
-    material_source = "ai"
-    material_generation_ms = None
     common_payload = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
@@ -1810,8 +1858,8 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "pretest_target": primary_pretest_target,
             "pretest_targets": pretest_targets,
             "learner_state": {
-                "current_status": state.current_status,
-                "primary_misconception": state.primary_misconception,
+                "current_status": state_current_status,
+                "primary_misconception": state_primary_misconception,
                 "scaffolding_level": current_level,
                 "teaching_strategy": effective_strategy,
                 "recurrence_count": state.recurrence_count,
@@ -1834,32 +1882,44 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         }
     else:
         payload = common_payload
-    started = perf_counter()
-    forbidden_material = [spec["expected_answer"], spec["body"]]
-    forbidden_material.extend(
-        option["body"] for option in spec.get("options") or [] if option.get("is_correct")
-    )
-    result, mandatory_validation = await _generate_validated_tutoring_turn(
-        db,
-        payload,
-        forbidden_strings=forbidden_material,
-    )
-    material_generation_ms = int((perf_counter() - started) * 1000)
-    tutor_message = _previous_turn_prefix(previous_turn) + result["tutor_message"]
-    teaching_strategy = result["teaching_strategy"]
 
-    turn = TutorTurn(
-        tutor_session_id=session.id,
+    forbidden_material = [spec["expected_answer"], spec["body"]]
+    forbidden_material.extend(option["body"] for option in spec.get("options") or [] if option.get("is_correct"))
+    return TutorTurnGenerationPlan(
+        session_id=session.id,
+        participant_id=participant.id,
+        group_condition=participant.group_condition,
         turn_index=turn_count + 1,
         scaffolding_level=current_level,
-        teaching_strategy=teaching_strategy,
         previous_teaching_strategy=state.previous_teaching_strategy,
-        strategy_changed=False,
-        tutor_message=tutor_message,
+        tutor_message_prefix=_previous_turn_prefix(previous_turn),
         learner_prompt=spec["body"],
-        practice_question_json=_merge_stage_meta(practice_question, position),
+        practice_question=_merge_stage_meta(practice_question, position),
+        position=position,
+        payload=payload,
+        forbidden_material=forbidden_material,
+    )
+
+
+def _persist_tutor_turn(
+    db: Session,
+    plan: TutorTurnGenerationPlan,
+    result: dict[str, Any],
+    mandatory_validation: dict[str, Any],
+    material_generation_ms: int,
+) -> TutorTurn:
+    turn = TutorTurn(
+        tutor_session_id=plan.session_id,
+        turn_index=plan.turn_index,
+        scaffolding_level=plan.scaffolding_level,
+        teaching_strategy=result["teaching_strategy"],
+        previous_teaching_strategy=plan.previous_teaching_strategy,
+        strategy_changed=False,
+        tutor_message=plan.tutor_message_prefix + result["tutor_message"],
+        learner_prompt=plan.learner_prompt,
+        practice_question_json=plan.practice_question,
         diagnosis_json={
-            "material_source": material_source,
+            "material_source": "ai",
             "material_generation_ms": material_generation_ms,
             "mandatory_elements": result.get("mandatory_elements"),
             "mandatory_elements_validation": mandatory_validation,
@@ -1867,9 +1927,9 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "teaching_contract_validation": mandatory_validation.get("teaching_contract"),
             "generation_attempts": mandatory_validation.get("attempts"),
             "tutoring_output_metrics": result.get("output_metrics") or _tutoring_output_metrics(result),
-            "group_condition": participant.group_condition,
-            "taxonomy_version": payload.get("taxonomy_version"),
-            "prompt_contract_version": payload.get("prompt_contract_version"),
+            "group_condition": plan.group_condition,
+            "taxonomy_version": plan.payload.get("taxonomy_version"),
+            "prompt_contract_version": plan.payload.get("prompt_contract_version"),
         },
         forbidden_help_given=False,
     )
@@ -1878,7 +1938,82 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     db.refresh(turn)
     return turn
 
-async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+
+async def _run_tutor_turn_prefetch(handle: PrefetchHandle, plan: TutorTurnGenerationPlan) -> None:
+    """Generate early and publish only after the answer request commits."""
+    db = SessionLocal()
+    try:
+        started = perf_counter()
+        result, mandatory_validation = await _generate_validated_tutoring_turn(
+            db,
+            plan.payload,
+            forbidden_strings=plan.forbidden_material,
+        )
+        material_generation_ms = int((perf_counter() - started) * 1000)
+        if not await handle.wait_for_decision():
+            return
+
+        db.expire_all()
+        session = db.query(TutorSession).filter_by(id=plan.session_id).with_for_update().one_or_none()
+        if session is None or session.ended_at is not None:
+            return
+        open_turn = (
+            db.query(TutorTurn)
+            .filter_by(tutor_session_id=plan.session_id, learner_response=None)
+            .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
+            .first()
+        )
+        if open_turn is not None:
+            return
+        _persist_tutor_turn(db, plan, result, mandatory_validation, material_generation_ms)
+    except asyncio.CancelledError:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
+    session = db.get(TutorSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="session not found")
+    participant = get_participant(db, session.participant_id, for_update=True)
+    session = db.query(TutorSession).filter_by(id=session_id).with_for_update().one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="session not found")
+    _assert_participant_active(participant)
+    if session.ended_at is not None:
+        raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
+    latest_open_turn = (
+        db.query(TutorTurn)
+        .filter_by(tutor_session_id=session.id, learner_response=None)
+        .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
+        .first()
+    )
+    if latest_open_turn:
+        return latest_open_turn
+
+    plan = _build_tutor_turn_plan(db, session, participant)
+    started = perf_counter()
+    result, mandatory_validation = await _generate_validated_tutoring_turn(
+        db,
+        plan.payload,
+        forbidden_strings=plan.forbidden_material,
+    )
+    material_generation_ms = int((perf_counter() - started) * 1000)
+    return _persist_tutor_turn(db, plan, result, mandatory_validation, material_generation_ms)
+
+
+async def respond_tutor_turn(
+    db: Session,
+    turn_id: str,
+    payload: dict[str, Any],
+    *,
+    prefetch_handle: PrefetchHandle | None = None,
+) -> dict[str, Any]:
     turn = db.get(TutorTurn, turn_id)
     if not turn:
         raise HTTPException(status_code=404, detail="turn not found")
@@ -1940,6 +2075,47 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     next_action = "move_next" if session_completed else "continue"
     target_rows_before_completion = learning_targets(db, participant.id) if session_completed else []
 
+    grading_json = {
+        "is_sufficient": is_sufficient,
+        "selected_option_id": selected_options[0]["option_id"] if selected_options else payload.get("selected_option_id"),
+        "selected_option_ids": [option["option_id"] for option in selected_options],
+        "selected_option_body": result.get("selected_option_body") or response,
+        "learning_stage": learning_stage,
+        "component_term": component_term,
+        "component_index": component_index,
+        "component_total": component_total,
+        "item_results": [],
+        "stage_completed": stage_completed,
+        "next_learning_stage": next_learning_stage,
+        "next_component_index": component_total if is_sufficient else component_index,
+        "diagnosed_status": diagnosed_status,
+        "learning_misconception_type": learning_misconception_type,
+        "learning_misconception_confidence": learning_misconception_confidence,
+        "learning_misconception_reason": learning_misconception_reason,
+        "ai_next_action": result.get("next_action"),
+        "response_time_sec": payload.get("response_time_sec"),
+        "material_source": (turn.diagnosis_json or {}).get("material_source"),
+        "material_generation_ms": (turn.diagnosis_json or {}).get("material_generation_ms"),
+    }
+    if prefetch_handle is not None and not is_sufficient and not attempt_limit_reached:
+        prefetch_plan = _build_tutor_turn_plan(
+            db,
+            session,
+            participant,
+            predicted_answer={
+                "turn": turn,
+                "response": response,
+                "grading_json": grading_json,
+                "next_level": next_level,
+                "next_learning_stage": next_learning_stage,
+                "diagnosed_status": diagnosed_status,
+                "learning_misconception_type": learning_misconception_type,
+            },
+        )
+        prefetch_handle.start(
+            lambda worker_handle: _run_tutor_turn_prefetch(worker_handle, prefetch_plan)
+        )
+
     selected_explanation_options = [
         option for option in selected_options if is_sufficient or not option.get("is_correct")
     ]
@@ -1997,28 +2173,7 @@ async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any])
     turn.response_time_sec = payload.get("response_time_sec")
     turn.next_scaffolding_level = next_level
     turn.ai_feedback = feedback_text
-    turn.grading_json = {
-        "is_sufficient": is_sufficient,
-        "selected_option_id": selected_options[0]["option_id"] if selected_options else payload.get("selected_option_id"),
-        "selected_option_ids": [option["option_id"] for option in selected_options],
-        "selected_option_body": result.get("selected_option_body") or response,
-        "learning_stage": learning_stage,
-        "component_term": component_term,
-        "component_index": component_index,
-        "component_total": component_total,
-        "item_results": [],
-        "stage_completed": stage_completed,
-        "next_learning_stage": next_learning_stage,
-        "next_component_index": component_total if is_sufficient else component_index,
-        "diagnosed_status": diagnosed_status,
-        "learning_misconception_type": learning_misconception_type,
-        "learning_misconception_confidence": learning_misconception_confidence,
-        "learning_misconception_reason": learning_misconception_reason,
-        "ai_next_action": result.get("next_action"),
-        "response_time_sec": payload.get("response_time_sec"),
-        "material_source": (turn.diagnosis_json or {}).get("material_source"),
-        "material_generation_ms": (turn.diagnosis_json or {}).get("material_generation_ms"),
-    }
+    turn.grading_json = grading_json
     state.scaffolding_level = next_level
     state.stable_correct_count += 1 if is_sufficient else 0
     state.current_status = "stable_correct" if is_sufficient else diagnosed_status
