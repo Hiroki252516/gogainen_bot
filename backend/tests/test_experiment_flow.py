@@ -1834,6 +1834,11 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert proposed_turn_row.diagnosis_json["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
         assert proposed_turn_row.diagnosis_json["teaching_contract"]["target_claim_id"]
         assert proposed_turn_row.diagnosis_json["teaching_contract_validation"]["valid"] is True
+        turn_metrics = proposed_turn_row.diagnosis_json["tutoring_output_metrics"]
+        assert turn_metrics["target_character_count"] == MATERIAL_TARGET_CHARACTERS
+        assert turn_metrics["min_character_count"] == MATERIAL_MIN_CHARACTERS
+        assert turn_metrics["max_character_count"] == MATERIAL_MAX_CHARACTERS
+        assert turn_metrics["character_count_in_target_range"] == 1
         participant_log = client.get(f"/api/admin/participants/{proposed_pid}/logs")
         assert participant_log.status_code == 200, participant_log.text
         logged_turn = participant_log.json()["tutor_sessions"][0]["turns"][0]
@@ -2508,6 +2513,10 @@ def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
         assert log.response_payload["output_metrics"]["character_count"] == len(
             normalized_response["tutor_message"]
         )
+        assert log.response_payload["output_metrics"]["target_character_count"] == MATERIAL_TARGET_CHARACTERS
+        assert log.response_payload["output_metrics"]["min_character_count"] == MATERIAL_MIN_CHARACTERS
+        assert log.response_payload["output_metrics"]["max_character_count"] == MATERIAL_MAX_CHARACTERS
+        assert log.response_payload["output_metrics"]["character_count_in_target_range"] == 1
 
         participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
         assert participant_logs.status_code == 200, participant_logs.text
