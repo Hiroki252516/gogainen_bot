@@ -140,6 +140,10 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 
 先行生成turnは未回答の間、調査用回答履歴と学習負担の実績値に算入しない。再利用時は同じ`turn_id`を返し、`diagnosis_json`とAIログに生成元・待機・再利用・失敗・破棄を記録する。`failed`/`discarded`後に同期フォールバックでinteractive turnが保存されたセッションは実学習として扱い、未使用prefetchの整理では強制終了しない。これは参加者画面の表示仕様、YAML問題文・選択肢・採点、AIBackend契約を変更しない。
 
+## Issue #107 教材文字数の共通化メモ
+
+両群の`generate_tutoring_turn`教材本文は、Markdown記号を含む文字数で700文字を目標とし、600〜800文字を許容範囲とする。control/proposedのRAG、入力分離、必須教授要素、固定問題・採点は変更しない。backendは生成後に文字数を検証し、範囲外なら初回生成後に同じAI backendで最大2回再生成し、最大3試行とする。再生成時は前回の実測文字数をAIへの調整指示へ含める。文字数検証の実測値、目標・許容範囲、試行回数、最終結果は`AICallLog.response_payload.generation_validation`と`TutorTurn.diagnosis_json.material_length_validation`、`output_metrics`へ保存する。許容範囲外のままの場合は参加者へ教材を確定せず、既存のAI失敗処理へ送る.
+
 ## Known Deck Inconsistencies and Resolution
 
 7月22日PPTXと8月21日更新仕様を受け、古いTransformer固有のM1/M3判定は新規フローから外し、3項目共通のA〜C正解、D〜F=M1、G〜I=M3、J=unknownのYAML判定へ統一した。M2/M4は実行時taxonomyに保持する。

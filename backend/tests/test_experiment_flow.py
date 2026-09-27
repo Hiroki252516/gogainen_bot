@@ -18,7 +18,12 @@ from app.ai.backend import strategy_for
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY, TAXONOMY_VERSION
-from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION
+from app.ai.teaching_contract import (
+    MATERIAL_MAX_CHARACTERS,
+    MATERIAL_MIN_CHARACTERS,
+    MATERIAL_TARGET_CHARACTERS,
+    PROMPT_CONTRACT_VERSION,
+)
 from app.core.config import get_settings
 from app.core.runtime_config import reset_reasoning_effort_override, set_reasoning_effort
 from app.db.session import SessionLocal, _backfill_completion_reasons, _backfill_evaluation_completion_flags, engine
@@ -964,7 +969,9 @@ def test_next_learning_material_retains_previous_context_but_excludes_feedback()
             .all()
         )
         next_generation_log = next(
-            log for log in next_generation_log if log.request_payload.get("participant_id") == pid
+            log for log in next_generation_log
+            if log.request_payload.get("participant_id") == pid
+            and (log.request_payload.get("term") or {}).get("slug") == "multi_agent"
         )
         assert next_generation_log.request_payload["previous_practice_question"] == first_turn["practice_question"]["body"]
         assert next_generation_log.request_payload["previous_learner_response"] == previous_turn.learner_response
@@ -1827,6 +1834,11 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert proposed_turn_row.diagnosis_json["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
         assert proposed_turn_row.diagnosis_json["teaching_contract"]["target_claim_id"]
         assert proposed_turn_row.diagnosis_json["teaching_contract_validation"]["valid"] is True
+        turn_metrics = proposed_turn_row.diagnosis_json["tutoring_output_metrics"]
+        assert turn_metrics["target_character_count"] == MATERIAL_TARGET_CHARACTERS
+        assert turn_metrics["min_character_count"] == MATERIAL_MIN_CHARACTERS
+        assert turn_metrics["max_character_count"] == MATERIAL_MAX_CHARACTERS
+        assert turn_metrics["character_count_in_target_range"] == 1
         participant_log = client.get(f"/api/admin/participants/{proposed_pid}/logs")
         assert participant_log.status_code == 200, participant_log.text
         logged_turn = participant_log.json()["tutor_sessions"][0]["turns"][0]
@@ -2124,7 +2136,6 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     text = prompt_source.read_text(encoding="utf-8")
     assert "misconception_taxonomy" in text
     assert "M4なら不足スキーマの構築" in text
-    assert "450〜850字程度を目安" in text
     assert "固定問題バンクが表示・採点" in text
     assert "fixed_practice_question_items" not in text
     assert "### 要点" in text
@@ -2167,6 +2178,8 @@ def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatc
     )
 
     prompt = captured_prompt["text"]
+    assert f"{MATERIAL_TARGET_CHARACTERS}文字前後" in prompt
+    assert f"{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字" in prompt
     assert "前回の確認問題の内容" in prompt
     assert "前回の学習者の回答" in prompt
     assert "CURRENT_FIXED_QUESTION_DO_NOT_SEND" not in prompt
@@ -2500,6 +2513,10 @@ def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
         assert log.response_payload["output_metrics"]["character_count"] == len(
             normalized_response["tutor_message"]
         )
+        assert log.response_payload["output_metrics"]["target_character_count"] == MATERIAL_TARGET_CHARACTERS
+        assert log.response_payload["output_metrics"]["min_character_count"] == MATERIAL_MIN_CHARACTERS
+        assert log.response_payload["output_metrics"]["max_character_count"] == MATERIAL_MAX_CHARACTERS
+        assert log.response_payload["output_metrics"]["character_count_in_target_range"] == 1
 
         participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
         assert participant_logs.status_code == 200, participant_logs.text

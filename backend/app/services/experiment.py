@@ -27,9 +27,13 @@ from app.ai.mandatory_elements import (
 )
 from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
 from app.ai.teaching_contract import (
+    MATERIAL_MAX_CHARACTERS,
+    MATERIAL_MIN_CHARACTERS,
+    MATERIAL_TARGET_CHARACTERS,
     PROMPT_CONTRACT_VERSION,
     validate_tutoring_material_safety,
     validate_teaching_contract,
+    validate_tutoring_material_length,
 )
 from app.core.config import get_settings
 from app.core.runtime_config import current_reasoning_effort
@@ -78,7 +82,9 @@ LEARNING_ALLOWED_STEPS = {"learning_targets", "final_test"}
 RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではありません。"
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
-MANDATORY_ELEMENT_MAX_ATTEMPTS = 2
+# Both validation paths include the initial generation plus up to two retries.
+MANDATORY_ELEMENT_MAX_ATTEMPTS = 3
+MATERIAL_LENGTH_MAX_ATTEMPTS = 3
 PREFETCH_STATES = {"pending", "generating", "ready", "consumed", "failed", "discarded"}
 PREFETCH_WAITING_STATES = {"pending", "generating", "ready"}
 
@@ -298,6 +304,16 @@ def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
     }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
 
 
+def _material_length_retry(length_validation: dict[str, Any], attempt: int) -> dict[str, Any]:
+    return {
+        "attempt": attempt,
+        "target_character_count": MATERIAL_TARGET_CHARACTERS,
+        "min_character_count": MATERIAL_MIN_CHARACTERS,
+        "max_character_count": MATERIAL_MAX_CHARACTERS,
+        "actual_character_count": length_validation.get("character_count"),
+    }
+
+
 async def _generate_validated_tutoring_turn(
     db: Session,
     payload: dict[str, Any],
@@ -311,37 +327,52 @@ async def _generate_validated_tutoring_turn(
         if group == "proposed"
         else None
     )
+    retry_limit = max(MANDATORY_ELEMENT_MAX_ATTEMPTS, MATERIAL_LENGTH_MAX_ATTEMPTS)
     if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
         request_payload = {**payload, "generation_attempt": 1}
         validation: dict[str, Any] = {}
-        for attempt in range(1, MANDATORY_ELEMENT_MAX_ATTEMPTS + 1):
+        for attempt in range(1, retry_limit + 1):
             result = await _ai_call(db, "generate_tutoring_turn", request_payload)
             contract_validation = validate_teaching_contract(result, expected_type, payload)
             safety_validation = validate_tutoring_material_safety(result, forbidden_strings)
-            missing = [*contract_validation.get("missing", []), *safety_validation.get("missing", [])]
+            length_validation = validate_tutoring_material_length(result)
+            retry_missing = [
+                *contract_validation.get("missing", []),
+                *safety_validation.get("missing", []),
+            ]
+            missing = [
+                *retry_missing,
+                *length_validation.get("missing", []),
+            ]
             validation = {
                 "required": False,
-                "valid": contract_validation["valid"] and safety_validation["valid"],
+                "valid": contract_validation["valid"] and safety_validation["valid"] and length_validation["valid"],
                 "expected_type": expected_type,
                 "actual_type": None,
                 "required_fields": [],
                 "missing": missing,
                 "teaching_contract": contract_validation,
                 "material_safety": safety_validation,
+                "material_length": length_validation,
                 "attempt": attempt,
             }
             _attach_generation_validation(db, request_payload, validation)
             if validation["valid"]:
                 return result, {**validation, "attempts": attempt}
-            if attempt < MANDATORY_ELEMENT_MAX_ATTEMPTS:
+            if attempt < retry_limit:
                 request_payload = {
                     **payload,
                     "generation_attempt": attempt + 1,
-                    "mandatory_element_retry": {
-                        "attempt": attempt + 1,
-                        "missing": missing,
-                    },
                 }
+                if not length_validation["valid"]:
+                    request_payload["material_length_retry"] = _material_length_retry(
+                        length_validation, attempt + 1
+                    )
+                if retry_missing:
+                    request_payload["mandatory_element_retry"] = {
+                        "attempt": attempt + 1,
+                        "missing": retry_missing,
+                    }
         raise HTTPException(
             status_code=503,
             detail={
@@ -354,36 +385,47 @@ async def _generate_validated_tutoring_turn(
     term_label = (payload.get("term") or {}).get("label")
     request_payload = {**payload, "generation_attempt": 1}
     validation: dict[str, Any] = {}
-    for attempt in range(1, MANDATORY_ELEMENT_MAX_ATTEMPTS + 1):
+    for attempt in range(1, retry_limit + 1):
         result = await _ai_call(db, "generate_tutoring_turn", request_payload)
         mandatory_validation = validate_mandatory_elements(result, expected_type, term_label)
         contract_validation = validate_teaching_contract(result, expected_type, payload, term_label)
         safety_validation = validate_tutoring_material_safety(result, forbidden_strings)
-        missing = [
+        length_validation = validate_tutoring_material_length(result)
+        retry_missing = [
             *mandatory_validation.get("missing", []),
             *contract_validation.get("missing", []),
             *safety_validation.get("missing", []),
         ]
+        missing = [
+            *retry_missing,
+            *length_validation.get("missing", []),
+        ]
         validation = {
             **mandatory_validation,
-            "valid": mandatory_validation["valid"] and contract_validation["valid"] and safety_validation["valid"],
+            "valid": mandatory_validation["valid"] and contract_validation["valid"] and safety_validation["valid"] and length_validation["valid"],
             "missing": missing,
             "teaching_contract": contract_validation,
             "material_safety": safety_validation,
+            "material_length": length_validation,
             "attempt": attempt,
         }
         _attach_generation_validation(db, request_payload, validation)
         if validation["valid"]:
             return result, {**validation, "attempts": attempt}
-        if attempt < MANDATORY_ELEMENT_MAX_ATTEMPTS:
+        if attempt < retry_limit:
             request_payload = {
                 **payload,
                 "generation_attempt": attempt + 1,
-                "mandatory_element_retry": {
-                    "attempt": attempt + 1,
-                    "missing": missing,
-                },
             }
+            if not length_validation["valid"]:
+                request_payload["material_length_retry"] = _material_length_retry(
+                    length_validation, attempt + 1
+                )
+            if retry_missing:
+                request_payload["mandatory_element_retry"] = {
+                    "attempt": attempt + 1,
+                    "missing": retry_missing,
+                }
 
     raise HTTPException(
         status_code=503,
@@ -1224,8 +1266,13 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
 
 def _tutoring_output_metrics(result: dict[str, Any]) -> dict[str, int]:
     material = str(result.get("tutor_message") or "")
+    character_count = len(material)
     return {
-        "character_count": len(material),
+        "character_count": character_count,
+        "target_character_count": MATERIAL_TARGET_CHARACTERS,
+        "min_character_count": MATERIAL_MIN_CHARACTERS,
+        "max_character_count": MATERIAL_MAX_CHARACTERS,
+        "character_count_in_target_range": int(MATERIAL_MIN_CHARACTERS <= character_count <= MATERIAL_MAX_CHARACTERS),
         "paragraph_count": len([block for block in re.split(r"\n\s*\n", material.strip()) if block.strip()]),
         "bullet_count": len(re.findall(r"(?m)^\s*(?:[-*+] |\d+[.)] )", material)),
     }
@@ -2003,6 +2050,7 @@ def _tutor_turn_from_generation(
         "mandatory_elements_validation": mandatory_validation,
         "teaching_contract": result.get("teaching_contract"),
         "teaching_contract_validation": mandatory_validation.get("teaching_contract"),
+        "material_length_validation": mandatory_validation.get("material_length"),
         "generation_attempts": mandatory_validation.get("attempts"),
         "tutoring_output_metrics": result.get("output_metrics") or _tutoring_output_metrics(result),
         "group_condition": group_condition,

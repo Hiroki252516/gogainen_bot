@@ -19,12 +19,12 @@
 - `teaching_targets`が3用語のM1/M3選択肢すべてに存在し、M1のE選択時に選択肢本文、`llm_knowledge:pretest:E`、研究者確認済みの「プロンプトだけでは重みを更新しない」という訂正がproposed payloadへ入る。
 - proposedの`pretest_target(s)`、`taxonomy_version`、`prompt_contract_version`が`AICallLog.request_payload`へ保存され、`TutorTurn.diagnosis_json`にも契約と検証結果が保存される。controlにはtaxonomy、誤答主張、診断履歴、learner state、learning stage、過去回答を入れない。
 - Codex app-serverが返した補正前のJSON文字列が`AICallLog.raw_text`に保存され、`response_payload`には補正後の利用値が保存される。参加者ログAPIとCSVの`value_json`から両方を比較できる。
-- M1/M3/unknownの`teaching_contract`がclaim ID、方略、訂正、仕組み、対比例、転移確認を満たし、本文と一致する。欠落・不正claim・誤った方略は同じbackendで最大2回再生成後に503となる。
+- M1/M3/unknownの`teaching_contract`がclaim ID、方略、訂正、仕組み、対比例、転移確認を満たし、本文と一致する。欠落・不正claim・誤った方略は同じbackendで初回を含む最大3試行（再生成は最大2回）後に503となる。
 - M1/M3が混在する事前テスト、事前targetのない学習中M1/M3、staleなM1/M3 targetを含むunknownで、claimの混在・捏造・503が発生しない。日本語に隣接した内部ラベルと改行を含む証拠文も検証する。
 - AI入力と出力に固定確認問題・選択肢・正答を含めず、生成教材へ直前フィードバックを転載しない。RAGの検索条件は段階・診断に依存せず両群で同一である。
 - Codex成功・失敗ログの`effective_request`から実送信prompt、Schema、model、effort、prompt/taxonomy版、RAG query/section/chunk ID/本文hash、試行番号、送信状態を追跡でき、認証情報を含まない。送信前失敗は未送信と区別でき、Mock logにはCodex実送信監査がない。
 - 提案群の教材再生成を行った場合、各`AICallLog.response_payload.generation_validation`に試行単位の契約・安全性検証結果を残し、最終`TutorTurn.diagnosis_json`にも総試行数と最終検証を保存する。
-- 教材文字数・段落数・箇条書き数を記録し、本文450〜850字は両群共通の目安として扱う。長さだけで再生成しない。
+- 教材文字数・段落数・箇条書き数を記録し、本文700文字前後（600〜800文字）を両群共通の許容範囲として検証する。範囲外の場合は同じAI backendで初回を含む最大3試行（再生成は最大2回）とし、再生成時は前回の実測文字数をAIへの調整指示へ含め、最終検証結果をAIログとTutorTurnへ保存する。
 - app-server payloadが `gpt-5.6-luna` / `medium` を使う。
 - 正答時は `generate_correct_answer_summary`、誤答時は `explain_selected_distractor` が呼ばれ、解説生成の目的とpayloadが `AICallLog` に記録される。
 - `/api/participants/{participant_id}/learning-targets` が、既存の未達対象 `targets`、互換用 `pretest_results`、直近の `test_results`（周回名、問題文、本人が選んだ選択肢本文、正誤）を返す。`test_results` に正答、期待解答、選択肢ごとの正誤、M分類などの内部診断値を含めない。
@@ -47,6 +47,7 @@
 
 ## Frontend
 
+- 参加者向け画面のヘッダーで「管理画面」を押すと、実験画面から移動する確認と「実験データは削除されない」旨を表示し、キャンセル時は遷移しない。管理画面自身からの同リンクでは確認を表示しない。
 - `/start`で参加コードを入力し、同意書画面を経由してpretestへ進む。同意前や不正コードでは参加者を作成せず、被験者画面に群名・内部群の対応を表示しない。テスト終了後は仮アンケート画面を表示し、送信後に終了画面へ進む。
 - 管理画面の「実験開始画面へ戻る」は参加者情報をブラウザから外して`/start`を表示し、サーバーの実験データは削除しない。「実験途中に戻る」は保存済み参加者の`current-step`から正規の続き画面へ戻る。
 - pretest/retest/final-testで3用語が表示される。

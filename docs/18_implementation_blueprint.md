@@ -43,7 +43,7 @@ learning確認は`enrichment` / `conceptual_change`のstage・用語ごとにv1�
 
 1. `content_loader.py`がYAMLの`teaching_targets`を検証し、事前テストの誤答選択肢からclaim IDと訂正メタデータを復元する。
 2. 両群に用語・共通構成要素・同一検索条件のRAGを渡す。固定問題、選択肢、正答、参加者ID、群名は教材生成モデルへ渡さない。controlは一般的な通常AIチューターとして説明し、診断・学習段階・履歴・回答を参照しない。proposedだけに`pretest_target(s)`、learner state、誤概念履歴、taxonomy、足場掛け方略を追加する。
-3. Codex app-serverの`generate_tutoring_turn`出力では、proposedの`teaching_contract`と`mandatory_elements`をservice側で検証し、claim対応、M1/M3/unknownの方略、本文内証拠、正答漏えいを確認する。両群の教材本文は450〜850字程度を目安とし、文字数・段落数・箇条書き数を記録するが、長さだけを理由に再生成しない。
+3. Codex app-serverの`generate_tutoring_turn`出力では、proposedの`teaching_contract`と`mandatory_elements`をservice側で検証し、claim対応、M1/M3/unknownの方略、本文内証拠、正答漏えいを確認する。両群の教材本文は700文字前後（600〜800文字）に共通化し、文字数・段落数・箇条書き数を記録する。許容範囲外の場合は初回生成後に同じAI backendで最大2回再生成し、最大3試行とする。再生成時は前回の実測文字数をAIへの調整指示へ含める。
 4. 契約・安全性の欠落時は同じbackendへ最大2回再生成する。各AIログへ生成試行番号と検証結果を記録し、失敗時はMockへフォールバックせず503とする。
 5. `TutorTurn.diagnosis_json`には最終契約・検証・出力長指標を、`AICallLog.request_payload.effective_request`にはCodexへ実送信した`thread/start`・`turn/start`設定と全文prompt/schema、モデル・推論レベル、prompt/taxonomy版、RAG照合情報、送信状態を保存する。認証情報は保存しない。既存DB列・CSV固定列・採点ロジック・実験遷移は変更しない。
 

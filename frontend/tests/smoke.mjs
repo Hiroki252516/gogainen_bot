@@ -22,6 +22,19 @@ for (const file of required) {
 
 console.log("frontend smoke ok");
 
+const appShell = fs.readFileSync(new URL("../components/AppShell.tsx", import.meta.url), "utf8");
+for (const expectedText of [
+  "ADMIN_NAVIGATION_CONFIRM_MESSAGE",
+  "window.confirm",
+  "event.preventDefault()",
+  'step === "管理画面"',
+  'href="/admin"'
+]) {
+  if (!appShell.includes(expectedText)) {
+    throw new Error(`app shell is missing admin navigation confirmation: ${expectedText}`);
+  }
+}
+
 const groupAdminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
 for (const expectedText of ['"proposed", "control"', "role=\"tablist\"", "activeGroup", "group_condition"]) {
   if (!groupAdminPage.includes(expectedText)) {
