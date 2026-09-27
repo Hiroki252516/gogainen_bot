@@ -294,7 +294,7 @@ export default function AdminPage() {
         <section className="panel stack">
           <h1>管理画面</h1>
           <div className="group-tabs" role="tablist" aria-label="実験群">
-            {(["control", "proposed"] as GroupCondition[]).map((group) => (
+            {(["proposed", "control"] as GroupCondition[]).map((group) => (
               <button
                 key={group}
                 className={activeGroup === group ? "group-tab active" : "group-tab"}
