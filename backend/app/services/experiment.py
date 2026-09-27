@@ -326,10 +326,11 @@ async def _generate_validated_tutoring_turn(
         if group == "proposed"
         else None
     )
+    retry_limit = max(MANDATORY_ELEMENT_MAX_ATTEMPTS, MATERIAL_LENGTH_MAX_ATTEMPTS)
     if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
         request_payload = {**payload, "generation_attempt": 1}
         validation: dict[str, Any] = {}
-        for attempt in range(1, MATERIAL_LENGTH_MAX_ATTEMPTS + 1):
+        for attempt in range(1, retry_limit + 1):
             result = await _ai_call(db, "generate_tutoring_turn", request_payload)
             contract_validation = validate_teaching_contract(result, expected_type, payload)
             safety_validation = validate_tutoring_material_safety(result, forbidden_strings)
@@ -357,12 +358,15 @@ async def _generate_validated_tutoring_turn(
             _attach_generation_validation(db, request_payload, validation)
             if validation["valid"]:
                 return result, {**validation, "attempts": attempt}
-            if attempt < MATERIAL_LENGTH_MAX_ATTEMPTS:
+            if attempt < retry_limit:
                 request_payload = {
                     **payload,
                     "generation_attempt": attempt + 1,
-                    "material_length_retry": _material_length_retry(length_validation, attempt + 1),
                 }
+                if not length_validation["valid"]:
+                    request_payload["material_length_retry"] = _material_length_retry(
+                        length_validation, attempt + 1
+                    )
                 if retry_missing:
                     request_payload["mandatory_element_retry"] = {
                         "attempt": attempt + 1,
@@ -380,7 +384,7 @@ async def _generate_validated_tutoring_turn(
     term_label = (payload.get("term") or {}).get("label")
     request_payload = {**payload, "generation_attempt": 1}
     validation: dict[str, Any] = {}
-    for attempt in range(1, max(MANDATORY_ELEMENT_MAX_ATTEMPTS, MATERIAL_LENGTH_MAX_ATTEMPTS) + 1):
+    for attempt in range(1, retry_limit + 1):
         result = await _ai_call(db, "generate_tutoring_turn", request_payload)
         mandatory_validation = validate_mandatory_elements(result, expected_type, term_label)
         contract_validation = validate_teaching_contract(result, expected_type, payload, term_label)
@@ -407,12 +411,15 @@ async def _generate_validated_tutoring_turn(
         _attach_generation_validation(db, request_payload, validation)
         if validation["valid"]:
             return result, {**validation, "attempts": attempt}
-        if attempt < max(MANDATORY_ELEMENT_MAX_ATTEMPTS, MATERIAL_LENGTH_MAX_ATTEMPTS):
+        if attempt < retry_limit:
             request_payload = {
                 **payload,
                 "generation_attempt": attempt + 1,
-                "material_length_retry": _material_length_retry(length_validation, attempt + 1),
             }
+            if not length_validation["valid"]:
+                request_payload["material_length_retry"] = _material_length_retry(
+                    length_validation, attempt + 1
+                )
             if retry_missing:
                 request_payload["mandatory_element_retry"] = {
                     "attempt": attempt + 1,
