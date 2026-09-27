@@ -299,7 +299,7 @@ Unique:
 - prefetch_error_code TEXT(80) NULL
 - created_at TIMESTAMP NOT NULL
 
-`prefetch_state=none`は通常の対話生成、`ready`は後続用語の未回答v1教材が待機中、`consumed`はその教材を参加者へ再利用済みを表す。`failed`はAI失敗後に通常生成へ切り替え可能な状態、`discarded`は先行生成結果を利用しなかった状態である。既存DBへは列を追加し、過去行を`none`へ補正する。未使用の`pending`、`generating`、`ready`、`failed`、`discarded`は新周回やギブアップ時に再利用せず終了する。
+`prefetch_state=none`は通常の対話生成、`ready`は後続用語の未回答v1教材が待機中、`consumed`はその教材を参加者へ再利用済みを表す。`failed`はAI失敗後に通常生成へ切り替え可能な状態、`discarded`は先行生成結果を利用しなかった状態である。既存DBへは列を追加し、過去行を`none`へ補正する。未使用の`pending`、`generating`、`ready`、`failed`、`discarded`は新周回やギブアップ時に再利用せず終了する。ただし、`failed`または`discarded`から同期フォールバックで通常のinteractive turnが保存されたセッションは実学習中とみなし、未使用prefetchのクリーンアップで強制終了しない。
 
 ### tutor_turns
 
