@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -812,6 +813,123 @@ def test_learning_answer_generates_feedback_with_group_specific_payloads():
         assert summary_log.purpose == "generate_correct_answer_summary"
         assert proposed_log.request_payload["rag_context"] == proposed_tutoring_log.request_payload["rag_context"]
         assert control_log.request_payload["rag_context"] == control_tutoring_log.request_payload["rag_context"]
+    finally:
+        db.close()
+
+
+def test_wrong_learning_answer_prefetches_next_turn_and_reuses_one_open_turn(monkeypatch):
+    class CoordinatedBackend(MockAIBackend):
+        def __init__(self):
+            self.feedback_started = threading.Event()
+            self.prefetch_started = threading.Event()
+            self.feedback_finished = threading.Event()
+            self.allow_feedback = threading.Event()
+            self.allow_prefetch = threading.Event()
+            self.generation_calls = 0
+            self.generation_terms = []
+
+        async def wait_for(self, event):
+            for _ in range(500):
+                if event.is_set():
+                    return
+                await asyncio.sleep(0.01)
+            raise TimeoutError("coordinated backend event timed out")
+
+        async def generate_tutoring_turn(self, payload):
+            self.generation_calls += 1
+            term_slug = (payload.get("term") or {}).get("slug")
+            self.generation_terms.append(term_slug)
+            if term_slug == "multi_agent":
+                self.prefetch_started.set()
+            await self.wait_for(self.allow_prefetch)
+            return await super().generate_tutoring_turn(payload)
+
+        async def explain_selected_distractor(self, payload):
+            self.feedback_started.set()
+            await self.wait_for(self.allow_feedback)
+            result = await super().explain_selected_distractor(payload)
+            self.feedback_finished.set()
+            return result
+
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
+    first_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    backend = CoordinatedBackend()
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: backend)
+    result: dict[str, object] = {}
+
+    prefetch_client = TestClient(app, backend_options={"use_uvloop": True}) if uvloop else TestClient(app)
+    with prefetch_client:
+        def submit_answer():
+            result["response"] = prefetch_client.post(
+                f"/api/tutor-turns/{first_turn['turn_id']}/respond",
+                json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+                headers={"Idempotency-Key": "prefetch-concurrency-test"},
+            )
+
+        request_thread = threading.Thread(target=submit_answer)
+        request_thread.start()
+        try:
+            assert backend.feedback_started.wait(2)
+            assert backend.prefetch_started.wait(2)
+            assert request_thread.is_alive()
+
+            backend.allow_feedback.set()
+            assert backend.feedback_finished.wait(2)
+            request_thread.join(3)
+            response = result["response"]
+            assert response.status_code == 200, response.text
+            assert backend.generation_terms.count("multi_agent") == 1
+
+            backend.allow_prefetch.set()
+            next_turn = prefetch_client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+            assert next_turn.status_code == 200, next_turn.text
+            assert next_turn.json()["turn_index"] == first_turn["turn_index"] + 1
+            assert backend.generation_terms.count("multi_agent") == 1
+        finally:
+            backend.allow_feedback.set()
+            backend.allow_prefetch.set()
+            request_thread.join(5)
+
+    db = SessionLocal()
+    try:
+        assert db.query(TutorTurn).filter_by(tutor_session_id=session["tutor_session_id"]).count() == 2
+    finally:
+        db.close()
+
+
+def test_prefetch_failure_keeps_answer_successful_and_falls_back_to_sync_generation(monkeypatch):
+    class FailingOnceBackend(MockAIBackend):
+        def __init__(self):
+            self.generation_calls = 0
+
+        async def generate_tutoring_turn(self, payload):
+            self.generation_calls += 1
+            if self.generation_calls == 1:
+                raise CodexAppServerError("prefetch_failed", "先行生成に失敗しました。")
+            return await super().generate_tutoring_turn(payload)
+
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
+    first_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    backend = FailingOnceBackend()
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: backend)
+
+    response_client = TestClient(app, backend_options={"use_uvloop": True}) if uvloop else TestClient(app)
+    with response_client:
+        response = response_client.post(
+            f"/api/tutor-turns/{first_turn['turn_id']}/respond",
+            json={"selected_option_ids": _ids_for_labels(first_turn["practice_question"], ["A", "D", "G"])},
+            headers={"Idempotency-Key": "prefetch-failure-test"},
+        )
+        assert response.status_code == 200, response.text
+        next_turn = response_client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+        assert next_turn.status_code == 200, next_turn.text
+
+    assert backend.generation_calls == 2
+    db = SessionLocal()
+    try:
+        assert db.query(TutorTurn).filter_by(tutor_session_id=session["tutor_session_id"]).count() == 2
     finally:
         db.close()
 
