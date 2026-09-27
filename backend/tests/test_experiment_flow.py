@@ -723,7 +723,12 @@ def test_idempotency_replays_learning_session_turn_and_feedback_without_duplicat
 
     db = SessionLocal()
     try:
-        before_ai_log_count = db.query(AICallLog).filter(AICallLog.request_payload["participant_id"].as_string() == pid).count()
+        before_ai_log_count = sum(
+            1
+            for log in db.query(AICallLog).all()
+            if log.request_payload.get("participant_id") == pid
+            and (log.request_payload.get("generation_audit") or {}).get("origin") != "prefetch"
+        )
     finally:
         db.close()
     duplicate_response = client.post(
@@ -736,9 +741,14 @@ def test_idempotency_replays_learning_session_turn_and_feedback_without_duplicat
 
     db = SessionLocal()
     try:
-        assert db.query(TutorSession).filter_by(participant_id=pid).count() == 1
+        assert db.query(TutorSession).filter_by(id=session_id, participant_id=pid).count() == 1
         assert db.query(TutorTurn).filter_by(tutor_session_id=session_id).count() == 2
-        assert db.query(AICallLog).filter(AICallLog.request_payload["participant_id"].as_string() == pid).count() == before_ai_log_count
+        assert sum(
+            1
+            for log in db.query(AICallLog).all()
+            if log.request_payload.get("participant_id") == pid
+            and (log.request_payload.get("generation_audit") or {}).get("origin") != "prefetch"
+        ) == before_ai_log_count
     finally:
         db.close()
 
@@ -780,8 +790,18 @@ def test_learning_answer_generates_feedback_with_group_specific_payloads():
         control_log = next(log for log in reversed(explanation_logs) if log.request_payload.get("participant_id") == control_pid)
         summary_log = next(log for log in reversed(explanation_logs) if log.request_payload.get("participant_id") == correct_pid)
         tutoring_logs = db.query(AICallLog).filter_by(purpose="generate_tutoring_turn").all()
-        proposed_tutoring_log = next(log for log in reversed(tutoring_logs) if log.request_payload.get("participant_id") == proposed_pid)
-        control_tutoring_log = next(log for log in reversed(tutoring_logs) if log.request_payload.get("participant_id") == control_pid)
+        proposed_tutoring_log = next(
+            log for log in reversed(tutoring_logs)
+            if log.request_payload.get("participant_id") == proposed_pid
+            and (log.request_payload.get("term") or {}).get("slug") == "multi_agent"
+            and (log.request_payload.get("generation_audit") or {}).get("origin") != "prefetch"
+        )
+        control_tutoring_log = next(
+            log for log in reversed(tutoring_logs)
+            if log.request_payload.get("participant_id") == control_pid
+            and (log.request_payload.get("term") or {}).get("slug") == "multi_agent"
+            and (log.request_payload.get("generation_audit") or {}).get("origin") != "prefetch"
+        )
         assert proposed_log.purpose == "explain_selected_distractor"
         assert proposed_log.request_payload["misconception_taxonomy"] == MISCONCEPTION_TAXONOMY
         assert "session_misconception_history" in proposed_log.request_payload
@@ -1644,8 +1664,18 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
     db = SessionLocal()
     try:
         tutoring_logs = db.query(AICallLog).filter_by(purpose="generate_tutoring_turn").all()
-        proposed_log = next(log for log in reversed(tutoring_logs) if log.request_payload.get("participant_id") == proposed_pid)
-        control_log = next(log for log in reversed(tutoring_logs) if log.request_payload.get("participant_id") == control_pid)
+        proposed_log = next(
+            log for log in reversed(tutoring_logs)
+            if log.request_payload.get("participant_id") == proposed_pid
+            and (log.request_payload.get("term") or {}).get("slug") == "llm_knowledge"
+            and (log.request_payload.get("generation_audit") or {}).get("origin") != "prefetch"
+        )
+        control_log = next(
+            log for log in reversed(tutoring_logs)
+            if log.request_payload.get("participant_id") == control_pid
+            and (log.request_payload.get("term") or {}).get("slug") == "llm_knowledge"
+            and (log.request_payload.get("generation_audit") or {}).get("origin") != "prefetch"
+        )
         assert proposed_log.request_payload["misconception_taxonomy"] == MISCONCEPTION_TAXONOMY
         assert proposed_log.request_payload["taxonomy_version"] == TAXONOMY_VERSION
         assert proposed_log.request_payload["prompt_contract_version"] == PROMPT_CONTRACT_VERSION

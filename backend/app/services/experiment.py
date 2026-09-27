@@ -52,7 +52,7 @@ from app.models import (
     TutorTurn,
     now,
 )
-from app.services.idempotency import idempotency_error
+from app.services.idempotency import idempotency_error, run_idempotent
 
 
 PUBLIC_LEVEL = {"L3": "豊富化", "L2": "概念変化"}
@@ -74,6 +74,8 @@ RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではあり�
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
 MANDATORY_ELEMENT_MAX_ATTEMPTS = 2
+PREFETCH_STATES = {"pending", "generating", "ready", "consumed", "failed", "discarded"}
+PREFETCH_WAITING_STATES = {"pending", "generating", "ready"}
 
 
 def _commit(db: Session) -> None:
@@ -650,6 +652,11 @@ def _close_open_tutor_sessions(db: Session, participant_id: str) -> int:
     open_sessions = db.query(TutorSession).filter_by(participant_id=participant_id, ended_at=None).all()
     ended_at = now()
     for session in open_sessions:
+        if _prefetch_state(session) in PREFETCH_WAITING_STATES | {"failed"}:
+            session.prefetch_state = "discarded"
+            session.prefetch_discarded_at = ended_at
+            session.prefetch_error_code = "participant_session_closed"
+            _update_prefetch_ai_logs(db, session.id, disposition="discarded", error_code="participant_session_closed")
         session.ended_at = ended_at
     return len(open_sessions)
 
@@ -775,6 +782,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
 def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Save the temporary post-experiment survey and complete the participant flow."""
     participant = get_participant(db, participant_id, for_update=True)
+    discard_unconsumed_prefetches(db, participant.id, reason="experiment_finished")
     existing = (
         db.query(ParticipantSurvey)
         .filter_by(participant_id=participant.id, phase="posttest")
@@ -1203,10 +1211,17 @@ def _tutoring_output_metrics(result: dict[str, Any]) -> dict[str, int]:
 async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[str, Any]:
     reasoning_effort = current_reasoning_effort()
     backend = get_ai_backend(reasoning_effort=reasoning_effort)
-    logged_payload = {**payload, "reasoning_effort": reasoning_effort}
+    # Generation provenance is server-side audit metadata.  Keep it in the
+    # database log, but never send it to the model as part of the teaching
+    # contract or prompt input.
+    generation_audit = payload.get("_generation_audit")
+    backend_payload = {key: value for key, value in payload.items() if key != "_generation_audit"}
+    logged_payload = {**backend_payload, "reasoning_effort": reasoning_effort}
+    if generation_audit is not None:
+        logged_payload["generation_audit"] = generation_audit
     started = datetime.now(UTC)
     try:
-        result = await getattr(backend, purpose)(payload)
+        result = await getattr(backend, purpose)(backend_payload)
         raw_text = getattr(result, "raw_text", None)
         request_audit = getattr(result, "request_audit", None)
         result = dict(result)
@@ -1686,18 +1701,18 @@ def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> Tu
     return session
 
 
-async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
-    session = db.get(TutorSession, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="session not found")
-    participant = get_participant(db, session.participant_id, for_update=True)
-    session = db.query(TutorSession).filter_by(id=session_id).with_for_update().one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="session not found")
-    _assert_participant_active(participant)
-    if session.ended_at is not None:
-        raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
+def _tutoring_generation_context(
+    db: Session,
+    session: TutorSession,
+    participant: Participant,
+    *,
+    generation_origin: str = "interactive",
+    prefetch_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the same fixed-question/AI contract for interactive and prefetched turns."""
     term = db.get(Term, session.term_id)
+    if not term:
+        raise HTTPException(status_code=404, detail="term not found")
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one()
     previous_attempt = db.get(Attempt, state.last_attempt_id) if state.last_attempt_id else None
     pretest_attempt = (
@@ -1716,14 +1731,6 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
             .first()
         )
-    latest_open_turn = (
-        db.query(TutorTurn)
-        .filter_by(tutor_session_id=session.id, learner_response=None)
-        .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
-        .first()
-    )
-    if latest_open_turn:
-        return latest_open_turn
     position = _learning_position(db, session, term, participant)
     if position["learning_stage"] == "final_feedback":
         raise HTTPException(status_code=400, detail="learning session already completed")
@@ -1740,13 +1747,9 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if not active_misconception_type and position["learning_stage"] == "enrichment":
         active_misconception_type = "unknown"
 
-    # The learning question order is session-scoped.  Counting only turns in
-    # the current stage reset the variant sequence whenever the adaptive stage
-    # changed, which made the fixed question bank appear randomly ordered.
-    # ``turn_count`` is also the displayed problem position and advances only
-    # when a new TutorTurn is generated, never when the current answer is
-    # graded.
-    learning_variant_index = min(turn_count + 1, 5)
+    # Prefetch is always the first fixed question (v1).  Interactive turns
+    # retain the existing session-scoped sequence and adaptive stage behavior.
+    learning_variant_index = 1 if generation_origin == "prefetch" else min(turn_count + 1, 5)
     spec = _learning_question_spec(
         term.slug,
         position["learning_stage"],
@@ -1765,10 +1768,6 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         "variant_key": spec["variant_key"],
         "learning_variant_index": learning_variant_index,
     }
-    tutor_message = spec["material"]
-    teaching_strategy = effective_strategy
-    material_source = "ai"
-    material_generation_ms = None
     common_payload = {
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
@@ -1834,49 +1833,494 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
         }
     else:
         payload = common_payload
-    started = perf_counter()
+    payload["_generation_audit"] = {
+        "origin": generation_origin,
+        "prefetch": prefetch_audit,
+    }
     forbidden_material = [spec["expected_answer"], spec["body"]]
     forbidden_material.extend(
         option["body"] for option in spec.get("options") or [] if option.get("is_correct")
     )
-    result, mandatory_validation = await _generate_validated_tutoring_turn(
-        db,
-        payload,
-        forbidden_strings=forbidden_material,
-    )
-    material_generation_ms = int((perf_counter() - started) * 1000)
-    tutor_message = _previous_turn_prefix(previous_turn) + result["tutor_message"]
-    teaching_strategy = result["teaching_strategy"]
+    return {
+        "session": session,
+        "participant": participant,
+        "term": term,
+        "state": state,
+        "position": position,
+        "spec": spec,
+        "practice_question": practice_question,
+        "payload": payload,
+        "forbidden_material": forbidden_material,
+        "turn_count": turn_count,
+        "previous_turn": previous_turn,
+        "current_level": current_level,
+        "generation_origin": generation_origin,
+        "prefetch_audit": prefetch_audit,
+    }
 
-    turn = TutorTurn(
+
+def _tutor_turn_from_generation(
+    context: dict[str, Any],
+    result: dict[str, Any],
+    mandatory_validation: dict[str, Any],
+    *,
+    material_generation_ms: int,
+) -> TutorTurn:
+    session = context["session"]
+    participant = context["participant"]
+    state = context["state"]
+    position = context["position"]
+    spec = context["spec"]
+    previous_turn = context["previous_turn"]
+    prefetch_audit = context.get("prefetch_audit")
+    diagnosis = {
+        "material_source": "ai",
+        "material_generation_ms": material_generation_ms,
+        "mandatory_elements": result.get("mandatory_elements"),
+        "mandatory_elements_validation": mandatory_validation,
+        "teaching_contract": result.get("teaching_contract"),
+        "teaching_contract_validation": mandatory_validation.get("teaching_contract"),
+        "generation_attempts": mandatory_validation.get("attempts"),
+        "tutoring_output_metrics": result.get("output_metrics") or _tutoring_output_metrics(result),
+        "group_condition": participant.group_condition,
+        "taxonomy_version": context["payload"].get("taxonomy_version"),
+        "prompt_contract_version": context["payload"].get("prompt_contract_version"),
+        "generation_origin": context.get("generation_origin", "interactive"),
+        "prefetch": prefetch_audit or {"state": "not_applicable", "reused": False},
+    }
+    return TutorTurn(
         tutor_session_id=session.id,
-        turn_index=turn_count + 1,
-        scaffolding_level=current_level,
-        teaching_strategy=teaching_strategy,
+        turn_index=context["turn_count"] + 1,
+        scaffolding_level=context["current_level"],
+        teaching_strategy=result["teaching_strategy"],
         previous_teaching_strategy=state.previous_teaching_strategy,
         strategy_changed=False,
-        tutor_message=tutor_message,
+        tutor_message=_previous_turn_prefix(previous_turn) + result["tutor_message"],
         learner_prompt=spec["body"],
-        practice_question_json=_merge_stage_meta(practice_question, position),
-        diagnosis_json={
-            "material_source": material_source,
-            "material_generation_ms": material_generation_ms,
-            "mandatory_elements": result.get("mandatory_elements"),
-            "mandatory_elements_validation": mandatory_validation,
-            "teaching_contract": result.get("teaching_contract"),
-            "teaching_contract_validation": mandatory_validation.get("teaching_contract"),
-            "generation_attempts": mandatory_validation.get("attempts"),
-            "tutoring_output_metrics": result.get("output_metrics") or _tutoring_output_metrics(result),
-            "group_condition": participant.group_condition,
-            "taxonomy_version": payload.get("taxonomy_version"),
-            "prompt_contract_version": payload.get("prompt_contract_version"),
-        },
+        practice_question_json=_merge_stage_meta(context["practice_question"], position),
+        diagnosis_json=diagnosis,
         forbidden_help_given=False,
+    )
+
+
+def _prefetch_state(session: TutorSession) -> str:
+    return session.prefetch_state or "none"
+
+
+def _mark_prefetch_consumed(db: Session, session: TutorSession, turn: TutorTurn) -> None:
+    consumed_at = now()
+    session.prefetch_state = "consumed"
+    session.prefetch_consumed_at = consumed_at
+    diagnosis = dict(turn.diagnosis_json or {})
+    prefetch = dict(diagnosis.get("prefetch") or {})
+    prefetch.update({"state": "consumed", "reused": True, "consumed_at": consumed_at.isoformat()})
+    diagnosis["prefetch"] = prefetch
+    diagnosis["generation_origin"] = diagnosis.get("generation_origin") or "prefetch"
+    turn.diagnosis_json = diagnosis
+    _update_prefetch_ai_logs(db, session.id, disposition="consumed")
+    _commit(db)
+
+
+def _discard_prefetch_for_interactive_generation(
+    db: Session,
+    session: TutorSession,
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    state_before = _prefetch_state(session)
+    discarded_at = now()
+    session.prefetch_state = "discarded"
+    session.prefetch_discarded_at = discarded_at
+    session.prefetch_error_code = reason
+    # This transition must be visible to the worker before the synchronous
+    # fallback awaits the AI, otherwise the worker could insert a stale v1.
+    db.commit()
+    return {
+        "state_before": state_before,
+        "state": "discarded",
+        "source_session_id": session.prefetch_source_session_id,
+        "waited": state_before in {"pending", "generating"},
+        "reused": False,
+        "discarded": True,
+        "reason": reason,
+        "discarded_at": discarded_at.isoformat(),
+    }
+
+
+async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
+    session = db.get(TutorSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="session not found")
+    participant = get_participant(db, session.participant_id, for_update=True)
+    session = db.query(TutorSession).filter_by(id=session_id).with_for_update().one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="session not found")
+    _assert_participant_active(participant)
+    if session.ended_at is not None:
+        raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
+
+    latest_open_turn = (
+        db.query(TutorTurn)
+        .filter_by(tutor_session_id=session.id, learner_response=None)
+        .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
+        .first()
+    )
+    if latest_open_turn:
+        if _prefetch_state(session) == "ready":
+            _mark_prefetch_consumed(db, session, latest_open_turn)
+        return latest_open_turn
+
+    turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
+    prefetch_audit = None
+    state = _prefetch_state(session)
+    if state in PREFETCH_WAITING_STATES:
+        transition_audit = _discard_prefetch_for_interactive_generation(
+            db,
+            session,
+            reason="interactive_generation_started",
+        )
+        # A prefetch is only a candidate for the first turn (v1).  If this
+        # session already has a turn, keep the normal interactive audit for
+        # subsequent adaptive turns even if a stale worker state remains.
+        if turn_count == 0:
+            prefetch_audit = transition_audit
+        # The commit above expires the locked objects but retains the same
+        # Session; subsequent reads use the current database snapshot.
+        session = db.get(TutorSession, session_id)
+        participant = get_participant(db, participant.id, for_update=True)
+    elif turn_count == 0 and state in {"failed", "discarded"} and session.prefetch_source_session_id:
+        prefetch_audit = {
+            "state_before": state,
+            "state": state,
+            "source_session_id": session.prefetch_source_session_id,
+            "waited": False,
+            "reused": False,
+            "discarded": state == "discarded",
+            "reason": session.prefetch_error_code or "prefetch_unavailable",
+        }
+
+    context = _tutoring_generation_context(
+        db,
+        session,
+        participant,
+        generation_origin="interactive_fallback" if prefetch_audit else "interactive",
+        prefetch_audit=prefetch_audit,
+    )
+    started = perf_counter()
+    result, mandatory_validation = await _generate_validated_tutoring_turn(
+        db,
+        context["payload"],
+        forbidden_strings=context["forbidden_material"],
+    )
+    turn = _tutor_turn_from_generation(
+        context,
+        result,
+        mandatory_validation,
+        material_generation_ms=int((perf_counter() - started) * 1000),
     )
     db.add(turn)
     _commit(db)
     db.refresh(turn)
     return turn
+
+
+def prepare_prefetch_sessions(db: Session, participant_id: str, source_session_id: str) -> list[str]:
+    """Create open pending sessions for every later learning target.
+
+    This function only performs short database work.  It deliberately does
+    not call the AI backend; each returned session is generated independently
+    by the response-after worker.
+    """
+    participant = get_participant(db, participant_id)
+    source_session = db.get(TutorSession, source_session_id)
+    if not source_session or source_session.participant_id != participant.id or source_session.ended_at is not None:
+        return []
+    if participant.current_step != "learning_targets":
+        return []
+
+    source_term = db.get(Term, source_session.term_id)
+    source_order = PRETEST_TERM_ORDER.get(source_term.slug if source_term else "", -1)
+    target_rows = learning_targets(db, participant.id)
+    target_rows = sorted(
+        (
+            row for row in target_rows
+            if PRETEST_TERM_ORDER.get(row["term_slug"], -1) > source_order
+        ),
+        key=lambda row: PRETEST_TERM_ORDER.get(row["term_slug"], 10_000),
+    )
+    prepared_ids: list[str] = []
+    requested_at = now()
+    for row in target_rows:
+        term = db.query(Term).filter_by(slug=row["term_slug"]).one_or_none()
+        if not term:
+            continue
+        existing = (
+            db.query(TutorSession)
+            .filter_by(participant_id=participant.id, term_id=term.id, ended_at=None)
+            .order_by(TutorSession.started_at.desc())
+            .first()
+        )
+        if existing:
+            # A participant may have reached this term before the worker.  In
+            # that case the interactive session wins and the worker must not
+            # convert it into a prefetched session.
+            if _prefetch_state(existing) == "pending" and existing.prefetch_source_session_id == source_session.id:
+                prepared_ids.append(existing.id)
+            continue
+        count = db.query(func.count(TutorSession.id)).filter_by(participant_id=participant.id, term_id=term.id).scalar() or 0
+        session = TutorSession(
+            participant_id=participant.id,
+            term_id=term.id,
+            session_index=count + 1,
+            group_condition=participant.group_condition,
+            prefetch_state="pending",
+            prefetch_source_session_id=source_session.id,
+            prefetch_requested_at=requested_at,
+        )
+        db.add(session)
+        db.flush()
+        prepared_ids.append(session.id)
+    if prepared_ids:
+        db.commit()
+    return prepared_ids
+
+
+def _claim_prefetch_session(db: Session, session_id: str) -> bool:
+    """Claim a pending session and release the transaction before AI awaits."""
+    session = db.query(TutorSession).filter_by(id=session_id).with_for_update().one_or_none()
+    if not session or _prefetch_state(session) != "pending" or session.ended_at is not None:
+        return False
+    participant = db.get(Participant, session.participant_id)
+    assignment = db.query(TermAssignment).filter_by(participant_id=session.participant_id, term_id=session.term_id).one_or_none()
+    if (
+        not participant
+        or participant.current_step != "learning_targets"
+        or participant.completed_at is not None
+        or not assignment
+        or not assignment.is_learning_target
+    ):
+        session.prefetch_state = "discarded"
+        session.prefetch_discarded_at = now()
+        session.prefetch_error_code = "prefetch_not_current"
+        session.ended_at = session.prefetch_discarded_at
+        db.commit()
+        return False
+    session.prefetch_state = "generating"
+    session.prefetch_generating_at = now()
+    db.commit()
+    return True
+
+
+def _prefetch_generation_audit(session: TutorSession) -> dict[str, Any]:
+    return {
+        "state": "generating",
+        "session_id": session.id,
+        "source_session_id": session.prefetch_source_session_id,
+        "generation_key": "initial-v1",
+        "variant_policy": "v1",
+        "waited": False,
+        "reused": False,
+        "discarded": False,
+    }
+
+
+def _prefetch_error_code(exc: Exception) -> str:
+    if isinstance(exc, HTTPException):
+        detail = exc.detail
+        if isinstance(detail, dict) and detail.get("error_code"):
+            return str(detail["error_code"])
+        return f"http_{exc.status_code}"
+    return "prefetch_generation_failed"
+
+
+def _update_prefetch_ai_logs(
+    db: Session,
+    session_id: str,
+    *,
+    disposition: str,
+    error_code: str | None = None,
+) -> None:
+    """Attach the final lifecycle disposition to server-side AI audit rows."""
+    logs = (
+        db.query(AICallLog)
+        .filter(
+            AICallLog.purpose == "generate_tutoring_turn",
+            AICallLog.request_payload["generation_audit"]["prefetch"]["session_id"].as_string() == session_id,
+        )
+        .all()
+    )
+    for log in logs:
+        generation_audit = (log.request_payload or {}).get("generation_audit") or {}
+        prefetch = generation_audit.get("prefetch") or {}
+        if prefetch.get("session_id") != session_id:
+            continue
+        response = dict(log.response_payload or {})
+        response["prefetch_audit"] = {
+            "session_id": session_id,
+            "disposition": disposition,
+            "error_code": error_code,
+            "reused": disposition == "consumed",
+        }
+        log.response_payload = response
+
+
+def _prefetch_session_is_eligible(db: Session, session: TutorSession) -> bool:
+    participant = db.get(Participant, session.participant_id)
+    assignment = db.query(TermAssignment).filter_by(participant_id=session.participant_id, term_id=session.term_id).one_or_none()
+    return bool(
+        participant
+        and participant.current_step == "learning_targets"
+        and participant.completed_at is None
+        and assignment
+        and assignment.is_learning_target
+        and session.ended_at is None
+    )
+
+
+async def generate_prefetched_tutor_turn(db: Session, session_id: str) -> bool:
+    """Generate and persist one prefetched v1 turn without holding user locks."""
+    if not _claim_prefetch_session(db, session_id):
+        return False
+    session = db.get(TutorSession, session_id)
+    if not session:
+        return False
+    participant = db.get(Participant, session.participant_id)
+    if not participant:
+        return False
+    generation_audit = _prefetch_generation_audit(session)
+    try:
+        # The claim commit above is complete before this read/AI await.  No
+        # participant or tutor-session row lock is held while the backend runs.
+        context = _tutoring_generation_context(
+            db,
+            session,
+            participant,
+            generation_origin="prefetch",
+            prefetch_audit=generation_audit,
+        )
+        started = perf_counter()
+
+        async def operation() -> tuple[dict[str, Any], dict[str, Any]]:
+            return await _generate_validated_tutoring_turn(
+                db,
+                context["payload"],
+                forbidden_strings=context["forbidden_material"],
+            )
+
+        generated = await run_idempotent(
+            db,
+            scope=f"prefetch_tutor_turn:{session_id}",
+            key="initial-v1",
+            participant_id=participant.id,
+            request_data={"session_id": session_id, "variant_policy": "v1"},
+            operation=operation,
+        )
+        if isinstance(generated, list):
+            result, mandatory_validation = generated
+        else:
+            result, mandatory_validation = generated
+        generation_ms = int((perf_counter() - started) * 1000)
+
+        db.expire_all()
+        final_session = db.query(TutorSession).filter_by(id=session_id).with_for_update().one_or_none()
+        if not final_session or _prefetch_state(final_session) != "generating":
+            _update_prefetch_ai_logs(db, session_id, disposition="discarded", error_code="interactive_generation_won_race")
+            db.commit()
+            return False
+        if not _prefetch_session_is_eligible(db, final_session):
+            final_session.prefetch_state = "discarded"
+            final_session.prefetch_discarded_at = now()
+            final_session.prefetch_error_code = "prefetch_not_current"
+            final_session.ended_at = final_session.prefetch_discarded_at
+            _update_prefetch_ai_logs(db, session_id, disposition="discarded", error_code="prefetch_not_current")
+            db.commit()
+            return False
+        existing_turn = db.query(TutorTurn).filter_by(tutor_session_id=session_id).first()
+        if existing_turn:
+            final_session.prefetch_state = "discarded"
+            final_session.prefetch_discarded_at = now()
+            final_session.prefetch_error_code = "interactive_turn_exists"
+            _update_prefetch_ai_logs(db, session_id, disposition="discarded", error_code="interactive_turn_exists")
+            db.commit()
+            return False
+
+        ready_audit = {
+            **generation_audit,
+            "state": "ready",
+            "ready_at": now().isoformat(),
+        }
+        context["prefetch_audit"] = ready_audit
+        turn = _tutor_turn_from_generation(
+            context,
+            result,
+            mandatory_validation,
+            material_generation_ms=generation_ms,
+        )
+        db.add(turn)
+        final_session.prefetch_state = "ready"
+        final_session.prefetch_ready_at = now()
+        _update_prefetch_ai_logs(db, session_id, disposition="ready")
+        db.commit()
+        return True
+    except Exception as exc:
+        db.rollback()
+        failed_session = db.query(TutorSession).filter_by(id=session_id).with_for_update().one_or_none()
+        if failed_session:
+            error_code = _prefetch_error_code(exc)
+            if _prefetch_state(failed_session) == "generating":
+                failed_session.prefetch_state = "failed"
+                failed_session.prefetch_failed_at = now()
+                failed_session.prefetch_error_code = error_code
+            _update_prefetch_ai_logs(
+                db,
+                session_id,
+                disposition="failed" if _prefetch_state(failed_session) == "failed" else "discarded",
+                error_code=failed_session.prefetch_error_code or error_code,
+            )
+            db.commit()
+        return False
+
+
+def discard_unconsumed_prefetches(db: Session, participant_id: str, *, reason: str) -> int:
+    """Invalidate unused prefetched sessions at give-up and new rounds."""
+    candidate_sessions = (
+        db.query(TutorSession)
+        .filter(
+            TutorSession.participant_id == participant_id,
+            TutorSession.ended_at.is_(None),
+            TutorSession.prefetch_state.in_(sorted(PREFETCH_WAITING_STATES | {"failed", "discarded"})),
+        )
+        .all()
+    )
+    if not candidate_sessions:
+        return 0
+
+    # A failed/discarded prefetch session can continue as a normal interactive
+    # session after synchronous fallback.  Only sessions whose turns are still
+    # purely prefetched may be closed here; otherwise a new-round cleanup
+    # would terminate an active learning session.
+    candidate_ids = [session.id for session in candidate_sessions]
+    turns = (
+        db.query(TutorTurn)
+        .filter(TutorTurn.tutor_session_id.in_(candidate_ids))
+        .all()
+    )
+    interactive_session_ids = {
+        turn.tutor_session_id
+        for turn in turns
+        if turn.learner_response is not None
+        or turn.grading_json
+        or (turn.diagnosis_json or {}).get("generation_origin") != "prefetch"
+    }
+    sessions = [session for session in candidate_sessions if session.id not in interactive_session_ids]
+    discarded_at = now()
+    for session in sessions:
+        session.prefetch_state = "discarded"
+        session.prefetch_discarded_at = discarded_at
+        session.prefetch_error_code = reason
+        session.ended_at = discarded_at
+        _update_prefetch_ai_logs(db, session.id, disposition="discarded", error_code=reason)
+    return len(sessions)
 
 async def respond_tutor_turn(db: Session, turn_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     turn = db.get(TutorTurn, turn_id)
@@ -2220,6 +2664,10 @@ def _is_mastery_test_batch(db: Session, attempts: list[Attempt]) -> bool:
 
 
 def _reset_test_learning_targets(db: Session, participant: Participant, attempts: list[Attempt]) -> list[str]:
+    # A retest/final-test result starts a new learning-round decision.  Any
+    # material prepared for the previous round is tied to stale learner state
+    # and must not leak into the new round.
+    discard_unconsumed_prefetches(db, participant.id, reason="new_learning_round")
     active_terms = _active_test_terms(db)
     active_term_ids = {term.id for term in active_terms}
     attempts_by_term: dict[str, list[Attempt]] = {term_id: [] for term_id in active_term_ids}
@@ -2403,9 +2851,31 @@ def _misconception_timeline(attempts: list[Attempt], terms: dict[str, Term]) -> 
 
 
 def _learning_burden(db: Session, participant_id: str, attempts: list[Attempt]) -> dict[str, Any]:
-    sessions = db.query(TutorSession).filter_by(participant_id=participant_id).all()
-    session_ids = [session.id for session in sessions]
-    turns = db.query(TutorTurn).filter(TutorTurn.tutor_session_id.in_(session_ids or ["__none__"])).all()
+    all_sessions = db.query(TutorSession).filter_by(participant_id=participant_id).all()
+    session_ids = [session.id for session in all_sessions]
+    all_turns = db.query(TutorTurn).filter(TutorTurn.tutor_session_id.in_(session_ids or ["__none__"])).all()
+    turns_by_session: dict[str, list[TutorTurn]] = {}
+    for turn in all_turns:
+        turns_by_session.setdefault(turn.tutor_session_id, []).append(turn)
+
+    def counts_as_learning(session: TutorSession) -> bool:
+        state = _prefetch_state(session)
+        if state not in PREFETCH_STATES:
+            return True
+        if state not in {"pending", "generating", "ready", "failed", "discarded"}:
+            return True
+        # A failed/discarded prefetch can still become a real interactive
+        # session through synchronous fallback.  An untouched prefetched v1
+        # has no answer and contributes neither burden nor answer history.
+        for turn in turns_by_session.get(session.id, []):
+            diagnosis = turn.diagnosis_json or {}
+            if turn.learner_response is not None or turn.grading_json or diagnosis.get("generation_origin") != "prefetch":
+                return True
+        return False
+
+    sessions = [session for session in all_sessions if counts_as_learning(session)]
+    actual_session_ids = {session.id for session in sessions}
+    turns = [turn for turn in all_turns if turn.tutor_session_id in actual_session_ids]
     retest_count = max(
         (_round_number(_attempt_test_round(attempt)) or 0 for attempt in attempts if attempt.phase in {"retest", "final_test"}),
         default=0,
@@ -2651,10 +3121,10 @@ EXPORTS = {
     "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at", "completion_reason"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "selected_option_id", "selected_option_ids", "reason_text", "free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "updated_at"]),
-    "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at"]),
-    "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
+    "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),
+    "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "diagnosis_json", "practice_question_json", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
-    "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "status", "error_code", "latency_ms", "created_at"]),
+    "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "request_payload", "response_payload", "status", "error_code", "error_message", "latency_ms", "created_at"]),
     "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "score_timeline_json", "misconception_timeline_json", "learning_burden_json", "condition_check_json", "completed", "created_at"]),
     "participant_surveys": (ParticipantSurvey, ["id", "participant_id", "phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "term_confidences", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]),
 }
@@ -2727,6 +3197,7 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
     stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
     grading = turn.grading_json or {}
     practice_question = turn.practice_question_json or {}
+    diagnosis = turn.diagnosis_json or {}
     return {
         "tutor_turn_id": turn.id,
         "tutor_session_id": turn.tutor_session_id,
@@ -2752,6 +3223,10 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "teaching_contract_validation": (turn.diagnosis_json or {}).get("teaching_contract_validation"),
         "taxonomy_version": (turn.diagnosis_json or {}).get("taxonomy_version"),
         "prompt_contract_version": (turn.diagnosis_json or {}).get("prompt_contract_version"),
+        "generation_origin": diagnosis.get("generation_origin"),
+        "prefetch_audit": diagnosis.get("prefetch"),
+        "prefetch_state": _prefetch_state(session),
+        "prefetch_source_session_id": session.prefetch_source_session_id,
         "tutor_message": turn.tutor_message,
         "learner_prompt": turn.learner_prompt,
         "question_body": practice_question.get("body"),
@@ -2926,6 +3401,8 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "error_code": row.error_code,
                 "error_message": row.error_message,
                 "latency_ms": row.latency_ms,
+                "generation_audit": (row.request_payload or {}).get("generation_audit"),
+                "prefetch_audit": (row.response_payload or {}).get("prefetch_audit"),
                 "group_condition": _ai_log_group_condition(row, participant_by_id),
                 "created_at": _iso(row.created_at),
             }
@@ -3017,6 +3494,15 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "group_condition": session.group_condition,
             "started_at": _iso(session.started_at),
             "ended_at": _iso(session.ended_at),
+            "prefetch_state": _prefetch_state(session),
+            "prefetch_source_session_id": session.prefetch_source_session_id,
+            "prefetch_requested_at": _iso(session.prefetch_requested_at),
+            "prefetch_generating_at": _iso(session.prefetch_generating_at),
+            "prefetch_ready_at": _iso(session.prefetch_ready_at),
+            "prefetch_consumed_at": _iso(session.prefetch_consumed_at),
+            "prefetch_failed_at": _iso(session.prefetch_failed_at),
+            "prefetch_discarded_at": _iso(session.prefetch_discarded_at),
+            "prefetch_error_code": session.prefetch_error_code,
             "turns": [_turn_log_row(turn, session, participant, terms.get(session.term_id)) for turn in turns_by_session.get(session.id, [])],
         }
         for session in sessions
