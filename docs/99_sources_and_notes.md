@@ -138,7 +138,7 @@ Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差�
 
 `pending`/`generating`中に参加者が先に到達した場合は待機結果を破棄し、同期生成へ切り替える。AI失敗は`failed`と`AICallLog`へ記録して参加者へ返さず、`codex_app_server`からMockへフォールバックしない。現在用語の不正解は後続待機turnに影響させず、現在用語の2問目だけが既存の誤概念履歴で適応される。ギブアップ、実験終了、再テスト後の新周回では未使用turnを破棄する。
 
-先行生成turnは未回答の間、調査用回答履歴と学習負担の実績値に算入しない。再利用時は同じ`turn_id`を返し、`diagnosis_json`とAIログに生成元・待機・再利用・失敗・破棄を記録する。これは参加者画面の表示仕様、YAML問題文・選択肢・採点、AIBackend契約を変更しない。
+先行生成turnは未回答の間、調査用回答履歴と学習負担の実績値に算入しない。再利用時は同じ`turn_id`を返し、`diagnosis_json`とAIログに生成元・待機・再利用・失敗・破棄を記録する。`failed`/`discarded`後に同期フォールバックでinteractive turnが保存されたセッションは実学習として扱い、未使用prefetchの整理では強制終了しない。これは参加者画面の表示仕様、YAML問題文・選択肢・採点、AIBackend契約を変更しない。
 
 ## Known Deck Inconsistencies and Resolution
 
