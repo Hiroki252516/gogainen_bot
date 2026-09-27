@@ -283,6 +283,17 @@ class CodexAppServerBackend:
             "見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
             "被験者ID、群名、内部識別子、M1〜M4などの内部ラベルを学習者向け本文に書かない。",
         ]
+        material_length_retry = payload.get("material_length_retry")
+        if isinstance(material_length_retry, dict):
+            actual_character_count = material_length_retry.get("actual_character_count")
+            if isinstance(actual_character_count, int) and not isinstance(actual_character_count, bool):
+                rules.append(
+                    f"前回の教材本文は{actual_character_count}文字で許容範囲外だった。今回は前回の内容を冗長に繰り返さず、Markdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に必ず収める。"
+                )
+            else:
+                rules.append(
+                    f"前回の教材本文が文字数の許容範囲外だった。今回はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に必ず収める。"
+                )
         if expected_type:
             headings = mandatory_element_headings(expected_type)
             heading_order = "、".join(f"### {heading}" for heading in headings.values())
