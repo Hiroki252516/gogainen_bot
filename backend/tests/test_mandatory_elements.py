@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+from fastapi import HTTPException
+
 from app.services import experiment as experiment_service
 from app.ai.mandatory_elements import (
     expected_mandatory_type,
@@ -371,6 +374,28 @@ def test_service_retries_same_backend_when_material_is_outside_common_range(monk
     assert calls[1]["material_length_retry"]["actual_character_count"] == len("短い教材")
 
 
+def test_service_allows_two_material_length_retries(monkeypatch):
+    backend = MockAIBackend()
+    payload = _payload("M1", "conceptual_change")
+    calls: list[dict] = []
+
+    async def fake_ai_call(db, purpose, request_payload):
+        assert purpose == "generate_tutoring_turn"
+        calls.append(request_payload)
+        result = await backend.generate_tutoring_turn(request_payload)
+        result["tutor_message"] = "短い教材"
+        return result
+
+    monkeypatch.setattr(experiment_service, "_ai_call", fake_ai_call)
+    with pytest.raises(HTTPException, match="教材の誤概念対応契約を満たす教材を生成できませんでした"):
+        asyncio.run(experiment_service._generate_validated_tutoring_turn(None, payload))
+
+    assert [call["generation_attempt"] for call in calls] == [1, 2, 3]
+    assert "material_length_retry" not in calls[0]
+    assert calls[1]["material_length_retry"]["actual_character_count"] == len("短い教材")
+    assert calls[2]["material_length_retry"]["actual_character_count"] == len("短い教材")
+
+
 def test_codex_prompt_schema_requires_m1_evidence(monkeypatch):
     backend = CodexAppServerBackend()
     payload = _payload("M1", "conceptual_change")
@@ -511,6 +536,10 @@ def test_control_audit_keeps_original_contract_and_generation_attempt(monkeypatc
         "taxonomy_version": "audit-taxonomy-v4",
         "generation_attempt": 3,
         "mandatory_element_retry": {"attempt": 2, "missing": ["private-validation-detail"]},
+        "material_length_retry": {
+            "attempt": 3,
+            "actual_character_count": 450,
+        },
         "learner_state": {"primary_misconception": "PRIVATE-M1"},
         "rag_context": {"query": "common query", "allowed_sections": ["3.2"], "chunks": []},
     }
@@ -526,6 +555,8 @@ def test_control_audit_keeps_original_contract_and_generation_attempt(monkeypatc
     assert "PRIVATE-M1" not in captured["prompt"]
     assert "audit-contract-v7" not in captured["prompt"]
     assert "private-validation-detail" not in captured["prompt"]
+    assert "前回の教材本文は450文字で許容範囲外だった" in captured["prompt"]
+    assert "600〜800文字" in captured["prompt"]
     audit_context = captured["audit_context"]
     assert audit_context["prompt_contract_version"] == "audit-contract-v7"
     assert audit_context["taxonomy_version"] == "audit-taxonomy-v4"
