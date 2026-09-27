@@ -18,7 +18,12 @@ from app.ai.backend import strategy_for
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY, TAXONOMY_VERSION
-from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION
+from app.ai.teaching_contract import (
+    MATERIAL_MAX_CHARACTERS,
+    MATERIAL_MIN_CHARACTERS,
+    MATERIAL_TARGET_CHARACTERS,
+    PROMPT_CONTRACT_VERSION,
+)
 from app.core.config import get_settings
 from app.core.runtime_config import reset_reasoning_effort_override, set_reasoning_effort
 from app.db.session import SessionLocal, _backfill_completion_reasons, _backfill_evaluation_completion_flags, engine
@@ -2126,9 +2131,6 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     text = prompt_source.read_text(encoding="utf-8")
     assert "misconception_taxonomy" in text
     assert "M4なら不足スキーマの構築" in text
-    assert "MATERIAL_TARGET_CHARACTERS" in text
-    assert "MATERIAL_MIN_CHARACTERS" in text
-    assert "MATERIAL_MAX_CHARACTERS" in text
     assert "固定問題バンクが表示・採点" in text
     assert "fixed_practice_question_items" not in text
     assert "### 要点" in text
@@ -2171,6 +2173,8 @@ def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatc
     )
 
     prompt = captured_prompt["text"]
+    assert f"{MATERIAL_TARGET_CHARACTERS}文字前後" in prompt
+    assert f"{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字" in prompt
     assert "前回の確認問題の内容" in prompt
     assert "前回の学習者の回答" in prompt
     assert "CURRENT_FIXED_QUESTION_DO_NOT_SEND" not in prompt
