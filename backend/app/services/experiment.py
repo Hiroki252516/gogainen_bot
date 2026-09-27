@@ -652,7 +652,7 @@ def _close_open_tutor_sessions(db: Session, participant_id: str) -> int:
     open_sessions = db.query(TutorSession).filter_by(participant_id=participant_id, ended_at=None).all()
     ended_at = now()
     for session in open_sessions:
-        if _prefetch_state(session) in PREFETCH_WAITING_STATES:
+        if _prefetch_state(session) in PREFETCH_WAITING_STATES | {"failed"}:
             session.prefetch_state = "discarded"
             session.prefetch_discarded_at = ended_at
             session.prefetch_error_code = "participant_session_closed"
@@ -1970,19 +1970,25 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             _mark_prefetch_consumed(db, session, latest_open_turn)
         return latest_open_turn
 
+    turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
     prefetch_audit = None
     state = _prefetch_state(session)
     if state in PREFETCH_WAITING_STATES:
-        prefetch_audit = _discard_prefetch_for_interactive_generation(
+        transition_audit = _discard_prefetch_for_interactive_generation(
             db,
             session,
             reason="interactive_generation_started",
         )
+        # A prefetch is only a candidate for the first turn (v1).  If this
+        # session already has a turn, keep the normal interactive audit for
+        # subsequent adaptive turns even if a stale worker state remains.
+        if turn_count == 0:
+            prefetch_audit = transition_audit
         # The commit above expires the locked objects but retains the same
         # Session; subsequent reads use the current database snapshot.
         session = db.get(TutorSession, session_id)
         participant = get_participant(db, participant.id, for_update=True)
-    elif state in {"failed", "discarded"} and session.prefetch_source_session_id:
+    elif turn_count == 0 and state in {"failed", "discarded"} and session.prefetch_source_session_id:
         prefetch_audit = {
             "state_before": state,
             "state": state,
@@ -2135,7 +2141,14 @@ def _update_prefetch_ai_logs(
     error_code: str | None = None,
 ) -> None:
     """Attach the final lifecycle disposition to server-side AI audit rows."""
-    logs = db.query(AICallLog).filter_by(purpose="generate_tutoring_turn").all()
+    logs = (
+        db.query(AICallLog)
+        .filter(
+            AICallLog.purpose == "generate_tutoring_turn",
+            AICallLog.request_payload["generation_audit"]["prefetch"]["session_id"].as_string() == session_id,
+        )
+        .all()
+    )
     for log in logs:
         generation_audit = (log.request_payload or {}).get("generation_audit") or {}
         prefetch = generation_audit.get("prefetch") or {}
@@ -2270,7 +2283,7 @@ async def generate_prefetched_tutor_turn(db: Session, session_id: str) -> bool:
 
 def discard_unconsumed_prefetches(db: Session, participant_id: str, *, reason: str) -> int:
     """Invalidate unused prefetched sessions at give-up and new rounds."""
-    sessions = (
+    candidate_sessions = (
         db.query(TutorSession)
         .filter(
             TutorSession.participant_id == participant_id,
@@ -2279,6 +2292,27 @@ def discard_unconsumed_prefetches(db: Session, participant_id: str, *, reason: s
         )
         .all()
     )
+    if not candidate_sessions:
+        return 0
+
+    # A failed/discarded prefetch session can continue as a normal interactive
+    # session after synchronous fallback.  Only sessions whose turns are still
+    # purely prefetched may be closed here; otherwise a new-round cleanup
+    # would terminate an active learning session.
+    candidate_ids = [session.id for session in candidate_sessions]
+    turns = (
+        db.query(TutorTurn)
+        .filter(TutorTurn.tutor_session_id.in_(candidate_ids))
+        .all()
+    )
+    interactive_session_ids = {
+        turn.tutor_session_id
+        for turn in turns
+        if turn.learner_response is not None
+        or turn.grading_json
+        or (turn.diagnosis_json or {}).get("generation_origin") != "prefetch"
+    }
+    sessions = [session for session in candidate_sessions if session.id not in interactive_session_ids]
     discarded_at = now()
     for session in sessions:
         session.prefetch_state = "discarded"
