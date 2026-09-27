@@ -39,7 +39,14 @@ from app.core.config import get_settings
 from app.core.runtime_config import current_reasoning_effort
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
-from app.seed.content_loader import content_term, learning_question_spec, load_content, teaching_target_for_option
+from app.seed.content_loader import (
+    CURRENT_LEARNING_CONTENT_VERSION,
+    LEGACY_LEARNING_CONTENT_VERSION,
+    content_term,
+    learning_question_spec,
+    load_content,
+    teaching_target_for_option,
+)
 from app.models import (
     AICallLog,
     AuditEvent,
@@ -118,6 +125,7 @@ class TutorTurnGenerationPlan:
     forbidden_material: list[str]
     generation_origin: str
     prefetch_audit: dict[str, Any] | None
+    learning_content_version: int
 
 
 def _commit(db: Session) -> None:
@@ -140,11 +148,16 @@ def _learning_question_spec(
     learning_stage: str,
     component_term: str | None,
     variant_index: int = 1,
+    content_version: int = LEGACY_LEARNING_CONTENT_VERSION,
 ) -> dict[str, Any]:
     try:
-        return learning_question_spec(term_slug, learning_stage, variant_index)
-    except (KeyError, StopIteration) as exc:
+        return learning_question_spec(term_slug, learning_stage, variant_index, content_version)
+    except (KeyError, StopIteration, ValueError) as exc:
         raise HTTPException(status_code=400, detail="fixed learning question not found") from exc
+
+
+def _participant_learning_content_version(participant: Participant) -> int:
+    return participant.learning_content_version or LEGACY_LEARNING_CONTENT_VERSION
 
 
 def _learning_question_item(term_slug: str, component_term: str) -> dict[str, Any]:
@@ -153,7 +166,6 @@ def _learning_question_item(term_slug: str, component_term: str) -> dict[str, An
         "component_term": component_term,
         "material": spec["material"],
         "body": spec["body"],
-        "expected_answer": spec["expected_answer"],
         "question_type": spec["question_type"],
         "options": _public_learning_options(spec),
     }
@@ -214,11 +226,20 @@ def _validate_multi_select_labels(labels: set[str], selected_count: int) -> None
         return
     if "J" in labels:
         raise HTTPException(status_code=400, detail="unknown option cannot be combined with other options")
-    if not labels.issubset(set("ABCDEFGHI")) or selected_count != 3:
+    if not labels.issubset(set("ABCDEFGHI")) or selected_count != 3 or len(labels) != selected_count:
         raise HTTPException(status_code=400, detail="select exactly three options from A-I or only J")
 
 
-def _classify_selected_options(options: list[Any], correct_labels: set[str] | None = None) -> tuple[bool, str | None, str]:
+def _option_is_correct(option: Any) -> bool:
+    return bool(option.is_correct if hasattr(option, "is_correct") else option.get("is_correct"))
+
+
+def _classify_selected_options(
+    options: list[Any],
+    correct_labels: set[str] | None = None,
+    *,
+    use_option_correctness: bool = False,
+) -> tuple[bool, str | None, str]:
     selected_labels = {_option_label(option) for option in options}
     correct_labels = correct_labels or {"A", "B", "C"}
     misconceptions = [_option_misconception(option) for option in options]
@@ -226,7 +247,12 @@ def _classify_selected_options(options: list[Any], correct_labels: set[str] | No
         return False, "M3", "misconception"
     if "M1" in misconceptions:
         return False, "M1", "misconception"
-    if selected_labels == correct_labels:
+    options_are_correct = (
+        len(options) == 3 and all(_option_is_correct(option) for option in options)
+        if use_option_correctness
+        else selected_labels == correct_labels
+    )
+    if options_are_correct:
         return True, None, "stable_correct"
     return False, "unknown", "unknown"
 
@@ -236,7 +262,7 @@ def _fixed_feedback_for_options(options: list[dict[str, Any]], spec: dict[str, A
         is_correct, mtype, status = False, "unknown", "unknown"
         selected_label_text = "未選択"
     else:
-        is_correct, mtype, status = _classify_selected_options(options)
+        is_correct, mtype, status = _classify_selected_options(options, use_option_correctness=True)
         selected_label_text = _selected_labels(options)
     return {
         "feedback": "選択内容は十分です。次の確認へ進みます。" if is_correct else "選択内容はまだ不十分です。教材を確認して、もう一度選び直してください。",
@@ -889,6 +915,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         assignment_method="admin_code",
         consent_checked=consent_checked,
         current_step="pretest",
+        learning_content_version=CURRENT_LEARNING_CONTENT_VERSION,
         started_at=now(),
     )
     db.add(participant)
@@ -1966,16 +1993,17 @@ def _tutoring_generation_context(
         if not active_misconception_type and position["learning_stage"] == "enrichment":
             active_misconception_type = "unknown"
 
+    learning_content_version = _participant_learning_content_version(participant)
     spec = _learning_question_spec(
         term.slug,
         position["learning_stage"],
         position["component_term"],
         learning_variant_index,
+        learning_content_version,
     )
     question_type = "control_learning_multi_select" if participant.group_condition == "control" else spec["question_type"]
     practice_question = {
         "body": spec["body"],
-        "expected_answer": spec["expected_answer"],
         "question_type": question_type,
         "options": _public_learning_options(spec),
         "selection_mode": spec.get("selection_mode", "multiple"),
@@ -2061,6 +2089,7 @@ def _tutoring_generation_context(
         "problem_variant_key": spec["variant_key"],
         "problem_variant_index": learning_variant_index,
         "actual_ai_input": _actual_tutoring_input(payload, participant.group_condition),
+        "learning_content_version": learning_content_version,
     }
     forbidden_material = [spec["expected_answer"], spec["body"]]
     forbidden_material.extend(
@@ -2082,6 +2111,7 @@ def _tutoring_generation_context(
         "current_level": current_level,
         "generation_origin": generation_origin,
         "prefetch_audit": prefetch_audit,
+        "learning_content_version": learning_content_version,
     }
 
 
@@ -2115,6 +2145,7 @@ def _build_tutor_turn_plan(
         forbidden_material=context["forbidden_material"],
         generation_origin=context["generation_origin"],
         prefetch_audit=context.get("prefetch_audit"),
+        learning_content_version=context["learning_content_version"],
     )
 
 
@@ -2138,6 +2169,7 @@ def _tutor_turn_from_generation(
         generation_origin = context.generation_origin
         prefetch_audit = context.prefetch_audit
         payload = context.payload
+        learning_content_version = context.learning_content_version
     else:
         session_id = context["session"].id
         group_condition = context["participant"].group_condition
@@ -2151,6 +2183,7 @@ def _tutor_turn_from_generation(
         generation_origin = context.get("generation_origin", "interactive")
         prefetch_audit = context.get("prefetch_audit")
         payload = context["payload"]
+        learning_content_version = context["learning_content_version"]
     instruction_audit = dict(payload.get("_generation_audit") or {})
     diagnosis = {
         "material_source": "ai",
@@ -2165,6 +2198,7 @@ def _tutor_turn_from_generation(
         "group_condition": group_condition,
         "taxonomy_version": payload.get("taxonomy_version"),
         "prompt_contract_version": payload.get("prompt_contract_version"),
+        "learning_content_version": learning_content_version,
         "generation_origin": generation_origin,
         "prefetch": prefetch_audit or {"state": "not_applicable", "reused": False},
         "instruction_route": instruction_audit.get("instruction_route"),
@@ -2686,7 +2720,16 @@ async def respond_tutor_turn(
     component_total = int(meta.get("component_total") or 1)
     component_term = meta.get("component_term")
 
-    spec = _learning_question_spec(term.slug, learning_stage, component_term, variant_index)
+    turn_content_version = (turn.diagnosis_json or {}).get("learning_content_version")
+    if turn_content_version not in {LEGACY_LEARNING_CONTENT_VERSION, CURRENT_LEARNING_CONTENT_VERSION}:
+        turn_content_version = _participant_learning_content_version(participant)
+    spec = _learning_question_spec(
+        term.slug,
+        learning_stage,
+        component_term,
+        variant_index,
+        turn_content_version,
+    )
     selected_options = _selected_learning_options(spec, payload.get("selected_option_ids"), payload.get("selected_option_id"), response)
     if spec.get("selection_mode") == "multiple":
         _validate_multi_select_labels({_option_label(option) for option in selected_options}, len(selected_options))
@@ -3582,6 +3625,7 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "teaching_contract_validation": (turn.diagnosis_json or {}).get("teaching_contract_validation"),
         "taxonomy_version": (turn.diagnosis_json or {}).get("taxonomy_version"),
         "prompt_contract_version": (turn.diagnosis_json or {}).get("prompt_contract_version"),
+        "learning_content_version": diagnosis.get("learning_content_version"),
         "generation_origin": diagnosis.get("generation_origin"),
         "prefetch_audit": diagnosis.get("prefetch"),
         "prefetch_state": _prefetch_state(session),

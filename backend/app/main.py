@@ -12,7 +12,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import LearnerState, Term, TutorSession, TutorTurn
+from app.models import Term, TutorSession, TutorTurn
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
@@ -39,7 +39,6 @@ from app.services.experiment import (
     get_participant,
     give_up_experiment,
     give_up_learning,
-    latest_learning_misconception,
     learning_targets,
     latest_test_results,
     participant_logs,
@@ -49,7 +48,6 @@ from app.services.experiment import (
     recalculate_evaluation,
     respond_tutor_turn,
     score_phase,
-    session_misconception_history,
     submit_attempt,
     submit_survey,
 )
@@ -59,6 +57,63 @@ from app.services.prefetch import prefetch_coordinator, schedule_prefetch
 
 
 settings = get_settings()
+
+
+_PUBLIC_PRACTICE_QUESTION_FIELDS = {
+    "body",
+    "question_type",
+    "options",
+    "items",
+    "selection_mode",
+    "min_selections",
+    "max_selections",
+    "variant_key",
+    "learning_variant_index",
+}
+_PUBLIC_PRACTICE_ITEM_FIELDS = {
+    "component_term",
+    "material",
+    "body",
+    "question_type",
+    "options",
+    "selection_mode",
+    "min_selections",
+    "max_selections",
+    "variant_key",
+    "learning_variant_index",
+}
+_PRIVATE_TURN_RESPONSE_FIELDS = {
+    "initial_misconception_type",
+    "misconception_type",
+    "latest_learning_misconception_type",
+    "latest_learning_misconception_reason",
+    "session_misconception_history",
+    "teaching_strategy",
+}
+
+
+def _public_practice_question(question: object) -> dict | None:
+    if not isinstance(question, dict):
+        return None
+
+    def public_item(item: object, allowed_fields: set[str]) -> dict:
+        if not isinstance(item, dict):
+            return {}
+        result = {key: value for key, value in item.items() if key in allowed_fields and key != "options"}
+        options = item.get("options")
+        if isinstance(options, list):
+            result["options"] = [
+                {key: option[key] for key in ("option_id", "label", "body") if key in option}
+                for option in options
+                if isinstance(option, dict)
+            ]
+        return result
+
+    result = public_item(question, _PUBLIC_PRACTICE_QUESTION_FIELDS)
+    items = question.get("items")
+    if isinstance(items, list):
+        result["items"] = [public_item(item, _PUBLIC_PRACTICE_ITEM_FIELDS) for item in items]
+    return result
 
 
 def _reasoning_effort_status() -> dict:
@@ -379,17 +434,14 @@ async def api_generate_tutor_turn(
         turn = await generate_tutor_turn(db, session_id)
         current_session = db.get(TutorSession, session_id)
         term = db.get(Term, current_session.term_id) if current_session else None
-        state = db.query(LearnerState).filter_by(participant_id=current_session.participant_id, term_id=current_session.term_id).one() if current_session else None
         stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
-        history = session_misconception_history(db, session_id)
-        latest_learning = latest_learning_misconception(db, session_id)
         return {
             "turn_id": turn.id,
             "term_slug": term.slug if term else None,
             "term_label": term.label if term else None,
             "tutor_message": turn.tutor_message,
             "learner_prompt": turn.learner_prompt,
-            "practice_question": turn.practice_question_json,
+            "practice_question": _public_practice_question(turn.practice_question_json),
             "requires_learner_response": True,
             "turn_index": turn.turn_index,
             "max_turns": settings.max_turns_per_term,
@@ -400,12 +452,6 @@ async def api_generate_tutor_turn(
             "component_total": stage_meta.get("component_total"),
             "stage_completed": False,
             "scaffolding_level": turn.scaffolding_level,
-            "initial_misconception_type": state.primary_misconception if state else None,
-            "misconception_type": state.primary_misconception if state else None,
-            "latest_learning_misconception_type": latest_learning.get("misconception_type") if latest_learning else None,
-            "latest_learning_misconception_reason": latest_learning.get("reason") if latest_learning else None,
-            "session_misconception_history": history,
-            "teaching_strategy": turn.teaching_strategy,
         }
 
     response = await run_idempotent(
@@ -416,6 +462,15 @@ async def api_generate_tutor_turn(
         request_data={"session_id": session_id},
         operation=operation,
     )
+    if isinstance(response, tuple) and len(response) == 1 and isinstance(response[0], dict):
+        response = response[0]
+    if isinstance(response, dict):
+        response = {
+            key: value
+            for key, value in response.items()
+            if key not in _PRIVATE_TURN_RESPONSE_FIELDS
+        }
+        response["practice_question"] = _public_practice_question(response.get("practice_question"))
     # Schedule only after the interactive response transaction has completed.
     # A reused prefetched turn carries its origin in the private diagnosis
     # audit and must not start another prefetch batch.

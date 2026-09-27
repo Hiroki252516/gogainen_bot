@@ -124,7 +124,7 @@ AI・情報系専門用語では、どの誤概念が再発しやすいか。
 
 ## PPTX Details Captured
 
-- 現行MVPの3用語の問題は `backend/app/seed/content/learning_content.yml` に反映する
+- テスト系の3用語の問題は `backend/app/seed/content/learning_content.yml`、新規参加者向け学習確認v2は `backend/app/seed/content/learning_questions_v2.yml` に反映する。既存参加者は学習確認v1を継続する
 - Transformer等の旧用語は過去ログ・DB互換用として非アクティブ化する
 - Problem phase separation from 5月25日 slide 22/23 is reflected in `02_experiment_flow.md`
 - 問題バリエーションの再利用上限は `construct_key` と `variant_key`、YAMLのvariant定義で管理する

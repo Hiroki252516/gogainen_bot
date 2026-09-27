@@ -5,11 +5,13 @@
 - A/Bの有効な参加コードがない参加者作成は拒否され、Aは内部`proposed`、Bは内部`control`へ変換される。正常作成時は`assignment_method=admin_code`を保存し、参加者向けレスポンスに`group_condition`を含めない。同意なしの参加者作成も拒否され、同意画面から同意した場合だけ`pretest`へ進む。`survey`送信で`participant_surveys`が1件保存され、`current_step=finish`、`completion_reason=completed`になる。送信再実行でアンケートが重複しない。
 - 同意画面の参加者作成が15秒以内に完了しない場合はタイムアウトエラーを表示し、「開始しています...」のまま操作不能にならない。DB接続障害はAPIの503と利用者向けエラーとして確認できる。
 - YAMLにactive termが `llm_knowledge`、`multi_agent`、`memory_process` の3件だけ存在する。
-- pretest・retest・final_test・学習確認の固定複数選択問題がA〜Jの10選択肢で、A/B/C、M1、M3、unknownの配分が3/3/3/1になる。`l0_check`と`transfer`はこの配分の対象外である。
+- pretest・retest・final_testと学習確認v1の固定複数選択問題がA〜Jの10選択肢で、A/B/C、M1、M3、unknownの配分が3/3/3/1になる。学習確認v2も各問で同じ3/3/3/1配分を持つが、A〜Iのラベル役割はvariantごとに変わり、全30問を通じて各ラベルが正解・M1・M3に各10回ずつなる。`l0_check`と`transfer`はこの配分の対象外である。
 - pretest・final_testが各用語1問、retestが各用語4バリエーション、learning確認がstage・用語ごとに5バリエーションになる。
-- A/B/C完全一致だけが正解、J単独だけがunknown、M3がM1より優先される。
+- テスト系と学習確認v1はA/B/C完全一致だけ、学習確認v2は提示問題の正解3選択肢だけを重複なくすべて選んだ場合だけ正解となる。J単独だけがunknownで、M3がM1より優先される。
 - retestはv1〜v4を使い、5回目以降はv4を再利用する。
-- learning確認はv1〜v5を使い、6回目以降はv5を再利用する。
+- 新規参加者の学習確認v2は3用語×2学習段階×5場面variantの全30問を検証し、各段階・用語の5問が適用・予測・比較・境界判断・事例診断を含む。長さの極端な差や固定テスト文との一致を拒否し、設問・選択肢に表面的な正誤の手掛かりがないことを内容レビューで確認する。
+- 既存参加者（版列NULLを含む）は学習確認v1、新規参加者はv2を使い、提示済みターンの版で回答を採点する。pretest/retest/final_testの問題・採点は変更しない。
+- learning確認は各版でv1〜v5を使い、6回目以降はv5を再利用する。
 - RAGは用語別の指定sectionだけを検索し、LangGraphチャンクを返さない。
 - 同じ用語・同じ構成要素についてcontrolとproposedのRAG query、allowed section、chunk ID、chunk本文が一致し、検索に学習段階・診断・履歴を使わない。
 - 教材生成のcontrol有効promptは、参加者ID・群名・固定問題・選択肢・正答・診断・学習段階・履歴を含まず、学習者の回答や履歴だけを変えたmetamorphic testでも同一になる。
@@ -30,6 +32,7 @@
 - app-server payloadが `gpt-5.6-luna` / `medium` を使う。
 - 正答時は `generate_correct_answer_summary`、誤答時は `explain_selected_distractor` が呼ばれ、解説生成の目的とpayloadが `AICallLog` に記録される。
 - `/api/participants/{participant_id}/learning-targets` が、既存の未達対象 `targets`、互換用 `pretest_results`、直近の `test_results`（周回名、問題文、本人が選んだ選択肢本文、正誤）を返す。`test_results` に正答、期待解答、選択肢ごとの正誤、M分類などの内部診断値を含めない。
+- 学習ターン生成の参加者向けレスポンスと冪等再取得が、問題文・公開選択肢・選択数制約だけを返し、`expected_answer`、正誤metadata、M分類、内部stage metadataを含めない。
 - 解説生成に失敗した場合、固定採点結果や学習状態を部分確定せず、Mockへ自動フォールバックしない。
 - 学習ギブアップAPIが開いている学習セッションを終了し、`current_step=retest`と`next_url=/retest`を返す。ギブアップした学習ターンは回答として保存しない。
 - 実験ギブアップAPIが、`current_step=retest`または`final_test`では`current_step=survey`、`next_url=/survey`、学習対象確認中などそれ以外では`current_step=finish`、`next_url=/finish`を返し、`completed_at`、`completion_reason=give_up`を確定する。retestまたはfinal_testギブアップ後は問題の取得・回答保存・採点・学習セッション操作を409で拒否し、アンケート送信後に`current_step=finish`へ進む。アンケート送信後も`completion_reason=give_up`とギブアップ時の`completed_at`を保持する。学習ギブアップは`completion_reason`を変更せず、両操作を`AuditEvent`へ記録する。管理画面の参加者一覧・詳細とCSVで状態・回数・操作時刻を確認できる。
