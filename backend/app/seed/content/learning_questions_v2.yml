@@ -93,7 +93,7 @@ terms:
         - variant_key: learning_conceptual_change_v1
           scenario_type: application
           scenario: 医療機関の案内AIが、診療時間の変更をすぐ回答へ反映し、学習済みモデルの更新作業は避けたい。回答には根拠資料も使わせる。
-          task: 必要な処理と、重み更新との境界を示す説明を三つ選びなさい。
+          task: 最新資料を回答に使う方法と、追加訓練でモデルの重みを更新する方法の違いを正しく説明しているものを3つ選びなさい
           choices:
             correct:
               - 回答時に更新済み資料を検索し、該当箇所をモデルの入力へ含める。

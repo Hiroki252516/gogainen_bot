@@ -207,6 +207,30 @@ def test_learning_v2_bank_has_scenario_roles_and_balanced_labels():
     assert all(counts == {"correct": 10, "M1": 10, "M3": 10} for counts in role_counts.values())
 
 
+def test_llm_knowledge_conceptual_change_v1_prompt_and_option_roles():
+    task = (
+        "最新資料を回答に使う方法と、追加訓練でモデルの重みを更新する方法の違いを"
+        "正しく説明しているものを3つ選びなさい"
+    )
+    content = load_learning_v2_content()
+    variant = content["terms"]["llm_knowledge"]["conceptual_change"]["variants"][0]
+    spec = learning_question_spec(
+        "llm_knowledge", "conceptual_change", 1, CURRENT_LEARNING_CONTENT_VERSION
+    )
+
+    assert variant["task"] == task
+    assert spec["body"].endswith(f"\n\n{task}")
+    roles = {"correct": [], "M1": [], "M3": []}
+    for option in spec["options"][:9]:
+        role = "correct" if option["is_correct"] else option["misconception_type"]
+        roles[role].append(option["label"])
+    assert roles == {
+        "correct": ["G", "H", "I"],
+        "M1": ["A", "B", "C"],
+        "M3": ["D", "E", "F"],
+    }
+
+
 def test_legacy_learning_bank_and_test_question_roles_remain_unchanged():
     legacy = learning_question_spec(
         "llm_knowledge", "enrichment", 1, LEGACY_LEARNING_CONTENT_VERSION
