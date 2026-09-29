@@ -123,27 +123,6 @@ def mandatory_elements_schema(misconception_type: str | None = None) -> dict[str
     }
 
 
-def mandatory_element_prompt(misconception_type: str | None) -> str:
-    requirements = mandatory_element_requirements(misconception_type)
-    headings = mandatory_element_headings(misconception_type)
-    if not requirements:
-        return ""
-    lines = [
-        f"現在の必須教授要素タイプは {misconception_type}。次の見出しをこの順序で教材本文に使う:",
-    ]
-    lines.extend(
-        f"- {field} / ### {headings[field]}: {description}"
-        for field, description in requirements.items()
-    )
-    lines.append("## 用語名の直後に、上記の ### 見出しを順番どおりに置く。")
-    lines.append("M1/M3/unknownでは「### 要点」「### 具体例」「### 注意点」を使わない。")
-    lines.append("mandatory_elements は type と上記フィールドを直下に持つオブジェクトにし、不要なフィールドや入れ子を追加しない。")
-    lines.append("mandatory_elements の各値は、教材本文からそのまま抜き出した短い証拠文にする。")
-    lines.append("各証拠文は、対応する見出しのセクション内に置く。")
-    lines.append("mandatory_elements は研究ログ用であり、学習者向け本文に内部ラベルを表示しない。")
-    return "\n".join(lines)
-
-
 def validate_mandatory_elements(
     result: dict[str, Any],
     expected_type: str | None,

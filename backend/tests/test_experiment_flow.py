@@ -2628,8 +2628,12 @@ def test_admin_participant_delete_rolls_back_on_commit_failure(monkeypatch):
 
 
 def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonomy():
-    prompt_source = Path(__file__).resolve().parents[1] / "app" / "ai" / "codex_app_server_backend.py"
-    text = prompt_source.read_text(encoding="utf-8")
+    app_root = Path(__file__).resolve().parents[1] / "app"
+    prompt_sources = (
+        app_root / "ai" / "codex_app_server_backend.py",
+        app_root / "ai" / "tutoring_prompt.py",
+    )
+    text = "\n".join(source.read_text(encoding="utf-8") for source in prompt_sources)
     assert "misconception_taxonomy" in text
     assert "M4なら不足スキーマの構築" in text
     assert "固定問題バンクが表示・採点" in text
