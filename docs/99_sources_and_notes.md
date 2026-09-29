@@ -43,7 +43,7 @@
 | 即時再テスト | 各用語4バリエーション。5回目以降はv4を再利用 |
 | 最終テスト | 各用語1問。理由・ヒント・即時正解表示なし |
 
-このため、実装ではテスト問題に `construct_key` と `variant_key` を持たせ、学習確認は `TutorTurn.practice_question_json.variant_key` で管理する。テスト系は `backend/app/seed/content/learning_content.yml`、学習確認v2は `backend/app/seed/content/learning_questions_v2.yml` を用いる。事前・最終テストは各用語1問、再テストはv1〜v4、学習確認は各学習段階・各用語5 variantで管理し、上限を超えた場合は最後のvariantを再利用する。既存参加者はNULL版をv1として継続し、新規参加者はv2へ固定する。
+このため、実装ではテスト問題に `construct_key` と `variant_key` を持たせ、学習確認は `TutorTurn.practice_question_json.variant_key` で管理する。テスト系は `backend/app/seed/content/learning_content.yml`、学習確認v2は `backend/app/seed/content/learning_questions_v2.yml` を用いる。事前・最終テストは各用語1問、再テストはv1〜v5、学習確認は各学習段階・各用語5 variantで管理し、上限を超えた場合は最後のvariantを再利用する。既存参加者はNULL版をv1として継続し、新規参加者はv2へ固定する。
 
 ### Main metrics
 
@@ -152,7 +152,7 @@ controlの診断結果は採点・評価・監査には保存するが教授へ�
 
 ## Known Deck Inconsistencies and Resolution
 
-7月22日PPTXと8月21日更新仕様を受け、古いTransformer固有のM1/M3判定は新規フローから外した。テスト系と学習確認v1では3項目共通のA〜C正解、D〜F=M1、G〜I=M3、J=unknownを使う。新規参加者向け学習確認v2では各設問の正解・M1・M3役割をA〜Iへ均等に分散し、問題ごとの選択肢メタデータで採点する。M2/M4は実行時taxonomyに保持する。
+7月22日PPTXと8月21日更新仕様を受け、古いTransformer固有のM1/M3判定は新規フローから外した。学習確認v1では3項目共通のA〜C正解、D〜F=M1、G〜I=M3、J=unknownを互換用に維持する。テスト系（pretest/retest/final_test）と新規参加者向け学習確認v2では各設問の正解・M1・M3役割をA〜Iへ分散し、問題ごとの選択肢metadataで採点する。テスト系は21variantを通じて各ラベルが各役割を7回ずつ担う。M2/M4は実行時taxonomyに保持する。
 
 5月18日PPTXではH0の表記があったが、現在の実装では固定3ターンの足場掛け制ではなく、`enrichment`（豊富化）、`conceptual_change`（概念変化）、`final_feedback`（教材フィードバック）の`learning_stage`を使う。1つの学習確認に十分回答すると当該`TutorSession`を終了する。L3/L2相当の値は内部`scaffolding_level`互換・ログ用に残すもので、参加者向けの段階名やL3からL2へ進む別個の学習段階ではない。
 

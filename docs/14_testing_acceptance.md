@@ -5,12 +5,13 @@
 - A/Bの有効な参加コードがない参加者作成は拒否され、Aは内部`proposed`、Bは内部`control`へ変換される。正常作成時は`assignment_method=admin_code`を保存し、参加者向けレスポンスに`group_condition`を含めない。同意なしの参加者作成も拒否され、同意画面から同意した場合だけ`pretest`へ進む。`survey`送信で`participant_surveys`が1件保存され、`current_step=finish`、`completion_reason=completed`になる。送信再実行でアンケートが重複しない。
 - 同意画面の参加者作成が15秒以内に完了しない場合はタイムアウトエラーを表示し、「開始しています...」のまま操作不能にならない。DB接続障害はAPIの503と利用者向けエラーとして確認できる。
 - YAMLにactive termが `llm_knowledge`、`multi_agent`、`memory_process` の3件だけ存在する。
-- pretest・retest・final_testと学習確認v1の固定複数選択問題がA〜Jの10選択肢で、A/B/C、M1、M3、unknownの配分が3/3/3/1になる。学習確認v2も各問で同じ3/3/3/1配分を持つが、A〜Iのラベル役割はvariantごとに変わり、全30問を通じて各ラベルが正解・M1・M3に各10回ずつなる。`l0_check`と`transfer`はこの配分の対象外である。
-- pretest・final_testが各用語1問、retestが各用語4バリエーション、learning確認がstage・用語ごとに5バリエーションになる。
-- テスト系と学習確認v1はA/B/C完全一致だけ、学習確認v2は提示問題の正解3選択肢だけを重複なくすべて選んだ場合だけ正解となる。J単独だけがunknownで、M3がM1より優先される。
-- retestはv1〜v4を使い、5回目以降はv4を再利用する。
+- pretest・retest・final_testはA〜Jの10選択肢で、各variant内の正解、M1、M3、unknownを3/3/3/1にする。全21variantを通じてA〜Iの各ラベルが正解・M1・M3を各7回ずつ担い、設問はシナリオに基づく判断形式になる。学習確認v1は旧固定配置、学習確認v2はvariant別metadata配置で、各問の配分は3/3/3/1、全30問を通じて各ラベルが正解・M1・M3を各10回担う。`l0_check`と`transfer`はこの配分の対象外である。
+- pretest・final_testは各用語1問、retestは各用語5variant、learning確認はstage・用語ごとに5variantになる。
+- テスト系と学習確認v2は提示問題の正解metadataに該当する3選択肢だけを重複なくすべて選んだ場合に正解となる。学習確認v1はA/B/C完全一致だけが正解。J単独だけがunknownで、M3がM1より優先される。
+- retestはv1〜v5を使い、6回目以降はv5を再利用する。
+- テスト問題の21variantに選択肢本文の重複がなく、選択肢長の極端な差や正誤の露骨な表現手掛かりを内容レビューで確認する。
 - 新規参加者の学習確認v2は3用語×2学習段階×5場面variantの全30問を検証し、各段階・用語の5問が適用・予測・比較・境界判断・事例診断を含む。長さの極端な差や固定テスト文との一致を拒否し、設問・選択肢に表面的な正誤の手掛かりがないことを内容レビューで確認する。
-- 既存参加者（版列NULLを含む）は学習確認v1、新規参加者はv2を使い、提示済みターンの版で回答を採点する。pretest/retest/final_testの問題・採点は変更しない。
+- 既存参加者（版列NULLを含む）は学習確認v1、新規参加者はv2を使い、提示済みターンの版で回答を採点する。テスト系はvariant別の選択肢metadataで採点し、正誤結果の表示・非公開情報のprojectionを維持する。
 - learning確認は各版でv1〜v5を使い、6回目以降はv5を再利用する。
 - RAGは用語別の指定sectionだけを検索し、LangGraphチャンクを返さない。
 - 同じ用語・同じ構成要素についてcontrolとproposedのRAG query、allowed section、chunk ID、chunk本文が一致し、検索に学習段階・診断・履歴を使わない。

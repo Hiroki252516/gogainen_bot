@@ -30,7 +30,7 @@
 3. 3用語のpretest
 4. 診断と学習対象選択
 5. 未達用語の学習・確認問題
-6. 用語ごとのretest（v1〜v4、以後v4再利用）
+6. 用語ごとのretest（v1〜v5、以後v5再利用）
 7. 未達があれば `current_step=learning_targets` に戻す。追加周回はクライアントまたは研究者が再開し、自動反復ループはない
 8. 初回テストで学習対象がなかった場合、3用語の`final_test`（参加者向け表示は「再テスト1」）
 9. `/survey`で仮アンケートを保存
@@ -40,7 +40,7 @@
 
 learning確認は`enrichment` / `conceptual_change`のstage・用語ごとにv1〜v5を使う。確認問題は`questions`へseedせず、`TutorTurn.practice_question_json`に保存する。学習確認では`variant_key`を保存し、テスト問題が使う`construct_key`/`variant_key`の命名と互換性を保つ。L3/L2は内部`scaffolding_level`互換値であり、参加者向けstageではない。
 
-新規参加者には作成時に`participants.learning_content_version=2`を固定し、場面判断型v2を使う。既存参加者および列追加でNULLの既存行はv1のまま進行する。実際に提示した版は各`TutorTurn.diagnosis_json.learning_content_version`へ保存し、回答時もその版を使う。学習確認v2は3用語×2 stage×5場面種類（適用・予測・比較・境界判断・事例診断）の30 variantで、正解/M1/M3を3つずつ配置する。A〜Iの役割を版全体で均等化し、Jは「わからない」。テスト系問題は変更しない。
+新規参加者には作成時に`participants.learning_content_version=2`を固定し、場面判断型v2を使う。既存参加者および列追加でNULLの既存行はv1のまま進行する。実際に提示した版は各`TutorTurn.diagnosis_json.learning_content_version`へ保存し、回答時もその版を使う。学習確認v2は3用語×2 stage×5場面種類（適用・予測・比較・境界判断・事例診断）の30 variantで、正解/M1/M3を3つずつ配置する。A〜Iの役割を版全体で均等化し、Jは「わからない」。テスト系は独立した21場面variantを持ち、問題metadataで採点する。学習確認の版管理はテスト系variantや採点には影響しない。
 
 ### 誤概念対応教材の生成経路
 

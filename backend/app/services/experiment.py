@@ -40,6 +40,7 @@ from app.core.runtime_config import current_reasoning_effort
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import (
+    ASSESSMENT_VARIANT_COUNTS,
     CURRENT_LEARNING_CONTENT_VERSION,
     LEGACY_LEARNING_CONTENT_VERSION,
     content_term,
@@ -1101,7 +1102,7 @@ def _question_for_phase_variant(
             term_id=term_id,
             phase="retest",
         ).scalar() or 0
-        variant_number = min(previous_count + 1, 4)
+        variant_number = min(previous_count + 1, ASSESSMENT_VARIANT_COUNTS["retest"])
         expected_key = f"retest_v{variant_number}"
     elif phase == "pretest":
         expected_key = "pretest_v1"
@@ -1495,7 +1496,9 @@ def _selected_option_label_text(options: list[QuestionOption]) -> str | None:
 
 
 def _fixed_attempt_result(options: list[QuestionOption]) -> dict[str, Any]:
-    is_correct, misconception_type, status = _classify_selected_options(options)
+    is_correct, misconception_type, status = _classify_selected_options(
+        options, use_option_correctness=True
+    )
     return {
         "is_correct": is_correct,
         "score": 1.0 if is_correct else 0.0,
@@ -1777,7 +1780,13 @@ def _test_result_question(
         round_number = _round_number(test_round)
         if round_number is not None:
             has_final_test = db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
-            variant_number = max(1, min(4, round_number - (1 if has_final_test else 0)))
+            variant_number = max(
+                1,
+                min(
+                    ASSESSMENT_VARIANT_COUNTS["retest"],
+                    round_number - (1 if has_final_test else 0),
+                ),
+            )
             expected_variant = f"retest_v{variant_number}"
 
     query = (

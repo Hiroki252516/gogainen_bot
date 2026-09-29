@@ -7,8 +7,8 @@
 - 現行main系の実装状態を基準に仕様を整理
 - active seedを `llm_knowledge`、`multi_agent`、`memory_process` の3用語へ変更
 - テスト系YAML問題バンクと、起動時に検証する版付き学習確認問題バンク
-- pretest/final_test各1問、retest v1〜v4、既存参加者向けlearning v1、新規参加者向けlearning v2の30場面variant
-- テスト系・learning v1の固定ラベル採点と、learning v2の保存済み選択肢役割による決定論的採点（M3優先）
+- pretest/final_test各1問、retest v1〜v5、既存参加者向けlearning v1、新規参加者向けlearning v2の30場面variant
+- テスト系・learning v2の保存済み選択肢役割による採点と、learning v1の固定ラベル採点（M3優先）
 - 旧Term・問題・ログを削除せず非アクティブ化
 - ローカルRAG packの読み込み、用語別section制限、LangGraph除外
 - control/proposedの共通RAGと個別化payloadの分離

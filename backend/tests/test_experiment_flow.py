@@ -48,9 +48,11 @@ from app.models import (
 )
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import (
+    ASSESSMENT_VARIANT_COUNTS,
     ACTIVE_TERM_SLUGS,
     CURRENT_LEARNING_CONTENT_VERSION,
     LEGACY_LEARNING_CONTENT_VERSION,
+    assessment_question_spec,
     content_term,
     learning_question_spec,
     load_content,
@@ -80,6 +82,38 @@ def _latest_turn(turn_id: str) -> TutorTurn | None:
 def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
     by_label = {option["label"]: option["option_id"] for option in question["options"]}
     return [by_label[label] for label in labels]
+
+
+def _phase_labels_for_roles(pid: str, phase: str, question: dict, roles: list[str]) -> list[str]:
+    db = SessionLocal()
+    try:
+        saved_question = db.get(Question, question["question_id"])
+        assert saved_question is not None
+        suffix = (saved_question.variant_key or "_v1").rsplit("_v", 1)[-1]
+        variant_index = int(suffix) if phase == "retest" else 1
+    finally:
+        db.close()
+    spec = assessment_question_spec(question["term_slug"], phase, variant_index)
+    labels = []
+    for role in roles:
+        labels.append(next(
+            option["label"]
+            for option in spec["options"]
+            if option["label"] not in labels
+            and (option["is_correct"] if role == "correct" else option["misconception_type"] == role)
+        ))
+    return labels
+
+
+def _phase_role_labels(pid: str, phase: str, question: dict, requested: list[str]) -> list[str]:
+    requested_role = {
+        frozenset("ABC"): "correct",
+        frozenset("DEF"): "M1",
+        frozenset("GHI"): "M3",
+    }.get(frozenset(requested))
+    if requested_role is None:
+        return requested
+    return _phase_labels_for_roles(pid, phase, question, [requested_role] * 3)
 
 
 def _ids_for_learning_role(question: dict, term_slug: str, learning_stage: str, role: str) -> list[str]:
@@ -124,7 +158,9 @@ def _submit_phase_questions(pid: str, phase: str, labels: list[str]) -> list[dic
                 "participant_id": pid,
                 "question_id": question["question_id"],
                 "phase": phase,
-                "selected_option_ids": _ids_for_labels(question, labels),
+                "selected_option_ids": _ids_for_labels(
+                    question, _phase_role_labels(pid, phase, question, labels)
+                ),
                 "response_time_sec": 1.25,
                 "question_shown_at": QUESTION_SHOWN_AT,
                 "answered_at": ANSWERED_AT,
@@ -143,7 +179,10 @@ def _submit_phase_questions_by_term(pid: str, phase: str, labels_by_term: dict[s
                 "participant_id": pid,
                 "question_id": question["question_id"],
                 "phase": phase,
-                "selected_option_ids": _ids_for_labels(question, labels_by_term[question["term_slug"]]),
+                "selected_option_ids": _ids_for_labels(
+                    question,
+                    _phase_role_labels(pid, phase, question, labels_by_term[question["term_slug"]]),
+                ),
             },
         )
         assert response.status_code == 200, response.text
@@ -167,10 +206,65 @@ def test_content_contract_has_three_terms_and_required_variant_counts():
     assert tuple(term["slug"] for term in content["terms"]) == ACTIVE_TERM_SLUGS
     for term in content["terms"]:
         assert len(term["questions"]["pretest"]) == 1
-        assert len(term["questions"]["retest"]) == 4
+        assert len(term["questions"]["retest"]) == 5
         assert len(term["questions"]["final_test"]) == 1
         assert len(term["learning"]["enrichment"]["variants"]) == 5
         assert len(term["learning"]["conceptual_change"]["variants"]) == 5
+
+
+def test_assessment_bank_has_21_scenario_variants_balanced_roles_and_option_lengths():
+    content = load_content()
+    role_counts = {label: {role: 0 for role in ("correct", "M1", "M3")} for label in "ABCDEFGHI"}
+    bodies = set()
+    choices = set()
+    variant_count = 0
+
+    for term in content["terms"]:
+        for phase, expected_count in ASSESSMENT_VARIANT_COUNTS.items():
+            variants = term["questions"][phase]
+            assert len(variants) == expected_count
+            for index, variant in enumerate(variants, start=1):
+                assert variant.get("scenario")
+                assert variant.get("task")
+                spec = assessment_question_spec(term["slug"], phase, index)
+                assert spec["body"] == f"{variant['scenario']}\n\n{variant['task']}"
+                assert len(spec["options"]) == 10
+                assert sum(option["is_correct"] for option in spec["options"]) == 3
+                assert sum(option["misconception_type"] == "M1" for option in spec["options"]) == 3
+                assert sum(option["misconception_type"] == "M3" for option in spec["options"]) == 3
+                assert spec["options"][-1]["label"] == "J"
+                correct_labels = [option["label"] for option in spec["options"] if option["is_correct"]]
+                assert spec["expected"].startswith("、".join(correct_labels))
+                assert spec["body"] not in bodies
+                bodies.add(spec["body"])
+                visible_options = spec["options"][:9]
+                lengths = [len(option["body"]) for option in visible_options]
+                assert min(lengths) >= 20
+                assert max(lengths) <= min(lengths) * 1.8
+                assert max(lengths) - min(lengths) <= 32
+                for option in visible_options:
+                    assert option["body"] not in choices
+                    choices.add(option["body"])
+                    role = "correct" if option["is_correct"] else option["misconception_type"]
+                    role_counts[option["label"]][role] += 1
+                variant_count += 1
+
+    assert variant_count == 21
+    assert all(counts == {"correct": 7, "M1": 7, "M3": 7} for counts in role_counts.values())
+
+
+def test_pretest_teaching_targets_follow_rotated_option_roles():
+    from app.seed.content_loader import teaching_target_for_option
+
+    for term_slug in ACTIVE_TERM_SLUGS:
+        spec = assessment_question_spec(term_slug, "pretest")
+        for option in spec["options"]:
+            target = teaching_target_for_option(term_slug, option["label"])
+            if option["misconception_type"] in {"M1", "M3"}:
+                assert target is not None
+                assert target["corrected_claim"]
+            else:
+                assert target is None
 
 
 def test_learning_v2_bank_has_scenario_roles_and_balanced_labels():
@@ -477,15 +571,41 @@ def test_attempt_requires_three_from_a_to_i_or_unknown_j_only():
 
 def test_pretest_scoring_correct_m1_m3_unknown_and_snapshots():
     cases = [
-        (["A", "B", "C"], True, None, "stable_correct"),
-        (["A", "B", "D"], False, "M1", "misconception"),
-        (["A", "D", "G"], False, "M3", "misconception"),
-        (["D", "E", "F"], False, "M1", "misconception"),
-        (["G", "H", "I"], False, "M3", "misconception"),
+        (["correct", "correct", "correct"], True, None, "stable_correct"),
+        (["correct", "correct", "M1"], False, "M1", "misconception"),
+        (["correct", "M1", "M3"], False, "M3", "misconception"),
+        (["M1", "M1", "M1"], False, "M1", "misconception"),
+        (["M3", "M3", "M3"], False, "M3", "misconception"),
         (["J"], False, "unknown", "unknown"),
     ]
-    for labels, is_correct, misconception_type, status in cases:
-        pid = _create_participant_with_pretest(labels=labels)
+    for roles, is_correct, misconception_type, status in cases:
+        participant = client.post(
+            "/api/participants",
+            json={"assignment_code": "A", "consent_checked": True},
+        ).json()
+        pid = participant["participant_id"]
+        questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+        for question in questions:
+            labels = (
+                ["J"]
+                if roles == ["J"]
+                else _phase_labels_for_roles(pid, "pretest", question, roles)
+            )
+            saved = client.post(
+                "/api/attempts",
+                json={
+                    "participant_id": pid,
+                    "question_id": question["question_id"],
+                    "phase": "pretest",
+                    "selected_option_ids": _ids_for_labels(question, labels),
+                    "response_time_sec": 1.25,
+                    "question_shown_at": QUESTION_SHOWN_AT,
+                    "answered_at": ANSWERED_AT,
+                },
+            )
+            assert saved.status_code == 200, saved.text
+        diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
+        assert diagnosis.status_code == 200, diagnosis.text
         db = SessionLocal()
         try:
             attempts = db.query(Attempt).filter_by(participant_id=pid, phase="pretest").all()
@@ -610,13 +730,14 @@ def test_attempts_cannot_be_saved_for_wrong_phase_or_after_pretest():
     pid = participant["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:
+        labels = _phase_labels_for_roles(pid, "pretest", question, ["correct"] * 3)
         response = client.post(
             "/api/attempts",
             json={
                 "participant_id": pid,
                 "question_id": question["question_id"],
                 "phase": "pretest",
-                "selected_option_ids": _ids_for_labels(question, ["A", "B", "C"]),
+                "selected_option_ids": _ids_for_labels(question, labels),
             },
         )
         assert response.status_code == 200, response.text
@@ -651,19 +772,21 @@ def test_learning_targets_returns_all_pretest_results_without_internal_labels():
     participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
     pid = participant["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
-    labels_by_term = {
-        "llm_knowledge": ["A", "B", "C"],
-        "multi_agent": ["G", "H", "I"],
+    roles_by_term = {
+        "llm_knowledge": ["correct", "correct", "correct"],
+        "multi_agent": ["M3", "M3", "M3"],
         "memory_process": ["J"],
     }
     for question in questions:
+        roles = roles_by_term[question["term_slug"]]
+        labels = ["J"] if roles == ["J"] else _phase_labels_for_roles(pid, "pretest", question, roles)
         response = client.post(
             "/api/attempts",
             json={
                 "participant_id": pid,
                 "question_id": question["question_id"],
                 "phase": "pretest",
-                "selected_option_ids": _ids_for_labels(question, labels_by_term[question["term_slug"]]),
+                "selected_option_ids": _ids_for_labels(question, labels),
                 "response_time_sec": 1.25,
                 "question_shown_at": QUESTION_SHOWN_AT,
                 "answered_at": ANSWERED_AT,
@@ -1445,10 +1568,10 @@ def test_control_sequence_is_independent_of_pretest_and_learning_history():
         db.close()
 
 
-def test_retest_uses_four_variants_then_reuses_variant_four():
+def test_retest_uses_five_variants_then_reuses_variant_five():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     observed: list[str] = []
-    for _ in range(5):
+    for _ in range(6):
         questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
         assert len(questions) == 3
         target_question = next(question for question in questions if question["term_slug"] == "llm_knowledge")
@@ -1456,15 +1579,18 @@ def test_retest_uses_four_variants_then_reuses_variant_four():
         for question in questions:
             response = client.post(
                 "/api/attempts",
-                json={"participant_id": pid, "question_id": question["question_id"], "phase": "retest", "selected_option_ids": _ids_for_labels(question, ["D", "E", "F"])},
+                json={"participant_id": pid, "question_id": question["question_id"], "phase": "retest", "selected_option_ids": _ids_for_labels(question, _phase_role_labels(pid, "retest", question, ["D", "E", "F"]))},
             )
             assert response.status_code == 200, response.text
         score = client.post(f"/api/participants/{pid}/score-retest")
         assert score.status_code == 200, score.text
         assert score.json()["next_step"] == "learning_targets"
         assert score.json()["learning_target_slugs"] == list(ACTIVE_TERM_SLUGS)
-    assert len(set(observed[:4])) == 4
-    assert observed[4] == observed[3]
+        review = client.get(f"/api/participants/{pid}/learning-targets").json()["test_results"]
+        llm_result = next(result for result in review["results"] if result["term_slug"] == "llm_knowledge")
+        assert llm_result["question_body"] == target_question["body"]
+    assert len(set(observed[:5])) == 5
+    assert observed[5] == observed[4]
 
 
 def test_retest_non_mastery_routes_to_first_failed_learning_session_and_blocks_final_test():
@@ -1550,7 +1676,9 @@ def test_incomplete_retest_keeps_unanswered_term_as_learning_target():
                 "participant_id": pid,
                 "question_id": question["question_id"],
                 "phase": "retest",
-                "selected_option_ids": _ids_for_labels(question, ["A", "B", "C"]),
+                "selected_option_ids": _ids_for_labels(
+                    question, _phase_role_labels(pid, "retest", question, ["A", "B", "C"])
+                ),
             },
         )
         assert response.status_code == 200, response.text
@@ -1861,7 +1989,7 @@ def test_retest_mastery_skips_final_test_and_uses_retest_score():
         correct_option_ids = [
             option.id
             for option in db.query(QuestionOption)
-            .filter(QuestionOption.question_id == final_question.id, QuestionOption.option_label.in_(["A", "B", "C"]))
+            .filter(QuestionOption.question_id == final_question.id, QuestionOption.is_correct.is_(True))
             .order_by(QuestionOption.default_order)
             .all()
         ]
@@ -2298,12 +2426,23 @@ def test_admin_logs_and_csv_show_multiple_selection_labels():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     logs = client.get(f"/api/admin/participants/{pid}/logs").json()
     assert len(logs["attempts"]) == 3
-    assert all(row["selected_option_body"] == "D / E / F" for row in logs["attempts"])
     assert all(row["misconception_type"] == "M1" for row in logs["attempts"])
+    m1_labels_by_term = {
+        term_slug: [option["label"] for option in assessment_question_spec(term_slug, "pretest")["options"] if option["misconception_type"] == "M1"]
+        for term_slug in ACTIVE_TERM_SLUGS
+    }
+    assert all(
+        row["selected_option_body"] == " / ".join(m1_labels_by_term[row["term_slug"]])
+        for row in logs["attempts"]
+    )
 
     overview = client.get("/api/admin/logs/overview").json()
-    assert any(row.get("selected_option_body") == "D / E / F" for row in overview["recent_answer_history"])
-    assert any(row.get("group_condition") == "proposed" for row in overview["recent_ai_call_logs"])
+    expected_first_term_labels = " / ".join(m1_labels_by_term[ACTIVE_TERM_SLUGS[0]])
+    assert any(row.get("selected_option_body") == expected_first_term_labels for row in overview["recent_answer_history"])
+    assert any(
+        row.get("participant_id") == pid and row.get("group_condition") == "proposed"
+        for row in overview["participants"]
+    )
 
     recalculate = client.post(f"/api/participants/{pid}/evaluation-summary/recalculate")
     assert recalculate.status_code == 200
@@ -2312,7 +2451,7 @@ def test_admin_logs_and_csv_show_multiple_selection_labels():
 
     participant_csv = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert participant_csv.status_code == 200
-    assert "D / E / F" in participant_csv.text
+    assert all(" / ".join(labels) in participant_csv.text for labels in m1_labels_by_term.values())
     assert "answer,test_attempt" in participant_csv.text
 
 
