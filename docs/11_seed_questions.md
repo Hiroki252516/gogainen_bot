@@ -16,15 +16,18 @@ LangGraphを含む見出し・セクションのチャンクは検索結果か�
 
 ## 固定問題の構成
 
-pretest、retest、final_testと学習確認の固定複数選択問題はA〜Jの10選択肢を持つ。テスト系はvariantごとのmetadataでA〜Iに正解3つ、M1誤答3つ、M3誤答3つを割り当て、学習確認v2も同様にvariantごとに役割を循環させる。学習確認v1だけは既存参加者との互換性のためA〜Cが正解、D〜FがM1、G〜IがM3の固定配置を維持する。`l0_check`の自由回答と`transfer`の互換問題は別形式である。
+pretest、retest、final_testと学習確認の固定複数選択問題はA〜Jの10選択肢を持つ。実験用の基準ではテスト系のA〜Iの役割をvariantごとに分散し、学習確認v2も同様にvariantごとに循環させる。学習確認v1は既存参加者との互換性のためA〜Cが正解、D〜FがM1、G〜IがM3の固定配置を維持する。`l0_check`の自由回答と`transfer`の互換問題は別形式である。
 
-- テスト系: 各variantの3選択肢に`is_correct: true`を設定し、残り6選択肢にM1/M3を3つずつ設定
+`fix/issue-124`では開発者の判定確認用に、テスト系および学習確認v2の役割をA〜C=正解、D〜F=M1、G〜I=M3、J=unknownへ一時固定する。これは実験用の基準ではなく、正解ラベルを手掛かりにできるため、このブランチで参加者データを収集してはならない。実験開始前にvariant別の分散配置へ戻し、分布検査を復旧する。
+
+- テスト系: 各variantの3選択肢に`is_correct: true`を設定し、残り6選択肢にM1/M3を3つずつ設定（`fix/issue-124`のデバッグ上書き中はA〜Cが正解、D〜FがM1、G〜IがM3）
 - 学習確認v1のA〜C: `is_correct: true`
 - 学習確認v1のD〜F: `misconception_type: M1`
 - 学習確認v1のG〜I: `misconception_type: M3`
+- 学習確認v2: 実験用の基準ではvariant別に役割を分散（デバッグ上書き中はA〜Cが正解、D〜FがM1、G〜IがM3）
 - J: `misconception_type: unknown`
 
-正解はvariantごとの正解metadataを持つ3選択肢だけをすべて選んだ場合に限定し、Jは単独選択だけを有効とする。テスト系は各用語につきpretest 1種類、retest 5種類、final_test 1種類の全21variantを持ち、再テスト6回目以降はv5を再利用する。全21問を通じてA〜Iの各ラベルは正解・M1・M3に各7回割り当たる。各問題はシナリオと判断タスクを持ち、選択肢本文は教材や他variantから流用しない。M1誤答は単一命題の誤り、M3誤答は概念カテゴリーの取り違えとして設計する。Jは全問「わからない」。YAMLローダーはvariant数、場面・タスク、役割配分、重複、文字数差、ラベル役割の分散、LangGraph混入を検証する。M1/M3のテスト系選択肢には、`teaching_targets`として研究者確認済みの`corrected_claim`、`mechanism_explanation`、`contrast_example`を置き、M3には`wrong_category`、`correct_category`、`boundary_criterion`も置く。選択肢本文は既存の`QuestionOption.body`を正本とし、claim IDは`{term_slug}:pretest:{option_label}`から実行時に作る。
+正解はvariantごとの正解metadataを持つ3選択肢だけをすべて選んだ場合に限定し、Jは単独選択だけを有効とする。テスト系は各用語につきpretest 1種類、retest 5種類、final_test 1種類の全21variantを持ち、再テスト6回目以降はv5を再利用する。実験用の基準では全21問を通じてA〜Iの各ラベルを正解・M1・M3に各7回割り当てる。各問題はシナリオと判断タスクを持ち、選択肢本文は教材や他variantから流用しない。M1誤答は単一命題の誤り、M3誤答は概念カテゴリーの取り違えとして設計する。Jは全問「わからない」。YAMLローダーはvariant数、場面・タスク、役割配分、重複、文字数差、LangGraph混入を検証する。M1/M3のテスト系選択肢には、`teaching_targets`として研究者確認済みの`corrected_claim`、`mechanism_explanation`、`contrast_example`を置き、M3には`wrong_category`、`correct_category`、`boundary_criterion`も置く。選択肢本文は既存の`QuestionOption.body`を正本とし、claim IDは`{term_slug}:pretest:{option_label}`から実行時に作る。
 
 `teaching_targets`は採点用データではない。`Attempt.is_correct`、`diagnosed_status`、`misconception_type`を変更せず、提案群の教材生成payloadを具体化するためだけに使う。J「わからない」には誤った主張のtargetを作らず、unknownの基礎説明へ分岐する。
 

@@ -5,7 +5,7 @@
 - A/Bの有効な参加コードがない参加者作成は拒否され、Aは内部`proposed`、Bは内部`control`へ変換される。正常作成時は`assignment_method=admin_code`を保存し、参加者向けレスポンスに`group_condition`を含めない。同意なしの参加者作成も拒否され、同意画面から同意した場合だけ`pretest`へ進む。`survey`送信で`participant_surveys`が1件保存され、`current_step=finish`、`completion_reason=completed`になる。送信再実行でアンケートが重複しない。
 - 同意画面の参加者作成が15秒以内に完了しない場合はタイムアウトエラーを表示し、「開始しています...」のまま操作不能にならない。DB接続障害はAPIの503と利用者向けエラーとして確認できる。
 - YAMLにactive termが `llm_knowledge`、`multi_agent`、`memory_process` の3件だけ存在する。
-- pretest・retest・final_testはA〜Jの10選択肢で、各variant内の正解、M1、M3、unknownを3/3/3/1にする。全21variantを通じてA〜Iの各ラベルが正解・M1・M3を各7回ずつ担い、設問はシナリオに基づく判断形式になる。学習確認v1は旧固定配置、学習確認v2はvariant別metadata配置で、各問の配分は3/3/3/1、全30問を通じて各ラベルが正解・M1・M3を各10回担う。`l0_check`と`transfer`はこの配分の対象外である。
+- pretest・retest・final_testはA〜Jの10選択肢で、各variant内の正解、M1、M3、unknownを3/3/3/1にする。実験用の基準では全21variantを通じてA〜Iの各ラベルが正解・M1・M3を各7回ずつ担い、設問はシナリオに基づく判断形式になる。学習確認v1は旧固定配置、学習確認v2は実験用の基準ではvariant別metadata配置で、各問の配分は3/3/3/1、全30問を通じて各ラベルが正解・M1・M3を各10回担う。`fix/issue-124`の一時的デバッグ上書きではテスト系・学習確認v2ともA〜C=正解、D〜F=M1、G〜I=M3、J=unknownを検証する。この上書きのまま実験データを収集せず、開始前に分散配置と分布検査を復元する。`l0_check`と`transfer`はこの配分の対象外である。
 - pretest・final_testは各用語1問、retestは各用語5variant、learning確認はstage・用語ごとに5variantになる。
 - テスト系と学習確認v2は提示問題の正解metadataに該当する3選択肢だけを重複なくすべて選んだ場合に正解となる。学習確認v1はA/B/C完全一致だけが正解。J単独だけがunknownで、M3がM1より優先される。
 - retestはv1〜v5を使い、6回目以降はv5を再利用する。
