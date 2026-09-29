@@ -45,10 +45,10 @@ def _option_tuples(options: list[dict[str, Any]]) -> list[tuple[str, str, bool, 
 
 def _assessment_options(variant: dict[str, Any]) -> list[dict[str, Any]]:
     choices = variant["choices"]
-    rotation = int(variant["role_rotation"])
     options = []
     for label_index, label in enumerate("ABCDEFGHI"):
-        slot = (label_index - rotation) % 9
+        # Temporary issue-124 debug mapping; restore role_rotation before data collection.
+        slot = label_index
         role = ASSESSMENT_ROLE_SLOTS[slot]
         body = choices[role][slot % 3]
         options.append(
@@ -72,6 +72,19 @@ def _validate_option_set(name: str, options: Any) -> None:
     correct = [option for option in options if option.get("is_correct")]
     if [option["label"] for option in correct] != ["A", "B", "C"]:
         raise ValueError(f"{name} must mark A-C as the only correct options")
+    expected_types = {
+        **{label: None for label in "ABC"},
+        **{label: "M1" for label in "DEF"},
+        **{label: "M3" for label in "GHI"},
+        "J": "unknown",
+    }
+    for option in options:
+        label = option["label"]
+        expected_correct = label in "ABC"
+        if bool(option.get("is_correct")) is not expected_correct:
+            raise ValueError(f"{name} has an incorrect role for option {label}")
+        if option.get("misconception_type") != expected_types[label]:
+            raise ValueError(f"{name} has an incorrect role for option {label}")
     types = [option.get("misconception_type") for option in options]
     if types.count("M1") != 3 or types.count("M3") != 3 or types.count("unknown") != 1:
         raise ValueError(f"{name} must contain M1=3, M3=3, unknown=1")
@@ -137,7 +150,6 @@ def _validate_content(content: dict[str, Any]) -> None:
     for name, options in (content.get("option_sets") or {}).items():
         _validate_option_set(f"option_sets.{name}", options)
 
-    role_counts = {label: {role: 0 for role in ASSESSMENT_OPTION_ROLES} for label in "ABCDEFGHI"}
     all_bodies: set[str] = set()
     all_choice_bodies: set[str] = set()
 
@@ -166,15 +178,13 @@ def _validate_content(content: dict[str, Any]) -> None:
                     raise ValueError("assessment question bodies must be unique")
                 all_bodies.add(body)
                 options = _assessment_options(variant)
+                _validate_option_set(f"{slug}.{phase}.{variant['variant_key']}", options)
                 visible_bodies = [option["body"] for option in options[:9]]
                 if len(set(visible_bodies)) != 9:
                     raise ValueError(f"{slug}.{phase}.{variant['variant_key']} has duplicate choices")
                 if any(option_body in all_choice_bodies for option_body in visible_bodies):
                     raise ValueError("assessment choices must not be reused across variants")
                 all_choice_bodies.update(visible_bodies)
-                for option in options[:9]:
-                    role = "correct" if option["is_correct"] else option["misconception_type"]
-                    role_counts[option["label"]][role] += 1
         learning = term.get("learning") or {}
         for stage in LEARNING_STAGES:
             variants = (learning.get(stage) or {}).get("variants") or []
@@ -192,9 +202,6 @@ def _validate_content(content: dict[str, Any]) -> None:
 
     if sum(ASSESSMENT_VARIANT_COUNTS.values()) * len(ACTIVE_TERM_SLUGS) != 21:
         raise ValueError("assessment bank must contain exactly 21 variants")
-    if any(counts != {role: 7 for role in ASSESSMENT_OPTION_ROLES} for counts in role_counts.values()):
-        raise ValueError("assessment labels must be assigned each role exactly seven times")
-
     _validate_teaching_targets(content)
 
 
@@ -224,14 +231,13 @@ def _validate_assessment_variant(term_slug: str, phase: str, variant: Any) -> No
         raise ValueError(f"{name} must not mention LangGraph")
 
 
-def _v2_options(variant: dict[str, Any], rotation: int) -> list[dict[str, Any]]:
+def _v2_options(variant: dict[str, Any]) -> list[dict[str, Any]]:
     choices = variant["choices"]
     options = []
     role_slots = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
     for label_index, label in enumerate("ABCDEFGHI"):
-        slot = (label_index - rotation) % 9
-        role = role_slots[slot]
-        role_index = slot % 3
+        role = role_slots[label_index]
+        role_index = label_index % 3
         options.append(
             {
                 "label": label,
@@ -288,9 +294,7 @@ def _validate_v2_content(content: dict[str, Any], legacy_content: dict[str, Any]
         for variant in (term.get("questions") or {}).get(phase, [])
         for option in _assessment_options(variant)[:9]
     }
-    role_counts = {label: {role: 0 for role in LEARNING_OPTION_ROLES} for label in "ABCDEFGHI"}
     variant_count = 0
-    rotation = 0
 
     for term_slug in ACTIVE_TERM_SLUGS:
         stage_data = terms.get(term_slug) or {}
@@ -327,18 +331,14 @@ def _validate_v2_content(content: dict[str, Any], legacy_content: dict[str, Any]
                     raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} copies fixed test wording")
                 if _contains_langgraph(variant):
                     raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} must not mention LangGraph")
-
-                for label_index, label in enumerate("ABCDEFGHI"):
-                    slot = (label_index - rotation) % 9
-                    role = LEARNING_OPTION_ROLES[slot // 3]
-                    role_counts[label][role] += 1
-                rotation = (rotation + 3) % 9
+                _validate_option_set(
+                    f"{term_slug}.{stage}.{variant['variant_key']}",
+                    _v2_options(variant),
+                )
                 variant_count += 1
 
     if variant_count != 30:
         raise ValueError("learning v2 bank must contain exactly 30 variants")
-    if any(counts != {role: 10 for role in LEARNING_OPTION_ROLES} for counts in role_counts.values()):
-        raise ValueError("learning v2 labels must be assigned each role exactly ten times")
 
 
 @lru_cache(maxsize=1)
@@ -386,18 +386,13 @@ def learning_question_spec(
     elif content_version == CURRENT_LEARNING_CONTENT_VERSION:
         stage_data = load_learning_v2_content()["terms"][term_slug][stage]
         variants = stage_data["variants"]
-        term_index = ACTIVE_TERM_SLUGS.index(term_slug)
-        stage_index = LEARNING_STAGES.index(stage)
-        index = min(max(variant_index, 1), len(variants)) - 1
-        ordinal = term_index * len(LEARNING_STAGES) * 5 + stage_index * 5 + index
-        rotation = (ordinal * 3) % 9
     else:
         raise ValueError(f"unsupported learning content version: {content_version}")
     index = min(max(variant_index, 1), len(variants)) - 1
     variant = dict(variants[index])
     if content_version == CURRENT_LEARNING_CONTENT_VERSION:
         variant["body"] = f"{variant['scenario']}\n\n{variant['task']}"
-        variant["options"] = _v2_options(variant, rotation)
+        variant["options"] = _v2_options(variant)
         variant.pop("choices", None)
         variant.pop("scenario", None)
         variant.pop("task", None)

@@ -74,12 +74,12 @@ def test_seed_has_researcher_verified_targets_for_all_m1_and_m3_options():
 
 def test_primary_target_does_not_cross_types_or_fallback_to_unknown():
     targets = [
-        {"claim_id": "memory_process:pretest:A", "misconception_type": "M1"},
-        {"claim_id": "memory_process:pretest:D", "misconception_type": "M3"},
+        {"claim_id": "memory_process:pretest:D", "misconception_type": "M1"},
+        {"claim_id": "memory_process:pretest:G", "misconception_type": "M3"},
     ]
 
-    assert experiment_service._primary_pretest_target(targets, "M1")["claim_id"] == "memory_process:pretest:A"
-    assert experiment_service._primary_pretest_target(targets, "M3")["claim_id"] == "memory_process:pretest:D"
+    assert experiment_service._primary_pretest_target(targets, "M1")["claim_id"] == "memory_process:pretest:D"
+    assert experiment_service._primary_pretest_target(targets, "M3")["claim_id"] == "memory_process:pretest:G"
     assert experiment_service._primary_pretest_target(targets, "unknown") is None
 
 

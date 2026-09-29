@@ -212,9 +212,8 @@ def test_content_contract_has_three_terms_and_required_variant_counts():
         assert len(term["learning"]["conceptual_change"]["variants"]) == 5
 
 
-def test_assessment_bank_has_21_scenario_variants_balanced_roles_and_option_lengths():
+def test_assessment_bank_has_21_scenario_variants_fixed_roles_and_option_lengths():
     content = load_content()
-    role_counts = {label: {role: 0 for role in ("correct", "M1", "M3")} for label in "ABCDEFGHI"}
     bodies = set()
     choices = set()
     variant_count = 0
@@ -233,6 +232,9 @@ def test_assessment_bank_has_21_scenario_variants_balanced_roles_and_option_leng
                 assert sum(option["misconception_type"] == "M1" for option in spec["options"]) == 3
                 assert sum(option["misconception_type"] == "M3" for option in spec["options"]) == 3
                 assert spec["options"][-1]["label"] == "J"
+                assert [option["label"] for option in spec["options"] if option["is_correct"]] == list("ABC")
+                assert [option["label"] for option in spec["options"] if option["misconception_type"] == "M1"] == list("DEF")
+                assert [option["label"] for option in spec["options"] if option["misconception_type"] == "M3"] == list("GHI")
                 correct_labels = [option["label"] for option in spec["options"] if option["is_correct"]]
                 assert spec["expected"].startswith("、".join(correct_labels))
                 assert spec["body"] not in bodies
@@ -245,15 +247,12 @@ def test_assessment_bank_has_21_scenario_variants_balanced_roles_and_option_leng
                 for option in visible_options:
                     assert option["body"] not in choices
                     choices.add(option["body"])
-                    role = "correct" if option["is_correct"] else option["misconception_type"]
-                    role_counts[option["label"]][role] += 1
                 variant_count += 1
 
     assert variant_count == 21
-    assert all(counts == {"correct": 7, "M1": 7, "M3": 7} for counts in role_counts.values())
 
 
-def test_pretest_teaching_targets_follow_rotated_option_roles():
+def test_pretest_teaching_targets_follow_fixed_option_roles():
     from app.seed.content_loader import teaching_target_for_option
 
     for term_slug in ACTIVE_TERM_SLUGS:
@@ -263,13 +262,14 @@ def test_pretest_teaching_targets_follow_rotated_option_roles():
             if option["misconception_type"] in {"M1", "M3"}:
                 assert target is not None
                 assert target["corrected_claim"]
+                expected_labels = list("DEF") if option["misconception_type"] == "M1" else list("GHI")
+                assert option["label"] in expected_labels
             else:
                 assert target is None
 
 
-def test_learning_v2_bank_has_scenario_roles_and_balanced_labels():
+def test_learning_v2_bank_has_scenario_roles_and_fixed_labels():
     content = load_learning_v2_content()
-    role_counts = {label: {role: 0 for role in ("correct", "M1", "M3")} for label in "ABCDEFGHI"}
     variant_count = 0
 
     for term_slug in ACTIVE_TERM_SLUGS:
@@ -292,13 +292,12 @@ def test_learning_v2_bank_has_scenario_roles_and_balanced_labels():
                     "label": "J", "body": "わからない。", "is_correct": False,
                     "misconception_type": "unknown", "option_id": "J",
                 }
-                for option in spec["options"][:9]:
-                    role = "correct" if option["is_correct"] else option["misconception_type"]
-                    role_counts[option["label"]][role] += 1
+                assert [option["label"] for option in spec["options"] if option["is_correct"]] == list("ABC")
+                assert [option["label"] for option in spec["options"] if option["misconception_type"] == "M1"] == list("DEF")
+                assert [option["label"] for option in spec["options"] if option["misconception_type"] == "M3"] == list("GHI")
                 variant_count += 1
 
     assert variant_count == 30
-    assert all(counts == {"correct": 10, "M1": 10, "M3": 10} for counts in role_counts.values())
 
 
 def test_llm_knowledge_conceptual_change_v1_prompt_and_option_roles():
@@ -319,9 +318,9 @@ def test_llm_knowledge_conceptual_change_v1_prompt_and_option_roles():
         role = "correct" if option["is_correct"] else option["misconception_type"]
         roles[role].append(option["label"])
     assert roles == {
-        "correct": ["G", "H", "I"],
-        "M1": ["A", "B", "C"],
-        "M3": ["D", "E", "F"],
+        "correct": ["A", "B", "C"],
+        "M1": ["D", "E", "F"],
+        "M3": ["G", "H", "I"],
     }
 
 
@@ -906,7 +905,7 @@ def test_learning_v2_scores_presented_roles_and_keeps_m3_priority():
     correct_ids = _ids_for_learning_role(
         correct_turn["practice_question"], "multi_agent", correct_turn["learning_stage"], "correct"
     )
-    assert [option["label"] for option in correct_turn["practice_question"]["options"] if option["option_id"] in correct_ids] == ["D", "E", "F"]
+    assert [option["label"] for option in correct_turn["practice_question"]["options"] if option["option_id"] in correct_ids] == ["A", "B", "C"]
     db = SessionLocal()
     try:
         participant = db.get(Participant, correct_pid)
