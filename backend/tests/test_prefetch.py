@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.db.session import SessionLocal
 from app.main import app
 from app.models import AICallLog, EvaluationSummary, Term, TutorSession, TutorTurn
+from app.seed.content_loader import assessment_question_spec
 import app.services.experiment as experiment_service
 from app.services.prefetch import wait_for_prefetch_tasks
 from app.services.tutor_prefetch import TutorPrefetchRegistry
@@ -58,13 +59,15 @@ def _create_participant_with_pretest() -> str:
     pid = participant.json()["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:
+        spec = assessment_question_spec(question["term_slug"], "pretest")
+        m1_labels = [option["label"] for option in spec["options"] if option["misconception_type"] == "M1"]
         response = client.post(
             "/api/attempts",
             json={
                 "participant_id": pid,
                 "question_id": question["question_id"],
                 "phase": "pretest",
-                "selected_option_ids": _ids_for_labels(question, ["D", "E", "F"]),
+                "selected_option_ids": _ids_for_labels(question, m1_labels),
             },
         )
         assert response.status_code == 200, response.text

@@ -54,7 +54,7 @@ Response:
 ## Variant policy
 
 - pretest: 用語ごとに `pretest_v1`
-- retest: `retest_v1`〜`retest_v4`。5回目以降はv4を再利用
+- retest: `retest_v1`〜`retest_v5`。6回目以降はv5を再利用
 - learning: stage・用語ごとにv1〜v5。6回目以降はv5を再利用
 - final_test: 用語ごとに `final_test_v1`
 
@@ -93,7 +93,9 @@ seed済みのテスト問題は`questions.variant_key`に保存し、学習確�
 
 ## Scoring
 
-テスト系と学習確認v1はA/B/Cの3つだけを選択した場合だけ正解。学習確認v2は提示variantの正解metadataに基づき、正解3選択肢を重複なくすべて選んだ場合だけ正解。不正解分類はM3を最優先し、次にM1、J単独または判定材料なしはunknownとする。採点・遷移はbackendが決定し、AI出力で上書きしない。
+pretest、retest、final_testは提示された問題variantの選択肢metadataを参照し、正解3選択肢を重複なくすべて選んだ場合だけ正解とする。新規参加者向け学習確認v2も同じmetadata方式を使う。既存参加者向け学習確認v1は互換仕様としてA/B/Cの3つだけを選んだ場合に正解とする。不正解分類はM3を最優先し、次にM1、J単独または判定材料なしはunknownとする。採点・遷移はbackendが決定し、AI出力で上書きしない。
+
+テスト問題は用語ごとにpretest 1問、retest 5問、final_test 1問を持つ。全3用語・21variantを通じてA〜Iの各ラベルは正解・M1・M3をそれぞれ7回担う。各variantは場面と設問タスクを使った判断問題であり、各問の役割は選択肢metadataに保存する。
 
 ## Learning API
 

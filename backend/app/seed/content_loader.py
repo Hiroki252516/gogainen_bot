@@ -17,6 +17,9 @@ LEGACY_LEARNING_CONTENT_VERSION = 1
 CURRENT_LEARNING_CONTENT_VERSION = 2
 LEARNING_OPTION_ROLES = ("correct", "M1", "M3")
 LEARNING_SCENARIO_TYPES = ("application", "prediction", "comparison", "boundary", "diagnosis")
+ASSESSMENT_OPTION_ROLES = ("correct", "M1", "M3")
+ASSESSMENT_VARIANT_COUNTS = {"pretest": 1, "retest": 5, "final_test": 1}
+ASSESSMENT_ROLE_SLOTS = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
 UNKNOWN_OPTION = {"label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"}
 
 
@@ -38,6 +41,26 @@ def _option_tuples(options: list[dict[str, Any]]) -> list[tuple[str, str, bool, 
         )
         for option in options
     ]
+
+
+def _assessment_options(variant: dict[str, Any]) -> list[dict[str, Any]]:
+    choices = variant["choices"]
+    rotation = int(variant["role_rotation"])
+    options = []
+    for label_index, label in enumerate("ABCDEFGHI"):
+        slot = (label_index - rotation) % 9
+        role = ASSESSMENT_ROLE_SLOTS[slot]
+        body = choices[role][slot % 3]
+        options.append(
+            {
+                "label": label,
+                "body": body,
+                "is_correct": role == "correct",
+                "misconception_type": None if role == "correct" else role,
+            }
+        )
+    options.append(dict(UNKNOWN_OPTION))
+    return options
 
 
 def _validate_option_set(name: str, options: Any) -> None:
@@ -69,7 +92,11 @@ def _validate_teaching_targets(content: dict[str, Any]) -> None:
             if isinstance(pretest_variants, list) and pretest_variants and isinstance(pretest_variants[0], dict)
             else {}
         )
-        options = first_pretest.get("options") or []
+        options = (
+            _assessment_options(first_pretest)
+            if first_pretest.get("choices")
+            else first_pretest.get("options") or []
+        )
         for option in options:
             label = option.get("label")
             misconception_type = option.get("misconception_type")
@@ -86,7 +113,7 @@ def _validate_teaching_targets(content: dict[str, Any]) -> None:
                 raise ValueError(f"teaching_targets.{slug}.{label} must not target {misconception_type}")
 
 
-def _validate_variant(term_slug: str, phase: str, variant: Any) -> None:
+def _validate_learning_variant(term_slug: str, phase: str, variant: Any) -> None:
     if not isinstance(variant, dict) or not variant.get("variant_key") or not variant.get("body"):
         raise ValueError(f"{term_slug}.{phase} contains an invalid variant")
     _validate_option_set(f"{term_slug}.{phase}.{variant['variant_key']}", variant.get("options"))
@@ -98,13 +125,21 @@ def _validate_content(content: dict[str, Any]) -> None:
     if tuple(term.get("slug") for term in content.get("terms", [])) != ACTIVE_TERM_SLUGS:
         raise ValueError(f"active terms must be exactly {ACTIVE_TERM_SLUGS}")
     policy = content.get("selection_policy") or {}
-    if policy.get("correct_labels") != ["A", "B", "C"] or policy.get("unknown_label") != "J":
-        raise ValueError("selection policy must use A-C as correct and J as unknown")
+    if (
+        policy.get("scored_labels") != list("ABCDEFGHI")
+        or policy.get("correct_count") != 3
+        or policy.get("misconception_counts") != {"M1": 3, "M3": 3}
+        or policy.get("unknown_label") != "J"
+        or policy.get("classification_priority") != ["M3", "M1", "unknown"]
+    ):
+        raise ValueError("assessment selection policy is invalid")
 
     for name, options in (content.get("option_sets") or {}).items():
         _validate_option_set(f"option_sets.{name}", options)
 
-    _validate_teaching_targets(content)
+    role_counts = {label: {role: 0 for role in ASSESSMENT_OPTION_ROLES} for label in "ABCDEFGHI"}
+    all_bodies: set[str] = set()
+    all_choice_bodies: set[str] = set()
 
     for term in content["terms"]:
         slug = term["slug"]
@@ -113,7 +148,7 @@ def _validate_content(content: dict[str, Any]) -> None:
         questions = term.get("questions") or {}
         for phase in QUESTION_PHASES:
             variants = questions.get(phase) or []
-            expected_count = 4 if phase == "retest" else 1
+            expected_count = ASSESSMENT_VARIANT_COUNTS[phase]
             if len(variants) != expected_count:
                 raise ValueError(f"{slug}.{phase} must contain {expected_count} variant(s)")
             expected_keys = [
@@ -125,7 +160,21 @@ def _validate_content(content: dict[str, Any]) -> None:
             if len({variant.get("variant_key") for variant in variants}) != expected_count:
                 raise ValueError(f"{slug}.{phase} has duplicate variant keys")
             for variant in variants:
-                _validate_variant(slug, phase, variant)
+                _validate_assessment_variant(slug, phase, variant)
+                body = f"{variant['scenario']}\n\n{variant['task']}"
+                if body in all_bodies:
+                    raise ValueError("assessment question bodies must be unique")
+                all_bodies.add(body)
+                options = _assessment_options(variant)
+                visible_bodies = [option["body"] for option in options[:9]]
+                if len(set(visible_bodies)) != 9:
+                    raise ValueError(f"{slug}.{phase}.{variant['variant_key']} has duplicate choices")
+                if any(option_body in all_choice_bodies for option_body in visible_bodies):
+                    raise ValueError("assessment choices must not be reused across variants")
+                all_choice_bodies.update(visible_bodies)
+                for option in options[:9]:
+                    role = "correct" if option["is_correct"] else option["misconception_type"]
+                    role_counts[option["label"]][role] += 1
         learning = term.get("learning") or {}
         for stage in LEARNING_STAGES:
             variants = (learning.get(stage) or {}).get("variants") or []
@@ -137,9 +186,42 @@ def _validate_content(content: dict[str, Any]) -> None:
             if len({variant.get("variant_key") for variant in variants}) != 5:
                 raise ValueError(f"{slug}.learning.{stage} has duplicate variant keys")
             for variant in variants:
-                _validate_variant(slug, f"learning.{stage}", variant)
+                _validate_learning_variant(slug, f"learning.{stage}", variant)
         if _contains_langgraph(term) or _contains_langgraph(term.get("rag_sections")):
             raise ValueError(f"{slug} must not mention LangGraph")
+
+    if sum(ASSESSMENT_VARIANT_COUNTS.values()) * len(ACTIVE_TERM_SLUGS) != 21:
+        raise ValueError("assessment bank must contain exactly 21 variants")
+    if any(counts != {role: 7 for role in ASSESSMENT_OPTION_ROLES} for counts in role_counts.values()):
+        raise ValueError("assessment labels must be assigned each role exactly seven times")
+
+    _validate_teaching_targets(content)
+
+
+def _validate_assessment_variant(term_slug: str, phase: str, variant: Any) -> None:
+    name = f"{term_slug}.{phase}.{variant.get('variant_key') if isinstance(variant, dict) else 'unknown'}"
+    if not isinstance(variant, dict) or not variant.get("variant_key"):
+        raise ValueError(f"{name} is invalid")
+    if not str(variant.get("scenario") or "").strip() or not str(variant.get("task") or "").strip():
+        raise ValueError(f"{name} needs a scenario and task")
+    if variant.get("role_rotation") not in {0, 3, 6}:
+        raise ValueError(f"{name} role_rotation must be 0, 3, or 6")
+    choices = variant.get("choices")
+    if not isinstance(choices, dict) or tuple(choices) != ASSESSMENT_OPTION_ROLES:
+        raise ValueError(f"{name} must define correct, M1, and M3 choices")
+    texts: list[str] = []
+    for role in ASSESSMENT_OPTION_ROLES:
+        items = choices.get(role)
+        if not isinstance(items, list) or len(items) != 3 or any(not str(item).strip() for item in items):
+            raise ValueError(f"{name} needs three nonempty {role} choices")
+        texts.extend(str(item).strip() for item in items)
+    lengths = [len(text) for text in texts]
+    if min(lengths) < 20 or max(lengths) > min(lengths) * 1.8 or max(lengths) - min(lengths) > 32:
+        raise ValueError(f"{name} has a conspicuous option-length spread")
+    if len(set(texts)) != len(texts):
+        raise ValueError(f"{name} has duplicate choice text")
+    if _contains_langgraph(variant):
+        raise ValueError(f"{name} must not mention LangGraph")
 
 
 def _v2_options(variant: dict[str, Any], rotation: int) -> list[dict[str, Any]]:
@@ -162,6 +244,19 @@ def _v2_options(variant: dict[str, Any], rotation: int) -> list[dict[str, Any]]:
     return options
 
 
+def assessment_question_spec(term_slug: str, phase: str, variant_index: int = 1) -> dict[str, Any]:
+    if phase not in QUESTION_PHASES:
+        raise ValueError(f"unsupported assessment phase: {phase}")
+    variants = content_term(term_slug)["questions"][phase]
+    index = min(max(variant_index, 1), len(variants)) - 1
+    variant = dict(variants[index])
+    variant["body"] = f"{variant['scenario']}\n\n{variant['task']}"
+    variant["options"] = _assessment_options(variant)
+    correct_labels = [option["label"] for option in variant["options"] if option["is_correct"]]
+    variant["expected"] = f"{'、'.join(correct_labels)}をすべて選択し、それ以外を選ばない。"
+    return variant
+
+
 def _validate_v2_content(content: dict[str, Any], legacy_content: dict[str, Any]) -> None:
     if content.get("version") != CURRENT_LEARNING_CONTENT_VERSION:
         raise ValueError("learning_questions_v2.yml must have version 2")
@@ -177,8 +272,21 @@ def _validate_v2_content(content: dict[str, Any], legacy_content: dict[str, Any]
     legacy_bodies = {
         variant["body"]
         for term in legacy_content["terms"]
+        for stage in LEARNING_STAGES
+        for variant in ((term.get("learning") or {}).get(stage) or {}).get("variants", [])
+    }
+    legacy_bodies.update(
+        f"{variant['scenario']}\n\n{variant['task']}"
+        for term in legacy_content["terms"]
         for phase in QUESTION_PHASES
         for variant in (term.get("questions") or {}).get(phase, [])
+    )
+    assessment_options = {
+        option["body"]
+        for term in legacy_content["terms"]
+        for phase in QUESTION_PHASES
+        for variant in (term.get("questions") or {}).get(phase, [])
+        for option in _assessment_options(variant)[:9]
     }
     role_counts = {label: {role: 0 for role in LEARNING_OPTION_ROLES} for label in "ABCDEFGHI"}
     variant_count = 0
@@ -215,7 +323,7 @@ def _validate_v2_content(content: dict[str, Any], legacy_content: dict[str, Any]
                     raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} has a conspicuous option-length spread")
                 if len(set(all_choice_bodies)) != 9:
                     raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} has duplicate choices")
-                if any(body in legacy_options or body in legacy_bodies for body in all_choice_bodies):
+                if any(body in legacy_options or body in legacy_bodies or body in assessment_options for body in all_choice_bodies):
                     raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} copies fixed test wording")
                 if _contains_langgraph(variant):
                     raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} must not mention LangGraph")
@@ -312,11 +420,21 @@ def seed_terms() -> list[dict[str, Any]]:
     for term in load_content()["terms"]:
         questions = term["questions"]
         normalized_questions: dict[str, Any] = {
-            "pretest": {**questions["pretest"][0], "options": _option_tuples(questions["pretest"][0]["options"])},
+            "pretest": {
+                **assessment_question_spec(term["slug"], "pretest"),
+                "options": _option_tuples(assessment_question_spec(term["slug"], "pretest")["options"]),
+            },
             "retest": [
-                {**variant, "options": _option_tuples(variant["options"])} for variant in questions["retest"]
+                {
+                    **assessment_question_spec(term["slug"], "retest", index),
+                    "options": _option_tuples(assessment_question_spec(term["slug"], "retest", index)["options"]),
+                }
+                for index in range(1, ASSESSMENT_VARIANT_COUNTS["retest"] + 1)
             ],
-            "final_test": {**questions["final_test"][0], "options": _option_tuples(questions["final_test"][0]["options"])},
+            "final_test": {
+                **assessment_question_spec(term["slug"], "final_test"),
+                "options": _option_tuples(assessment_question_spec(term["slug"], "final_test")["options"]),
+            },
             "l0": questions["l0"],
             "transfer": questions["transfer"],
         }

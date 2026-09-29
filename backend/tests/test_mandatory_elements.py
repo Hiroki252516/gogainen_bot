@@ -25,7 +25,13 @@ from app.ai.teaching_contract import (
     validate_tutoring_material_length,
     validate_tutoring_material_safety,
 )
-from app.seed.content_loader import ACTIVE_TERM_SLUGS, _validate_teaching_targets, load_content, teaching_target_for_option
+from app.seed.content_loader import (
+    ACTIVE_TERM_SLUGS,
+    _validate_teaching_targets,
+    assessment_question_spec,
+    load_content,
+    teaching_target_for_option,
+)
 
 
 def _payload(misconception_type: str | None, stage: str) -> dict:
@@ -51,7 +57,7 @@ def test_seed_has_researcher_verified_targets_for_all_m1_and_m3_options():
     content = load_content()
     assert tuple(term["slug"] for term in content["terms"]) == ACTIVE_TERM_SLUGS
     for term in content["terms"]:
-        options = term["questions"]["pretest"][0]["options"]
+        options = assessment_question_spec(term["slug"], "pretest")["options"]
         for option in options:
             if option.get("misconception_type") not in {"M1", "M3"}:
                 continue
@@ -68,19 +74,19 @@ def test_seed_has_researcher_verified_targets_for_all_m1_and_m3_options():
 
 def test_primary_target_does_not_cross_types_or_fallback_to_unknown():
     targets = [
-        {"claim_id": "memory_process:pretest:D", "misconception_type": "M1"},
-        {"claim_id": "memory_process:pretest:G", "misconception_type": "M3"},
+        {"claim_id": "memory_process:pretest:A", "misconception_type": "M1"},
+        {"claim_id": "memory_process:pretest:D", "misconception_type": "M3"},
     ]
 
-    assert experiment_service._primary_pretest_target(targets, "M1")["claim_id"] == "memory_process:pretest:D"
-    assert experiment_service._primary_pretest_target(targets, "M3")["claim_id"] == "memory_process:pretest:G"
+    assert experiment_service._primary_pretest_target(targets, "M1")["claim_id"] == "memory_process:pretest:A"
+    assert experiment_service._primary_pretest_target(targets, "M3")["claim_id"] == "memory_process:pretest:D"
     assert experiment_service._primary_pretest_target(targets, "unknown") is None
 
 
 def test_unknown_contract_ignores_stale_pretest_targets():
     payload = _payload("unknown", "enrichment")
     stale_target = {
-        "claim_id": "memory_process:pretest:D",
+        "claim_id": "memory_process:pretest:A",
         "misconception_type": "M1",
         "observed_claim": "誤った説明",
     }
@@ -572,7 +578,7 @@ def test_codex_unknown_prompt_has_empty_claim_contract(monkeypatch):
     backend = CodexAppServerBackend()
     payload = _payload("unknown", "enrichment")
     payload["pretest_targets"] = [
-        {"claim_id": "memory_process:pretest:D", "misconception_type": "M1"}
+        {"claim_id": "memory_process:pretest:A", "misconception_type": "M1"}
     ]
     captured: dict[str, object] = {}
     mock_result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
@@ -588,7 +594,7 @@ def test_codex_unknown_prompt_has_empty_claim_contract(monkeypatch):
     prompt = captured["prompt"]
     assert "unknownのteaching_contractはtarget_claim_idをnull" in prompt
     assert "pretest_targetsの全claim_idをaddressed_claim_idsへ入れる" not in prompt
-    assert "memory_process:pretest:D" not in prompt
+    assert "memory_process:pretest:A" not in prompt
     assert "teaching_contract" in captured["schema"]["properties"]
 
 
@@ -703,23 +709,23 @@ def test_control_feedback_uses_only_current_feedback_context_for_both_outcomes(m
 def test_teaching_contract_rejects_unknown_claim_and_empty_refutation():
     payload = _payload("M1", "conceptual_change")
     target = {
-        "claim_id": "memory_process:pretest:E",
+        "claim_id": "memory_process:pretest:B",
         "misconception_type": "M1",
-        "observed_claim": "保存した情報は常に正しい。",
-        "corrected_claim": "保存した情報は検証して使う。",
+        "observed_claim": "保存された情報は、古くなっても確認せず常に正しいものとして使う。",
+        "corrected_claim": "保存情報の内容や鮮度を確かめ、必要に応じて検証・更新して使う。",
         "mechanism_explanation": "保存情報の誤りや古さを確認するためです。",
         "contrast_example": "根拠を確認して使う場合と無条件で信じる場合を比べます。",
     }
     payload["pretest_target"] = target
     payload["pretest_targets"] = [target]
     result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
-    result["teaching_contract"]["target_claim_id"] = "memory_process:pretest:D"
+    result["teaching_contract"]["target_claim_id"] = "memory_process:pretest:A"
     result["teaching_contract"]["corrected_claim"] = ""
 
     validation = validate_teaching_contract(result, "M1", payload, payload["term"]["label"])
 
     assert not validation["valid"]
-    assert "target_claim_id:expected_one_of_memory_process:pretest:E" in validation["missing"]
+    assert "target_claim_id:expected_one_of_memory_process:pretest:B" in validation["missing"]
     assert "corrected_claim:empty" in validation["missing"]
 
 
