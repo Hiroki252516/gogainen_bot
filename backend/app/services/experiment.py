@@ -31,6 +31,7 @@ from app.ai.teaching_contract import (
     MATERIAL_MIN_CHARACTERS,
     MATERIAL_TARGET_CHARACTERS,
     PROMPT_CONTRACT_VERSION,
+    validate_control_material_headings,
     validate_tutoring_material_safety,
     validate_teaching_contract,
     validate_tutoring_material_length,
@@ -369,28 +370,36 @@ async def _generate_validated_tutoring_turn(
     )
     retry_limit = max(MANDATORY_ELEMENT_MAX_ATTEMPTS, MATERIAL_LENGTH_MAX_ATTEMPTS)
     if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
+        term_label = (payload.get("term") or {}).get("label")
         request_payload = {**payload, "generation_attempt": 1}
         validation: dict[str, Any] = {}
         for attempt in range(1, retry_limit + 1):
             result = await _ai_call(db, "generate_tutoring_turn", request_payload)
+            heading_validation = (
+                validate_control_material_headings(result, term_label)
+                if group == "control"
+                else {"required": False, "valid": True, "missing": []}
+            )
             contract_validation = validate_teaching_contract(result, expected_type, payload)
             safety_validation = validate_tutoring_material_safety(result, forbidden_strings)
             length_validation = validate_tutoring_material_length(result)
-            retry_missing = [
+            content_retry_missing = [
                 *contract_validation.get("missing", []),
                 *safety_validation.get("missing", []),
             ]
+            retry_missing = [*heading_validation.get("missing", []), *content_retry_missing]
             missing = [
                 *retry_missing,
                 *length_validation.get("missing", []),
             ]
             validation = {
-                "required": False,
-                "valid": contract_validation["valid"] and safety_validation["valid"] and length_validation["valid"],
+                "required": group == "control",
+                "valid": heading_validation["valid"] and contract_validation["valid"] and safety_validation["valid"] and length_validation["valid"],
                 "expected_type": expected_type,
                 "actual_type": None,
                 "required_fields": [],
                 "missing": missing,
+                "control_material_headings": heading_validation,
                 "teaching_contract": contract_validation,
                 "material_safety": safety_validation,
                 "material_length": length_validation,
@@ -408,10 +417,15 @@ async def _generate_validated_tutoring_turn(
                     request_payload["material_length_retry"] = _material_length_retry(
                         length_validation, attempt + 1
                     )
-                if retry_missing:
+                if not heading_validation["valid"]:
+                    request_payload["control_heading_retry"] = {
+                        "attempt": attempt + 1,
+                        "missing": heading_validation["missing"],
+                    }
+                if content_retry_missing:
                     request_payload["mandatory_element_retry"] = {
                         "attempt": attempt + 1,
-                        "missing": retry_missing,
+                        "missing": content_retry_missing,
                     }
         raise HTTPException(
             status_code=503,

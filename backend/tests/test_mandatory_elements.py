@@ -16,12 +16,14 @@ from app.ai.mandatory_elements import (
 from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.ai.mock_backend import MockAIBackend
 from app.ai.teaching_contract import (
+    CONTROL_MATERIAL_HEADINGS,
     MATERIAL_MAX_CHARACTERS,
     MATERIAL_MIN_CHARACTERS,
     MATERIAL_TARGET_CHARACTERS,
     reconcile_teaching_contract,
     teaching_contract_schema,
     validate_teaching_contract,
+    validate_control_material_headings,
     validate_tutoring_material_length,
     validate_tutoring_material_safety,
 )
@@ -464,13 +466,19 @@ def test_control_tutoring_never_uses_proposed_mandatory_contract(monkeypatch):
         }
     )
     captured: dict[str, object] = {}
+    mock_result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    assert mock_result["teaching_strategy"] == "general_explanation"
+    assert "mandatory_elements" not in mock_result
+    assert "teaching_contract" not in mock_result
+    for heading in CONTROL_MATERIAL_HEADINGS:
+        assert f"### {heading}" in mock_result["tutor_message"]
 
     def unexpected_mandatory_type(_payload):
         raise AssertionError("control generation must not resolve a proposed-group type")
 
     async def capture(purpose, prompt, output_schema, **kwargs):
         captured.update(purpose=purpose, prompt=prompt, schema=output_schema, **kwargs)
-        return {"tutor_message": "## 記憶プロセス\n\n### 要点\n- 情報を保存し検索します。", "teaching_strategy": "adaptive_scaffolding"}
+        return {**mock_result, "teaching_strategy": "adaptive_scaffolding"}
 
     monkeypatch.setattr("app.ai.codex_app_server_backend.expected_mandatory_type", unexpected_mandatory_type)
     monkeypatch.setattr(backend, "_run_structured_turn", capture)
@@ -480,13 +488,52 @@ def test_control_tutoring_never_uses_proposed_mandatory_contract(monkeypatch):
     assert "teaching_contract" not in captured["schema"]["properties"]
     assert "private-claim" not in captured["prompt"]
     assert "private-contract-version" not in captured["prompt"]
+    assert "『わからない』を選んだか" in captured["prompt"]
+    assert "## 記憶プロセス" in captured["prompt"]
+    for heading in CONTROL_MATERIAL_HEADINGS:
+        assert f"### {heading}" in captured["prompt"]
+        assert f"### {heading}" in result["tutor_message"]
+    assert "unknown" not in captured["prompt"]
     assert result["teaching_strategy"] == "general_explanation"
+
+
+def test_control_material_heading_validator_requires_exact_order_and_no_extras():
+    message = "## 記憶プロセス\n" + "\n".join(
+        f"### {heading}\n説明" for heading in CONTROL_MATERIAL_HEADINGS
+    )
+    result = {"tutor_message": message}
+
+    assert validate_control_material_headings(result, "記憶プロセス")["valid"]
+    missing = validate_control_material_headings(
+        {"tutor_message": message.replace("### 正例", "### 例")},
+        "記憶プロセス",
+    )
+    swapped_message = message.replace("### 定義", "### 一時定義", 1).replace(
+        "### 構成要素", "### 定義", 1
+    ).replace("### 一時定義", "### 構成要素", 1)
+    reordered = validate_control_material_headings(
+        {"tutor_message": swapped_message}, "記憶プロセス"
+    )
+    extra = validate_control_material_headings(
+        {"tutor_message": message.replace("### 非例", "### 追加\n説明\n\n### 非例")},
+        "記憶プロセス",
+    )
+
+    assert not missing["valid"]
+    assert not reordered["valid"]
+    assert not extra["valid"]
 
 
 def test_service_control_validation_skips_proposed_type_resolution(monkeypatch):
     payload = _payload("M1", "conceptual_change")
     payload["group_condition"] = "control"
     calls: list[dict] = []
+    valid_result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    valid_result["tutor_message"] += "あ" * (812 - len(valid_result["tutor_message"]))
+    invalid_result = {
+        **valid_result,
+        "tutor_message": valid_result["tutor_message"].replace("### 正例", "### 具体例", 1),
+    }
 
     def unexpected_mandatory_type(_payload):
         raise AssertionError("control validation must not resolve a proposed-group type")
@@ -494,10 +541,7 @@ def test_service_control_validation_skips_proposed_type_resolution(monkeypatch):
     async def fake_ai_call(_db, purpose, request_payload):
         assert purpose == "generate_tutoring_turn"
         calls.append(request_payload)
-        return {
-            "tutor_message": "## 記憶プロセス\n\n### 要点\n- 情報を保存し検索します。\n\n" + "構成要素と役割の関係を確認します。" * 36,
-            "teaching_strategy": "general_explanation",
-        }
+        return invalid_result if len(calls) == 1 else valid_result
 
     monkeypatch.setattr(experiment_service, "expected_mandatory_type", unexpected_mandatory_type)
     monkeypatch.setattr(experiment_service, "_ai_call", fake_ai_call)
@@ -506,7 +550,38 @@ def test_service_control_validation_skips_proposed_type_resolution(monkeypatch):
     assert validation["valid"]
     assert validation["expected_type"] is None
     assert calls[0]["generation_attempt"] == 1
+    assert len(calls) == 2
+    assert calls[1]["control_heading_retry"]["attempt"] == 2
+    assert validation["control_material_headings"]["valid"]
+    assert validation["material_length"]["character_count"] == 812
     assert result["teaching_strategy"] == "general_explanation"
+
+
+def test_service_control_validation_returns_503_after_invalid_heading_retries(monkeypatch):
+    payload = _payload("M1", "conceptual_change")
+    payload["group_condition"] = "control"
+    invalid_result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+    invalid_result["tutor_message"] = invalid_result["tutor_message"].replace(
+        "### 正例", "### 具体例", 1
+    )
+    calls: list[dict] = []
+
+    async def fake_ai_call(_db, purpose, request_payload):
+        assert purpose == "generate_tutoring_turn"
+        calls.append(request_payload)
+        return invalid_result
+
+    monkeypatch.setattr(experiment_service, "_ai_call", fake_ai_call)
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(experiment_service._generate_validated_tutoring_turn(None, payload))
+
+    assert error.value.status_code == 503
+    assert len(calls) == max(
+        experiment_service.MANDATORY_ELEMENT_MAX_ATTEMPTS,
+        experiment_service.MATERIAL_LENGTH_MAX_ATTEMPTS,
+    )
+    assert "tutor_message:control_heading_sequence_invalid" in error.value.detail["missing"]
 
 
 def test_missing_group_condition_uses_proposed_contract_in_service(monkeypatch):
@@ -553,7 +628,9 @@ def test_control_audit_keeps_original_contract_and_generation_attempt(monkeypatc
 
     async def capture(purpose, prompt, output_schema, **kwargs):
         captured.update(purpose=purpose, prompt=prompt, schema=output_schema, **kwargs)
-        return {"tutor_message": "## 記憶プロセス\n\n### 要点\n- 情報を保存し検索します。", "teaching_strategy": "general_explanation"}
+        return await MockAIBackend().generate_tutoring_turn(
+            {"group_condition": "control", "term": {"label": "記憶プロセス", "description": "情報を保存し検索します。"}}
+        )
 
     monkeypatch.setattr(backend, "_run_structured_turn", capture)
     asyncio.run(backend.generate_tutoring_turn(payload))
@@ -562,7 +639,7 @@ def test_control_audit_keeps_original_contract_and_generation_attempt(monkeypatc
     assert "audit-contract-v7" not in captured["prompt"]
     assert "private-validation-detail" not in captured["prompt"]
     assert "前回の教材本文は450文字で許容範囲外だった" in captured["prompt"]
-    assert "600〜800文字" in captured["prompt"]
+    assert "600〜850文字" in captured["prompt"]
     audit_context = captured["audit_context"]
     assert audit_context["prompt_contract_version"] == "audit-contract-v7"
     assert audit_context["taxonomy_version"] == "audit-taxonomy-v4"
@@ -649,6 +726,8 @@ def test_control_tutoring_prompt_is_independent_of_participant_diagnostics_and_f
     assert "記憶プロセス" in prompts[0]
     assert "chunk-1" in prompts[0]
     assert "通常のAIチューター" in prompts[0]
+    assert "### 定義" in prompts[0]
+    assert "### 非例" in prompts[0]
 
 
 def test_control_feedback_uses_only_current_feedback_context_for_both_outcomes(monkeypatch):
@@ -748,6 +827,11 @@ def test_material_length_validation_uses_common_700_character_range():
     assert valid["character_count"] == MATERIAL_TARGET_CHARACTERS
     assert valid["min_character_count"] == MATERIAL_MIN_CHARACTERS
     assert valid["max_character_count"] == MATERIAL_MAX_CHARACTERS
+
+    control_material_with_six_headings = validate_tutoring_material_length(
+        {"tutor_message": "あ" * 812}
+    )
+    assert control_material_with_six_headings["valid"]
 
     too_short = validate_tutoring_material_length({"tutor_message": "あ" * (MATERIAL_MIN_CHARACTERS - 1)})
     assert not too_short["valid"]

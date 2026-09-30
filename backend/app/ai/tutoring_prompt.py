@@ -31,6 +31,7 @@ def mandatory_element_prompt(misconception_type: str | None) -> str:
     lines.append("mandatory_elements は研究ログ用であり、学習者向け本文に内部ラベルを表示しない。")
     return "\n".join(lines)
 from app.ai.teaching_contract import (
+    CONTROL_MATERIAL_HEADINGS,
     MATERIAL_MAX_CHARACTERS,
     MATERIAL_MIN_CHARACTERS,
     MATERIAL_TARGET_CHARACTERS,
@@ -109,7 +110,25 @@ def build_tutoring_prompt(
                 f"前回の教材本文が文字数の許容範囲外だった。今回はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に必ず収める。"
             )
 
-    if expected_type:
+    control_heading_retry = retry_source.get("control_heading_retry")
+    if group == "control" and isinstance(control_heading_retry, dict):
+        rules.append(
+            "前回の教材は見出し構成の検証に失敗した。用語見出しの後に指定された6つの小見出しを順番どおりに置き、追加の小見出しを使わない。"
+        )
+
+    if group == "control":
+        control_heading_order = "、".join(
+            f"『### {heading}』" for heading in CONTROL_MATERIAL_HEADINGS
+        )
+        rules.extend(
+            [
+                f"tutor_message は必ず『## {term_label}』の後に {control_heading_order} をこの順で置く。これ以外の見出しは追加しない。",
+                "定義には共通の用語説明、構成要素には共通情報から分かる主要な要素、役割には用語が果たす機能を書く。",
+                "判断基準には用語の適用範囲を見分ける一般的な基準、正例には用語に当てはまる具体例、非例には似ているが用語に当てはまらない例を書く。",
+                "この6見出しは統制群の全参加者に同じ形式で使う。特定の参加者が『わからない』を選んだか、またはどの診断状態かを推測して見出しや内容を変えない。",
+            ]
+        )
+    elif expected_type:
         headings = mandatory_element_headings(expected_type)
         heading_order = "、".join(f"### {heading}" for heading in headings.values())
         rules.extend(

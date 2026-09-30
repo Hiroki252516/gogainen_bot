@@ -150,6 +150,10 @@ controlの診断結果は採点・評価・監査には保存するが教授へ�
 
 両群の`generate_tutoring_turn`教材本文は、Markdown記号を含む文字数で700文字を目標とし、600〜800文字を許容範囲とする。control/proposedのRAG、入力分離、必須教授要素、固定問題・採点は変更しない。backendは生成後に文字数を検証し、範囲外なら初回生成後に同じAI backendで最大2回再生成し、最大3試行とする。再生成時は前回の実測文字数をAIへの調整指示へ含める。文字数検証の実測値、目標・許容範囲、試行回数、最終結果は`AICallLog.response_payload.generation_validation`と`TutorTurn.diagnosis_json.material_length_validation`、`output_metrics`へ保存する。許容範囲外のままの場合は参加者へ教材を確定せず、既存のAI失敗処理へ送る.
 
+## 2026-09-30 教材見出し追加後の許容文字数
+
+Issue #126で統制群にも6つの固定小見出しを必須化した後、実AI生成ログで正しい見出し順の教材が812文字となり、旧上限800文字だけを超えて全3試行が拒否された。両群間の教材量条件は共通に保ち、目標700文字・下限600文字を維持したまま、許容上限を850文字へ変更した。現行の範囲は両群とも600〜850文字であり、初回を含む最大3試行、同一AI backendでの再生成、試行別監査記録の方針は維持する。
+
 ## Known Deck Inconsistencies and Resolution
 
 7月22日PPTXと8月21日更新仕様を受け、古いTransformer固有のM1/M3判定は新規フローから外した。学習確認v1では3項目共通のA〜C正解、D〜F=M1、G〜I=M3、J=unknownを互換用に維持する。テスト系（pretest/retest/final_test）と新規参加者向け学習確認v2では各設問の正解・M1・M3役割をA〜Iへ分散し、問題ごとの選択肢metadataで採点する。テスト系は21variantを通じて各ラベルが各役割を7回ずつ担う。M2/M4は実行時taxonomyに保持する。

@@ -9,6 +9,7 @@ from app.ai.mandatory_elements import (
     mock_mandatory_elements,
 )
 from app.ai.teaching_contract import (
+    CONTROL_MATERIAL_HEADINGS,
     MATERIAL_TARGET_CHARACTERS,
     mock_teaching_contract,
 )
@@ -101,6 +102,21 @@ class MockAIBackend:
                 ] or teaching_contract["addressed_claim_ids"]
             if mandatory_type == "unknown":
                 message += "\n- 定義から構成要素と役割へつなげて、新しい例に適用します。"
+        elif group == "control":
+            component_terms = payload.get("component_terms") or [label]
+            component_text = "、".join(str(item) for item in component_terms)
+            control_sections = {
+                "定義": f"**{label}**: {description}",
+                "構成要素": f"共通の用語情報では、{component_text}を理解に必要な要素として扱います。",
+                "役割": f"これらの要素が関係し合い、{label}に固有の機能を果たします。",
+                "判断基準": f"事例にある要素や働きが、{description}に当てはまるかを確認します。",
+                "正例": f"共通の用語説明に示された働きが具体的に現れる事例が、{label}の正例です。",
+                "非例": f"名称や場面が似ていても、{label}の説明にある要素や役割を持たないものは非例です。",
+            }
+            message = f"## {label}\n\n" + "\n\n".join(
+                f"### {heading}\n- {control_sections[heading]}"
+                for heading in CONTROL_MATERIAL_HEADINGS
+            )
         elif stage == "enrichment":
             message = (
                 f"## {label}\n\n"

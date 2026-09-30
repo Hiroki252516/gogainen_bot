@@ -68,10 +68,10 @@ Dockerの再ビルド・再起動では、ブラウザの`localStorage`に保存
 - AI診断失敗
 - AI call logの失敗・未接続状態。手動診断修正UIと修正内容のAuditEvent書き込みは将来対応
 - app-server接続状態
-- 教材生成を監査する場合は、被験者別ログの`ai_call_logs.request_payload.effective_request`で実送信prompt、Schema、モデル・推論レベル、prompt/taxonomy版、RAG chunk情報、送信状態を確認する。教材本文は700文字前後（600〜800文字）が共通範囲であり、文字数・段落数・箇条書き数、生成各試行の検証結果、最終試行回数も確認できる
+- 教材生成を監査する場合は、被験者別ログの`ai_call_logs.request_payload.effective_request`で実送信prompt、Schema、モデル・推論レベル、prompt/taxonomy版、RAG chunk情報、送信状態を確認する。教材本文は700文字前後（600〜850文字）が共通範囲であり、文字数・段落数・箇条書き数、生成各試行の検証結果、最終試行回数も確認できる
 - 先行生成を監査する場合は、`tutor_sessions.prefetch_state`の遷移、`tutor_turns.diagnosis_json.generation_origin/prefetch`、`AICallLog.request_payload.generation_audit`と`response_payload.prefetch_audit`を用語順に照合する。`ready`のまま未回答のturnは回答履歴・学習負担へ含めない。
 - `failed`または`discarded`のセッションでも、参加者到達後に同期フォールバックのinteractive turnが保存されていれば実学習として継続中である。新周回・実験終了の未使用prefetch整理では、そのセッションを未使用教材として終了させない。
-- controlの教材生成promptには用語・共通構成要素・共通RAGだけが含まれ、固定問題・選択肢・正答、参加者ID・群名、個人の回答・診断・学習段階・履歴は含まれない。正答要約・誤答解説では現在の問題・選択・表示済み教材・共通RAGのみを使う
+- controlの教材生成promptには用語・共通構成要素・共通RAGだけが含まれ、固定問題・選択肢・正答、参加者ID・群名、個人の回答・診断・学習段階・履歴は含まれない。生成教材が「定義」「構成要素」「役割」「判断基準」「正例」「非例」の順になり、余分な見出しがないことも確認する。正答要約・誤答解説では現在の問題・選択・表示済み教材・共通RAGのみを使う
 - controlの教材と確認問題は`control-fixed-v1`の用語・session内turn_index系列である。異なるpretestや学習履歴の参加者を同じ用語・同じturn_indexで比較し、`TutorTurn.diagnosis_json.instruction_route/fixed_sequence_key`と`AICallLog.request_payload.generation_audit.actual_ai_input`を確認する。診断値が保存されていてもcontrol教材へ反映されていないことを監査する。
 - Codex監査prompt全文には学習者の回答・履歴が含まれる場合があるため、研究者限定で取り扱い、外部共有や参加者画面への表示を行わない
 

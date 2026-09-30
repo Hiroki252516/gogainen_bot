@@ -6,12 +6,20 @@ from typing import Any
 
 MATERIAL_TARGET_CHARACTERS = 700
 MATERIAL_MIN_CHARACTERS = 600
-MATERIAL_MAX_CHARACTERS = 800
+MATERIAL_MAX_CHARACTERS = 850
 
 
-PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v2-control-isolation"
+PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v3-control-material-headings"
 TEACHING_CONTRACT_TYPES = ("M1", "M3", "unknown")
 REFUTATION_MODES = ("explicit", "implicit", "category_comparison", "none")
+CONTROL_MATERIAL_HEADINGS = (
+    "定義",
+    "構成要素",
+    "役割",
+    "判断基準",
+    "正例",
+    "非例",
+)
 
 
 def teaching_contract_schema() -> dict[str, Any]:
@@ -215,6 +223,34 @@ def validate_tutoring_material_safety(
         if isinstance(value, str) and value.strip() and value in message:
             missing.append(f"tutor_message:forbidden_fixed_text:{index}")
     return {"valid": not missing, "missing": missing}
+
+
+def validate_control_material_headings(
+    result: dict[str, Any],
+    term_label: str | None,
+) -> dict[str, Any]:
+    """Require the shared, diagnosis-independent control material structure."""
+    message = str(result.get("tutor_message") or "")
+    actual_headings = [
+        (match.group(1), match.group(2).strip())
+        for match in re.finditer(
+            r"(?m)^[ \t]{0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$",
+            message,
+        )
+    ]
+    expected_headings = (
+        [("##", term_label)] if isinstance(term_label, str) and term_label else []
+    ) + [("###", heading) for heading in CONTROL_MATERIAL_HEADINGS]
+    missing: list[str] = []
+    if not expected_headings or actual_headings != expected_headings:
+        missing.append("tutor_message:control_heading_sequence_invalid")
+    return {
+        "required": True,
+        "valid": not missing,
+        "expected_headings": expected_headings,
+        "actual_headings": actual_headings,
+        "missing": missing,
+    }
 
 
 def validate_tutoring_material_length(result: dict[str, Any]) -> dict[str, Any]:

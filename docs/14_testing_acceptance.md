@@ -16,6 +16,7 @@
 - RAGは用語別の指定sectionだけを検索し、LangGraphチャンクを返さない。
 - 同じ用語・同じ構成要素についてcontrolとproposedのRAG query、allowed section、chunk ID、chunk本文が一致し、検索に学習段階・診断・履歴を使わない。
 - 教材生成のcontrol有効promptは、参加者ID・群名・固定問題・選択肢・正答・診断・学習段階・履歴を含まず、学習者の回答や履歴だけを変えたmetamorphic testでも同一になる。
+- controlの教材は診断に依存せず、用語見出しの下に「定義」「構成要素」「役割」「判断基準」「正例」「非例」をこの順で持つ。余分な小見出し、見出し不足、順序違いは再生成され、規定回数後も不適合なら503になる。controlのSchemaに`mandatory_elements`と`teaching_contract`は含めない。
 - controlの`generate_tutoring_turn`は`control-fixed-v1`の固定系列を使い、事前テスト、`LearnerState`、過去回答、誤概念を変えても同じ用語・同じturn_indexの教材、variant、問題文、選択肢になる。controlの不正解後も`next_learning_stage`は固定系列を示し、診断値は教材選択へ使わない。
 - 両群の教材生成に固定問題・選択肢・正答を含めない。表示と採点はYAML/backendが担い、生成Schemaに問題・選択肢用fieldを含めない。
 - controlの正答要約・誤答解説は同じprojectionを使い、学習段階・診断・履歴・識別子を除きつつ、現在の問題・選択内容・表示済み教材・共通RAGを保つ。一般的な誤解の説明・訂正は許容する。
@@ -29,7 +30,7 @@
 - AI入力と出力に固定確認問題・選択肢・正答を含めず、生成教材へ直前フィードバックを転載しない。RAGの検索条件は段階・診断に依存せず両群で同一である。
 - Codex成功・失敗ログの`effective_request`から実送信prompt、Schema、model、effort、prompt/taxonomy版、RAG query/section/chunk ID/本文hash、試行番号、送信状態を追跡でき、認証情報を含まない。送信前失敗は未送信と区別でき、Mock logにはCodex実送信監査がない。
 - 提案群の教材再生成を行った場合、各`AICallLog.response_payload.generation_validation`に試行単位の契約・安全性検証結果を残し、最終`TutorTurn.diagnosis_json`にも総試行数と最終検証を保存する。
-- 教材文字数・段落数・箇条書き数を記録し、本文700文字前後（600〜800文字）を両群共通の許容範囲として検証する。範囲外の場合は同じAI backendで初回を含む最大3試行（再生成は最大2回）とし、再生成時は前回の実測文字数をAIへの調整指示へ含め、最終検証結果をAIログとTutorTurnへ保存する。
+- 教材文字数・段落数・箇条書き数を記録し、本文700文字前後（600〜850文字）を両群共通の許容範囲として検証する。範囲外の場合は同じAI backendで初回を含む最大3試行（再生成は最大2回）とし、再生成時は前回の実測文字数をAIへの調整指示へ含め、最終検証結果をAIログとTutorTurnへ保存する。
 - app-server payloadが `gpt-5.6-luna` / `medium` を使う。
 - 正答時は `generate_correct_answer_summary`、誤答時は `explain_selected_distractor` が呼ばれ、解説生成の目的とpayloadが `AICallLog` に記録される。
 - `/api/participants/{participant_id}/learning-targets` が、既存の未達対象 `targets`、互換用 `pretest_results`、直近の `test_results`（周回名、問題文、本人が選んだ選択肢本文、正誤）を返す。`test_results` に正答、期待解答、選択肢ごとの正誤、M分類などの内部診断値を含めない。

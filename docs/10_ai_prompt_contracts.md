@@ -2,14 +2,14 @@
 
 ## 共通契約
 
-AI教材生成は `AIBackend` 経由で行い、実行時の教材根拠としてローカルRAG本文を使う。RAG検索クエリは対象用語、共通説明、構成要素だけで組み立て、学習段階や個人の誤答履歴によって検索対象の章を変えない。教材生成契約の版は `tutoring-teaching-contract-v2-control-isolation`、taxonomyの版は `m1-m3-unknown-v1` としてpayloadとログへ保存する。
+AI教材生成は `AIBackend` 経由で行い、実行時の教材根拠としてローカルRAG本文を使う。RAG検索クエリは対象用語、共通説明、構成要素だけで組み立て、学習段階や個人の誤答履歴によって検索対象の章を変えない。教材生成契約の版は `tutoring-teaching-contract-v3-control-material-headings`、taxonomyの版は `m1-m3-unknown-v1` としてpayloadとログへ保存する。
 
 両群へ渡す共通payload:
 
 - term slug / 表示名
 - 構成要素
 - 用語に対応するRAG本文と対象section
-- 教材本文はMarkdown記号を含めて700文字前後（600〜800文字）に統一し、文字数・段落数・箇条書き数を計測する。許容範囲外の場合は初回生成後に同じAI backendで最大2回再生成し、最大3試行とする。再生成時は前回の実測文字数をAIへの調整指示へ含める
+- 教材本文はMarkdown記号を含めて700文字前後（600〜850文字）に統一し、文字数・段落数・箇条書き数を計測する。許容範囲外の場合は初回生成後に同じAI backendで最大2回再生成し、最大3試行とする。再生成時は前回の実測文字数をAIへの調整指示へ含める
 
 proposedだけへ追加する情報:
 
@@ -25,7 +25,7 @@ proposedだけへ追加する情報:
 
 固定問題、選択肢、正答、参加者ID、群名は両群のモデルpromptへ含めない。これらはアプリ内の出題・採点・ログ照合に限る。
 
-control payloadには `learning_stage`、`misconception_taxonomy`、誤答主張、診断履歴、learner state、足場掛け履歴、過去回答を含めない。用語・共通構成要素・診断に依存しないRAG本文だけを使い、`teaching_strategy` は `general_explanation` に固定する。一般的な誤解を正確に説明したり訂正したりすることは許容するが、特定学習者の状態を推測・反映しない。両群のRAG query、allowed section、chunk ID、本文は同一にする。
+control payloadには `learning_stage`、`misconception_taxonomy`、誤答主張、診断履歴、learner state、足場掛け履歴、過去回答を含めない。用語・共通構成要素・診断に依存しないRAG本文だけを使い、`teaching_strategy` は `general_explanation` に固定する。一般的な誤解を正確に説明したり訂正したりすることは許容するが、特定学習者の状態を推測・反映しない。両群のRAG query、allowed section、chunk ID、本文は同一にする。controlの全教材は、個人のunknown判定とは無関係に「定義」「構成要素」「役割」「判断基準」「正例」「非例」の順で構成し、各見出しをローカル検証する。この構造は提示形式の統一であり、controlに`mandatory_elements`や`teaching_contract`を要求せず、出力Schemaも増やさない。
 
 controlの教材・確認問題の系列も診断非依存とする。backendは`control-fixed-v1`として、対象用語と当該`TutorSession`のターン番号から固定stageとYAMLのvariant（v1〜v5、上限後はv5）を選び、`LearnerState`、pretest、過去回答、誤概念、履歴によって変更しない。`fixed_sequence_key`と`instruction_route=control_fixed`はモデル入力ではなく監査JSONにだけ保存する。提案群は従来どおり適応経路を使い、`instruction_route=proposed_adaptive`として監査する。
 
@@ -119,7 +119,7 @@ M1、M3、unknownの教材本文は、次のタイプ別Markdown構成を必須�
 - 対象ではない例
 ```
 
-M2、M4、統制群など必須教授要素の対象外では、従来の共通構造を使う。
+提案群のM2、M4など必須教授要素の対象外では、従来の共通構造を使う。統制群は別途、全参加者へ固定の6見出しを使うが、提案群のタイプ別必須教授要素や構造化契約は導入しない。
 
 ## 構造化された教材生成契約
 
