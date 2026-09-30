@@ -19,8 +19,6 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServe
 from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY, TAXONOMY_VERSION
 from app.ai.teaching_contract import (
-    MATERIAL_MAX_CHARACTERS,
-    MATERIAL_MIN_CHARACTERS,
     MATERIAL_TARGET_CHARACTERS,
     PROMPT_CONTRACT_VERSION,
 )
@@ -2320,9 +2318,10 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert proposed_turn_row.diagnosis_json["teaching_contract_validation"]["valid"] is True
         turn_metrics = proposed_turn_row.diagnosis_json["tutoring_output_metrics"]
         assert turn_metrics["target_character_count"] == MATERIAL_TARGET_CHARACTERS
-        assert turn_metrics["min_character_count"] == MATERIAL_MIN_CHARACTERS
-        assert turn_metrics["max_character_count"] == MATERIAL_MAX_CHARACTERS
-        assert turn_metrics["character_count_in_target_range"] == 1
+        assert turn_metrics["character_count"] == len(proposed_turn_row.tutor_message)
+        assert turn_metrics["character_count_delta_from_target"] == (
+            len(proposed_turn_row.tutor_message) - MATERIAL_TARGET_CHARACTERS
+        )
         participant_log = client.get(f"/api/admin/participants/{proposed_pid}/logs")
         assert participant_log.status_code == 200, participant_log.text
         logged_turn = participant_log.json()["tutor_sessions"][0]["turns"][0]
@@ -2678,7 +2677,8 @@ def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatc
 
     prompt = captured_prompt["text"]
     assert f"{MATERIAL_TARGET_CHARACTERS}文字前後" in prompt
-    assert f"{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字" in prompt
+    assert "文字数は厳密な条件にせず" in prompt
+    assert "600〜" not in prompt
     assert "前回の確認問題の内容" in prompt
     assert "前回の学習者の回答" in prompt
     assert "CURRENT_FIXED_QUESTION_DO_NOT_SEND" not in prompt
@@ -3013,9 +3013,9 @@ def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
             normalized_response["tutor_message"]
         )
         assert log.response_payload["output_metrics"]["target_character_count"] == MATERIAL_TARGET_CHARACTERS
-        assert log.response_payload["output_metrics"]["min_character_count"] == MATERIAL_MIN_CHARACTERS
-        assert log.response_payload["output_metrics"]["max_character_count"] == MATERIAL_MAX_CHARACTERS
-        assert log.response_payload["output_metrics"]["character_count_in_target_range"] == 1
+        assert log.response_payload["output_metrics"]["character_count_delta_from_target"] == (
+            len(normalized_response["tutor_message"]) - MATERIAL_TARGET_CHARACTERS
+        )
 
         participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
         assert participant_logs.status_code == 200, participant_logs.text

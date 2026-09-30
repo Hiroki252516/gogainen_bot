@@ -17,14 +17,12 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.ai.mock_backend import MockAIBackend
 from app.ai.teaching_contract import (
     CONTROL_MATERIAL_HEADINGS,
-    MATERIAL_MAX_CHARACTERS,
-    MATERIAL_MIN_CHARACTERS,
     MATERIAL_TARGET_CHARACTERS,
+    measure_tutoring_material_length,
     reconcile_teaching_contract,
     teaching_contract_schema,
     validate_teaching_contract,
     validate_control_material_headings,
-    validate_tutoring_material_length,
     validate_tutoring_material_safety,
 )
 from app.seed.content_loader import (
@@ -357,51 +355,46 @@ def test_service_retries_same_backend_when_mandatory_evidence_is_missing(monkeyp
     assert result["mandatory_elements"]["type"] == "M3"
 
 
-def test_service_retries_same_backend_when_material_is_outside_common_range(monkeypatch):
-    backend = MockAIBackend()
+@pytest.mark.parametrize(
+    ("group_condition", "character_count"),
+    [("control", 200), ("proposed", 900)],
+)
+def test_service_does_not_enforce_material_length_bounds(
+    monkeypatch, group_condition, character_count
+):
     payload = _payload("M1", "conceptual_change")
+    payload["group_condition"] = group_condition
+    if group_condition == "control":
+        headings = [
+            "## 記憶プロセス",
+            *(f"### {heading}\n説明" for heading in CONTROL_MATERIAL_HEADINGS),
+        ]
+        material = "\n\n".join(headings)
+        material += "あ" * (character_count - len(material))
+        result = {"tutor_message": material, "teaching_strategy": "general_explanation"}
+    else:
+        result = asyncio.run(MockAIBackend().generate_tutoring_turn(payload))
+        result["tutor_message"] += "あ" * (character_count - len(result["tutor_message"]))
+        material = result["tutor_message"]
     calls: list[dict] = []
 
-    async def fake_ai_call(db, purpose, request_payload):
+    async def fake_ai_call(_db, purpose, request_payload):
         assert purpose == "generate_tutoring_turn"
         calls.append(request_payload)
-        result = await backend.generate_tutoring_turn(request_payload)
-        if len(calls) == 1:
-            result["tutor_message"] = "短い教材"
         return result
 
     monkeypatch.setattr(experiment_service, "_ai_call", fake_ai_call)
-    result, validation = asyncio.run(
+    generated, validation = asyncio.run(
         experiment_service._generate_validated_tutoring_turn(None, payload)
     )
 
     assert validation["valid"]
-    assert validation["attempts"] == 2
-    assert validation["material_length"]["valid"]
-    assert len(calls) == 2
-    assert calls[1]["material_length_retry"]["actual_character_count"] == len("短い教材")
-
-
-def test_service_allows_two_material_length_retries(monkeypatch):
-    backend = MockAIBackend()
-    payload = _payload("M1", "conceptual_change")
-    calls: list[dict] = []
-
-    async def fake_ai_call(db, purpose, request_payload):
-        assert purpose == "generate_tutoring_turn"
-        calls.append(request_payload)
-        result = await backend.generate_tutoring_turn(request_payload)
-        result["tutor_message"] = "短い教材"
-        return result
-
-    monkeypatch.setattr(experiment_service, "_ai_call", fake_ai_call)
-    with pytest.raises(HTTPException, match="教材の誤概念対応契約を満たす教材を生成できませんでした"):
-        asyncio.run(experiment_service._generate_validated_tutoring_turn(None, payload))
-
-    assert [call["generation_attempt"] for call in calls] == [1, 2, 3]
+    assert validation["attempts"] == 1
+    assert validation["material_length_metrics"]["character_count"] == character_count
+    assert validation["material_length_metrics"]["character_count_delta_from_target"] == character_count - MATERIAL_TARGET_CHARACTERS
+    assert len(calls) == 1
     assert "material_length_retry" not in calls[0]
-    assert calls[1]["material_length_retry"]["actual_character_count"] == len("短い教材")
-    assert calls[2]["material_length_retry"]["actual_character_count"] == len("短い教材")
+    assert generated["tutor_message"] == material
 
 
 def test_codex_prompt_schema_requires_m1_evidence(monkeypatch):
@@ -553,7 +546,7 @@ def test_service_control_validation_skips_proposed_type_resolution(monkeypatch):
     assert len(calls) == 2
     assert calls[1]["control_heading_retry"]["attempt"] == 2
     assert validation["control_material_headings"]["valid"]
-    assert validation["material_length"]["character_count"] == 812
+    assert validation["material_length_metrics"]["character_count"] == 812
     assert result["teaching_strategy"] == "general_explanation"
 
 
@@ -577,10 +570,7 @@ def test_service_control_validation_returns_503_after_invalid_heading_retries(mo
         asyncio.run(experiment_service._generate_validated_tutoring_turn(None, payload))
 
     assert error.value.status_code == 503
-    assert len(calls) == max(
-        experiment_service.MANDATORY_ELEMENT_MAX_ATTEMPTS,
-        experiment_service.MATERIAL_LENGTH_MAX_ATTEMPTS,
-    )
+    assert len(calls) == experiment_service.MANDATORY_ELEMENT_MAX_ATTEMPTS
     assert "tutor_message:control_heading_sequence_invalid" in error.value.detail["missing"]
 
 
@@ -617,10 +607,6 @@ def test_control_audit_keeps_original_contract_and_generation_attempt(monkeypatc
         "taxonomy_version": "audit-taxonomy-v4",
         "generation_attempt": 3,
         "mandatory_element_retry": {"attempt": 2, "missing": ["private-validation-detail"]},
-        "material_length_retry": {
-            "attempt": 3,
-            "actual_character_count": 450,
-        },
         "learner_state": {"primary_misconception": "PRIVATE-M1"},
         "rag_context": {"query": "common query", "allowed_sections": ["3.2"], "chunks": []},
     }
@@ -638,8 +624,9 @@ def test_control_audit_keeps_original_contract_and_generation_attempt(monkeypatc
     assert "PRIVATE-M1" not in captured["prompt"]
     assert "audit-contract-v7" not in captured["prompt"]
     assert "private-validation-detail" not in captured["prompt"]
-    assert "前回の教材本文は450文字で許容範囲外だった" in captured["prompt"]
-    assert "600〜850文字" in captured["prompt"]
+    assert "700文字前後を目安にする" in captured["prompt"]
+    assert "文字数は厳密な条件にせず" in captured["prompt"]
+    assert "600〜850文字" not in captured["prompt"]
     audit_context = captured["audit_context"]
     assert audit_context["prompt_contract_version"] == "audit-contract-v7"
     assert audit_context["taxonomy_version"] == "audit-taxonomy-v4"
@@ -821,25 +808,14 @@ def test_material_safety_rejects_fixed_answer_text():
     assert not validation["valid"]
 
 
-def test_material_length_validation_uses_common_700_character_range():
-    valid = validate_tutoring_material_length({"tutor_message": "あ" * MATERIAL_TARGET_CHARACTERS})
-    assert valid["valid"]
-    assert valid["character_count"] == MATERIAL_TARGET_CHARACTERS
-    assert valid["min_character_count"] == MATERIAL_MIN_CHARACTERS
-    assert valid["max_character_count"] == MATERIAL_MAX_CHARACTERS
-
-    control_material_with_six_headings = validate_tutoring_material_length(
-        {"tutor_message": "あ" * 812}
-    )
-    assert control_material_with_six_headings["valid"]
-
-    too_short = validate_tutoring_material_length({"tutor_message": "あ" * (MATERIAL_MIN_CHARACTERS - 1)})
-    assert not too_short["valid"]
-    assert "character_count_below_minimum" in too_short["missing"][0]
-
-    too_long = validate_tutoring_material_length({"tutor_message": "あ" * (MATERIAL_MAX_CHARACTERS + 1)})
-    assert not too_long["valid"]
-    assert "character_count_above_maximum" in too_long["missing"][0]
+def test_material_length_measurement_records_target_without_enforcing_bounds():
+    for character_count in (100, MATERIAL_TARGET_CHARACTERS, 900):
+        metrics = measure_tutoring_material_length(
+            {"tutor_message": "あ" * character_count}
+        )
+        assert metrics["character_count"] == character_count
+        assert metrics["target_character_count"] == MATERIAL_TARGET_CHARACTERS
+        assert metrics["character_count_delta_from_target"] == character_count - MATERIAL_TARGET_CHARACTERS
 
 
 def test_mandatory_schema_is_strict_for_each_type():

@@ -2,14 +2,14 @@
 
 ## 共通契約
 
-AI教材生成は `AIBackend` 経由で行い、実行時の教材根拠としてローカルRAG本文を使う。RAG検索クエリは対象用語、共通説明、構成要素だけで組み立て、学習段階や個人の誤答履歴によって検索対象の章を変えない。教材生成契約の版は `tutoring-teaching-contract-v3-control-material-headings`、taxonomyの版は `m1-m3-unknown-v1` としてpayloadとログへ保存する。
+AI教材生成は `AIBackend` 経由で行い、実行時の教材根拠としてローカルRAG本文を使う。RAG検索クエリは対象用語、共通説明、構成要素だけで組み立て、学習段階や個人の誤答履歴によって検索対象の章を変えない。教材生成契約の版は `tutoring-teaching-contract-v4-control-headings-soft-length-target`、taxonomyの版は `m1-m3-unknown-v1` としてpayloadとログへ保存する。
 
 両群へ渡す共通payload:
 
 - term slug / 表示名
 - 構成要素
 - 用語に対応するRAG本文と対象section
-- 教材本文はMarkdown記号を含めて700文字前後（600〜850文字）に統一し、文字数・段落数・箇条書き数を計測する。許容範囲外の場合は初回生成後に同じAI backendで最大2回再生成し、最大3試行とする。再生成時は前回の実測文字数をAIへの調整指示へ含める
+- 教材本文はMarkdown記号を含めて700文字前後を目安とし、文字数・段落数・箇条書き数を計測する。文字数に下限・上限は設けず、文字数だけを理由に拒否・再生成しない。見出し、教授契約、安全性など別の生成契約違反は従来どおり検証・再生成する
 
 proposedだけへ追加する情報:
 

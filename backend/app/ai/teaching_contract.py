@@ -5,11 +5,9 @@ from typing import Any
 
 
 MATERIAL_TARGET_CHARACTERS = 700
-MATERIAL_MIN_CHARACTERS = 600
-MATERIAL_MAX_CHARACTERS = 850
 
 
-PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v3-control-material-headings"
+PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v4-control-headings-soft-length-target"
 TEACHING_CONTRACT_TYPES = ("M1", "M3", "unknown")
 REFUTATION_MODES = ("explicit", "implicit", "category_comparison", "none")
 CONTROL_MATERIAL_HEADINGS = (
@@ -253,26 +251,14 @@ def validate_control_material_headings(
     }
 
 
-def validate_tutoring_material_length(result: dict[str, Any]) -> dict[str, Any]:
-    """Keep both tutoring conditions within the common material-size target."""
+def measure_tutoring_material_length(result: dict[str, Any]) -> dict[str, int]:
+    """Record material length against the shared target without enforcing bounds."""
     material = str(result.get("tutor_message") or "")
     character_count = len(material)
-    missing: list[str] = []
-    if character_count < MATERIAL_MIN_CHARACTERS:
-        missing.append(
-            f"tutor_message:character_count_below_minimum:{character_count}<{MATERIAL_MIN_CHARACTERS}"
-        )
-    elif character_count > MATERIAL_MAX_CHARACTERS:
-        missing.append(
-            f"tutor_message:character_count_above_maximum:{character_count}>{MATERIAL_MAX_CHARACTERS}"
-        )
     return {
-        "valid": not missing,
         "character_count": character_count,
         "target_character_count": MATERIAL_TARGET_CHARACTERS,
-        "min_character_count": MATERIAL_MIN_CHARACTERS,
-        "max_character_count": MATERIAL_MAX_CHARACTERS,
-        "missing": missing,
+        "character_count_delta_from_target": character_count - MATERIAL_TARGET_CHARACTERS,
     }
 
 

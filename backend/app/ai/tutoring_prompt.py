@@ -32,8 +32,6 @@ def mandatory_element_prompt(misconception_type: str | None) -> str:
     return "\n".join(lines)
 from app.ai.teaching_contract import (
     CONTROL_MATERIAL_HEADINGS,
-    MATERIAL_MAX_CHARACTERS,
-    MATERIAL_MIN_CHARACTERS,
     MATERIAL_TARGET_CHARACTERS,
 )
 
@@ -90,26 +88,13 @@ def build_tutoring_prompt(
         "tutor_message には現在の用語の教材だけを書く。問題文、選択肢、正答、過去の回答やフィードバックは含めない。",
         "学習確認問題はbackendの固定問題バンクが表示・採点するため、問題や選択肢を生成しない。",
         "教材には定義、仕組みまたは役割、具体例、注意点を含める。一般的な誤解を正確に説明・訂正してよい。",
-        f"教材本文はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に統一する。定義、仕組み、具体例、注意点を保ち、不要な繰り返しで水増ししない。",
+        f"教材本文はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後を目安にする。定義、仕組み、具体例、注意点を保ち、文字数は厳密な条件にせず、内容の正確さ・完全性・読みやすさを優先する。不要な繰り返しで水増ししない。",
         "見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
         "被験者ID、群名、内部識別子、M1〜M4などの内部ラベルを学習者向け本文に書かない。",
     ]
 
-    # ``retry_context`` is server-side generation metadata.  It may contribute
-    # a length-adjustment instruction, but it must never become model input.
+    # ``retry_context`` contains server-side structural validation metadata.
     retry_source = retry_context or payload
-    material_length_retry = retry_source.get("material_length_retry")
-    if isinstance(material_length_retry, dict):
-        actual_character_count = material_length_retry.get("actual_character_count")
-        if isinstance(actual_character_count, int) and not isinstance(actual_character_count, bool):
-            rules.append(
-                f"前回の教材本文は{actual_character_count}文字で許容範囲外だった。今回は前回の内容を冗長に繰り返さず、Markdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に必ず収める。"
-            )
-        else:
-            rules.append(
-                f"前回の教材本文が文字数の許容範囲外だった。今回はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に必ず収める。"
-            )
-
     control_heading_retry = retry_source.get("control_heading_retry")
     if group == "control" and isinstance(control_heading_retry, dict):
         rules.append(
