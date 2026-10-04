@@ -7,7 +7,7 @@
 | PPTX上の要点 | 仕様への反映 | 実装要素 |
 |---|---|---|
 | 専門用語は「知っているつもり」でも誤って理解する | `00_project_summary.md`, `03_misconception_taxonomy.md` | diagnosis, misconception_type |
-| その場の正解だけでは不十分 | `02_experiment_flow.md`, `12_evaluation_metrics.md` | retest, final_test |
+| その場の正解だけでは不十分 | `02_experiment_flow.md`, `12_evaluation_metrics.md` | retest。`final_test`はpretestで学習対象がない参加者に限られ、retest満点時は省略される |
 | 評価は正答率だけでなく再発と自力解答を見る | `12_evaluation_metrics.md` | evaluation_summaries |
 | AIを使うかではなくログで支援を変えるかを比較 | `01_research_requirements.md` | group_condition control/proposed |
 | 学習ログは次の支援を決める診断材料 | `05_system_architecture.md`, `07_data_model.md` | learner_states, tutor_turns |
@@ -66,7 +66,7 @@
 必要データ:
 
 - semanticな`learning_stage`と内部`scaffolding_level` history
-- final_test attempts
+- `final_test` attempts（現行フローではpretestで学習対象がない参加者のみ。全員共通の事後測定ではない）
 - l0_check attempts  # 互換・補助
 - l0_success
 - stable_correct_count
