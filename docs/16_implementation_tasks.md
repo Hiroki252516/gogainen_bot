@@ -1,14 +1,15 @@
 # 16. Implementation Tasks
 
-この文書は、3用語・YAML問題・RAG対応の現行実装状態を示す。
+この文書は、現在のチェックアウトにおける3用語・YAML問題・RAG対応の実装状態を示す。研究計画上の未実装条件は「残タスク」に分ける。
 
 ## 実装済み
 
-- 現行main系の実装状態を基準に仕様を整理
+- 現行チェックアウトの実装状態を基準に仕様を整理
 - active seedを `llm_knowledge`、`multi_agent`、`memory_process` の3用語へ変更
 - テスト系YAML問題バンクと、起動時に検証する版付き学習確認問題バンク
 - pretest/final_test各1問、retest v1〜v5、既存参加者向けlearning v1、新規参加者向けlearning v2の30場面variant
 - テスト系・learning v2の保存済み選択肢役割による採点と、learning v1の固定ラベル採点（M3優先）
+- 現行デバッグ用の全バンク固定役割（A〜C正解、D〜F=M1、G〜I=M3、J=unknown）。研究データ収集には不適切
 - 旧Term・問題・ログを削除せず非アクティブ化
 - ローカルRAG packの読み込み、用語別section制限、LangGraph除外
 - control/proposedの共通RAGと個別化payloadの分離
@@ -24,6 +25,7 @@
 
 ## 残タスク
 
+- 研究データ収集開始前に、テスト系・学習確認問題の正解ラベル手掛かりをなくす役割分散を実装し、問題バンク・ローダー・テスト・運用文書を同時に更新
 - 実験本番データ取得前のapp-server接続確認
 - アンケート本体の設問拡張
 - 管理画面の詳細なグラフ化・高度なフィルタ機能

@@ -95,7 +95,7 @@ seed済みのテスト問題は`questions.variant_key`に保存し、学習確�
 
 pretest、retest、final_testは提示された問題variantの選択肢metadataを参照し、正解3選択肢を重複なくすべて選んだ場合だけ正解とする。新規参加者向け学習確認v2も同じmetadata方式を使う。既存参加者向け学習確認v1は互換仕様としてA/B/Cの3つだけを選んだ場合に正解とする。不正解分類はM3を最優先し、次にM1、J単独または判定材料なしはunknownとする。採点・遷移はbackendが決定し、AI出力で上書きしない。
 
-テスト問題は用語ごとにpretest 1問、retest 5問、final_test 1問を持つ。全3用語・21variantを通じてA〜Iの各ラベルは正解・M1・M3をそれぞれ7回担う。各variantは場面と設問タスクを使った判断問題であり、各問の役割は選択肢metadataに保存する。
+テスト問題は用語ごとにpretest 1問、retest 5問、final_test 1問を持つ。各variantは場面と設問タスクを使った判断問題であり、各問の役割は選択肢metadataに保存する。現行デバッグ実装では全21variantでA〜Cが正解、D〜FがM1、G〜IがM3、Jがunknownに固定される。variant間の役割分散は実装されておらず、正解ラベルが手掛かりになるため、この状態は研究データ収集に使わない。
 
 ## Learning API
 
