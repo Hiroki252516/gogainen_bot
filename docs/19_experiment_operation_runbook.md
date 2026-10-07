@@ -6,7 +6,7 @@
 
 **実験開始前の必須確認:** テスト系・学習確認v2ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
 
-実験仕様版は1。既存試用・未対応版は閲覧専用で再開・評価再計算をしない。移行時はparticipants.experiment_spec_versionをnullableで追加し、既存値をNULLのまま残す。旧行を版1へ一括付け替えない。DBのバックアップ後、隔離DBで移行とseed再実行を検証してから配布する。
+実験仕様版は2。NULL・版1・未対応版は閲覧専用で再開・削除・評価再計算をしない。既存のparticipants.experiment_spec_versionを使い、旧行を版2へ付け替えない。起動時補修も現行版に限定する。DBのバックアップ後、隔離DBで起動・seed再実行と旧値保全を検証してから配布する。
 
 1. Docker Desktopを起動する
 2. ルート`.env`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動する
@@ -73,8 +73,8 @@
 - 教材生成を監査する場合は、被験者別ログの`ai_call_logs.request_payload.effective_request`で実送信prompt、Schema、モデル・推論レベル、prompt/taxonomy版、RAG chunk情報、送信状態を確認する。教材本文は700文字前後（600〜800文字）が共通範囲であり、文字数・段落数・箇条書き数、生成各試行の検証結果、最終試行回数も確認できる
 - 先行生成を監査する場合は、`tutor_sessions.prefetch_state`の遷移、`tutor_turns.diagnosis_json.generation_origin/prefetch`、`AICallLog.request_payload.generation_audit`と`response_payload.prefetch_audit`を用語順に照合する。`ready`のまま未回答のturnは回答履歴・学習負担へ含めない。
 - `failed`または`discarded`のセッションでも、参加者到達後に同期フォールバックのinteractive turnが保存されていれば実学習として継続中である。新周回・実験終了の未使用prefetch整理では、そのセッションを未使用教材として終了させない。
-- controlの教材生成promptには用語・共通構成要素・共通RAGだけが含まれ、固定問題・選択肢・正答、参加者ID・群名、個人の回答・診断・学習段階・履歴は含まれない。正答要約・誤答解説では現在の問題・選択・表示済み教材・共通RAGのみを使う
-- controlの教材と確認問題は`control-fixed-v1`の用語・session内turn_index系列である。異なるpretestや学習履歴の参加者を同じ用語・同じturn_indexで比較し、`TutorTurn.diagnosis_json.instruction_route/fixed_sequence_key`と`AICallLog.request_payload.generation_audit.actual_ai_input`を確認する。診断値が保存されていてもcontrol教材へ反映されていないことを監査する。
+- 両群の3AIタスクに用語・共通構成要素・共通RAG・interaction_historyが入る。履歴には同じ用語の全フェーズ/周回の採点済み問題・選択・全体正誤・時刻だけが入り、診断・教授・AI解説が混ざらない。controlには明示的診断・対象主張・taxonomy・教授方針・学習段階がないことを、input_projectionと実送信effective_requestで確認する。現在の未回答問題や正答キーは教材生成へ渡さず、回答後解説だけに現在問題・必要な選択・表示済み教材を加える。
+- 確認問題は両群ともshared-diagnosis-route-v1で、unknownはenrichment、M1/M3はconceptual_change。同じ状態・回答・turn_indexなら問題とvariantが一致する。教材のinstruction_routeはcontrolがshared_history_general、proposedがshared_history_diagnosticで、proposedだけに教授契約を要求する。共通履歴の版・件数・SHA-256をAIログとTutorTurnで照合する。統制群が回答から自然に誤りを訂正することは許容し、研究比較は明示的な誤概念対応の追加効果と説明する。
 - Codex監査prompt全文には学習者の回答・履歴が含まれる場合があるため、研究者限定で取り扱い、外部共有や参加者画面への表示を行わない
 
 ### 学習回答後の先行生成の確認
@@ -82,6 +82,7 @@
 - 不正解かつ残り挑戦回数がある回答では、解説表示中に次教材生成が進む。画面には内部並行処理を表示しない。
 - 被験者が「次の確認へ」を押したとき、先行生成済みなら待ち時間なく次教材へ進み、生成中なら`次の確認を準備中...`の進捗表示で待つ。
 - 先行生成失敗は回答失敗ではない。次ターン取得が通常の同期生成へフォールバックしたことを、参加者ログの`generate_tutoring_turn`と`AICallLog`で確認する。
+- 次教材へ投影した共通履歴が、回答確定後の履歴と同じであることを確認する。現在回答は回答後解説の履歴にはまだ入らず、次教材では1件だけ入る。時刻も投影するが、AI解説本文は投影しない。
 - 解説生成失敗は回答・学習状態を確定しないため、AI call logの失敗を確認してから同じ回答を再送する。Mockへ切り替えたログを本実験データへ混ぜない。
 - 学習ギブアップまたはプロセス再起動後は先行生成が残らない場合がある。その場合は次ターン取得時の通常生成が正しい復旧経路であり、終了済みセッションへ新教材が保存されていないことを確認する。
 

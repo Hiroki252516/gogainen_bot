@@ -12,4 +12,6 @@
 
 学習ギブアップはretestへ進む。retest/final_testの実験ギブアップはsurveyへ進む。採点・ギブアップ・再送・先行生成は仕様版の確認後に実行する。
 
-旧試用は `current-step` で `legacy_read_only` / `can_resume=false` を返す。画面の新規開始ボタンはブラウザの参加者・進行・保留送信情報だけを消し、startから同意を取り直す。DB記録は残す。
+学習確認の出題規則は両群共通で、unknownはenrichment、M1/M3はconceptual_change。同じ状態・回答・ターンなら同じ問題とvariantを使う。統制群の旧固定系列は使わない。
+
+NULL・仕様版1・未対応版は `current-step` で `legacy_read_only` / `can_resume=false` を返す。画面の新規開始ボタンはブラウザの参加者・進行・保留送信情報だけを消し、startから同意を取り直す。新規は仕様版2で、旧DB記録は残す。

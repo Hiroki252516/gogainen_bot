@@ -85,6 +85,7 @@ def build_tutoring_prompt(
         "学習セッション用の正確で読みやすい日本語教材を安全なMarkdownで作る。",
         f"教材の主題は現在の用語『{term_label}』とし、入力された用語説明を中心にする。",
         "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
+        "interaction_history は同じ用語の採点済み回答の観察記録である。question_body、selected_options、is_correctを参照し、既に扱った点や見直す点に沿って説明・例を具体化してよい。選択記録を本人の確定した信念と断定しない。",
         "rag_context.chunks がある場合は同じ用語の教材コンテキストを参照し、根拠のない断定を避ける。",
         "tutor_message には現在の用語の教材だけを書く。問題文、選択肢、正答、過去の回答やフィードバックは含めない。",
         "学習確認問題はbackendの固定問題バンクが表示・採点するため、問題や選択肢を生成しない。",
@@ -154,7 +155,8 @@ def build_tutoring_prompt(
         )
 
     if group == "control":
-        rules.append("通常のAIチューターとして、入力された共通の用語情報と教材コンテキストだけから一般向けの説明を作る。個人の回答・診断・履歴・学習段階を推測したり前提にしたりしない。")
+        rules.append("通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使って説明を作る。回答から自然に誤りを見つけて訂正してよいが、入力されていないbackendの誤概念診断、修正対象、タイプ別教授方針を与えられた事実として扱わない。")
+        rules.append("general_explanation は、backendの明示的な誤概念診断・タイプ別教授方針によらず、共通履歴を利用して定義・仕組み・具体例・注意点を説明する通常の教授方略を意味する。")
         rules.append("teaching_strategy は general_explanation に固定する。")
     else:
         rules.append("教授方略はbackendが決定済みである。active_misconception_type、pretest_target、pretest_targets、diagnostic_evidence、session_misconception_historyを、その方略に沿った説明・対比例の具体化に利用し、別方略へ変更しない。")

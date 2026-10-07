@@ -14,6 +14,7 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
 from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
 from app.db import session as database
 from app.db.session import SessionLocal
 from app.main import app
@@ -60,7 +61,7 @@ def trial_snapshot(db, pid):
     return json.dumps(output, default=str, sort_keys=True)
 
 
-@pytest.mark.parametrize("bank_version,spec_version", [(1, None), (2, None), (2, 99)])
+@pytest.mark.parametrize("bank_version,spec_version", [(1, None), (2, None), (1, 1), (2, 1), (2, 99)])
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version):
     pid, questions = create_trial()
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
@@ -128,7 +129,7 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
     assert all(row["legacy_read_only"] for row in overview["recent_answer_history"] if row["participant_id"] == pid)
     with SessionLocal() as db:
         for group in summary["groups"]:
-            assert group["participant_count"] == db.query(Participant).filter_by(group_condition=group["group_condition"], experiment_spec_version=1).count()
+            assert group["participant_count"] == db.query(Participant).filter_by(group_condition=group["group_condition"], experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION).count()
     exported = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert exported.status_code == 200
     assert next(csv.reader(exported.text.splitlines())) == experiment.LOG_CSV_COLUMNS

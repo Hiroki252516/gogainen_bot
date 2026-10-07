@@ -182,7 +182,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
     "input": [
       {
         "type": "text",
-        "text": "目的: tutoring_turn。共通用語とRAGから教材を生成し、teaching_strategyをgeneral_explanationに固定してください..."
+        "text": "目的: tutoring_turn。共通用語・RAG・interaction_historyから教材を生成し、teaching_strategyをgeneral_explanationに固定してください..."
       }
     ],
     "approvalPolicy": "never",
@@ -227,6 +227,8 @@ MVPではフロントエンドにAI生成途中のストリームを見せなく
 10. 用途ごとのJSON辞書を呼び出し側へ返す
 
 各Codex呼び出しでは、`AICallLog.request_payload.effective_request`に送信直前の実際の`thread/start`設定、`turn/start`の全文prompt・JSON Schema・モデル・推論レベルを保存する。併せてprompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、教材生成試行番号、送信状態を記録する。認証ヘッダー・tokenは保存しない。接続や送信前の失敗では、送信試行と実送信の状態を区別する。Mockの入力にはこのCodex実送信監査を付けない。
+
+仕様版2では共通interaction_historyの版・件数・SHA-256、共通出題規則版とactual_ai_inputも記録する。モデルへは共通履歴の診断除外投影を送り、proposedだけに診断・対象主張・教授方針を追加する。input_projectionはサーバー側投影であり、送信済みかどうかはeffective_request.transmissionを確認する。
 
 この監査には学習者の選択・回答・学習履歴が含まれる場合があるため、参加者ログAPI・CSVと同様に研究者限定で扱う。DB列およびCSV固定列は追加せず、既存JSON payload内へ記録する。
 

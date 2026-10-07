@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.ai.backend import strategy_for
+from app.ai.interaction_history import project_model_payload
 from app.ai.mandatory_elements import (
     expected_mandatory_type,
     mandatory_element_headings,
@@ -111,7 +112,7 @@ class MockAIBackend:
                 "- 似た仕組みとの違いを、表面的な言葉ではなく構造から確認します。"
             )
         result = {
-            "tutor_message": _pad_tutoring_material(message),
+            "tutor_message": _pad_tutoring_material(message + _history_note(payload)),
             "teaching_strategy": strategy_for(mandatory_type, None, group),
         }
         if mandatory_elements:
@@ -128,6 +129,7 @@ class MockAIBackend:
                 "## 今回の要点\n\n"
                 f"- **{label}**の役割と処理対象を区別できていることが要点です。\n"
                 "- 教材で確認した定義と具体例を結び付けて考えられています。"
+                + _history_note(payload, feedback=True)
             )
         }
 
@@ -143,10 +145,20 @@ class MockAIBackend:
                 f"- 「{selected}」は、**{label}**の役割や処理範囲と一致しません。\n\n"
                 "## 見直す観点\n\n"
                 "- 教材の定義、構成要素の役割、情報の流れを確認してください。"
+                + _history_note(payload, feedback=True)
             ),
             "remediation_focus": "定義、構成要素の役割、情報の流れを確認する。",
             "general_knowledge_supplement": None,
         }
+
+
+def _history_note(payload: dict[str, Any], *, feedback: bool = False) -> str:
+    history = project_model_payload(payload, proposed=payload.get("group_condition", "proposed") == "proposed", feedback=feedback)["interaction_history"]
+    if not history:
+        return ""
+    if history[-1].get("is_correct"):
+        return "\n- 以前の回答で確認できた点を、別の例にも結び付けて整理します。"
+    return "\n- 以前の回答で見直す必要があった点は、定義と処理の違いを対応させて確認します。"
 
 
 def _pad_tutoring_material(message: str) -> str:

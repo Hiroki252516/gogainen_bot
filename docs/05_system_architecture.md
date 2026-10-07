@@ -186,9 +186,15 @@ sequenceDiagram
 
 現在用語の不正解は先行生成済みの後続用語へ影響させず、現在用語の次ターンだけが既存の`previous_learning_misconception`と履歴で適応される。ギブアップ、実験終了、再テスト後の新しい学習周回では未使用の先行生成を破棄する。先行生成状態は参加者レスポンスや画面へ追加せず、`TutorTurn.diagnosis_json`、`AICallLog`、管理者ログで監査する。未使用の教材は回答履歴と学習負担の実績値へ算入しない。
 
-### #102 統制群の固定教材系列
+### #138 共通履歴と診断連動の共通出題
 
-controlの教材・問題選択は、`control-fixed-v1`として用語とsession内turn_indexから決める。`LearnerState`、pretest、誤概念、過去回答、履歴はcontrolの教材段階・variant・確認問題の選択に使わない。診断結果は評価のために保存するが、教材生成AIの実質入力には含めない。route、固定キー、実際の入力投影は`TutorTurn.diagnosis_json`とAIログのJSON監査へ保存し、参加者向けレスポンスの形と画面表示は変えない。
+両群で既存proposedの診断連動出題規則を使用し、unknownはenrichment、M1/M3はconceptual_changeを選ぶ。出題規則版はshared-diagnosis-route-v1であり、旧control-fixed-v1を新規処理で使わない。controlのLLMには分類や診断由来段階を渡さない。
+
+services/interaction_history.pyが同じ参加者・用語の採点済みAttempt/TutorTurnを全周回から統合する。ai/interaction_history.pyが共通allowlistとproposed専用allowlistを適用し、履歴内の診断・教授情報も除く。教材・正答要約・誤答解説の3タスクで同じ共通履歴を使い、proposedだけに明示的な誤概念対応を追加する。
+
+同一セッションの次教材では、固定採点した現在回答と時刻を履歴へ投影してAI呼出しを先行する。回答確定後の同期履歴と同じ入力になり、解説失敗時は公開しない。履歴からAI解説を除き、生成教材への過去問題/回答prefix追記をしない。
+
+履歴の版・件数・SHA-256、出題規則版、群別追加情報、実際の入力投影は既存JSONで監査する。DB列・CSV固定ヘッダ・参加者API形は変えない。NULL・仕様版1・未対応版は閲覧専用にし、新規版2だけを進行・集計する。
 
 ## app-server起動方式
 
