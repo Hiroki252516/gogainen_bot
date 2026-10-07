@@ -3,10 +3,10 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from app.models import Term, TutorSession, TutorTurn
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
+from app.core.experiment_spec import assert_current_experiment, can_resume
 from app.core.runtime_config import (
     ALLOWED_REASONING_EFFORTS,
     current_reasoning_effort,
@@ -63,19 +64,6 @@ _PUBLIC_PRACTICE_QUESTION_FIELDS = {
     "body",
     "question_type",
     "options",
-    "items",
-    "selection_mode",
-    "min_selections",
-    "max_selections",
-    "variant_key",
-    "learning_variant_index",
-}
-_PUBLIC_PRACTICE_ITEM_FIELDS = {
-    "component_term",
-    "material",
-    "body",
-    "question_type",
-    "options",
     "selection_mode",
     "min_selections",
     "max_selections",
@@ -110,9 +98,6 @@ def _public_practice_question(question: object) -> dict | None:
         return result
 
     result = public_item(question, _PUBLIC_PRACTICE_QUESTION_FIELDS)
-    items = question.get("items")
-    if isinstance(items, list):
-        result["items"] = [public_item(item, _PUBLIC_PRACTICE_ITEM_FIELDS) for item in items]
     return result
 
 
@@ -140,7 +125,32 @@ async def lifespan(_: FastAPI):
         prefetch_coordinator.shutdown()
 
 
-app = FastAPI(title="Learning Log AI Tutor", lifespan=lifespan)
+async def guard_current_mutation(request: Request, db: Session = Depends(get_db)) -> None:
+    """Reject historical writes before body validation, replay, or prefetch."""
+    if request.method != "POST":
+        return
+    path = request.url.path
+    if path.startswith("/api/admin/") or path in {"/api/participants", "/api/seed"}:
+        return
+    participant_id = request.path_params.get("participant_id")
+    if path in {"/api/attempts", "/api/tutor-sessions"}:
+        try:
+            body = await request.json()
+        except ValueError:
+            return
+        participant_id = body.get("participant_id") if isinstance(body, dict) else None
+    elif request.path_params.get("session_id"):
+        session = db.get(TutorSession, request.path_params["session_id"])
+        participant_id = session.participant_id if session else None
+    elif request.path_params.get("turn_id"):
+        turn = db.get(TutorTurn, request.path_params["turn_id"])
+        session = db.get(TutorSession, turn.tutor_session_id) if turn else None
+        participant_id = session.participant_id if session else None
+    if participant_id:
+        assert_current_experiment(get_participant(db, participant_id))
+
+
+app = FastAPI(title="Learning Log AI Tutor", lifespan=lifespan, dependencies=[Depends(guard_current_mutation)])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin, "http://127.0.0.1:3000"],
@@ -156,13 +166,11 @@ class ParticipantCreate(BaseModel):
 
 
 class AttemptPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     participant_id: str
     question_id: str
-    phase: str | None = None
-    selected_option_id: str | None = None
-    selected_option_ids: list[str] | None = None
-    free_text_answer: str | None = None
-    reason_text: str | None = None
+    phase: Literal["pretest", "retest", "final_test"] | None = None
+    selected_option_ids: list[str]
     response_time_sec: float | None = None
     question_shown_at: datetime | None = None
     answered_at: datetime | None = None
@@ -174,10 +182,8 @@ class TutorSessionCreate(BaseModel):
 
 
 class TutorTurnRespond(BaseModel):
-    learner_response: str = ""
-    selected_option_id: str | None = None
-    selected_option_ids: list[str] | None = None
-    selected_item_option_ids: dict[str, str] | None = None
+    model_config = ConfigDict(extra="forbid")
+    selected_option_ids: list[str]
     response_time_sec: float | None = None
     question_shown_at: datetime | None = None
     answered_at: datetime | None = None
@@ -263,16 +269,17 @@ async def api_create_participant(
 @app.get("/api/participants/{participant_id}/current-step")
 def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
     participant = get_participant(db, participant_id)
+    if not can_resume(participant):
+        return {"step": "legacy_read_only", "next_url": "/start", "can_resume": False}
     mapping = {
         "pretest": "/pretest",
         "learning_targets": "/learning-targets",
         "retest": "/retest",
         "final_test": "/final-test",
         "survey": "/survey",
-        "l0_check": "/l0-check",
         "finish": "/finish",
     }
-    return {"step": participant.current_step, "next_url": mapping.get(participant.current_step, "/start")}
+    return {"step": participant.current_step, "next_url": mapping.get(participant.current_step, "/start"), "can_resume": True}
 
 
 @app.get("/api/experiment/{participant_id}/pretest")
@@ -285,9 +292,6 @@ def get_retest(participant_id: str, db: Session = Depends(get_db)) -> dict:
     return {"phase": "retest", "questions": question_payloads(db, participant_id, "retest")}
 
 
-@app.get("/api/experiment/{participant_id}/l0-check")
-def get_l0(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return {"phase": "l0_check", "questions": question_payloads(db, participant_id, "l0_check")}
 
 
 @app.get("/api/experiment/{participant_id}/final-test")
@@ -353,6 +357,7 @@ async def api_give_up_learning(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
+    assert_current_experiment(get_participant(db, participant_id))
     await tutor_prefetch_registry.cancel_for_participant(participant_id)
     return await run_idempotent(
         db,
@@ -370,6 +375,7 @@ async def api_give_up_experiment(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
+    assert_current_experiment(get_participant(db, participant_id))
     await tutor_prefetch_registry.cancel_for_participant(participant_id)
     return await run_idempotent(
         db,
@@ -424,6 +430,9 @@ async def api_generate_tutor_turn(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
+    session = db.get(TutorSession, session_id)
+    if session is not None:
+        assert_current_experiment(get_participant(db, session.participant_id))
     # Wait before touching the request-scoped SQLAlchemy session. The worker
     # may be waiting on an external AI call for several seconds.
     await tutor_prefetch_registry.wait_for(session_id)
@@ -447,11 +456,7 @@ async def api_generate_tutor_turn(
             "max_turns": settings.max_turns_per_term,
             "learning_stage": stage_meta.get("learning_stage"),
             "learning_stage_label": stage_meta.get("learning_stage_label"),
-            "component_term": stage_meta.get("component_term"),
-            "component_index": stage_meta.get("component_index"),
-            "component_total": stage_meta.get("component_total"),
             "stage_completed": False,
-            "scaffolding_level": turn.scaffolding_level,
         }
 
     response = await run_idempotent(
@@ -492,6 +497,8 @@ async def api_respond_tutor_turn(
     turn = db.get(TutorTurn, turn_id)
     session = db.get(TutorSession, turn.tutor_session_id) if turn else None
     participant_id = session.participant_id if session else None
+    if participant_id is not None:
+        assert_current_experiment(get_participant(db, participant_id))
     prefetch_handle = (
         tutor_prefetch_registry.prepare(session.id, participant_id)
         if session is not None and participant_id is not None
@@ -537,20 +544,6 @@ async def api_score_retest(
     )
 
 
-@app.post("/api/participants/{participant_id}/score-l0-check")
-async def api_score_l0(
-    participant_id: str,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    db: Session = Depends(get_db),
-) -> dict:
-    return await run_idempotent(
-        db,
-        scope=f"score:{participant_id}:l0_check",
-        key=idempotency_key,
-        participant_id=participant_id,
-        request_data={"participant_id": participant_id, "phase": "l0_check"},
-        operation=lambda: score_phase(db, participant_id, "l0_check"),
-    )
 
 
 @app.post("/api/participants/{participant_id}/score-final-test")
@@ -592,6 +585,8 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "participant_id": row.id,
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,
+                "experiment_spec_version": row.experiment_spec_version,
+                "can_resume": can_resume(row),
                 "current_step": row.current_step,
                 "completed_at": row.completed_at.isoformat() if row.completed_at else None,
                 "completion_reason": row.completion_reason,

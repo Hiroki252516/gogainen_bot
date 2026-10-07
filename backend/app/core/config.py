@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     rag_base_dir: str = "./rag_agent_knowledge_base"
     max_learning_targets: int = 3
     max_turns_per_term: int = 3
-    random_seed: str = "20260525"
     export_dir: str = "./exports"
     frontend_origin: str = "http://localhost:3000"
 

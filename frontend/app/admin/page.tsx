@@ -11,6 +11,8 @@ type Participant = {
   display_code: string;
   group_condition: string;
   current_step: string;
+  can_resume: boolean;
+  experiment_spec_version: number | null;
   completed_at: string | null;
   completion_reason: string | null;
   give_up_learning_count: number;
@@ -19,7 +21,7 @@ type Participant = {
 type GroupCondition = "control" | "proposed";
 const REASONING_EFFORTS = ["low", "medium", "high"] as const;
 type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
-type CurrentStepResponse = { step: string; next_url: string };
+type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
   ai_backend: string;
   account_label?: string;
@@ -65,6 +67,7 @@ const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
 const MISCONCEPTION_TRANSITION_TYPES = Object.keys(MISCONCEPTION_TRANSITION_LABELS);
 const LOG_FIELD_LABELS: Record<string, string> = {
   display_code: "被験者",
+  legacy_read_only: "試用区分",
   source_type: "記録種別",
   test_round: "周回",
   term_slug: "用語",
@@ -86,7 +89,7 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   updated_at: "更新時刻",
   pretest_score: "テスト正答率",
   retest_score: "再テスト正答率",
-  l0_correct_rate: "到達正答率",
+  attainment_correct_rate: "到達正答率",
   same_misconception_recurrence_rate: "同種再発率",
   completed: "完了",
   completion_reason: "終了理由",
@@ -164,6 +167,10 @@ export default function AdminPage() {
     setResumingExperiment(true);
     try {
       const current = await api<CurrentStepResponse>(`/api/participants/${resumeParticipantId}/current-step`);
+      if (!current.can_resume) {
+        setFlowNavigationError("この試用記録は閲覧専用です。新しい実験を開始してください。");
+        return;
+      }
       const displayCode = activeParticipantId
         ? localStorage.getItem("display_code")
         : localStorage.getItem(ADMIN_RESUME_DISPLAY_CODE_KEY);
@@ -284,9 +291,10 @@ export default function AdminPage() {
   }
 
   const activeParticipants = participants.filter((participant) => participant.group_condition === activeGroup);
+  const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume).length;
   const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup);
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
-  const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup);
+  const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only);
 
   return (
     <AppShell step="管理画面">
@@ -365,7 +373,7 @@ export default function AdminPage() {
               <div className="notice">
                 <strong>{activeGroupSummary.group_condition}</strong>
                 <p>参加者: {activeGroupSummary.participant_count}</p>
-                <p>確認テスト正答率: {formatRate(activeGroupSummary.l0_correct_rate)}</p>
+                <p>確認テスト正答率: {formatRate(activeGroupSummary.attainment_correct_rate)}</p>
                 <p>事前比改善: {formatPoints(activeGroupSummary.avg_score_delta_from_pretest_pt)}</p>
               </div>
             ) : null}
@@ -401,13 +409,17 @@ export default function AdminPage() {
           <p className="muted">{activeGroup}群の進捗、回答履歴、評価サマリーを確認します。</p>
           <div className="grid">
             <div className="notice">
-              <strong>被験者数</strong>
-              <p>{activeParticipants.length}</p>
+              <strong>現行参加者数</strong>
+              <p>{currentParticipantCount}</p>
+            </div>
+            <div className="notice">
+              <strong>旧試用数（閲覧専用）</strong>
+              <p>{activeParticipants.length - currentParticipantCount}</p>
             </div>
           </div>
           <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
-          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
-          <LogList title="評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+          <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
         <section className="panel">
           <h2>{activeGroup}群の被験者一覧</h2>
@@ -428,7 +440,7 @@ export default function AdminPage() {
                 <tr key={p.participant_id}>
                   <td>{p.display_code}</td>
                   <td>{p.group_condition}</td>
-                  <td>{p.current_step}</td>
+                  <td>{p.can_resume ? p.current_step : `旧試用（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
                   <td>
                     <div>学習: {p.give_up_learning_count ?? 0}回</div>
@@ -442,10 +454,10 @@ export default function AdminPage() {
                   <td>
                     <button
                       className="danger-button"
-                      disabled={deletingParticipantId === p.participant_id}
+                      disabled={deletingParticipantId === p.participant_id || !p.can_resume}
                       onClick={() => deleteParticipant(p)}
                     >
-                      {deletingParticipantId === p.participant_id ? "削除中..." : "参加者を削除"}
+                      {!p.can_resume ? "閲覧専用" : deletingParticipantId === p.participant_id ? "削除中..." : "参加者を削除"}
                     </button>
                   </td>
                 </tr>
@@ -473,7 +485,8 @@ export default function AdminPage() {
                 <p>
                   学習ギブアップ: {participantLog.participant.give_up_learning_count ?? 0}回 / 実験ギブアップ: {participantLog.participant.give_up_experiment_count ?? 0}回
                 </p>
-                <button className="secondary" disabled={recalculating} onClick={() => recalculateParticipantSummary(participantLog.participant.participant_id)}>
+                {!participantLog.participant.can_resume ? <p>旧試用・閲覧専用（現行の群集計から除外）</p> : null}
+                <button className="secondary" disabled={recalculating || !participantLog.participant.can_resume} onClick={() => recalculateParticipantSummary(participantLog.participant.participant_id)}>
                   {recalculating ? "評価サマリー再計算中..." : "評価サマリーを再計算"}
                 </button>
               </div>
@@ -488,6 +501,17 @@ export default function AdminPage() {
                 </section>
               )}
               <ParticipantFlow logs={participantLog} />
+              {!participantLog.participant.can_resume ? (
+                <details className="raw-json">
+                  <summary>旧仕様の保存フィールド（閲覧専用）</summary>
+                  <pre>{JSON.stringify({
+                    attempts: participantLog.attempts.map((row: any) => ({ id: row.attempt_id, legacy_fields: row.legacy_fields })),
+                    learner_states: participantLog.learner_states,
+                    tutor_sessions: participantLog.tutor_sessions,
+                    evaluation: participantLog.latest_evaluation_summary,
+                  }, null, 2)}</pre>
+                </details>
+              ) : null}
               <LogList title="アンケート回答" rows={participantLog.surveys} fields={["phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]} />
               <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
@@ -568,10 +592,10 @@ function EvaluationSummary({ summary }: { summary: any }) {
   const misconceptionTerms = summary.misconception_timeline?.terms || [];
   const finalTestSkipped = summary.score_timeline?.final_test_skipped_after_retest_mastery === true;
   const firstRetestRound = rounds.find((round: any) => String(round.round || "").startsWith("retest_"));
-  const finalRound = rounds.find((round: any) => round.phase === "final_test") || rounds.find((round: any) => round.phase === "l0_check");
-  const hasFinalOutcome = summary.l0_correct_rate !== null && summary.l0_correct_rate !== undefined;
-  const finalDelta = finalTestSkipped && summary.pretest_score !== null && summary.pretest_score !== undefined && summary.l0_correct_rate !== null && summary.l0_correct_rate !== undefined
-    ? (summary.l0_correct_rate - summary.pretest_score) * 100
+  const finalRound = rounds.find((round: any) => round.phase === "final_test");
+  const hasFinalOutcome = summary.attainment_correct_rate !== null && summary.attainment_correct_rate !== undefined;
+  const finalDelta = finalTestSkipped && summary.pretest_score !== null && summary.pretest_score !== undefined && summary.attainment_correct_rate !== null && summary.attainment_correct_rate !== undefined
+    ? (summary.attainment_correct_rate - summary.pretest_score) * 100
     : finalRound?.score_delta_from_pretest_pt;
   return (
     <section className="insight-panel stack" aria-labelledby="evaluation-insight-title">
@@ -587,7 +611,7 @@ function EvaluationSummary({ summary }: { summary: any }) {
       <div className="flow-summary">
         <Metric label="テスト" value={formatRate(summary.pretest_score)} />
         <Metric label={roundLabel(firstRetestRound?.round || "retest_1")} value={formatRate(firstRetestRound?.score_rate ?? summary.retest_score)} />
-        {hasFinalOutcome ? <Metric label={finalTestSkipped ? "最終到達（再テスト満点）" : "最終到達"} value={formatRate(summary.l0_correct_rate)} /> : null}
+        {hasFinalOutcome ? <Metric label={finalTestSkipped ? "最終到達（再テスト満点）" : "最終到達"} value={formatRate(summary.attainment_correct_rate)} /> : null}
         <Metric label="再テスト回数" value={`${burden.retest_count ?? 0}回`} />
       </div>
       {finalTestSkipped ? <p className="muted">再テスト満点のため、追加の確認を省略しています。</p> : null}
@@ -714,6 +738,7 @@ function FlowCard({ row }: { row: any }) {
       <div className="flow-card-head">
         <div>
           <span className="phase-pill">{phaseLabel(row.phase, row.test_round)}</span>
+          {row.legacy_read_only ? <span className="muted">旧試用（閲覧専用） </span> : null}
           <strong>{row.term_label || row.term_slug}</strong>
           {row.component_term ? <span className="muted"> / {row.component_term}</span> : null}
         </div>
@@ -834,6 +859,7 @@ function SessionLog({ sessions }: { sessions: any[] }) {
 function formatCell(field: string, value: any) {
   if (value === null || value === undefined) return "-";
   if (typeof value === "boolean") {
+    if (field === "legacy_read_only") return value ? "旧試用（閲覧専用）" : "現行";
     if (field === "is_correct") return value ? "正解" : "不正解";
     if (field === "completed") return value ? "完了" : "未完了";
     return value ? "あり" : "なし";

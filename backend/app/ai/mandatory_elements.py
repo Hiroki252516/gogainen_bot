@@ -71,7 +71,7 @@ def expected_mandatory_type(payload: dict[str, Any]) -> str | None:
         return None
 
     # An explicitly supplied active type is authoritative, including an
-    # unsupported/non-MVP value.  Falling back from M2/M4/None to an older
+    # unsupported value. Falling back from an explicit type to an older
     # learner-state diagnosis would apply the wrong mandatory schema.
     if "active_misconception_type" in payload:
         active_type = payload.get("active_misconception_type")

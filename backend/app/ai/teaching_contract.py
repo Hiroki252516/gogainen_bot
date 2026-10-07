@@ -9,7 +9,7 @@ MATERIAL_MIN_CHARACTERS = 600
 MATERIAL_MAX_CHARACTERS = 800
 
 
-PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v2-control-isolation"
+PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v3-current-spec"
 TEACHING_CONTRACT_TYPES = ("M1", "M3", "unknown")
 REFUTATION_MODES = ("explicit", "implicit", "category_comparison", "none")
 

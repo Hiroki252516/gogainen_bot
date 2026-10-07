@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
-import random
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -17,7 +16,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.ai.codex_app_server_backend import CodexAppServerError
-from app.ai.backend import lower_level, normalize_level, raise_level, strategy_for
+from app.ai.backend import strategy_for
 from app.ai.factory import get_ai_backend
 from app.ai.mandatory_elements import (
     MANDATORY_MISCONCEPTION_TYPES,
@@ -36,13 +35,13 @@ from app.ai.teaching_contract import (
     validate_tutoring_material_length,
 )
 from app.core.config import get_settings
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, assert_current_experiment, can_resume
 from app.core.runtime_config import current_reasoning_effort
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import (
     ASSESSMENT_VARIANT_COUNTS,
     CURRENT_LEARNING_CONTENT_VERSION,
-    LEGACY_LEARNING_CONTENT_VERSION,
     content_term,
     learning_question_spec,
     load_content,
@@ -69,10 +68,10 @@ from app.models import (
     now,
 )
 from app.services.idempotency import idempotency_error, run_idempotent
+from app.services.legacy_logs import legacy_fields, legacy_selected_option_body, legacy_turn_answer_rows
 from app.services.tutor_prefetch import PrefetchHandle
 
 
-PUBLIC_LEVEL = {"L3": "豊富化", "L2": "概念変化"}
 PRETEST_TERM_ORDER = {
     term["slug"]: index for index, term in enumerate(load_content()["terms"])
 }
@@ -89,17 +88,14 @@ CONTROL_FIXED_SEQUENCE_VERSION = "control-fixed-v1"
 CONTROL_FIXED_LEARNING_STAGE = "conceptual_change"
 CONTROL_TUTORING_INPUT_KEYS = (
     "term",
-    "component_term",
-    "component_index",
-    "component_total",
     "component_terms",
     "rag_context",
 )
 TEST_PHASES = {"pretest", "retest", "final_test"}
-ATTEMPT_PHASES = TEST_PHASES | {"l0_check"}
+ATTEMPT_PHASES = TEST_PHASES
 FINAL_TEST_NOT_AVAILABLE_DETAIL = "この参加者は最終テスト対象ではありません。"
 RETEST_ALLOWED_STEPS = {"learning_targets", "retest"}
-LEARNING_ALLOWED_STEPS = {"learning_targets", "final_test"}
+LEARNING_ALLOWED_STEPS = {"learning_targets"}
 RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではありません。"
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
@@ -116,8 +112,6 @@ class TutorTurnGenerationPlan:
     participant_id: str
     group_condition: str
     turn_index: int
-    scaffolding_level: str
-    previous_teaching_strategy: str | None
     tutor_message_prefix: str
     learner_prompt: str
     practice_question: dict[str, Any]
@@ -147,29 +141,12 @@ def _component_terms(term_slug: str, term_label: str) -> list[str]:
 def _learning_question_spec(
     term_slug: str,
     learning_stage: str,
-    component_term: str | None,
     variant_index: int = 1,
-    content_version: int = LEGACY_LEARNING_CONTENT_VERSION,
 ) -> dict[str, Any]:
     try:
-        return learning_question_spec(term_slug, learning_stage, variant_index, content_version)
+        return learning_question_spec(term_slug, learning_stage, variant_index)
     except (KeyError, StopIteration, ValueError) as exc:
         raise HTTPException(status_code=400, detail="fixed learning question not found") from exc
-
-
-def _participant_learning_content_version(participant: Participant) -> int:
-    return participant.learning_content_version or LEGACY_LEARNING_CONTENT_VERSION
-
-
-def _learning_question_item(term_slug: str, component_term: str) -> dict[str, Any]:
-    spec = _learning_question_spec(term_slug, "conceptual_change", component_term)
-    return {
-        "component_term": component_term,
-        "material": spec["material"],
-        "body": spec["body"],
-        "question_type": spec["question_type"],
-        "options": _public_learning_options(spec),
-    }
 
 
 def _public_learning_options(spec: dict[str, Any]) -> list[dict[str, str]]:
@@ -179,9 +156,7 @@ def _public_learning_options(spec: dict[str, Any]) -> list[dict[str, str]]:
 def _selection_constraints(question_type: str | None, option_count: int) -> dict[str, Any]:
     if question_type and "multi_select" in question_type:
         return {"selection_mode": "multiple", "min_selections": 3, "max_selections": 3}
-    if option_count:
-        return {"selection_mode": "single", "min_selections": 1, "max_selections": 1}
-    return {"selection_mode": "free_text", "min_selections": 0, "max_selections": 0}
+    raise HTTPException(status_code=400, detail="unsupported question type")
 
 
 def _learning_option_meta(spec: dict[str, Any], option_id: str | None) -> dict[str, Any] | None:
@@ -190,24 +165,14 @@ def _learning_option_meta(spec: dict[str, Any], option_id: str | None) -> dict[s
     return next((option for option in spec["options"] if option["option_id"] == option_id), None)
 
 
-def _selected_fixed_option(spec: dict[str, Any], selected_option_id: str | None, response: str) -> dict[str, Any] | None:
-    option = _learning_option_meta(spec, selected_option_id)
-    if option:
-        return option
-    cleaned = (response or "").strip()
-    if not cleaned:
-        return None
-    return next((item for item in spec["options"] if item["body"] == cleaned), None)
-
-
-def _selected_learning_options(spec: dict[str, Any], selected_option_ids: list[str] | None, selected_option_id: str | None, response: str) -> list[dict[str, Any]]:
-    ids = selected_option_ids or ([selected_option_id] if selected_option_id else [])
+def _selected_learning_options(spec: dict[str, Any], selected_option_ids: list[str] | None) -> list[dict[str, Any]]:
+    ids = selected_option_ids or []
+    if len(ids) != len(set(ids)):
+        raise HTTPException(status_code=400, detail="duplicate selected options")
     options = [_learning_option_meta(spec, option_id) for option_id in ids]
-    selected = [option for option in options if option]
-    if selected:
-        return selected
-    option = _selected_fixed_option(spec, selected_option_id, response)
-    return [option] if option else []
+    if any(option is None for option in options):
+        raise HTTPException(status_code=400, detail="invalid selected options")
+    return options
 
 
 def _selected_labels(options: list[dict[str, Any]]) -> str:
@@ -237,22 +202,13 @@ def _option_is_correct(option: Any) -> bool:
 
 def _classify_selected_options(
     options: list[Any],
-    correct_labels: set[str] | None = None,
-    *,
-    use_option_correctness: bool = False,
 ) -> tuple[bool, str | None, str]:
-    selected_labels = {_option_label(option) for option in options}
-    correct_labels = correct_labels or {"A", "B", "C"}
     misconceptions = [_option_misconception(option) for option in options]
     if "M3" in misconceptions:
         return False, "M3", "misconception"
     if "M1" in misconceptions:
         return False, "M1", "misconception"
-    options_are_correct = (
-        len(options) == 3 and all(_option_is_correct(option) for option in options)
-        if use_option_correctness
-        else selected_labels == correct_labels
-    )
+    options_are_correct = len(options) == 3 and all(_option_is_correct(option) for option in options)
     if options_are_correct:
         return True, None, "stable_correct"
     return False, "unknown", "unknown"
@@ -263,53 +219,18 @@ def _fixed_feedback_for_options(options: list[dict[str, Any]], spec: dict[str, A
         is_correct, mtype, status = False, "unknown", "unknown"
         selected_label_text = "未選択"
     else:
-        is_correct, mtype, status = _classify_selected_options(options, use_option_correctness=True)
+        is_correct, mtype, status = _classify_selected_options(options)
         selected_label_text = _selected_labels(options)
     return {
         "feedback": "選択内容は十分です。次の確認へ進みます。" if is_correct else "選択内容はまだ不十分です。教材を確認して、もう一度選び直してください。",
         "is_sufficient": is_correct,
         "next_action": "move_next" if is_correct else "continue",
-        "next_scaffolding_level": "L2" if is_correct else "L3",
         "learning_misconception_type": mtype,
         "learning_misconception_confidence": 0.95,
         "learning_misconception_reason": "固定3選択式問題で正解選択肢だけを選びました。" if is_correct else f"固定3選択式問題で{mtype}相当として判定しました。",
         "state_update_reason": "fixed_multi_select_correct" if is_correct else f"fixed_multi_select_{status}",
         "selected_option_body": selected_label_text,
     }
-
-
-def _fixed_feedback(option: dict[str, Any] | None, spec: dict[str, Any]) -> dict[str, Any]:
-    return _fixed_feedback_for_options([option] if option else [], spec)
-
-
-def _fixed_item_result(component_term: str, selected_option_id: str | None, response: str, spec: dict[str, Any]) -> dict[str, Any]:
-    option = _selected_fixed_option(spec, selected_option_id, response)
-    correct_option = next((item for item in spec["options"] if item["is_correct"]), None)
-    is_correct = bool(option and option["is_correct"])
-    misconception_type = None if is_correct else ((option or {}).get("misconception_type") or "unknown")
-    return {
-        "component_term": component_term,
-        "question_body": spec["body"],
-        "selected_option_id": option.get("option_id") if option else selected_option_id,
-        "selected_option_body": option.get("body") if option else response,
-        "correct_option_id": correct_option.get("option_id") if correct_option else None,
-        "correct_answer": correct_option.get("body") if correct_option else spec.get("expected_answer"),
-        "is_correct": is_correct,
-        "is_sufficient": is_correct,
-        "learning_misconception_type": misconception_type,
-        "feedback": "正解です。要点を押さえられています。" if is_correct else "不正解です。正解文と教材を確認して、次の確認で選び直してください。",
-    }
-
-
-def _feedback_text_from_item_results(item_results: list[dict[str, Any]]) -> str:
-    lines = ["回答結果"]
-    for item in item_results:
-        status = "正解" if item["is_correct"] else "不正解"
-        lines.append(f"【{item['component_term']}】{status}")
-        lines.append(f"あなたの回答: {item.get('selected_option_body') or '未選択'}")
-        lines.append(f"正解: {item.get('correct_answer') or ''}")
-        lines.append(f"フィードバック: {item['feedback']}")
-    return "\n".join(lines)
 
 
 def _previous_turn_prefix(previous_turn: TutorTurn | None) -> str:
@@ -330,16 +251,13 @@ def _practice_question_text(practice_question: dict[str, Any] | None) -> str:
         return ""
     if practice_question.get("body"):
         return practice_question["body"]
-    items = practice_question.get("items") or []
-    return " / ".join(item.get("body", "") for item in items if item.get("body"))
+    return ""
 
 
-def _misconception_scaffolding_guidance(misconception_type: str | None) -> str:
+def _misconception_teaching_guidance(misconception_type: str | None) -> str:
     return {
         "M1": "単一の誤った命題を明示し、誤った考え、正しい考え、反例、誤りの理由をこの順で教材本文へ含める。",
-        "M2": "複数の信念がつながった説明モデルを確認し、中核前提を修正してモデル全体を再構成させる。",
         "M3": "対象概念の誤カテゴリー、正カテゴリー、境界基準、近いカテゴリーとの比較をこの順で教材本文へ含める。",
-        "M4": "不足しているカテゴリーや関係のスキーマを具体例から構築し、新しい知識構造へ接続させる。",
         "unknown": "誤概念を推測せず、基礎定義、主要構成要素、役割、最小限の判断基準、正例、非例を必ず教材本文へ含める。",
     }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
 
@@ -360,121 +278,47 @@ async def _generate_validated_tutoring_turn(
     *,
     forbidden_strings: list[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Generate proposed-group material and enforce the MVP operation contract."""
     group = payload.get("group_condition", "proposed")
-    expected_type = (
-        expected_mandatory_type({**payload, "group_condition": group})
-        if group == "proposed"
-        else None
-    )
-    retry_limit = max(MANDATORY_ELEMENT_MAX_ATTEMPTS, MATERIAL_LENGTH_MAX_ATTEMPTS)
-    if expected_type not in MANDATORY_MISCONCEPTION_TYPES:
-        request_payload = {**payload, "generation_attempt": 1}
-        validation: dict[str, Any] = {}
-        for attempt in range(1, retry_limit + 1):
-            result = await _ai_call(db, "generate_tutoring_turn", request_payload)
-            contract_validation = validate_teaching_contract(result, expected_type, payload)
-            safety_validation = validate_tutoring_material_safety(result, forbidden_strings)
-            length_validation = validate_tutoring_material_length(result)
-            retry_missing = [
-                *contract_validation.get("missing", []),
-                *safety_validation.get("missing", []),
-            ]
-            missing = [
-                *retry_missing,
-                *length_validation.get("missing", []),
-            ]
-            validation = {
-                "required": False,
-                "valid": contract_validation["valid"] and safety_validation["valid"] and length_validation["valid"],
-                "expected_type": expected_type,
-                "actual_type": None,
-                "required_fields": [],
-                "missing": missing,
-                "teaching_contract": contract_validation,
-                "material_safety": safety_validation,
-                "material_length": length_validation,
-                "attempt": attempt,
-            }
-            _attach_generation_validation(db, request_payload, validation)
-            if validation["valid"]:
-                return result, {**validation, "attempts": attempt}
-            if attempt < retry_limit:
-                request_payload = {
-                    **payload,
-                    "generation_attempt": attempt + 1,
-                }
-                if not length_validation["valid"]:
-                    request_payload["material_length_retry"] = _material_length_retry(
-                        length_validation, attempt + 1
-                    )
-                if retry_missing:
-                    request_payload["mandatory_element_retry"] = {
-                        "attempt": attempt + 1,
-                        "missing": retry_missing,
-                    }
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error_code": "teaching_contract_invalid",
-                "message": "教材の安全な生成契約を満たす教材を生成できませんでした。",
-                "missing": validation.get("missing", []),
-            },
-        )
-
+    expected_type = expected_mandatory_type({**payload, "group_condition": group}) if group == "proposed" else None
+    selected_strategy = strategy_for(expected_type, None, group)
     term_label = (payload.get("term") or {}).get("label")
+    retry_limit = max(MANDATORY_ELEMENT_MAX_ATTEMPTS, MATERIAL_LENGTH_MAX_ATTEMPTS)
     request_payload = {**payload, "generation_attempt": 1}
     validation: dict[str, Any] = {}
     for attempt in range(1, retry_limit + 1):
         result = await _ai_call(db, "generate_tutoring_turn", request_payload)
-        mandatory_validation = validate_mandatory_elements(result, expected_type, term_label)
-        contract_validation = validate_teaching_contract(result, expected_type, payload, term_label)
-        safety_validation = validate_tutoring_material_safety(result, forbidden_strings)
-        length_validation = validate_tutoring_material_length(result)
-        retry_missing = [
-            *mandatory_validation.get("missing", []),
-            *contract_validation.get("missing", []),
-            *safety_validation.get("missing", []),
-        ]
-        missing = [
-            *retry_missing,
-            *length_validation.get("missing", []),
-        ]
+        mandatory = validate_mandatory_elements(result, expected_type, term_label)
+        contract = validate_teaching_contract(result, expected_type, payload, term_label)
+        safety = validate_tutoring_material_safety(result, forbidden_strings)
+        length = validate_tutoring_material_length(result)
+        strategy_valid = result.get("teaching_strategy") == selected_strategy
+        retry_missing = [*mandatory.get("missing", []), *contract.get("missing", []), *safety.get("missing", [])]
+        if not strategy_valid:
+            retry_missing.append("teaching_strategy.mismatch")
         validation = {
-            **mandatory_validation,
-            "valid": mandatory_validation["valid"] and contract_validation["valid"] and safety_validation["valid"] and length_validation["valid"],
-            "missing": missing,
-            "teaching_contract": contract_validation,
-            "material_safety": safety_validation,
-            "material_length": length_validation,
+            **mandatory,
+            "valid": mandatory["valid"] and contract["valid"] and safety["valid"] and length["valid"] and strategy_valid,
+            "missing": [*retry_missing, *length.get("missing", [])],
+            "teaching_contract": contract,
+            "material_safety": safety,
+            "material_length": length,
+            "teaching_strategy": {"expected": selected_strategy, "actual": result.get("teaching_strategy"), "valid": strategy_valid},
             "attempt": attempt,
         }
         _attach_generation_validation(db, request_payload, validation)
         if validation["valid"]:
             return result, {**validation, "attempts": attempt}
         if attempt < retry_limit:
-            request_payload = {
-                **payload,
-                "generation_attempt": attempt + 1,
-            }
-            if not length_validation["valid"]:
-                request_payload["material_length_retry"] = _material_length_retry(
-                    length_validation, attempt + 1
-                )
+            request_payload = {**payload, "generation_attempt": attempt + 1}
+            if not length["valid"]:
+                request_payload["material_length_retry"] = _material_length_retry(length, attempt + 1)
             if retry_missing:
-                request_payload["mandatory_element_retry"] = {
-                    "attempt": attempt + 1,
-                    "missing": retry_missing,
-                }
-
-    raise HTTPException(
-        status_code=503,
-        detail={
-            "error_code": "teaching_contract_invalid",
-            "message": "教材の誤概念対応契約を満たす教材を生成できませんでした。",
-            "missing": validation.get("missing", []),
-        },
-    )
+                request_payload["mandatory_element_retry"] = {"attempt": attempt + 1, "missing": retry_missing}
+    raise HTTPException(status_code=503, detail={
+        "error_code": "teaching_contract_invalid",
+        "message": "教材の生成契約を満たす教材を生成できませんでした。",
+        "missing": validation.get("missing", []),
+    })
 
 
 def _attach_generation_validation(
@@ -536,11 +380,9 @@ def _learning_stage_for_misconception(misconception_type: str | None, status: st
 
 
 def _learning_stage_label_for_state(state: LearnerState) -> str:
-    """Expose a learner-safe stage using diagnosis before the fallback level."""
     if state.current_status in {"misconception", "unknown"}:
-        stage = _learning_stage_for_misconception(state.primary_misconception, state.current_status)
-        return LEARNING_STAGE_LABELS[stage]
-    return PUBLIC_LEVEL.get(normalize_level(state.scaffolding_level), "概念理解を確認")
+        return LEARNING_STAGE_LABELS[_learning_stage_for_misconception(state.primary_misconception, state.current_status)]
+    return "概念理解を確認"
 
 
 def _learning_position(db: Session, session: TutorSession, term: Term, participant: Participant) -> dict[str, Any]:
@@ -563,9 +405,6 @@ def _learning_position(db: Session, session: TutorSession, term: Term, participa
     return {
         "learning_stage": stage,
         "learning_stage_label": LEARNING_STAGE_LABELS[stage],
-        "component_term": None,
-        "component_index": 0,
-        "component_total": 1,
         "component_terms": _component_terms(term.slug, term.label),
     }
 
@@ -579,9 +418,6 @@ def _control_fixed_position(term: Term, turn_index: int, variant_index: int) -> 
     return {
         "learning_stage": CONTROL_FIXED_LEARNING_STAGE,
         "learning_stage_label": LEARNING_STAGE_LABELS[CONTROL_FIXED_LEARNING_STAGE],
-        "component_term": None,
-        "component_index": 0,
-        "component_total": 1,
         "component_terms": _component_terms(term.slug, term.label),
         "instruction_route": "control_fixed",
         "fixed_sequence_key": _control_fixed_sequence_key(term.slug, turn_index, variant_index),
@@ -614,67 +450,34 @@ def _merge_stage_meta(practice_question: dict[str, Any], position: dict[str, Any
     practice_question["stage_meta"] = {
         "learning_stage": position["learning_stage"],
         "learning_stage_label": position["learning_stage_label"],
-        "component_term": position["component_term"],
-        "component_index": position["component_index"],
-        "component_total": position["component_total"],
         "component_terms": position.get("component_terms") or [],
     }
     return practice_question
 
 
 def session_misconception_history(db: Session, session_id: str) -> list[dict[str, Any]]:
-    turns = (
-        db.query(TutorTurn)
-        .filter_by(tutor_session_id=session_id)
-        .order_by(TutorTurn.turn_index)
-        .all()
-    )
-    history: list[dict[str, Any]] = []
+    session = db.get(TutorSession, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="tutor session not found")
+    assert_current_experiment(get_participant(db, session.participant_id))
+    turns = db.query(TutorTurn).filter_by(tutor_session_id=session_id).order_by(TutorTurn.turn_index).all()
+    history = []
     for turn in turns:
         grading = turn.grading_json or {}
-        if not grading or "learning_misconception_type" not in grading:
+        if "learning_misconception_type" not in grading:
             continue
-        meta = _practice_meta(turn)
-        stage = grading.get("learning_stage") or meta.get("learning_stage") or "conceptual_change"
-        item_results = grading.get("item_results") or []
-        if item_results:
-            for index, item in enumerate(item_results):
-                history.append(
-                    {
-                        "turn_id": turn.id,
-                        "turn_index": turn.turn_index,
-                        "learning_stage": stage,
-                        "label": item.get("component_term") or f"構成用語{index + 1}",
-                        "component_term": item.get("component_term"),
-                        "component_index": index,
-                        "misconception_type": item.get("learning_misconception_type"),
-                        "confidence": grading.get("learning_misconception_confidence"),
-                        "reason": item.get("feedback") or grading.get("learning_misconception_reason"),
-                        "is_sufficient": item.get("is_sufficient"),
-                    }
-                )
-            continue
-        label = grading.get("component_term") or meta.get("component_term") or LEARNING_STAGE_LABELS.get(stage, "概念変化")
-        history.append(
-            {
-                "turn_id": turn.id,
-                "turn_index": turn.turn_index,
-                "learning_stage": stage,
-                "label": label,
-                "component_term": grading.get("component_term") or meta.get("component_term"),
-                "component_index": grading.get("component_index", meta.get("component_index")),
-                "misconception_type": grading.get("learning_misconception_type"),
-                "confidence": grading.get("learning_misconception_confidence"),
-                "reason": grading.get("learning_misconception_reason"),
-                "is_sufficient": grading.get("is_sufficient"),
-            }
-        )
+        stage = grading.get("learning_stage") or "conceptual_change"
+        history.append({
+            "turn_id": turn.id,
+            "turn_index": turn.turn_index,
+            "learning_stage": stage,
+            "label": LEARNING_STAGE_LABELS.get(stage, "概念変化"),
+            "misconception_type": grading.get("learning_misconception_type"),
+            "confidence": grading.get("learning_misconception_confidence"),
+            "reason": grading.get("learning_misconception_reason"),
+            "is_sufficient": grading.get("is_sufficient"),
+        })
     return history
-
-
-def latest_learning_misconception(db: Session, session_id: str) -> dict[str, Any] | None:
-    history = session_misconception_history(db, session_id)
-    return history[-1] if history else None
 
 
 def _rag_query(*parts: str | None) -> str:
@@ -756,6 +559,7 @@ def participant_give_up_counts(db: Session, participant_ids: list[str]) -> dict[
 
 
 def _assert_participant_active(participant: Participant) -> None:
+    assert_current_experiment(participant)
     if participant.current_step == "finish" or participant.completed_at is not None:
         raise HTTPException(status_code=409, detail=EXPERIMENT_FINISHED_DETAIL)
 
@@ -789,8 +593,6 @@ def _assert_phase_available(participant: Participant, phase: str) -> None:
     elif phase == "final_test":
         if participant.current_step != "final_test":
             raise HTTPException(status_code=409, detail=FINAL_TEST_NOT_AVAILABLE_DETAIL)
-    elif phase == "l0_check" and participant.current_step not in {"l0_check", "final_test"}:
-        raise HTTPException(status_code=409, detail="この参加者は確認テスト対象ではありません。")
 
 
 def _close_open_tutor_sessions(db: Session, participant_id: str) -> int:
@@ -836,6 +638,7 @@ def give_up_learning(db: Session, participant_id: str) -> dict[str, Any]:
 def give_up_experiment(db: Session, participant_id: str) -> dict[str, Any]:
     """End the participant's experiment and route test users to the survey."""
     participant = get_participant(db, participant_id, for_update=True)
+    assert_current_experiment(participant)
     before_step = participant.current_step
     before_completed_at = participant.completed_at.isoformat() if participant.completed_at else None
     already_finished = participant.current_step == "finish" and participant.completed_at is not None
@@ -917,6 +720,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         consent_checked=consent_checked,
         current_step="pretest",
         learning_content_version=CURRENT_LEARNING_CONTENT_VERSION,
+        experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
         started_at=now(),
     )
     db.add(participant)
@@ -928,6 +732,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
 def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Save the temporary post-experiment survey and complete the participant flow."""
     participant = get_participant(db, participant_id, for_update=True)
+    assert_current_experiment(participant)
     discard_unconsumed_prefetches(db, participant.id, reason="experiment_finished")
     existing = (
         db.query(ParticipantSurvey)
@@ -995,6 +800,7 @@ def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> 
 
 def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
     participant = get_participant(db, participant_id)
+    assert_current_experiment(participant)
     session_ids = [session.id for session in db.query(TutorSession).filter_by(participant_id=participant.id).all()]
     deleted_counts: dict[str, int] = {}
 
@@ -1029,6 +835,8 @@ def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
             entity_id=participant.id,
             before_json={
                 "display_code": participant.display_code,
+            "experiment_spec_version": participant.experiment_spec_version,
+            "can_resume": can_resume(participant),
                 "group_condition": participant.group_condition,
                 "current_step": participant.current_step,
                 "deleted_counts": deleted_counts,
@@ -1044,7 +852,6 @@ def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
         raise
 
     return {"participant_id": participant.id, "deleted": True, "deleted_counts": deleted_counts}
-
 
 
 def _source_question_phase(phase: str) -> str:
@@ -1109,31 +916,13 @@ def _question_for_phase_variant(
     elif phase == "final_test":
         expected_key = "final_test_v1"
     else:
-        expected_key = "l0_check_v1"
+        raise HTTPException(status_code=400, detail="unsupported attempt phase")
     return next((question for question in candidates if question.variant_key == expected_key), candidates[0])
 
 
 def _displayed_options(db: Session, participant: Participant, question: Question) -> list[dict[str, str]]:
-    options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id).order_by(QuestionOption.default_order).all()
-    if not options:
-        return []
-    if "multi_select" in question.question_type:
-        return [{"option_id": option.id, "label": option.option_label, "body": option.body} for option in options]
-    display = db.query(QuestionDisplayOrder).filter_by(participant_id=participant.id, question_id=question.id).one_or_none()
-    if not display:
-        seed = f"{get_settings().random_seed}:{participant.id}:{question.id}"
-        rng = random.Random(seed)
-        option_ids = [option.id for option in options]
-        rng.shuffle(option_ids)
-        display = QuestionDisplayOrder(participant_id=participant.id, question_id=question.id, option_order=option_ids, random_seed=seed)
-        db.add(display)
-        _commit(db)
-    option_by_id = {option.id: option for option in options}
-    public_options = []
-    for index, option_id in enumerate(display.option_order):
-        option = option_by_id[option_id]
-        public_options.append({"option_id": option.id, "label": chr(65 + index), "body": option.body})
-    return public_options
+    options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id, QuestionOption.option_label.in_(list("ABCDEFGHIJ"))).order_by(QuestionOption.default_order).all()
+    return [{"option_id": option.id, "label": option.option_label, "body": option.body} for option in options]
 
 
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
@@ -1177,8 +966,6 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
             for option_id in (submitted_attempt.selected_option_ids or [])
             if option_id
         ] if submitted_attempt else []
-        if submitted_attempt and not submitted_option_ids and submitted_attempt.selected_option_id:
-            submitted_option_ids = [str(submitted_attempt.selected_option_id)]
         out.append(
             {
                 "question_id": question.id,
@@ -1192,15 +979,11 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "answer_status": "submitted" if submitted_attempt else "unanswered",
                 "submitted_answer": (
                     {
-                        "selected_option_id": submitted_attempt.selected_option_id,
                         "selected_option_ids": submitted_option_ids,
-                        "free_text_answer": submitted_attempt.free_text_answer,
-                        "reason_text": submitted_attempt.reason_text,
                     }
                     if submitted_attempt
                     else None
                 ),
-                "requires_reason": phase not in {"pretest", "retest", "final_test"},
                 **_selection_constraints(question.question_type, len(public_options)),
             }
         )
@@ -1221,21 +1004,15 @@ def _naive_datetime(value: datetime | None) -> datetime | None:
 
 def _selected_ids_from_payload(payload: dict[str, Any]) -> list[str]:
     selected_option_ids = payload.get("selected_option_ids") or []
-    if not selected_option_ids and payload.get("selected_option_id"):
-        selected_option_ids = [payload["selected_option_id"]]
     return [str(option_id) for option_id in selected_option_ids if option_id]
 
 
 def _attempt_answer_matches_payload(attempt: Attempt, payload: dict[str, Any]) -> bool:
     stored_ids = [str(option_id) for option_id in (attempt.selected_option_ids or []) if option_id]
-    if not stored_ids and attempt.selected_option_id:
-        stored_ids = [str(attempt.selected_option_id)]
     return (
         attempt.question_id == payload.get("question_id")
         and attempt.phase == (payload.get("phase") or attempt.phase)
         and stored_ids == _selected_ids_from_payload(payload)
-        and (attempt.free_text_answer or None) == (payload.get("free_text_answer") or None)
-        and (attempt.reason_text or None) == (payload.get("reason_text") or None)
     )
 
 
@@ -1296,12 +1073,10 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
             "この問題はすでに回答済みです。回答は変更できません。",
             attempt_id=pending.id,
         )
-    selected_option_ids = payload.get("selected_option_ids") or ([payload.get("selected_option_id")] if payload.get("selected_option_id") else [])
+    selected_option_ids = payload.get("selected_option_ids") or []
     selected_option_ids = [option_id for option_id in selected_option_ids if option_id]
     if len(selected_option_ids) != len(set(selected_option_ids)):
         raise HTTPException(status_code=400, detail="duplicate selected options")
-    if payload.get("selected_option_id") and payload.get("selected_option_id") not in selected_option_ids:
-        raise HTTPException(status_code=400, detail="selected option does not match selected options")
     constraints = _selection_constraints(question.question_type, db.query(func.count(QuestionOption.id)).filter_by(question_id=question.id).scalar() or 0)
     selected_for_validation = db.query(QuestionOption).filter(QuestionOption.question_id == question.id, QuestionOption.id.in_(selected_option_ids or ["__none__"])).all()
     if len(selected_for_validation) != len(selected_option_ids):
@@ -1309,11 +1084,6 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
     if constraints["selection_mode"] == "multiple":
         selected_labels = {option.option_label for option in selected_for_validation}
         _validate_multi_select_labels(selected_labels, len(selected_option_ids))
-    elif constraints["selection_mode"] == "single" and len(selected_option_ids) != 1:
-        raise HTTPException(status_code=400, detail="select exactly one option")
-    elif constraints["selection_mode"] == "free_text" and selected_option_ids:
-        raise HTTPException(status_code=400, detail="free-text questions cannot have selected options")
-    is_pretest = phase == "pretest"
     attempt_index = (
         db.query(func.count(Attempt.id))
         .filter_by(participant_id=participant.id, question_id=question.id, phase=phase)
@@ -1327,11 +1097,7 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         phase=phase,
         test_round=_test_round_key_for_question(db, participant, phase, question),
         attempt_index=attempt_index,
-        selected_option_id=(payload.get("selected_option_id") or (selected_option_ids[0] if selected_option_ids else None)),
         selected_option_ids=selected_option_ids or None,
-        free_text_answer=None if is_pretest else payload.get("free_text_answer"),
-        reason_text=None if is_pretest else payload.get("reason_text"),
-        confidence=None,
         response_time_sec=payload.get("response_time_sec"),
         question_shown_at=_naive_datetime(payload.get("question_shown_at")),
         answered_at=_naive_datetime(payload.get("answered_at")),
@@ -1478,12 +1244,8 @@ def _record_ai_log(db: Session, log: AICallLog) -> None:
     db.commit()
 
 
-def _selected_option(db: Session, attempt: Attempt) -> QuestionOption | None:
-    return db.get(QuestionOption, attempt.selected_option_id) if attempt.selected_option_id else None
-
-
 def _selected_options(db: Session, attempt: Attempt) -> list[QuestionOption]:
-    option_ids = attempt.selected_option_ids or ([attempt.selected_option_id] if attempt.selected_option_id else [])
+    option_ids = attempt.selected_option_ids or []
     if not option_ids:
         return []
     options = db.query(QuestionOption).filter(QuestionOption.id.in_(option_ids)).all()
@@ -1496,48 +1258,16 @@ def _selected_option_label_text(options: list[QuestionOption]) -> str | None:
 
 
 def _fixed_attempt_result(options: list[QuestionOption]) -> dict[str, Any]:
-    is_correct, misconception_type, status = _classify_selected_options(
-        options, use_option_correctness=True
-    )
+    is_correct, misconception_type, status = _classify_selected_options(options)
     return {
         "is_correct": is_correct,
         "score": 1.0 if is_correct else 0.0,
         "diagnosed_status": status,
         "misconception_type": misconception_type,
-        "secondary_misconception_type": None,
         "diagnosis_confidence": 0.95,
         "natural_language_diagnosis": "正しい構造を選択できています。" if is_correct else ("基本知識が不足している可能性があります。" if status == "unknown" else "選択内容に誤った捉え方が含まれています。"),
-        "recommended_initial_scaffolding_level": "L2" if is_correct else "L3",
-        "recommended_teaching_strategy": strategy_for(misconception_type, status, "proposed"),
-        "requires_manual_review": False,
-        "l0_success": is_correct,
+        "recommended_teaching_strategy": None if is_correct else strategy_for(misconception_type, status, "proposed"),
     }
-
-
-def _diagnosis_payload(db: Session, participant: Participant, attempt: Attempt) -> dict[str, Any]:
-    question = db.get(Question, attempt.question_id)
-    term = db.get(Term, attempt.term_id)
-    option = _selected_option(db, attempt)
-    options = _selected_options(db, attempt)
-    payload = {
-        "participant_id": participant.id,
-        "group_condition": participant.group_condition,
-        "term": {"slug": term.slug, "label": term.label, "definition": term.description},
-        "question": {"id": question.id, "phase": question.phase, "question_type": question.question_type, "body": question.body, "expected_answer": question.expected_answer},
-        "selected_option": None
-        if not option
-        else {"id": option.id, "body": option.body, "is_correct": option.is_correct, "initial_misconception_type": option.misconception_type},
-        "selected_options": [
-            {"id": item.id, "label": item.option_label, "body": item.body, "is_correct": item.is_correct, "initial_misconception_type": item.misconception_type}
-            for item in options
-        ],
-        "history": {"previous_attempts": []},
-    }
-    if question.phase != "pretest":
-        payload["learner_response"] = {"reason_text": attempt.reason_text, "free_text_answer": attempt.free_text_answer}
-    if participant.group_condition == "proposed":
-        payload["misconception_taxonomy"] = taxonomy_for_prompt()
-    return payload
 
 
 def _public_summary(text: str | None) -> str:
@@ -1561,9 +1291,7 @@ def _priority(attempt: Attempt) -> tuple[float, str]:
         return score, f"{attempt.misconception_type}を概念変化で確認"
     if attempt.diagnosed_status == "unknown":
         return 70 + term_order_bonus, "豊富化で基礎理解を確認"
-    if attempt.diagnosed_status == "unstable_correct":
-        return 45 + term_order_bonus, "理解を確認"
-    return 10 + term_order_bonus, "転移準備"
+    return 10 + term_order_bonus, "正解記録"
 
 
 async def diagnose_pretest(db: Session, participant_id: str) -> int:
@@ -1582,23 +1310,20 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
     scored_attempts: list[Attempt] = []
     for attempt in attempts:
         question = db.get(Question, attempt.question_id)
-        if question and "multi_select" in question.question_type:
-            result = _fixed_attempt_result(_selected_options(db, attempt))
-            if participant.group_condition == "control":
-                result["recommended_teaching_strategy"] = "general_explanation"
-        else:
-            result = await _ai_call(db, "diagnose_answer", _diagnosis_payload(db, participant, attempt))
+        if not question or "multi_select" not in question.question_type:
+            raise HTTPException(status_code=400, detail="unsupported question type")
+        result = _fixed_attempt_result(_selected_options(db, attempt))
+        if participant.group_condition == "control":
+            result["recommended_teaching_strategy"] = "general_explanation"
         attempt.is_correct = result["is_correct"]
         attempt.score = 1.0 if result["is_correct"] else 0.0
         attempt.diagnosed_status = result["diagnosed_status"]
         attempt.misconception_type = result["misconception_type"]
-        attempt.secondary_misconception_type = result["secondary_misconception_type"]
         attempt.misconception_confidence = result["diagnosis_confidence"]
         attempt.natural_language_diagnosis = result["natural_language_diagnosis"]
-        attempt.requires_manual_review = result["requires_manual_review"]
         state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
         if not state:
-            state = LearnerState(participant_id=participant.id, term_id=attempt.term_id, current_status=result["diagnosed_status"], primary_misconception=result["misconception_type"], secondary_misconception=result["secondary_misconception_type"], scaffolding_level=result["recommended_initial_scaffolding_level"], teaching_strategy=result["recommended_teaching_strategy"], last_attempt_id=attempt.id, state_summary=result["natural_language_diagnosis"])
+            state = LearnerState(participant_id=participant.id, term_id=attempt.term_id, current_status=result["diagnosed_status"], primary_misconception=result["misconception_type"], teaching_strategy=result["recommended_teaching_strategy"], last_attempt_id=attempt.id, state_summary=result["natural_language_diagnosis"])
             db.add(state)
         scored_attempts.append(attempt)
     _commit(db)
@@ -1736,7 +1461,7 @@ def pretest_results(db: Session, participant_id: str) -> list[dict[str, Any]]:
 
 def _public_selected_options(db: Session, attempt: Attempt) -> list[dict[str, str]]:
     """Return only the option text the participant selected for a test result."""
-    selected_ids = attempt.selected_option_ids or ([attempt.selected_option_id] if attempt.selected_option_id else [])
+    selected_ids = attempt.selected_option_ids or []
     selected_ids = [option_id for option_id in selected_ids if option_id]
     if not selected_ids:
         return []
@@ -1901,7 +1626,6 @@ def _predicted_history_entry(turn: TutorTurn, predicted_answer: dict[str, Any]) 
         "learning_stage": stage,
         "label": grading.get("component_term") or meta.get("component_term") or LEARNING_STAGE_LABELS.get(stage, "概念変化"),
         "component_term": grading.get("component_term") or meta.get("component_term"),
-        "component_index": grading.get("component_index", meta.get("component_index")),
         "misconception_type": grading.get("learning_misconception_type"),
         "confidence": grading.get("learning_misconception_confidence"),
         "reason": grading.get("learning_misconception_reason"),
@@ -1919,13 +1643,11 @@ def _tutoring_generation_context(
     prefetch_audit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the shared generation contract without mutating answer state."""
+    assert_current_experiment(participant)
     term = db.get(Term, session.term_id)
     if not term:
         raise HTTPException(status_code=404, detail="term not found")
     state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=term.id).one()
-    previous_attempt = None
-    if participant.group_condition == "proposed" and state.last_attempt_id:
-        previous_attempt = db.get(Attempt, state.last_attempt_id)
     pretest_attempt = None
     if participant.group_condition == "proposed":
         pretest_attempt = (
@@ -1952,7 +1674,6 @@ def _tutoring_generation_context(
     else:
         position = _learning_position(db, session, term, participant)
         misconception_history = session_misconception_history(db, session.id)
-    current_level = normalize_level(state.scaffolding_level)
     state_current_status = state.current_status
     state_primary_misconception = state.primary_misconception
 
@@ -1972,7 +1693,6 @@ def _tutoring_generation_context(
                 "learning_stage": predicted_stage,
                 "learning_stage_label": LEARNING_STAGE_LABELS[predicted_stage],
             }
-        current_level = predicted_answer["next_level"]
         if participant.group_condition == "proposed":
             state_current_status = predicted_answer["diagnosed_status"]
             state_primary_misconception = predicted_answer["learning_misconception_type"]
@@ -2002,13 +1722,11 @@ def _tutoring_generation_context(
         if not active_misconception_type and position["learning_stage"] == "enrichment":
             active_misconception_type = "unknown"
 
-    learning_content_version = _participant_learning_content_version(participant)
+    learning_content_version = CURRENT_LEARNING_CONTENT_VERSION
     spec = _learning_question_spec(
         term.slug,
         position["learning_stage"],
-        position["component_term"],
         learning_variant_index,
-        learning_content_version,
     )
     question_type = "control_learning_multi_select" if participant.group_condition == "control" else spec["question_type"]
     practice_question = {
@@ -2025,16 +1743,13 @@ def _tutoring_generation_context(
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "term": {"slug": term.slug, "label": term.label, "description": term.description},
-        "component_term": position["component_term"],
-        "component_index": position["component_index"],
-        "component_total": position["component_total"],
         "component_terms": _component_terms(term.slug, term.label),
         "prompt_contract_version": PROMPT_CONTRACT_VERSION,
+        "taxonomy_version": TAXONOMY_VERSION,
         "rag_context": _rag_context(
             term.slug,
             term.label,
             term.description,
-            position["component_term"],
         ),
     }
     if participant.group_condition == "proposed":
@@ -2064,17 +1779,15 @@ def _tutoring_generation_context(
             "learner_state": {
                 "current_status": state_current_status,
                 "primary_misconception": state_primary_misconception,
-                "scaffolding_level": current_level,
                 "teaching_strategy": effective_strategy,
                 "recurrence_count": state.recurrence_count,
             },
-            "previous_answer": previous_attempt.reason_text if previous_attempt else "",
             "previous_diagnosis_for_learner": state.state_summary,
             "previous_practice_question": _practice_question_text(previous_turn.practice_question_json if previous_turn else None),
             "previous_learner_response": (previous_turn.learner_response or "") if previous_turn else "",
             "previous_learning_misconception": previous_learning_misconception,
             "session_misconception_history": misconception_history,
-            "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(active_misconception_type),
+            "misconception_teaching_guidance": _misconception_teaching_guidance(active_misconception_type),
             "misconception_taxonomy": taxonomy_for_prompt(),
             "active_misconception_type": active_misconception_type,
             "mandatory_teaching_elements": mandatory_element_requirements(active_misconception_type),
@@ -2117,7 +1830,6 @@ def _tutoring_generation_context(
         "turn_count": turn_count,
         "turn_index": turn_index,
         "previous_turn": previous_turn,
-        "current_level": current_level,
         "generation_origin": generation_origin,
         "prefetch_audit": prefetch_audit,
         "learning_content_version": learning_content_version,
@@ -2144,8 +1856,6 @@ def _build_tutor_turn_plan(
         participant_id=participant.id,
         group_condition=participant.group_condition,
         turn_index=context["turn_count"] + 1,
-        scaffolding_level=context["current_level"],
-        previous_teaching_strategy=predicted_answer["turn"].teaching_strategy,
         tutor_message_prefix=_previous_turn_prefix(context["previous_turn"]),
         learner_prompt=context["spec"]["body"],
         practice_question=_merge_stage_meta(context["practice_question"], context["position"]),
@@ -2168,12 +1878,10 @@ def _tutor_turn_from_generation(
     if isinstance(context, TutorTurnGenerationPlan):
         session_id = context.session_id
         group_condition = context.group_condition
-        previous_teaching_strategy = context.previous_teaching_strategy
         position = context.position
         learner_prompt = context.learner_prompt
         practice_question = context.practice_question
         turn_index = context.turn_index
-        scaffolding_level = context.scaffolding_level
         tutor_message_prefix = context.tutor_message_prefix
         generation_origin = context.generation_origin
         prefetch_audit = context.prefetch_audit
@@ -2182,12 +1890,10 @@ def _tutor_turn_from_generation(
     else:
         session_id = context["session"].id
         group_condition = context["participant"].group_condition
-        previous_teaching_strategy = context["state"].previous_teaching_strategy
         position = context["position"]
         learner_prompt = context["spec"]["body"]
         practice_question = context["practice_question"]
         turn_index = context["turn_count"] + 1
-        scaffolding_level = context["current_level"]
         tutor_message_prefix = _previous_turn_prefix(context["previous_turn"])
         generation_origin = context.get("generation_origin", "interactive")
         prefetch_audit = context.get("prefetch_audit")
@@ -2217,15 +1923,11 @@ def _tutor_turn_from_generation(
     return TutorTurn(
         tutor_session_id=session_id,
         turn_index=turn_index,
-        scaffolding_level=scaffolding_level,
         teaching_strategy=result["teaching_strategy"],
-        previous_teaching_strategy=previous_teaching_strategy,
-        strategy_changed=False,
         tutor_message=tutor_message_prefix + result["tutor_message"],
         learner_prompt=learner_prompt,
         practice_question_json=_merge_stage_meta(practice_question, position),
         diagnosis_json=diagnosis,
-        forbidden_help_given=False,
     )
 
 
@@ -2354,6 +2056,7 @@ async def _run_tutor_turn_prefetch(handle: PrefetchHandle, plan: TutorTurnGenera
     """Generate early and publish only after the answer request commits."""
     db = SessionLocal()
     try:
+        assert_current_experiment(get_participant(db, plan.participant_id))
         started = perf_counter()
         result, mandatory_validation = await _generate_validated_tutoring_turn(
             db,
@@ -2365,6 +2068,7 @@ async def _run_tutor_turn_prefetch(handle: PrefetchHandle, plan: TutorTurnGenera
             return
 
         db.expire_all()
+        assert_current_experiment(get_participant(db, plan.participant_id))
         session = db.query(TutorSession).filter_by(id=plan.session_id).with_for_update().one_or_none()
         if session is None or session.ended_at is not None:
             return
@@ -2400,6 +2104,7 @@ def prepare_prefetch_sessions(db: Session, participant_id: str, source_session_i
     by the response-after worker.
     """
     participant = get_participant(db, participant_id)
+    assert_current_experiment(participant)
     source_session = db.get(TutorSession, source_session_id)
     if not source_session or source_session.participant_id != participant.id or source_session.ended_at is not None:
         return []
@@ -2456,9 +2161,13 @@ def prepare_prefetch_sessions(db: Session, participant_id: str, source_session_i
 def _claim_prefetch_session(db: Session, session_id: str) -> bool:
     """Claim a pending session and release the transaction before AI awaits."""
     session = db.query(TutorSession).filter_by(id=session_id).with_for_update().one_or_none()
-    if not session or _prefetch_state(session) != "pending" or session.ended_at is not None:
+    if not session:
         return False
     participant = db.get(Participant, session.participant_id)
+    if participant is not None:
+        assert_current_experiment(participant)
+    if _prefetch_state(session) != "pending" or session.ended_at is not None:
+        return False
     assignment = db.query(TermAssignment).filter_by(participant_id=session.participant_id, term_id=session.term_id).one_or_none()
     if (
         not participant
@@ -2534,6 +2243,8 @@ def _update_prefetch_ai_logs(
 
 def _prefetch_session_is_eligible(db: Session, session: TutorSession) -> bool:
     participant = db.get(Participant, session.participant_id)
+    if participant is not None:
+        assert_current_experiment(participant)
     assignment = db.query(TermAssignment).filter_by(participant_id=session.participant_id, term_id=session.term_id).one_or_none()
     return bool(
         participant
@@ -2650,6 +2361,7 @@ async def generate_prefetched_tutor_turn(db: Session, session_id: str) -> bool:
 
 
 def discard_unconsumed_prefetches(db: Session, participant_id: str, *, reason: str) -> int:
+    assert_current_experiment(get_participant(db, participant_id))
     """Invalidate unused prefetched sessions at give-up and new rounds."""
     candidate_sessions = (
         db.query(TutorSession)
@@ -2720,26 +2432,18 @@ async def respond_tutor_turn(
             turn_id=turn.id,
         )
     state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one()
-    response = payload.get("learner_response") or ""
+    response = ""
     term = db.get(Term, session.term_id)
     meta = _practice_meta(turn)
     learning_stage = meta.get("learning_stage") or "conceptual_change"
     variant_index = int((turn.practice_question_json or {}).get("learning_variant_index") or 1)
-    component_index = int(meta.get("component_index") or 0)
-    component_total = int(meta.get("component_total") or 1)
-    component_term = meta.get("component_term")
 
-    turn_content_version = (turn.diagnosis_json or {}).get("learning_content_version")
-    if turn_content_version not in {LEGACY_LEARNING_CONTENT_VERSION, CURRENT_LEARNING_CONTENT_VERSION}:
-        turn_content_version = _participant_learning_content_version(participant)
     spec = _learning_question_spec(
         term.slug,
         learning_stage,
-        component_term,
         variant_index,
-        turn_content_version,
     )
-    selected_options = _selected_learning_options(spec, payload.get("selected_option_ids"), payload.get("selected_option_id"), response)
+    selected_options = _selected_learning_options(spec, payload.get("selected_option_ids"))
     if spec.get("selection_mode") == "multiple":
         _validate_multi_select_labels({_option_label(option) for option in selected_options}, len(selected_options))
     result = _fixed_feedback_for_options(selected_options, spec)
@@ -2752,7 +2456,6 @@ async def respond_tutor_turn(
     learning_misconception_confidence = result.get("learning_misconception_confidence")
     learning_misconception_reason = result.get("learning_misconception_reason") or result.get("state_update_reason") or ""
     diagnosed_status = "stable_correct" if is_sufficient else ("unknown" if learning_misconception_type == "unknown" else "misconception")
-    next_level = normalize_level(lower_level(state.scaffolding_level) if is_sufficient else raise_level(state.scaffolding_level))
     stage_completed = is_sufficient
     next_learning_stage = "final_feedback" if is_sufficient else _learning_stage_for_misconception(learning_misconception_type, diagnosed_status)
     if participant.group_condition == "control" and not is_sufficient:
@@ -2773,17 +2476,11 @@ async def respond_tutor_turn(
 
     grading_json = {
         "is_sufficient": is_sufficient,
-        "selected_option_id": selected_options[0]["option_id"] if selected_options else payload.get("selected_option_id"),
         "selected_option_ids": [option["option_id"] for option in selected_options],
         "selected_option_body": result.get("selected_option_body") or response,
         "learning_stage": learning_stage,
-        "component_term": component_term,
-        "component_index": component_index,
-        "component_total": component_total,
-        "item_results": [],
         "stage_completed": stage_completed,
         "next_learning_stage": next_learning_stage,
-        "next_component_index": component_total if is_sufficient else component_index,
         "diagnosed_status": diagnosed_status,
         "learning_misconception_type": learning_misconception_type,
         "learning_misconception_confidence": learning_misconception_confidence,
@@ -2806,7 +2503,6 @@ async def respond_tutor_turn(
                 "turn": turn,
                 "response": response,
                 "grading_json": grading_json,
-                "next_level": next_level,
                 "next_learning_stage": next_learning_stage,
                 "diagnosed_status": diagnosed_status,
                 "learning_misconception_type": learning_misconception_type,
@@ -2824,7 +2520,6 @@ async def respond_tutor_turn(
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "term": {"slug": term.slug, "label": term.label, "description": term.description},
-        "component_term": component_term,
         "question_body": spec["body"],
         "selected_option_body": " / ".join(selected_explanation_bodies),
         "selected_option_bodies": selected_explanation_bodies,
@@ -2833,7 +2528,6 @@ async def respond_tutor_turn(
             term.slug,
             term.label,
             term.description,
-            component_term,
         ),
     }
     if participant.group_condition == "proposed":
@@ -2843,16 +2537,11 @@ async def respond_tutor_turn(
                 "learner_state": {
                     "current_status": state.current_status,
                     "primary_misconception": state.primary_misconception,
-                    "scaffolding_level": normalize_level(state.scaffolding_level),
-                    "teaching_strategy": strategy_for(
-                        learning_misconception_type,
-                        diagnosed_status,
-                        participant.group_condition,
-                    ),
+                    "teaching_strategy": None if is_sufficient else strategy_for(learning_misconception_type, diagnosed_status, participant.group_condition),
                     "recurrence_count": state.recurrence_count,
                 },
                 "learning_misconception_type": learning_misconception_type,
-                "misconception_scaffolding_guidance": _misconception_scaffolding_guidance(learning_misconception_type),
+                "misconception_teaching_guidance": _misconception_teaching_guidance(learning_misconception_type),
                 "misconception_taxonomy": taxonomy_for_prompt(),
                 "session_misconception_history": session_misconception_history(db, session.id),
             }
@@ -2867,14 +2556,11 @@ async def respond_tutor_turn(
         raise RuntimeError("AI explanation response was empty")
 
     turn.learner_response = response
-    turn.learner_confidence = None
     turn.question_shown_at = _naive_datetime(payload.get("question_shown_at"))
     turn.answered_at = _naive_datetime(payload.get("answered_at"))
     turn.response_time_sec = payload.get("response_time_sec")
-    turn.next_scaffolding_level = next_level
     turn.ai_feedback = feedback_text
     turn.grading_json = grading_json
-    state.scaffolding_level = next_level
     state.stable_correct_count += 1 if is_sufficient else 0
     state.current_status = "stable_correct" if is_sufficient else diagnosed_status
     state.primary_misconception = None if is_sufficient else learning_misconception_type
@@ -2919,27 +2605,21 @@ async def respond_tutor_turn(
         "learning_stage": learning_stage,
         "stage_completed": stage_completed,
         "next_learning_stage": next_learning_stage,
-        "component_term": component_term,
-        "component_index": component_index,
-        "component_total": component_total,
-        "next_component_index": component_total if is_sufficient else component_index,
         "learning_misconception_type": learning_misconception_type,
         "learning_misconception_confidence": learning_misconception_confidence,
         "learning_misconception_reason": learning_misconception_reason,
-        "next_scaffolding_level": next_level,
         "turn_index": turn.turn_index,
         "max_turns": get_settings().max_turns_per_term,
         "attempts_used": attempts_used,
         "remaining_attempts": 0 if is_sufficient else max(get_settings().max_turns_per_term - attempts_used, 0),
         "session_ended_by_attempt_limit": attempt_limit_reached,
-        "item_results": [],
         "next_url": next_url,
     }
 
 async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str, Any]:
     participant = get_participant(db, participant_id, for_update=True)
     _assert_participant_active(participant)
-    if phase not in {"retest", "l0_check", "final_test"}:
+    if phase not in {"retest", "final_test"}:
         raise HTTPException(status_code=400, detail="unsupported score phase")
     _assert_phase_available(participant, phase)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase, is_correct=None).all()
@@ -2947,94 +2627,36 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         raise HTTPException(status_code=400, detail=f"{phase} attempts not found")
     for attempt in attempts:
         question = db.get(Question, attempt.question_id)
-        option = _selected_option(db, attempt)
-        options = _selected_options(db, attempt)
-        payload = {
-            "participant_id": participant.id,
-            "group_condition": participant.group_condition,
-            "question": {"id": question.id, "phase": phase, "body": question.body, "expected_answer": question.expected_answer, "expected_keywords": question.expected_keywords},
-            "selected_option": None if not option else {"id": option.id, "body": option.body, "is_correct": option.is_correct, "initial_misconception_type": option.misconception_type},
-            "selected_options": [
-                {"id": item.id, "label": item.option_label, "body": item.body, "is_correct": item.is_correct, "initial_misconception_type": item.misconception_type}
-                for item in options
-            ],
-            "free_text_answer": attempt.free_text_answer,
-            "reason_text": attempt.reason_text,
-        }
-        if participant.group_condition == "proposed":
-            payload["misconception_taxonomy"] = taxonomy_for_prompt()
-        if "multi_select" in question.question_type:
-            result = _fixed_attempt_result(options)
-        elif phase in {"retest", "final_test"} and option:
-            result = {
-                "is_correct": bool(option.is_correct),
-                "score": 1.0 if option.is_correct else 0.0,
-                "diagnosed_status": "stable_correct" if option.is_correct else ("unknown" if option.misconception_type == "unknown" else "misconception"),
-                "misconception_type": None if option.is_correct else option.misconception_type,
-                "secondary_misconception_type": None,
-                "l0_success": bool(option.is_correct),
-            }
-        else:
-            result = await _ai_call(db, "grade_response", payload)
+        if not question or "multi_select" not in question.question_type:
+            raise HTTPException(status_code=400, detail="unsupported question type")
+        result = _fixed_attempt_result(_selected_options(db, attempt))
         attempt.is_correct = result["is_correct"]
         attempt.score = result["score"]
         attempt.diagnosed_status = result["diagnosed_status"]
         attempt.misconception_type = result["misconception_type"]
-        attempt.secondary_misconception_type = result["secondary_misconception_type"]
-        attempt.l0_success = result["l0_success"] if result.get("l0_success") is not None else (result["is_correct"] if phase == "final_test" else None)
         state = db.query(LearnerState).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
-        if not state:
+        if state is None:
             continue
         if phase == "retest":
             previous = db.query(Attempt).filter_by(participant_id=participant.id, term_id=attempt.term_id, phase="pretest").order_by(Attempt.created_at.desc()).first()
             if previous and previous.misconception_type in {"M1", "M3"} and previous.misconception_type == attempt.misconception_type:
                 attempt.recurrence_flag = True
                 state.recurrence_count += 1
-                state.previous_teaching_strategy = state.teaching_strategy
-                state.teaching_strategy = strategy_for(attempt.misconception_type, "misconception", participant.group_condition)
                 db.add(RecurrenceEvent(participant_id=participant.id, term_id=attempt.term_id, previous_attempt_id=previous.id, current_attempt_id=attempt.id, previous_misconception_type=previous.misconception_type, current_misconception_type=attempt.misconception_type, is_same_type=True, phase=phase))
-            state.scaffolding_level = lower_level(state.scaffolding_level) if attempt.is_correct else state.scaffolding_level
-            assignment = db.query(TermAssignment).filter_by(participant_id=participant.id, term_id=attempt.term_id).one_or_none()
-            if assignment:
-                assignment.is_learning_target = not bool(attempt.is_correct)
-                if attempt.is_correct:
-                    assignment.priority_score = 0
-                    assignment.selection_reason = "正解したため次周回から除外"
-                else:
-                    assignment.priority_score, assignment.selection_reason = _priority(attempt)
-        if phase in {"l0_check", "final_test"}:
-            state.l0_success_count += 1 if attempt.is_correct else 0
-            state.scaffolding_level = "L2" if attempt.is_correct else "L3"
-        state.current_status = "stable_correct" if attempt.is_correct else ("unknown" if attempt.misconception_type == "unknown" else "misconception")
-        state.primary_misconception = None if attempt.is_correct else attempt.misconception_type
+        state.current_status = result["diagnosed_status"]
+        state.primary_misconception = result["misconception_type"]
+        state.teaching_strategy = ("general_explanation" if participant.group_condition == "control" else None) if attempt.is_correct else strategy_for(attempt.misconception_type, attempt.diagnosed_status, participant.group_condition)
         state.last_attempt_id = attempt.id
-    learning_target_slugs: list[str] = []
-    next_url: str | None = None
-    if phase == "retest":
-        db.flush()
-        learning_target_slugs = _reset_test_learning_targets(db, participant, attempts)
-        if _is_mastery_test_batch(db, attempts):
-            participant.current_step = "survey"
-            next_url = _next_url(participant.current_step)
-        else:
-            participant.current_step = "learning_targets"
-            next_url = f"/learning/{learning_target_slugs[0]}" if learning_target_slugs else _next_url(participant.current_step)
-    elif phase == "l0_check":
+    db.flush()
+    learning_target_slugs = _reset_test_learning_targets(db, participant, attempts)
+    if _is_mastery_test_batch(db, attempts):
         participant.current_step = "survey"
         next_url = _next_url(participant.current_step)
-    elif phase == "final_test":
-        learning_target_slugs = _reset_test_learning_targets(db, participant, attempts)
-        if _is_mastery_test_batch(db, attempts):
-            participant.current_step = "survey"
-            next_url = _next_url(participant.current_step)
-        else:
-            participant.current_step = "learning_targets"
-            next_url = f"/learning/{learning_target_slugs[0]}" if learning_target_slugs else _next_url(participant.current_step)
+    else:
+        participant.current_step = "learning_targets"
+        next_url = f"/learning/{learning_target_slugs[0]}" if learning_target_slugs else _next_url(participant.current_step)
     _commit(db)
-    response: dict[str, Any] = {"status": "completed", "next_step": participant.current_step, "next_url": next_url or _next_url(participant.current_step)}
-    if phase in {"retest", "final_test"}:
-        response["learning_target_slugs"] = learning_target_slugs
-    return response
+    return {"status": "completed", "next_step": participant.current_step, "next_url": next_url, "learning_target_slugs": learning_target_slugs}
 
 
 def _next_url(step: str) -> str:
@@ -3156,7 +2778,7 @@ def _round_sort_key(test_round: str, phase: str, attempt_index: int) -> tuple[in
     number = _round_number(test_round)
     if number is not None:
         return (1, number, attempt_index)
-    phase_order = {"l0_check": 0, "transfer": 1}
+    phase_order = {}
     return (2, phase_order.get(phase, 99), attempt_index)
 
 
@@ -3167,7 +2789,7 @@ def _attempt_sort_key(attempt: Attempt) -> tuple[int, int, int, str]:
 def _test_rounds(attempts: list[Attempt]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str, int], list[Attempt]] = {}
     for attempt in attempts:
-        if attempt.phase not in {"pretest", "retest", "final_test", "l0_check"}:
+        if attempt.phase not in TEST_PHASES:
             continue
         grouped.setdefault((_attempt_test_round(attempt), attempt.phase, attempt.attempt_index), []).append(attempt)
 
@@ -3229,7 +2851,7 @@ def _misconception_change_type(initial: Attempt | None, latest: Attempt | None) 
 def _misconception_timeline(attempts: list[Attempt], terms: dict[str, Term]) -> dict[str, Any]:
     by_term: dict[str, list[Attempt]] = {}
     for attempt in attempts:
-        if attempt.phase in {"pretest", "retest", "final_test", "l0_check"}:
+        if attempt.phase in TEST_PHASES:
             by_term.setdefault(attempt.term_id, []).append(attempt)
 
     terms_out: list[dict[str, Any]] = []
@@ -3291,7 +2913,7 @@ def _learning_burden(db: Session, participant_id: str, attempts: list[Attempt]) 
         (_round_number(_attempt_test_round(attempt)) or 0 for attempt in attempts if attempt.phase in {"retest", "final_test"}),
         default=0,
     )
-    test_time = sum(attempt.response_time_sec or 0 for attempt in attempts if attempt.phase in {"pretest", "retest", "final_test", "l0_check"})
+    test_time = sum(attempt.response_time_sec or 0 for attempt in attempts if attempt.phase in TEST_PHASES)
     learning_time = sum(turn.response_time_sec or 0 for turn in turns)
     retained_count = sum(1 for attempt in attempts if attempt.phase in {"pretest", "retest"} and attempt.is_correct is False)
     return {
@@ -3312,18 +2934,16 @@ def _condition_check(db: Session, participant: Participant, attempts: list[Attem
     return {
         "control_general_explanation_maintained": all(strategy == "general_explanation" for strategy in strategies) if participant.group_condition == "control" else None,
         "proposed_adaptive_strategy_used": any(strategy != "general_explanation" for strategy in strategies) if participant.group_condition == "proposed" else None,
-        "strategy_changed_count": sum(1 for turn in turns if turn.strategy_changed),
-        "forbidden_help_count": sum(1 for turn in turns if turn.forbidden_help_given),
-        "manual_review_count": sum(1 for attempt in attempts if attempt.requires_manual_review),
     }
 
 
 def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummary:
     participant = get_participant(db, participant_id)
+    assert_current_experiment(participant)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id).all()
-    by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in ["pretest", "retest", "l0_check", "final_test"]}
-    final_items = by_phase["final_test"] or by_phase["l0_check"]
-    final_score_source = "final_test" if by_phase["final_test"] else ("l0_check" if by_phase["l0_check"] else None)
+    by_phase = {phase: [a for a in attempts if a.phase == phase] for phase in TEST_PHASES}
+    final_items = by_phase["final_test"]
+    final_score_source = "final_test" if final_items else None
     retest_mastery_items = _latest_retest_mastery_attempts(db, by_phase["retest"])
     final_test_skipped = False
     if not final_items and retest_mastery_items:
@@ -3340,7 +2960,7 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         return len(rec_terms) / len(denom)
 
     def final_score_value(attempt: Attempt) -> bool:
-        return bool(attempt.is_correct) if final_score_source == "retest_mastery" else bool(attempt.l0_success)
+        return bool(attempt.is_correct)
 
     condition_check = _condition_check(db, participant, attempts)
     condition_check.update(
@@ -3354,14 +2974,10 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         group_condition=participant.group_condition,
         pretest_score=_rate(by_phase["pretest"], lambda a: bool(a.is_correct)),
         retest_score=_rate(by_phase["retest"], lambda a: bool(a.is_correct)),
-        l0_correct_rate=_rate(final_items, final_score_value),
-        transfer_correct_rate=None,
+        attainment_correct_rate=_rate(final_items, final_score_value),
         same_misconception_recurrence_rate=(len(same_rec) / len(initial_m)) if initial_m else None,
         m1_recurrence_rate=m_rate("M1"),
-        m2_recurrence_rate=m_rate("M2"),
         m3_recurrence_rate=m_rate("M3"),
-        m4_failure_rate=None,
-        unknown_persistence_rate=None,
         learning_target_count=db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0,
         score_timeline_json={
             "rounds": _test_rounds(attempts),
@@ -3426,7 +3042,7 @@ def _ensure_evaluation_summary(db: Session, participant: Participant) -> Evaluat
         .order_by(EvaluationSummary.created_at.desc(), EvaluationSummary.id.desc())
         .first()
     )
-    if not _has_scored_pretest(db, participant.id):
+    if not can_resume(participant) or not _has_scored_pretest(db, participant.id):
         return latest
     source_at = _latest_evaluation_source_at(db, participant)
     expected_completed = participant.completed_at is not None and participant.completion_reason != "give_up"
@@ -3492,7 +3108,7 @@ def _group_misconception_transition_summary(
 
 
 def admin_summary(db: Session) -> dict[str, Any]:
-    participants = db.query(Participant).all()
+    participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION).all()
     terms = _term_map(db)
     rows = []
     for group in ["control", "proposed"]:
@@ -3509,18 +3125,18 @@ def admin_summary(db: Session) -> dict[str, Any]:
             vals = []
             for summary in latest_summaries:
                 rounds = (summary.score_timeline_json or {}).get("rounds") or []
-                final_round = next((row for row in reversed(rounds) if row.get("phase") in {"final_test", "l0_check"}), None)
+                final_round = next((row for row in reversed(rounds) if row.get("phase") in {"final_test"}), None)
                 if final_round and final_round.get("score_delta_from_pretest_pt") is not None:
                     vals.append(final_round["score_delta_from_pretest_pt"])
-                elif (summary.score_timeline_json or {}).get("final_score_source") == "retest_mastery" and summary.pretest_score is not None and summary.l0_correct_rate is not None:
-                    vals.append(round((summary.l0_correct_rate - summary.pretest_score) * 100, 6))
+                elif (summary.score_timeline_json or {}).get("final_score_source") == "retest_mastery" and summary.pretest_score is not None and summary.attainment_correct_rate is not None:
+                    vals.append(round((summary.attainment_correct_rate - summary.pretest_score) * 100, 6))
             return sum(vals) / len(vals) if vals else None
         rows.append(
             {
                 "group_condition": group,
                 "participant_count": len(group_participants),
                 "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
-                "l0_correct_rate": avg("l0_correct_rate"),
+                "attainment_correct_rate": avg("attainment_correct_rate"),
                 "avg_score_delta_from_pretest_pt": avg_final_delta(),
                 "misconception_transition_summary": _group_misconception_transition_summary(group_participants, latest_summaries, terms),
             }
@@ -3530,13 +3146,13 @@ def admin_summary(db: Session) -> dict[str, Any]:
 
 EXPORTS = {
     "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at", "completion_reason"]),
-    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "selected_option_id", "selected_option_ids", "reason_text", "free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "l0_success", "requires_manual_review", "created_at"]),
-    "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "l0_success_count", "updated_at"]),
+    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
+    "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "legacy_scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "legacy_l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),
-    "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "scaffolding_level", "teaching_strategy", "strategy_changed", "tutor_message", "diagnosis_json", "practice_question_json", "learner_response", "ai_feedback", "next_scaffolding_level", "forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
+    "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "legacy_scaffolding_level", "teaching_strategy", "legacy_strategy_changed", "tutor_message", "diagnosis_json", "practice_question_json", "learner_response", "ai_feedback", "legacy_next_scaffolding_level", "legacy_forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "request_payload", "response_payload", "status", "error_code", "error_message", "latency_ms", "created_at"]),
-    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "l0_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "score_timeline_json", "misconception_timeline_json", "learning_burden_json", "condition_check_json", "completed", "created_at"]),
+    "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "legacy_m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "score_timeline_json", "misconception_timeline_json", "learning_burden_json", "condition_check_json", "completed", "created_at"]),
     "participant_surveys": (ParticipantSurvey, ["id", "participant_id", "phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "term_confidences", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]),
 }
 
@@ -3571,19 +3187,22 @@ def _attempt_log_row(
     participant = participants.get(attempt.participant_id)
     term = terms.get(attempt.term_id)
     question = questions.get(attempt.question_id)
-    option = options.get(attempt.selected_option_id or "")
     selected_options = [options[option_id] for option_id in (attempt.selected_option_ids or []) if option_id in options]
-    selected_option_body = _selected_option_label_text(selected_options) or (option.body if option else None)
+    selected_option_body = _selected_option_label_text(selected_options)
+    if selected_option_body is None and participant and not can_resume(participant):
+        selected_option_body = legacy_selected_option_body(attempt, options)
     return {
         "attempt_id": attempt.id,
+        **({"legacy_fields": legacy_fields(attempt)} if participant and not can_resume(participant) else {}),
         "participant_id": attempt.participant_id,
         "display_code": participant.display_code if participant else None,
+        "legacy_read_only": bool(participant and not can_resume(participant)),
         "group_condition": participant.group_condition if participant else None,
         "phase": attempt.phase,
         "test_round": _attempt_test_round(attempt),
         "term_slug": term.slug if term else None,
         "term_label": term.label if term else None,
-        "question_body": question.body if question else None,
+        "question_body": attempt.question_body_snapshot or (question.body if question else None),
         "selected_option_body": selected_option_body,
         "selected_option_ids": attempt.selected_option_ids,
         "question_body_snapshot": attempt.question_body_snapshot,
@@ -3591,15 +3210,11 @@ def _attempt_log_row(
         "response_time_sec": attempt.response_time_sec,
         "question_shown_at": _iso(attempt.question_shown_at),
         "answered_at": _iso(attempt.answered_at),
-        "free_text_answer": attempt.free_text_answer,
-        "reason_text": attempt.reason_text,
         "is_correct": attempt.is_correct,
         "score": attempt.score,
         "diagnosed_status": attempt.diagnosed_status,
         "misconception_type": attempt.misconception_type,
         "recurrence_flag": attempt.recurrence_flag,
-        "l0_success": attempt.l0_success,
-        "requires_manual_review": attempt.requires_manual_review,
         "created_at": _iso(attempt.created_at),
     }
 
@@ -3611,23 +3226,21 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
     diagnosis = turn.diagnosis_json or {}
     return {
         "tutor_turn_id": turn.id,
+        **({"legacy_fields": legacy_fields(turn)} if participant and not can_resume(participant) else {}),
         "tutor_session_id": turn.tutor_session_id,
         "participant_id": session.participant_id,
         "display_code": participant.display_code if participant else None,
+        "legacy_read_only": bool(participant and not can_resume(participant)),
         "group_condition": session.group_condition,
         "term_slug": term.slug if term else None,
         "term_label": term.label if term else None,
         "session_index": session.session_index,
         "turn_index": turn.turn_index,
-        "scaffolding_level": turn.scaffolding_level,
         "learning_stage": stage_meta.get("learning_stage"),
         "learning_stage_label": stage_meta.get("learning_stage_label"),
         "component_term": stage_meta.get("component_term"),
-        "component_index": stage_meta.get("component_index"),
-        "component_total": stage_meta.get("component_total"),
         "next_learning_stage": grading.get("next_learning_stage"),
         "teaching_strategy": turn.teaching_strategy,
-        "strategy_changed": turn.strategy_changed,
         "mandatory_elements": (turn.diagnosis_json or {}).get("mandatory_elements"),
         "mandatory_elements_validation": (turn.diagnosis_json or {}).get("mandatory_elements_validation"),
         "teaching_contract": (turn.diagnosis_json or {}).get("teaching_contract"),
@@ -3652,7 +3265,6 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "response_time_sec": turn.response_time_sec if turn.response_time_sec is not None else grading.get("response_time_sec"),
         "question_shown_at": _iso(turn.question_shown_at),
         "answered_at": _iso(turn.answered_at),
-        "forbidden_help_given": turn.forbidden_help_given,
         "created_at": _iso(turn.created_at),
     }
 
@@ -3668,13 +3280,10 @@ def _answer_history_attempt_row(attempt_row: dict[str, Any]) -> dict[str, Any]:
         "source_type": "test_attempt",
         "source_id": attempt_row["attempt_id"],
         "learning_stage": None,
-        "component_term": None,
-        "component_index": None,
-        "component_total": None,
         "turn_index": None,
         "is_sufficient": None,
         "teaching_strategy": None,
-        "learner_response": attempt_row.get("selected_option_body") or attempt_row.get("free_text_answer") or attempt_row.get("reason_text"),
+        "learner_response": attempt_row.get("selected_option_body") or (attempt_row.get("legacy_fields") or {}).get("free_text_answer") or (attempt_row.get("legacy_fields") or {}).get("reason_text"),
     }
 
 
@@ -3690,46 +3299,16 @@ def _answer_history_turn_row(turn_row: dict[str, Any]) -> dict[str, Any]:
         "recurrence_flag": None,
         "question_body_snapshot": turn_row.get("question_body"),
         "option_order_snapshot": (turn_row.get("practice_question") or {}).get("options"),
-        "free_text_answer": None,
-        "reason_text": None,
         "learner_response": turn_row.get("selected_option_body") or turn_row.get("learner_response"),
     }
 
 
 def _answer_history_turn_rows(turn_row: dict[str, Any]) -> list[dict[str, Any]]:
-    item_results = (turn_row.get("grading_json") or {}).get("item_results") or []
-    if not item_results:
-        return [_answer_history_turn_row(turn_row)]
-    rows = []
-    for index, item in enumerate(item_results):
-        rows.append(
-            {
-                **turn_row,
-                "answer_log_id": f"tutor_turn:{turn_row['tutor_turn_id']}:item:{index}",
-                "source_type": "learning_turn",
-                "source_id": turn_row["tutor_turn_id"],
-                "phase": "learning",
-                "is_correct": item.get("is_correct"),
-                "misconception_type": item.get("learning_misconception_type"),
-                "recurrence_flag": None,
-                "question_body": item.get("question_body"),
-                "question_body_snapshot": item.get("question_body"),
-                "option_order_snapshot": next(
-                    (practice_item.get("options") for practice_item in (turn_row.get("practice_question") or {}).get("items", []) if practice_item.get("component_term") == item.get("component_term")),
-                    None,
-                ),
-                "free_text_answer": None,
-                "reason_text": None,
-                "learner_response": item.get("selected_option_body"),
-                "selected_option_body": item.get("selected_option_body"),
-                "is_sufficient": item.get("is_sufficient"),
-                "learning_misconception_type": item.get("learning_misconception_type"),
-                "component_term": item.get("component_term"),
-                "component_index": index,
-                "component_total": len(item_results),
-            }
-        )
-    return rows
+    if turn_row.get("legacy_read_only"):
+        rows = legacy_turn_answer_rows(turn_row)
+        if rows:
+            return rows
+    return [_answer_history_turn_row(turn_row)]
 
 
 def _answer_history_rows(attempt_rows: list[dict[str, Any]], turn_rows: list[dict[str, Any]], *, reverse: bool = False, limit: int | None = None) -> list[dict[str, Any]]:
@@ -3791,6 +3370,8 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
             {
                 "participant_id": row.id,
                 "display_code": row.display_code,
+                "experiment_spec_version": row.experiment_spec_version,
+                "can_resume": can_resume(row),
                 "group_condition": row.group_condition,
                 "current_step": row.current_step,
                 "completed_at": _iso(row.completed_at),
@@ -3854,8 +3435,10 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "display_code": participant_by_id.get(row.participant_id).display_code if participant_by_id.get(row.participant_id) else None,
                 "group_condition": row.group_condition,
                 "pretest_score": row.pretest_score,
+                "legacy_read_only": not can_resume(participant_by_id[row.participant_id]) if row.participant_id in participant_by_id else True,
+                **({"legacy_fields": legacy_fields(row)} if participant_by_id.get(row.participant_id) and not can_resume(participant_by_id[row.participant_id]) else {}),
                 "retest_score": row.retest_score,
-                "l0_correct_rate": row.l0_correct_rate,
+                "attainment_correct_rate": row.attainment_correct_rate,
                 "same_misconception_recurrence_rate": row.same_misconception_recurrence_rate,
                 "score_timeline": row.score_timeline_json,
                 "misconception_timeline": row.misconception_timeline_json,
@@ -3924,6 +3507,8 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
         "participant": {
             "participant_id": participant.id,
             "display_code": participant.display_code,
+            "experiment_spec_version": participant.experiment_spec_version,
+            "can_resume": can_resume(participant),
             "group_condition": participant.group_condition,
             "assignment_method": participant.assignment_method,
             "current_step": participant.current_step,
@@ -3941,13 +3526,12 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
                 "term_slug": terms.get(row.term_id).slug if terms.get(row.term_id) else None,
                 "term_label": terms.get(row.term_id).label if terms.get(row.term_id) else None,
                 "current_status": row.current_status,
+                **({"legacy_fields": legacy_fields(row)} if not can_resume(participant) else {}),
                 "primary_misconception": row.primary_misconception,
-                "scaffolding_level": row.scaffolding_level,
-                "current_stage_for_display": _learning_stage_label_for_state(row),
+                "current_stage_for_display": _learning_stage_label_for_state(row) if can_resume(participant) else "旧試用の保存値",
                 "teaching_strategy": row.teaching_strategy,
                 "stable_correct_count": row.stable_correct_count,
                 "recurrence_count": row.recurrence_count,
-                "l0_success_count": row.l0_success_count,
                 "state_summary": row.state_summary,
                 "updated_at": _iso(row.updated_at),
             }
@@ -4028,11 +3612,11 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
         if not summary
         else {
             "pretest_score": summary.pretest_score,
+            **({"legacy_fields": legacy_fields(summary)} if not can_resume(participant) else {}),
             "retest_score": summary.retest_score,
-            "l0_correct_rate": summary.l0_correct_rate,
+            "attainment_correct_rate": summary.attainment_correct_rate,
             "same_misconception_recurrence_rate": summary.same_misconception_recurrence_rate,
             "m1_recurrence_rate": summary.m1_recurrence_rate,
-            "m2_recurrence_rate": summary.m2_recurrence_rate,
             "m3_recurrence_rate": summary.m3_recurrence_rate,
             "learning_target_count": summary.learning_target_count,
             "score_timeline": summary.score_timeline_json,

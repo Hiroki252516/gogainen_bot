@@ -1,4 +1,6 @@
-# 学習ログ駆動型AIチューター 開発仕様リポジトリ
+# 学習ログ駆動型AIチューター
+
+現行実験仕様版は1。新規参加者のみ進行でき、旧v1/v2の試用は閲覧専用です。記録を削除せず管理者ログ・CSVから確認できます。更新前の資料は `docs/history/2026-10-06/` に保存しています。
 
 このリポジトリは、卒業研究で使う「誤概念タイプと学習ステージに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 
@@ -8,19 +10,19 @@
 
 研究の比較対象は「AIを使うかどうか」ではありません。比較対象は「一般的なAI解説」と「学習ログに基づいて誤概念タイプ・学習ステージ・教授方略を変えるAIチューター」です。
 
-主評価指標は次の3つです。
+現在の研究仮説は次の3つです（評価式・統計手法を今回再設計しません）。
 
-1. 同種誤答再発率
-2. 最終テスト正答率
-3. 回答時間
+1. 実験群は統制群より事前テストから初回再テストへの正答率の伸びが大きい。
+2. 実験群は統制群より学習セッション・再テストのループ回数が少ない。
+3. 実験群は統制群より同種誤答タイプを再び示す割合が低い。
 
 これは研究上の評価目的である。現行実装では`final_test`はpretestで学習対象がない参加者に限られ、学習対象のある参加者は再テスト満点後に省略される。したがって、現行データには全員共通の最終テスト正答率はなく、測定経路を記録・区別して解釈する。
 
 現行フローでは、参加者向けの表示名を「テスト」「再テスト1」「再テスト2」のように統一します。内部フェーズ `final_test` は、pretestで学習対象がない参加者にだけ使い、画面上は「再テスト1」と表示します。学習対象がある参加者は学習後に`retest`を受けます。retestで3項目すべて正解した場合は追加の確認を省略して`/survey`へ進み、不正解・未回答がある場合は学習対象へ戻ります。したがって、全参加者が同じ`final_test`を受ける設計ではありません。
 
-事前・再テスト・最終テストの問題は `backend/app/seed/content/learning_content.yml`、新規参加者向け学習確認問題v2は `backend/app/seed/content/learning_questions_v2.yml` で管理します。学習確認v2は3用語×2学習段階×5 variantで、適用・予測・比較・境界判断・事例診断の場面判断問題です。既存参加者（版未記録を含む）はv1、新規参加者は作成時にv2へ固定されます。現行デバッグ配置では、テスト系および学習確認v1/v2ともA〜Cが正解、D〜FがM1、G〜IがM3、Jが「わからない」です。各問には各役割が3/3/3/1で置かれますが、A〜Iの役割分散は行われていません。正解ラベルを手掛かりにできるため、この配置で研究データを収集しないでください。採点は提示問題の選択肢metadata（v1は互換ルール）を使います。
+テスト系は `backend/app/seed/content/learning_content.yml`、学習確認は現行v2の `learning_questions_v2.yml` だけを使用します。テスト21問、学習確認30問で、各問は正解/M1/M3/unknownを3/3/3/1持ちます。A〜C正解、D〜F=M1、G〜I=M3、J=unknownは一時デバッグ配置です。収集前に位置分散を復旧する必要があります。採点は選択肢メタデータに基づきます。
 
-教材生成では、両群が `rag_agent_knowledge_base/` の共通RAG本文を参照します。提案群だけが学習ログ・誤概念分類・足場掛け情報を利用し、統制群には個人の履歴やtaxonomyを渡しません。LangGraph関連のチャンクは対象外です。
+教材生成では両群が共通RAGを参照します。提案群だけがM1/M3/unknown・事前誤答・学習履歴を使い、統制群に個人診断や履歴を渡しません。教授方略はbackendで固定します。教材内の適用確認transfer_checkは維持します。
 
 ## 実装で守る前提
 
@@ -30,7 +32,7 @@
 - 通常実行では `CodexAppServerBackend` を使い、ユーザーのChatGPT/CodexログインでAIを呼び出す
 - `MockAIBackend` は自動テスト・CI・app-server切り分け専用に残す
 - ChatGPT/Codex認証情報をDBへ保存しない
-- 被験者画面に `M1` から `M4` の内部ラベルを直接表示しない
+- 被験者画面に内部分類・群名・教授方略を直接表示しない
 - 回答、出題時刻、回答時刻、回答時間、AI診断、AI応答、学習ステージ更新を研究ログとして保存する
 - 管理画面とCSVでは、テスト回答と学習ターン回答を `answer_history` として同じ回答履歴に統合する
 - 回答ログの `attempts.test_round` に `test`、`retest_1`、`retest_2` の周回名を保存し、内部処理用の `phase` と区別する
@@ -53,8 +55,8 @@
 | `docs/00_project_summary.md` | 研究とシステムの全体像 |
 | `docs/01_research_requirements.md` | 研究課題、仮説、実験条件 |
 | `docs/02_experiment_flow.md` | 被験者フローと状態遷移 |
-| `docs/03_misconception_taxonomy.md` | 最終M1〜M4分類と旧分類からの対応 |
-| `docs/04_scaffolding_and_tutoring.md` | ステージ制学習、教授方略、チャット制御 |
+| `docs/03_misconception_taxonomy.md` | 現行M1/M3/unknown分類 |
+| `docs/04_scaffolding_and_tutoring.md` | 固定教授方略、教材必須要素、教材内適用確認 |
 | `docs/05_system_architecture.md` | システム構成とモジュール境界 |
 | `docs/06_codex_app_server_integration.md` | Codex app-server連携方針 |
 | `docs/07_data_model.md` | DBテーブル、enum、保存ルール |
@@ -172,4 +174,4 @@ GET /api/admin/participants/{participant_id}/logs.csv
 
 CSVは `record_type, source_type, participant_id, display_code, phase, test_round, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。
 
-現行の評価サマリーは `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率、Mタイプ別再発率を中心に保存します。得点推移は `test`、`retest_1`、`retest_2` の周回名で記録し、`final_test` は内部フェーズ名として必要な場合だけ保持します。再テスト3用語が全問正解した場合は追加の確認を省略し、再テスト満点を最終到達率に代用してJSONに `final_test_skipped_after_retest_mastery` と `final_score_source` を記録します。
+現行サマリーはpretest_score、retest_score、attainment_correct_rate、同種誤答/M1/M3別再発率を保存します。到達率の物理保存先だけ旧列を維持し、計算はis_correctを使います。周回名とfinal_score_sourceで測定経路を区別します。旧試用は保存値の閲覧/CSVだけとし、再計算や現行群集計には混ぜません。

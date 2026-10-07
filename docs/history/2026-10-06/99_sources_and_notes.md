@@ -1,0 +1,166 @@
+# 99. Sources and Notes
+
+## Uploaded Research Decks
+
+この仕様リポジトリは、以下のPPTXから抽出した研究計画をもとに整備した。
+
+- `/Users/hiroki/Downloads/5月18日(テーマ変更) (2) 2.pptx`
+- `/Users/hiroki/Downloads/5月25日進捗報告.pptx`
+
+## Research Plan Summary
+
+研究の中心は、AIチューターを作ること自体ではない。中心は、AI・情報系専門用語の誤概念を学習ログから追跡し、同じ誤概念の再発抑制と足場掛けなし転移を評価することである。
+
+比較対象は「AIを使うかどうか」ではなく、以下である。
+
+- 統制群: 一般的なAI解説
+- 提案群: 学習ログ、誤概念タイプ、学習ステージに基づいて支援を変えるAIチューター
+
+## Key Decisions from Decks
+
+### Final taxonomy
+
+5月18日案ではM1〜M6の誤概念分類が提示されていた。5月25日案では、先行研究に基づく独自の分析枠組みとしてM1〜M4へ整理された。
+
+2026-08-21更新後のMVPでは、M1〜M4を次の知識構造上の粒度として扱う。固定問題の選択肢はM1/M3/unknownを診断対象とし、M2/M4はAI内部taxonomyと将来の問題設計のために保持する。
+
+| Final | Name |
+|---|---|
+| M1 | 誤信念型 |
+| M2 | 欠陥メンタルモデル型 |
+| M3 | カテゴリー誤り型 |
+| M4 | 欠如したスキーマ型 |
+| unknown | 知識不足 |
+
+### Problem phase separation
+
+5月25日案では、問題タイプとフェーズの対応が明示されていた。現行仕様では問題本文と選択肢をYAMLで固定し、variant_keyで再利用規則を追跡する。
+
+| フェーズ | 使う問題 |
+|---|---|
+| 事前テスト | 定義問題・識別問題 |
+| 学習セッション | `enrichment` / `conceptual_change`の固定確認問題 |
+| 即時再テスト | 初期計画上の案は各用語4バリエーション、5回目以降はv4を再利用（現行実装はv1〜v5、6回目以降はv5） |
+| 最終テスト | 各用語1問。理由・ヒント・即時正解表示なし |
+
+この表は初期研究計画に書かれた問題案であり、現行実装と異なる箇所がある。現行実装ではテスト問題に `construct_key` と `variant_key` を持たせ、学習確認は `TutorTurn.practice_question_json.variant_key` で管理する。テスト系は `backend/app/seed/content/learning_content.yml`、学習確認v2は `backend/app/seed/content/learning_questions_v2.yml` を用いる。事前・最終テストは各用語1問、再テストはv1〜v5、学習確認は各学習段階・各用語5 variantで管理し、上限を超えた場合は最後のvariantを再利用する。既存参加者はNULL版をv1として継続し、新規参加者はv2へ固定する。
+
+### Main metrics
+
+PPTXで繰り返し示されていた主評価指標は以下。
+
+- 同種誤答再発率
+- 足場掛けなし自力解答率
+
+これらは `docs/12_evaluation_metrics.md` に定義した。
+
+## References in Decks
+
+### Conceptual change / category shift
+
+- Chi, M. T. (2009). Three types of conceptual change: Belief revision, mental model transformation, and categorical shift.
+- Chi, M. T. H. (2008). Three types of conceptual change: Belief revision, mental model transformation, and categorical shift.
+
+M1の単一信念の修正、M2のメンタルモデルの再構成、M3のカテゴリー再分類という粒度の根拠として使用する。固定問題でM3を優先判定するのは、カテゴリーの取り違えが他の局所的な誤りより上位の説明枠を壊すためである。
+
+- Chi, M. T. (2013). Two kinds and four sub-types of misconceived knowledge, ways to change it, and the learning outcomes. In *International Handbook of Research on Conceptual Change* (pp. 49-70). Routledge.
+
+M4「欠如したスキーマ型」の根拠として使用する。不正確な知識の修正だけでなく、学習者に不足しているカテゴリーや関係を新たに構築する必要がある場合を区別する。
+
+### Similar concept boundary confusion
+
+- Hassani, H., Ghodsi, M., & Howell, G. (2010). A note on standard deviation and standard error. Teaching Mathematics and its Applications, 29(2), 108-112.
+- Qian, Y., & Lehman, J. (2017). Students' Misconceptions and Other Difficulties in Introductory Programming: A Literature Review.
+
+Hassaniらの研究はM2全体を定義する根拠ではなく、標準偏差と標準誤差のような近接概念の境界混同を説明する補助例として扱う。M2の本質的定義はChiのメンタルモデルの議論に置く。
+
+### Surface feature / keyword reaction
+
+- Chi, M. T., Feltovich, P. J., & Glaser, R. (1981). Categorization and representation of physics problems by experts and novices. Cognitive Science, 5(2), 121-152.
+
+初心者が表層特徴に基づいて問題を表象し、専門家が原理・構造に基づいて表象する差を、M3の診断問題と教材設計の補助根拠として使う。特定用語のM1〜M4定義そのものではない。
+
+### Transfer
+
+- Bransford, J. D., & Schwartz, D. L. (1999). Rethinking Transfer: A Simple Proposal With Multiple Implications. Review of Research in Education, 24(1), 61-100.
+- 白水始. (2012). 認知科学と学習科学における知識の転移. 人工知能, 27(4), 347-358.
+
+転移研究は、M4で構築したスキーマやM3で再配置したカテゴリーが新しい文脈でも使えるかを評価する補助根拠として使う。
+
+### AI tutoring / scaffolding / learning analytics
+
+- VanLehn, K. (2011). The Relative Effectiveness of Human Tutoring, Intelligent Tutoring Systems, and Other Tutoring Systems.
+- SoLAR (2025). What is Learning Analytics? Society for Learning Analytics Research.
+- Kestin, G. et al. (2025). AI tutoring outperforms in-class active learning. Scientific Reports.
+- Zheng, L. et al. (2022). An exploratory study on fade-in versus fade-out scaffolding.
+- 加納政芳. (2013). 英単語学習システムにおける足場かけ使用による学習能力の変化.
+- 和久友親, 田村哲嗣, & 川瀬真弓. (2024). 学習者の理解度に応じた自動問題生成AIシステムの開発.
+- Puech, R., Macina, J., Chatain, J., Sachan, M., & Kapur, M. (2025). Towards the pedagogical steering of large language models for tutoring.
+
+## Codex app-server Notes
+
+このプロジェクトはOpenAI APIキーを使わない。Codex app-server経由でユーザーのChatGPT/Codexログインを使う。ただしapp-serverは仕様変更可能性があるため、`AIBackend` として隔離する。
+
+ローカルCLI確認:
+
+- `codex app-server --listen ws://127.0.0.1:4500`
+- `--ws-auth capability-token`
+- `--ws-token-file`
+- `generate-json-schema --experimental --out <dir>`
+- v2 schemaに `thread/start`, `turn/start`, `account/read`, `account/login/start`, `account/login/cancel`, `account/logout`
+- `turn/start` に `outputSchema`
+
+実装時はその時点のschemaを再生成して確認する。
+
+## Design Assumptions
+
+### 現行MVPと将来設計の区別
+
+現行MVPとは、このリポジトリの確認対象チェックアウトにあるコード、YAML、Docker設定、API、画面で現在実行できる範囲を指す。実装済みと書く機能は、対応するコードまたはAPIの存在だけでなく、現行の主導線から実行できることを確認する。研究計画上必要でも、API・画面・集計処理がない機能は「将来対応」「未実装」と明記する。ブランチ名や過去の作業時点だけを根拠に実装済みとは扱わない。
+
+この基準により、遅延再テスト、完全な転移評価、M2/M4固定診断問題、理解度差分・足場掛け削減量、管理者による手動診断修正とその監査、詳細な群間グラフは将来設計として扱う。参加者削除、学習・実験ギブアップ、これらの操作監査は現行実装である。評価モデルに互換列やJSON列が存在することだけで、指標が算出済みとはみなさない。
+
+- MVPは参加者単位の群間比較を基本にする
+- 現行の参加者作成は、管理者が伝えるA/B参加コードを受け付け、Aを`proposed`、Bを`control`へbackendで変換する。参加者画面に群名を表示せず、`assignment_method=admin_code`を保存する。参加者が群を直接選択する方式や、現行APIでのランダム割り当ては採用しない
+- 参加者数が少ない場合、用語単位の被験者内比較へ拡張可能にする
+- 現行MVPの学習対象は、`llm_knowledge`、`multi_agent`、`memory_process` の3件
+- 診断後、正解済み用語は学習対象から除外し、未達用語だけを学習する
+- 再テストAPIは事前テスト対象の3件を扱える。現行backendは1回の採点呼び出し後、未達用語を `learning_targets` に戻すが、学習・再テストの自動周回は実装していない。
+- 事前テスト、学習、再テスト、最終テストはYAMLで定義した3項目を基本にする
+- Transformer、Attention、事前学習、事後学習など旧用語は過去ログ・DB互換用として非アクティブ化する
+- RAGは通常 `rag_agent_knowledge_base/` の用語別セクションを共通参照する。アクティブなRAGルートに`chunks.jsonl`がない場合だけ、互換用の `rag_ready_教材/` へフォールバックする。LangGraph関連チャンクは除外する
+- 遅延再テストは任意拡張であり、現行の開始API/UI・集計は未実装
+- MockAIBackendをテスト・切り分け用に維持する
+
+## Issue #97 先行教材生成の実装メモ
+
+2026-09-27時点の実装では、初回教材のレスポンス後にbackend内のresponse-after workerが後続の未達用語すべての初回教材を先行生成する。順序は`PRETEST_TERM_ORDER`、固定確認問題は参加者のコンテンツ版に対応する初回variant、生成契約・RAG・control/proposedの入力分離は通常の教材生成と同じである。耐久キューは導入せず、`TutorSession.prefetch_state`をDB上の監査状態として保存する。
+
+`pending`/`generating`中に参加者が先に到達した場合は待機結果を破棄し、同期生成へ切り替える。AI失敗は`failed`と`AICallLog`へ記録して参加者へ返さず、`codex_app_server`からMockへフォールバックしない。現在用語の不正解は後続待機turnに影響させず、現在用語の2問目だけが既存の誤概念履歴で適応される。ギブアップ、実験終了、再テスト後の新周回では未使用turnを破棄する。
+
+先行生成turnは未回答の間、調査用回答履歴と学習負担の実績値に算入しない。再利用時は同じ`turn_id`を返し、`diagnosis_json`とAIログに生成元・待機・再利用・失敗・破棄を記録する。`failed`/`discarded`後に同期フォールバックでinteractive turnが保存されたセッションは実学習として扱い、未使用prefetchの整理では強制終了しない。これは参加者画面の表示仕様、YAML問題文・選択肢・採点、AIBackend契約を変更しない。
+
+## Issue #102 統制群の固定教材シーケンス
+
+2026-09-27時点の実装では、controlの教材・確認問題選択を`control-fixed-v1`へ分離した。対象用語と同一`TutorSession`内のturn_indexから`conceptual_change`のv1〜v5を決め、pretest、`LearnerState`、誤概念、回答履歴、診断stageによって変更しない。proposedは既存の`_learning_position`と履歴・target・足場掛けによる適応経路を維持する。
+
+controlの診断結果は採点・評価・監査には保存するが教授へは使わない。`TutorTurn.diagnosis_json`と`AICallLog.request_payload.generation_audit`へ`instruction_route`、`fixed_sequence_key`、用語・session/turn・variant、`actual_ai_input`を追加し、Codex app-serverの`effective_request`にも実送信promptと照合できる形で記録する。`actual_ai_input`はcontrolでは用語・共通構成要素・共通RAGだけを含み、参加者ID、群名、診断、履歴、学習stageを含めない。DB/CSVの固定列、公開API、参加者UI、YAML問題文・選択肢・採点は変更しない。
+
+## Issue #107 教材文字数の共通化メモ
+
+両群の`generate_tutoring_turn`教材本文は、Markdown記号を含む文字数で700文字を目標とし、600〜800文字を許容範囲とする。control/proposedのRAG、入力分離、必須教授要素、固定問題・採点は変更しない。backendは生成後に文字数を検証し、範囲外なら初回生成後に同じAI backendで最大2回再生成し、最大3試行とする。再生成時は前回の実測文字数をAIへの調整指示へ含める。文字数検証の実測値、目標・許容範囲、試行回数、最終結果は`AICallLog.response_payload.generation_validation`と`TutorTurn.diagnosis_json.material_length_validation`、`output_metrics`へ保存する。許容範囲外のままの場合は参加者へ教材を確定せず、既存のAI失敗処理へ送る.
+
+## Known Deck Inconsistencies and Resolution
+
+7月22日PPTXと8月21日更新仕様を受け、古いTransformer固有のM1/M3判定は新規フローから外した。現行コードでは学習確認v1/v2とテスト系すべてでA〜C正解、D〜F=M1、G〜I=M3、J=unknownに固定し、提示問題の選択肢metadata（v1は互換ルール）で採点する。variant間のラベル分散は実装されていないため、この配置はデバッグ専用であり研究データ収集には使わない。M2/M4は実行時taxonomyに保持するが、固定問題で直接診断しない。
+
+5月18日PPTXではH0の表記があったが、現在の実装では固定3ターンの足場掛け制ではなく、`enrichment`（豊富化）、`conceptual_change`（概念変化）、`final_feedback`（教材フィードバック）の`learning_stage`を使う。1つの学習確認に十分回答すると当該`TutorSession`を終了する。L3/L2相当の値は内部`scaffolding_level`互換・ログ用に残すもので、参加者向けの段階名やL3からL2へ進む別個の学習段階ではない。
+
+## Implementation Non-goals
+
+- 汎用チャットボットの作成
+- OpenAI APIキー利用
+- インターネット公開
+- 個人情報収集
+- 全AI用語を網羅する教材サイト化
+- 統計分析ソフト内蔵の本格実装

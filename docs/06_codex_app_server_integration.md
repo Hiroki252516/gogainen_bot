@@ -141,17 +141,14 @@ capability tokenを使う場合は、backendコンテナに同じtokenファイ�
 
 Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造化JSONを返すタスク」としてAIに依頼する。
 
-診断・教授・採点で用途を分ける。
+教材生成・正答要約・誤答解説で用途を分ける。
 
-- diagnosis thread（自由回答・互換フェーズ）
 - tutoring thread（教材生成）
-- grading thread（互換・補助フェーズ）
-- feedback thread（互換・補助フェーズ）
 - correct-answer summary / distractor explanation thread
 
-現行実装では、構造化されたAI呼び出しごとにephemeral threadを作る。用途は `diagnose_answer`、`generate_tutoring_turn`、`generate_correct_answer_summary`、`explain_selected_distractor` などの `purpose` としてログに残す。
+構造化呼出しごとにephemeral threadを作り、generate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3purposeをログに残す。
 
-現行の有効なpretest・retest・final_test・learning確認問題は固定YAMLの複数選択式であり、採点とM1/M3/unknown分類をapp-serverへ依存しない。`diagnose_answer`、`grade_response`、`generate_feedback` は自由回答や過去データとの互換用に残る。通常の学習導線でapp-serverを使う主な箇所は教材生成と回答後解説生成である。
+全問固定複数選択で、採点・分類をapp-serverへ依存しない。旧AI診断・自由回答採点・自己説明フィードバック・状態要約の実行経路はない。過去ログは読出しだけにする。
 
 ## thread/start 例
 
@@ -164,7 +161,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
     "cwd": "/tmp",
     "approvalPolicy": "never",
     "sandbox": "read-only",
-    "baseInstructions": "You are a structured-output educational diagnosis assistant.",
+    "baseInstructions": "You are a structured-output tutoring and answer-feedback assistant.",
     "ephemeral": true
   }
 }
@@ -185,7 +182,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
     "input": [
       {
         "type": "text",
-        "text": "以下の回答を診断し、指定JSONスキーマだけを返してください..."
+        "text": "目的: tutoring_turn。共通用語とRAGから教材を生成し、teaching_strategyをgeneral_explanationに固定してください..."
       }
     ],
     "approvalPolicy": "never",
@@ -194,12 +191,10 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
     "outputSchema": {
       "type": "object",
       "properties": {
-        "is_correct": { "type": "boolean" },
-        "misconception_type": { "type": ["string", "null"] },
-        "diagnosis_confidence": { "type": "number" },
-        "evidence": { "type": "string" }
+        "tutor_message": { "type": "string" },
+        "teaching_strategy": { "type": "string", "enum": ["general_explanation"] }
       },
-      "required": ["is_correct", "misconception_type", "diagnosis_confidence", "evidence"],
+      "required": ["tutor_message", "teaching_strategy"],
       "additionalProperties": false
     }
   }

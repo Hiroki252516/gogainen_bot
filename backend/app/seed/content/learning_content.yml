@@ -7,43 +7,6 @@ selection_policy:
   unknown_label: J
   classification_priority: [M3, M1, unknown]
 
-option_sets:
-  llm_knowledge: &llm_knowledge_options
-    - {label: A, body: "事前学習は、大規模で多様なデータから言語パターンや一般的知識の基盤を獲得する方法である。", is_correct: true, misconception_type: null}
-    - {label: B, body: "RAGは、回答時に外部文書を検索し、その内容をモデルへの文脈として利用する方法である。", is_correct: true, misconception_type: null}
-    - {label: C, body: "プロンプトエンジニアリングは、指示や入力の構成を工夫して、望ましい応答を引き出す方法である。", is_correct: true, misconception_type: null}
-    - {label: D, body: "RAGを使うと、検索した文書の内容がその場でモデルの重みに恒久的に書き込まれる。", is_correct: false, misconception_type: M1}
-    - {label: E, body: "プロンプトエンジニアリングを行えば、モデルの学習済み重みそのものが更新される。", is_correct: false, misconception_type: M1}
-    - {label: F, body: "ファインチューニングは、入力文の書き方を少し変えるだけで、訓練データを使わない。", is_correct: false, misconception_type: M1}
-    - {label: G, body: "RAGは、モデル内部に知識を保存するための重み更新そのものである。", is_correct: false, misconception_type: M3}
-    - {label: H, body: "プロンプトエンジニアリングは、外部文書を検索するデータベースという種類の仕組みである。", is_correct: false, misconception_type: M3}
-    - {label: I, body: "事前学習は、利用者が回答を検索するための画面やアプリケーションである。", is_correct: false, misconception_type: M3}
-    - {label: J, body: "わからない。", is_correct: false, misconception_type: unknown}
-
-  multi_agent: &multi_agent_options
-    - {label: A, body: "マルチエージェントでは、複数のエージェントが役割分担しながら課題に取り組める。", is_correct: true, misconception_type: null}
-    - {label: B, body: "エージェント間の情報共有や結果の受け渡しを設計すると、複数の処理を連携させられる。", is_correct: true, misconception_type: null}
-    - {label: C, body: "複雑な課題を分解し、調査・計画・実行などの役割ごとに処理させることができる。", is_correct: true, misconception_type: null}
-    - {label: D, body: "プロンプトを複数書けば、役割分担や情報交換がなくても必ずマルチエージェントになる。", is_correct: false, misconception_type: M1}
-    - {label: E, body: "マルチエージェントでは、すべてのエージェントが常に同じ回答を出さなければならない。", is_correct: false, misconception_type: M1}
-    - {label: F, body: "エージェントが一度得た情報は、設計に関係なく永久に正しい記憶として保持される。", is_correct: false, misconception_type: M1}
-    - {label: G, body: "マルチエージェントとは、単一の巨大なモデルを一つの処理として実行する方式である。", is_correct: false, misconception_type: M3}
-    - {label: H, body: "ツールから返されたデータそのものが、独立した目的と判断を持つエージェントである。", is_correct: false, misconception_type: M3}
-    - {label: I, body: "処理が分岐するワークフローは、エージェントの役割や自律性がなくても必ずマルチエージェントである。", is_correct: false, misconception_type: M3}
-    - {label: J, body: "わからない。", is_correct: false, misconception_type: unknown}
-
-  memory_process: &memory_process_options
-    - {label: A, body: "記憶プロセスは、過去の対話や経験から必要な情報を保存し、後で参照できるようにする処理である。", is_correct: true, misconception_type: null}
-    - {label: B, body: "記憶を検索・更新・要約する仕組みによって、現在の処理へ過去の情報を活用できる。", is_correct: true, misconception_type: null}
-    - {label: C, body: "自己評価や振り返りを記憶プロセスと組み合わせると、過去の結果を次の応答改善に利用できる。", is_correct: true, misconception_type: null}
-    - {label: D, body: "記憶プロセスは、過去の会話を必ず一字一句そのまま永久保存する処理である。", is_correct: false, misconception_type: M1}
-    - {label: E, body: "記憶を利用する場合、保存した情報は内容を確認せず、常に正しいものとして使う。", is_correct: false, misconception_type: M1}
-    - {label: F, body: "自己評価を一度行えば、記憶の検索や更新を設計しなくても自動的に次の応答へ反映される。", is_correct: false, misconception_type: M1}
-    - {label: G, body: "記憶プロセスは、モデルの学習済み重みそのものと同じ種類の知識保存である。", is_correct: false, misconception_type: M3}
-    - {label: H, body: "RAGによる文書検索と記憶プロセスは、目的や更新方法に違いがなく完全に同じ仕組みである。", is_correct: false, misconception_type: M3}
-    - {label: I, body: "会話の入力を一つのプロンプトに貼り付けるだけで、記憶プロセス全体が成立する。", is_correct: false, misconception_type: M3}
-    - {label: J, body: "わからない。", is_correct: false, misconception_type: unknown}
-
 teaching_targets:
   llm_knowledge:
     D:
@@ -158,7 +121,6 @@ terms:
     questions:
       pretest:
         - variant_key: pretest_v1
-          role_rotation: 0
           scenario: "市立病院の案内AIは、更新された診療時間表をその日の問い合わせから参照し、モデルを追加訓練せずに回答したい。"
           task: "必要な処理と、モデル内部の変更に関する説明を3つ選びなさい。"
           choices:
@@ -176,7 +138,6 @@ terms:
               - "事前学習は、患者が診療内容を探すためのWeb画面に当たる。"
       retest:
         - variant_key: retest_v1
-          role_rotation: 3
           scenario: "自治体の窓口AIは、改訂された手続案内をすぐ回答へ反映し、モデルの再訓練を避ける。担当者は必要な変更と仕組みの違いを確認している。"
           task: "この要件に合う処理と、重み更新の説明を3つ選びなさい。"
           choices:
@@ -193,7 +154,6 @@ terms:
               - "プロンプトは、改訂文書を保管して検索する外部知識庫のことである。"
               - "事前学習は、窓口の利用者が回答を検索するためのアプリ機能である。"
         - variant_key: retest_v2
-          role_rotation: 6
           scenario: "通販会社の案内AIは、商品仕様の変更を受けて最新カタログを参照する。モデルの更新作業は行わず、回答の形式は指示で整えたい。"
           task: "要件を満たす処理と、それぞれが変える対象を正しく示す説明を3つ選びなさい。"
           choices:
@@ -210,7 +170,6 @@ terms:
               - "プロンプトは商品資料を登録して、必要なページを検索する保存領域である。"
               - "事前学習は、買い手が商品情報を探す検索サイトに当たる。"
         - variant_key: retest_v3
-          role_rotation: 0
           scenario: "大学図書館の質問窓口は、日々追加される利用案内を回答の根拠に使う。職員は資料の更新だけでモデルの学習状態が変わるかも整理したい。"
           task: "実装方法と、入力・重み・訓練の関係を正しく述べるものを3つ選びなさい。"
           choices:
@@ -227,7 +186,6 @@ terms:
               - "プロンプトは、案内文書を保管して質問に合わせて取り出す検索装置である。"
               - "事前学習は、図書館利用者が本を探すための画面の設計である。"
         - variant_key: retest_v4
-          role_rotation: 3
           scenario: "防災センターの案内AIは、避難所の開設情報を随時参照して回答する。運用者は最新情報の反映とモデルの再訓練を別々に管理したい。"
           task: "情報を使う時点とモデルに加える変更を区別した説明を3つ選びなさい。"
           choices:
@@ -244,7 +202,6 @@ terms:
               - "プロンプトは、避難情報を保存して質問に応じて検索する仕組みである。"
               - "事前学習は、住民が開設状況を確認するための検索画面である。"
         - variant_key: retest_v5
-          role_rotation: 6
           scenario: "入試案内AIは、更新された募集要項を参照して受験生へ答える。担当者は、変更のたびにモデル自体を訓練し直す運用を避けたい。"
           task: "この運用に合う情報利用とモデル更新の説明を3つ選びなさい。"
           choices:
@@ -262,7 +219,6 @@ terms:
               - "事前学習は、受験生が出願条件を探すWebサービスに当たる。"
       final_test:
         - variant_key: final_test_v1
-          role_rotation: 0
           scenario: "鉄道会社の問い合わせAIは、最新の運行案内を回答に使い、案内の改訂ごとにモデルの学習をやり直さない方針である。"
           task: "情報を回答へ反映する方法と、モデルの重みを変える方法について正しい説明を3つ選びなさい。"
           choices:
@@ -278,26 +234,6 @@ terms:
               - "RAGは、運行情報を使ってモデルの重みを訓練するための手法である。"
               - "プロンプトは、運行資料を保存し質問に合う文書を検索する装置である。"
               - "事前学習は、利用者が列車の運行状況を検索するアプリ画面である。"
-      l0: "LLMに知識や能力を与える方法を、重み更新の有無と利用時の情報の扱いに触れて説明してください。"
-      transfer: "新しい社内資料を参照しながら回答するLLMを設計するとき、事前学習・プロンプト・RAGのどれをどのように使い分けるか説明してください。"
-    learning:
-      enrichment:
-        material: "LLMに知識を与える方法を、学習時に重みを変える方法と、利用時に情報を与える方法に分けて整理します。"
-        variants:
-          - {variant_key: learning_enrichment_v1, body: "LLMに知識を与える方法のうち、学習時に行う方法と利用時に行う方法を区別して説明しなさい。", options: *llm_knowledge_options}
-          - {variant_key: learning_enrichment_v2, body: "事前学習、RAG、プロンプトエンジニアリングの役割を一つずつ説明しなさい。", options: *llm_knowledge_options}
-          - {variant_key: learning_enrichment_v3, body: "RAGが回答時にどのように外部知識を使うかを説明しなさい。", options: *llm_knowledge_options}
-          - {variant_key: learning_enrichment_v4, body: "モデルの重みを更新する方法と、更新せずに情報を与える方法の違いを説明しなさい。", options: *llm_knowledge_options}
-          - {variant_key: learning_enrichment_v5, body: "LLMへ知識を与える方法を、使うタイミングと情報の所在に触れて説明しなさい。", options: *llm_knowledge_options}
-      conceptual_change:
-        material: "似た言葉でも、重みを更新する学習と、推論時に外部情報を文脈へ加える方法は異なります。どの方法が何を変えるのかを対比します。"
-        variants:
-          - {variant_key: learning_conceptual_change_v1, body: "RAGとファインチューニングを、重み更新と情報利用の違いから比較しなさい。", options: *llm_knowledge_options}
-          - {variant_key: learning_conceptual_change_v2, body: "プロンプトエンジニアリングがモデルの重みを更新しない理由を説明しなさい。", options: *llm_knowledge_options}
-          - {variant_key: learning_conceptual_change_v3, body: "外部資料を参照して回答する仕組みを、事前学習との違いに触れて説明しなさい。", options: *llm_knowledge_options}
-          - {variant_key: learning_conceptual_change_v4, body: "LLMに知識を与える方法を、学習時と推論時の二つの観点で整理しなさい。", options: *llm_knowledge_options}
-          - {variant_key: learning_conceptual_change_v5, body: "知識をモデル内部に持たせる方法と、回答時に外部から与える方法を比較しなさい。", options: *llm_knowledge_options}
-
   - slug: multi_agent
     label: "マルチエージェント"
     description: "マルチエージェントは、複数のエージェントに役割や目的を持たせ、情報共有や結果の受け渡しを通じて複雑な課題を分担して処理する設計である。"
@@ -307,7 +243,6 @@ terms:
     questions:
       pretest:
         - variant_key: pretest_v1
-          role_rotation: 3
           scenario: "図書館の案内システムは、蔵書を調べる担当と利用条件を確認する担当を分け、結果を合わせて質問へ回答する。"
           task: "複数の担当を連携させる設計として正しい説明を3つ選びなさい。"
           choices:
@@ -325,7 +260,6 @@ terms:
               - "条件分岐を増やしたプログラムは、主体の役割なしでもマルチエージェントである。"
       retest:
         - variant_key: retest_v1
-          role_rotation: 6
           scenario: "旅行計画AIでは、観光候補を調べる担当、日程を組む担当、移動条件を確かめる担当が順番に結果を共有する。"
           task: "この構成が課題を分担する方法として適切な説明を3つ選びなさい。"
           choices:
@@ -342,7 +276,6 @@ terms:
               - "地図検索が返す経路一覧そのものが、独自の目的を持つエージェントである。"
               - "経路条件で処理先を分けるプログラムは、それだけで複数主体の設計となる。"
         - variant_key: retest_v2
-          role_rotation: 0
           scenario: "博物館の案内AIは、展示内容を調べる担当と来館者の希望を整理する担当を使い、短い見学案を作る。"
           task: "担当の連携と単なる処理分割を区別した説明を3つ選びなさい。"
           choices:
@@ -359,7 +292,6 @@ terms:
               - "展示検索ツールの結果一覧自体が、判断や目標を持つエージェントである。"
               - "希望に応じて経路を分ける処理は、役割がなくてもマルチエージェントである。"
         - variant_key: retest_v3
-          role_rotation: 3
           scenario: "災害対応の計画支援では、被害情報を整理する担当と物資の配分を考える担当が情報を引き継ぐ。"
           task: "複数の主体が協力する仕組みについて正しい説明を3つ選びなさい。"
           choices:
@@ -376,7 +308,6 @@ terms:
               - "情報検索の返却データが、それ自体で判断を行うエージェントとなる。"
               - "災害状況に応じて条件分岐するだけで、複数エージェントの構成になる。"
         - variant_key: retest_v4
-          role_rotation: 6
           scenario: "研究支援AIは、論文を探す担当、要点を整理する担当、研究者の条件と照合する担当を連携させる。"
           task: "この設計の役割分担と情報の受け渡しを正しく説明するものを3つ選びなさい。"
           choices:
@@ -393,7 +324,6 @@ terms:
               - "検索結果の論文一覧は、それ自体が目標を立てるエージェントとして働く。"
               - "検索語に応じた分岐処理は、独立した役割がなくてもエージェント群となる。"
         - variant_key: retest_v5
-          role_rotation: 0
           scenario: "倉庫の出荷支援では、在庫を調べる担当、注文の優先度を決める担当、作業順を作る担当が結果をつなぐ。"
           task: "このシステムをマルチエージェントとして説明する記述を3つ選びなさい。"
           choices:
@@ -411,7 +341,6 @@ terms:
               - "注文条件に応じて処理経路を変えるだけで、主体の連携が成立する。"
       final_test:
         - variant_key: final_test_v1
-          role_rotation: 3
           scenario: "空港の運航支援AIは、遅延便を調べる担当と乗り継ぎ可能性を検討する担当が情報を共有して案内を作る。"
           task: "複数エージェントの構成と、単なる機能呼び出しとの違いを示す説明を3つ選びなさい。"
           choices:
@@ -427,26 +356,6 @@ terms:
               - "一つのモデルが複数の工程を実行すれば、それだけでエージェント同士の協働になる。"
               - "運航検索の結果データそのものが、目的を持って案内するエージェントである。"
               - "便の状況で処理を分岐するワークフローは、主体の役割なしに複数エージェントとなる。"
-      l0: "マルチエージェントとは何かを、役割分担、タスク分解、情報共有に触れて説明してください。"
-      transfer: "調査・計画・実行を別々の担当に任せるAIシステムを設計するとき、エージェント間の情報受け渡しをどのように設計するか説明してください。"
-    learning:
-      enrichment:
-        material: "マルチエージェントを、複数の役割を持つエージェントが課題を分担し、情報を交換して結果を統合する仕組みとして整理します。"
-        variants:
-          - {variant_key: learning_enrichment_v1, body: "マルチエージェントにおける役割分担の意味を説明しなさい。", options: *multi_agent_options}
-          - {variant_key: learning_enrichment_v2, body: "複雑な課題をタスク分解する利点を説明しなさい。", options: *multi_agent_options}
-          - {variant_key: learning_enrichment_v3, body: "エージェント間の情報共有が必要な理由を説明しなさい。", options: *multi_agent_options}
-          - {variant_key: learning_enrichment_v4, body: "複数のエージェントの結果を統合する流れを説明しなさい。", options: *multi_agent_options}
-          - {variant_key: learning_enrichment_v5, body: "マルチエージェントの基本構造を、役割と連携に触れて説明しなさい。", options: *multi_agent_options}
-      conceptual_change:
-        material: "複数の処理があるだけではマルチエージェントとは限りません。役割、目的、判断、情報交換を持つ単位としてエージェントを捉えます。"
-        variants:
-          - {variant_key: learning_conceptual_change_v1, body: "単なる処理分割とマルチエージェントの違いを説明しなさい。", options: *multi_agent_options}
-          - {variant_key: learning_conceptual_change_v2, body: "ツールとエージェントの役割の違いを説明しなさい。", options: *multi_agent_options}
-          - {variant_key: learning_conceptual_change_v3, body: "マルチエージェントにおいて、役割と情報交換がどのように関係するか説明しなさい。", options: *multi_agent_options}
-          - {variant_key: learning_conceptual_change_v4, body: "一つの大きなモデルと複数エージェントの設計上の違いを説明しなさい。", options: *multi_agent_options}
-          - {variant_key: learning_conceptual_change_v5, body: "マルチエージェントを、処理数ではなく自律的な役割と連携の観点から説明しなさい。", options: *multi_agent_options}
-
   - slug: memory_process
     label: "記憶プロセス"
     description: "記憶プロセスは、過去の対話や経験から必要な情報を保存・検索・更新し、現在の応答や次の処理に活用する仕組みである。"
@@ -456,7 +365,6 @@ terms:
     questions:
       pretest:
         - variant_key: pretest_v1
-          role_rotation: 6
           scenario: "健康相談AIは、利用者が伝えた食事上の希望を次回の提案にも生かしたい。希望が変わったときは古い内容をそのまま使わない。"
           task: "過去情報を次の応答へ活用する設計について正しい説明を3つ選びなさい。"
           choices:
@@ -474,7 +382,6 @@ terms:
               - "前回の会話を毎回入力欄へ貼り付ければ、保存や更新の機能も備わる。"
       retest:
         - variant_key: retest_v1
-          role_rotation: 0
           scenario: "料理提案サービスは、利用者が避けたい食材を次回の献立にも反映する。利用者が考えを変えた場合は登録内容を直す。"
           task: "このサービスで過去情報を管理する方法について正しい説明を3つ選びなさい。"
           choices:
@@ -491,7 +398,6 @@ terms:
               - "過去の希望を使う記憶機能は、公開文書を探すRAGそのものを指している。"
               - "相談履歴を毎回プロンプトに加えるだけで、情報の更新機能まで実現できる。"
         - variant_key: retest_v2
-          role_rotation: 3
           scenario: "問い合わせ窓口は、利用者が以前に指定した連絡方法を次回の案内に使う。新しい指定があれば以前の情報と置き換える。"
           task: "記録を次の応答へ引き継ぐ設計として正しい説明を3つ選びなさい。"
           choices:
@@ -508,7 +414,6 @@ terms:
               - "過去の利用者情報を使う機能は、一般資料を検索するRAGと完全に同じである。"
               - "前回のやり取りを入力へ再掲するだけで、継続的な記録管理が成立する。"
         - variant_key: retest_v3
-          role_rotation: 6
           scenario: "プロジェクト支援AIは、会議で決まった担当と期限を次の進捗確認で参照する。決定が変われば記録も見直す。"
           task: "過去の決定事項を適切に扱う方法について正しい説明を3つ選びなさい。"
           choices:
@@ -525,7 +430,6 @@ terms:
               - "会議履歴の記憶は、外部の規程文書を検索するRAGと同じ処理を意味する。"
               - "直前の会議録を毎回入力へ追加するだけで、保存と更新も行われている。"
         - variant_key: retest_v4
-          role_rotation: 0
           scenario: "読書案内サービスは、利用者が以前に読みたいと話したテーマを次の推薦に利用する。関心が変化したら古い記録を修正する。"
           task: "推薦に過去の情報を生かす仕組みとして正しい説明を3つ選びなさい。"
           choices:
@@ -542,7 +446,6 @@ terms:
               - "利用者の関心を扱う記憶は、書籍情報を探すRAGと同一の仕組みである。"
               - "以前の会話文を毎回プロンプトへ貼れば、記憶の検索や更新も行われる。"
         - variant_key: retest_v5
-          role_rotation: 3
           scenario: "家計相談AIは、前回確認した月ごとの支出目標を次の助言に使う。目標額の変更を受けたときは新しい内容を反映する。"
           task: "記録の保存・検索・更新について正しい説明を3つ選びなさい。"
           choices:
@@ -560,7 +463,6 @@ terms:
               - "前回の相談を入力文に再掲するだけで、保存情報の更新まで実現する。"
       final_test:
         - variant_key: final_test_v1
-          role_rotation: 6
           scenario: "旅行案内AIは、利用者が前回指定した移動上の希望を次の行程作成に使う。希望の変更があれば過去の内容をそのまま使わない。"
           task: "次の案内に過去情報を生かす方法について正しい説明を3つ選びなさい。"
           choices:
@@ -576,22 +478,3 @@ terms:
               - "過去の希望を持つ機能は、追加訓練でモデルの重みを更新する方法である。"
               - "利用者の履歴を扱う記憶処理は、観光案内を探すRAGと同じ仕組みである。"
               - "前回の会話を入力へ貼り付けるだけで、記憶の保存や更新が成立する。"
-      l0: "記憶プロセスを、保存、検索、更新、振り返りの関係に触れて説明してください。"
-      transfer: "対話型AIが過去の相談内容を次回の応答に活用する仕組みを設計するとき、保存・検索・更新の流れを説明してください。"
-    learning:
-      enrichment:
-        material: "記憶プロセスを、必要な情報を保存し、検索して現在の処理へ渡し、必要に応じて更新する流れとして整理します。"
-        variants:
-          - {variant_key: learning_enrichment_v1, body: "記憶プロセスにおける保存・検索・更新の役割を説明しなさい。", options: *memory_process_options}
-          - {variant_key: learning_enrichment_v2, body: "過去の対話を次の応答へ活用する流れを説明しなさい。", options: *memory_process_options}
-          - {variant_key: learning_enrichment_v3, body: "記憶を検索する処理が必要な理由を説明しなさい。", options: *memory_process_options}
-          - {variant_key: learning_enrichment_v4, body: "記憶を更新する処理が必要な場面を説明しなさい。", options: *memory_process_options}
-          - {variant_key: learning_enrichment_v5, body: "記憶プロセスの基本的な流れを、過去情報の利用に触れて説明しなさい。", options: *memory_process_options}
-      conceptual_change:
-        material: "記憶プロセスは、モデルの重みそのものでも、会話を無条件に貼り付けるだけの処理でもありません。何を保存し、どう検索・更新するかを設計する仕組みです。"
-        variants:
-          - {variant_key: learning_conceptual_change_v1, body: "記憶プロセスとモデルの学習済み重みの違いを説明しなさい。", options: *memory_process_options}
-          - {variant_key: learning_conceptual_change_v2, body: "記憶プロセスとRAGの共通点・相違点を説明しなさい。", options: *memory_process_options}
-          - {variant_key: learning_conceptual_change_v3, body: "会話をそのまま貼り付けることと記憶プロセスの違いを説明しなさい。", options: *memory_process_options}
-          - {variant_key: learning_conceptual_change_v4, body: "振り返りや自己評価を記憶の更新へつなげる意味を説明しなさい。", options: *memory_process_options}
-          - {variant_key: learning_conceptual_change_v5, body: "記憶プロセスを保存・検索・更新の設計として説明しなさい。", options: *memory_process_options}

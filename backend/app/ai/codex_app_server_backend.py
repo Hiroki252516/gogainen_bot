@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import websockets
+from app.ai.backend import strategy_for
 
 from app.core.config import get_settings
 from app.core.runtime_config import normalize_reasoning_effort
@@ -185,53 +186,6 @@ class CodexAppServerBackend:
             await self._initialize(rpc)
             return await rpc.call("account/logout")
 
-    async def diagnose_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
-        schema = {
-            "type": "object",
-            "properties": {
-                "is_correct": {"type": "boolean"},
-                "diagnosed_status": {"type": "string", "enum": ["misconception", "unknown", "unstable_correct", "stable_correct", "ambiguous"]},
-                "misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
-                "secondary_misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
-                "diagnosis_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                "natural_language_diagnosis": {"type": "string"},
-                "evidence": {"type": "string"},
-                "recommended_initial_scaffolding_level": {"type": "string", "enum": ["L2", "L3"]},
-                "recommended_teaching_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
-                "requires_manual_review": {"type": "boolean"},
-            },
-            "required": [
-                "is_correct",
-                "diagnosed_status",
-                "misconception_type",
-                "secondary_misconception_type",
-                "diagnosis_confidence",
-                "natural_language_diagnosis",
-                "evidence",
-                "recommended_initial_scaffolding_level",
-                "recommended_teaching_strategy",
-                "requires_manual_review",
-            ],
-            "additionalProperties": False,
-        }
-        prompt = self._prompt(
-            "pretest_diagnosis",
-            payload,
-            [
-                "事前テスト診断では選択肢の正誤と誤答選択肢の初期ラベルだけから理解状態を診断する。",
-                "natural_language_diagnosis では、入力欄の有無や未入力であることに絶対に触れず、選択内容から見える理解状態だけを書く。",
-                "誤概念タイプの内部ラベルは、入力payloadのtaxonomy定義に従う。M1〜M4は学習者向け文面に出さない。",
-                "natural_language_diagnosis には M1〜M4 という内部ラベルを絶対に書かない。",
-                f"recommended_teaching_strategy は次の識別子だけから選ぶ: {', '.join(_TEACHING_STRATEGIES)}。",
-            ],
-        )
-        result = await self._run_structured_turn(
-            "diagnose_answer", prompt, schema, audit_context=self._audit_context(payload)
-        )
-        if payload.get("group_condition") == "control":
-            result["recommended_teaching_strategy"] = "general_explanation"
-        result["natural_language_diagnosis"] = _strip_pretest_input_mentions(_strip_internal_labels(result["natural_language_diagnosis"]))
-        return result
 
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]:
         group = payload.get("group_condition", "proposed")
@@ -245,6 +199,7 @@ class CodexAppServerBackend:
             if group == "proposed"
             else self._control_tutoring_payload(payload)
         )
+        selected_strategy = strategy_for(expected_type, None, group)
         if group == "proposed" and expected_type == "unknown":
             # Prevent stale M1/M3 observations from becoming an unknown learner's target.
             prompt_payload = {
@@ -260,7 +215,7 @@ class CodexAppServerBackend:
             "type": "object",
             "properties": {
                 "tutor_message": {"type": "string"},
-                "teaching_strategy": {"type": "string", "enum": _TEACHING_STRATEGIES},
+                "teaching_strategy": {"type": "string", "enum": [selected_strategy]},
             },
             "required": ["tutor_message", "teaching_strategy"],
             "additionalProperties": False,
@@ -279,7 +234,7 @@ class CodexAppServerBackend:
                 group=group,
                 expected_type=expected_type,
                 term_label=term_label,
-                teaching_strategies=_TEACHING_STRATEGIES,
+                teaching_strategies=[selected_strategy],
             ),
             schema,
             # Audit metadata comes from the full request; model input stays allowlisted.
@@ -292,99 +247,8 @@ class CodexAppServerBackend:
                     result["teaching_contract"][field] = _strip_internal_labels(result["teaching_contract"][field])
         result = reconcile_mandatory_elements(result, expected_type)
         result = reconcile_teaching_contract(result, expected_type)
-        if group == "control":
-            result["teaching_strategy"] = "general_explanation"
         return result
 
-    async def grade_response(self, payload: dict[str, Any]) -> dict[str, Any]:
-        schema = {
-            "type": "object",
-            "properties": {
-                "is_correct": {"type": "boolean"},
-                "score": {"type": "number", "minimum": 0, "maximum": 1},
-                "misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
-                "secondary_misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
-                "diagnosed_status": {"type": "string", "enum": ["misconception", "unknown", "unstable_correct", "stable_correct", "ambiguous"]},
-                "recurrence_flag": {"type": "boolean"},
-                "l0_success": {"type": ["boolean", "null"]},
-                "feedback_for_log": {"type": "string"},
-                "evidence": {"type": "string"},
-                "requires_manual_review": {"type": "boolean"},
-            },
-            "required": [
-                "is_correct",
-                "score",
-                "misconception_type",
-                "secondary_misconception_type",
-                "diagnosed_status",
-                "recurrence_flag",
-                "l0_success",
-                "feedback_for_log",
-                "evidence",
-                "requires_manual_review",
-            ],
-            "additionalProperties": False,
-        }
-        result = await self._run_structured_turn(
-            "grade_response",
-            self._prompt(
-                "phase_grading",
-                payload,
-                [
-                    "再テスト、確認テストの回答を採点する。",
-                    "学習者には即時正解やヒントを出さない前提なので、feedback_for_log は管理・分析ログ用に短く書く。",
-                ],
-            ),
-            schema,
-            audit_context=self._audit_context(payload),
-        )
-        result["feedback_for_log"] = _strip_internal_labels(result["feedback_for_log"])
-        return result
-
-    async def generate_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
-        schema = {
-            "type": "object",
-            "properties": {
-                "feedback": {"type": "string"},
-                "is_sufficient": {"type": "boolean"},
-                "next_action": {"type": "string", "enum": ["continue", "move_next"]},
-                "next_scaffolding_level": {"type": "string", "enum": ["L2", "L3"]},
-                "learning_misconception_type": {"type": ["string", "null"], "enum": ["M1", "M2", "M3", "M4", "unknown", None]},
-                "learning_misconception_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
-                "learning_misconception_reason": {"type": "string"},
-                "strategy_changed": {"type": "boolean"},
-                "state_update_reason": {"type": "string"},
-            },
-            "required": ["feedback", "is_sufficient", "next_action", "next_scaffolding_level", "learning_misconception_type", "learning_misconception_confidence", "learning_misconception_reason", "strategy_changed", "state_update_reason"],
-            "additionalProperties": False,
-        }
-        result = await self._run_structured_turn(
-            "generate_feedback",
-            self._prompt(
-                "learning_feedback",
-                payload,
-                [
-                    "学習セッション中の自己説明に対して、日本語で短くフィードバックする。",
-                    "feedback は安全なMarkdownとして返す。複数の観点を含める場合は箇条書きにし、長い一段落にしない。重要語は **太字** にしてよい。",
-                    "feedback では見出しを必須にしないが、見出し、箇条書き、太字、短い段落だけを使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
-                    "rag_context.chunks がある場合は、その教材コンテキストを優先して判定・フィードバックする。教材にない内容は推測で断定しない。",
-                    "M1〜M4 という内部ラベルを学習者向け文面に絶対に書かない。",
-                    "learning_misconception_type は、この学習セッション内の今回回答だけに対する内部診断として入力payloadのtaxonomyに従って選ぶ。事前テスト由来の primary_misconception を上書きしない。",
-                    "十分回答なら learning_misconception_type は null にしてよい。不十分な場合は、taxonomyの診断cueと教授方略に沿ってM1〜M4またはunknownを選ぶ。",
-                    "learning_misconception_reason は研究者向けログ用に短く書き、学習者向けfeedbackには内部ラベルを書かない。",
-                    "learning_stage が enrichment の場合、知識不足を補う観点で十分性を判定する。",
-                    "learning_stage が conceptual_change の場合、誤った捉え方から正しいカテゴリー・構造へ移行できているかを判定する。",
-                    "理解が十分なら move_next、不十分なら continue にする。",
-                    "next_scaffolding_level は参考値として L3/L2 のいずれかにし、指定外のレベルは使わない。最終更新はbackendが決める。",
-                ],
-            ),
-            schema,
-            audit_context=self._audit_context(payload),
-        )
-        result["feedback"] = _strip_internal_labels(result["feedback"])
-        result["learning_misconception_reason"] = _strip_internal_labels(result["learning_misconception_reason"])
-        result["state_update_reason"] = _strip_internal_labels(result["state_update_reason"])
-        return result
 
     async def generate_correct_answer_summary(self, payload: dict[str, Any]) -> dict[str, Any]:
         schema = {
@@ -408,7 +272,7 @@ class CodexAppServerBackend:
                     "summary は学習者向けの安全なMarkdownにする。冒頭に ## 今回の要点 を置き、箇条書き、**太字**、短い段落だけを使う。",
                     "HTML、表、コードブロック、画像、長大な連続段落は使わない。",
                     "rag_context.chunks がある場合はその本文を優先し、本文にない内容を推測で断定しない。",
-                    "M1〜M4、unknown、taxonomy、足場掛け、研究者向け診断、AIの思考過程を出力しない。",
+                    "M1/M3/unknown、taxonomy、研究者向け診断、AIの思考過程を出力しない。",
                     "summary には学習者の個人情報や内部識別子を含めない。",
                 ],
             ),
@@ -444,7 +308,7 @@ class CodexAppServerBackend:
                     "正答の選択肢本文、正答位置、正答そのものを直接示さない。",
                     "feedback は ## どこが違うか と ## 見直す観点を中心に、箇条書き、**太字**、短い段落だけを使う安全なMarkdownにする。",
                     "remediation_focus は学習者が次に確認する観点を一文で返し、general_knowledge_supplement は追加説明が不要なら null にする。",
-                    "taxonomyや誤概念タイプが入力されている場合は教授方略の判断に使うが、M1〜M4などのラベルを出力しない。",
+                    "taxonomyや誤概念タイプが入力されている場合は解説の具体化に使うが、M1/M3/unknownなどのラベルを出力しない。",
                     "HTML、表、コードブロック、画像、長大な連続段落、AIの思考過程は出力しない。",
                     "rag_context.chunks がある場合はその本文を優先し、本文にない内容を推測で断定しない。",
                     "選択内容が空なら、前提知識不足として定義と判断基準の確認を促す。",
@@ -459,33 +323,6 @@ class CodexAppServerBackend:
             result["general_knowledge_supplement"] = _strip_internal_labels(result["general_knowledge_supplement"])
         return result
 
-    async def summarize_learner_state(self, payload: dict[str, Any]) -> dict[str, Any]:
-        schema = {
-            "type": "object",
-            "properties": {
-                "summary_for_admin": {"type": "string"},
-                "summary_for_learner": {"type": "string"},
-                "risk_flags": {"type": "array", "items": {"type": "string"}},
-                "recommended_next_focus": {"type": "string"},
-            },
-            "required": ["summary_for_admin", "summary_for_learner", "risk_flags", "recommended_next_focus"],
-            "additionalProperties": False,
-        }
-        result = await self._run_structured_turn(
-            "summarize_learner_state",
-            self._prompt(
-                "learner_state_summary",
-                payload,
-                [
-                    "管理者用と学習者用の短い状態要約を作る。",
-                    "学習者用要約には M1〜M4 という内部ラベルを絶対に書かない。",
-                ],
-            ),
-            schema,
-            audit_context=self._audit_context(payload),
-        )
-        result["summary_for_learner"] = _strip_internal_labels(result["summary_for_learner"])
-        return result
 
     def _client(self) -> _CodexRpcClient:
         return _CodexRpcClient(
@@ -689,32 +526,38 @@ class CodexAppServerBackend:
 
     def _proposed_tutoring_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         allowed = {
-            "term", "learning_stage", "learning_stage_label", "component_term", "component_index",
-            "component_total", "component_terms", "prompt_contract_version", "taxonomy_version",
-            "pretest_target", "pretest_targets", "learner_state", "previous_answer",
+            "term", "learning_stage", "learning_stage_label",
+            "component_terms", "prompt_contract_version", "taxonomy_version",
+            "pretest_target", "pretest_targets", "learner_state",
             "previous_diagnosis_for_learner", "previous_practice_question", "previous_learner_response",
             "previous_learning_misconception", "session_misconception_history",
-            "misconception_scaffolding_guidance", "misconception_taxonomy", "active_misconception_type",
+            "misconception_teaching_guidance", "misconception_taxonomy", "active_misconception_type",
             "mandatory_teaching_elements", "diagnostic_evidence", "rag_context", "mandatory_element_retry",
         }
-        return {key: payload[key] for key in allowed if key in payload}
+        result = {key: payload[key] for key in allowed if key in payload}
+        if isinstance(result.get("learner_state"), dict):
+            result["learner_state"] = {key: value for key, value in result["learner_state"].items() if key in {"current_status", "primary_misconception", "teaching_strategy", "recurrence_count"}}
+        return result
 
     def _control_tutoring_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        allowed = {"term", "component_term", "component_index", "component_total", "component_terms", "rag_context"}
+        allowed = {"term", "component_terms", "rag_context"}
         return {key: payload[key] for key in allowed if key in payload}
 
     def _proposed_feedback_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         allowed = {
-            "term", "learning_stage", "component_term", "question_body", "selected_option_body",
+            "term", "learning_stage", "question_body", "selected_option_body",
             "selected_option_bodies", "material", "rag_context", "learner_state",
-            "learning_misconception_type", "misconception_scaffolding_guidance", "misconception_taxonomy",
+            "learning_misconception_type", "misconception_teaching_guidance", "misconception_taxonomy",
             "session_misconception_history",
         }
-        return {key: payload[key] for key in allowed if key in payload}
+        result = {key: payload[key] for key in allowed if key in payload}
+        if isinstance(result.get("learner_state"), dict):
+            result["learner_state"] = {key: value for key, value in result["learner_state"].items() if key in {"current_status", "primary_misconception", "teaching_strategy", "recurrence_count"}}
+        return result
 
     def _control_feedback_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         allowed = {
-            "term", "component_term", "question_body", "selected_option_body",
+            "term", "question_body", "selected_option_body",
             "selected_option_bodies", "material", "rag_context",
         }
         return {key: payload[key] for key in allowed if key in payload}
@@ -730,21 +573,10 @@ class CodexAppServerBackend:
 
 _BASE_INSTRUCTIONS = """
 You are the AI engine for a Japanese research prototype called Learning Log AI Tutor.
-You must act only as a structured-output educational diagnosis and tutoring assistant.
+You must act only as a structured-output tutoring and answer-feedback assistant.
 Never modify files, run tools, browse, ask for API keys, or request authentication secrets.
 Return only the JSON object requested by the caller's output schema.
 """.strip()
-
-_TEACHING_STRATEGIES = [
-    "general_explanation",
-    "belief_revision",
-    "category_reorientation",
-    "boundary_comparison",
-    "deep_structure_focus",
-    "context_transfer_training",
-    "foundational_explanation",
-    "self_explanation_check",
-]
 
 
 def _parse_json_object(raw_text: str) -> dict[str, Any]:
@@ -785,14 +617,3 @@ def _strip_internal_labels(text: str) -> str:
         r"\1",
         cleaned,
     )
-
-
-def _strip_pretest_input_mentions(text: str) -> str:
-    cleaned = text or ""
-    cleaned = re.sub(r"理由記述(や自信度)?(も)?ないため、?", "", cleaned)
-    cleaned = re.sub(r"理由記述(や自信度)?(も)?ないので、?", "", cleaned)
-    cleaned = re.sub(r"理由記述や自信度", "回答内容", cleaned)
-    cleaned = re.sub(r"理由記述", "回答内容", cleaned)
-    cleaned = re.sub(r"自信度", "", cleaned)
-    cleaned = re.sub(r"、{2,}", "、", cleaned)
-    return cleaned.strip("、 ")
