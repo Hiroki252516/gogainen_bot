@@ -144,6 +144,7 @@ export function clearParticipantSession(): void {
   localStorage.removeItem("participant_id");
   localStorage.removeItem("display_code");
   localStorage.removeItem("pending_assignment_code");
+  localStorage.removeItem("learning_targets");
   for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
     const key = window.sessionStorage.key(index);
     if (key?.startsWith("idempotency_pending:")) {

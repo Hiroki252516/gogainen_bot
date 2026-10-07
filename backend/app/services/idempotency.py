@@ -12,7 +12,8 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import IdempotencyRecord, now
+from app.core.experiment_spec import assert_current_experiment
+from app.models import IdempotencyRecord, Participant, now
 
 
 IDEMPOTENCY_KEY_MAX_LENGTH = 128
@@ -63,6 +64,7 @@ async def run_idempotent(
     requests can observe the in-progress state. The business changes and the
     completed record are committed together at the end of the operation.
     """
+    _assert_current_participant(db, participant_id)
     normalized_key = normalize_idempotency_key(key)
     if normalized_key is None:
         return await _call(operation)
@@ -125,6 +127,7 @@ def _reserve(
 ) -> Reservation | tuple[Any]:
     existing = db.query(IdempotencyRecord).filter_by(scope=scope, idempotency_key=key).one_or_none()
     if existing:
+        _assert_current_participant(db, existing.participant_id)
         if existing.request_hash != fingerprint:
             raise idempotency_error(
                 "idempotency_key_conflict",
@@ -166,6 +169,7 @@ def _reserve(
         existing = db.query(IdempotencyRecord).filter_by(scope=scope, idempotency_key=key).one_or_none()
         if existing is None:
             raise
+        _assert_current_participant(db, existing.participant_id)
         if existing.request_hash != fingerprint:
             raise idempotency_error(
                 "idempotency_key_conflict",
@@ -187,6 +191,15 @@ def _replay(record: IdempotencyRecord) -> tuple[Any]:
         detail = body.get("detail", body) if isinstance(body, dict) else body
         raise HTTPException(status_code=status, detail=detail)
     return (body,)
+
+
+def _assert_current_participant(db: Session, participant_id: str | None) -> None:
+    if participant_id is None:
+        return
+    participant = db.get(Participant, participant_id)
+    if participant is None:
+        raise HTTPException(status_code=404, detail="被験者が見つかりません。")
+    assert_current_experiment(participant)
 
 
 def _store_failure(db: Session, reservation: Reservation, status: int, detail: Any) -> None:

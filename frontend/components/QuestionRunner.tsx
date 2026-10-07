@@ -7,10 +7,7 @@ import { ApiError, api, clearPendingIdempotency, postIdempotent, requireParticip
 
 type Option = { option_id: string; label: string; body: string };
 type SubmittedAnswer = {
-  selected_option_id?: string | null;
   selected_option_ids?: string[] | null;
-  free_text_answer?: string | null;
-  reason_text?: string | null;
 };
 type Question = {
   question_id: string;
@@ -21,8 +18,7 @@ type Question = {
   options: Option[];
   test_round?: string | null;
   test_round_label?: string | null;
-  requires_reason?: boolean;
-  selection_mode?: "single" | "multiple" | "free_text";
+  selection_mode?: "multiple";
   min_selections?: number;
   max_selections?: number;
   answer_status?: "unanswered" | "submitted";
@@ -69,9 +65,9 @@ export function QuestionRunner({
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState("");
+
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [reason, setReason] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -102,22 +98,13 @@ export function QuestionRunner({
     setQuestionStartedAt(Date.now());
     setQuestionShownAt(new Date().toISOString());
     const submittedAnswer = current?.submitted_answer;
-    const submittedIds = submittedAnswer?.selected_option_ids?.length
-      ? submittedAnswer.selected_option_ids
-      : submittedAnswer?.selected_option_id
-        ? [submittedAnswer.selected_option_id]
-        : [];
-    setSelected(submittedAnswer?.selected_option_id || "");
-    setSelectedIds(submittedIds);
-    setReason(submittedAnswer?.reason_text || submittedAnswer?.free_text_answer || "");
+    setSelectedIds(submittedAnswer?.selected_option_ids || []);
   }, [current?.answer_status, current?.question_id, current?.submitted_answer]);
 
   async function advanceAfterAnswer() {
     if (index + 1 < questions.length) {
       setIndex(index + 1);
-      setSelected("");
       setSelectedIds([]);
-      setReason("");
       setError("");
       setQuestionStartedAt(Date.now());
       setQuestionShownAt(new Date().toISOString());
@@ -157,21 +144,12 @@ export function QuestionRunner({
       await advanceAfterAnswer();
       return;
     }
-    const isMultiple = current.selection_mode === "multiple";
-    const minSelections = current.min_selections ?? (isMultiple ? 1 : 0);
-    const maxSelections = current.max_selections ?? (isMultiple ? current.options.length : 1);
+    const isMultiple = true;
+    const minSelections = current.min_selections ?? 3;
+    const maxSelections = current.max_selections ?? 3;
     const selectionState = multipleSelectionState(current.options, selectedIds, minSelections);
     if (isMultiple && (!selectionState.isComplete || selectedIds.length > maxSelections)) {
       setError(`A〜Iから${minSelections}つ選ぶか、「わからない」だけを選んでください。`);
-      return;
-    }
-    if (!isMultiple && current.options.length && !selected) {
-      setError("選択肢を選んでください。");
-      return;
-    }
-    const requiresReason = current.requires_reason ?? true;
-    if (requiresReason && !reason.trim()) {
-      setError("理由を入力してください。");
       return;
     }
     setSaving(true);
@@ -183,10 +161,7 @@ export function QuestionRunner({
       participant_id: id,
       question_id: current.question_id,
       phase,
-      selected_option_id: isMultiple ? (selectedIds[0] || null) : (selected || null),
-      selected_option_ids: isMultiple ? selectedIds : null,
-      free_text_answer: current.options.length ? null : reason || null,
-      reason_text: requiresReason ? reason : null,
+      selected_option_ids: selectedIds,
       response_time_sec: responseTimeSec,
       question_shown_at: questionShownAt,
       answered_at: answeredAt,
@@ -223,21 +198,11 @@ export function QuestionRunner({
   if (error && !current) return <div className="panel danger">{error}</div>;
   if (!current) return <div className="panel">問題がありません。</div>;
 
-  const isMultipleQuestion = current.selection_mode === "multiple";
+  const isMultipleQuestion = true;
   const isAnswered = current.answer_status === "submitted";
   const lockedAnswer = current.submitted_answer;
-  const lockedSelectedIds = lockedAnswer?.selected_option_ids?.length
-    ? lockedAnswer.selected_option_ids
-    : lockedAnswer?.selected_option_id
-      ? [lockedAnswer.selected_option_id]
-      : [];
+  const lockedSelectedIds = lockedAnswer?.selected_option_ids || [];
   const displayedSelectedIds = isAnswered && lockedAnswer ? lockedSelectedIds : selectedIds;
-  const displayedSelectedId = isAnswered && lockedAnswer
-    ? lockedAnswer.selected_option_id || lockedSelectedIds[0] || ""
-    : selected;
-  const displayedReason = isAnswered && lockedAnswer
-    ? lockedAnswer.reason_text || lockedAnswer.free_text_answer || ""
-    : reason;
   const requiredSelections = current.min_selections ?? 3;
   const selectionState = multipleSelectionState(current.options, selectedIds, requiredSelections);
   const canSubmit = !saving && (isAnswered || !isMultipleQuestion || selectionState.isComplete);
@@ -275,9 +240,7 @@ export function QuestionRunner({
       {current.options.length > 0 ? (
         <div className="options">
           {current.options.map((option) => {
-            const isSelected = isMultipleQuestion
-              ? displayedSelectedIds.includes(option.option_id)
-              : displayedSelectedId === option.option_id;
+            const isSelected = displayedSelectedIds.includes(option.option_id);
             const isUnknown = option.label === "J";
             const isDisabled =
               isMultipleQuestion &&
@@ -288,16 +251,12 @@ export function QuestionRunner({
             return (
               <label className={`option ${isDisabled ? "option-disabled" : ""} ${isAnswered && isSelected ? "option-selected-locked" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
                 <input
-                  type={isMultipleQuestion ? "checkbox" : "radio"}
+                  type="checkbox"
                   name="option"
                   value={option.option_id}
                   checked={isSelected}
                   disabled={isAnswered || isDisabled}
                   onChange={() => {
-                    if (!isMultipleQuestion) {
-                      setSelected(option.option_id);
-                      return;
-                    }
                     setSelectedIds((currentIds) => nextMultipleSelection(current.options, currentIds, option, requiredSelections));
                   }}
                 />
@@ -308,12 +267,6 @@ export function QuestionRunner({
             );
           })}
         </div>
-      ) : null}
-      {current.requires_reason ?? true ? (
-        <label>
-          {current.options.length ? "理由" : "回答"}
-          <textarea value={displayedReason} onChange={(event) => setReason(event.target.value)} placeholder="自分の言葉で書いてください。" disabled={isAnswered || saving} />
-        </label>
       ) : null}
       {error ? <div className="danger">{error}</div> : null}
       <div className="actions">

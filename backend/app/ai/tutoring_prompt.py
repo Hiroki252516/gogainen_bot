@@ -48,7 +48,7 @@ def compose_structured_prompt(
         "",
         "出力は指定JSON Schemaに一致するJSONオブジェクトのみ。Markdown、説明文、コードブロックは禁止。",
         "個人情報、APIキー、アクセストークン、認証情報を要求・保存・推測しない。",
-        "被験者に見える文面では内部研究ラベル M1/M2/M3/M4 を使わない。",
+        "被験者に見える文面では内部研究ラベル M1/M3/unknown を使わない。",
         "",
         "追加ルール:",
         *[f"- {rule}" for rule in rules],
@@ -91,7 +91,7 @@ def build_tutoring_prompt(
         "教材には定義、仕組みまたは役割、具体例、注意点を含める。一般的な誤解を正確に説明・訂正してよい。",
         f"教材本文はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に統一する。定義、仕組み、具体例、注意点を保ち、不要な繰り返しで水増ししない。",
         "見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
-        "被験者ID、群名、内部識別子、M1〜M4などの内部ラベルを学習者向け本文に書かない。",
+        "被験者ID、群名、内部識別子、M1/M3/unknownなどの内部ラベルを学習者向け本文に書かない。",
     ]
 
     # ``retry_context`` is server-side generation metadata.  It may contribute
@@ -123,7 +123,7 @@ def build_tutoring_prompt(
         if expected_type in {"M1", "M3"}:
             rules.extend(
                 [
-                    "teaching_contractを必ず返し、現在のタイプに一致するpretest_targetsがある場合は、そのclaim_idだけをaddressed_claim_idsへ入れる。target_claim_idは主対象のclaim_idにする。",
+                    "teaching_contractを必ず返す。現在のタイプに一致するpretest_targetsが複数ある場合、addressed_claim_idsには該当するclaim_idを全件入れ、1件も省略しない。他タイプのIDは入れない。target_claim_idだけは主対象のclaim_idにする。",
                     "現在のタイプに一致するpretest_targetsがない場合は、target_claim_idをnull、addressed_claim_idsを空配列にし、研究者確認済みでない具体的な誤答主張を創作しない。",
                     "teaching_contractのcorrected_claim、mechanism_explanation、contrast_example、transfer_checkは、tutor_message本文にそのまま含める。",
                     "teaching_contractのtarget_addressedはtrueにする。M1のrefutation_modeはexplicitを標準とし、M3はcategory_comparisonにする。",
@@ -157,13 +157,13 @@ def build_tutoring_prompt(
         rules.append("通常のAIチューターとして、入力された共通の用語情報と教材コンテキストだけから一般向けの説明を作る。個人の回答・診断・履歴・学習段階を推測したり前提にしたりしない。")
         rules.append("teaching_strategy は general_explanation に固定する。")
     else:
-        rules.append("入力された事前診断、誤答対象、学習履歴を教授方略の選択に利用する。")
-        rules.append("入力payloadのmisconception_taxonomyにあるM1〜M4の定義と教授方略を厳守する。M3ならカテゴリー再分類、M2なら説明モデルの再構成、M1なら誤信念の反証、M4なら不足スキーマの構築、unknownなら基礎知識の豊富化を優先する。")
+        rules.append("教授方略はbackendが決定済みである。active_misconception_type、pretest_target、pretest_targets、diagnostic_evidence、session_misconception_historyを、その方略に沿った説明・対比例の具体化に利用し、別方略へ変更しない。")
+        rules.append("misconception_taxonomyにあるM1/M3/unknownの定義と教授方針を守る。M1は誤信念の反駁、M3はカテゴリー再分類、unknownは基礎説明を行う。")
         rules.append("diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置き、学習者が示していない誤概念を創作しない。unknownでは誤った考えを推測しない。")
         rules.append("pretest_targetまたはpretest_targetsがある場合、それを今回の教授目標として優先する。観察された選択を確定した信念とは断定せず、選択された説明として扱う。")
         rules.append("M1は対象がある場合はその誤った命題を、対象がない場合は一般的な誤りの型を、正しい命題、誤りの仕組み、対比例、別事例への適用確認とともに明示する。M3も対象がある場合はその誤カテゴリーを、対象がない場合は一般的なカテゴリー境界を、正カテゴリー、境界、対比例、別事例への適用確認とともに明示する。unknownは反駁せず、定義・構成要素・役割・正例・非例と適用確認を示す。")
         rules.append("unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
-    rules.append(f"teaching_strategy は次の識別子だけから選ぶ: {', '.join(teaching_strategies)}。")
+    rules.append(f"teaching_strategy はbackendで指定された {', '.join(teaching_strategies)} に固定する。")
 
     return compose_structured_prompt("tutoring_turn", payload, rules)
 

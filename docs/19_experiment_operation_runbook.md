@@ -4,7 +4,9 @@
 
 ## Before Experiment
 
-**実験開始前の必須確認:** 現行コードではテスト系・学習確認v1/v2ともA〜Cが正解、D〜FがM1、G〜IがM3、Jがunknownに固定されている。ラベル位置から正解を推測できるため、この状態で研究データを収集しない。実験開始前にvariant間の役割分散を実装し、問題バンク・ローダー・採点テスト・配布環境がその設定で一致していることを確認する。現行コードに実験用配置への切替設定はない。
+**実験開始前の必須確認:** テスト系・学習確認v2ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
+
+実験仕様版は1。既存試用・未対応版は閲覧専用で再開・評価再計算をしない。移行時はparticipants.experiment_spec_versionをnullableで追加し、既存値をNULLのまま残す。旧行を版1へ一括付け替えない。DBのバックアップ後、隔離DBで移行とseed再実行を検証してから配布する。
 
 1. Docker Desktopを起動する
 2. ルート`.env`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動する
@@ -14,7 +16,7 @@
 6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する（AI status APIは `/api/admin/ai/status`）
 7. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
 
-Dockerの再ビルド・再起動では、ブラウザの`localStorage`に保存された参加者IDは消えない。そのため、未完了の実験がある場合は現在位置から再開する。新しい実験を始める場合は、終了画面の「新しい実験を開始」を押してブラウザの参加者情報を消去する。管理画面から参加者を削除した場合も、同じブラウザの参加者情報は自動的に消去される。
+再起動してもブラウザの参加者IDは残る。現行版は再開できるが、旧試用は閲覧専用案内の「新しい実験を開始」からstart・consentへ進む。この操作はブラウザの参加者・進行・保留送信だけを消し、DB記録を削除しない。旧試用のログ・生AI・保存済み評価・CSVは管理画面で閲覧できるが、現行群集計に混ぜない。
 
 ## Participant Setup
 
@@ -60,7 +62,7 @@ Dockerの再ビルド・再起動では、ブラウザの`localStorage`に保存
 
 現行MVPのテスト・再テスト対象は、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語である。`attempts.test_round` に `test`、`retest_1`、`retest_2` 以降を保存する。`/survey` は仮フォームで、送信時に`participant_surveys`へ保存する。
 
-問題はYAMLで管理される。pretestとfinal_testは各用語1問、retestはv1〜v5の5種類で6回目以降にv5を再利用する。全テストvariantのA〜Cが正解、D〜FがM1、G〜IがM3に固定されており、分散配置は実装されていない。学習確認は参加者作成時に版を固定し、新規参加者は場面判断型v2、版未記録を含む既存参加者はv1を使い、それぞれv1〜v5（以後v5再利用）である。v1/v2とも判定位置は同じ固定配置である。サーバーは問題variantのmetadata（v1は互換ルール）で採点する。参加者向け問題APIは正答キーと誤概念metadataを返さず、回答後の既存の正解・不正解表示は維持する。LangGraphはRAG検索結果に含めない。
+問題はYAMLで管理する。pretest/final_testは各用語1問、retestは5種類で6回目以降variant5。学習確認は現行v2の30問だけで、旧v1の出題・採点経路はない。固定複数選択のメタデータで採点し、問題APIは正答/誤概念情報を公開しない。結果確認の正誤表示を維持する。新規seedはテスト21問のみで、既存の廃止問題は削除せず非activeにする。LangGraphをRAGへ含めない。
 
 研究者が見るもの:
 
@@ -117,28 +119,20 @@ Mockは自動テスト・障害切り分け用であり、本実験運用では�
 
 1. `/admin` で参加者の「完了」「中断」と終了理由を確認
 2. 採点済みの事前テストがある参加者のevaluation summaryは画面表示時に自動計算される。必要な場合だけ再計算ボタンで強制更新する
-   - 旧データの`finish`参加者は、ギブアップ監査ログに基づいて終了理由とサマリーの完了状態が起動時に補正される
+   - 旧試用の終了理由・保存済み評価は補正せずそのまま閲覧する
    - 被験者別の学習段階は、誤概念・unknownの診断状態を優先して表示する
 3. 管理画面で全体ログと被験者別ログを確認する
 4. 被験者別ログの `回答履歴（テスト＋学習）` で、テスト回答と学習ターン回答の時刻・回答時間が連続して見えることを確認する
-5. `evaluation_summaries` の `pretest_score`, `retest_score`, `l0_correct_rate`, 同種誤答再発率を確認する。用語別variant_keyも必要に応じて確認する
+5. `pretest_score`, `retest_score`, `attainment_correct_rate`, 同種誤答再発率を確認する。物理DB列は履歴互換を維持する
 6. 必要に応じて全体ログCSVまたは被験者別ログCSVを出力する
 7. exportsフォルダを研究分析用に保管する
-8. 必要なら、管理画面の確認ダイアログから `DELETE /api/admin/participants/{participant_id}` で被験者データを削除する。削除前に`delete_participant`のAuditEventが残るが、seedデータとexport fileは削除されないため、DBバックアップと保存方針も確認する
+8. 現行版の試用だけは明示的に確認して削除できるが、旧試用は削除も禁止する。通常は保存・CSV出力を優先する
 
-`l0_correct_rate` は互換名であり、通常は `final_test` の正答率、なければ互換 `l0_check` の正答率として読む。両方がなく、再テスト満点で最終テストを省略した場合は再テスト満点を代用し、`final_score_source=retest_mastery` として判別する。得点率・誤概念・負担・条件統制の推移は現行 `evaluation_summaries` のJSONとCSVの `value_json` に保存される。自動周回のない参加者では存在するattemptsだけが集計対象になる。
+attainment_correct_rateはis_correctから計算した最終到達率で、final_testまたは最新の再テスト満点バッチを使う。final_score_sourceで測定経路を区別する。廃止フェーズの成功判定を参照しない。旧保存値は履歴用に閲覧し、再計算しない。
 
-## Delayed Retest Optional Operation（将来対応）
+## 旧運用案
 
-遅延再テストを行う場合:
-
-1. 実験終了後、別日に同じ被験者コードで再開する
-2. `delayed_retest` phaseの問題を出す
-3. Q1/Q2/Q4の別バージョンを使う
-4. 学習セッションやヒントは出さない
-5. delayed_retest_scoreとdelayed recurrenceを別集計する
-
-現行MVPには `delayed_retest` を開始するAPI/UIがない。別日再テストを導入する場合の運用案として残す。
+追加評価・別日テストの旧案はhistory/2026-10-06の運用資料に隔離する。現在の実験手順として実行しない。
 
 ## Data Export Checklist
 

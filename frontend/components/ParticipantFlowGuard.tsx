@@ -8,13 +8,15 @@ import { ApiError, api, clearParticipantSession, participantId } from "@/lib/api
 type CurrentStepResponse = {
   step: string;
   next_url: string;
+  can_resume: boolean;
 };
 
 type LearningTargetsResponse = {
   targets: Array<{ term_slug: string }>;
 };
 
-export function CheckingFlow({ error = false, onRetry }: { error?: boolean; onRetry?: () => void } = {}) {
+export function CheckingFlow({ error = false, legacy = false, onRetry }: { error?: boolean; legacy?: boolean; onRetry?: () => void } = {}) {
+  if (legacy) return <LegacyTrialNotice />;
   return (
     <section className="panel" aria-busy="true" role="status">
       {error ? (
@@ -29,11 +31,25 @@ export function CheckingFlow({ error = false, onRetry }: { error?: boolean; onRe
   );
 }
 
+export function LegacyTrialNotice() {
+  return (
+    <section className="panel stack">
+      <h1>この試用記録は閲覧専用です</h1>
+      <p>保存済みの記録は管理画面から確認できます。</p>
+      <button type="button" onClick={() => {
+        clearParticipantSession();
+        window.location.assign("/start");
+      }}>新しい実験を開始</button>
+    </section>
+  );
+}
+
 export function useParticipantFlowGuard(allowedSteps: readonly string[]) {
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [checkError, setCheckError] = useState(false);
+  const [legacy, setLegacy] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
@@ -51,6 +67,10 @@ export function useParticipantFlowGuard(allowedSteps: readonly string[]) {
     api<CurrentStepResponse>(`/api/participants/${id}/current-step`)
       .then((data) => {
         if (!active) return;
+        if (!data.can_resume) {
+          setLegacy(true);
+          return;
+        }
         if (allowedSteps.includes(data.step)) {
           setReady(true);
           return;
@@ -78,7 +98,7 @@ export function useParticipantFlowGuard(allowedSteps: readonly string[]) {
     };
   }, [allowedSteps, pathname, retryCount, router]);
 
-  return { ready, error: checkError, retry: () => setRetryCount((count) => count + 1) };
+  return { ready, legacy, error: checkError, retry: () => setRetryCount((count) => count + 1) };
 }
 
 export function useLearningTargetFlowGuard(termSlug: string) {
@@ -86,6 +106,7 @@ export function useLearningTargetFlowGuard(termSlug: string) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [checkError, setCheckError] = useState(false);
+  const [legacy, setLegacy] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
@@ -104,6 +125,10 @@ export function useLearningTargetFlowGuard(termSlug: string) {
       try {
         const step = await api<CurrentStepResponse>(`/api/participants/${id}/current-step`);
         if (!active) return;
+        if (!step.can_resume) {
+          setLegacy(true);
+          return;
+        }
         if (step.step !== "learning_targets") {
           const nextUrl = step.next_url || "/start";
           if (nextUrl === pathname) setReady(true);
@@ -137,7 +162,7 @@ export function useLearningTargetFlowGuard(termSlug: string) {
     };
   }, [pathname, retryCount, router, termSlug]);
 
-  return { ready, error: checkError, retry: () => setRetryCount((count) => count + 1) };
+  return { ready, legacy, error: checkError, retry: () => setRetryCount((count) => count + 1) };
 }
 
 export function ParticipantFlowGuard({
@@ -148,7 +173,7 @@ export function ParticipantFlowGuard({
   children: ReactNode;
 }) {
   const flow = useParticipantFlowGuard(allowedSteps);
-  return flow.ready ? <>{children}</> : <CheckingFlow error={flow.error} onRetry={flow.retry} />;
+  return flow.ready ? <>{children}</> : <CheckingFlow legacy={flow.legacy} error={flow.error} onRetry={flow.retry} />;
 }
 
 export function ParticipantEntryGuard({ children }: { children: ReactNode }) {
@@ -156,6 +181,7 @@ export function ParticipantEntryGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [checkError, setCheckError] = useState(false);
+  const [legacy, setLegacy] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
@@ -173,6 +199,10 @@ export function ParticipantEntryGuard({ children }: { children: ReactNode }) {
     api<CurrentStepResponse>(`/api/participants/${id}/current-step`)
       .then((data) => {
         if (!active) return;
+        if (!data.can_resume) {
+          setLegacy(true);
+          return;
+        }
         const nextUrl = data.next_url || "/start";
         if (nextUrl === pathname) {
           setReady(true);
@@ -196,5 +226,5 @@ export function ParticipantEntryGuard({ children }: { children: ReactNode }) {
     };
   }, [pathname, retryCount, router]);
 
-  return ready ? <>{children}</> : <CheckingFlow error={checkError} onRetry={() => setRetryCount((count) => count + 1)} />;
+  return ready ? <>{children}</> : <CheckingFlow legacy={legacy} error={checkError} onRetry={() => setRetryCount((count) => count + 1)} />;
 }

@@ -121,13 +121,9 @@ from typing import Any, Protocol
 class AIBackend(Protocol):
     provider: str
 
-    async def diagnose_answer(self, payload: dict[str, Any]) -> dict[str, Any]: ...
     async def generate_tutoring_turn(self, payload: dict[str, Any]) -> dict[str, Any]: ...
-    async def grade_response(self, payload: dict[str, Any]) -> dict[str, Any]: ...
-    async def generate_feedback(self, payload: dict[str, Any]) -> dict[str, Any]: ...
     async def generate_correct_answer_summary(self, payload: dict[str, Any]) -> dict[str, Any]: ...
     async def explain_selected_distractor(self, payload: dict[str, Any]) -> dict[str, Any]: ...
-    async def summarize_learner_state(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 ```
 
 実装:
@@ -147,15 +143,12 @@ sequenceDiagram
   participant B as Backend
   participant DB as PostgreSQL
   participant Y as YAML/固定採点
-  participant AI as AIBackend（互換）
   F->>B: POST /api/attempts
   B->>DB: save attempt
   F->>B: POST /api/participants/{id}/diagnose-pretest
   B->>DB: load attempts/options
   B->>Y: fixed option scoring
   Y-->>B: deterministic diagnosis
-  B->>AI: diagnose_answer（自由回答・互換時のみ）
-  AI-->>B: JSON結果（互換時のみ）
   B->>DB: create/update attempts and learner_states
   B-->>F: diagnosis summary without internal labels
 ```
@@ -187,7 +180,7 @@ sequenceDiagram
 
 ### #97 学習教材の先行生成
 
-現在の用語の初回教材を参加者へ返した後、backendのresponse-after workerが、`PRETEST_TERM_ORDER`で現在より後にある未達用語すべてについて、各用語の学習確認問題の初回variantと教材を先行生成する。参加者に固定された学習確認問題バンクの版に従い、既存参加者にはv1のvariant、新規参加者にはv2のvariantを使う。対象用語ごとに独立したDBセッションを使い、AI待機中は参加者行・対象`TutorSession`のロックを保持しない。
+初回教材を返した後、後続の未達用語について現行v2の初回variant教材を先行生成する。旧試用はworker開始前に拒否する。対象用語ごとに独立DBセッションを使い、AI待機中は参加者行・TutorSessionのロックを保持しない。
 
 先行生成用の`TutorSession`は`pending`→`generating`→`ready`と進み、次の用語の既存APIが`ready`の未回答`TutorTurn`をそのまま返して`consumed`へ進める。利用者が先に次の用語へ進んだ場合、workerの結果は`discarded`として保存し、現在のリクエストは従来の同期生成へ切り替える。AI失敗は`failed`と`AICallLog`へ記録し、参加者には返さず、次の用語で通常生成する。内部`IdempotencyRecord`のキーで同じ先行生成を二重実行しない。
 
@@ -233,16 +226,15 @@ MVPでは耐久キューを導入しない。#97の先行教材だけは、レ�
 | `CODEX_REASONING_EFFORT` | `medium` | turn/startのreasoning effort |
 | `RAG_BASE_DIR` | `./rag_agent_knowledge_base` | read-only RAG資産のルート |
 | `MAX_LEARNING_TARGETS` | `3` | 学習対象数の上限。現行seedは3用語 |
-| `MAX_TURNS_PER_TERM` | `3` | 1用語あたりの目安としてAPIレスポンスに返す値。現行コードはこの値で生成回数を強制制限しない |
-| `RANDOM_SEED` | `20260525` | 再現性のあるランダム化 |
+| `MAX_TURNS_PER_TERM` | `3` | 1用語の回答挑戦上限。不正解が上限に達したら未達のまま次用語へ進む |
 
 ## 研究ロジックとAIの分離
 
-AIは教材本文・回答後解説を生成し、自由回答・互換フェーズでは診断・採点・フィードバック案も返し得る。ただし、現行の固定多選択問題では採点とM1/M3/unknown判定にAIを使わず、以下はbackendが決める。
+AIは教材・正答要約・誤答解説だけを生成する。採点とM1/M3/unknown分類、教授方略はbackendが決める。
 
 - 群条件の適用
 - 問題の出し分けと固定多選択問題の採点
-- 学習ステージ、構成用語インデックス、互換scaffolding_levelの最終更新
+- 意味的な学習stageと固定教授方略
 - recurrence_flag
 - 評価指標
 - CSV出力値

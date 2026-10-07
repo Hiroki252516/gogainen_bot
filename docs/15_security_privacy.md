@@ -39,7 +39,7 @@ MVPでは個人名・メールアドレスを収集しない。被験者IDのみ
 - AI診断
 - AI応答
 - 学習ログ
-- 学習ステージ更新と互換scaffolding_level更新
+- 意味的な学習stageと固定教授方略
 - AI call log、診断・学習ログ、再発イベント
 
 保存しない:
@@ -51,7 +51,7 @@ MVPでは個人名・メールアドレスを収集しない。被験者IDのみ
 
 ## AI出力の注意
 
-自由回答・互換フェーズでAIが診断する場合、その診断は誤る可能性がある。固定多選択問題の正誤とM1/M3/unknown判定はYAMLとbackendが決め、AI診断で上書きしない。現行管理画面では診断・AI call logを確認できるが、診断結果を編集する手動修正UIと監査書き込みは未実装である。
+AIは教材と解説だけを生成する。誤りや正答漏えいを検証し、固定採点・分類・状態・方略をAIに変更させない。旧試用は読取り専用で回答や評価を更新しない。
 
 手動修正（将来対応）:
 
@@ -61,7 +61,7 @@ MVPでは個人名・メールアドレスを収集しない。被験者IDのみ
 
 ## 削除機能（現行MVP）
 
-管理画面の確認ダイアログ後に `DELETE /api/admin/participants/{participant_id}` を実行できる。対象参加者に所有されるsurvey、assignment、display order、recurrence event、tutor session/turn、learner state、evaluation summary、attempt、AI call logを削除し、seedのterms・questions・question_optionsは残す。
+現行版の参加者だけは管理画面の確認後にDELETEできる。旧試用は削除も409で拒否する。現行版の削除は所有レコードのみを対象とし、seedや他参加者の記録を消さない。
 
 削除前に`delete_participant`の`AuditEvent`を保存し、参加者削除後もその監査記録を残す。削除は被験者1名単位であり、全参加者一括削除、全実験データ削除、CSV/export file削除のAPIはない。
 

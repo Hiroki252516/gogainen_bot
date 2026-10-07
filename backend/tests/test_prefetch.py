@@ -145,7 +145,7 @@ def test_wrong_current_turn_keeps_prefetch_and_current_second_turn_uses_m3():
         )
         current_turn = db.get(TutorTurn, turn["turn_id"])
         second_turn = db.get(TutorTurn, second.json()["turn_id"])
-        assert second_turn.previous_teaching_strategy == current_turn.teaching_strategy
+        assert second_turn.legacy_previous_teaching_strategy is None
     finally:
         db.close()
 

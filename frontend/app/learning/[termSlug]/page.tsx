@@ -9,13 +9,6 @@ import { CheckingFlow, useLearningTargetFlowGuard } from "@/components/Participa
 import { postIdempotent, requireParticipant } from "@/lib/api";
 
 type Option = { option_id: string; label: string; body: string };
-type PracticeItem = {
-  component_term: string;
-  material?: string;
-  body: string;
-  question_type?: string;
-  options?: Option[];
-};
 
 type Turn = {
   turn_id: string;
@@ -23,26 +16,13 @@ type Turn = {
   term_label?: string;
   tutor_message: string;
   learner_prompt: string;
-  practice_question: { body: string; options?: Option[]; items?: PracticeItem[]; selection_mode?: "single" | "multiple"; min_selections?: number; max_selections?: number; learning_variant_index?: number };
+  practice_question: { body: string; options?: Option[]; selection_mode?: "multiple"; min_selections?: number; max_selections?: number; learning_variant_index?: number };
   turn_index: number;
   max_turns: number;
   learning_stage?: string;
   learning_stage_label?: string;
-  component_term?: string | null;
-  component_index?: number;
-  component_total?: number;
-  scaffolding_level?: string;
 };
 
-type ItemResult = {
-  component_term: string;
-  question_body: string;
-  selected_option_body?: string | null;
-  correct_answer?: string | null;
-  is_correct: boolean;
-  is_sufficient: boolean;
-  feedback: string;
-};
 
 type Feedback = {
   feedback: string;
@@ -52,20 +32,14 @@ type Feedback = {
   learning_stage?: string;
   stage_completed?: boolean;
   next_learning_stage?: string;
-  component_term?: string | null;
-  component_index?: number;
-  component_total?: number;
-  next_component_index?: number;
   learning_misconception_type?: string | null;
   learning_misconception_confidence?: number | null;
   learning_misconception_reason?: string | null;
-  next_scaffolding_level: string;
   turn_index: number;
   max_turns: number;
   attempts_used?: number;
   remaining_attempts?: number;
   session_ended_by_attempt_limit?: boolean;
-  item_results?: ItemResult[];
   next_url?: string;
 };
 
@@ -105,16 +79,6 @@ function progressForNewQuestion(termSlug: string, turn: Pick<Turn, "turn_index" 
   };
 }
 
-function componentDisplay(turn: Turn) {
-  const items = turn.practice_question?.items || [];
-  if (items.length) {
-    return `用語: ${items.map((item) => item.component_term).join("、")} (${items.length}件)`;
-  }
-  if (typeof turn.component_index === "number" && typeof turn.component_total === "number") {
-    return `用語: ${turn.component_term} ${turn.component_index + 1} / ${turn.component_total}`;
-  }
-  return `用語: ${turn.component_term || "構成用語"}`;
-}
 
 function multipleSelectionState(options: Option[], selectedIds: string[], requiredSelections = 3) {
   const selectedOptions = options.filter((option) => selectedIds.includes(option.option_id));
@@ -209,10 +173,7 @@ export default function LearningPage() {
   const termSlug = params.termSlug;
   const [sessionId, setSessionId] = useState("");
   const [turn, setTurn] = useState<Turn | null>(null);
-  const [response, setResponse] = useState("");
-  const [selectedOptionId, setSelectedOptionId] = useState("");
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
-  const [selectedItemOptionIds, setSelectedItemOptionIds] = useState<Record<string, string>>({});
   const [turnStartedAt, setTurnStartedAt] = useState(() => Date.now());
   const [turnShownAt, setTurnShownAt] = useState(() => new Date().toISOString());
   const [questionProgress, setQuestionProgress] = useState<QuestionProgress | null>(null);
@@ -239,10 +200,7 @@ export default function LearningPage() {
       setTurn(null);
       setQuestionProgress(null);
       setFeedback(null);
-      setResponse("");
-      setSelectedOptionId("");
       setSelectedOptionIds([]);
-      setSelectedItemOptionIds({});
       setError("");
       try {
         const participantId = requireParticipant();
@@ -272,7 +230,6 @@ export default function LearningPage() {
   async function submit() {
     if (!turn || actionInFlightRef.current) return;
     const options = turn.practice_question?.options || [];
-    const items = turn.practice_question?.items || [];
     const isMultiple = turn.practice_question?.selection_mode === "multiple";
     const requiredSelections = turn.practice_question?.min_selections ?? 3;
     const selectionState = multipleSelectionState(options, selectedOptionIds, requiredSelections);
@@ -280,27 +237,14 @@ export default function LearningPage() {
       setError(`A〜Iから${requiredSelections}つ選ぶか、「わからない」だけを選んでください。`);
       return;
     }
-    if (!isMultiple && options.length && !selectedOptionId) {
-      setError("選択肢を選んでください。");
-      return;
-    }
-    if (items.length && items.some((item) => !selectedItemOptionIds[item.component_term])) {
-      setError("すべての確認問題で選択肢を選んでください。");
-      return;
-    }
     actionInFlightRef.current = true;
     setSubmitting(true);
     setError("");
     try {
-      const selectedOption = options.find((option) => option.option_id === selectedOptionId);
-      const selectedOptions = options.filter((option) => selectedOptionIds.includes(option.option_id));
       const answeredAt = new Date().toISOString();
       const responseTimeSec = Math.max(0.001, (Date.now() - turnStartedAt) / 1000);
       const responseBody = {
-        selected_option_id: isMultiple ? (selectedOptionIds[0] || null) : (selectedOptionId || null),
-        selected_option_ids: isMultiple ? selectedOptionIds : null,
-        selected_item_option_ids: items.length ? selectedItemOptionIds : null,
-        learner_response: isMultiple ? selectedOptions.map((option) => option.label).join(" / ") : (selectedOption?.body || response),
+        selected_option_ids: selectedOptionIds,
         response_time_sec: responseTimeSec,
         question_shown_at: turnShownAt,
         answered_at: answeredAt,
@@ -312,9 +256,7 @@ export default function LearningPage() {
       );
       const updatedTurn = {
         ...turn,
-        scaffolding_level: data.next_scaffolding_level,
         learning_stage: data.next_learning_stage || turn.learning_stage,
-        component_index: data.next_component_index ?? turn.component_index,
       };
       // Grading feedback belongs to the current problem.  Keep its position
       // unchanged while the next retry is still part of the same problem.
@@ -349,10 +291,7 @@ export default function LearningPage() {
       setQuestionProgress(progressForNewQuestion(termSlug, next));
       setTurnStartedAt(Date.now());
       setTurnShownAt(new Date().toISOString());
-      setResponse("");
-      setSelectedOptionId("");
       setSelectedOptionIds([]);
-      setSelectedItemOptionIds({});
       setFeedback(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -362,7 +301,7 @@ export default function LearningPage() {
     }
   }
 
-  if (!flowReady) return <CheckingFlow error={flow.error} onRetry={flow.retry} />;
+  if (!flowReady) return <CheckingFlow legacy={flow.legacy} error={flow.error} onRetry={flow.retry} />;
 
   const progress = questionProgress || (turn ? progressForNewQuestion(termSlug, turn) : null);
   const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;
@@ -399,34 +338,7 @@ export default function LearningPage() {
               <section className="learning-block problem-block" aria-labelledby="problem-title">
                 <h2 id="problem-title">問題</h2>
                 <p>{turn.practice_question?.body || turn.learner_prompt}</p>
-                {turn.practice_question?.items?.length ? (
-                  <div className="stack">
-                    {turn.practice_question.items.map((item) => (
-                      <article className="component-question" key={item.component_term}>
-                        <h3>{item.component_term}</h3>
-                        {item.material ? <MarkdownText className="markdown-compact">{item.material}</MarkdownText> : null}
-                        <p>{item.body}</p>
-                        <div className="options">
-                          {(item.options || []).map((option) => (
-                            <label className="option" key={option.option_id}>
-                              <input
-                                type="radio"
-                                name={`learning-option-${item.component_term}`}
-                                value={option.option_id}
-                                checked={selectedItemOptionIds[item.component_term] === option.option_id}
-                                disabled={submitting || Boolean(feedback)}
-                                onChange={() => setSelectedItemOptionIds((current) => ({ ...current, [item.component_term]: option.option_id }))}
-                              />
-                              <span>
-                                <strong>{option.label}.</strong> {option.body}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                ) : turn.practice_question?.options?.length ? (
+                {turn.practice_question?.options?.length ? (
                   <>
                     {turn.practice_question.selection_mode === "multiple" ? (() => {
                       const requiredSelections = turn.practice_question.min_selections ?? 3;
@@ -449,7 +361,7 @@ export default function LearningPage() {
                         const isMultiple = turn.practice_question?.selection_mode === "multiple";
                         const requiredSelections = turn.practice_question?.min_selections ?? 3;
                         const selectionState = multipleSelectionState(turn.practice_question?.options || [], selectedOptionIds, requiredSelections);
-                        const isSelected = isMultiple ? selectedOptionIds.includes(option.option_id) : selectedOptionId === option.option_id;
+                        const isSelected = selectedOptionIds.includes(option.option_id);
                         const isUnknown = option.label === "J";
                         const isDisabled =
                           isMultiple &&
@@ -460,16 +372,12 @@ export default function LearningPage() {
                         return (
                           <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
                             <input
-                              type={isMultiple ? "checkbox" : "radio"}
+                              type="checkbox"
                               name="learning-option"
                               value={option.option_id}
                               checked={isSelected}
                               disabled={submitting || Boolean(feedback) || isDisabled}
                               onChange={() => {
-                                if (!isMultiple) {
-                                  setSelectedOptionId(option.option_id);
-                                  return;
-                                }
                                 setSelectedOptionIds((currentIds) => nextMultipleSelection(turn.practice_question?.options || [], currentIds, option, requiredSelections));
                               }}
                             />
@@ -481,12 +389,7 @@ export default function LearningPage() {
                       })}
                     </div>
                   </>
-                ) : (
-                  <label>
-                    あなたの回答・自己説明
-                    <textarea disabled={submitting || Boolean(feedback)} value={response} onChange={(event) => setResponse(event.target.value)} />
-                  </label>
-                )}
+                ) : null}
               </section>
             </div>
             {feedback ? (
@@ -501,18 +404,6 @@ export default function LearningPage() {
                   {feedback.is_sufficient ? "正解です。" : "不正解です。"}
                 </strong>
                 <MarkdownText>{feedback.feedback}</MarkdownText>
-                {feedback.item_results?.length ? (
-                  <div className="stack">
-                    {feedback.item_results.map((item) => (
-                      <article className={`result-card ${item.is_correct ? "correct" : "incorrect"}`} key={item.component_term}>
-                        <h3>{item.component_term}: {item.is_correct ? "正解" : "不正解"}</h3>
-                        <p>あなたの回答: {item.selected_option_body || "未選択"}</p>
-                        <p>正解: {item.correct_answer}</p>
-                        <MarkdownText className="markdown-compact">{item.feedback}</MarkdownText>
-                      </article>
-                    ))}
-                  </div>
-                ) : null}
               </section>
             ) : null}
             {submitting ? (feedback ? <ContinueProgress /> : <SubmitProgress />) : null}

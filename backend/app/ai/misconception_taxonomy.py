@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 
-TAXONOMY_VERSION = "m1-m3-unknown-v1"
+TAXONOMY_VERSION = "m1-m3-unknown-v2"
 
 
 MISCONCEPTION_TAXONOMY: dict[str, Any] = {
@@ -17,15 +17,6 @@ MISCONCEPTION_TAXONOMY: dict[str, Any] = {
         "learning_outcome": "belief_revision",
         "research_basis": "Chi (2009), belief revision",
     },
-    "M2": {
-        "label": "欠陥メンタルモデル型",
-        "definition": "複数の信念が因果関係や説明モデルとしてつながっているが、そのモデル全体または中核前提が誤っている状態。",
-        "diagnostic_cues": ["複数の説明が一つの誤った仕組みとして連鎖する", "一つの事実訂正だけでは説明全体が変わらない"],
-        "teaching_guidelines": ["モデルを構成する信念と関係を分解する", "中核前提を複数の反証で修正する", "正しい仕組みを図式または因果の順序で再構成させる"],
-        "avoid": ["一つの用語の定義だけで解決したとみなす", "表面的な言い換えだけで終える", "誤った因果関係を温存する"],
-        "learning_outcome": "mental_model_transformation",
-        "research_basis": "Chi (2009), mental model transformation",
-    },
     "M3": {
         "label": "カテゴリー誤り型",
         "definition": "対象概念を、本来属する上位カテゴリーとは異なる種類のものとして捉えている状態。",
@@ -34,15 +25,6 @@ MISCONCEPTION_TAXONOMY: dict[str, Any] = {
         "avoid": ["誤カテゴリーのまま細部だけを補足する", "表層的なキーワード一致で理解したとみなす", "カテゴリー移行前に専門用語を増やしすぎる"],
         "learning_outcome": "categorical_shift",
         "research_basis": "Chi (2009), categorical shift",
-    },
-    "M4": {
-        "label": "欠如したスキーマ型",
-        "definition": "正しい分類先や関係を判断するために必要な知識構造・スキーマが不足している状態。",
-        "diagnostic_cues": ["誤った信念やカテゴリーを積極的に主張するより、判断に必要な枠組みが欠けている", "新しい事例の関係を説明できない"],
-        "teaching_guidelines": ["不足しているカテゴリー・関係・手順を特定する", "具体例から新しいスキーマを段階的に構築する", "新しいスキーマを別事例へ適用させる"],
-        "avoid": ["知識不足を誤信念として反証する", "一度に大量の用語を提示する", "新しいスキーマの適用確認を省く"],
-        "learning_outcome": "schema_formation",
-        "research_basis": "Chi (2013), missing schema subtype",
     },
     "unknown": {
         "label": "知識不足",

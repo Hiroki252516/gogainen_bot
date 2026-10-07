@@ -51,7 +51,6 @@ from app.seed.content_loader import (
     ASSESSMENT_VARIANT_COUNTS,
     ACTIVE_TERM_SLUGS,
     CURRENT_LEARNING_CONTENT_VERSION,
-    LEGACY_LEARNING_CONTENT_VERSION,
     assessment_question_spec,
     content_term,
     learning_question_spec,
@@ -121,7 +120,6 @@ def _ids_for_learning_role(question: dict, term_slug: str, learning_stage: str, 
         term_slug,
         learning_stage,
         question.get("learning_variant_index", 1),
-        CURRENT_LEARNING_CONTENT_VERSION,
     )
     if role == "correct":
         labels = [option["label"] for option in spec["options"] if option["is_correct"]]
@@ -135,7 +133,6 @@ def _ids_for_learning_role_mix(question: dict, term_slug: str, learning_stage: s
         term_slug,
         learning_stage,
         question.get("learning_variant_index", 1),
-        CURRENT_LEARNING_CONTENT_VERSION,
     )
     labels = []
     for role in ("correct", "M1", "M3"):
@@ -208,8 +205,8 @@ def test_content_contract_has_three_terms_and_required_variant_counts():
         assert len(term["questions"]["pretest"]) == 1
         assert len(term["questions"]["retest"]) == 5
         assert len(term["questions"]["final_test"]) == 1
-        assert len(term["learning"]["enrichment"]["variants"]) == 5
-        assert len(term["learning"]["conceptual_change"]["variants"]) == 5
+        assert len(load_learning_v2_content()["terms"][term["slug"]]["enrichment"]["variants"]) == 5
+        assert len(load_learning_v2_content()["terms"][term["slug"]]["conceptual_change"]["variants"]) == 5
 
 
 def test_assessment_bank_has_21_scenario_variants_fixed_roles_and_option_lengths():
@@ -281,7 +278,7 @@ def test_learning_v2_bank_has_scenario_roles_and_fixed_labels():
             ]
             for variant_index, variant in enumerate(variants, start=1):
                 spec = learning_question_spec(
-                    term_slug, stage, variant_index, CURRENT_LEARNING_CONTENT_VERSION
+                    term_slug, stage, variant_index
                 )
                 assert spec["body"] == f"{variant['scenario']}\n\n{variant['task']}"
                 assert len(spec["options"]) == 10
@@ -308,7 +305,7 @@ def test_llm_knowledge_conceptual_change_v1_prompt_and_option_roles():
     content = load_learning_v2_content()
     variant = content["terms"]["llm_knowledge"]["conceptual_change"]["variants"][0]
     spec = learning_question_spec(
-        "llm_knowledge", "conceptual_change", 1, CURRENT_LEARNING_CONTENT_VERSION
+        "llm_knowledge", "conceptual_change", 1
     )
 
     assert variant["task"] == task
@@ -324,16 +321,6 @@ def test_llm_knowledge_conceptual_change_v1_prompt_and_option_roles():
     }
 
 
-def test_legacy_learning_bank_and_test_question_roles_remain_unchanged():
-    legacy = learning_question_spec(
-        "llm_knowledge", "enrichment", 1, LEGACY_LEARNING_CONTENT_VERSION
-    )
-    assert [option["label"] for option in legacy["options"] if option["is_correct"]] == ["A", "B", "C"]
-    assert [option["label"] for option in legacy["options"] if option["misconception_type"] == "M1"] == ["D", "E", "F"]
-    assert [option["label"] for option in legacy["options"] if option["misconception_type"] == "M3"] == ["G", "H", "I"]
-    assert load_content()["terms"][0]["questions"]["pretest"][0]["variant_key"] == "pretest_v1"
-
-
 def test_pretest_returns_three_multi_select_questions_with_ten_options():
     participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
     questions = client.get(f"/api/experiment/{participant['participant_id']}/pretest").json()["questions"]
@@ -347,7 +334,7 @@ def test_pretest_returns_three_multi_select_questions_with_ten_options():
         assert question["max_selections"] == 3
         assert [option["label"] for option in question["options"]] == list("ABCDEFGHIJ")
         assert len(question["options"]) == 10
-        assert question["requires_reason"] is False
+        assert "requires_reason" not in question
 
 
 def test_idempotency_replays_same_attempt_and_rejects_changed_or_duplicate_answers():
@@ -402,7 +389,7 @@ def test_idempotency_replays_same_attempt_and_rejects_changed_or_duplicate_answe
     questions_after_submit = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     assert questions_after_submit[0]["answer_status"] == "submitted"
     assert questions_after_submit[0]["submitted_answer"]["selected_option_ids"] == body["selected_option_ids"]
-    assert questions_after_submit[0]["submitted_answer"]["reason_text"] is None
+    assert set(questions_after_submit[0]["submitted_answer"]) == {"selected_option_ids"}
     db = SessionLocal()
     try:
         assert db.query(Attempt).filter_by(participant_id=pid, question_id=question["question_id"], phase="pretest").count() == 1
@@ -658,10 +645,10 @@ def test_admin_learner_state_stage_uses_diagnosis_for_misconception_and_unknown(
         states = {state.term_id: state for state in db.query(LearnerState).filter_by(participant_id=pid).all()}
         states[terms["llm_knowledge"]].current_status = "misconception"
         states[terms["llm_knowledge"]].primary_misconception = "M3"
-        states[terms["llm_knowledge"]].scaffolding_level = "L3"
+        states[terms["llm_knowledge"]].legacy_scaffolding_level = "L3"
         states[terms["memory_process"]].current_status = "unknown"
         states[terms["memory_process"]].primary_misconception = "unknown"
-        states[terms["memory_process"]].scaffolding_level = "L2"
+        states[terms["memory_process"]].legacy_scaffolding_level = "L2"
         db.commit()
     finally:
         db.close()
@@ -878,7 +865,7 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     assert saved_turn.grading_json["selected_option_ids"] == ["A", "B", "C"]
 
     assert correct["next_url"] == "/learning/multi_agent"
-    assert client.get(f"/api/participants/{pid}/current-step").json() == {
+    assert client.get(f"/api/participants/{pid}/current-step").json() == {"can_resume": True,
         "step": "learning_targets",
         "next_url": "/learning-targets",
     }
@@ -973,34 +960,6 @@ def test_learning_v2_scores_presented_roles_and_keeps_m3_priority():
     assert mixed_result.status_code == 200, mixed_result.text
     assert mixed_result.json()["is_sufficient"] is False
     assert mixed_result.json()["learning_misconception_type"] == "M3"
-
-
-def test_old_participant_without_learning_version_stays_on_legacy_bank():
-    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
-    db = SessionLocal()
-    try:
-        participant = db.get(Participant, pid)
-        assert participant is not None
-        participant.learning_content_version = None
-        db.commit()
-    finally:
-        db.close()
-
-    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
-    response = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
-    assert response.status_code == 200, response.text
-    turn_payload = response.json()
-    assert turn_payload["practice_question"]["variant_key"] == "learning_conceptual_change_v1"
-    assert [option["label"] for option in turn_payload["practice_question"]["options"][:3]] == ["A", "B", "C"]
-    saved_turn = _latest_turn(turn_payload["turn_id"])
-    assert saved_turn is not None
-    assert saved_turn.diagnosis_json["learning_content_version"] == LEGACY_LEARNING_CONTENT_VERSION
-    legacy_correct = client.post(
-        f"/api/tutor-turns/{turn_payload['turn_id']}/respond",
-        json={"selected_option_ids": _ids_for_labels(turn_payload["practice_question"], ["A", "B", "C"])},
-    )
-    assert legacy_correct.status_code == 200, legacy_correct.text
-    assert legacy_correct.json()["is_sufficient"] is True
 
 
 def test_participant_turn_api_hides_answer_keys_on_new_and_cached_responses():
@@ -1176,7 +1135,7 @@ def test_learning_answer_generates_feedback_with_group_specific_payloads():
     )
     assert control_wrong.status_code == 200, control_wrong.text
 
-    correct_pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    correct_pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     correct_session = client.post("/api/tutor-sessions", json={"participant_id": correct_pid, "term_slug": "memory_process"}).json()
     correct_turn = client.post(f"/api/tutor-sessions/{correct_session['tutor_session_id']}/turns", json={}).json()
     correct = client.post(
@@ -1423,13 +1382,15 @@ def test_new_tutor_session_does_not_reuse_previous_session_context():
         db.close()
 
 
-def test_previous_turn_prefix_supports_items_and_missing_response():
+def test_previous_turn_prefix_ignores_retired_items_and_missing_response():
     previous_turn = SimpleNamespace(
         practice_question_json={"items": [{"body": "第一問"}, {"body": "第二問"}]},
         learner_response=None,
     )
 
-    assert experiment_service._previous_turn_prefix(previous_turn) == "前の問題: 第一問 / 第二問\n\n"
+    assert experiment_service._previous_turn_prefix(previous_turn) == ""
+    previous_turn.practice_question_json = {"body": "現在の固定問題"}
+    assert experiment_service._previous_turn_prefix(previous_turn) == "前の問題: 現在の固定問題\n\n"
 
 
 def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch):
@@ -1552,9 +1513,6 @@ def test_control_sequence_is_independent_of_pretest_and_learning_history():
             assert audit["fixed_sequence_key"] == "control-fixed-v1:llm_knowledge:turn-1:v1"
             assert set(audit["actual_ai_input"]) == {
                 "term",
-                "component_term",
-                "component_index",
-                "component_total",
                 "component_terms",
                 "rag_context",
             }
@@ -1711,7 +1669,7 @@ def test_learning_give_up_routes_to_retest_and_closes_current_session():
     assert give_up.status_code == 200, give_up.text
     assert give_up.json()["next_step"] == "retest"
     assert give_up.json()["next_url"] == "/retest"
-    assert client.get(f"/api/participants/{pid}/current-step").json() == {"step": "retest", "next_url": "/retest"}
+    assert client.get(f"/api/participants/{pid}/current-step").json() == {"can_resume": True, "step": "retest", "next_url": "/retest"}
     assert client.get(f"/api/experiment/{pid}/retest").status_code == 200
     participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
     assert participant_logs.status_code == 200, participant_logs.text
@@ -1761,7 +1719,7 @@ def test_experiment_give_up_during_retest_routes_to_survey_and_blocks_retest_act
     assert give_up.json()["next_url"] == "/survey"
     current = client.get(f"/api/participants/{pid}/current-step")
     assert current.status_code == 200
-    assert current.json() == {"step": "survey", "next_url": "/survey"}
+    assert current.json() == {"can_resume": True, "step": "survey", "next_url": "/survey"}
 
     assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
     assert client.post(f"/api/participants/{pid}/score-retest").status_code == 409
@@ -1863,7 +1821,7 @@ def test_experiment_give_up_during_final_test_routes_to_survey_and_blocks_final_
     assert give_up.json()["next_url"] == "/survey"
     current = client.get(f"/api/participants/{pid}/current-step")
     assert current.status_code == 200
-    assert current.json() == {"step": "survey", "next_url": "/survey"}
+    assert current.json() == {"can_resume": True, "step": "survey", "next_url": "/survey"}
     assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
     assert client.post(f"/api/participants/{pid}/score-final-test").status_code == 409
     blocked_attempt = client.post(
@@ -2012,7 +1970,7 @@ def test_retest_mastery_skips_final_test_and_uses_retest_score():
     try:
         summary = db.query(EvaluationSummary).filter_by(participant_id=pid).order_by(EvaluationSummary.created_at.desc()).first()
         assert summary is not None
-        assert summary.l0_correct_rate == pytest.approx(1.0)
+        assert summary.attainment_correct_rate == pytest.approx(1.0)
         assert summary.score_timeline_json["final_test_skipped_after_retest_mastery"] is True
         assert summary.score_timeline_json["final_score_source"] == "retest_mastery"
         assert summary.condition_check_json["final_test_skipped_after_retest_mastery"] is True
@@ -2301,7 +2259,7 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert "プロンプトエンジニアリングは入力文脈や指示を工夫する方法" in e_target["corrected_claim"]
         assert "session_misconception_history" in proposed_log.request_payload
         assert "misconception_taxonomy" not in control_log.request_payload
-        assert "taxonomy_version" not in control_log.request_payload
+        assert control_log.request_payload["taxonomy_version"] == TAXONOMY_VERSION
         assert "pretest_targets" not in control_log.request_payload
         assert "learner_state" not in control_log.request_payload
         assert "session_misconception_history" not in control_log.request_payload
@@ -2634,13 +2592,14 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     )
     text = "\n".join(source.read_text(encoding="utf-8") for source in prompt_sources)
     assert "misconception_taxonomy" in text
-    assert "M4なら不足スキーマの構築" in text
+    assert "M1/M3/unknownの定義と教授方針" in text
+    assert "M4なら不足スキーマの構築" not in text
     assert "固定問題バンクが表示・採点" in text
     assert "fixed_practice_question_items" not in text
     assert "### 要点" in text
     assert "### 具体例" in text
     assert "### 注意点" in text
-    assert "feedback は安全なMarkdownとして返す" in text
+    assert "feedback は ## どこが違うか" in text
     assert "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず" not in text
     assert "previous_feedback_for_learner" not in text
     assert "generate_correct_answer_summary" in text
@@ -2713,15 +2672,6 @@ def test_mock_tutoring_and_feedback_use_markdown_contract():
     for heading in ("### 要点", "### 具体例", "### 注意点"):
         assert heading not in turn["tutor_message"]
 
-    correct_feedback = asyncio.run(
-        backend.generate_feedback({**payload, "learner_response": "役割を分担します。"})
-    )
-    incorrect_feedback = asyncio.run(
-        backend.generate_feedback({**payload, "learner_response": "わからない"})
-    )
-    assert "### 要点" in correct_feedback["feedback"]
-    assert "### 見直しポイント" in incorrect_feedback["feedback"]
-
     correct_summary = asyncio.run(backend.generate_correct_answer_summary(payload))
     distractor_feedback = asyncio.run(
         backend.explain_selected_distractor({**payload, "selected_option_bodies": ["誤った説明"]})
@@ -2731,13 +2681,15 @@ def test_mock_tutoring_and_feedback_use_markdown_contract():
     assert "## 見直す観点" in distractor_feedback["feedback"]
 
 
-def test_latest_taxonomy_and_strategy_cover_m1_to_m4():
-    assert {"M1", "M2", "M3", "M4", "unknown"}.issubset(MISCONCEPTION_TAXONOMY)
+def test_latest_taxonomy_and_strategy_cover_current_types():
+    assert set(MISCONCEPTION_TAXONOMY) == {"M1", "M3", "unknown"}
     assert strategy_for("M1", "misconception", "proposed") == "belief_revision"
-    assert strategy_for("M2", "misconception", "proposed") == "deep_structure_focus"
     assert strategy_for("M3", "misconception", "proposed") == "category_reorientation"
-    assert strategy_for("M4", "misconception", "proposed") == "context_transfer_training"
-    assert strategy_for("M4", "misconception", "control") == "general_explanation"
+    assert strategy_for("unknown", "unknown", "proposed") == "foundational_explanation"
+    assert strategy_for(None, None, "control") == "general_explanation"
+    for retired in ("M2", "M4"):
+        with pytest.raises(ValueError):
+            strategy_for(retired, "misconception", "proposed")
 
 
 def test_rag_is_limited_by_topic_and_excludes_langgraph():

@@ -393,7 +393,7 @@ def test_service_allows_two_material_length_retries(monkeypatch):
         return result
 
     monkeypatch.setattr(experiment_service, "_ai_call", fake_ai_call)
-    with pytest.raises(HTTPException, match="教材の誤概念対応契約を満たす教材を生成できませんでした"):
+    with pytest.raises(HTTPException, match="教材の生成契約を満たす教材を生成できませんでした"):
         asyncio.run(experiment_service._generate_validated_tutoring_turn(None, payload))
 
     assert [call["generation_attempt"] for call in calls] == [1, 2, 3]
@@ -470,7 +470,7 @@ def test_control_tutoring_never_uses_proposed_mandatory_contract(monkeypatch):
 
     async def capture(purpose, prompt, output_schema, **kwargs):
         captured.update(purpose=purpose, prompt=prompt, schema=output_schema, **kwargs)
-        return {"tutor_message": "## 記憶プロセス\n\n### 要点\n- 情報を保存し検索します。", "teaching_strategy": "adaptive_scaffolding"}
+        return {"tutor_message": "## 記憶プロセス\n\n### 要点\n- 情報を保存し検索します。", "teaching_strategy": "general_explanation"}
 
     monkeypatch.setattr("app.ai.codex_app_server_backend.expected_mandatory_type", unexpected_mandatory_type)
     monkeypatch.setattr(backend, "_run_structured_turn", capture)

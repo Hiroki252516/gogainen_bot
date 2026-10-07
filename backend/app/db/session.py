@@ -29,6 +29,7 @@ def _ensure_lightweight_schema_updates() -> None:
         "participants": [
             ("completion_reason", "TEXT"),
             ("learning_content_version", "INTEGER"),
+            ("experiment_spec_version", "INTEGER"),
         ],
         "attempts": [
             ("test_round", "TEXT"),
@@ -80,7 +81,7 @@ def _ensure_lightweight_schema_updates() -> None:
 def _backfill_attempt_test_rounds(connection) -> None:
     """Populate round names for attempts created before the test_round column existed."""
     rows = connection.execute(
-        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE test_round IS NULL OR test_round = ''")
+        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE (test_round IS NULL OR test_round = '') AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = 1)")
     ).mappings().all()
     if not rows:
         return
@@ -129,6 +130,7 @@ def _backfill_completion_reasons(connection) -> None:
                 ELSE 'completed'
             END
             WHERE participants.current_step = 'finish'
+              AND participants.experiment_spec_version = 1
               AND participants.completed_at IS NOT NULL
               AND (
                   participants.completion_reason IS NULL
@@ -160,6 +162,7 @@ def _backfill_evaluation_completion_flags(connection) -> None:
                 )
                 FROM participants
                 WHERE participants.id = summaries.participant_id
+                  AND participants.experiment_spec_version = 1
                 """
             )
         )
@@ -179,11 +182,13 @@ def _backfill_evaluation_completion_flags(connection) -> None:
                 END
                 FROM participants
                 WHERE participants.id = evaluation_summaries.participant_id
+                  AND participants.experiment_spec_version = 1
             )
             WHERE EXISTS (
                 SELECT 1
                 FROM participants
                 WHERE participants.id = evaluation_summaries.participant_id
+                  AND participants.experiment_spec_version = 1
             )
             """
         )
@@ -202,7 +207,8 @@ def _backfill_tutor_prefetch_states(connection) -> None:
             """
             UPDATE tutor_sessions
             SET prefetch_state = 'none'
-            WHERE prefetch_state IS NULL OR prefetch_state = ''
+            WHERE (prefetch_state IS NULL OR prefetch_state = '')
+              AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = 1)
             """
         )
     )

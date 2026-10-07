@@ -890,6 +890,13 @@ button:disabled {
   padding-top: 10px;
 }
 
+.raw-json pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+
 .flow-timeline {
   display: grid;
   gap: 12px;
