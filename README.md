@@ -28,6 +28,8 @@
 
 両群の教材は、小見出しの文言・数・順序・まとめ方をAIが決めます。冒頭の `## 用語名` と少なくとも1つの非空 `###` セクションは維持します。実験群の反駁・再分類・基礎説明と教材内適用確認は引き続き必須で、専用見出しではなく本文中の証拠文で検証します。契約版は `tutoring-teaching-contract-v5-dynamic-sections`。見出し・順序・節数・証拠配置を既存JSONに記録し、不一致を自動補正せず最大3試行で再生成します。画面ラベル・回答後解説の見出し・採点・問題・DB列・CSV固定ヘッダは変更しません。
 
+この自動検証は、契約内の対象ID・方略・必須フィールド・本文証拠の一致・章立て・文字数・禁止文字列を確認するものです。教材の事実的正しさ、反駁の妥当性、言い換えによる正答漏えい、意味的な過去解説の混入まで保証するものではありません。プロンプト上の指示と自動検査を区別し、教材内容は研究者が目視確認します。詳細は [AI契約の検証範囲](docs/10_ai_prompt_contracts.md#出力検証) を参照してください。
+
 - OpenAI APIキーは使わない
 - OpenAI SDKで通常APIを直接呼ばない
 - AI呼び出しは `AIBackend` 抽象インターフェース経由にする
@@ -35,11 +37,13 @@
 - `MockAIBackend` は自動テスト・CI・app-server切り分け専用に残す
 - ChatGPT/Codex認証情報をDBへ保存しない
 - 被験者画面に内部分類・群名・教授方略を直接表示しない
-- 回答、出題時刻、回答時刻、回答時間、AI診断、AI応答、学習ステージ更新を研究ログとして保存する
+- 回答、出題時刻、回答時刻、回答時間、backendの固定採点・分類、AI教材・解説、学習ステージ更新を研究ログとして保存する
 - 管理画面とCSVでは、テスト回答と学習ターン回答を `answer_history` として同じ回答履歴に統合する
 - 回答ログの `attempts.test_round` に `test`、`retest_1`、`retest_2` の周回名を保存し、内部処理用の `phase` と区別する
 - 実験分析に必要なCSVを出力できるようにする
 - 再テストは毎回、事前テスト対象の3項目すべてを出題し、全問正解ならアンケートへ進み、それ以外は不正解・未回答項目だけを次周回の学習対象にする
+
+**管理者アクセスは未対策です。** 現行の管理画面・管理APIには管理者認証・権限確認がなく、参加者画面にも管理画面リンクがあります。移動時の確認ダイアログやChatGPT/Codexログインは管理者のアクセス制御ではありません。ログ・CSVを「研究者限定で扱う」は運用方針であり、参加者からのアクセスをシステムが防止する保証ではありません。本実験開始前のアクセス対策は未解決事項です。詳細は [セキュリティ仕様](docs/15_security_privacy.md) を参照してください。
 
 ## 推奨構成
 
@@ -104,7 +108,7 @@ docker compose up --build
 - backend health: http://localhost:8000/api/health
 - admin: http://localhost:3000/admin
 
-DockerではPostgreSQLを使用します。backendからCodex app-serverへの接続先は`.env`の`CODEX_APP_SERVER_URL`で変更できます。Docker Desktopでは通常`ws://host.docker.internal:4500`を使います。`rag_agent_knowledge_base/` はread-onlyでbackendへマウントされ、初期seedはYAMLを検証したうえでbackend起動時に自動投入されます。
+DockerではPostgreSQLを使用します。現行Composeの既定は`BACKEND_NETWORK_MODE=host`で、backendは`CODEX_APP_SERVER_URL=ws://127.0.0.1:4500`のapp-serverへ接続します。bridge構成へ変更する場合だけ、接続先を通常`ws://host.docker.internal:4500`へ上書きし、DB接続先やネットワーク設定も合わせて調整します。`rag_agent_knowledge_base/` はread-onlyでbackendへマウントされ、初期seedはYAMLを検証したうえでbackend起動時に自動投入されます。
 
 ### ローカル開発
 
@@ -143,17 +147,20 @@ cd frontend && npm run build
 ./scripts/start-codex-app-server.sh
 ```
 
-Docker Composeではbackendコンテナからホストへ接続するため、`.env`に以下を設定します。
+現行Docker Composeのhost network構成では、`.env`に以下を設定します。`.env.example`の既定値と同じ接続方式です。
 
 ```env
 AI_BACKEND=codex_app_server
-CODEX_APP_SERVER_URL=ws://host.docker.internal:4500
+BACKEND_NETWORK_MODE=host
+CODEX_APP_SERVER_URL=ws://127.0.0.1:4500
 CODEX_APP_SERVER_LISTEN_URL=ws://127.0.0.1:4500
 CODEX_APP_SERVER_CWD=/tmp
 CODEX_MODEL=gpt-5.6-luna
 CODEX_REASONING_EFFORT=medium
 RAG_BASE_DIR=/rag_agent_knowledge_base
 ```
+
+bridge構成を選ぶ場合のapp-server接続例は`CODEX_APP_SERVER_URL=ws://host.docker.internal:4500`です。このURLだけを既定のhost network構成へ混ぜず、backendからのホスト名解決・4500番への到達、DB接続先・ポート公開も確認してください。詳しくは [Docker開発仕様](docs/13_docker_development.md) を参照してください。
 
 ローカルでbackendを直接起動する場合は、backendが動くホストから到達できるURLへ`CODEX_APP_SERVER_URL`を変更します。通常は`ws://127.0.0.1:4500`です。`MockAIBackend` は `AI_BACKEND=mock` を明示したテスト用途に限ります。app-serverが未起動または未ログインの場合、AI呼び出しはMockへ自動フォールバックせず、`ai_call_logs` に失敗として記録されます。
 

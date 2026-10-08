@@ -29,9 +29,18 @@ backend指定方略はcontrol→general_explanation、M1→belief_revision、M3�
 
 proposedの教材はtutor_message、teaching_strategy、mandatory_elements、teaching_contractを持つ。契約項目はtarget_claim_id、addressed_claim_ids、refutation_mode、corrected_claim、mechanism_explanation、contrast_example、transfer_check、target_addressed。
 
-M1は反駁、M3はカテゴリー比較、unknownは基礎説明。transfer_checkは教材内の適用確認であり必須。本文との証拠一致、対象主張、未観察誤概念の創作、内部ラベル、正答漏えい、直前解説混入を検証する。600〜800文字、700文字前後を維持する。初回＋最大2回同backendで再生成し、失敗は503。Mockへ切り替えない。
+M1は反駁、M3はカテゴリー比較、unknownは基礎説明を生成するよう指示する。transfer_checkは教材内の適用確認であり必須。backendの自動検証は以下の構造・文字列検査であり、教授内容の意味的な正しさを判定するものではない。600〜800文字、700文字前後を維持する。検証違反時は初回＋最大2回同backendで再生成し、失敗は503。Mockへ切り替えない。
 
-mandatory_elementsとteaching_contractの内部キー・claim対応・型別内容は維持する。証拠文はどの節でもよいが、見出しを除く実際の節本文に存在する必要がある。複数要素が同じ節に存在してよい。JSONだけの証拠、見出しだけの証拠、空フィールド、本文と異なる要約は拒否し、先頭文や任意の適用らしい行で補正しない。構造・内容・契約・長さの検証は同じ最大3試行内で行う。統制群には型別必須要素や契約を要求せず、本文構造だけは共通に検証する。
+| 区分 | 現行の処理と保証範囲 |
+| --- | --- |
+| backendの自動検査 | 契約内のtarget_claim_id/addressed_claim_idsが指定対象IDの条件を満たすこと、タイプ別refutation_mode・teaching_strategy、必須フィールドの非空・null条件、target_addressed、証拠文の節本文内出現、用語見出し・非空節・内部ラベル、教材文字数を確認する。証拠一致では空白や一部Markdown記号を正規化する。 |
+| 禁止文字列検査 | 現在の固定確認問題の本文、expected_answer、正解選択肢本文について、各文字列が教材にそのまま含まれる場合を拒否する。言い換えや部分的な手掛かりを意味的に検出する検査ではない。 |
+| 入力分離とプロンプト指示 | 直前のAI解説全文を次教材の入力から除き、過去問題・回答・解説の転載、未観察誤概念の創作、正答漏えいをしないよう指示する。入力に渡さないことと、生成文の意味的な混入を判定することは別である。 |
+| 研究者の目視確認 | 教材の事実的正しさ、訂正・反駁・カテゴリー比較の妥当性、対象主張への実質的な対応、別事例への適用確認、言い換えによる正答漏えい、意味的な過去解説混入を確認する。これらを自動検証で保証しない。 |
+
+正しいclaim_idを返し、本文とJSONの証拠文が一致していても、その証拠文が研究者確認済みの訂正内容を正しく説明しているとは限らない。現在は訂正文の意味的な同値性や、証拠文が反例として成立するかを検査しない。生成検証のvalidは機械検査に合格したことを示し、教材内容全体が正しいとの認定ではない。
+
+mandatory_elementsとteaching_contractの内部キー・対象IDの条件・型別フィールドは維持する。証拠文はどの節でもよいが、見出しを除く実際の節本文に存在する必要がある。複数要素が同じ節に存在してよい。JSONだけの証拠、見出しだけの証拠、空フィールド、本文に同じ証拠文字列がない要約は拒否し、先頭文や任意の適用らしい行で補正しない。構造・証拠一致・契約・長さの検査は同じ最大3試行内で行う。統制群には型別必須要素や契約を要求せず、本文構造・文字数・禁止文字列・指定方略の検査を共通に適用する。
 
 正答要約/誤答解説も共通入力を使い、現在の問題・選択内容・表示済み教材を追加する。不正解の現在選択には従来どおり選ばれた誤答本文だけを使う。履歴は現在回答より前の確定分とし、二重掲載しない。proposedだけ診断と教授方針を追加し、固定採点をAI解説で変えない。
 
@@ -40,5 +49,7 @@ mandatory_elementsとteaching_contractの内部キー・claim対応・型別内�
 ## 監査
 
 AICallLogの既存JSON内に実送信thread/start、turn/start全文、SchemaとSHA-256、モデル・推論設定、RAG条件/chunk本文hash、版、試行・検証、生応答を保存する。interaction-history-v1の件数とSHA-256、出題規則版、モデル入力投影も記録する。controlのinstruction_routeはshared_history_general、proposedはshared_history_diagnostic。認証情報を保存しない。Mock入力を実送信として扱わない。TutorTurnにも版・履歴指紋・契約・検証を保存する。
+
+監査ログ・CSVを研究者限定で取り扱うことは運用方針である。現行管理APIに管理者認証・権限確認はなく、アクセスがシステムで制限されているとはみなさない。[セキュリティ仕様](15_security_privacy.md) に未解決事項を記載する。
 
 `AICallLog.response_payload.generation_validation.material_structure` と `TutorTurn.diagnosis_json.material_structure_validation` に、headings（表示順）、section_count、sectionsの位置/見出し/本文文字数、evidence_placements（内部フィールド→節番号）、valid/missingを保存する。各生成試行を監査し、成功した最後の検証をTutorTurnに残す。AI出力Schema、公開API、DB列、CSV固定ヘッダは追加しない。Mockの決定論的な章立てはテスト専用で、実AIの見出しを固定する根拠にしない。
