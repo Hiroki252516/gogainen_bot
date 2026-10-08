@@ -8,9 +8,7 @@ from fastapi import HTTPException
 from app.services import experiment as experiment_service
 from app.ai.mandatory_elements import (
     expected_mandatory_type,
-    mandatory_element_headings,
     mandatory_elements_schema,
-    reconcile_mandatory_elements,
     validate_mandatory_elements,
 )
 from app.ai.codex_app_server_backend import CodexAppServerBackend
@@ -19,7 +17,6 @@ from app.ai.teaching_contract import (
     MATERIAL_MAX_CHARACTERS,
     MATERIAL_MIN_CHARACTERS,
     MATERIAL_TARGET_CHARACTERS,
-    reconcile_teaching_contract,
     teaching_contract_schema,
     validate_teaching_contract,
     validate_tutoring_material_length,
@@ -32,6 +29,7 @@ from app.seed.content_loader import (
     load_content,
     teaching_target_for_option,
 )
+from app.ai.material_structure import validate_material_structure
 
 
 def _payload(misconception_type: str | None, stage: str) -> dict:
@@ -169,14 +167,13 @@ def test_mock_proposed_material_contains_all_mandatory_evidence():
         )
         assert validation["valid"], validation
         assert result["mandatory_elements"]["type"] == misconception_type
-        assert "### 要点" not in result["tutor_message"]
-        assert "### 具体例" not in result["tutor_message"]
-        assert "### 注意点" not in result["tutor_message"]
-        for heading in mandatory_element_headings(misconception_type).values():
-            assert f"### {heading}" in result["tutor_message"]
+        structure = validate_material_structure(result, payload["term"]["label"])
+        assert structure["valid"], structure
+        assert structure["section_count"] < len(validation["required_fields"])
+        assert all(validation["evidence_placements"].values())
 
 
-def test_codex_evidence_reconciliation_uses_visible_unknown_sections():
+def test_codex_does_not_repair_mismatched_evidence_from_arbitrary_body_text():
     backend = MockAIBackend()
     payload = _payload("unknown", "enrichment")
     result = asyncio.run(backend.generate_tutoring_turn(payload))
@@ -184,43 +181,44 @@ def test_codex_evidence_reconciliation_uses_visible_unknown_sections():
     result["teaching_contract"]["mechanism_explanation"] = "AIが返した別の仕組みです。"
     result["teaching_contract"]["transfer_check"] = "AIが返した別の適用確認です。"
 
-    reconcile_mandatory_elements(result, "unknown")
-    reconcile_teaching_contract(result, "unknown")
+    codex = CodexAppServerBackend()
+
+    async def capture(*args, **kwargs):
+        return result
+
+    codex._run_structured_turn = capture
+    result = asyncio.run(codex.generate_tutoring_turn(payload))
 
     mandatory_validation = validate_mandatory_elements(result, "unknown", payload["term"]["label"])
     contract_validation = validate_teaching_contract(result, "unknown", payload, payload["term"]["label"])
-    assert mandatory_validation["valid"], mandatory_validation
-    assert contract_validation["valid"], contract_validation
-    assert result["mandatory_elements"]["components"] in result["tutor_message"]
-    assert result["teaching_contract"]["mechanism_explanation"] in result["tutor_message"]
-    assert result["teaching_contract"]["transfer_check"] in result["tutor_message"]
+    assert not mandatory_validation["valid"]
+    assert not contract_validation["valid"]
+    assert result["mandatory_elements"]["components"] == "AIが返した別の要約です。"
+    assert result["teaching_contract"]["mechanism_explanation"] == "AIが返した別の仕組みです。"
+    assert result["teaching_contract"]["transfer_check"] == "AIが返した別の適用確認です。"
 
 
-def test_codex_evidence_reconciliation_fills_empty_values():
+def test_validator_rejects_empty_evidence_even_when_body_contains_required_content():
     backend = MockAIBackend()
     payload = _payload("unknown", "enrichment")
     result = asyncio.run(backend.generate_tutoring_turn(payload))
     result["mandatory_elements"]["components"] = ""
 
-    reconcile_mandatory_elements(result, "unknown")
-
     validation = validate_mandatory_elements(result, "unknown", payload["term"]["label"])
-    assert validation["valid"], validation
-    assert result["mandatory_elements"]["components"]
+    assert not validation["valid"]
+    assert "components:empty" in validation["missing"]
+    assert result["mandatory_elements"]["components"] == ""
 
 
-def test_codex_m3_contract_reconciliation_uses_contrast_example():
+def test_validator_rejects_contract_contrast_not_present_in_body():
     backend = MockAIBackend()
     payload = _payload("M3", "conceptual_change")
     result = asyncio.run(backend.generate_tutoring_turn(payload))
     result["teaching_contract"]["contrast_example"] = "AIが返した別のカテゴリー比較です。"
 
-    reconcile_mandatory_elements(result, "M3")
-    reconcile_teaching_contract(result, "M3")
-
     validation = validate_teaching_contract(result, "M3", payload, payload["term"]["label"])
-    assert validation["valid"], validation
-    assert result["teaching_contract"]["contrast_example"] in result["tutor_message"]
+    assert not validation["valid"]
+    assert "contrast_example:evidence_not_in_section" in validation["missing"]
 
 
 def test_codex_strips_contract_field_labels_from_learner_material():
@@ -262,16 +260,12 @@ def test_validator_requires_markdown_heading_lines_not_inline_markers():
     backend = MockAIBackend()
     payload = _payload("M1", "conceptual_change")
     result = asyncio.run(backend.generate_tutoring_turn(payload))
-    result["tutor_message"] = result["tutor_message"].replace(
-        "### 正しい考え",
-        "本文中で ### 正しい考え と表記します。",
-        1,
-    )
+    result["tutor_message"] = result["tutor_message"].replace("\n### ", "\n本文中で ### ")
 
     validation = validate_mandatory_elements(result, "M1", payload["term"]["label"])
 
     assert not validation["valid"]
-    assert "tutor_message:heading_missing:### 正しい考え" in validation["missing"]
+    assert "tutor_message:sections_missing" in validation["missing"]
     assert "correct_belief:evidence_not_in_section" in validation["missing"]
 
 
@@ -280,13 +274,12 @@ def test_validator_ignores_inline_heading_mentions_when_finding_section_end():
     payload = _payload("M1", "conceptual_change")
     result = asyncio.run(backend.generate_tutoring_turn(payload))
     elements = result["mandatory_elements"]
-    headings = mandatory_element_headings("M1")
     sections = ["## 記憶プロセス"]
-    for field, heading in headings.items():
+    for field in ("reason", "counterexample", "correct_belief", "wrong_belief"):
         evidence = elements[field]
         if field == "correct_belief":
             evidence = f"本文では ### 反例 と表記する説明も含める。\n- {evidence}"
-        sections.append(f"### {heading}\n- {evidence}")
+        sections.append(f"### 自由な見出し{len(sections)}\n- {evidence}")
     result["tutor_message"] = "\n\n".join(sections)
 
     validation = validate_mandatory_elements(result, "M1", payload["term"]["label"])
@@ -299,21 +292,20 @@ def test_validator_rejects_evidence_in_an_empty_heading_section():
     payload = _payload("M1", "conceptual_change")
     result = asyncio.run(backend.generate_tutoring_turn(payload))
     elements = result["mandatory_elements"]
-    headings = mandatory_element_headings("M1")
     sections = ["## 記憶プロセス"]
-    for field, heading in headings.items():
+    for field in ("wrong_belief", "correct_belief", "counterexample", "reason"):
         evidence = ""
         if field == "correct_belief":
             evidence = f"- {elements['wrong_belief']}\n- {elements[field]}"
         elif field != "wrong_belief":
             evidence = f"- {elements[field]}"
-        sections.append(f"### {heading}\n{evidence}")
+        sections.append(f"### 自由な見出し{len(sections)}\n{evidence}")
     result["tutor_message"] = "\n\n".join(sections)
 
     validation = validate_mandatory_elements(result, "M1", payload["term"]["label"])
 
     assert not validation["valid"]
-    assert "wrong_belief:evidence_not_in_section" in validation["missing"]
+    assert "tutor_message:section_body_empty:1" in validation["missing"]
 
 
 def test_validator_detects_internal_labels_adjacent_to_japanese_text():

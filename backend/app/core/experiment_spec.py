@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import HTTPException
 
 
-CURRENT_EXPERIMENT_SPEC_VERSION = 2
+CURRENT_EXPERIMENT_SPEC_VERSION = 3
 
 
 def can_resume(participant: Any) -> bool:

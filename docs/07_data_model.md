@@ -2,7 +2,7 @@
 
 モデルの正本は `backend/app/models/__init__.py`。既存の `participants.experiment_spec_version INTEGER NULL` を利用し、今回DB列やテーブルを追加しない。
 
-新規参加者だけ2を保存し、既存参加者のNULL・1・未対応版は変更しない。旧試用は進行・採点・完了更新・評価再計算を禁止する。起動時補修SQLは現行版定数へパラメーターで限定し、旧記録を変更しない。
+新規参加者だけ3を保存し、既存参加者のNULL・1・2・未対応版は変更しない。旧試用は進行・採点・完了更新・評価再計算を禁止する。起動時補修SQLは現行版定数へパラメーターで限定し、旧記録を変更しない。
 
 現行の主な保存対象:
 
@@ -15,7 +15,9 @@
 
 interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み出し、別テーブルへ複製しない。同じ参加者・用語の全周回を時系列で統合し、共通allowlistで診断・教授メタデータを除く。内部IDは並び順と参照照合にだけ使い、モデルへ送らない。
 
-既存JSONへinteraction-history-v1の件数/SHA-256、shared-diagnosis-route-v1、仕様版2を追加する。AICallLog.request_payload.input_projectionはサーバー側の入力投影であり、実送信はeffective_requestとtransmissionを確認する。Mockの投影を実app-server送信とみなさない。
+既存JSONへinteraction-history-v1の件数/SHA-256、shared-diagnosis-route-v1、仕様版3を保存する。AICallLog.request_payload.input_projectionはサーバー側の入力投影であり、実送信はeffective_requestとtransmissionを確認する。Mockの投影を実app-server送信とみなさない。
+
+章立て監査は既存のAICallLog.response_payload.generation_validation.material_structureとTutorTurn.diagnosis_json.material_structure_validationに保存する。見出し・順序・節数・本文文字数・必須証拠配置（節番号）・検証結果を含み、DB列追加はしない。重複見出しは節番号で区別する。旧教材と旧監査JSONは再解析・書換えせず保持する。
 
 旧列は物理削除しない。ORM名を `legacy_*` にして履歴読出しへ隔離する。新規レコードの旧NOT NULL列には `not_applicable`、0、falseなどの中立値を設定するだけで、教授・採点には参照しない。過去値は保持する。
 

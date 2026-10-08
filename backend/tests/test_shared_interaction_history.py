@@ -191,7 +191,7 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
             assert [row["label"] for row in history[-1]["selected_options"]] == list(following)
             assert first_feedback.response_payload["feedback"] not in json.dumps(history, ensure_ascii=False)
             assert generation.request_payload["interaction_history_audit"]["record_count"] == 2
-            assert generation.request_payload["experiment_spec_version"] == 2
+            assert generation.request_payload["experiment_spec_version"] == 3
             assert generation.request_payload["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
             if group == "B":
                 assert set(generation.request_payload["input_projection"]) == set(COMMON_INPUT_KEYS)
@@ -204,15 +204,16 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
     assert trials[0][2]["next_url"] == trials[1][2]["next_url"]
 
 
-def test_startup_repairs_only_version_two_and_preserves_version_one_trial(tmp_path, monkeypatch):
+@pytest.mark.parametrize("legacy_version", [1, 2])
+def test_startup_repairs_only_version_three_and_preserves_old_trials(tmp_path, monkeypatch, legacy_version):
     isolated = create_engine(f"sqlite:///{tmp_path / 'versions.db'}")
     monkeypatch.setattr(database, "engine", isolated)
     Base.metadata.create_all(isolated)
     with Session(isolated) as db:
         seed_database(db)
         question = db.query(Question).filter_by(phase="pretest").first()
-        old = Participant(display_code="OLD-V1", group_condition="control", experiment_spec_version=1, current_step="finish", completed_at=datetime(2026, 10, 1))
-        current = Participant(display_code="CURRENT", group_condition="control", experiment_spec_version=2, current_step="finish", completed_at=datetime(2026, 10, 1))
+        old = Participant(display_code="OLD", group_condition="control", experiment_spec_version=legacy_version, current_step="finish", completed_at=datetime(2026, 10, 1))
+        current = Participant(display_code="CURRENT", group_condition="control", experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, current_step="finish", completed_at=datetime(2026, 10, 1))
         db.add_all([old, current])
         db.flush()
         for participant in (old, current):
@@ -234,10 +235,10 @@ def test_startup_repairs_only_version_two_and_preserves_version_one_trial(tmp_pa
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round == "test"
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 2
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 3
     pid = create_trial()
     with SessionLocal() as db:
-        assert db.get(Participant, pid).experiment_spec_version == 2
+        assert db.get(Participant, pid).experiment_spec_version == 3
 
 
 def test_effective_audit_preserves_provider_input_including_retry_instructions():

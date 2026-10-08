@@ -1,6 +1,6 @@
 # 現行AI契約
 
-実験仕様版は2、契約版は `tutoring-teaching-contract-v4-shared-history`、taxonomy版は `m1-m3-unknown-v2`。
+実験仕様版は3、契約版は `tutoring-teaching-contract-v5-dynamic-sections`、taxonomy版は `m1-m3-unknown-v2`。共通履歴はinteraction-history-v1、共通出題規則はshared-diagnosis-route-v1のまま。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 
@@ -25,9 +25,13 @@ backend指定方略はcontrol→general_explanation、M1→belief_revision、M3�
 
 ## 出力検証
 
+両群とも冒頭の `## 用語名` と1つ以上の非空 `###` セクションを要求する。小見出しの文言・数・順序・複数要素のまとめ方はAIに任せ、専用見出しや固定順序を強制しない。従来の見出しを自然に生成してもよい。CommonMarkパーサー（markdown-it-py）で実際の見出しと節本文を解析し、インラインの見出し風文字列、コードブロック・引用内の見出しを教材の節とみなさない。空の節、用語見出しの欠落、内部ラベル露出を拒否する。
+
 proposedの教材はtutor_message、teaching_strategy、mandatory_elements、teaching_contractを持つ。契約項目はtarget_claim_id、addressed_claim_ids、refutation_mode、corrected_claim、mechanism_explanation、contrast_example、transfer_check、target_addressed。
 
 M1は反駁、M3はカテゴリー比較、unknownは基礎説明。transfer_checkは教材内の適用確認であり必須。本文との証拠一致、対象主張、未観察誤概念の創作、内部ラベル、正答漏えい、直前解説混入を検証する。600〜800文字、700文字前後を維持する。初回＋最大2回同backendで再生成し、失敗は503。Mockへ切り替えない。
+
+mandatory_elementsとteaching_contractの内部キー・claim対応・型別内容は維持する。証拠文はどの節でもよいが、見出しを除く実際の節本文に存在する必要がある。複数要素が同じ節に存在してよい。JSONだけの証拠、見出しだけの証拠、空フィールド、本文と異なる要約は拒否し、先頭文や任意の適用らしい行で補正しない。構造・内容・契約・長さの検証は同じ最大3試行内で行う。統制群には型別必須要素や契約を要求せず、本文構造だけは共通に検証する。
 
 正答要約/誤答解説も共通入力を使い、現在の問題・選択内容・表示済み教材を追加する。不正解の現在選択には従来どおり選ばれた誤答本文だけを使う。履歴は現在回答より前の確定分とし、二重掲載しない。proposedだけ診断と教授方針を追加し、固定採点をAI解説で変えない。
 
@@ -36,3 +40,5 @@ M1は反駁、M3はカテゴリー比較、unknownは基礎説明。transfer_che
 ## 監査
 
 AICallLogの既存JSON内に実送信thread/start、turn/start全文、SchemaとSHA-256、モデル・推論設定、RAG条件/chunk本文hash、版、試行・検証、生応答を保存する。interaction-history-v1の件数とSHA-256、出題規則版、モデル入力投影も記録する。controlのinstruction_routeはshared_history_general、proposedはshared_history_diagnostic。認証情報を保存しない。Mock入力を実送信として扱わない。TutorTurnにも版・履歴指紋・契約・検証を保存する。
+
+`AICallLog.response_payload.generation_validation.material_structure` と `TutorTurn.diagnosis_json.material_structure_validation` に、headings（表示順）、section_count、sectionsの位置/見出し/本文文字数、evidence_placements（内部フィールド→節番号）、valid/missingを保存する。各生成試行を監査し、成功した最後の検証をTutorTurnに残す。AI出力Schema、公開API、DB列、CSV固定ヘッダは追加しない。Mockの決定論的な章立てはテスト専用で、実AIの見出しを固定する根拠にしない。

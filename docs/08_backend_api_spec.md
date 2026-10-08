@@ -21,6 +21,6 @@
 
 回答は `selected_option_ids` と時刻情報（response_time_sec、question_shown_at、answered_at）。テストはparticipant_id/question_id/phaseも指定する。廃止入力項目は422。
 
-NULL・仕様版1・未対応版の書込みは本文検証・冪等レスポンス再送・先行生成より前に409 `legacy_experiment_read_only`。current-stepは保存状態を変えず `step=legacy_read_only`, `can_resume=false` を返す。新規仕様版2は `can_resume=true`。公開APIの構造は変えない。
+NULL・仕様版1/2・未対応版の書込みは本文検証・冪等レスポンス再送・先行生成より前に409 `legacy_experiment_read_only`。current-stepは保存状態を変えず `step=legacy_read_only`, `can_resume=false` を返す。新規仕様版3は `can_resume=true`。公開APIの構造は変えない。
 
 参加者の出題APIに正答や分類メタデータを公開しない。回答後の結果確認では問題・選択内容・正誤を返す。Idempotency-Keyの再送、回答済みロックは維持する。旧試用の管理者閲覧・CSVは許可し、再計算は拒否する。

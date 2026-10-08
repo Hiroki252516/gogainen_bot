@@ -25,6 +25,7 @@ from app.ai.mandatory_elements import (
     validate_mandatory_elements,
 )
 from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
+from app.ai.material_structure import validate_material_structure
 from app.ai.teaching_contract import (
     MATERIAL_MAX_CHARACTERS,
     MATERIAL_MIN_CHARACTERS,
@@ -233,8 +234,8 @@ def _practice_question_text(practice_question: dict[str, Any] | None) -> str:
 
 def _misconception_teaching_guidance(misconception_type: str | None) -> str:
     return {
-        "M1": "単一の誤った命題を明示し、誤った考え、正しい考え、反例、誤りの理由をこの順で教材本文へ含める。",
-        "M3": "対象概念の誤カテゴリー、正カテゴリー、境界基準、近いカテゴリーとの比較をこの順で教材本文へ含める。",
+        "M1": "単一の誤った命題、正しい考え、反例、誤りの理由を教材のセクション本文へ含める。専用見出しや記述順序は要求しない。",
+        "M3": "対象概念の誤カテゴリー、正カテゴリー、境界基準、近いカテゴリーとの比較を教材のセクション本文へ含める。専用見出しや記述順序は要求しない。",
         "unknown": "誤概念を推測せず、基礎定義、主要構成要素、役割、最小限の判断基準、正例、非例を必ず教材本文へ含める。",
     }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
 
@@ -268,17 +269,22 @@ async def _generate_validated_tutoring_turn(
         contract = validate_teaching_contract(result, expected_type, payload, term_label)
         safety = validate_tutoring_material_safety(result, forbidden_strings)
         length = validate_tutoring_material_length(result)
+        structure = validate_material_structure(result, term_label)
         strategy_valid = result.get("teaching_strategy") == selected_strategy
-        retry_missing = [*mandatory.get("missing", []), *contract.get("missing", []), *safety.get("missing", [])]
+        retry_missing = list(dict.fromkeys([
+            *mandatory.get("missing", []), *contract.get("missing", []),
+            *safety.get("missing", []), *structure["missing"],
+        ]))
         if not strategy_valid:
             retry_missing.append("teaching_strategy.mismatch")
         validation = {
             **mandatory,
-            "valid": mandatory["valid"] and contract["valid"] and safety["valid"] and length["valid"] and strategy_valid,
+            "valid": mandatory["valid"] and contract["valid"] and safety["valid"] and length["valid"] and structure["valid"] and strategy_valid,
             "missing": [*retry_missing, *length.get("missing", [])],
             "teaching_contract": contract,
             "material_safety": safety,
             "material_length": length,
+            "material_structure": structure,
             "teaching_strategy": {"expected": selected_strategy, "actual": result.get("teaching_strategy"), "valid": strategy_valid},
             "attempt": attempt,
         }
@@ -1837,6 +1843,7 @@ def _tutor_turn_from_generation(
         "teaching_contract": result.get("teaching_contract"),
         "teaching_contract_validation": mandatory_validation.get("teaching_contract"),
         "material_length_validation": mandatory_validation.get("material_length"),
+        "material_structure_validation": mandatory_validation.get("material_structure"),
         "generation_attempts": mandatory_validation.get("attempts"),
         "tutoring_output_metrics": result.get("output_metrics") or _tutoring_output_metrics(result),
         "group_condition": group_condition,
@@ -3180,6 +3187,7 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "mandatory_elements_validation": (turn.diagnosis_json or {}).get("mandatory_elements_validation"),
         "teaching_contract": (turn.diagnosis_json or {}).get("teaching_contract"),
         "teaching_contract_validation": (turn.diagnosis_json or {}).get("teaching_contract_validation"),
+        "material_structure_validation": (turn.diagnosis_json or {}).get("material_structure_validation"),
         "taxonomy_version": (turn.diagnosis_json or {}).get("taxonomy_version"),
         "prompt_contract_version": (turn.diagnosis_json or {}).get("prompt_contract_version"),
         "learning_content_version": diagnosis.get("learning_content_version"),

@@ -17,12 +17,10 @@ from app.core.runtime_config import normalize_reasoning_effort
 from app.ai.mandatory_elements import (
     expected_mandatory_type,
     mandatory_elements_schema,
-    reconcile_mandatory_elements,
 )
 from app.ai.misconception_taxonomy import TAXONOMY_VERSION
 from app.ai.teaching_contract import (
     PROMPT_CONTRACT_VERSION,
-    reconcile_teaching_contract,
     teaching_contract_schema,
 )
 from app.ai.tutoring_prompt import (
@@ -236,8 +234,6 @@ class CodexAppServerBackend:
             for field in ("corrected_claim", "mechanism_explanation", "contrast_example", "transfer_check"):
                 if isinstance(result["teaching_contract"].get(field), str):
                     result["teaching_contract"][field] = _strip_internal_labels(result["teaching_contract"][field])
-        result = reconcile_mandatory_elements(result, expected_type)
-        result = reconcile_teaching_contract(result, expected_type)
         return result
 
 

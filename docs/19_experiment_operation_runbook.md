@@ -6,7 +6,9 @@
 
 **実験開始前の必須確認:** テスト系・学習確認v2ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
 
-実験仕様版は2。NULL・版1・未対応版は閲覧専用で再開・削除・評価再計算をしない。既存のparticipants.experiment_spec_versionを使い、旧行を版2へ付け替えない。起動時補修も現行版に限定する。DBのバックアップ後、隔離DBで起動・seed再実行と旧値保全を検証してから配布する。
+実験仕様版は3。NULL・版1/2・未対応版は閲覧専用で再開・削除・評価再計算をしない。既存のparticipants.experiment_spec_versionを使い、旧行を版3へ付け替えない。起動時補修も現行版に限定する。DBのバックアップ後、隔離DBで起動・seed再実行と旧値保全を検証してから配布する。
+
+両群の教材章立てはAI生成で、見出しが毎回異なることは要求しない。冒頭##用語名と非空###節を確認し、実験群では必須教授内容・教材内transfer_checkが節本文にあることを確認する。AICallLog.response_payload.generation_validation.material_structureとTutorTurn.diagnosis_json.material_structure_validationから見出し順・節数・証拠配置・検証を照合する。契約版はtutoring-teaching-contract-v5-dynamic-sections。画面ラベルや回答後解説の見出しは従来どおり。
 
 1. Docker Desktopを起動する
 2. ルート`.env`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動する

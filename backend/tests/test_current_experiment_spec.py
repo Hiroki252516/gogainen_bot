@@ -61,7 +61,7 @@ def trial_snapshot(db, pid):
     return json.dumps(output, default=str, sort_keys=True)
 
 
-@pytest.mark.parametrize("bank_version,spec_version", [(1, None), (2, None), (1, 1), (2, 1), (2, 99)])
+@pytest.mark.parametrize("bank_version,spec_version", [(1, None), (2, None), (1, 1), (2, 1), (1, 2), (2, 2), (2, 99)])
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version):
     pid, questions = create_trial()
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()

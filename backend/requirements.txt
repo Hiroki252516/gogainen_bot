@@ -10,5 +10,6 @@ pytest==9.0.1
 httpx==0.28.1
 joblib==1.5.2
 PyYAML==6.0.2
+markdown-it-py==3.0.0
 scipy==1.16.3
 scikit-learn==1.8.0

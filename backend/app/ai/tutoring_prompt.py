@@ -4,37 +4,32 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
-from app.ai.mandatory_elements import (
-    mandatory_element_headings,
-    mandatory_element_requirements,
+from app.ai.mandatory_elements import mandatory_element_requirements
+from app.ai.teaching_contract import (
+    MATERIAL_MAX_CHARACTERS,
+    MATERIAL_MIN_CHARACTERS,
+    MATERIAL_TARGET_CHARACTERS,
 )
 
 
 def mandatory_element_prompt(misconception_type: str | None) -> str:
     """Render the type-specific teaching instruction for教材生成."""
     requirements = mandatory_element_requirements(misconception_type)
-    headings = mandatory_element_headings(misconception_type)
     if not requirements:
         return ""
     lines = [
-        f"現在の必須教授要素タイプは {misconception_type}。次の見出しをこの順序で教材本文に使う:",
+        f"現在の必須教授要素タイプは {misconception_type}。次の内容を教材のセクション本文に含める:",
     ]
     lines.extend(
-        f"- {field} / ### {headings[field]}: {description}"
+        f"- {field}: {description}"
         for field, description in requirements.items()
     )
-    lines.append("## 用語名の直後に、上記の ### 見出しを順番どおりに置く。")
-    lines.append("M1/M3/unknownでは「### 要点」「### 具体例」「### 注意点」を使わない。")
+    lines.append("必須要素ごとの専用見出しや記述順序は要求しない。複数の必須要素を同じセクションへまとめてよい。")
     lines.append("mandatory_elements は type と上記フィールドを直下に持つオブジェクトにし、不要なフィールドや入れ子を追加しない。")
     lines.append("mandatory_elements の各値は、教材本文からそのまま抜き出した短い証拠文にする。")
-    lines.append("各証拠文は、対応する見出しのセクション内に置く。")
+    lines.append("各証拠文は ### セクションの本文から正確にコピーする。見出しだけ、JSONだけにある証拠や、本文と異なる言い換えは不可。")
     lines.append("mandatory_elements は研究ログ用であり、学習者向け本文に内部ラベルを表示しない。")
     return "\n".join(lines)
-from app.ai.teaching_contract import (
-    MATERIAL_MAX_CHARACTERS,
-    MATERIAL_MIN_CHARACTERS,
-    MATERIAL_TARGET_CHARACTERS,
-)
 
 
 def compose_structured_prompt(
@@ -87,11 +82,13 @@ def build_tutoring_prompt(
         "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
         "interaction_history は同じ用語の採点済み回答の観察記録である。question_body、selected_options、is_correctを参照し、既に扱った点や見直す点に沿って説明・例を具体化してよい。選択記録を本人の確定した信念と断定しない。",
         "rag_context.chunks がある場合は同じ用語の教材コンテキストを参照し、根拠のない断定を避ける。",
-        "tutor_message には現在の用語の教材だけを書く。問題文、選択肢、正答、過去の回答やフィードバックは含めない。",
+        "tutor_message には現在の用語の教材だけを書く。問題文、選択肢一覧、正答キー、過去回答の列挙やフィードバックの転載はしない。",
         "学習確認問題はbackendの固定問題バンクが表示・採点するため、問題や選択肢を生成しない。",
         "教材には定義、仕組みまたは役割、具体例、注意点を含める。一般的な誤解を正確に説明・訂正してよい。",
         f"教材本文はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に統一する。定義、仕組み、具体例、注意点を保ち、不要な繰り返しで水増ししない。",
         "見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
+        f"tutor_message の冒頭は『## {term_label}』にする。その後の小見出しは ### を使い、少なくとも1つ、見出しと本文が空でないセクションを作る。",
+        "小見出しの文言・数・順序・セクションのまとめ方は、教材内容に適したものを自分で決める。固定テンプレートや必須要素ごとの専用見出しは要求しない。",
         "被験者ID、群名、内部識別子、M1/M3/unknownなどの内部ラベルを学習者向け本文に書かない。",
     ]
 
@@ -111,13 +108,8 @@ def build_tutoring_prompt(
             )
 
     if expected_type:
-        headings = mandatory_element_headings(expected_type)
-        heading_order = "、".join(f"### {heading}" for heading in headings.values())
         rules.extend(
             [
-                f"tutor_message は必ず『## {term_label}』の後に {heading_order} の順で構成する。",
-                "M1/M3/unknownでは『### 要点』『### 具体例』『### 注意点』を使わず、タイプ別の見出しを教材構造そのものにする。",
-                "各タイプ別セクションには対応する必須教授要素を置き、他のタイプの必須要素や不要なセクションを追加しない。",
                 "teaching_contractやmandatory_elementsのフィールド名（mechanism_explanation、transfer_check、definitionなど）をtutor_message本文に書かない。",
             ]
         )
@@ -126,7 +118,7 @@ def build_tutoring_prompt(
                 [
                     "teaching_contractを必ず返す。現在のタイプに一致するpretest_targetsが複数ある場合、addressed_claim_idsには該当するclaim_idを全件入れ、1件も省略しない。他タイプのIDは入れない。target_claim_idだけは主対象のclaim_idにする。",
                     "現在のタイプに一致するpretest_targetsがない場合は、target_claim_idをnull、addressed_claim_idsを空配列にし、研究者確認済みでない具体的な誤答主張を創作しない。",
-                    "teaching_contractのcorrected_claim、mechanism_explanation、contrast_example、transfer_checkは、tutor_message本文にそのまま含める。",
+                    "teaching_contractのcorrected_claim、mechanism_explanation、contrast_example、transfer_checkは、### セクションの本文から正確にコピーする。見出しやJSONだけに置かない。",
                     "teaching_contractのtarget_addressedはtrueにする。M1のrefutation_modeはexplicitを標準とし、M3はcategory_comparisonにする。",
                 ]
             )
@@ -134,25 +126,23 @@ def build_tutoring_prompt(
             rules.extend(
                 [
                     "unknownのteaching_contractはtarget_claim_idをnull、addressed_claim_idsを空配列、corrected_claimとcontrast_exampleをnullにする。",
-                    "unknownでは反駁対象を創作せず、mechanism_explanationとtransfer_checkだけを教材本文に含め、refutation_modeはnoneにする。",
+                    "unknownでは反駁対象を創作せず、mechanism_explanationとtransfer_checkを ### セクションの本文から正確にコピーし、refutation_modeはnoneにする。",
                     "teaching_contractのtarget_addressedはtrueにする。",
                 ]
             )
-    else:
-        rules.extend(
-            [
-                "tutor_message は必ず『## 用語名』『### 要点』『### 具体例』『### 注意点』の順に構成する。",
-                "各セクションは内容に応じた簡潔な箇条書き、または短い段落で書く。重要語は **太字** にしてよい。",
-                "内容上必要な場合だけ『### 前提用語とのつながり』『### 何ではないか』を追加する。",
-            ]
-        )
 
     if expected_type:
         rules.append(mandatory_element_prompt(expected_type))
-    if payload.get("mandatory_element_retry"):
-        rules.append(
-            "前回生成で必須教授要素またはteaching_contractが不足した。入力JSONの mandatory_element_retry.missing にある項目をすべて補い、契約フィールドの証拠文を教材本文へそのまま含める。"
-        )
+    validation_retry = retry_source.get("mandatory_element_retry")
+    if isinstance(validation_retry, dict):
+        retry_errors = validation_retry.get("missing", [])
+        if group == "control":
+            retry_errors = [error for error in retry_errors if isinstance(error, str) and (
+                error.startswith("tutor_message:") or error == "teaching_strategy.mismatch"
+            )]
+        if retry_errors:
+            rules.append("前回生成で本文構造または生成契約の検証に失敗した。次の検証エラーを修正する: "
+                         + json.dumps(retry_errors, ensure_ascii=False))
 
     if group == "control":
         rules.append("通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使って説明を作る。回答から自然に誤りを見つけて訂正してよいが、入力されていないbackendの誤概念診断、修正対象、タイプ別教授方針を与えられた事実として扱わない。")
@@ -164,6 +154,7 @@ def build_tutoring_prompt(
         rules.append("diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置き、学習者が示していない誤概念を創作しない。unknownでは誤った考えを推測しない。")
         rules.append("pretest_targetまたはpretest_targetsがある場合、それを今回の教授目標として優先する。観察された選択を確定した信念とは断定せず、選択された説明として扱う。")
         rules.append("M1は対象がある場合はその誤った命題を、対象がない場合は一般的な誤りの型を、正しい命題、誤りの仕組み、対比例、別事例への適用確認とともに明示する。M3も対象がある場合はその誤カテゴリーを、対象がない場合は一般的なカテゴリー境界を、正カテゴリー、境界、対比例、別事例への適用確認とともに明示する。unknownは反駁せず、定義・構成要素・役割・正例・非例と適用確認を示す。")
+        rules.append("M1のwrong_belief、M3のwrong_categoryは、修正対象の誤った命題・カテゴリーの説明をセクション本文へ実際に書いたうえで、その証拠文をコピーする。これは教授内容であり、過去問題・回答一覧・解説の転載とは区別する。JSONだけに誤った考えを書くのは不可。")
         rules.append("unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
     rules.append(f"teaching_strategy はbackendで指定された {', '.join(teaching_strategies)} に固定する。")
 

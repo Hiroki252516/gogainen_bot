@@ -2249,6 +2249,13 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert proposed_log.response_payload["generation_validation"]["valid"] is True
         assert control_log.request_payload["generation_attempt"] == 1
         assert control_log.response_payload["generation_validation"]["valid"] is True
+        for log, turn in ((proposed_log, proposed_turn), (control_log, control_turn)):
+            structure = log.response_payload["generation_validation"]["material_structure"]
+            assert structure["valid"]
+            assert structure["section_count"] >= 1
+            assert len(structure["headings"]) == structure["section_count"]
+            assert all(section["body_character_count"] > 0 for section in structure["sections"])
+            assert db.get(TutorTurn, turn["turn_id"]).diagnosis_json["material_structure_validation"] == structure
         assert {target["claim_id"] for target in proposed_log.request_payload["pretest_targets"]} == {
             "llm_knowledge:pretest:D",
             "llm_knowledge:pretest:E",
@@ -2287,6 +2294,7 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert logged_turn["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
         assert logged_turn["teaching_contract"]["target_claim_id"] == "llm_knowledge:pretest:D"
         assert logged_turn["teaching_contract_validation"]["valid"] is True
+        assert logged_turn["material_structure_validation"] == proposed_log.response_payload["generation_validation"]["material_structure"]
     finally:
         db.close()
 
@@ -2595,9 +2603,10 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     assert "M4なら不足スキーマの構築" not in text
     assert "固定問題バンクが表示・採点" in text
     assert "fixed_practice_question_items" not in text
-    assert "### 要点" in text
-    assert "### 具体例" in text
-    assert "### 注意点" in text
+    assert "小見出しの文言・数・順序・セクションのまとめ方" in text
+    assert "### 要点" not in text
+    assert "### 具体例" not in text
+    assert "### 注意点" not in text
     assert "feedback は ## どこが違うか" in text
     assert "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず" not in text
     assert "previous_feedback_for_learner" not in text
@@ -2659,18 +2668,11 @@ def test_mock_tutoring_and_feedback_use_markdown_contract():
     }
 
     turn = asyncio.run(backend.generate_tutoring_turn(payload))
-    for heading in (
-        "## マルチエージェント",
-        "### 定義",
-        "### 構成要素",
-        "### 役割",
-        "### 判断基準",
-        "### 正例",
-        "### 非例",
-    ):
-        assert heading in turn["tutor_message"]
-    for heading in ("### 要点", "### 具体例", "### 注意点"):
-        assert heading not in turn["tutor_message"]
+    assert turn["tutor_message"].startswith("## マルチエージェント")
+    assert turn["tutor_message"].count("### ") == 3
+    for field, evidence in turn["mandatory_elements"].items():
+        if field != "type":
+            assert evidence in turn["tutor_message"]
 
     correct_summary = asyncio.run(backend.generate_correct_answer_summary(payload))
     distractor_feedback = asyncio.run(
@@ -2861,7 +2863,7 @@ def test_ai_call_logs_effective_reasoning_effort(monkeypatch):
         reset_reasoning_effort_override()
 
 
-def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
+def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch):
     participant = client.post(
         "/api/participants",
         json={"assignment_code": "A", "consent_checked": True},
@@ -2939,10 +2941,9 @@ def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
         assert log.raw_text == raw_text
         assert "未検証の訂正文" in log.raw_text
         assert log.response_payload == normalized_response
-        assert log.response_payload["teaching_contract"]["corrected_claim"] == log.response_payload[
-            "mandatory_elements"
-        ]["correct_belief"]
-        assert "未検証の訂正文" not in log.response_payload["teaching_contract"]["corrected_claim"]
+        assert "未検証の訂正文" in log.response_payload["teaching_contract"]["corrected_claim"]
+        validation = experiment_service.validate_teaching_contract(normalized_response, "M1", payload, "記憶プロセス")
+        assert "corrected_claim:evidence_not_in_section" in validation["missing"]
         audit = log.request_payload["effective_request"]
         assert audit["model"] == "gpt-5.6-luna"
         assert audit["reasoning_effort"] == log.request_payload["reasoning_effort"]
