@@ -9,18 +9,18 @@ from typing import Any, Callable
 
 import websockets
 from app.ai.backend import strategy_for
+from app.ai.interaction_history import SHARED_QUESTION_ROUTE_VERSION, interaction_history_audit, project_model_payload
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
 
 from app.core.config import get_settings
 from app.core.runtime_config import normalize_reasoning_effort
 from app.ai.mandatory_elements import (
     expected_mandatory_type,
     mandatory_elements_schema,
-    reconcile_mandatory_elements,
 )
 from app.ai.misconception_taxonomy import TAXONOMY_VERSION
 from app.ai.teaching_contract import (
     PROMPT_CONTRACT_VERSION,
-    reconcile_teaching_contract,
     teaching_contract_schema,
 )
 from app.ai.tutoring_prompt import (
@@ -200,17 +200,6 @@ class CodexAppServerBackend:
             else self._control_tutoring_payload(payload)
         )
         selected_strategy = strategy_for(expected_type, None, group)
-        if group == "proposed" and expected_type == "unknown":
-            # Prevent stale M1/M3 observations from becoming an unknown learner's target.
-            prompt_payload = {
-                **prompt_payload,
-                "pretest_target": None,
-                "pretest_targets": [],
-                "diagnostic_evidence": {
-                    **(prompt_payload.get("diagnostic_evidence") or {}),
-                    "pretest_targets": [],
-                },
-            }
         schema = {
             "type": "object",
             "properties": {
@@ -245,8 +234,6 @@ class CodexAppServerBackend:
             for field in ("corrected_claim", "mechanism_explanation", "contrast_example", "transfer_check"):
                 if isinstance(result["teaching_contract"].get(field), str):
                     result["teaching_contract"][field] = _strip_internal_labels(result["teaching_contract"][field])
-        result = reconcile_mandatory_elements(result, expected_type)
-        result = reconcile_teaching_contract(result, expected_type)
         return result
 
 
@@ -269,6 +256,7 @@ class CodexAppServerBackend:
                 prompt_payload,
                 [
                     "固定YAMLの採点結果は正答済みである。正答選択肢の本文をそのまま繰り返さず、学習上の要点だけを短く説明する。",
+                    "interaction_historyは現在回答より前の同じ用語の採点済み履歴である。履歴を踏まえて要点を具体化してよいが、過去の問題や回答をそのまま転載しない。",
                     "summary は学習者向けの安全なMarkdownにする。冒頭に ## 今回の要点 を置き、箇条書き、**太字**、短い段落だけを使う。",
                     "HTML、表、コードブロック、画像、長大な連続段落は使わない。",
                     "rag_context.chunks がある場合はその本文を優先し、本文にない内容を推測で断定しない。",
@@ -305,6 +293,7 @@ class CodexAppServerBackend:
                 prompt_payload,
                 [
                     "固定YAMLの採点結果は不正解である。選択された説明の問題点と、教材を見直す観点だけを説明する。",
+                    "interaction_historyは現在回答より前の同じ用語の採点済み履歴である。履歴の回答・正誤を見直す観点に利用してよいが、履歴にない診断結果をbackendの判定として断定しない。",
                     "正答の選択肢本文、正答位置、正答そのものを直接示さない。",
                     "feedback は ## どこが違うか と ## 見直す観点を中心に、箇条書き、**太字**、短い段落だけを使う安全なMarkdownにする。",
                     "remediation_focus は学習者が次に確認する観点を一文で返し、general_knowledge_supplement は追加説明が不要なら null にする。",
@@ -385,6 +374,10 @@ class CodexAppServerBackend:
             "turn_start_method": "turn/start",
             "prompt_contract_version": (audit_context or {}).get("prompt_contract_version"),
             "taxonomy_version": (audit_context or {}).get("taxonomy_version"),
+            "experiment_spec_version": (audit_context or {}).get("experiment_spec_version"),
+            "interaction_history": (audit_context or {}).get("interaction_history"),
+            "question_route_version": (audit_context or {}).get("question_route_version"),
+            "actual_ai_input": (audit_context or {}).get("actual_ai_input"),
             "generation_attempt": (audit_context or {}).get("generation_attempt"),
             "model": self.settings.codex_model,
             "reasoning_effort": self.reasoning_effort,
@@ -506,6 +499,10 @@ class CodexAppServerBackend:
         if attempt is None:
             attempt = retry_attempt if retry_attempt is not None else 1
         return {
+            "experiment_spec_version": CURRENT_EXPERIMENT_SPEC_VERSION,
+            "interaction_history": interaction_history_audit(payload),
+            "question_route_version": SHARED_QUESTION_ROUTE_VERSION,
+            "actual_ai_input": project_model_payload(payload, proposed=payload.get("group_condition", "proposed") == "proposed", feedback=not generation),
             "prompt_contract_version": payload.get("prompt_contract_version") or PROMPT_CONTRACT_VERSION,
             "taxonomy_version": payload.get("taxonomy_version") or (TAXONOMY_VERSION if payload.get("misconception_taxonomy") else None),
             "generation_attempt": attempt if generation else None,
@@ -525,42 +522,16 @@ class CodexAppServerBackend:
         }
 
     def _proposed_tutoring_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        allowed = {
-            "term", "learning_stage", "learning_stage_label",
-            "component_terms", "prompt_contract_version", "taxonomy_version",
-            "pretest_target", "pretest_targets", "learner_state",
-            "previous_diagnosis_for_learner", "previous_practice_question", "previous_learner_response",
-            "previous_learning_misconception", "session_misconception_history",
-            "misconception_teaching_guidance", "misconception_taxonomy", "active_misconception_type",
-            "mandatory_teaching_elements", "diagnostic_evidence", "rag_context", "mandatory_element_retry",
-        }
-        result = {key: payload[key] for key in allowed if key in payload}
-        if isinstance(result.get("learner_state"), dict):
-            result["learner_state"] = {key: value for key, value in result["learner_state"].items() if key in {"current_status", "primary_misconception", "teaching_strategy", "recurrence_count"}}
-        return result
+        return project_model_payload(payload, proposed=True)
 
     def _control_tutoring_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        allowed = {"term", "component_terms", "rag_context"}
-        return {key: payload[key] for key in allowed if key in payload}
+        return project_model_payload(payload, proposed=False)
 
     def _proposed_feedback_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        allowed = {
-            "term", "learning_stage", "question_body", "selected_option_body",
-            "selected_option_bodies", "material", "rag_context", "learner_state",
-            "learning_misconception_type", "misconception_teaching_guidance", "misconception_taxonomy",
-            "session_misconception_history",
-        }
-        result = {key: payload[key] for key in allowed if key in payload}
-        if isinstance(result.get("learner_state"), dict):
-            result["learner_state"] = {key: value for key, value in result["learner_state"].items() if key in {"current_status", "primary_misconception", "teaching_strategy", "recurrence_count"}}
-        return result
+        return project_model_payload(payload, proposed=True, feedback=True)
 
     def _control_feedback_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        allowed = {
-            "term", "question_body", "selected_option_body",
-            "selected_option_bodies", "material", "rag_context",
-        }
-        return {key: payload[key] for key in allowed if key in payload}
+        return project_model_payload(payload, proposed=False, feedback=True)
 
     def _account_label(self, account: dict[str, Any] | None) -> str:
         if not account:

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import re
 from typing import Any
+
+from app.ai.material_structure import evidence_sections, normalize_evidence, validate_material_structure
 
 
 MANDATORY_MISCONCEPTION_TYPES = ("M1", "M3", "unknown")
@@ -29,40 +30,10 @@ _REQUIREMENTS: dict[str, dict[str, str]] = {
     },
 }
 
-_HEADINGS: dict[str, dict[str, str]] = {
-    "M1": {
-        "wrong_belief": "誤った考え",
-        "correct_belief": "正しい考え",
-        "counterexample": "反例",
-        "reason": "誤りの理由",
-    },
-    "M3": {
-        "wrong_category": "誤カテゴリー",
-        "correct_category": "正カテゴリー",
-        "boundary_criterion": "境界基準",
-        "contrast_example": "近いカテゴリーとの比較",
-    },
-    "unknown": {
-        "definition": "定義",
-        "components": "構成要素",
-        "role": "役割",
-        "decision_criterion": "判断基準",
-        "positive_example": "正例",
-        "non_example": "非例",
-    },
-}
-
-_GENERIC_HEADINGS = ("要点", "具体例", "注意点")
-
 
 def mandatory_element_requirements(misconception_type: str | None) -> dict[str, str]:
     """Return the research-operation fields required for an MVP type."""
     return dict(_REQUIREMENTS.get(misconception_type or "", {}))
-
-
-def mandatory_element_headings(misconception_type: str | None) -> dict[str, str]:
-    """Return the learner-facing section heading for each required field."""
-    return dict(_HEADINGS.get(misconception_type or "", {}))
 
 
 def expected_mandatory_type(payload: dict[str, Any]) -> str | None:
@@ -153,36 +124,19 @@ def validate_mandatory_elements(
     message = result.get("tutor_message") or ""
     if not isinstance(message, str):
         message = ""
-    if term_label and not _heading_matches(message, "##", term_label):
-        missing.append("tutor_message:term_heading_missing")
-    headings = mandatory_element_headings(expected_type)
-    heading_positions: list[int] = []
-    for heading in headings.values():
-        marker = f"### {heading}"
-        matches = _heading_matches(message, "###", heading)
-        if not matches:
-            missing.append(f"tutor_message:heading_missing:{marker}")
-        else:
-            heading_positions.append(matches[0].start())
-    if heading_positions != sorted(heading_positions):
-        missing.append("tutor_message:heading_order_invalid")
-    for heading in _GENERIC_HEADINGS:
-        if re.search(rf"(?m)^###\s+{re.escape(heading)}\s*$", message):
-            missing.append(f"tutor_message:generic_heading_forbidden:### {heading}")
-    if re.search(r"(?<![A-Za-z0-9])M[1-4](?![A-Za-z0-9])", message):
-        missing.append("tutor_message:internal_label_exposed")
-
-    normalized_message = _normalize_evidence(message)
-    for field, value_heading in headings.items():
+    missing.extend(validate_material_structure(result, term_label)["missing"])
+    normalized_message = normalize_evidence(message)
+    placements: dict[str, list[int]] = {}
+    for field in requirements:
         value = elements.get(field)
         if not isinstance(value, str) or not value.strip():
             missing.append(f"{field}:empty")
             continue
-        if _normalize_evidence(value) not in normalized_message:
+        if normalize_evidence(value) not in normalized_message:
             missing.append(f"{field}:evidence_not_in_tutor_message")
             continue
-        section = _heading_section(message, value_heading, tuple(headings.values()))
-        if not section or _normalize_evidence(value) not in _normalize_evidence(section):
+        placements[field] = evidence_sections(message, value)
+        if not placements[field]:
             missing.append(f"{field}:evidence_not_in_section")
 
     return {
@@ -191,6 +145,7 @@ def validate_mandatory_elements(
         "expected_type": expected_type,
         "actual_type": actual_type,
         "required_fields": list(requirements),
+        "evidence_placements": placements,
         "missing": missing,
     }
 
@@ -227,69 +182,3 @@ def mock_mandatory_elements(
         "positive_example": f"{term_label}の構成要素が役割を分担して働く場面が該当する。",
         "non_example": f"{term_label}の名前が含まれていても、定義や役割を満たさない処理は該当しない。",
     }
-
-
-def reconcile_mandatory_elements(result: dict[str, Any], misconception_type: str | None) -> dict[str, Any]:
-    """Synchronize AI evidence fields with the visible Markdown sections.
-
-    Codex sometimes writes a semantically equivalent paraphrase into the
-    research-only JSON field instead of copying the visible sentence exactly.
-    The learner-facing material is the source of truth, so recover a short
-    evidence span from the corresponding non-empty section before validation.
-    Missing headings or empty sections are intentionally left invalid.
-    """
-    if misconception_type not in MANDATORY_MISCONCEPTION_TYPES:
-        return result
-    message = result.get("tutor_message")
-    if not isinstance(message, str):
-        return result
-    elements = result.get("mandatory_elements")
-    if not isinstance(elements, dict):
-        return result
-
-    headings = mandatory_element_headings(misconception_type)
-    repaired = dict(elements)
-    for field, heading in headings.items():
-        section = _heading_section(message, heading, tuple(headings.values()))
-        evidence = _first_section_evidence(section)
-        current = repaired.get(field)
-        normalized_current = _normalize_evidence(current) if isinstance(current, str) else ""
-        if evidence and (not normalized_current or normalized_current not in _normalize_evidence(section)):
-            repaired[field] = evidence
-    result["mandatory_elements"] = repaired
-    return result
-
-
-def _heading_section(message: str, heading: str, headings: tuple[str, ...]) -> str:
-    matches = _heading_matches(message, "###", heading)
-    if not matches:
-        return ""
-    current = matches[0]
-    content_start = current.end()
-    following = [
-        following_match.start()
-        for candidate in headings
-        if candidate != heading
-        for following_match in _heading_matches(message, "###", candidate)
-        if following_match.start() >= content_start
-    ]
-    content_end = min(following) if following else len(message)
-    return message[content_start:content_end]
-
-
-def _normalize_evidence(value: str) -> str:
-    return re.sub(r"[\s*_`#>\[\]]+", "", value or "")
-
-
-def _first_section_evidence(section: str) -> str:
-    for line in section.splitlines():
-        candidate = re.sub(r"^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s+)", "", line).strip()
-        if candidate and not candidate.startswith("#"):
-            return candidate
-    return ""
-
-
-def _heading_matches(message: str, prefix: str, heading: str) -> list[re.Match[str]]:
-    """Find exact Markdown heading lines, never inline heading-like text."""
-    pattern = rf"(?m)^{re.escape(prefix)}\s+{re.escape(heading)}\s*$"
-    return list(re.finditer(pattern, message))

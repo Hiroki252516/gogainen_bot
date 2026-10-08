@@ -6,6 +6,8 @@
 
 学習確認は現行v2の3用語×2意味的stage×5問=30問。適用・予測・比較・境界判断・事例診断を扱う。DB質問テーブルへseedせず提示時にTutorTurn.practice_question_jsonへ保存する。旧v1の出題/採点はない。
 
+両群とも同じ診断連動規則でstageを選ぶ。unknownはenrichment、M1/M3はconceptual_change、variantは同じturn_indexに従う。旧統制群の固定conceptual_change系列を使わない。問題本文・選択肢・採点データは変更しない。
+
 全問A〜C正解・D〜F=M1・G〜I=M3・J=unknownのデバッグ配置を維持する。正解3つの完全選択とM3優先を維持し、判定はメタデータを使う。問題文・選択肢内容は変更しない。
 
 teaching_targetsに研究者確認済み訂正・仕組み・対比・M3境界を保存する。observed_claimは選択肢本文から取得する。Jには対象主張を作らない。

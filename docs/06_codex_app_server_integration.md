@@ -182,7 +182,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
     "input": [
       {
         "type": "text",
-        "text": "目的: tutoring_turn。共通用語とRAGから教材を生成し、teaching_strategyをgeneral_explanationに固定してください..."
+        "text": "目的: tutoring_turn。共通用語・RAG・interaction_historyから教材を生成し、teaching_strategyをgeneral_explanationに固定してください..."
       }
     ],
     "approvalPolicy": "never",
@@ -228,7 +228,13 @@ MVPではフロントエンドにAI生成途中のストリームを見せなく
 
 各Codex呼び出しでは、`AICallLog.request_payload.effective_request`に送信直前の実際の`thread/start`設定、`turn/start`の全文prompt・JSON Schema・モデル・推論レベルを保存する。併せてprompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、教材生成試行番号、送信状態を記録する。認証ヘッダー・tokenは保存しない。接続や送信前の失敗では、送信試行と実送信の状態を区別する。Mockの入力にはこのCodex実送信監査を付けない。
 
-この監査には学習者の選択・回答・学習履歴が含まれる場合があるため、参加者ログAPI・CSVと同様に研究者限定で扱う。DB列およびCSV固定列は追加せず、既存JSON payload内へ記録する。
+仕様版3でも共通interaction_historyの版・件数・SHA-256、共通出題規則版とactual_ai_inputを記録する。モデルへは共通履歴の診断除外投影を送り、proposedだけに診断・対象主張・教授方針を追加する。input_projectionはサーバー側投影であり、送信済みかどうかはeffective_request.transmissionを確認する。
+
+両群の教材章立てをAIが決め、出力Schemaは従来のままとする。本文構造と実験群の証拠文をbackendで検証する。不一致を見出しの先頭文などで補正せず同backendへ再生成させ、各試行のmaterial_structureと最終TutorTurnの章立て監査を保存する。契約版はtutoring-teaching-contract-v5-dynamic-sections。
+
+app-serverへのoutputSchema指定とbackendの構造・契約・証拠文字列検査は、内容の事実検証とは別である。教材の正しさ、反駁の妥当性、言い換えによる正答漏えい、意味的な過去解説混入まで自動保証しない。[AI契約](10_ai_prompt_contracts.md#出力検証) に自動検査・プロンプト指示・目視確認の境界を記載する。
+
+この監査には学習者の選択・回答・学習履歴が含まれる場合があるため、参加者ログAPI・CSVと同様に研究者限定で扱う。これは運用方針であり、現行管理APIに管理者認証・権限確認があることを意味しない。本実験開始前のアクセス対策は [セキュリティ仕様](15_security_privacy.md) の未解決事項として扱う。DB列およびCSV固定列は追加せず、既存JSON payload内へ記録する。
 
 ## 失敗時の扱い
 

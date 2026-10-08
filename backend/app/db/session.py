@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
 from app.models import Base
 
 
@@ -81,7 +82,8 @@ def _ensure_lightweight_schema_updates() -> None:
 def _backfill_attempt_test_rounds(connection) -> None:
     """Populate round names for attempts created before the test_round column existed."""
     rows = connection.execute(
-        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE (test_round IS NULL OR test_round = '') AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = 1)")
+        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE (test_round IS NULL OR test_round = '') AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = :spec_version)"),
+        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
     ).mappings().all()
     if not rows:
         return
@@ -130,7 +132,7 @@ def _backfill_completion_reasons(connection) -> None:
                 ELSE 'completed'
             END
             WHERE participants.current_step = 'finish'
-              AND participants.experiment_spec_version = 1
+              AND participants.experiment_spec_version = :spec_version
               AND participants.completed_at IS NOT NULL
               AND (
                   participants.completion_reason IS NULL
@@ -144,12 +146,13 @@ def _backfill_completion_reasons(connection) -> None:
                   )
               )
             """
-        )
+        ),
+        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
     )
 
 
 def _backfill_evaluation_completion_flags(connection) -> None:
-    """Keep every historical summary's completion flag consistent with its participant."""
+    """Repair current-version summaries only; historical trials must remain untouched."""
     if engine.dialect.name == "postgresql":
         connection.execute(
             text(
@@ -162,9 +165,10 @@ def _backfill_evaluation_completion_flags(connection) -> None:
                 )
                 FROM participants
                 WHERE participants.id = summaries.participant_id
-                  AND participants.experiment_spec_version = 1
+                  AND participants.experiment_spec_version = :spec_version
                 """
-            )
+            ),
+            {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
         )
         return
 
@@ -182,35 +186,32 @@ def _backfill_evaluation_completion_flags(connection) -> None:
                 END
                 FROM participants
                 WHERE participants.id = evaluation_summaries.participant_id
-                  AND participants.experiment_spec_version = 1
+                  AND participants.experiment_spec_version = :spec_version
             )
             WHERE EXISTS (
                 SELECT 1
                 FROM participants
                 WHERE participants.id = evaluation_summaries.participant_id
-                  AND participants.experiment_spec_version = 1
+                  AND participants.experiment_spec_version = :spec_version
             )
             """
-        )
+        ),
+        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
     )
 
 
 def _backfill_tutor_prefetch_states(connection) -> None:
-    """Make historical tutor sessions explicit normal sessions.
-
-    Older databases have no prefetch lifecycle.  A nullable column is added
-    during the lightweight migration, then all existing rows are normalized to
-    ``none`` so application code can treat the state as non-null.
-    """
+    """Normalize missing prefetch state for current-version sessions only."""
     connection.execute(
         text(
             """
             UPDATE tutor_sessions
             SET prefetch_state = 'none'
             WHERE (prefetch_state IS NULL OR prefetch_state = '')
-              AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = 1)
+              AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = :spec_version)
             """
-        )
+        ),
+        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
     )
 
 

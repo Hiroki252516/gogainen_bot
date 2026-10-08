@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from app.ai.backend import strategy_for
+from app.ai.interaction_history import project_model_payload
 from app.ai.mandatory_elements import (
     expected_mandatory_type,
-    mandatory_element_headings,
     mock_mandatory_elements,
 )
 from app.ai.teaching_contract import (
@@ -22,7 +22,6 @@ class MockAIBackend:
         term = payload.get("term") or {}
         label = term.get("label", "対象用語")
         description = term.get("description") or f"{label}の基本的な定義と役割を確認します。"
-        stage = payload.get("learning_stage") or "conceptual_change"
         group = payload.get("group_condition", "proposed")
         mandatory_type = expected_mandatory_type(payload)
         mandatory_elements = None
@@ -46,17 +45,16 @@ class MockAIBackend:
                         None,
                     )
             mandatory_elements = mock_mandatory_elements(label, description, mandatory_type, target)
-            headings = mandatory_element_headings(mandatory_type)
             transfer_check = (
                 f"新しい例でも、{(target or {}).get('corrected_claim') or description}に当てはまるかを説明します。"
             )
             message = (
                 f"## {label}\n\n"
                 + "\n\n".join(
-                    f"### {headings[field]}\n- {mandatory_elements[field]}"
-                    for field in headings
+                    f"### {heading}\n" + "\n".join(f"- {mandatory_elements[field]}" for field in fields)
+                    for heading, fields in _mock_sections(label, mandatory_type)
                 )
-                + f"\n\n### 適用確認\n- {transfer_check}"
+                + f"\n- {transfer_check}"
             )
             mechanism = (
                 (target or {}).get("mechanism_explanation")
@@ -88,30 +86,18 @@ class MockAIBackend:
                 ] or teaching_contract["addressed_claim_ids"]
             if mandatory_type == "unknown":
                 message += "\n- 定義から構成要素と役割へつなげて、新しい例に適用します。"
-        elif stage == "enrichment":
-            message = (
-                f"## {label}\n\n"
-                "### 要点\n"
-                f"- **{label}**: {description}\n"
-                "- まずは構成要素と役割を分けて確認します。\n\n"
-                "### 具体例\n"
-                f"- {label}の構成要素が、それぞれの役割を分担して働く場面を考えます。\n\n"
-                "### 注意点\n"
-                "- 用語名だけで判断せず、役割と情報の流れに注目します。"
-            )
         else:
             message = (
                 f"## {label}\n\n"
-                "### 要点\n"
+                f"### {label}の働きを整理する\n"
                 f"- **{label}**: {description}\n"
-                "- 誤った捉え方と正しい役割の違いを整理します。\n\n"
-                "### 具体例\n"
-                f"- {label}を、役割と情報の流れに沿って説明する場面を考えます。\n\n"
-                "### 注意点\n"
-                "- 似た仕組みとの違いを、表面的な言葉ではなく構造から確認します。"
+                "- 構成要素の役割と情報の流れを対応させて確認します。\n\n"
+                "### 事例から使い分けを考える\n"
+                f"- {label}の構成要素が、役割を分担して働く場面を考えます。\n"
+                "- 似た仕組みとの違いは、用語名ではなく役割と処理範囲から判断します。"
             )
         result = {
-            "tutor_message": _pad_tutoring_material(message),
+            "tutor_message": _pad_tutoring_material(message + _history_note(payload)),
             "teaching_strategy": strategy_for(mandatory_type, None, group),
         }
         if mandatory_elements:
@@ -128,6 +114,7 @@ class MockAIBackend:
                 "## 今回の要点\n\n"
                 f"- **{label}**の役割と処理対象を区別できていることが要点です。\n"
                 "- 教材で確認した定義と具体例を結び付けて考えられています。"
+                + _history_note(payload, feedback=True)
             )
         }
 
@@ -143,10 +130,39 @@ class MockAIBackend:
                 f"- 「{selected}」は、**{label}**の役割や処理範囲と一致しません。\n\n"
                 "## 見直す観点\n\n"
                 "- 教材の定義、構成要素の役割、情報の流れを確認してください。"
+                + _history_note(payload, feedback=True)
             ),
             "remediation_focus": "定義、構成要素の役割、情報の流れを確認する。",
             "general_knowledge_supplement": None,
         }
+
+
+def _mock_sections(label: str, misconception_type: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Deterministic test outlines merge evidence without imposing production headings."""
+    return {
+        "M1": [
+            (f"{label}について見直す点", ("wrong_belief", "correct_belief")),
+            ("事例と仕組みを結び付ける", ("counterexample", "reason")),
+        ],
+        "M3": [
+            (f"{label}はどの種類か", ("wrong_category", "correct_category")),
+            ("使い分けの基準を確かめる", ("contrast_example", "boundary_criterion")),
+        ],
+        "unknown": [
+            (f"{label}の基本", ("definition", "role")),
+            ("構成と判断の手掛かり", ("components", "decision_criterion")),
+            ("当てはまる例と当てはまらない例", ("positive_example", "non_example")),
+        ],
+    }[misconception_type]
+
+
+def _history_note(payload: dict[str, Any], *, feedback: bool = False) -> str:
+    history = project_model_payload(payload, proposed=payload.get("group_condition", "proposed") == "proposed", feedback=feedback)["interaction_history"]
+    if not history:
+        return ""
+    if history[-1].get("is_correct"):
+        return "\n- 以前の回答で確認できた点を、別の例にも結び付けて整理します。"
+    return "\n- 以前の回答で見直す必要があった点は、定義と処理の違いを対応させて確認します。"
 
 
 def _pad_tutoring_material(message: str) -> str:

@@ -1295,7 +1295,7 @@ def test_prefetch_failure_keeps_answer_successful_and_falls_back_to_sync_generat
         db.close()
 
 
-def test_next_learning_material_retains_previous_context_but_excludes_feedback():
+def test_next_learning_material_uses_history_without_reprinting_previous_context_or_feedback():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
     first_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
@@ -1311,8 +1311,8 @@ def test_next_learning_material_retains_previous_context_but_excludes_feedback()
     next_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
     assert next_turn.status_code == 200, next_turn.text
     next_material = next_turn.json()["tutor_message"]
-    assert f"前の問題: {first_turn['practice_question']['body']}" in next_material
-    assert f"あなたの回答: {previous_turn.learner_response}" in next_material
+    assert "前の問題:" not in next_material
+    assert "あなたの回答:" not in next_material
     assert previous_turn.ai_feedback not in next_material
     assert "振り返り:" not in next_material
 
@@ -1329,8 +1329,9 @@ def test_next_learning_material_retains_previous_context_but_excludes_feedback()
             if log.request_payload.get("participant_id") == pid
             and (log.request_payload.get("term") or {}).get("slug") == "multi_agent"
         )
-        assert next_generation_log.request_payload["previous_practice_question"] == first_turn["practice_question"]["body"]
-        assert next_generation_log.request_payload["previous_learner_response"] == previous_turn.learner_response
+        history = next_generation_log.request_payload["interaction_history"]
+        assert history[-1]["question_body"] == first_turn["practice_question"]["body"]
+        assert [row["label"] for row in history[-1]["selected_options"]] == previous_turn.learner_response.split(" / ")
         assert "previous_feedback_for_learner" not in next_generation_log.request_payload
         assert previous_turn.ai_feedback not in str(next_generation_log.request_payload)
         assert next_generation_log.request_payload["previous_learning_misconception"]["misconception_type"] == "M3"
@@ -1339,7 +1340,7 @@ def test_next_learning_material_retains_previous_context_but_excludes_feedback()
         db.close()
 
 
-def test_new_tutor_session_does_not_reuse_previous_session_context():
+def test_new_tutor_session_reuses_term_history_without_reprinting_previous_session_context():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     first_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
     first_turn = client.post(f"/api/tutor-sessions/{first_session['tutor_session_id']}/turns", json={}).json()
@@ -1376,21 +1377,18 @@ def test_new_tutor_session_does_not_reuse_previous_session_context():
         )
         assert generation_log is not None
         assert generation_log.request_payload["participant_id"] == pid
-        assert generation_log.request_payload["previous_practice_question"] == ""
-        assert generation_log.request_payload["previous_learner_response"] == ""
+        assert "previous_practice_question" not in generation_log.request_payload
+        assert "previous_learner_response" not in generation_log.request_payload
+        assert any(row["question_body"] == first_turn["practice_question"]["body"] for row in generation_log.request_payload["interaction_history"])
     finally:
         db.close()
 
 
-def test_previous_turn_prefix_ignores_retired_items_and_missing_response():
-    previous_turn = SimpleNamespace(
-        practice_question_json={"items": [{"body": "第一問"}, {"body": "第二問"}]},
-        learner_response=None,
-    )
+def test_history_projection_ignores_retired_items_and_diagnostic_metadata():
+    from app.ai.interaction_history import project_interaction_history
 
-    assert experiment_service._previous_turn_prefix(previous_turn) == ""
-    previous_turn.practice_question_json = {"body": "現在の固定問題"}
-    assert experiment_service._previous_turn_prefix(previous_turn) == "前の問題: 現在の固定問題\n\n"
+    projected = project_interaction_history([{"question_body": "現在の固定問題", "items": [{"body": "旧問題"}], "misconception_type": "M3", "selected_options": [{"label": "D", "body": "選択本文", "is_correct": False, "rationale": "診断理由"}]}])
+    assert projected == [{"question_body": "現在の固定問題", "selected_options": [{"label": "D", "body": "選択本文"}]}]
 
 
 def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch):
@@ -1448,7 +1446,7 @@ def test_control_group_logs_same_stage_but_uses_general_explanation():
     assert saved_turn.teaching_strategy == "general_explanation"
 
 
-def test_control_sequence_is_independent_of_pretest_and_learning_history():
+def test_control_sequence_uses_the_shared_diagnosis_route_but_excludes_diagnosis_from_model_input():
     unknown_pid = _create_participant_with_pretest(group="control", labels=["J"])
     misconception_pid = _create_participant_with_pretest(group="control", labels=["D", "E", "F"])
     sessions = {
@@ -1465,9 +1463,9 @@ def test_control_sequence_is_independent_of_pretest_and_learning_history():
     }
     first_unknown = first_turns[unknown_pid]
     first_misconception = first_turns[misconception_pid]
-    assert first_unknown["learning_stage"] == "conceptual_change"
+    assert first_unknown["learning_stage"] == "enrichment"
     assert first_misconception["learning_stage"] == "conceptual_change"
-    assert first_unknown["practice_question"] == first_misconception["practice_question"]
+    assert first_unknown["practice_question"] != first_misconception["practice_question"]
 
     for pid, labels in ((unknown_pid, ["A", "D", "G"]), (misconception_pid, ["A", "E", "H"])):
         response = client.post(
@@ -1493,8 +1491,8 @@ def test_control_sequence_is_independent_of_pretest_and_learning_history():
             for pid in (unknown_pid, misconception_pid)
         }
         for pid, turn in turns.items():
-            assert turn.diagnosis_json["instruction_route"] == "control_fixed"
-            assert turn.diagnosis_json["fixed_sequence_key"] == "control-fixed-v1:llm_knowledge:turn-1:v1"
+            assert turn.diagnosis_json["instruction_route"] == "shared_history_general"
+            assert turn.diagnosis_json["question_route_version"] == "shared-diagnosis-route-v1"
             logs = (
                 db.query(AICallLog)
                 .filter_by(purpose="generate_tutoring_turn")
@@ -1509,12 +1507,13 @@ def test_control_sequence_is_independent_of_pretest_and_learning_history():
                 and (log.request_payload.get("generation_audit") or {}).get("turn_index") == 1
             )
             audit = log.request_payload["generation_audit"]
-            assert audit["instruction_route"] == "control_fixed"
-            assert audit["fixed_sequence_key"] == "control-fixed-v1:llm_knowledge:turn-1:v1"
+            assert audit["instruction_route"] == "shared_history_general"
+            assert audit["question_route_version"] == "shared-diagnosis-route-v1"
             assert set(audit["actual_ai_input"]) == {
                 "term",
                 "component_terms",
                 "rag_context",
+                "interaction_history",
             }
             assert "participant_id" not in audit["actual_ai_input"]
             assert "group_condition" not in audit["actual_ai_input"]
@@ -2250,6 +2249,13 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert proposed_log.response_payload["generation_validation"]["valid"] is True
         assert control_log.request_payload["generation_attempt"] == 1
         assert control_log.response_payload["generation_validation"]["valid"] is True
+        for log, turn in ((proposed_log, proposed_turn), (control_log, control_turn)):
+            structure = log.response_payload["generation_validation"]["material_structure"]
+            assert structure["valid"]
+            assert structure["section_count"] >= 1
+            assert len(structure["headings"]) == structure["section_count"]
+            assert all(section["body_character_count"] > 0 for section in structure["sections"])
+            assert db.get(TutorTurn, turn["turn_id"]).diagnosis_json["material_structure_validation"] == structure
         assert {target["claim_id"] for target in proposed_log.request_payload["pretest_targets"]} == {
             "llm_knowledge:pretest:D",
             "llm_knowledge:pretest:E",
@@ -2288,6 +2294,7 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
         assert logged_turn["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
         assert logged_turn["teaching_contract"]["target_claim_id"] == "llm_knowledge:pretest:D"
         assert logged_turn["teaching_contract_validation"]["valid"] is True
+        assert logged_turn["material_structure_validation"] == proposed_log.response_payload["generation_validation"]["material_structure"]
     finally:
         db.close()
 
@@ -2596,9 +2603,10 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     assert "M4なら不足スキーマの構築" not in text
     assert "固定問題バンクが表示・採点" in text
     assert "fixed_practice_question_items" not in text
-    assert "### 要点" in text
-    assert "### 具体例" in text
-    assert "### 注意点" in text
+    assert "小見出しの文言・数・順序・セクションのまとめ方" in text
+    assert "### 要点" not in text
+    assert "### 具体例" not in text
+    assert "### 注意点" not in text
     assert "feedback は ## どこが違うか" in text
     assert "前の確認問題に対する採点結果・解説・振り返りは教材本文へ再掲せず" not in text
     assert "previous_feedback_for_learner" not in text
@@ -2628,7 +2636,8 @@ def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatc
                 "fixed_practice_question": {"body": "CURRENT_FIXED_QUESTION_DO_NOT_SEND", "expected_answer": "説明"},
                 "learner_state": {"teaching_strategy": "foundational_explanation", "scaffolding_level": "L3"},
                 "previous_practice_question": "前回の確認問題の内容",
-                "previous_learner_response": "前回の学習者の回答",
+                    "previous_learner_response": "前回の学習者の回答",
+                    "interaction_history": [{"source_type": "learning_turn", "question_body": "前回の確認問題の内容", "selected_options": [{"label": "D", "body": "前回の学習者の回答"}], "is_correct": False}],
                 "previous_learning_misconception": {"misconception_type": "M3"},
                 "session_misconception_history": [{"misconception_type": "M3"}],
             }
@@ -2659,18 +2668,11 @@ def test_mock_tutoring_and_feedback_use_markdown_contract():
     }
 
     turn = asyncio.run(backend.generate_tutoring_turn(payload))
-    for heading in (
-        "## マルチエージェント",
-        "### 定義",
-        "### 構成要素",
-        "### 役割",
-        "### 判断基準",
-        "### 正例",
-        "### 非例",
-    ):
-        assert heading in turn["tutor_message"]
-    for heading in ("### 要点", "### 具体例", "### 注意点"):
-        assert heading not in turn["tutor_message"]
+    assert turn["tutor_message"].startswith("## マルチエージェント")
+    assert turn["tutor_message"].count("### ") == 3
+    for field, evidence in turn["mandatory_elements"].items():
+        if field != "type":
+            assert evidence in turn["tutor_message"]
 
     correct_summary = asyncio.run(backend.generate_correct_answer_summary(payload))
     distractor_feedback = asyncio.run(
@@ -2861,7 +2863,7 @@ def test_ai_call_logs_effective_reasoning_effort(monkeypatch):
         reset_reasoning_effort_override()
 
 
-def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
+def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch):
     participant = client.post(
         "/api/participants",
         json={"assignment_code": "A", "consent_checked": True},
@@ -2939,10 +2941,9 @@ def test_codex_ai_call_logs_raw_and_reconciled_model_responses(monkeypatch):
         assert log.raw_text == raw_text
         assert "未検証の訂正文" in log.raw_text
         assert log.response_payload == normalized_response
-        assert log.response_payload["teaching_contract"]["corrected_claim"] == log.response_payload[
-            "mandatory_elements"
-        ]["correct_belief"]
-        assert "未検証の訂正文" not in log.response_payload["teaching_contract"]["corrected_claim"]
+        assert "未検証の訂正文" in log.response_payload["teaching_contract"]["corrected_claim"]
+        validation = experiment_service.validate_teaching_contract(normalized_response, "M1", payload, "記憶プロセス")
+        assert "corrected_claim:evidence_not_in_section" in validation["missing"]
         audit = log.request_payload["effective_request"]
         assert audit["model"] == "gpt-5.6-luna"
         assert audit["reasoning_effort"] == log.request_payload["reasoning_effort"]
