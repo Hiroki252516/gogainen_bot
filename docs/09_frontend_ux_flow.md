@@ -1,5 +1,13 @@
 # 現行画面
 
+## 目標の画面要件と未対応
+
+両群で回答形式・正誤表示・挑戦上限・再学習/終了規則・画面構成を共通とする。教材の章立てはAI生成し、検査用JSON・内部分類は参加者に見せない。
+
+目標の事後アンケートは利用経験4項目の有無、1〜10段階の自己評価・操作評価・教材評価6項目、自由記述を扱う。[項目一覧](12_evaluation_metrics.md#アンケートの目標) を参照する。現行survey画面のRATING_OPTIONSは1〜5であり、目標の画面・入力型・保存は未対応。教材閲覧の判定方法や非閲覧者への項目提示はQ05で確認し、勝手に画面分岐を確定しない。
+
+## 現行実装
+
 start / consent / pretest / diagnosing / learning-targets / learning/[termSlug] / retest / final-test / survey / finish / adminを使う。廃止した追加確認ページは404。
 
 ParticipantFlowGuardはcurrent-stepを確認する。旧試用は回答・生成を始めず閲覧専用案内と「新しい実験を開始」を表示する。新規開始はブラウザのparticipant_id、display_code、learning_targets、保留参加コード、保留送信を消すだけでDBを削除しない。

@@ -1,6 +1,8 @@
 # 学習ログ駆動型AIチューター
 
-現行実験仕様版は3。新規参加者のみ進行でき、仕様版NULL・1・2・未対応版の試用は閲覧専用です。記録を削除せず管理者ログ・CSVから確認できます。更新前の資料は `docs/history/2026-10-06/` に保存しています。
+目標仕様は2026-10-18確認の実験計画書に合わせています。文書更新だけで実装済みとはしません。[計画書との対応・未対応・要確認事項](docs/20_experiment_plan_alignment.md) を先に確認してください。
+
+実行時の実験仕様版は3のままです。新規参加者のみ進行でき、仕様版NULL・1・2・未対応版の試用は閲覧専用です。記録を削除せず管理者ログ・CSVから確認できます。更新前の資料は `docs/history/2026-10-06/` に保存しています。
 
 このリポジトリは、卒業研究で使う「誤概念タイプと学習ステージに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 
@@ -10,11 +12,18 @@
 
 研究の比較対象は「AIを使うかどうか」ではありません。両群とも同じ種類の学習履歴を参照する通常AIを使い、実験群だけにbackendの明示的な診断・修正対象・誤概念の定義・タイプ別教授方針を追加した効果を比較します。統制群が生の回答履歴から自然に誤りを訂正することは許容し、「誤概念対応全般の有無」の比較とは位置づけません。
 
-現在の研究仮説は次の3つです（評価式・統計手法を今回再設計しません）。
+目標の研究仮説は、計画書の仮説一覧に合わせて次の6つです。分析表に残る古い番号は使わず、未指定の集計条件は独自に決めません。
 
-1. 実験群は統制群より事前テストから初回再テストへの正答率の伸びが大きい。
-2. 実験群は統制群より学習セッション・再テストのループ回数が少ない。
-3. 実験群は統制群より同種誤答タイプを再び示す割合が低い。
+1. 実験群は、統制群よりも、テスト間の正答率の伸びが大きい。
+2. 実験群は統制群よりも、再テストで満点に到達するまでの学習セッション回数が少ない。
+3. 実験群は統制群よりも、学習セッションで扱う一用語当たりの周回数が少ない。
+4. 実験群は統制群よりも、同じ誤答タイプを再び選ぶ割合が低い。
+5. 教材を閲覧した参加者において、実験群は統制群よりも、学習後アンケートの教材の評価が高い。
+6. 実験群は統制群よりも、再テストで満点に到達した参加者の割合が高い。
+
+大学生40名・各群20名、原則無作為割付、gpt-5.6-luna / lowを目標とします。目標のunknownと共通説明は意味や仕組みの説明、統制群の指示は共通情報からの通常説明です。事後アンケートは経験の有無、1〜10段階評価、教材評価6項目、自由記述を扱います。
+
+**未対応:** 現行unknownの6項目必須指定、統制群の指示にある診断用語、mediumの推論既定値、5段階の仮アンケートは変更していません。画面・入力型・保存・集計の対応と、6仮説の比較回次・集計単位の確定が必要です。自動無作為割付や各群20名上限も実装していません。
 
 これは研究上の評価目的である。現行実装では`final_test`はpretestで学習対象がない参加者に限られ、学習対象のある参加者は再テスト満点後に省略される。したがって、現行データには全員共通の最終テスト正答率はなく、測定経路を記録・区別して解釈する。
 
@@ -78,7 +87,8 @@
 | `docs/17_traceability_matrix.md` | 研究計画から仕様への対応表 |
 | `docs/18_implementation_blueprint.md` | 将来実装時のディレクトリ・サービス設計 |
 | `docs/19_experiment_operation_runbook.md` | 実験運用手順 |
-| `docs/99_sources_and_notes.md` | PPTX由来メモ、参考文献、設計判断 |
+| `docs/20_experiment_plan_alignment.md` | 計画書の出典・対応・未対応・要確認事項 |
+| `docs/99_sources_and_notes.md` | 計画書の参考文献、理論と設計判断、旧資料の扱い |
 
 ## 起動方法
 
@@ -147,7 +157,7 @@ cd frontend && npm run build
 ./scripts/start-codex-app-server.sh
 ```
 
-現行Docker Composeのhost network構成では、`.env`に以下を設定します。`.env.example`の既定値と同じ接続方式です。
+以下は現行Docker Composeのhost network構成と`.env.example`の既定値の例です。**計画書の目標はlowですが、下記の現行既定値mediumを今回変更したわけではありません。** 実験前に両群同一のlow設定と送信監査を別途確認します。管理APIによる実行時の上書きもあるため、既定値と実送信値を区別してください。
 
 ```env
 AI_BACKEND=codex_app_server
@@ -183,4 +193,4 @@ GET /api/admin/participants/{participant_id}/logs.csv
 
 CSVは `record_type, source_type, participant_id, display_code, phase, test_round, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。
 
-現行サマリーはpretest_score、retest_score、attainment_correct_rate、同種誤答/M1/M3別再発率を保存します。到達率の物理保存先だけ旧列を維持し、計算はis_correctを使います。周回名とfinal_score_sourceで測定経路を区別します。旧試用は保存値の閲覧/CSVだけとし、再計算や現行群集計には混ぜません。
+現行サマリーはpretest_score、retest_score、attainment_correct_rate、同種誤答/M1/M3別再発率を保存します。これらを新6仮説の確定した評価値と同一視しません。到達率の物理保存先だけ旧列を維持し、計算はis_correctを使います。周回名とfinal_score_sourceで測定経路を区別します。旧試用は保存値の閲覧/CSVだけとし、再計算や現行群集計には混ぜません。[評価指標と未確定条件](docs/12_evaluation_metrics.md) を参照してください。

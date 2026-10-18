@@ -1,5 +1,13 @@
 # 現行API
 
+## 計画書対応の範囲
+
+以下は利用可能な現行APIであり今回変更しない。計画書を目標仕様にしても新アンケート・6仮説の集計が利用可能になったとはしない。[未対応と要確認](20_experiment_plan_alignment.md) を参照する。
+
+特にPOST /api/participants/{id}/surveyのSurveyPayload（backend/app/main.py:192-201）は経験・自己評価・操作評価等を1〜5で受け付ける現行型。計画の有無回答・1〜10段階・教材6項目に対応する新しい入力型/項目名・保存契約は未実装。既存エンドポイントがあることを新項目の受付保証としない。
+
+## 利用可能な現行契約
+
 正本は `backend/app/main.py`。回答可能フェーズはpretest/retest/final_testだけ。廃止した追加確認の専用URL/APIは404。
 
 | 用途 | API |

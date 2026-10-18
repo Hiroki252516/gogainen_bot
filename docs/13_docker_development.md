@@ -1,5 +1,9 @@
 # 13. Docker Development
 
+## 計画書の目標と環境例
+
+研究時の目標モデル/推論設定は両群ともgpt-5.6-luna / low。以下は現行Compose・.env.exampleの例であり、mediumの既定値を今回変更したわけではない。実施前に環境設定と管理APIの実行時上書き、実送信のeffortを確認する。[D04](20_experiment_plan_alignment.md#現行実装との差分) を参照する。文書更新でコンテナ起動・DB移行・設定書換えは行わない。
+
 ## Target Environment
 
 - MacBook Air M4

@@ -1,4 +1,54 @@
-# 現行AI契約
+# AI指示の目標と現行契約
+
+計画書を目標仕様とし、実装との差分は [D01〜D04/Q10](20_experiment_plan_alignment.md) で管理する。本書の目標プロンプトを、そのまま現行の実送信原文と呼ばない。今回、AI出力Schema・検査・指示文・版は変更していない。
+
+## 目標プロンプトと現行原文
+
+### 計画書の指示文の抜粋
+
+以下は計画書6.7に掲載された目標の文面の抜粋。完全な送信promptではなく、共通ルール・個別入力・出力Schema等と組み合わせる。まだコードへ反映していない。
+
+共通教材指示（6.7.1）:
+
+```text
+教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。
+```
+
+統制群の指示（6.7.2）:
+
+```text
+通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。
+general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。
+teaching_strategy は general_explanation に固定する。
+```
+
+実験群への指示（6.7.3からの抜粋）:
+
+```text
+active_misconception_type、pretest_target、pretest_targets、diagnostic_evidence、session_misconception_historyを、その方略に沿った説明・対比例の具体化に利用し、別方略へ変更しない。
+misconception_taxonomyにあるM1/M3/unknownの定義と教授方針を守る。M1は誤信念の反駁、M3はカテゴリー再分類、unknownは基礎説明を行う。
+diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置く。
+unknownは意味や仕組みを示す。
+```
+
+指定方略はM1ならbelief_revision、M3ならcategory_reorientation、unknownならfoundational_explanation。backendが選んだ具体的な値を末尾の固定指示と出力Schemaへ入れる。「backend」はJSONキーではなくプログラム側を指す語であり、その語だけからLLMが内部状態を読めるわけではない。
+
+M1/M3の対象主張・訂正・仕組み・対比例、別事例への適用確認と本文証拠という教授要件は計画書に残る。unknownの6項目をどう見直すかは未対応で、新しいSchemaや検査項目はQ10の確認後に決める。意味や仕組みという短い記述へ置換済みとはしない。
+
+### 現行コードの原文と参照元
+
+下表は目標文面ではなく、現行コードの指示原文。パスはリポジトリからの相対位置で、行番号は [照合HEAD](20_experiment_plan_alignment.md#文書の位置づけ) のもの。
+
+| 場所 | 現行原文 |
+| --- | --- |
+| backend/app/ai/tutoring_prompt.py:87 | 教材には定義、仕組みまたは役割、具体例、注意点を含める。一般的な誤解を正確に説明・訂正してよい。 |
+| backend/app/ai/tutoring_prompt.py:148 | 通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使って説明を作る。回答から自然に誤りを見つけて訂正してよいが、入力されていないbackendの誤概念診断、修正対象、タイプ別教授方針を与えられた事実として扱わない。 |
+| backend/app/ai/tutoring_prompt.py:149 | general_explanation は、backendの明示的な誤概念診断・タイプ別教授方針によらず、共通履歴を利用して定義・仕組み・具体例・注意点を説明する通常の教授方略を意味する。 |
+| backend/app/services/experiment.py:239 | 誤概念を推測せず、基礎定義、主要構成要素、役割、最小限の判断基準、正例、非例を必ず教材本文へ含める。 |
+
+原文全体は [tutoring_prompt.py](../backend/app/ai/tutoring_prompt.py) を参照する。共通ラッパーは35行目、教材指示は79行目以降、タイプ別指示は152〜159行目。unknownの必須項目は [mandatory_elements.py](../backend/app/ai/mandatory_elements.py) の23〜30行目にある。入力だけでなく生成文章にも制約を指示する一方、生成文の意味的な正しさを機械検査したと扱わない。
+
+## 現行契約（実行版3）
 
 実験仕様版は3、契約版は `tutoring-teaching-contract-v5-dynamic-sections`、taxonomy版は `m1-m3-unknown-v2`。共通履歴はinteraction-history-v1、共通出題規則はshared-diagnosis-route-v1のまま。
 
@@ -43,6 +93,14 @@ M1は反駁、M3はカテゴリー比較、unknownは基礎説明を生成する
 mandatory_elementsとteaching_contractの内部キー・対象IDの条件・型別フィールドは維持する。証拠文はどの節でもよいが、見出しを除く実際の節本文に存在する必要がある。複数要素が同じ節に存在してよい。JSONだけの証拠、見出しだけの証拠、空フィールド、本文に同じ証拠文字列がない要約は拒否し、先頭文や任意の適用らしい行で補正しない。構造・証拠一致・契約・長さの検査は同じ最大3試行内で行う。統制群には型別必須要素や契約を要求せず、本文構造・文字数・禁止文字列・指定方略の検査を共通に適用する。
 
 正答要約/誤答解説も共通入力を使い、現在の問題・選択内容・表示済み教材を追加する。不正解の現在選択には従来どおり選ばれた誤答本文だけを使う。履歴は現在回答より前の確定分とし、二重掲載しない。proposedだけ診断と教授方針を追加し、固定採点をAI解説で変えない。
+
+### 回答後解説の現行原文の参照
+
+正答/誤答ごとの基本指示は両群共通。正答要約は [codex_app_server_backend.py](../backend/app/ai/codex_app_server_backend.py) の240行目から（指示原文258〜264行目）、誤答解説は273行目から（295〜303行目）。群別入力だけを切り替え、教材生成プロンプト全体をそのまま流用しない。
+
+正答は要点を短くまとめてsummaryを返し、冒頭に「今回の要点」を置くよう指示する。誤答は正答本文・位置を直接示さず、「どこが違うか」「見直す観点」を中心とするfeedbackを生成するよう指示する。これらの内容上の条件を全て自動検査しているわけではない。remediation_focusとgeneral_knowledge_supplementも返すが、現行画面に表示する解説本文はfeedbackだけ。
+
+入力の組立てはbackend/app/services/experiment.py:2453-2496。両群に現在問題・表示済み教材・必要な選択本文・共通履歴・RAGを渡し、実験群だけに現在の誤答タイプ・学習者状態・指針・taxonomy・診断履歴を追加する。pretest_target(s)など教材用入力の全項目を解説にも渡すわけではない。固定の正誤表示はfrontend/app/learning/[termSlug]/page.tsx:404でありAI生成ではない。
 
 確認問題は両群ともshared-diagnosis-route-v1の規則を使い、unknownはenrichment、M1/M3はconceptual_change。同じ状態・回答・ターンなら同じ問題/variant。controlのモデルへこの段階は渡さない。次教材の先行生成では、現在の固定採点・選択・時刻を履歴へ副作用なしに投影し、回答確定後だけ公開する。解説失敗時は生成物を破棄する。
 
