@@ -69,6 +69,20 @@ try {
     await page.goto(new URL("/admin", base).href);
     await page.getByRole("heading", { name: "6仮説の記述集計", exact: true }).waitFor();
     assert.equal(await page.getByRole("link", { name: "6仮説・群別CSV", exact: true }).count(), 1);
+    for (const reason of ["途中中断", "継続中", "完了・満点未達", "終了状況不明"]) {
+      assert.equal(await page.getByText(`${reason}：`, { exact: false }).count(), 2);
+    }
+    assert(await page.getByText("表示済みセッションの記録欠落を意味しません", { exact: false }).isVisible());
+    const summary = await (await page.request.get(new URL("/api/admin/evaluation-summary", base).href)).json();
+    assert.equal(summary.hypotheses.metrics_version, "six-hypotheses-v2");
+    for (const group of summary.hypotheses.groups) {
+      assert.equal(group.h2.missing_count, group.h2.not_attained_count);
+      assert.equal(Object.values(group.h2.censoring_breakdown).reduce((count, stat) => count + stat.n, 0), group.h2.not_attained_count);
+      assert.equal(group.h6.denominator, group.participant_count);
+    }
+    const csv = await page.request.get(new URL("/api/admin/export/hypothesis_group_summary.csv", base).href);
+    assert.equal(csv.status(), 200);
+    assert((await csv.text()).includes("censoring_breakdown"));
     console.log(JSON.stringify({ scenario: viewed ? "material_viewed" : "not_viewed_initial_perfect", survey_fields: count, flow_and_admin: "passed", participant_id: participant.participant_id }));
     await context.close();
   }

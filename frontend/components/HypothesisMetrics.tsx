@@ -12,12 +12,15 @@ const ITEMS: Record<string, string> = {
   clarity: "内容のわかりやすさ", readability: "読みやすさ", japanese_clarity: "日本語のわかりやすさ",
   difficulty_appropriateness: "難易度の適切さ", learning_usefulness: "学習への役立ち度", amount_appropriateness: "量の適切さ",
 };
+const CENSORING_REASONS: Record<string, string> = {
+  give_up: "途中中断", in_progress: "継続中", completed_without_mastery: "完了・満点未達", other: "終了状況不明",
+};
 function format(value: number | null | undefined, rate = false) {
   return value == null ? "対象データなし" : rate ? `${(value * 100).toFixed(1)}%` : value.toFixed(2);
 }
 function StatsTable({ groups }: { groups: any[] }) {
   return <div style={{ overflowX: "auto" }}><table>
-    <thead><tr><th>指標</th><th>群</th><th>対象人数</th><th>平均／割合</th><th>中央値</th><th>欠測</th><th>対象外</th></tr></thead>
+    <thead><tr><th>指標</th><th>群</th><th>対象人数</th><th>平均／割合</th><th>中央値</th><th>欠測・未観測</th><th>対象外</th></tr></thead>
     <tbody>{Object.entries(LABELS).flatMap(([key, label]) => groups.map((group: any) => {
       const stat = group[key];
       return <tr key={`${group.group_condition}-${key}`}><th>{label}</th><td>{group.group_condition}</td><td>{stat.n}</td>
@@ -32,7 +35,7 @@ export function HypothesisMetrics({ data }: { data: any }) {
     <h2 id="hypotheses-title">6仮説の記述集計</h2>
     <p>新プロトコル登録者のみ。統計検定・仮説支持の自動判定は行いません。欠測は補完しません。</p>
     <StatsTable groups={data.groups} />
-    <p className="muted">仮説2は満点到達者のみの条件付き集計です。仮説3は用語内平均→参加者内平均、仮説4は参加者ごとの率の平均です。</p>
+    <p className="muted">仮説2は満点到達者のみの条件付き集計です。仮説2の未観測は満点までの総回数が未確定の人数であり、表示済みセッションの記録欠落を意味しません。仮説3は用語内平均→参加者内平均、仮説4は参加者ごとの率の平均です。</p>
     <div className="actions">
       <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_metrics.csv`}>6仮説・参加者別CSV</a>
       <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.csv`}>6仮説・群別CSV</a>
@@ -52,6 +55,10 @@ export function HypothesisMetrics({ data }: { data: any }) {
       <strong>{group.group_condition}：登録 {group.participant_count}人</strong>
       <p>満点到達 {group.h6.numerator}/{group.h6.denominator}人、未達 {group.h2.not_attained_count}人、学習なし到達 {group.h2.attained_without_learning_count}人</p>
       <p>未達者の観測セッション数：n={group.h2.observed_nonattainer_sessions.n}、平均 {format(group.h2.observed_nonattainer_sessions.mean)}、中央値 {format(group.h2.observed_nonattainer_sessions.median)}</p>
+      <ul>{Object.entries(CENSORING_REASONS).map(([reason, label]) => {
+        const stat = group.h2.censoring_breakdown[reason];
+        return <li key={reason}>{label}：{stat.n}人、観測セッション数の平均 {format(stat.mean)}、中央値 {format(stat.median)}</li>;
+      })}</ul>
       <p>参考・用語件数比：{group.h4.pooled_numerator}/{group.h4.pooled_denominator}（{format(group.h4.pooled_rate, true)}）、教材表示者 {group.h5.viewed_count}人</p>
       <p>終了状況：{JSON.stringify(group.completion_reasons)}</p>
     </div>)}
@@ -72,6 +79,7 @@ export function ParticipantHypothesisMetrics({ data }: { data: any }) {
   if (!data) return null;
   return <section className="notice stack"><h3>参加者の6仮説対応値</h3>
     <p>経路：{data.route}／教材表示：{data.has_viewed_material ? "あり" : "なし"}</p>
+    {data.h2.censoring_reason && <p>満点未達の終了状況：{CENSORING_REASONS[data.h2.censoring_reason]}</p>}
     <ul>{Object.entries(LABELS).map(([key, label]) => <li key={key}>{label}：{format(data[key].value, key === "h4" || key === "h6")}（{data[key].status || "observed"}）</li>)}</ul>
     <details><summary>分母・用語別・回次別の詳細</summary><pre>{JSON.stringify(data, null, 2)}</pre></details>
   </section>;

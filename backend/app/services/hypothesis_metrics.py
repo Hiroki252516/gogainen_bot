@@ -12,7 +12,7 @@ from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PR
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION
 
-METRICS_VERSION = "six-hypotheses-v1"
+METRICS_VERSION = "six-hypotheses-v2"
 TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
 
 
@@ -106,6 +106,16 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     h2_value = sum(shown_at <= first_mastery_at for _, shown_at in displayed) if reached else None
     h1_value = next((r["gain_pt"] for r in rounds if r["round"] == 1), None) if paired_complete else None
     h3_value = mean(term_means.values()) if term_means else None
+    censoring_reason = None
+    if not reached:
+        if participant.completion_reason == "give_up":
+            censoring_reason = "give_up"
+        elif participant.completion_reason == "completed":
+            censoring_reason = "completed_without_mastery"
+        elif participant.completion_reason is None and participant.completed_at is None and participant.current_step != "finish":
+            censoring_reason = "in_progress"
+        else:
+            censoring_reason = "other"
     return {
         "metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
         "participant_id": participant.id, "display_code": participant.display_code,
@@ -114,6 +124,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         "has_viewed_material": bool(displayed), "rounds": rounds,
         "h1": {"value": h1_value, "status": "observed" if h1_value is not None else "missing_paired_tests", "pretest_score": pre_score},
         "h2": {"value": h2_value, "status": "attained" if reached else "not_attained",
+               "censoring_reason": censoring_reason,
                "observed_session_count": len(displayed), "first_mastery_round": first_mastery_round,
                "first_mastery_at": first_mastery_at.isoformat() if reached else None,
                "attained_without_learning": reached and h2_value == 0},
@@ -139,8 +150,13 @@ def _group(rows):
         result[key] = _stats([r[key]["value"] for r in rows], n)
         result[key]["not_applicable_count"] = sum(r[key].get("status", "").startswith("not_applicable") for r in rows)
         result[key]["missing_count"] -= result[key]["not_applicable_count"]
-    result["h2"].update({"not_attained_count": sum(not r["h6"]["attained"] for r in rows),
-                           "missing_count": 0,
+    nonattainers = [r["h2"] for r in rows if not r["h6"]["attained"]]
+    result["h2"].update({"not_attained_count": len(nonattainers),
+                           "censored_count": len(nonattainers),
+                           "censoring_breakdown": {
+                               reason: _stats([r["observed_session_count"] for r in nonattainers if r["censoring_reason"] == reason])
+                               for reason in ("give_up", "in_progress", "completed_without_mastery", "other")
+                           },
                            "observed_nonattainer_sessions": _stats([r["h2"]["observed_session_count"] for r in rows if not r["h6"]["attained"]]),
                            "attained_without_learning_count": sum(r["h2"]["attained_without_learning"] for r in rows)})
     eligible_h4 = [r["h4"] for r in rows if r["h4"]["value"] is not None]
@@ -196,6 +212,7 @@ def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool) -> Path:
                 records.append({**base, "metric": key, **{k: v for k, v in metric.items() if k in fields}, "details_json": json.dumps(metric, ensure_ascii=False)})
             for item, value in (row["h5"]["items"] or {}).items():
                 records.append({**base, "metric": f"h5.{item}", "value": value, "status": "observed"})
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8-sig") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()

@@ -16,7 +16,7 @@
 | 新プロトコル | experiment-plan-2026-10-18-v1 |
 | 教材契約版 | tutoring-teaching-contract-v6-plan-aligned |
 | taxonomy版 | m1-m3-unknown-v3 |
-| アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v1 |
+| アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
 ## 計画書と仕様書の対応
 
@@ -50,6 +50,8 @@ Q01〜Q07・Q09・Q10は、Wordだけから補わずユーザーへの確認と�
 | Q08 | Chi本文2008/参考文献2009の版・ページ照合は未解決。引用年を無断訂正しない |
 | Q09 | 最大3回答/3回不正解終了を維持。測定は0〜3不正解として明文化 |
 | Q10 | unknownはmandatory_elements.definitionと既存teaching_contractのmechanism_explanation/transfer_checkを本文証拠として要求。旧6項目は撤廃 |
+
+PR #142の修正では、指標版v2として仮説2の未達人数を未観測として表示し、中断・継続中・完了時点で未達等の内訳と観測回数を追加した。到達者平均・仮説6の登録者分母・実験プロトコルは変えない。教材表示だけの離脱でも既存の更新時刻監視でキャッシュが更新されることを回帰テストで確認した。CSVは未作成の出力先ディレクトリにも出力できるようにした。
 
 ## 保護する契約と開始前確認
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from datetime import datetime, timedelta
 
 import pytest
@@ -14,7 +15,7 @@ from app.core.experiment_spec import CURRENT_PROTOCOL_ID, can_resume
 from app.main import app
 from app.db import session as database
 from app.db.session import SessionLocal
-from app.models import Attempt, AuditEvent, Base, Participant, ParticipantSurvey, Question, Term, TutorSession, TutorTurn
+from app.models import Attempt, AuditEvent, Base, EvaluationSummary, Participant, ParticipantSurvey, Question, Term, TutorSession, TutorTurn
 from app.seed.seed_questions import seed_database
 from app.services import experiment
 from app.services.hypothesis_metrics import current_metrics, group_metrics, participant_metrics, write_metrics_csv
@@ -177,6 +178,90 @@ def test_group_weights_missing_censoring_and_export_match(study, tmp_path):
         assert exported
         assert all(r["protocol_id"] == CURRENT_PROTOCOL_ID for r in exported)
         assert "LEGACY" not in path.read_text(encoding="utf-8-sig")
+
+
+def test_h2_distinguishes_nonattainer_outcomes_without_changing_h6(study, tmp_path):
+    for index, reason in enumerate(("give_up", None, "completed", "other")):
+        p = participant(study, f"NOT-{index}")
+        p.completion_reason = reason
+        if reason == "completed":
+            p.completed_at = AT
+            p.current_step = "finish"
+        for number in range(index):
+            session(study, p, "llm_knowledge", number + 1, answered=False)
+    for index, reason in enumerate(("completed", "give_up")):
+        p = participant(study, f"ATTAINED-{index}")
+        p.completion_reason = reason
+        test_round(study, p, 0, ["correct"] * 3)
+        test_round(study, p, 1, ["correct"] * 3, phase="final_test")
+    rows = current_metrics(study)
+    by_code = {row["display_code"]: row for row in rows}
+    assert [by_code[f"NOT-{i}"]["h2"]["censoring_reason"] for i in range(4)] == ["give_up", "in_progress", "completed_without_mastery", "other"]
+    assert all(by_code[f"ATTAINED-{i}"]["h2"]["censoring_reason"] is None for i in range(2))
+    result = group_metrics(rows)["groups"][1]
+    assert result["h2"]["n"] == 2
+    assert result["h2"]["mean"] == 0
+    assert result["h2"]["missing_count"] == 4
+    assert result["h2"]["censored_count"] == 4
+    assert result["h2"]["not_attained_count"] == 4
+    assert result["h2"]["observed_nonattainer_sessions"]["mean"] == 1.5
+    for reason, count in zip(("give_up", "in_progress", "completed_without_mastery", "other"), range(4)):
+        assert result["h2"]["censoring_breakdown"][reason]["n"] == 1
+        assert result["h2"]["censoring_breakdown"][reason]["mean"] == count
+    assert result["h6"]["denominator"] == 6
+    assert result["h6"]["numerator"] == 2
+    assert result["h6"]["rate"] == pytest.approx(1 / 3)
+    exported = write_metrics_csv(tmp_path / "h2.csv", rows, grouped=True)
+    records = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
+    h2 = next(r for r in records if r["metric"] == "h2" and r["group_condition"] == "proposed")
+    assert h2["missing_count"] == "4"
+    assert json.loads(h2["details_json"])["censoring_breakdown"] == result["h2"]["censoring_breakdown"]
+
+
+@pytest.mark.parametrize("grouped", [False, True])
+def test_metrics_csv_creates_missing_parent_directories(study, tmp_path, grouped):
+    participant(study)
+    path = tmp_path / "not-created" / "nested" / "metrics.csv"
+    assert not path.parent.exists()
+    assert write_metrics_csv(path, current_metrics(study), grouped=grouped) == path
+    assert list(csv.DictReader(path.open(encoding="utf-8-sig")))
+
+
+def test_material_view_without_an_answer_refreshes_evaluation_cache(study):
+    p = participant(study)
+    test_round(study, p, 0, ["M1"] * 3)
+    row = session(study, p, "llm_knowledge", 1, displayed=False, answered=False, ended=False)
+    row.prefetch_state = "consumed"
+    study.commit()
+    cached = experiment._ensure_evaluation_summary(study, p)
+    assert cached.hypothesis_metrics_json["has_viewed_material"] is False
+    assert experiment._ensure_evaluation_summary(study, p).id == cached.id
+    turn = study.query(TutorTurn).filter_by(tutor_session_id=row.id).one()
+    record_material_view(study, turn.id)
+    assert turn.learner_response is None
+    assert experiment._latest_evaluation_source_at(study, p) > cached.created_at
+    refreshed = experiment._ensure_evaluation_summary(study, p)
+    assert refreshed.id != cached.id
+    assert refreshed.hypothesis_metrics_json["has_viewed_material"] is True
+    assert refreshed.hypothesis_metrics_json["h2"]["observed_session_count"] == 1
+    assert refreshed.hypothesis_metrics_json["h5"]["status"] == "missing_survey"
+    record_material_view(study, turn.id)
+    assert experiment._ensure_evaluation_summary(study, p).id == refreshed.id
+
+
+def test_evaluation_cache_refreshes_only_current_protocol_on_metrics_version_change(study):
+    for code, protocol in (("CURRENT", CURRENT_PROTOCOL_ID), ("LEGACY", None)):
+        p = participant(study, code, protocol=protocol)
+        test_round(study, p, 0, ["M1"] * 3)
+        study.commit()
+        cached = EvaluationSummary(participant_id=p.id, group_condition=p.group_condition,
+                                   hypothesis_metrics_json={"metrics_version": "six-hypotheses-v1"})
+        study.add(cached)
+        study.commit()
+        refreshed = experiment._ensure_evaluation_summary(study, p)
+        assert (refreshed.id != cached.id) is (protocol == CURRENT_PROTOCOL_ID)
+        if protocol == CURRENT_PROTOCOL_ID:
+            assert refreshed.hypothesis_metrics_json["metrics_version"] == "six-hypotheses-v2"
 
 
 def test_rounds_remain_distinct_after_variant_five_is_reused(study):

@@ -38,7 +38,7 @@ from app.ai.teaching_contract import (
 from app.core.config import get_settings
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, assert_current_experiment, can_resume
 from app.services.research_protocol import SURVEY_VERSION, validate_survey_for_participant
-from app.services.hypothesis_metrics import participant_metrics, current_metrics, group_metrics, write_metrics_csv
+from app.services.hypothesis_metrics import METRICS_VERSION, participant_metrics, current_metrics, group_metrics, write_metrics_csv
 from app.core.runtime_config import current_reasoning_effort
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
@@ -2991,7 +2991,12 @@ def _ensure_evaluation_summary(db: Session, participant: Participant) -> Evaluat
         return latest
     source_at = _latest_evaluation_source_at(db, participant)
     expected_completed = participant.completed_at is not None and participant.completion_reason != "give_up"
-    if latest is None or (source_at is not None and latest.created_at < source_at) or latest.completed != expected_completed:
+    if (
+        latest is None
+        or (latest.hypothesis_metrics_json or {}).get("metrics_version") != METRICS_VERSION
+        or (source_at is not None and latest.created_at < source_at)
+        or latest.completed != expected_completed
+    ):
         return recalculate_evaluation(db, participant.id)
     return latest
 
