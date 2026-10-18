@@ -169,7 +169,7 @@ def test_mock_proposed_material_contains_all_mandatory_evidence():
         assert result["mandatory_elements"]["type"] == misconception_type
         structure = validate_material_structure(result, payload["term"]["label"])
         assert structure["valid"], structure
-        assert structure["section_count"] < len(validation["required_fields"])
+        assert structure["section_count"] <= len(validation["required_fields"])
         assert all(validation["evidence_placements"].values())
 
 
@@ -177,7 +177,7 @@ def test_codex_does_not_repair_mismatched_evidence_from_arbitrary_body_text():
     backend = MockAIBackend()
     payload = _payload("unknown", "enrichment")
     result = asyncio.run(backend.generate_tutoring_turn(payload))
-    result["mandatory_elements"]["components"] = "AIが返した別の要約です。"
+    result["mandatory_elements"]["definition"] = "AIが返した別の要約です。"
     result["teaching_contract"]["mechanism_explanation"] = "AIが返した別の仕組みです。"
     result["teaching_contract"]["transfer_check"] = "AIが返した別の適用確認です。"
 
@@ -193,7 +193,7 @@ def test_codex_does_not_repair_mismatched_evidence_from_arbitrary_body_text():
     contract_validation = validate_teaching_contract(result, "unknown", payload, payload["term"]["label"])
     assert not mandatory_validation["valid"]
     assert not contract_validation["valid"]
-    assert result["mandatory_elements"]["components"] == "AIが返した別の要約です。"
+    assert result["mandatory_elements"]["definition"] == "AIが返した別の要約です。"
     assert result["teaching_contract"]["mechanism_explanation"] == "AIが返した別の仕組みです。"
     assert result["teaching_contract"]["transfer_check"] == "AIが返した別の適用確認です。"
 
@@ -202,12 +202,12 @@ def test_validator_rejects_empty_evidence_even_when_body_contains_required_conte
     backend = MockAIBackend()
     payload = _payload("unknown", "enrichment")
     result = asyncio.run(backend.generate_tutoring_turn(payload))
-    result["mandatory_elements"]["components"] = ""
+    result["mandatory_elements"]["definition"] = ""
 
     validation = validate_mandatory_elements(result, "unknown", payload["term"]["label"])
     assert not validation["valid"]
-    assert "components:empty" in validation["missing"]
-    assert result["mandatory_elements"]["components"] == ""
+    assert "definition:empty" in validation["missing"]
+    assert result["mandatory_elements"]["definition"] == ""
 
 
 def test_validator_rejects_contract_contrast_not_present_in_body():
@@ -754,7 +754,7 @@ def test_mandatory_schema_is_strict_for_each_type():
     expected_fields = {
         "M1": {"type", "wrong_belief", "correct_belief", "counterexample", "reason"},
         "M3": {"type", "wrong_category", "correct_category", "boundary_criterion", "contrast_example"},
-        "unknown": {"type", "definition", "components", "role", "decision_criterion", "positive_example", "non_example"},
+        "unknown": {"type", "definition"},
     }
     for misconception_type in ("M1", "M3", "unknown"):
         schema = mandatory_elements_schema(misconception_type)

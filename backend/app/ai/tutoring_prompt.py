@@ -84,8 +84,8 @@ def build_tutoring_prompt(
         "rag_context.chunks がある場合は同じ用語の教材コンテキストを参照し、根拠のない断定を避ける。",
         "tutor_message には現在の用語の教材だけを書く。問題文、選択肢一覧、正答キー、過去回答の列挙やフィードバックの転載はしない。",
         "学習確認問題はbackendの固定問題バンクが表示・採点するため、問題や選択肢を生成しない。",
-        "教材には定義、仕組みまたは役割、具体例、注意点を含める。一般的な誤解を正確に説明・訂正してよい。",
-        f"教材本文はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に統一する。定義、仕組み、具体例、注意点を保ち、不要な繰り返しで水増ししない。",
+        "教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。",
+        f"教材本文はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に統一する。意味や仕組みの説明を保ち、不要な繰り返しで水増ししない。",
         "見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
         f"tutor_message の冒頭は『## {term_label}』にする。その後の小見出しは ### を使い、少なくとも1つ、見出しと本文が空でないセクションを作る。",
         "小見出しの文言・数・順序・セクションのまとめ方は、教材内容に適したものを自分で決める。固定テンプレートや必須要素ごとの専用見出しは要求しない。",
@@ -145,15 +145,15 @@ def build_tutoring_prompt(
                          + json.dumps(retry_errors, ensure_ascii=False))
 
     if group == "control":
-        rules.append("通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使って説明を作る。回答から自然に誤りを見つけて訂正してよいが、入力されていないbackendの誤概念診断、修正対象、タイプ別教授方針を与えられた事実として扱わない。")
-        rules.append("general_explanation は、backendの明示的な誤概念診断・タイプ別教授方針によらず、共通履歴を利用して定義・仕組み・具体例・注意点を説明する通常の教授方略を意味する。")
+        rules.append("通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。")
+        rules.append("general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。")
         rules.append("teaching_strategy は general_explanation に固定する。")
     else:
         rules.append("教授方略はbackendが決定済みである。active_misconception_type、pretest_target、pretest_targets、diagnostic_evidence、session_misconception_historyを、その方略に沿った説明・対比例の具体化に利用し、別方略へ変更しない。")
         rules.append("misconception_taxonomyにあるM1/M3/unknownの定義と教授方針を守る。M1は誤信念の反駁、M3はカテゴリー再分類、unknownは基礎説明を行う。")
         rules.append("diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置き、学習者が示していない誤概念を創作しない。unknownでは誤った考えを推測しない。")
         rules.append("pretest_targetまたはpretest_targetsがある場合、それを今回の教授目標として優先する。観察された選択を確定した信念とは断定せず、選択された説明として扱う。")
-        rules.append("M1は対象がある場合はその誤った命題を、対象がない場合は一般的な誤りの型を、正しい命題、誤りの仕組み、対比例、別事例への適用確認とともに明示する。M3も対象がある場合はその誤カテゴリーを、対象がない場合は一般的なカテゴリー境界を、正カテゴリー、境界、対比例、別事例への適用確認とともに明示する。unknownは反駁せず、定義・構成要素・役割・正例・非例と適用確認を示す。")
+        rules.append("M1は対象がある場合はその誤った命題を、対象がない場合は一般的な誤りの型を、正しい命題、誤りの仕組み、対比例、別事例への適用確認とともに明示する。M3も対象がある場合はその誤カテゴリーを、対象がない場合は一般的なカテゴリー境界を、正カテゴリー、境界、対比例、別事例への適用確認とともに明示する。unknownは反駁せず、意味や仕組みと別事例への適用確認を示す。")
         rules.append("M1のwrong_belief、M3のwrong_categoryは、修正対象の誤った命題・カテゴリーの説明をセクション本文へ実際に書いたうえで、その証拠文をコピーする。これは教授内容であり、過去問題・回答一覧・解説の転載とは区別する。JSONだけに誤った考えを書くのは不可。")
         rules.append("unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
     rules.append(f"teaching_strategy はbackendで指定された {', '.join(teaching_strategies)} に固定する。")

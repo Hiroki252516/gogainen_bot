@@ -22,11 +22,6 @@ _REQUIREMENTS: dict[str, dict[str, str]] = {
     },
     "unknown": {
         "definition": "対象用語の基礎定義を示す。",
-        "components": "理解に必要な主要構成要素を示す。",
-        "role": "対象用語の役割または目的を示す。",
-        "decision_criterion": "最小限の判断基準を示す。",
-        "positive_example": "正しい具体例を示す。",
-        "non_example": "対象ではない例、または混同しやすい非例を示す。",
     },
 }
 
@@ -176,9 +171,4 @@ def mock_mandatory_elements(
     return {
         "type": "unknown",
         "definition": f"{term_label}は、{description}",
-        "components": f"{term_label}は、対象・役割・処理の流れに分けて確認する。",
-        "role": f"{term_label}は、情報を適切に扱うための役割を担う。",
-        "decision_criterion": "定義、構成要素、役割の3点が説明できるかを確認する。",
-        "positive_example": f"{term_label}の構成要素が役割を分担して働く場面が該当する。",
-        "non_example": f"{term_label}の名前が含まれていても、定義や役割を満たさない処理は該当しない。",
     }

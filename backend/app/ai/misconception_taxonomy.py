@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 
-TAXONOMY_VERSION = "m1-m3-unknown-v2"
+TAXONOMY_VERSION = "m1-m3-unknown-v3"
 
 
 MISCONCEPTION_TAXONOMY: dict[str, Any] = {
@@ -27,10 +27,10 @@ MISCONCEPTION_TAXONOMY: dict[str, Any] = {
         "research_basis": "Chi (2009), categorical shift",
     },
     "unknown": {
-        "label": "知識不足",
-        "definition": "誤った信念やカテゴリーを特定できる根拠がなく、対象概念の基礎知識が不足している状態。",
+        "label": "誤概念未特定",
+        "definition": "選択された回答から特定の誤った命題やカテゴリーを置けない操作上の区分。知識不足や誤概念の不存在を確定するものではない。",
         "diagnostic_cues": ["わからないを単独選択する", "具体的な誤った説明が確認できない"],
-        "teaching_guidelines": ["短い定義から始める", "構成要素と最小限の判断基準を示す", "簡単な例で理解を確認する"],
+        "teaching_guidelines": ["対象用語の意味や仕組みを説明する", "特定の誤概念や反駁対象を推測しない", "別事例への適用確認を教材本文に含める"],
         "avoid": ["誤概念があると断定する", "反証を先に提示する", "学習者へ内部分類を示す"],
         "learning_outcome": "foundational_explanation",
         "research_basis": "operational knowledge-gap category for this study",

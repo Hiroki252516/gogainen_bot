@@ -2,7 +2,7 @@
 
 ## 計画書の目標と環境例
 
-研究時の目標モデル/推論設定は両群ともgpt-5.6-luna / low。以下は現行Compose・.env.exampleの例であり、mediumの既定値を今回変更したわけではない。実施前に環境設定と管理APIの実行時上書き、実送信のeffortを確認する。[D04](20_experiment_plan_alignment.md#現行実装との差分) を参照する。文書更新でコンテナ起動・DB移行・設定書換えは行わない。
+現行既定モデル/推論設定はgpt-5.6-luna / low。実施前に配布設定・管理上書き・実送信を確認する。[D04](20_experiment_plan_alignment.md#現行実装との差分)を参照する。今回の検証は隔離SQLiteとローカル実行であり、配布先PostgreSQL/Dockerの確認とは区別する。
 
 ## Target Environment
 
@@ -120,7 +120,7 @@ CODEX_WS_TOKEN_FILE=
 CODEX_MODEL=gpt-5.6-luna
 CODEX_APP_SERVER_CWD=/tmp
 CODEX_TURN_TIMEOUT_SEC=120
-CODEX_REASONING_EFFORT=medium
+CODEX_REASONING_EFFORT=low
 RAG_BASE_DIR=/rag_agent_knowledge_base
 FRONTEND_INTERNAL_API_BASE_URL=http://host.docker.internal:8000
 NEXT_PUBLIC_API_BASE_URL=

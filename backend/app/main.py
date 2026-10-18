@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -53,6 +53,7 @@ from app.services.experiment import (
     submit_survey,
 )
 from app.services.idempotency import run_idempotent
+from app.services.research_protocol import SurveyPayload, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
 from app.services.prefetch import prefetch_coordinator, schedule_prefetch
 
@@ -102,12 +103,16 @@ def _public_practice_question(question: object) -> dict | None:
 
 
 def _reasoning_effort_status() -> dict:
+    effort = current_reasoning_effort()
+    study_settings_match = effort == "low" and settings.codex_model == "gpt-5.6-luna"
     return {
-        "reasoning_effort": current_reasoning_effort(),
+        "reasoning_effort": effort,
         "allowed_reasoning_efforts": list(ALLOWED_REASONING_EFFORTS),
         "can_change_reasoning_effort": True,
         "reasoning_effort_change_block_reason": None,
         "reasoning_effort_applies": settings.ai_backend == "codex_app_server",
+        "study_settings_match": study_settings_match,
+        "study_settings_warning": None if study_settings_match else "計画書の実験条件（gpt-5.6-luna / low）と一致していません。",
     }
 
 
@@ -187,18 +192,6 @@ class TutorTurnRespond(BaseModel):
     response_time_sec: float | None = None
     question_shown_at: datetime | None = None
     answered_at: datetime | None = None
-
-
-class SurveyPayload(BaseModel):
-    ai_experience_level: int = Field(ge=1, le=5)
-    programming_experience_level: int = Field(ge=1, le=5)
-    llm_usage_level: int = Field(ge=1, le=5)
-    self_rated_ai_knowledge: int = Field(ge=1, le=5)
-    term_confidences: dict[str, int] | None = None
-    usability_rating: int = Field(ge=1, le=5)
-    helpfulness_rating: int = Field(ge=1, le=5)
-    perceived_hint_amount: int = Field(ge=1, le=5)
-    free_comment: str | None = None
 
 
 class AILoginStart(BaseModel):
@@ -385,6 +378,16 @@ async def api_give_up_experiment(
         request_data={"participant_id": participant_id},
         operation=lambda: give_up_experiment(db, participant_id),
     )
+
+
+@app.get("/api/participants/{participant_id}/survey")
+def api_survey_context(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    return survey_context(db, get_participant(db, participant_id))
+
+
+@app.post("/api/tutor-turns/{turn_id}/material-view")
+def api_material_view(turn_id: str, db: Session = Depends(get_db)) -> dict:
+    return record_material_view(db, turn_id)
 
 
 @app.post("/api/participants/{participant_id}/survey")
@@ -586,6 +589,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,
                 "experiment_spec_version": row.experiment_spec_version,
+                "protocol_id": row.protocol_id,
                 "can_resume": can_resume(row),
                 "current_step": row.current_step,
                 "completed_at": row.completed_at.isoformat() if row.completed_at else None,

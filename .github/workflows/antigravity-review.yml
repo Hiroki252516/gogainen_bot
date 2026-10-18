@@ -644,7 +644,7 @@ jobs:
           # ----------------------------------------------------------
 
           payload = {
-              "agent": "antigravity-preview-05-2026",
+              "agent": "antigravity-preview-09-2026",
 
               "system_instruction": system_instruction,
 
@@ -674,7 +674,7 @@ jobs:
 
               "agent_config": {
                   "type": "antigravity",
-                  "max_total_tokens": 60000,
+                  "max_total_tokens": 100000,
               },
 
               "background": True,
@@ -751,7 +751,7 @@ jobs:
 
               continuation_payload = {
                   "agent": (
-                      "antigravity-preview-05-2026"
+                      "antigravity-preview-09-2026"
                   ),
 
                   # interaction-scoped設定なので再指定する。
@@ -782,7 +782,7 @@ jobs:
 
                   "agent_config": {
                       "type": "antigravity",
-                      "max_total_tokens": 30000,
+                      "max_total_tokens": 100000,
                   },
 
                   "background": True,
@@ -875,7 +875,7 @@ jobs:
               )
 
               retry_payload = {
-                  "agent": "antigravity-preview-05-2026",
+                  "agent": "antigravity-preview-09-2026",
                   "system_instruction": system_instruction,
                   "input": (
                       pr_context
@@ -892,7 +892,7 @@ jobs:
                   "tools": [],
                   "agent_config": {
                       "type": "antigravity",
-                      "max_total_tokens": 30000,
+                      "max_total_tokens": 100000,
                   },
                   "background": True,
               }

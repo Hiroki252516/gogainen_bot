@@ -2,7 +2,7 @@
 
 ## 目標設定と現行設定
 
-計画書の目標は両群共通のgpt-5.6-luna / low。以下の設定例とプロトコルは現行実装の説明であり、mediumの既定値や過去の検証値を今回変更していない。管理APIでの実行時上書きもあるため、配布設定と実送信のmodel/effortを両群で照合する。[未対応D04](20_experiment_plan_alignment.md#現行実装との差分) を参照する。
+現行既定値は両群共通のgpt-5.6-luna / low。管理APIの上書き機能を残し、low以外は条件不一致として表示・監査する。配布設定と実送信model/effortを照合する。過去のmedium検証記録は書き換えない。[対応表](20_experiment_plan_alignment.md)を参照する。
 
 ## 重要
 
@@ -191,7 +191,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
     ],
     "approvalPolicy": "never",
     "sandboxPolicy": { "type": "readOnly", "networkAccess": false },
-    "effort": "medium",
+    "effort": "low",
     "outputSchema": {
       "type": "object",
       "properties": {
@@ -207,7 +207,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 
 `outputSchema` とプロンプトでJSON契約をapp-serverへ指定し、backendは最終応答からJSONオブジェクトを抽出する。現行backendはローカルで完全なJSON Schema/型検証を行わず、app-server側の`outputSchema`と各呼び出し後のキー参照に依存する。JSONオブジェクトとして解析できない場合はエラーとして扱い、自動再試行は行わない。
 
-現行コードの推論既定値と以下の例は `medium`。計画書の目標は `low` であり、この文書更新では設定を切り替えない。app-server側のschemaが変わった場合は、その時点のschemaに合わせてoutputSchemaと呼び出し側のpayload・キー参照を更新する。
+現行コードと環境例の推論既定値はlow。app-serverのschemaが変わった場合は、その時点のschemaへoutputSchemaとpayloadを合わせる。実送信監査でmodel/effortとprotocol_idを確認する。
 
 ## ストリーミング処理
 
@@ -234,7 +234,7 @@ MVPではフロントエンドにAI生成途中のストリームを見せなく
 
 仕様版3でも共通interaction_historyの版・件数・SHA-256、共通出題規則版とactual_ai_inputを記録する。モデルへは共通履歴の診断除外投影を送り、proposedだけに診断・対象主張・教授方針を追加する。input_projectionはサーバー側投影であり、送信済みかどうかはeffective_request.transmissionを確認する。
 
-両群の教材章立てをAIが決め、出力Schemaは従来のままとする。本文構造と実験群の証拠文をbackendで検証する。不一致を見出しの先頭文などで補正せず同backendへ再生成させ、各試行のmaterial_structureと最終TutorTurnの章立て監査を保存する。契約版はtutoring-teaching-contract-v5-dynamic-sections。
+章立てはAIが決め、本文構造と実験群の本文証拠をbackendで検査する。unknownのmandatory_elementsをtype/definitionへ変更し、teaching_contractの仕組み・適用確認と合わせる。不一致を補正せず同backendへ再生成させ、章立て・検証を保存する。契約版はtutoring-teaching-contract-v6-plan-aligned。
 
 app-serverへのoutputSchema指定とbackendの構造・契約・証拠文字列検査は、内容の事実検証とは別である。教材の正しさ、反駁の妥当性、言い換えによる正答漏えい、意味的な過去解説混入まで自動保証しない。[AI契約](10_ai_prompt_contracts.md#出力検証) に自動検査・プロンプト指示・目視確認の境界を記載する。
 

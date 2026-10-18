@@ -10,7 +10,7 @@ MATERIAL_MIN_CHARACTERS = 600
 MATERIAL_MAX_CHARACTERS = 800
 
 
-PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v5-dynamic-sections"
+PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v6-plan-aligned"
 TEACHING_CONTRACT_TYPES = ("M1", "M3", "unknown")
 REFUTATION_MODES = ("explicit", "implicit", "category_comparison", "none")
 

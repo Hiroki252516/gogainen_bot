@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     codex_model: str = "gpt-5.6-luna"
     codex_app_server_cwd: str = "/tmp"
     codex_turn_timeout_sec: int = 120
-    codex_reasoning_effort: str = "medium"
+    codex_reasoning_effort: str = "low"
     rag_base_dir: str = "./rag_agent_knowledge_base"
     max_learning_targets: int = 3
     max_turns_per_term: int = 3

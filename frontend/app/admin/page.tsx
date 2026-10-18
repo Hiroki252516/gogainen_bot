@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { HypothesisMetrics, ParticipantHypothesisMetrics } from "@/components/HypothesisMetrics";
 import { API_BASE, ApiError, api, clearParticipantSession, participantId } from "@/lib/api";
 
 type Participant = {
@@ -23,6 +24,7 @@ const REASONING_EFFORTS = ["low", "medium", "high"] as const;
 type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
+  study_settings_warning?: string | null;
   ai_backend: string;
   account_label?: string;
   app_server_reachable?: boolean | null;
@@ -320,6 +322,7 @@ export default function AdminPage() {
               <p>{ai ? `${ai.ai_backend} / ${ai.account_label}` : "確認中"}</p>
               {ai?.app_server_reachable === false ? <p className="danger">Codex app-serverに接続できません。</p> : null}
               {ai?.last_error ? <p className="muted">{ai.last_error}</p> : null}
+              {ai?.study_settings_warning ? <p className="danger" role="alert">{ai.study_settings_warning}</p> : null}
               {ai?.logged_in === false ? (
                 <div className="actions">
                   <button className="secondary" onClick={() => startLogin("chatgpt")}>
@@ -417,10 +420,12 @@ export default function AdminPage() {
               <p>{activeParticipants.length - currentParticipantCount}</p>
             </div>
           </div>
+          <p className="muted">以下の従来保存値・推移は参考情報です。6仮説の確定指標は専用の集計欄を参照してください。</p>
           <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
           <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
           <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
+        <HypothesisMetrics data={summary?.hypotheses} />
         <section className="panel">
           <h2>{activeGroup}群の被験者一覧</h2>
           <table className="table">
@@ -491,7 +496,7 @@ export default function AdminPage() {
                 </button>
               </div>
               {participantLog.latest_evaluation_summary ? (
-                <EvaluationSummary summary={participantLog.latest_evaluation_summary} />
+                <><ParticipantHypothesisMetrics data={participantLog.latest_evaluation_summary.hypothesis_metrics} /><EvaluationSummary summary={participantLog.latest_evaluation_summary} /></>
               ) : (
                 <section className="insight-panel stack">
                   <div>
@@ -512,7 +517,7 @@ export default function AdminPage() {
                   }, null, 2)}</pre>
                 </details>
               ) : null}
-              <LogList title="アンケート回答" rows={participantLog.surveys} fields={["phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]} />
+              <LogList title="アンケート回答" rows={participantLog.surveys} fields={["phase", "survey_version", "responses", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]} />
               <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />

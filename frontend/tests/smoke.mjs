@@ -327,7 +327,17 @@ for (const expectedText of ["type ApiRequestInit", "AbortController", "timeoutMs
   }
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["実験後アンケート（仮）", "/survey", "usability_rating", "required label=\"AI利用経験\"", "required label=\"プログラミング経験\"", "required label=\"LLM利用頻度\"", "required label=\"AIに関する自己評価\"", "{required ? <span className=\"required-indicator\">必須選択</span> : null}", "回答を保存して終了", 'router.replace("/finish")']) {
+const hypothesisMetrics = fs.readFileSync(new URL("../components/HypothesisMetrics.tsx", import.meta.url), "utf8");
+for (const expectedText of ["6仮説の記述集計", "hypothesis_metrics.csv", "hypothesis_group_summary.csv", "observed_nonattainer_sessions", "pooled_denominator", "material_item_differences"]) {
+  if (!hypothesisMetrics.includes(expectedText)) throw new Error(`hypothesis display/export contract is missing: ${expectedText}`);
+}
+for (const expectedText of ["欠測・未観測", "censoring_breakdown", "censoring_reason", "途中中断", "継続中", "完了・満点未達", "終了状況不明", "表示済みセッションの記録欠落を意味しません"]) {
+  if (!hypothesisMetrics.includes(expectedText)) throw new Error(`H2 nonattainment reporting is missing: ${expectedText}`);
+}
+for (const expectedText of ["material-view", "visibilitychange", "materialViewError"]) {
+  if (!learningPage.includes(expectedText)) throw new Error(`material display recording is missing: ${expectedText}`);
+}
+for (const expectedText of ["実験後アンケート", "/survey", "experiences", "coding_assistance", "system_usability", "general_ratings", "material_ratings_required", "length: 10", "自由記述（必須）", "教材評価6項目は対象外", "回答を保存して終了", 'router.replace("/finish")']) {
   if (!surveyPage.includes(expectedText)) {
     throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
   }

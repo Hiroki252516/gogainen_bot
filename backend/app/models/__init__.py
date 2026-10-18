@@ -30,6 +30,7 @@ class Participant(Base):
     current_step: Mapped[str] = mapped_column(String(64), default="start", nullable=False)
     learning_content_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     experiment_spec_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    protocol_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completion_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -43,6 +44,8 @@ class ParticipantSurvey(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
     phase: Mapped[str] = mapped_column(String(32), nullable=False)
+    survey_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    responses_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ai_experience_level: Mapped[int | None] = mapped_column(Integer)
     programming_experience_level: Mapped[int | None] = mapped_column(Integer)
     llm_usage_level: Mapped[int | None] = mapped_column(Integer)
@@ -233,6 +236,8 @@ class TutorSession(Base):
 class TutorTurn(Base):
     __tablename__ = "tutor_turns"
 
+    material_viewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     tutor_session_id: Mapped[str] = mapped_column(String(36), ForeignKey("tutor_sessions.id"), nullable=False)
     turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -312,6 +317,7 @@ class EvaluationSummary(Base):
     misconception_timeline_json: Mapped[dict | None] = mapped_column(JSON)
     learning_burden_json: Mapped[dict | None] = mapped_column(JSON)
     condition_check_json: Mapped[dict | None] = mapped_column(JSON)
+    hypothesis_metrics_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 

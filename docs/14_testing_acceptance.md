@@ -1,6 +1,32 @@
 # 受け入れ条件と検証記録
 
-## 今回の文書更新の受け入れ条件
+## 2026-10-18 PR #142レビュー修正の検証
+
+- backend全210テスト合格（新規5ケース）。未作成の入れ子出力先への参加者別/群別CSV、仮説2の未観測人数・終了状況別観測回数・仮説6の分母不変、教材表示のみで離脱した場合のキャッシュ更新と再表示時の非更新、指標版更新時の現行プロトコル限定再作成を確認した。
+- 教材表示のキャッシュ監視がないという指摘は既存コードで再現しなかった。Participant.updated_atとTutorTurn.updated_atの監視を維持し、表示のみ・未回答の回帰テストを追加した。
+- 全テストには隔離SQLiteでのnullable列移行・seed再実行・旧記録保全の既存テストを含む。今回はDBスキーマ・実験プロトコル・教授内容・仮説の主計算式を変更していない。指標版はsix-hypotheses-v2。
+- frontend smoke・Next.js本番ビルド合格。Linux Node.js v22.14.0を使用。
+- browserスキルの組み込みブラウザは接続エラーで実行できず、独立Playwright/Chromiumで代替した。初期満点・教材閲覧の両経路を通し、8/14アンケート項目、管理画面の未達内訳、群別CSV、内訳人数の合計と仮説6の分母を確認した。両群それぞれ中断・継続中・完了時点未達・その他を1人ずつ含む合成データも使い、未達者の観測回数平均1.5を照合した。スクリーンショット環境には日本語フォントがないため、ラベル内容はDOMで検査した。
+- 検証用Codex app-server（4501番）、API（8001番）、画面（3001番）、SQLiteと出力先（/tmp/gogainen-pr142.dR3Cfk/）を使用。研究DBや8000番の既存プロセスは変更しなかった。検証用3プロセスは終了した。
+- 今回の実AIは教材閲覧経路で教材生成と正答要約の計2呼出し。保存監査でcodex_app_server / gpt-5.6-luna / lowを確認した。両群×3タイプの全組合せは今回再実行しておらず、下記の先行検証記録と区別する。
+- git diff --check合格。コミット・push・GitHubコメントの投稿やスレッド解決は行っていない。
+
+## 2026-10-18の計画整合実装・今回の検証
+
+- backend全205テスト合格。6仮説の期待値、欠測/対象外/未達、初期満点final_test、後半variant再使用、アンケートの厳密入力・必須条件、教材表示の冪等性を検証した。
+- 隔離SQLiteで不足nullable列の追加・起動/seed再実行・旧版3を含む旧記録の不変を検証。配布先PostgreSQL/Dockerの実行確認とは区別する。
+- frontend smokeとNext.js本番ビルド合格。検証には一時配置したLinux Node.js v22.14.0を使用した。
+- 実Codex CLI 0.149.0のログイン済みapp-serverを検証専用4501番で起動し、gpt-5.6-luna/lowで両群×M1/M3/unknownの教材・正答要約を確認した。M1回答後のM3誤答解説と次教材も両群で確認した。
+- backend/scripts/verify_plan_real_ai.pyで本文証拠・文字数・表示記録、実送信model/effort、統制群入力分離を検査した。Mockへ切り替えていない。
+- 実AIの記録は検証専用の/tmp/gogainen-plan-verification.dbと/tmp/gogainen-plan-exportsへ分離した。研究DBを移行・再計算していない。
+- 画面は独立したPlaywright/Chromiumで、開始→同意→事前テスト→初期満点final_test/教材閲覧学習→再テスト→結果確認→アンケート保存→終了→管理画面まで両経路合格。未表示者は8選択項目、表示者は14選択項目と必須自由記述、教材評価平均8の保存・集計を確認した。
+- 組み込みブラウザはsandboxCwd接続エラーで使用できず、一時Playwrightと不足ライブラリ2個を/tmpへ置いて代替した。OSやリポジトリの依存定義へブラウザ用パッケージを追加していない。
+
+実AIの再実行はPLAN_VERIFY_ISOLATED=1、AI_BACKEND=codex_app_server、隔離SQLite DATABASE_URL、EXPORT_DIR、RAG_BASE_DIR、検証用CODEX_APP_SERVER_URLを明示して上記スクリプトを使う。画面検証はfrontend/tests/plan-browser.mjsにPLAN_VERIFY_ISOLATED、ローカル専用PLAN_UI_BASE_URL、PLAN_PLAYWRIGHT_MODULEを明示する。通常の研究DBへ接続しない。
+
+採用判断は[20](20_experiment_plan_alignment.md)、指標は[12](12_evaluation_metrics.md)。デバッグ正答配置・管理アクセス・割付運用・承認等は未解決であり、テスト合格を実験開始可能の認定としない。
+
+## 先行する文書整理時点の受け入れ条件（過去記録）
 
 - 計画書の6仮説が研究条件・評価指標・対応表・READMEで同じ番号と意味を持つ。
 - 目標仕様、現行実装、未対応D01〜D07、要確認Q01〜Q10を区別する。計画書の抜粋を現行送信原文としない。
@@ -9,7 +35,7 @@
 - 変更は仕様書類のMarkdownのみ。Word、履歴、別リポジトリ、コード・設定・問題・API・DB・実行版・既存データを変更しない。
 - この文書更新ではbackend/frontend全テスト・実AI生成・seed・DB移行を実行しない。以下はコード変更時の受け入れ条件と過去の検証記録であり、今回の実行結果ではない。
 
-## 目標実装後に確認する条件（未実施）
+## 文書整理時点の実装後チェックリスト（当時未実施）
 
 - [ ] 計画書に合わせた共通/統制群指示とunknownの教授・検査契約を、入力・Schema・Mock・送信監査まで照合する。
 - [ ] 両群のgpt-5.6-luna / lowを配布設定と実送信で確認する。
