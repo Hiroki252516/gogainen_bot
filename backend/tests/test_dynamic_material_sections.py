@@ -32,7 +32,7 @@ def test_arbitrary_order_count_and_merged_evidence_are_valid(kind, count):
     evidence.reverse()
     headings = ["要点", "具体例", "注意点", "どう働くか", "別の場面で考える", "まとめ"]
     result["tutor_message"] = "## 記憶プロセス\n\n" + "\n\n".join(
-        f"### {headings[index]}\n" + "\n".join(f"- {value}" for value in evidence[index::count])
+        f"### {headings[index]}\n" + ("\n".join(f"- {value}" for value in evidence[index::count]) or "- 用語の意味と働きを整理します。")
         for index in range(count)
     )
     assert validate_mandatory_elements(result, kind, "記憶プロセス")["valid"]

@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { GiveUpButton } from "@/components/GiveUpButton";
 import { MarkdownText } from "@/components/MarkdownText";
 import { CheckingFlow, useLearningTargetFlowGuard } from "@/components/ParticipantFlowGuard";
-import { postIdempotent, requireParticipant } from "@/lib/api";
+import { api, postIdempotent, requireParticipant } from "@/lib/api";
 
 type Option = { option_id: string; label: string; body: string };
 
@@ -180,10 +180,29 @@ export default function LearningPage() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [materialViewError, setMaterialViewError] = useState("");
   const bootedTermRef = useRef<string | null>(null);
   const actionInFlightRef = useRef(false);
   const flow = useLearningTargetFlowGuard(termSlug);
   const flowReady = flow.ready;
+
+  useEffect(() => {
+    const turnId = turn?.turn_id;
+    if (!turnId || !flowReady) return;
+    let cancelled = false;
+    const record = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        await api(`/api/tutor-turns/${turnId}/material-view`, { method: "POST", body: "{}" });
+        if (!cancelled) setMaterialViewError("");
+      } catch {
+        if (!cancelled) setMaterialViewError("教材の表示記録を保存できませんでした。回答時に再試行します。");
+      }
+    };
+    void record();
+    document.addEventListener("visibilitychange", record);
+    return () => { cancelled = true; document.removeEventListener("visibilitychange", record); };
+  }, [turn?.turn_id, flowReady]);
 
   const nextHref = useMemo(() => {
     const targets = readLearningTargetSlugs();
@@ -242,6 +261,8 @@ export default function LearningPage() {
     setError("");
     try {
       const answeredAt = new Date().toISOString();
+      await api(`/api/tutor-turns/${turn.turn_id}/material-view`, { method: "POST", body: "{}" });
+      setMaterialViewError("");
       const responseTimeSec = Math.max(0.001, (Date.now() - turnStartedAt) / 1000);
       const responseBody = {
         selected_option_ids: selectedOptionIds,
@@ -325,6 +346,7 @@ export default function LearningPage() {
           ) : null}
         </div>
         {error ? <div className="danger">{error}</div> : null}
+        {materialViewError ? <div className="danger" role="alert">{materialViewError}</div> : null}
         {turn ? (
           <>
             <div className="notice">

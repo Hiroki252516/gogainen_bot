@@ -1749,13 +1749,9 @@ def test_experiment_give_up_during_retest_routes_to_survey_and_blocks_retest_act
         db.close()
 
     survey_payload = {
-        "ai_experience_level": 3,
-        "programming_experience_level": 2,
-        "llm_usage_level": 4,
-        "self_rated_ai_knowledge": 3,
-        "usability_rating": 5,
-        "helpfulness_rating": 4,
-        "perceived_hint_amount": 3,
+        "experiences": {"chat": True, "coding_assistance": False, "cli": False, "api": False},
+        "general_ratings": {"ai_usage_frequency": 4, "self_rated_ai_knowledge": 3, "system_usability": 5, "system_clarity": 4},
+        "material_ratings": None,
         "free_comment": "再テストギブアップ後アンケートの確認",
     }
     survey_key = f"survey-after-retest-give-up:{pid}"
@@ -1849,13 +1845,9 @@ def test_experiment_give_up_during_final_test_routes_to_survey_and_blocks_final_
         db.close()
 
     survey_payload = {
-        "ai_experience_level": 3,
-        "programming_experience_level": 2,
-        "llm_usage_level": 4,
-        "self_rated_ai_knowledge": 3,
-        "usability_rating": 5,
-        "helpfulness_rating": 4,
-        "perceived_hint_amount": 3,
+        "experiences": {"chat": True, "coding_assistance": False, "cli": False, "api": False},
+        "general_ratings": {"ai_usage_frequency": 4, "self_rated_ai_knowledge": 3, "system_usability": 5, "system_clarity": 4},
+        "material_ratings": None,
         "free_comment": "ギブアップ後アンケートの確認",
     }
     survey_key = f"survey-after-give-up:{pid}"
@@ -1987,16 +1979,12 @@ def test_survey_submission_saves_and_finishes_participant():
     assert score.json()["next_step"] == "survey"
 
     payload = {
-        "ai_experience_level": 3,
-        "programming_experience_level": 2,
-        "llm_usage_level": 4,
-        "self_rated_ai_knowledge": 3,
-        "usability_rating": 5,
-        "helpfulness_rating": 4,
-        "perceived_hint_amount": 3,
+        "experiences": {"chat": True, "coding_assistance": False, "cli": False, "api": False},
+        "general_ratings": {"ai_usage_frequency": 4, "self_rated_ai_knowledge": 3, "system_usability": 5, "system_clarity": 4},
+        "material_ratings": None,
         "free_comment": "仮アンケートの確認",
     }
-    missing_required_background = {key: value for key, value in payload.items() if key != "ai_experience_level"}
+    missing_required_background = {key: value for key, value in payload.items() if key != "experiences"}
     invalid = client.post(f"/api/participants/{pid}/survey", json=missing_required_background)
     assert invalid.status_code == 422
 
@@ -2018,14 +2006,15 @@ def test_survey_submission_saves_and_finishes_participant():
         assert participant.completion_reason == "completed"
         assert len(surveys) == 1
         assert surveys[0].phase == "posttest"
-        assert surveys[0].usability_rating == 5
+        assert surveys[0].usability_rating is None
+        assert surveys[0].responses_json["general_ratings"]["system_usability"] == 5
         assert surveys[0].free_comment == "仮アンケートの確認"
     finally:
         db.close()
 
     logs = client.get(f"/api/admin/participants/{pid}/logs")
     assert logs.status_code == 200, logs.text
-    assert logs.json()["surveys"][0]["helpfulness_rating"] == 4
+    assert logs.json()["surveys"][0]["responses"]["general_ratings"]["system_clarity"] == 4
     exported = client.get(f"/api/admin/participants/{pid}/logs_excel.csv")
     assert exported.status_code == 200, exported.text
     assert "post-experiment survey" in exported.text
@@ -2669,7 +2658,7 @@ def test_mock_tutoring_and_feedback_use_markdown_contract():
 
     turn = asyncio.run(backend.generate_tutoring_turn(payload))
     assert turn["tutor_message"].startswith("## マルチエージェント")
-    assert turn["tutor_message"].count("### ") == 3
+    assert turn["tutor_message"].count("### ") >= 1
     for field, evidence in turn["mandatory_elements"].items():
         if field != "type":
             assert evidence in turn["tutor_message"]
@@ -2725,10 +2714,10 @@ def test_rag_is_limited_by_topic_and_excludes_langgraph():
 def test_model_and_reasoning_settings_are_updated():
     settings = get_settings()
     assert settings.codex_model == "gpt-5.6-luna"
-    assert settings.codex_reasoning_effort == "medium"
+    assert settings.codex_reasoning_effort == "low"
     backend = CodexAppServerBackend()
     assert backend.settings.codex_model == "gpt-5.6-luna"
-    assert backend.settings.codex_reasoning_effort == "medium"
+    assert backend.settings.codex_reasoning_effort == "low"
 
 
 def test_admin_reasoning_effort_status_and_updates():
@@ -2736,7 +2725,8 @@ def test_admin_reasoning_effort_status_and_updates():
     try:
         status = client.get("/api/admin/ai/status")
         assert status.status_code == 200, status.text
-        assert status.json()["reasoning_effort"] == "medium"
+        assert status.json()["reasoning_effort"] == "low"
+        assert status.json()["study_settings_match"] is True
         assert status.json()["allowed_reasoning_efforts"] == ["low", "medium", "high"]
         assert status.json()["can_change_reasoning_effort"] is True
 
@@ -2744,6 +2734,7 @@ def test_admin_reasoning_effort_status_and_updates():
             response = client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": effort})
             assert response.status_code == 200, response.text
             assert response.json()["reasoning_effort"] == effort
+            assert response.json()["study_settings_match"] is (effort == "low")
 
         invalid = client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": "xhigh"})
         assert invalid.status_code == 422, invalid.text

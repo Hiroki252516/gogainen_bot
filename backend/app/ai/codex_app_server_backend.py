@@ -10,7 +10,7 @@ from typing import Any, Callable
 import websockets
 from app.ai.backend import strategy_for
 from app.ai.interaction_history import SHARED_QUESTION_ROUTE_VERSION, interaction_history_audit, project_model_payload
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 
 from app.core.config import get_settings
 from app.core.runtime_config import normalize_reasoning_effort
@@ -375,6 +375,7 @@ class CodexAppServerBackend:
             "prompt_contract_version": (audit_context or {}).get("prompt_contract_version"),
             "taxonomy_version": (audit_context or {}).get("taxonomy_version"),
             "experiment_spec_version": (audit_context or {}).get("experiment_spec_version"),
+            "protocol_id": (audit_context or {}).get("protocol_id"),
             "interaction_history": (audit_context or {}).get("interaction_history"),
             "question_route_version": (audit_context or {}).get("question_route_version"),
             "actual_ai_input": (audit_context or {}).get("actual_ai_input"),
@@ -500,6 +501,7 @@ class CodexAppServerBackend:
             attempt = retry_attempt if retry_attempt is not None else 1
         return {
             "experiment_spec_version": CURRENT_EXPERIMENT_SPEC_VERSION,
+            "protocol_id": CURRENT_PROTOCOL_ID,
             "interaction_history": interaction_history_audit(payload),
             "question_route_version": SHARED_QUESTION_ROUTE_VERSION,
             "actual_ai_input": project_model_payload(payload, proposed=payload.get("group_condition", "proposed") == "proposed", feedback=not generation),

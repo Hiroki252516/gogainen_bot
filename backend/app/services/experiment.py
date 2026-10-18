@@ -36,7 +36,9 @@ from app.ai.teaching_contract import (
     validate_tutoring_material_length,
 )
 from app.core.config import get_settings
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, assert_current_experiment, can_resume
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, assert_current_experiment, can_resume
+from app.services.research_protocol import SURVEY_VERSION, validate_survey_for_participant
+from app.services.hypothesis_metrics import participant_metrics, current_metrics, group_metrics, write_metrics_csv
 from app.core.runtime_config import current_reasoning_effort
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
@@ -236,7 +238,7 @@ def _misconception_teaching_guidance(misconception_type: str | None) -> str:
     return {
         "M1": "単一の誤った命題、正しい考え、反例、誤りの理由を教材のセクション本文へ含める。専用見出しや記述順序は要求しない。",
         "M3": "対象概念の誤カテゴリー、正カテゴリー、境界基準、近いカテゴリーとの比較を教材のセクション本文へ含める。専用見出しや記述順序は要求しない。",
-        "unknown": "誤概念を推測せず、基礎定義、主要構成要素、役割、最小限の判断基準、正例、非例を必ず教材本文へ含める。",
+        "unknown": "誤概念を推測せず、対象用語の意味や仕組みと、別事例への適用確認を教材本文に含める。",
     }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
 
 
@@ -672,6 +674,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         current_step="pretest",
         learning_content_version=CURRENT_LEARNING_CONTENT_VERSION,
         experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
+        protocol_id=CURRENT_PROTOCOL_ID,
         started_at=now(),
     )
     db.add(participant)
@@ -681,7 +684,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
 
 
 def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Save the temporary post-experiment survey and complete the participant flow."""
+    """Save the versioned questionnaire without reusing legacy five-point values."""
     participant = get_participant(db, participant_id, for_update=True)
     assert_current_experiment(participant)
     discard_unconsumed_prefetches(db, participant.id, reason="experiment_finished")
@@ -705,18 +708,13 @@ def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> 
 
     before_step = participant.current_step
     if existing is None:
+        responses = validate_survey_for_participant(db, participant, payload)
         existing = ParticipantSurvey(
             participant_id=participant.id,
             phase="posttest",
-            ai_experience_level=payload.get("ai_experience_level"),
-            programming_experience_level=payload.get("programming_experience_level"),
-            llm_usage_level=payload.get("llm_usage_level"),
-            self_rated_ai_knowledge=payload.get("self_rated_ai_knowledge"),
-            term_confidences=payload.get("term_confidences"),
-            usability_rating=payload.get("usability_rating"),
-            helpfulness_rating=payload.get("helpfulness_rating"),
-            perceived_hint_amount=payload.get("perceived_hint_amount"),
-            free_comment=payload.get("free_comment"),
+            survey_version=SURVEY_VERSION,
+            responses_json={k: v for k, v in responses.items() if k != "free_comment"},
+            free_comment=responses["free_comment"],
         )
         db.add(existing)
         db.flush()
@@ -1113,6 +1111,9 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
         **backend_payload,
         "reasoning_effort": reasoning_effort,
         "experiment_spec_version": CURRENT_EXPERIMENT_SPEC_VERSION,
+        "protocol_id": CURRENT_PROTOCOL_ID,
+        "model": get_settings().codex_model,
+        "study_settings_match": reasoning_effort == "low" and get_settings().codex_model == "gpt-5.6-luna",
         "question_route_version": SHARED_QUESTION_ROUTE_VERSION,
         "interaction_history_audit": interaction_history_audit(backend_payload),
         "input_projection": project_model_payload(backend_payload, proposed=backend_payload.get("group_condition", "proposed") == "proposed", feedback=purpose != "generate_tutoring_turn"),
@@ -2929,6 +2930,7 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         misconception_timeline_json=_misconception_timeline(attempts, _term_map(db)),
         learning_burden_json=_learning_burden(db, participant.id, attempts),
         condition_check_json=condition_check,
+        hypothesis_metrics_json=participant_metrics(db, participant),
         completed=participant.completed_at is not None and participant.completion_reason != "give_up",
     )
     db.add(summary)
@@ -2960,6 +2962,7 @@ def _latest_evaluation_source_at(db: Session, participant: Participant) -> datet
         (TermAssignment, TermAssignment.created_at),
         (RecurrenceEvent, RecurrenceEvent.created_at),
         (TutorSession, TutorSession.created_at),
+        (ParticipantSurvey, ParticipantSurvey.created_at),
     ]
     for model, timestamp_column in source_queries:
         value = db.query(func.max(timestamp_column)).filter(model.participant_id == participant.id).scalar()
@@ -3050,7 +3053,7 @@ def _group_misconception_transition_summary(
 
 
 def admin_summary(db: Session) -> dict[str, Any]:
-    participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION).all()
+    participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID, consent_checked=True).all()
     terms = _term_map(db)
     rows = []
     for group in ["control", "proposed"]:
@@ -3083,7 +3086,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 "misconception_transition_summary": _group_misconception_transition_summary(group_participants, latest_summaries, terms),
             }
         )
-    return {"groups": rows}
+    return {"groups": rows, "hypotheses": group_metrics(current_metrics(db))}
 
 
 EXPORTS = {
@@ -3207,6 +3210,7 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "grading_json": turn.grading_json,
         "response_time_sec": turn.response_time_sec if turn.response_time_sec is not None else grading.get("response_time_sec"),
         "question_shown_at": _iso(turn.question_shown_at),
+        "material_viewed_at": _iso(turn.material_viewed_at),
         "answered_at": _iso(turn.answered_at),
         "created_at": _iso(turn.created_at),
     }
@@ -3314,6 +3318,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "participant_id": row.id,
                 "display_code": row.display_code,
                 "experiment_spec_version": row.experiment_spec_version,
+                "protocol_id": row.protocol_id,
                 "can_resume": can_resume(row),
                 "group_condition": row.group_condition,
                 "current_step": row.current_step,
@@ -3387,6 +3392,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "misconception_timeline": row.misconception_timeline_json,
                 "learning_burden": row.learning_burden_json,
                 "condition_check": row.condition_check_json,
+                "hypothesis_metrics": row.hypothesis_metrics_json,
                 "completed": row.completed,
                 "completion_reason": participant_by_id.get(row.participant_id).completion_reason if participant_by_id.get(row.participant_id) else None,
                 "created_at": _iso(row.created_at),
@@ -3432,6 +3438,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "group_condition": session.group_condition,
             "started_at": _iso(session.started_at),
             "ended_at": _iso(session.ended_at),
+            "material_viewed_at": _iso(min((turn.material_viewed_at for turn in turns_by_session.get(session.id, []) if turn.material_viewed_at is not None), default=None)),
             "prefetch_state": _prefetch_state(session),
             "prefetch_source_session_id": session.prefetch_source_session_id,
             "prefetch_requested_at": _iso(session.prefetch_requested_at),
@@ -3451,6 +3458,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "participant_id": participant.id,
             "display_code": participant.display_code,
             "experiment_spec_version": participant.experiment_spec_version,
+            "protocol_id": participant.protocol_id,
             "can_resume": can_resume(participant),
             "group_condition": participant.group_condition,
             "assignment_method": participant.assignment_method,
@@ -3539,6 +3547,8 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
                 "participant_id": row.participant_id,
                 "phase": row.phase,
                 "ai_experience_level": row.ai_experience_level,
+                "survey_version": row.survey_version,
+                "responses": row.responses_json,
                 "programming_experience_level": row.programming_experience_level,
                 "llm_usage_level": row.llm_usage_level,
                 "self_rated_ai_knowledge": row.self_rated_ai_knowledge,
@@ -3566,6 +3576,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "misconception_timeline": summary.misconception_timeline_json,
             "learning_burden": summary.learning_burden_json,
             "condition_check": summary.condition_check_json,
+            "hypothesis_metrics": summary.hypothesis_metrics_json,
             "completed": summary.completed,
             "completion_reason": participant.completion_reason,
             "created_at": _iso(summary.created_at),
@@ -3602,6 +3613,7 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
     participant = logs["participant"]
     rows: list[dict[str, Any]] = []
     base = {"participant_id": participant["participant_id"], "display_code": participant["display_code"]}
+    rows.append({**base, "record_type": "participant", "phase": "registration", "event_time": participant.get("created_at"), "summary": "participant protocol and completion metadata", "value_json": _csv_value(participant)})
     for answer in logs["answer_history"]:
         if answer["source_type"] == "test_attempt":
             summary = f"{answer['term_label']} {answer['phase']} correct={answer['is_correct']} m={answer['misconception_type']}"
@@ -3668,6 +3680,9 @@ def export_overview_logs_excel_csv(db: Session) -> Path:
 
 
 def export_csv(db: Session, name: str) -> Path:
+    if name in {"hypothesis_metrics", "hypothesis_group_summary"}:
+        path = Path(get_settings().export_dir) / f"{name}.csv"
+        return write_metrics_csv(path, current_metrics(db), grouped=name == "hypothesis_group_summary")
     if name not in EXPORTS:
         raise HTTPException(status_code=404, detail="unknown export")
     model, columns = EXPORTS[name]

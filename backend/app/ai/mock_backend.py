@@ -64,8 +64,8 @@ class MockAIBackend:
                 or "構成要素と役割の関係を確認します。"
             )
             contrast = (target or {}).get("contrast_example") or mandatory_elements.get("counterexample") or mandatory_elements.get("contrast_example")
+            message += f"\n- 仕組み: {mechanism}"
             if mandatory_type in {"M1", "M3"}:
-                message += f"\n- 仕組み: {mechanism}"
                 if mandatory_type == "M3" and (target or {}).get("corrected_claim"):
                     message += f"\n- 正しい説明: {(target or {})['corrected_claim']}"
             teaching_contract = mock_teaching_contract(
@@ -149,9 +149,7 @@ def _mock_sections(label: str, misconception_type: str) -> list[tuple[str, tuple
             ("使い分けの基準を確かめる", ("contrast_example", "boundary_criterion")),
         ],
         "unknown": [
-            (f"{label}の基本", ("definition", "role")),
-            ("構成と判断の手掛かり", ("components", "decision_criterion")),
-            ("当てはまる例と当てはまらない例", ("positive_example", "non_example")),
+            (f"{label}の意味と仕組み", ("definition",)),
         ],
     }[misconception_type]
 

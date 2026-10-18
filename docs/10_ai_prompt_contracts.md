@@ -1,12 +1,12 @@
 # AI指示の目標と現行契約
 
-計画書を目標仕様とし、実装との差分は [D01〜D04/Q10](20_experiment_plan_alignment.md) で管理する。本書の目標プロンプトを、そのまま現行の実送信原文と呼ばない。今回、AI出力Schema・検査・指示文・版は変更していない。
+Wordと承認された実装判断を[20](20_experiment_plan_alignment.md)に記録する。6.7の共通・統制群指示を実装し、unknownの証拠Schema・taxonomy・検査・Mockも更新した。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
 
 ## 目標プロンプトと現行原文
 
 ### 計画書の指示文の抜粋
 
-以下は計画書6.7に掲載された目標の文面の抜粋。完全な送信promptではなく、共通ルール・個別入力・出力Schema等と組み合わせる。まだコードへ反映していない。
+以下は計画書6.7の抜粋で、現行指示に反映している。完全な送信promptではなく、共通ルール・個別入力・出力Schema等と組み合わせる。
 
 共通教材指示（6.7.1）:
 
@@ -33,24 +33,24 @@ unknownは意味や仕組みを示す。
 
 指定方略はM1ならbelief_revision、M3ならcategory_reorientation、unknownならfoundational_explanation。backendが選んだ具体的な値を末尾の固定指示と出力Schemaへ入れる。「backend」はJSONキーではなくプログラム側を指す語であり、その語だけからLLMが内部状態を読めるわけではない。
 
-M1/M3の対象主張・訂正・仕組み・対比例、別事例への適用確認と本文証拠という教授要件は計画書に残る。unknownの6項目をどう見直すかは未対応で、新しいSchemaや検査項目はQ10の確認後に決める。意味や仕組みという短い記述へ置換済みとはしない。
+M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証拠は維持する。unknownは旧6項目を撤廃し、mandatory_elementsはtype/definitionのみ、既存teaching_contractのmechanism_explanation/transfer_checkと合わせて3点の本文証拠を要求する。unknownの対象ID/訂正/対比例はnullまたは空配列、refutation_modeはnone。
 
 ### 現行コードの原文と参照元
 
-下表は目標文面ではなく、現行コードの指示原文。パスはリポジトリからの相対位置で、行番号は [照合HEAD](20_experiment_plan_alignment.md#文書の位置づけ) のもの。
+下表は現行コードに反映した指示原文の抜粋。パスはリポジトリからの相対位置であり、過去の照合HEADの行番号とは区別する。
 
 | 場所 | 現行原文 |
 | --- | --- |
-| backend/app/ai/tutoring_prompt.py:87 | 教材には定義、仕組みまたは役割、具体例、注意点を含める。一般的な誤解を正確に説明・訂正してよい。 |
-| backend/app/ai/tutoring_prompt.py:148 | 通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使って説明を作る。回答から自然に誤りを見つけて訂正してよいが、入力されていないbackendの誤概念診断、修正対象、タイプ別教授方針を与えられた事実として扱わない。 |
-| backend/app/ai/tutoring_prompt.py:149 | general_explanation は、backendの明示的な誤概念診断・タイプ別教授方針によらず、共通履歴を利用して定義・仕組み・具体例・注意点を説明する通常の教授方略を意味する。 |
-| backend/app/services/experiment.py:239 | 誤概念を推測せず、基礎定義、主要構成要素、役割、最小限の判断基準、正例、非例を必ず教材本文へ含める。 |
+| backend/app/ai/tutoring_prompt.py | 教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。 |
+| backend/app/ai/tutoring_prompt.py | 通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。 |
+| backend/app/ai/tutoring_prompt.py | general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。 |
+| backend/app/services/experiment.py | 誤概念を推測せず、対象用語の意味や仕組みと、別事例への適用確認を教材本文に含める。 |
 
-原文全体は [tutoring_prompt.py](../backend/app/ai/tutoring_prompt.py) を参照する。共通ラッパーは35行目、教材指示は79行目以降、タイプ別指示は152〜159行目。unknownの必須項目は [mandatory_elements.py](../backend/app/ai/mandatory_elements.py) の23〜30行目にある。入力だけでなく生成文章にも制約を指示する一方、生成文の意味的な正しさを機械検査したと扱わない。
+原文全体は[tutoring_prompt.py](../backend/app/ai/tutoring_prompt.py)のcompose_structured_prompt/build_tutoring_prompt、unknownの必須項目は[mandatory_elements.py](../backend/app/ai/mandatory_elements.py)を参照する。生成文の意味的な正しさまで機械検査したとは扱わない。
 
 ## 現行契約（実行版3）
 
-実験仕様版は3、契約版は `tutoring-teaching-contract-v5-dynamic-sections`、taxonomy版は `m1-m3-unknown-v2`。共通履歴はinteraction-history-v1、共通出題規則はshared-diagnosis-route-v1のまま。
+実験仕様版3、新protocol_idはexperiment-plan-2026-10-18-v1。契約版はtutoring-teaching-contract-v6-plan-aligned、taxonomy版はm1-m3-unknown-v3。共通履歴interaction-history-v1、出題規則shared-diagnosis-route-v1は維持。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 
@@ -90,7 +90,7 @@ M1は反駁、M3はカテゴリー比較、unknownは基礎説明を生成する
 
 正しいclaim_idを返し、本文とJSONの証拠文が一致していても、その証拠文が研究者確認済みの訂正内容を正しく説明しているとは限らない。現在は訂正文の意味的な同値性や、証拠文が反例として成立するかを検査しない。生成検証のvalidは機械検査に合格したことを示し、教材内容全体が正しいとの認定ではない。
 
-mandatory_elementsとteaching_contractの内部キー・対象IDの条件・型別フィールドは維持する。証拠文はどの節でもよいが、見出しを除く実際の節本文に存在する必要がある。複数要素が同じ節に存在してよい。JSONだけの証拠、見出しだけの証拠、空フィールド、本文に同じ証拠文字列がない要約は拒否し、先頭文や任意の適用らしい行で補正しない。構造・証拠一致・契約・長さの検査は同じ最大3試行内で行う。統制群には型別必須要素や契約を要求せず、本文構造・文字数・禁止文字列・指定方略の検査を共通に適用する。
+M1/M3の内部キーとteaching_contractを維持し、unknownのmandatory_elementsだけを上記のtype/definitionへ変更する。証拠文は見出しを除く実際の節本文に存在する必要があり、複数要素が同じ節でよい。JSONだけ・見出しだけ・空欄・本文と不一致の証拠は拒否し、先頭文等で補正しない。構造・証拠・契約・長さを同じ最大3試行内で検査する。統制群に型別契約を要求しない。
 
 正答要約/誤答解説も共通入力を使い、現在の問題・選択内容・表示済み教材を追加する。不正解の現在選択には従来どおり選ばれた誤答本文だけを使う。履歴は現在回答より前の確定分とし、二重掲載しない。proposedだけ診断と教授方針を追加し、固定採点をAI解説で変えない。
 

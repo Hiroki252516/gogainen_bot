@@ -1,16 +1,16 @@
 # 現行データと履歴互換
 
-## 目標の収集内容と未対応
+## 収集内容と版付き保存
 
 計画書では参加者・群・用語・フェーズ/回次、問題と選択内容、全体正誤とunknown区分、誤答タイプ・再発、時刻/時間、段階・方略、完了/中断、AI実行状態、アンケートを収集する。正誤のboolとunknown分類は別の記録であり、保存型を文書だけで三値へ変更しない。
 
-目標のアンケートは経験4項目の有無、1〜10段階の自己評価・操作評価・教材評価6項目、自由記述。現行ParticipantSurveyは5段階の仮項目用で、新項目の入力・保存・CSV・集計は未対応。新列名・JSON形式・尺度変換は今回定義/実装せず、既存値を保全する。[D05/Q05](20_experiment_plan_alignment.md) を参照する。
+現行アンケートは経験4有無、一般4/教材6の1〜10段階、必須自由記述。ParticipantSurvey.survey_versionとresponses_jsonへ版付きで保存し、旧5段階列は新規入力に使わない。定義は[12](12_evaluation_metrics.md)。
 
 ## 現行の保存契約
 
-モデルの正本は `backend/app/models/__init__.py`。既存の `participants.experiment_spec_version INTEGER NULL` を利用し、今回DB列やテーブルを追加しない。
+モデルの正本は `backend/app/models/__init__.py`。実験仕様版3を維持し、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。
 
-新規参加者だけ3を保存し、既存参加者のNULL・1・2・未対応版は変更しない。旧試用は進行・採点・完了更新・評価再計算を禁止する。起動時補修SQLは現行版定数へパラメーターで限定し、旧記録を変更しない。
+新規参加者だけ仕様版3とexperiment-plan-2026-10-18-v1を保存する。既存版3を含む異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 
@@ -27,7 +27,7 @@ interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み
 
 章立て監査は既存のAICallLog.response_payload.generation_validation.material_structureとTutorTurn.diagnosis_json.material_structure_validationに保存する。見出し・順序・節数・本文文字数・必須証拠配置（節番号）・検証結果を含み、DB列追加はしない。重複見出しは節番号で区別する。旧教材と旧監査JSONは再解析・書換えせず保持する。
 
-本文からコピーした検査用文章はTutorTurn.diagnosis_json.mandatory_elementsのwrong_belief（M1）/wrong_category（M3）等と、AICallLog.response_payload.mandatory_elementsへ保存する。教授方略名や事前指定する対象そのものとは別の、AIが返す出力項目であり参加者へ表示しない。unknownの現行6項目と将来の証拠設計は区別する。
+本文証拠はTutorTurn.diagnosis_jsonとAICallLog.response_payloadへ保存し、参加者に表示しない。unknownはmandatory_elements.definition、teaching_contract.mechanism_explanation/transfer_checkを検査する。旧6項目の過去JSONは書き換えない。
 
 旧列は物理削除しない。ORM名を `legacy_*` にして履歴読出しへ隔離する。新規レコードの旧NOT NULL列には `not_applicable`、0、falseなどの中立値を設定するだけで、教授・採点には参照しない。過去値は保持する。
 

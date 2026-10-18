@@ -13,7 +13,7 @@ from app.ai.interaction_history import COMMON_INPUT_KEYS, INTERACTION_HISTORY_VE
 from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import taxonomy_for_prompt
 from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.db import session as database
 from app.db.session import SessionLocal
 from app.main import app
@@ -213,7 +213,7 @@ def test_startup_repairs_only_version_three_and_preserves_old_trials(tmp_path, m
         seed_database(db)
         question = db.query(Question).filter_by(phase="pretest").first()
         old = Participant(display_code="OLD", group_condition="control", experiment_spec_version=legacy_version, current_step="finish", completed_at=datetime(2026, 10, 1))
-        current = Participant(display_code="CURRENT", group_condition="control", experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, current_step="finish", completed_at=datetime(2026, 10, 1))
+        current = Participant(display_code="CURRENT", group_condition="control", experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID, current_step="finish", completed_at=datetime(2026, 10, 1))
         db.add_all([old, current])
         db.flush()
         for participant in (old, current):

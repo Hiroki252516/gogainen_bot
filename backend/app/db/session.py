@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.models import Base
 
 
@@ -31,6 +31,11 @@ def _ensure_lightweight_schema_updates() -> None:
             ("completion_reason", "TEXT"),
             ("learning_content_version", "INTEGER"),
             ("experiment_spec_version", "INTEGER"),
+            ("protocol_id", "VARCHAR(80)"),
+        ],
+        "participant_surveys": [
+            ("survey_version", "VARCHAR(80)"),
+            ("responses_json", json_type),
         ],
         "attempts": [
             ("test_round", "TEXT"),
@@ -41,6 +46,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("selected_option_ids", json_type),
         ],
         "tutor_turns": [
+            ("material_viewed_at", datetime_type),
             ("question_shown_at", datetime_type),
             ("answered_at", datetime_type),
             ("response_time_sec", "FLOAT"),
@@ -57,6 +63,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("prefetch_error_code", "VARCHAR(80)"),
         ],
         "evaluation_summaries": [
+            ("hypothesis_metrics_json", json_type),
             ("score_timeline_json", json_type),
             ("misconception_timeline_json", json_type),
             ("learning_burden_json", json_type),
@@ -82,8 +89,8 @@ def _ensure_lightweight_schema_updates() -> None:
 def _backfill_attempt_test_rounds(connection) -> None:
     """Populate round names for attempts created before the test_round column existed."""
     rows = connection.execute(
-        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE (test_round IS NULL OR test_round = '') AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = :spec_version)"),
-        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
+        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE (test_round IS NULL OR test_round = '') AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = :spec_version AND protocol_id = :protocol_id)"),
+        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION, "protocol_id": CURRENT_PROTOCOL_ID},
     ).mappings().all()
     if not rows:
         return
@@ -133,6 +140,7 @@ def _backfill_completion_reasons(connection) -> None:
             END
             WHERE participants.current_step = 'finish'
               AND participants.experiment_spec_version = :spec_version
+              AND participants.protocol_id = :protocol_id
               AND participants.completed_at IS NOT NULL
               AND (
                   participants.completion_reason IS NULL
@@ -147,7 +155,7 @@ def _backfill_completion_reasons(connection) -> None:
               )
             """
         ),
-        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
+        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION, "protocol_id": CURRENT_PROTOCOL_ID},
     )
 
 
@@ -166,9 +174,10 @@ def _backfill_evaluation_completion_flags(connection) -> None:
                 FROM participants
                 WHERE participants.id = summaries.participant_id
                   AND participants.experiment_spec_version = :spec_version
+                  AND participants.protocol_id = :protocol_id
                 """
             ),
-            {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
+            {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION, "protocol_id": CURRENT_PROTOCOL_ID},
         )
         return
 
@@ -187,16 +196,18 @@ def _backfill_evaluation_completion_flags(connection) -> None:
                 FROM participants
                 WHERE participants.id = evaluation_summaries.participant_id
                   AND participants.experiment_spec_version = :spec_version
+                  AND participants.protocol_id = :protocol_id
             )
             WHERE EXISTS (
                 SELECT 1
                 FROM participants
                 WHERE participants.id = evaluation_summaries.participant_id
                   AND participants.experiment_spec_version = :spec_version
+                  AND participants.protocol_id = :protocol_id
             )
             """
         ),
-        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
+        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION, "protocol_id": CURRENT_PROTOCOL_ID},
     )
 
 
@@ -208,10 +219,10 @@ def _backfill_tutor_prefetch_states(connection) -> None:
             UPDATE tutor_sessions
             SET prefetch_state = 'none'
             WHERE (prefetch_state IS NULL OR prefetch_state = '')
-              AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = :spec_version)
+              AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = :spec_version AND protocol_id = :protocol_id)
             """
         ),
-        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION},
+        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION, "protocol_id": CURRENT_PROTOCOL_ID},
     )
 
 

@@ -1,6 +1,6 @@
 # 分類と教授方針
 
-目標は実験計画書に沿うM1/M3/unknown。現行taxonomy版はm1-m3-unknown-v2、実装は [misconception_taxonomy.py](../backend/app/ai/misconception_taxonomy.py)。今回の文書更新で実行時の定義・プロンプト・版を変更しない。
+実験計画書と承認された実装計画に沿うM1/M3/unknown。現行taxonomy版はm1-m3-unknown-v3、実装は[misconception_taxonomy.py](../backend/app/ai/misconception_taxonomy.py)。
 
 | 分類 | 選択記録としての意味 | 方略 | 目標の教授内容 |
 | --- | --- | --- | --- |
@@ -9,7 +9,7 @@
 | unknown | J単独選択など、特定の誤った主張を修正対象に置けない回答 | foundational_explanation | 特定の誤概念を仮定せず意味や仕組みを説明する |
 | control | 共通履歴による通常説明。backendの診断・タイプ別指針は受け取らない | general_explanation | 共通情報から学習対象を説明し、自然な誤り訂正も許容する |
 
-現行unknownのtaxonomyは知識不足と表現し、教材では定義・構成要素・役割・判断基準・正例・非例の6項目を要求する。目標への変更は [未対応D03](20_experiment_plan_alignment.md#現行実装との差分)。unknownは誤概念の不存在や知識欠如の確定診断ではない。
+unknownの旧6項目必須指定は撤廃した。定義はmandatory_elements.definition、仕組み・適用確認は既存teaching_contractのmechanism_explanation/transfer_checkから本文内出現を検査する。unknownは誤概念の不存在や知識欠如の確定診断ではない。
 
 ## 固定判定と教授への利用
 

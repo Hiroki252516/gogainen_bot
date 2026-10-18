@@ -2,7 +2,7 @@
 
 ## 計画書に対する位置づけ
 
-目標仕様は [計画書対応表](20_experiment_plan_alignment.md)。以下の構成図・データフロー・設定表は現行実装または明記した将来案を示す。新6仮説の分析、unknownの指示変更、統制群の文言簡略化、新アンケートは未対応を区別する。API・DB・サービスを今回変更しない。
+採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。新6仮説はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧記録保護は仕様版とprotocol_idで限定する。
 
 ## 現行MVPの実装
 
@@ -198,7 +198,7 @@ services/interaction_history.pyが同じ参加者・用語の採点済みAttempt
 
 同一セッションの次教材では、固定採点した現在回答と時刻を履歴へ投影してAI呼出しを先行する。回答確定後の同期履歴と同じ入力になり、解説失敗時は公開しない。履歴からAI解説を除き、生成教材への過去問題/回答prefix追記をしない。
 
-履歴の版・件数・SHA-256、出題規則版、群別追加情報、実際の入力投影は既存JSONで監査する。DB列・CSV固定ヘッダ・参加者API形は変えない。NULL・仕様版1/2・未対応版は閲覧専用にし、新規版3だけを進行・集計する。
+履歴の版・件数・SHA-256、出題規則版、群別追加情報、入力投影を既存JSONで監査する。統合CSV固定ヘッダを維持し、新protocol_id・アンケート・表示時刻・指標のnullable列を追加する。進行・集計・補修は版3＋現行protocol_idだけに限定する。
 
 教材章立ては両群ともAI生成し、material_structureでMarkdownの見出しと節本文を解析する。実験群の必須教授証拠は任意の節本文で検証する。章立て・証拠配置は既存JSONへ記録し、固定見出しからの自動補正はしない。
 
@@ -237,7 +237,7 @@ MVPでは耐久キューを導入しない。#97の後続用語の先行教材�
 | `CODEX_APP_SERVER_CWD` | `/tmp` | app-server threadの作業ディレクトリ |
 | `CODEX_TURN_TIMEOUT_SEC` | `120` | AI応答タイムアウト |
 | `CODEX_MODEL` | `gpt-5.6-luna` | Codex app-serverへ渡すモデル |
-| `CODEX_REASONING_EFFORT` | `medium` | 現行既定値。計画書目標はlowであり切替は未実施 |
+| `CODEX_REASONING_EFFORT` | `low` | 現行既定値。管理上書き不一致を警告・監査 |
 | `RAG_BASE_DIR` | `./rag_agent_knowledge_base` | read-only RAG資産のルート |
 | `MAX_LEARNING_TARGETS` | `3` | 学習対象数の上限。現行seedは3用語 |
 | `MAX_TURNS_PER_TERM` | `3` | 1用語の回答挑戦上限。不正解が上限に達したら未達のまま次用語へ進む |

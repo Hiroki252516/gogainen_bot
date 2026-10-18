@@ -6,10 +6,14 @@ from fastapi import HTTPException
 
 
 CURRENT_EXPERIMENT_SPEC_VERSION = 3
+CURRENT_PROTOCOL_ID = "experiment-plan-2026-10-18-v1"
 
 
 def can_resume(participant: Any) -> bool:
-    return participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
+    return (
+        participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
+        and getattr(participant, "protocol_id", None) == CURRENT_PROTOCOL_ID
+    )
 
 
 def assert_current_experiment(participant: Any) -> None:
