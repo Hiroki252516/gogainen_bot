@@ -1,5 +1,9 @@
 # 05. System Architecture
 
+## 計画書に対する位置づけ
+
+目標仕様は [計画書対応表](20_experiment_plan_alignment.md)。以下の構成図・データフロー・設定表は現行実装または明記した将来案を示す。新6仮説の分析、unknownの指示変更、統制群の文言簡略化、新アンケートは未対応を区別する。API・DB・サービスを今回変更しない。
+
 ## 現行MVPの実装
 
 現行コードは、FastAPIの単一backendサービスとNext.js frontendを中心に構成される。実験フロー、問題seed、学習セッション、評価再計算は主に `backend/app/services/experiment.py` に実装され、AI呼び出しは `AIBackend` 経由で `CodexAppServerBackend` または明示指定時の `MockAIBackend` が処理する。Docker Composeではbackend、frontend、PostgreSQLを起動し、ローカルの直接起動ではSQLiteを使用できる。
@@ -233,7 +237,7 @@ MVPでは耐久キューを導入しない。#97の後続用語の先行教材�
 | `CODEX_APP_SERVER_CWD` | `/tmp` | app-server threadの作業ディレクトリ |
 | `CODEX_TURN_TIMEOUT_SEC` | `120` | AI応答タイムアウト |
 | `CODEX_MODEL` | `gpt-5.6-luna` | Codex app-serverへ渡すモデル |
-| `CODEX_REASONING_EFFORT` | `medium` | turn/startのreasoning effort |
+| `CODEX_REASONING_EFFORT` | `medium` | 現行既定値。計画書目標はlowであり切替は未実施 |
 | `RAG_BASE_DIR` | `./rag_agent_knowledge_base` | read-only RAG資産のルート |
 | `MAX_LEARNING_TARGETS` | `3` | 学習対象数の上限。現行seedは3用語 |
 | `MAX_TURNS_PER_TERM` | `3` | 1用語の回答挑戦上限。不正解が上限に達したら未達のまま次用語へ進む |
