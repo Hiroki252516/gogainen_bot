@@ -176,10 +176,12 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
         assert trial_snapshot(db, pid) == before
     with isolated.begin() as connection:
         connection.execute(text("ALTER TABLE participants DROP COLUMN experiment_spec_version"))
+        connection.execute(text("ALTER TABLE participants DROP COLUMN option_order_mode"))
     database.init_db()
     database.init_db()
     with Session(isolated) as db:
         assert db.get(Participant, pid).experiment_spec_version is None
+        assert db.get(Participant, pid).option_order_mode is None
         assert trial_snapshot(db, pid) == before
     isolated.dispose()
 

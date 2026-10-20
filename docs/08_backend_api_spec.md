@@ -30,6 +30,8 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 | 教材表示記録 | POST `/api/tutor-turns/{id}/material-view` |
 | 6仮説の群別集計 | GET `/api/admin/evaluation-summary` のhypotheses |
 | 6仮説CSV | GET `/api/admin/export/hypothesis_metrics.csv`, `/hypothesis_group_summary.csv` |
+| 選択肢配置設定の取得 | GET `/api/admin/option-order` |
+| 選択肢配置設定の更新 | PUT `/api/admin/option-order` (`mode`: `debug_fixed` または `randomized`) |
 | 管理者ログ | GET `/api/admin/participants/{id}/logs`, `/logs.csv`, `/logs_excel.csv` |
 | 評価再計算 | POST `/api/participants/{id}/evaluation-summary/recalculate` |
 
@@ -38,3 +40,7 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 NULL・版1/2・未対応版・旧protocol_idの版3は、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。新規版3＋現行protocol_idのみcan_resume=true。
 
 参加者の出題APIに正答や分類メタデータを公開しない。回答後の結果確認では問題・選択内容・正誤を返す。Idempotency-Keyの再送、回答済みロックは維持する。旧試用の管理者閲覧・CSVは許可し、再計算は拒否する。
+
+選択肢配置はRuntimeSettingの単一行で管理する。未設定時は `debug_fixed`。管理APIのPUTで設定を保存し、GETは現在値と `applies_to=new_participants_only` を返す。新規参加者には開始時のモードを保存し、既存参加者のnull値は `debug_fixed` として扱う。`randomized` は問題バンクごとの固定・均衡配置で、同一問題は群や参加者をまたいで同じラベル・順序となる。採点は表示ラベルではなく選択肢IDと内部メタデータで行う。画面向け選択肢に追加する `exclusive` は「わからない」の単独選択を扱うための情報で、正誤やM1/M3分類は含まない。
+
+ランダム配置の学習問題で送る `option_id` は、表示済みのTutorTurnスナップショットに保存するランダムIDであり、元の選択肢ラベルや判定役割を符号化しない。回答時はそのスナップショットを内部選択肢へ照合する。設問再取得・送信再試行では保存済みTutorTurnを返すため、同じ表示に対するIDは維持される。問題の表示ラベルと順序自体は問題バンクから決定論的に生成する。

@@ -73,6 +73,12 @@ from app.models import (
 from app.services.idempotency import idempotency_error, run_idempotent
 from app.services.legacy_logs import legacy_fields, legacy_selected_option_body, legacy_turn_answer_rows
 from app.services.interaction_history import build_interaction_history
+from app.services.option_order import (
+    assessment_bank_index,
+    current_option_order_mode,
+    learning_bank_index,
+    present_options,
+)
 from app.services.tutor_prefetch import PrefetchHandle
 
 
@@ -142,8 +148,19 @@ def _learning_question_spec(
         raise HTTPException(status_code=400, detail="fixed learning question not found") from exc
 
 
-def _public_learning_options(spec: dict[str, Any]) -> list[dict[str, str]]:
-    return [{"option_id": option["option_id"], "label": option["label"], "body": option["body"]} for option in spec["options"]]
+def _public_learning_options(
+    spec: dict[str, Any],
+    participant: Participant,
+    term_slug: str,
+    learning_stage: str,
+    variant_index: int,
+) -> list[dict[str, Any]]:
+    return present_options(
+        spec["options"],
+        mode=participant.option_order_mode,
+        bank="learning",
+        item_index=learning_bank_index(term_slug, learning_stage, variant_index),
+    )
 
 
 def _selection_constraints(question_type: str | None, option_count: int) -> dict[str, Any]:
@@ -158,11 +175,27 @@ def _learning_option_meta(spec: dict[str, Any], option_id: str | None) -> dict[s
     return next((option for option in spec["options"] if option["option_id"] == option_id), None)
 
 
-def _selected_learning_options(spec: dict[str, Any], selected_option_ids: list[str] | None) -> list[dict[str, Any]]:
+def _selected_learning_options(
+    spec: dict[str, Any],
+    selected_option_ids: list[str] | None,
+    displayed_options: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     ids = selected_option_ids or []
     if len(ids) != len(set(ids)):
         raise HTTPException(status_code=400, detail="duplicate selected options")
-    options = [_learning_option_meta(spec, option_id) for option_id in ids]
+    if displayed_options:
+        displayed_by_id = {
+            str(option.get("option_id")): option
+            for option in displayed_options
+            if isinstance(option, dict) and option.get("option_id")
+        }
+        spec_by_body = {str(option["body"]): option for option in spec["options"]}
+        selected_displays = [displayed_by_id.get(str(option_id)) for option_id in ids]
+        if any(option is None for option in selected_displays):
+            raise HTTPException(status_code=400, detail="invalid selected options")
+        options = [spec_by_body.get(str(option["body"])) for option in selected_displays]
+    else:
+        options = [_learning_option_meta(spec, option_id) for option_id in ids]
     if any(option is None for option in options):
         raise HTTPException(status_code=400, detail="invalid selected options")
     return options
@@ -172,21 +205,18 @@ def _selected_labels(options: list[dict[str, Any]]) -> str:
     return " / ".join(option["label"] for option in options)
 
 
-def _option_label(option: Any) -> str | None:
-    return option.option_label if hasattr(option, "option_label") else option.get("label")
-
-
 def _option_misconception(option: Any) -> str | None:
     return option.misconception_type if hasattr(option, "misconception_type") else option.get("misconception_type")
 
 
-def _validate_multi_select_labels(labels: set[str], selected_count: int) -> None:
-    if labels == {"J"} and selected_count == 1:
+def _validate_multi_select_options(options: list[Any], selected_count: int) -> None:
+    unknown_count = sum(_option_misconception(option) == "unknown" for option in options)
+    if unknown_count == 1 and selected_count == 1:
         return
-    if "J" in labels:
+    if unknown_count:
         raise HTTPException(status_code=400, detail="unknown option cannot be combined with other options")
-    if not labels.issubset(set("ABCDEFGHI")) or selected_count != 3 or len(labels) != selected_count:
-        raise HTTPException(status_code=400, detail="select exactly three options from A-I or only J")
+    if selected_count != 3 or len(options) != selected_count:
+        raise HTTPException(status_code=400, detail="select exactly three options or only the unknown option")
 
 
 def _option_is_correct(option: Any) -> bool:
@@ -675,6 +705,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         learning_content_version=CURRENT_LEARNING_CONTENT_VERSION,
         experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
         protocol_id=CURRENT_PROTOCOL_ID,
+        option_order_mode=current_option_order_mode(db),
         started_at=now(),
     )
     db.add(participant)
@@ -869,9 +900,21 @@ def _question_for_phase_variant(
     return next((question for question in candidates if question.variant_key == expected_key), candidates[0])
 
 
-def _displayed_options(db: Session, participant: Participant, question: Question) -> list[dict[str, str]]:
+def _displayed_options(db: Session, participant: Participant, question: Question) -> list[dict[str, Any]]:
     options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id, QuestionOption.option_label.in_(list("ABCDEFGHIJ"))).order_by(QuestionOption.default_order).all()
-    return [{"option_id": option.id, "label": option.option_label, "body": option.body} for option in options]
+    term = db.get(Term, question.term_id)
+    if term is None:
+        raise HTTPException(status_code=404, detail="question term not found")
+    try:
+        item_index = assessment_bank_index(term.slug, question.phase, question.variant_key)
+    except (ValueError, IndexError):
+        item_index = 0
+    return present_options(
+        options,
+        mode=participant.option_order_mode,
+        bank="assessment",
+        item_index=item_index,
+    )
 
 
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
@@ -1031,8 +1074,7 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
     if len(selected_for_validation) != len(selected_option_ids):
         raise HTTPException(status_code=400, detail="invalid selected options")
     if constraints["selection_mode"] == "multiple":
-        selected_labels = {option.option_label for option in selected_for_validation}
-        _validate_multi_select_labels(selected_labels, len(selected_option_ids))
+        _validate_multi_select_options(selected_for_validation, len(selected_option_ids))
     attempt_index = (
         db.query(func.count(Attempt.id))
         .filter_by(participant_id=participant.id, question_id=question.id, phase=phase)
@@ -1672,7 +1714,13 @@ def _tutoring_generation_context(
     practice_question = {
         "body": spec["body"],
         "question_type": spec["question_type"],
-        "options": _public_learning_options(spec),
+        "options": _public_learning_options(
+            spec,
+            participant,
+            term.slug,
+            position["learning_stage"],
+            learning_variant_index,
+        ),
         "selection_mode": spec.get("selection_mode", "multiple"),
         "min_selections": spec.get("min_selections", 3),
         "max_selections": spec.get("max_selections", 3),
@@ -2381,10 +2429,22 @@ async def respond_tutor_turn(
         learning_stage,
         variant_index,
     )
-    selected_options = _selected_learning_options(spec, payload.get("selected_option_ids"))
+    selected_options = _selected_learning_options(
+        spec,
+        payload.get("selected_option_ids"),
+        (turn.practice_question_json or {}).get("options"),
+    )
     if spec.get("selection_mode") == "multiple":
-        _validate_multi_select_labels({_option_label(option) for option in selected_options}, len(selected_options))
-    result = _fixed_feedback_for_options(selected_options, spec)
+        _validate_multi_select_options(selected_options, len(selected_options))
+    displayed_labels = {
+        option["body"]: option["label"]
+        for option in _public_learning_options(spec, participant, term.slug, learning_stage, variant_index)
+    }
+    feedback_options = [
+        {**option, "label": displayed_labels.get(option["body"], option["label"])}
+        for option in selected_options
+    ]
+    result = _fixed_feedback_for_options(feedback_options, spec)
     response = result.get("selected_option_body") or response
 
     is_sufficient = bool(result.get("is_sufficient"))
@@ -2410,7 +2470,7 @@ async def respond_tutor_turn(
 
     grading_json = {
         "is_sufficient": is_sufficient,
-        "selected_option_ids": [option["option_id"] for option in selected_options],
+        "selected_option_ids": [str(option_id) for option_id in (payload.get("selected_option_ids") or [])],
         "selected_option_body": result.get("selected_option_body") or response,
         "learning_stage": learning_stage,
         "stage_completed": stage_completed,

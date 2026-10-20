@@ -34,7 +34,6 @@ for (const expectedText of [
     throw new Error(`app shell is missing admin navigation confirmation: ${expectedText}`);
   }
 }
-
 const groupAdminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
 for (const expectedText of ["participant.can_resume", "currentParticipantCount", "!row.legacy_read_only", "現行参加者数", "旧試用数（閲覧専用）", "現行参加者の評価サマリー"]) {
   if (!groupAdminPage.includes(expectedText)) throw new Error(`admin page must separate current aggregates from trial history: ${expectedText}`);
@@ -61,6 +60,15 @@ for (const expectedText of [
 if (groupAdminPage.includes("条件統制チェック")) {
   throw new Error("admin page must not show the condition control check card");
 }
+for (const expectedText of [
+  "/api/admin/option-order",
+  '"debug_fixed", "デバッグ配置"',
+  '"randomized", "ランダム配置"',
+  "新規参加者から適用します",
+  "実験データの収集には使用しないでください"
+]) {
+  if (!groupAdminPage.includes(expectedText)) throw new Error(`admin page missing option-order control: ${expectedText}`);
+}
 
 
 const learningPage = fs.readFileSync(new URL("../app/learning/[termSlug]/page.tsx", import.meta.url), "utf8");
@@ -72,6 +80,10 @@ if (fs.existsSync(new URL("../app/l0-check/page.tsx", import.meta.url))) throw n
 for (const source of [learningPage, fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8")]) {
   for (const retired of ["scaffolding_level", "selected_item_option_ids", "free_text_answer", "reason_text", "item_results", 'type="radio"']) {
     if (source.includes(retired)) throw new Error(`current answer UI must not include ${retired}`);
+  }
+  if (!source.includes("option.exclusive")) throw new Error("option selection must use the exclusive marker, not a fixed label");
+  if (source.includes('option.label === "J"') || source.includes("A〜Iから")) {
+    throw new Error("option selection UI must not depend on fixed J/A-I positions");
   }
 }
 if (flowGuard.includes('localStorage.setItem("learning_targets", JSON.stringify(targetSlugs))')) {

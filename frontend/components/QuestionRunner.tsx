@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { GiveUpButton } from "@/components/GiveUpButton";
 import { ApiError, api, clearPendingIdempotency, postIdempotent, requireParticipant } from "@/lib/api";
 
-type Option = { option_id: string; label: string; body: string };
+type Option = { option_id: string; label: string; body: string; exclusive?: boolean };
 type SubmittedAnswer = {
   selected_option_ids?: string[] | null;
 };
@@ -28,8 +28,8 @@ type ScoreResult = { next_url?: string; learning_target_slugs?: string[] };
 
 function multipleSelectionState(options: Option[], selectedIds: string[], requiredSelections = 3) {
   const selectedOptions = options.filter((option) => selectedIds.includes(option.option_id));
-  const hasUnknown = selectedOptions.some((option) => option.label === "J");
-  const normalSelectedCount = selectedOptions.filter((option) => option.label !== "J").length;
+  const hasUnknown = selectedOptions.some((option) => option.exclusive);
+  const normalSelectedCount = selectedOptions.filter((option) => !option.exclusive).length;
   const isComplete = (hasUnknown && selectedOptions.length === 1) || (!hasUnknown && normalSelectedCount === requiredSelections);
   return { selectedOptions, hasUnknown, normalSelectedCount, reachedLimit: !hasUnknown && normalSelectedCount >= requiredSelections, isComplete };
 }
@@ -37,8 +37,8 @@ function multipleSelectionState(options: Option[], selectedIds: string[], requir
 function nextMultipleSelection(options: Option[], selectedIds: string[], option: Option, requiredSelections = 3) {
   const isSelected = selectedIds.includes(option.option_id);
   if (isSelected) return selectedIds.filter((id) => id !== option.option_id);
-  if (option.label === "J") return [option.option_id];
-  const withoutUnknown = selectedIds.filter((id) => options.find((item) => item.option_id === id)?.label !== "J");
+  if (option.exclusive) return [option.option_id];
+  const withoutUnknown = selectedIds.filter((id) => !options.find((item) => item.option_id === id)?.exclusive);
   return withoutUnknown.length >= requiredSelections ? selectedIds : [...withoutUnknown, option.option_id];
 }
 
@@ -149,7 +149,7 @@ export function QuestionRunner({
     const maxSelections = current.max_selections ?? 3;
     const selectionState = multipleSelectionState(current.options, selectedIds, minSelections);
     if (isMultiple && (!selectionState.isComplete || selectedIds.length > maxSelections)) {
-      setError(`A〜Iから${minSelections}つ選ぶか、「わからない」だけを選んでください。`);
+      setError(`選択肢から正しい説明を${minSelections}つ、または「わからない」のみを選んでください。`);
       return;
     }
     setSaving(true);
@@ -233,7 +233,7 @@ export function QuestionRunner({
               ? "わからないを選ぶ場合は単独選択です。"
               : selectionState.reachedLimit
                 ? "上限に達しました。変更するには選択済みの項目を外してください。"
-                : `A〜Iから${requiredSelections}つ選ぶか、J「わからない」だけを選んでください。`}
+                : `選択肢から正しい説明を${requiredSelections}つ、または「わからない」のみを選んでください。`}
           </span>
         </div>
       ) : null}
@@ -241,7 +241,7 @@ export function QuestionRunner({
         <div className="options">
           {current.options.map((option) => {
             const isSelected = displayedSelectedIds.includes(option.option_id);
-            const isUnknown = option.label === "J";
+            const isUnknown = Boolean(option.exclusive);
             const isDisabled =
               isMultipleQuestion &&
               !isSelected &&
