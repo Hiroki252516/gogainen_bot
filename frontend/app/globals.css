@@ -479,6 +479,10 @@ button:disabled {
   min-width: 0;
 }
 
+.option-order-buttons {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .reasoning-effort-button {
   min-width: 0;
   border-color: #b9d7ff;
@@ -980,6 +984,10 @@ button:disabled {
 
   .reasoning-effort-buttons {
     grid-template-columns: 1fr;
+  }
+
+  .option-order-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .insight-head,

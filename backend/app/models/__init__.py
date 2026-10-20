@@ -31,9 +31,19 @@ class Participant(Base):
     learning_content_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     experiment_spec_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     protocol_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    option_order_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completion_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class RuntimeSetting(Base):
+    __tablename__ = "runtime_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    option_order_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="debug_fixed")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

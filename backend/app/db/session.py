@@ -32,6 +32,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("learning_content_version", "INTEGER"),
             ("experiment_spec_version", "INTEGER"),
             ("protocol_id", "VARCHAR(80)"),
+            ("option_order_mode", "VARCHAR(32)"),
         ],
         "participant_surveys": [
             ("survey_version", "VARCHAR(80)"),

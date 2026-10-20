@@ -53,6 +53,7 @@ from app.services.experiment import (
     submit_survey,
 )
 from app.services.idempotency import run_idempotent
+from app.services.option_order import current_option_order_mode, save_option_order_mode
 from app.services.research_protocol import SurveyPayload, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
 from app.services.prefetch import prefetch_coordinator, schedule_prefetch
@@ -92,7 +93,12 @@ def _public_practice_question(question: object) -> dict | None:
         options = item.get("options")
         if isinstance(options, list):
             result["options"] = [
-                {key: option[key] for key in ("option_id", "label", "body") if key in option}
+                {
+                    "option_id": option.get("option_id"),
+                    "label": option.get("label"),
+                    "body": option.get("body"),
+                    "exclusive": bool(option.get("exclusive", option.get("body") == "わからない。")),
+                }
                 for option in options
                 if isinstance(option, dict)
             ]
@@ -204,6 +210,11 @@ class AILoginCancel(BaseModel):
 
 class ReasoningEffortPayload(BaseModel):
     reasoning_effort: Literal["low", "medium", "high"]
+
+
+class OptionOrderPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["debug_fixed", "randomized"]
 
 
 DATABASE_UNAVAILABLE_DETAIL = "データベースに接続できません。管理者に確認してください。"
@@ -576,6 +587,17 @@ def api_admin_summary(db: Session = Depends(get_db)) -> dict:
     return admin_summary(db)
 
 
+@app.get("/api/admin/option-order")
+def api_admin_option_order(db: Session = Depends(get_db)) -> dict:
+    return {"mode": current_option_order_mode(db), "applies_to": "new_participants_only"}
+
+
+@app.put("/api/admin/option-order")
+def api_set_admin_option_order(payload: OptionOrderPayload, db: Session = Depends(get_db)) -> dict:
+    mode = save_option_order_mode(db, payload.mode)
+    return {"mode": mode, "applies_to": "new_participants_only"}
+
+
 @app.get("/api/admin/participants")
 def api_admin_participants(db: Session = Depends(get_db)) -> dict:
     from app.models import Participant
@@ -588,6 +610,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "participant_id": row.id,
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,
+                "option_order_mode": row.option_order_mode or "debug_fixed",
                 "experiment_spec_version": row.experiment_spec_version,
                 "protocol_id": row.protocol_id,
                 "can_resume": can_resume(row),

@@ -22,6 +22,8 @@ type Participant = {
 type GroupCondition = "control" | "proposed";
 const REASONING_EFFORTS = ["low", "medium", "high"] as const;
 type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+type OptionOrderMode = "debug_fixed" | "randomized";
+type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
   study_settings_warning?: string | null;
@@ -125,6 +127,9 @@ export default function AdminPage() {
   const [overview, setOverview] = useState<any>(null);
   const [participantLog, setParticipantLog] = useState<any>(null);
   const [ai, setAi] = useState<AiStatus | null>(null);
+  const [optionOrder, setOptionOrder] = useState<OptionOrderSetting | null>(null);
+  const [optionOrderSaving, setOptionOrderSaving] = useState(false);
+  const [optionOrderError, setOptionOrderError] = useState("");
   const [login, setLogin] = useState<any>(null);
   const [loginError, setLoginError] = useState("");
   const [reasoningEffortSaving, setReasoningEffortSaving] = useState(false);
@@ -142,6 +147,9 @@ export default function AdminPage() {
     api("/api/admin/evaluation-summary").then(setSummary);
     api("/api/admin/logs/overview").then(setOverview);
     api<AiStatus>("/api/admin/ai/status").then(setAi);
+    api<OptionOrderSetting>("/api/admin/option-order")
+      .then(setOptionOrder)
+      .catch((err) => setOptionOrderError(err instanceof Error ? err.message : String(err)));
   }, []);
 
   useEffect(() => {
@@ -234,6 +242,23 @@ export default function AdminPage() {
       setReasoningEffortError(err instanceof Error ? err.message : String(err));
     } finally {
       setReasoningEffortSaving(false);
+    }
+  }
+
+  async function updateOptionOrder(mode: OptionOrderMode) {
+    if (optionOrderSaving || !optionOrder || optionOrder.mode === mode) return;
+    setOptionOrderError("");
+    setOptionOrderSaving(true);
+    try {
+      const updated = await api<OptionOrderSetting>("/api/admin/option-order", {
+        method: "PUT",
+        body: JSON.stringify({ mode })
+      });
+      setOptionOrder(updated);
+    } catch (err) {
+      setOptionOrderError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOptionOrderSaving(false);
     }
   }
 
@@ -371,6 +396,33 @@ export default function AdminPage() {
                   {reasoningEffortError ? <p className="danger">{reasoningEffortError}</p> : null}
                 </div>
               ) : null}
+            </div>
+            <div className="notice">
+              <strong>選択肢の配置</strong>
+              <p>{optionOrder ? (optionOrder.mode === "debug_fixed" ? "デバッグ配置" : "ランダム配置") : "設定を確認中"}</p>
+              <div className="reasoning-effort-buttons option-order-buttons" role="group" aria-label="選択肢の配置モード">
+                {([
+                  ["debug_fixed", "デバッグ配置"],
+                  ["randomized", "ランダム配置"]
+                ] as [OptionOrderMode, string][]).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={optionOrder?.mode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
+                    aria-pressed={optionOrder?.mode === mode}
+                    disabled={!optionOrder || optionOrderSaving}
+                    onClick={() => updateOptionOrder(mode)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="muted">新規参加者から適用します。開始済みの参加者の配置は変わりません。</p>
+              {optionOrder?.mode === "debug_fixed" ? (
+                <p className="danger" role="alert">デバッグ配置は正解位置の手掛かりになるため、実験データの収集には使用しないでください。</p>
+              ) : null}
+              {optionOrderSaving ? <p className="muted">保存中...</p> : null}
+              {optionOrderError ? <p className="danger" role="alert">{optionOrderError}</p> : null}
             </div>
             {activeGroupSummary ? (
               <div className="notice">

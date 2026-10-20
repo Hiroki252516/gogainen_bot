@@ -8,16 +8,17 @@
 
 ## 現行の保存契約
 
-モデルの正本は `backend/app/models/__init__.py`。実験仕様版3を維持し、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。
+モデルの正本は `backend/app/models/__init__.py`。実験仕様版3を維持する。参加者の `option_order_mode` nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルを追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 
 新規参加者だけ仕様版3とexperiment-plan-2026-10-18-v1を保存する。既存版3を含む異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 
-- Participant: 群、同意、進捗、開始・完了時刻、終了理由、実験仕様版。
-- Attempt: 問題ID、複数選択ID、フェーズ・周回、正誤・M1/M3/unknown、問題/選択肢snapshot、時刻。
+- Participant: 群、同意、進捗、開始・完了時刻、終了理由、実験仕様版、開始時に確定した選択肢配置モード。
+- RuntimeSetting: ID=1の単一行に、今後作成する参加者へ適用する選択肢配置モードを保存する。未設定時の既定値は `debug_fixed`。
+- Attempt: 問題ID、複数選択ID、フェーズ・周回、正誤・M1/M3/unknown、問題/選択肢snapshot、時刻。選択肢snapshotには参加者に表示したラベル・本文・順序を保存する。
 - LearnerState: 現在状態、主分類、方略、正答記録数、再発数、最終回答ID。
-- TutorSession / TutorTurn: 教材・固定問題snapshot、回答・解説、採点JSON、生成契約・版・検証・先行生成監査。
+- TutorSession / TutorTurn: 教材・固定問題snapshot、回答・解説、採点JSON、生成契約・版・検証・先行生成監査。学習確認問題snapshotにも表示時の選択肢ラベル・本文・順序を保存する。
 - AICallLog: 実送信prompt・Schema・モデル・推論設定、RAG指紋、試行・検証結果、生応答。
 - EvaluationSummary: 現行スコア、同種再発、時系列・学習負担・条件確認JSON。
 

@@ -985,7 +985,7 @@ def test_participant_turn_api_hides_answer_keys_on_new_and_cached_responses():
         "session_misconception_history", "teaching_strategy",
     }
     assert not (forbidden_keys & set(collect_keys(first.json())))
-    assert all(set(option) == {"option_id", "label", "body"} for option in first.json()["practice_question"]["options"])
+    assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in first.json()["practice_question"]["options"])
 
     db = SessionLocal()
     try:
