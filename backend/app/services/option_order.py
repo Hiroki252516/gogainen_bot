@@ -39,6 +39,8 @@ def save_option_order_mode(db: Any, mode: str) -> str:
 
 
 def assessment_bank_index(term_slug: str, phase: str, variant_key: str) -> int:
+    if not isinstance(variant_key, str) or not variant_key:
+        raise ValueError(f"invalid assessment variant key: {variant_key}")
     term_index = ACTIVE_TERM_SLUGS.index(term_slug)
     phase_offsets = {"pretest": 0, "retest": 1, "final_test": 6}
     if phase not in phase_offsets:

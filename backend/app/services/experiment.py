@@ -2436,14 +2436,30 @@ async def respond_tutor_turn(
     )
     if spec.get("selection_mode") == "multiple":
         _validate_multi_select_options(selected_options, len(selected_options))
-    displayed_labels = {
-        option["body"]: option["label"]
-        for option in _public_learning_options(spec, participant, term.slug, learning_stage, variant_index)
-    }
-    feedback_options = [
-        {**option, "label": displayed_labels.get(option["body"], option["label"])}
-        for option in selected_options
-    ]
+    displayed_options = (turn.practice_question_json or {}).get("options")
+    if isinstance(displayed_options, list) and displayed_options:
+        displayed_by_id = {
+            str(option["option_id"]): option
+            for option in displayed_options
+            if isinstance(option, dict) and option.get("option_id")
+        }
+        selected_option_ids = payload.get("selected_option_ids") or []
+        selected_displays = [displayed_by_id.get(str(option_id)) for option_id in selected_option_ids]
+        if any(not option or not option.get("label") for option in selected_displays):
+            raise HTTPException(status_code=400, detail="invalid selected options")
+        feedback_options = [
+            {**option, "label": display["label"]}
+            for option, display in zip(selected_options, selected_displays, strict=True)
+        ]
+    else:
+        displayed_labels = {
+            option["body"]: option["label"]
+            for option in _public_learning_options(spec, participant, term.slug, learning_stage, variant_index)
+        }
+        feedback_options = [
+            {**option, "label": displayed_labels.get(option["body"], option["label"])}
+            for option in selected_options
+        ]
     result = _fixed_feedback_for_options(feedback_options, spec)
     response = result.get("selected_option_body") or response
 

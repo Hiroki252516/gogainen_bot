@@ -27,6 +27,7 @@ from app.services.option_order import (
     present_options,
 )
 from app.services.interaction_history import build_interaction_history
+from app.services import experiment as experiment_service
 
 
 def _assert_role_balance(bank: str, items: list[tuple[int, list[dict]]]) -> None:
@@ -98,6 +99,12 @@ def test_randomized_assignment_is_stable_unique_and_balanced_for_both_banks():
 def test_missing_or_unknown_participant_mode_defaults_to_debug_fixed():
     assert effective_option_order_mode(None) == DEBUG_FIXED
     assert effective_option_order_mode("old_value") == DEBUG_FIXED
+
+
+@pytest.mark.parametrize("variant_key", [None, "", "pretest", "pretest_vinvalid"])
+def test_assessment_bank_index_rejects_invalid_variant_keys(variant_key):
+    with pytest.raises(ValueError, match="invalid assessment variant key"):
+        assessment_bank_index(ACTIVE_TERM_SLUGS[0], "pretest", variant_key)
 
 
 @pytest.fixture
@@ -215,7 +222,7 @@ def test_randomized_labels_do_not_change_assessment_scoring_or_unknown_exclusivi
     assert actual_types == expected_types
 
 
-def test_randomized_learning_response_uses_internal_role_and_preserves_displayed_history(isolated_api):
+def test_randomized_learning_response_uses_internal_role_and_preserves_displayed_history(isolated_api, monkeypatch):
     client, engine = isolated_api
     assert client.put("/api/admin/option-order", json={"mode": RANDOMIZED}).status_code == 200
     participant_id = _create(client, "A")
@@ -255,6 +262,15 @@ def test_randomized_learning_response_uses_internal_role_and_preserves_displayed
     assert all(option["option_id"] not in set("ABCDEFGHIJ") for option in options)
     assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in options)
     unknown_option = next(option for option in options if option["exclusive"])
+
+    original_public_learning_options = experiment_service._public_learning_options
+
+    def fail_if_current_options_are_regenerated(spec, participant, term_slug, learning_stage, variant_index):
+        if variant_index == 1:
+            pytest.fail("answer processing should use the saved displayed-options snapshot")
+        return original_public_learning_options(spec, participant, term_slug, learning_stage, variant_index)
+
+    monkeypatch.setattr(experiment_service, "_public_learning_options", fail_if_current_options_are_regenerated)
     response = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
         json={"selected_option_ids": [unknown_option["option_id"]]},
