@@ -9,11 +9,12 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from fastapi import HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import assert_current_experiment
-from app.models import IdempotencyRecord, Participant, now
+from app.models import AuditEvent, IdempotencyRecord, Participant, now
 
 
 IDEMPOTENCY_KEY_MAX_LENGTH = 128
@@ -41,6 +42,27 @@ def request_fingerprint(value: Any) -> str:
     normalized = _json_safe(value)
     encoded = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def registration_key_was_deleted(db: Session, key: str) -> bool:
+    """Match one retired registration key in SQL without loading audit JSON."""
+    if db.get_bind().dialect.name == "postgresql":
+        keys = func.json_array_elements_text(
+            AuditEvent.before_json["registration_keys"],
+        ).table_valued("value")
+    else:
+        keys = func.json_each(
+            AuditEvent.before_json, "$.registration_keys",
+        ).table_valued("value")
+    key_exists = (
+        select(1).select_from(keys).where(keys.c.value == key)
+        .correlate(AuditEvent).exists()
+    )
+    return db.query(AuditEvent.id).filter(
+        AuditEvent.action == "delete_participant",
+        AuditEvent.entity_type == "participant",
+        key_exists,
+    ).first() is not None
 
 
 def idempotency_error(code: str, message: str, **extra: Any) -> HTTPException:

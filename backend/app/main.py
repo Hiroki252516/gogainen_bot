@@ -14,7 +14,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import AuditEvent, Participant, Term, TutorSession, TutorTurn
+from app.models import Participant, Term, TutorSession, TutorTurn
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
@@ -54,9 +54,8 @@ from app.services.experiment import (
     submit_attempt,
     submit_survey,
 )
-from app.services.idempotency import run_idempotent
+from app.services.idempotency import normalize_idempotency_key, registration_key_was_deleted, run_idempotent
 from app.services.option_order import current_option_order_mode, save_option_order_mode
-from app.services.idempotency import normalize_idempotency_key, run_idempotent
 from app.services import identity_mapping
 from app.services.research_protocol import SurveyPayload, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
@@ -274,10 +273,8 @@ async def api_create_participant(
     student_number = identity_mapping.validate_student_number(payload.student_number)
     normalized_key = normalize_idempotency_key(idempotency_key)
     registration_key = normalized_key or str(uuid4())
-    if normalized_key:
-        retired = db.query(AuditEvent).filter_by(action="delete_participant", entity_type="participant").all()
-        if any(normalized_key in (row.before_json or {}).get("registration_keys", []) for row in retired):
-            raise HTTPException(409, "この参加登録は削除されています。再送による再登録はできません。")
+    if normalized_key and registration_key_was_deleted(db, normalized_key):
+        raise HTTPException(409, "この参加登録は削除されています。再送による再登録はできません。")
     staged_id: str | None = None
 
     def operation() -> dict:

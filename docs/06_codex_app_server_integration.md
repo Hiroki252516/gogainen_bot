@@ -74,6 +74,8 @@ capability tokenを使う場合は、backendコンテナに同じtokenファイ�
 
 接続直後、必ず `initialize` を送る。以後、schemaに従って通知・レスポンスを処理する。
 
+Codex app-serverの[公式Protocol仕様](https://learn.chatgpt.com/docs/app-server#protocol)では、wire上のメッセージから汎用JSON-RPCの `jsonrpc` ヘッダーを省略する。`initialized` 通知は `method` / `params` のみとし、`id` を付けない。PR #145のレビューで追加を求められたが、このCodex固有の契約に従い現行通知を維持する。
+
 ```json
 {
   "method": "initialize",

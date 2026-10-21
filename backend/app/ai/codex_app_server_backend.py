@@ -128,6 +128,7 @@ class _CodexRpcClient:
             return message.get("result")
 
     async def notify(self, method: str, params: dict[str, Any]) -> None:
+        # Codex app-server's wire protocol omits the generic JSON-RPC header.
         await self._ws.send(json.dumps({"method": method, "params": params}))
 
     async def recv(self, notification_handler: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:

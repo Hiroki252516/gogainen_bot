@@ -22,7 +22,7 @@ def test_status_initializes_transport_before_reading_account(transport, tmp_path
             await ws.send(json.dumps({"id": request["id"], "result": {}}))
             ready = json.loads(await ws.recv())
             received.append(ready["method"])
-            assert "id" not in ready
+            assert ready == {"method": "initialized", "params": {}}
             request = json.loads(await ws.recv())
             received.append(request["method"])
             await ws.send(json.dumps({

@@ -20,8 +20,6 @@ async def main():
         raise SystemExit("AI_BACKEND must be codex_app_server; no Mock fallback is permitted.")
     if not os.environ.get("IDENTITY_MAPPING_PATH"):
         raise SystemExit("Set an isolated IDENTITY_MAPPING_PATH as well.")
-    if not os.environ.get("IDENTITY_MAPPING_PATH"):
-        raise SystemExit("Set an isolated IDENTITY_MAPPING_PATH as well.")
     from app.db.session import init_db, SessionLocal
     from app.seed.seed_questions import seed_database
     from app.main import app
@@ -38,7 +36,7 @@ async def main():
 
     async def case(group, kind, labels):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://isolated-verification", timeout=600) as client:
-            participant = await post(client, "/api/participants", {"assignment_code": group, "consent_checked": True, "student_number": "VERIFY-SYNTHETIC", "student_number": "VERIFY-SYNTHETIC"})
+            participant = await post(client, "/api/participants", {"assignment_code": group, "consent_checked": True, "student_number": "VERIFY-SYNTHETIC"})
             pid = participant["participant_id"]
             questions = (await client.get(f"/api/experiment/{pid}/pretest")).json()["questions"]
             for question in questions:

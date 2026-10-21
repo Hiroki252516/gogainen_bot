@@ -10,6 +10,8 @@
 
 登録・対応表の応答はCache-Control: no-store。対応表APIも現状は認証なしであり、確認ポップアップは認可の代わりにはならない。
 
+削除済み登録キーの再送判定は、削除監査のregistration_keys配列をDB側で完全一致検索する。SQLiteはjson_each、PostgreSQLはjson_array_elements_textとEXISTSを使用し、監査JSONの全件取得・Pythonでの線形探索を行わない。既存監査を書き換えず、新規テーブル・列・起動時補修も追加しない。参加者削除は既存_commitのdefer_commits処理を維持し、対応表削除前に研究DBを確定しない。対応表削除が失敗した場合は研究DBをロールバックする。別DB間の分散トランザクションを実装したという意味ではない。
+
 ## 計画書対応の範囲
 
 現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。実験仕様版3と新protocol_idの両方で進行可否を判定する。

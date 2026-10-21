@@ -11,9 +11,10 @@ from sqlalchemy import text
 from app.main import app
 from app.db.session import SessionLocal, engine
 from app.core.config import get_settings
-from app.models import AICallLog, Participant, IdempotencyRecord
+from app.models import AICallLog, AuditEvent, Participant, IdempotencyRecord
 from app.services import identity_mapping
 from app.services.experiment import _record_ai_log
+from app.services.idempotency import registration_key_was_deleted
 
 client = TestClient(app)
 
@@ -92,6 +93,55 @@ def test_withdrawal_deletes_mapping_and_rejects_late_ai_log():
                                        status="success", request_payload={"participant_id": pid}))
         assert exc.value.status_code == 404
         assert not db.query(AICallLog).filter(AICallLog.request_payload.contains(pid)).all()
+
+
+def test_retired_registration_query_matches_exact_array_member_without_changing_audit():
+    key = f'{uuid4()}-"_%[]日本語'
+    with SessionLocal() as db:
+        events = [
+            AuditEvent(actor="test", action=action, entity_type=entity_type,
+                       before_json=payload)
+            for action, entity_type, payload in (
+                ("delete_participant", "participant", {"registration_keys": ["another-key", key]}),
+                ("delete_participant", "participant", {"display_code": "legacy-without-keys"}),
+                ("delete_participant", "participant", None),
+                ("delete_participant", "participant", {"registration_keys": []}),
+                ("other_action", "participant", {"registration_keys": [f"{key}-other-action"]}),
+                ("delete_participant", "other_entity", {"registration_keys": [f"{key}-other-entity"]}),
+            )
+        ]
+        db.add_all(events)
+        db.commit()
+        before = {row.id: json.dumps(row.before_json, sort_keys=True) for row in events}
+        assert registration_key_was_deleted(db, key)
+        assert not registration_key_was_deleted(db, key[:12])
+        assert not registration_key_was_deleted(db, f"{key}-other-action")
+        assert not registration_key_was_deleted(db, f"{key}-other-entity")
+        db.expire_all()
+        assert {row.id: json.dumps(row.before_json, sort_keys=True) for row in events} == before
+
+
+def test_identity_deletion_failure_rolls_back_research_deletion(monkeypatch):
+    key = str(uuid4())
+    pid = register(key=key).json()["participant_id"]
+
+    def fail_mapping_delete(participant_id):
+        assert participant_id == pid
+        # The service has flushed deletes, but the API must not commit them yet.
+        with SessionLocal() as observer:
+            assert observer.get(Participant, pid) is not None
+        raise sqlite3.OperationalError("isolated mapping deletion failure")
+
+    monkeypatch.setattr(identity_mapping, "delete_mapping", fail_mapping_delete)
+    with TestClient(app, raise_server_exceptions=False) as no_raise:
+        response = no_raise.delete(f"/api/admin/participants/{pid}")
+    assert response.status_code == 500
+    with SessionLocal() as db:
+        assert db.get(Participant, pid) is not None
+        assert db.query(IdempotencyRecord).filter_by(idempotency_key=key).one()
+        assert not db.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).first()
+    assert [row["participant_id"] for row in identity_mapping.list_mappings()] == [pid]
+    assert register(key=key).status_code == 200
 
 
 def test_mapping_failure_does_not_create_participant_and_same_key_can_retry(monkeypatch):
