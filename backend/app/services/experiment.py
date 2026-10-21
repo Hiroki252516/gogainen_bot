@@ -689,6 +689,7 @@ def next_display_code(db: Session) -> str:
 
 
 def create_participant(db: Session, assignment_code: str | None, consent_checked: bool) -> Participant:
+    from app.services.identity_mapping import CONSENT_DOCUMENT_VERSION
     if not consent_checked:
         raise HTTPException(status_code=400, detail="同意書への同意が必要です。")
     normalized_code = (assignment_code or "").strip().upper()
@@ -701,6 +702,8 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         group_condition=group_condition,
         assignment_method="admin_code",
         consent_checked=consent_checked,
+        consent_document_version=CONSENT_DOCUMENT_VERSION,
+        consented_at=now(),
         current_step="pretest",
         learning_content_version=CURRENT_LEARNING_CONTENT_VERSION,
         experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
@@ -779,9 +782,11 @@ def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> 
 
 
 def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
-    participant = get_participant(db, participant_id)
+    participant = get_participant(db, participant_id, for_update=True)
     assert_current_experiment(participant)
     session_ids = [session.id for session in db.query(TutorSession).filter_by(participant_id=participant.id).all()]
+    registration_keys = [row.idempotency_key for row in db.query(IdempotencyRecord).filter_by(
+        participant_id=participant.id, scope="participant:create").all()]
     deleted_counts: dict[str, int] = {}
 
     def delete_by_participant(model: Any) -> None:
@@ -820,6 +825,7 @@ def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
                 "group_condition": participant.group_condition,
                 "current_step": participant.current_step,
                 "deleted_counts": deleted_counts,
+                "registration_keys": registration_keys,
                 "completion_reason": participant.completion_reason,
             },
             after_json={"deleted": True},
@@ -1241,6 +1247,9 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
 
 def _record_ai_log(db: Session, log: AICallLog) -> None:
     """Keep AI logs in the owning idempotent transaction when one is active."""
+    participant_id = (log.request_payload or {}).get("participant_id")
+    if participant_id and db.query(Participant.id).filter_by(id=participant_id).with_for_update().first() is None:
+        raise HTTPException(404, "被験者が見つかりません。")
     if db.info.get("defer_commits"):
         db.info.setdefault("deferred_ai_logs", []).append(log)
         return
@@ -3543,6 +3552,8 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "can_resume": can_resume(participant),
             "group_condition": participant.group_condition,
             "assignment_method": participant.assignment_method,
+            "consent_document_version": participant.consent_document_version,
+            "consented_at": _iso(participant.consented_at),
             "current_step": participant.current_step,
             "started_at": _iso(participant.started_at),
             "completed_at": _iso(participant.completed_at),

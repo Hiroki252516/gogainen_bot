@@ -189,7 +189,7 @@ def _submit_phase_questions_by_term(pid: str, phase: str, labels_by_term: dict[s
 def _create_participant_with_pretest(group: str = "proposed", labels: list[str] | None = None) -> str:
     participant = client.post(
         "/api/participants",
-        json={"assignment_code": _assignment_code_for_group(group), "consent_checked": True},
+        json={"assignment_code": _assignment_code_for_group(group), "consent_checked": True, "student_number": "TEST-0001"},
     ).json()
     pid = participant["participant_id"]
     _submit_phase_questions(pid, "pretest", labels or ["D", "E", "F"])
@@ -322,7 +322,7 @@ def test_llm_knowledge_conceptual_change_v1_prompt_and_option_roles():
 
 
 def test_pretest_returns_three_multi_select_questions_with_ten_options():
-    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     questions = client.get(f"/api/experiment/{participant['participant_id']}/pretest").json()["questions"]
 
     assert [question["term_slug"] for question in questions] == list(ACTIVE_TERM_SLUGS)
@@ -340,13 +340,13 @@ def test_pretest_returns_three_multi_select_questions_with_ten_options():
 def test_idempotency_replays_same_attempt_and_rejects_changed_or_duplicate_answers():
     participant_response = client.post(
         "/api/participants",
-        json={"assignment_code": "A", "consent_checked": True},
+        json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"},
         headers={"Idempotency-Key": "participant-idempotency-test"},
     )
     assert participant_response.status_code == 200, participant_response.text
     repeated_participant_response = client.post(
         "/api/participants",
-        json={"assignment_code": "A", "consent_checked": True},
+        json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"},
         headers={"Idempotency-Key": "participant-idempotency-test"},
     )
     assert repeated_participant_response.status_code == 200, repeated_participant_response.text
@@ -413,7 +413,7 @@ def test_participant_creation_reports_database_unavailable(monkeypatch):
 
     monkeypatch.setattr(main_module, "create_participant", raise_database_error)
 
-    response = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True})
+    response = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"})
 
     assert response.status_code == 503
     assert response.json() == {"detail": "データベースに接続できません。管理者に確認してください。"}
@@ -430,12 +430,12 @@ def test_participant_creation_with_idempotency_key_replays_database_failure(monk
 
     first = client.post(
         "/api/participants",
-        json={"assignment_code": "A", "consent_checked": True},
+        json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"},
         headers=headers,
     )
     replay = client.post(
         "/api/participants",
-        json={"assignment_code": "A", "consent_checked": True},
+        json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"},
         headers=headers,
     )
 
@@ -466,7 +466,7 @@ def test_participant_creation_retry_after_database_error_does_not_duplicate(monk
 
     monkeypatch.setattr(main_module, "create_participant", fail_once)
     headers = {"Idempotency-Key": "participant-db-error-retry"}
-    payload = {"assignment_code": "B", "consent_checked": True}
+    payload = {"assignment_code": "B", "consent_checked": True, "student_number": "TEST-0001"}
 
     first = client.post("/api/participants", json=payload, headers=headers)
     retry = client.post("/api/participants", json=payload, headers=headers)
@@ -510,17 +510,17 @@ def test_health_reports_database_unavailable(monkeypatch):
 
 def test_participant_creation_requires_valid_admin_assignment_code():
     for payload in (
-        {"consent_checked": True},
-        {"assignment_code": "C", "consent_checked": True},
-        {"group_condition": "proposed", "consent_checked": True},
+        {"consent_checked": True, "student_number": "TEST-0001"},
+        {"assignment_code": "C", "consent_checked": True, "student_number": "TEST-0001"},
+        {"group_condition": "proposed", "consent_checked": True, "student_number": "TEST-0001"},
     ):
         response = client.post("/api/participants", json=payload)
         assert response.status_code == 400, response.text
 
 
 def test_participant_creation_maps_admin_assignment_code_without_exposing_group():
-    proposed_response = client.post("/api/participants", json={"assignment_code": "a", "consent_checked": True})
-    control_response = client.post("/api/participants", json={"assignment_code": " b ", "consent_checked": True})
+    proposed_response = client.post("/api/participants", json={"assignment_code": "a", "consent_checked": True, "student_number": "TEST-0001"})
+    control_response = client.post("/api/participants", json={"assignment_code": " b ", "consent_checked": True, "student_number": "TEST-0001"})
     assert proposed_response.status_code == 200, proposed_response.text
     assert control_response.status_code == 200, control_response.text
     assert "group_condition" not in proposed_response.json()
@@ -537,7 +537,7 @@ def test_participant_creation_maps_admin_assignment_code_without_exposing_group(
 
 
 def test_attempt_requires_three_from_a_to_i_or_unknown_j_only():
-    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
     question = client.get(f"/api/experiment/{pid}/pretest").json()["questions"][0]
 
@@ -567,7 +567,7 @@ def test_pretest_scoring_correct_m1_m3_unknown_and_snapshots():
     for roles, is_correct, misconception_type, status in cases:
         participant = client.post(
             "/api/participants",
-            json={"assignment_code": "A", "consent_checked": True},
+            json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"},
         ).json()
         pid = participant["participant_id"]
         questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
@@ -672,7 +672,7 @@ def test_admin_overview_returns_only_latest_evaluation_summary_per_participant()
 
 
 def test_db_backfill_uses_give_up_audit_for_completion_metadata():
-    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
     db = SessionLocal()
     try:
@@ -712,7 +712,7 @@ def test_db_backfill_uses_give_up_audit_for_completion_metadata():
 
 
 def test_attempts_cannot_be_saved_for_wrong_phase_or_after_pretest():
-    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:
@@ -755,7 +755,7 @@ def test_attempts_cannot_be_saved_for_wrong_phase_or_after_pretest():
 
 
 def test_learning_targets_returns_all_pretest_results_without_internal_labels():
-    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     roles_by_term = {
@@ -812,7 +812,7 @@ def test_learning_targets_returns_all_pretest_results_without_internal_labels():
 
 
 def test_learning_targets_follow_pretest_order_not_diagnosis_priority():
-    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
     _submit_phase_questions_by_term(
         pid,
@@ -2411,11 +2411,11 @@ def test_admin_logs_and_csv_show_multiple_selection_labels():
 def test_group_misconception_transition_summary_uses_term_pretest_denominator():
     transition_types = ["resolved", "same_type_recurred", "changed_type", "unknown_persisted", "regressed", "unclassified"]
     control_pids = [
-        client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()["participant_id"]
+        client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True, "student_number": "TEST-0001"}).json()["participant_id"]
         for _ in transition_types
     ]
-    missing_pid = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()["participant_id"]
-    proposed_pid = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()["participant_id"]
+    missing_pid = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True, "student_number": "TEST-0001"}).json()["participant_id"]
+    proposed_pid = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()["participant_id"]
 
     db = SessionLocal()
     try:
@@ -2553,18 +2553,18 @@ def test_admin_can_delete_participant_and_related_data():
 
 
 def test_participant_creation_uses_next_unused_display_code_after_deletion():
-    original = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()
-    successor = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()
+    original = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True, "student_number": "TEST-0001"}).json()
+    successor = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True, "student_number": "TEST-0001"}).json()
     assert client.delete(f"/api/admin/participants/{original['participant_id']}").status_code == 200
 
-    recreated = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True})
+    recreated = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True, "student_number": "TEST-0001"})
     assert recreated.status_code == 200, recreated.text
     assert recreated.json()["display_code"] != original["display_code"]
     assert int(recreated.json()["display_code"][1:]) > int(successor["display_code"][1:])
 
 
 def test_admin_participant_delete_rolls_back_on_commit_failure(monkeypatch):
-    participant = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
     db = SessionLocal()
     try:
@@ -2744,7 +2744,7 @@ def test_admin_reasoning_effort_status_and_updates():
 
 def test_admin_reasoning_effort_update_is_allowed_while_participant_is_active():
     reset_reasoning_effort_override()
-    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     try:
         status = client.get("/api/admin/ai/status")
         assert status.status_code == 200, status.text
@@ -2781,6 +2781,9 @@ def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
         async def __aexit__(self, *_args):
             return None
 
+        async def notify(self, method, params):
+            self.calls.append((method, params))
+
         async def call(self, method, params=None, notification_handler=None, on_sent=None):
             self.calls.append((method, params))
             if on_sent:
@@ -2811,6 +2814,7 @@ def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
 
     assert result == {"ok": True}
     assert result.raw_text == '\n{"ok": true}\n'
+    assert [method for method, _ in rpc.calls][:3] == ["initialize", "initialized", "account/read"]
     turn_start = next(params for method, params in rpc.calls if method == "turn/start")
     assert turn_start["model"] == "gpt-5.6-luna"
     assert turn_start["effort"] == "low"
@@ -2857,7 +2861,7 @@ def test_ai_call_logs_effective_reasoning_effort(monkeypatch):
 def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch):
     participant = client.post(
         "/api/participants",
-        json={"assignment_code": "A", "consent_checked": True},
+        json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"},
     ).json()
     pid = participant["participant_id"]
     payload = {
@@ -2890,6 +2894,9 @@ def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch
 
         async def __aexit__(self, *_args):
             return None
+
+        async def notify(self, method, params):
+            assert method == "initialized"
 
         async def call(self, method, params=None, notification_handler=None, on_sent=None):
             if on_sent:
@@ -2980,6 +2987,7 @@ def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch
 
 def test_codex_failed_send_is_audited_as_not_sent(monkeypatch):
     backend = CodexAppServerBackend()
+    pid = client.post("/api/participants", json={"assignment_code": "B", "consent_checked": True, "student_number": "TEST-AUDIT"}).json()["participant_id"]
 
     class FakeRpc:
         async def __aenter__(self):
@@ -2987,6 +2995,9 @@ def test_codex_failed_send_is_audited_as_not_sent(monkeypatch):
 
         async def __aexit__(self, *_args):
             return None
+
+        async def notify(self, method, params):
+            assert method == "initialized"
 
         async def call(self, method, params=None, notification_handler=None, on_sent=None):
             if method == "account/read":
@@ -3012,7 +3023,7 @@ def test_codex_failed_send_is_audited_as_not_sent(monkeypatch):
                     db,
                     "generate_tutoring_turn",
                     {
-                        "participant_id": "P-AUDIT",
+                        "participant_id": pid,
                         "group_condition": "control",
                         "term": {"slug": "memory_process", "label": "記憶プロセス", "description": "情報を保存して検索します。"},
                         "rag_context": {"query": "common query", "allowed_sections": ["3.2"], "chunks": []},
@@ -3032,7 +3043,7 @@ def test_codex_failed_send_is_audited_as_not_sent(monkeypatch):
         assert audit["transmission"]["turn_start_attempted"] is True
         assert audit["transmission"]["turn_start_sent"] is False
         assert "記憶プロセス" in audit["prompt"]
-        assert "P-AUDIT" not in audit["prompt"]
+        assert pid not in audit["prompt"]
         assert "Bearer" not in json.dumps(audit)
     finally:
         db.close()

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { IdentityMappings } from "@/components/IdentityMappings";
 import { HypothesisMetrics, ParticipantHypothesisMetrics } from "@/components/HypothesisMetrics";
 import { API_BASE, ApiError, api, clearParticipantSession, participantId } from "@/lib/api";
 
@@ -288,7 +289,7 @@ export default function AdminPage() {
   }
 
   async function deleteParticipant(participant: Participant) {
-    const confirmed = window.confirm(`参加者 ${participant.display_code} と関連する実験データを完全に削除します。元に戻せません。続行しますか？`);
+    const confirmed = window.confirm(`参加者 ${participant.display_code} の研究DB内の回答・教材・AIログ等とアプリ内の対応表を削除します。元に戻せません。ダウンロード済みCSV・USBの対応表・バックアップは自動削除されません。撤回時は別途処理してください。続行しますか？`);
     if (!confirmed) return;
 
     setLogError("");
@@ -417,7 +418,8 @@ export default function AdminPage() {
                   </button>
                 ))}
               </div>
-              <p className="muted">新規参加者から適用します。開始済みの参加者の配置は変わりません。</p>
+              <p className="muted">モードの切替は新規参加者から適用します。開始済みの参加者の配置モードは変わりません。</p>
+              <p className="muted">ランダム配置ではA〜Iを並べ替え、「わからない」は最後のJに固定します。</p>
               {optionOrder?.mode === "debug_fixed" ? (
                 <p className="danger" role="alert">デバッグ配置は正解位置の手掛かりになるため、実験データの収集には使用しないでください。</p>
               ) : null}
@@ -579,6 +581,7 @@ export default function AdminPage() {
           )}
         </section>
       </div>
+      <IdentityMappings key={participants.length} />
     </AppShell>
   );
 }

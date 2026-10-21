@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from copy import deepcopy
 
 import pytest
 from fastapi.testclient import TestClient
@@ -38,8 +39,11 @@ def _assert_role_balance(bank: str, items: list[tuple[int, list[dict]]]) -> None
         source_by_body = {option["body"]: option_role(option) for option in options}
         for option in displayed:
             counts[source_by_body[option["body"]]][option["label"]] += 1
-    for role_counts in counts.values():
-        observed = [role_counts[label] for label in "ABCDEFGHIJ"]
+    assert counts["unknown"] == {"J": len(items)}
+    for role in ("correct", "M1", "M3"):
+        role_counts = counts[role]
+        assert role_counts["J"] == 0
+        observed = [role_counts[label] for label in "ABCDEFGHI"]
         assert max(observed) - min(observed) <= 1
 
 
@@ -91,7 +95,7 @@ def test_randomized_assignment_is_stable_unique_and_balanced_for_both_banks():
 
     assert len(assessment_items) == 21
     assert len(learning_items) == 30
-    assert unknown_labels == set("ABCDEFGHIJ")
+    assert unknown_labels == {"J"}
     _assert_role_balance("assessment", assessment_items)
     _assert_role_balance("learning", learning_items)
 
@@ -130,7 +134,7 @@ def isolated_api(tmp_path):
 def _create(client: TestClient, assignment_code: str) -> str:
     response = client.post(
         "/api/participants",
-        json={"assignment_code": assignment_code, "consent_checked": True},
+        json={"assignment_code": assignment_code, "consent_checked": True, "student_number": "TEST-OPTION-ORDER"},
     )
     assert response.status_code == 200, response.text
     return response.json()["participant_id"]
@@ -165,6 +169,8 @@ def test_admin_mode_is_persisted_and_snapshotted_for_new_participants(isolated_a
         assert [option["label"] for option in options] == list("ABCDEFGHIJ")
         assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in options)
         assert sum(option["exclusive"] for option in options) == 1
+        assert options[-1]["exclusive"] is True
+        assert options[-1]["label"] == "J"
         assert not any("is_correct" in option or "misconception_type" in option for option in options)
 
     with Session(engine) as db:
@@ -259,9 +265,27 @@ def test_randomized_learning_response_uses_internal_role_and_preserves_displayed
 
     assert len(options) == 10
     assert sum(option["exclusive"] for option in options) == 1
+    assert options[-1]["exclusive"] is True
+    assert options[-1]["label"] == "J"
     assert all(option["option_id"] not in set("ABCDEFGHIJ") for option in options)
     assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in options)
+    # Previously generated questions may have unknown elsewhere. Re-fetching
+    # and answering must retain their saved layout rather than regenerate it.
+    saved_question = deepcopy(practice_question)
+    first = saved_question["options"][0]
+    last = saved_question["options"][-1]
+    first["label"], last["label"] = last["label"], first["label"]
+    saved_question["options"].sort(key=lambda option: option["label"])
+    with Session(engine) as db:
+        saved_turn = db.get(TutorTurn, turn["turn_id"])
+        saved_turn.practice_question_json = saved_question
+        db.commit()
+    cached = client.post(f"/api/tutor-sessions/{session_id}/turns", json={})
+    assert cached.status_code == 200, cached.text
+    assert cached.json()["practice_question"]["options"] == saved_question["options"]
+    options = saved_question["options"]
     unknown_option = next(option for option in options if option["exclusive"])
+    assert unknown_option["label"] == "A"
 
     original_public_learning_options = experiment_service._public_learning_options
 

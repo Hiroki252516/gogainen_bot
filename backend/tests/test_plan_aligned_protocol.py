@@ -337,7 +337,8 @@ def test_additive_migration_does_not_relabel_or_convert_legacy_rows(study, monke
     study.commit()
     original = dict(study.execute(text("SELECT * FROM participants WHERE id=:id"), {"id": p.id}).mappings().one())
     with study.get_bind().begin() as connection:
-        for table, column in (("participants", "protocol_id"), ("participant_surveys", "survey_version"),
+        for table, column in (("participants", "protocol_id"), ("participants", "consent_document_version"),
+                              ("participants", "consented_at"), ("participant_surveys", "survey_version"),
                               ("participant_surveys", "responses_json"), ("tutor_turns", "material_viewed_at"),
                               ("evaluation_summaries", "hypothesis_metrics_json")):
             connection.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
@@ -353,7 +354,7 @@ def test_additive_migration_does_not_relabel_or_convert_legacy_rows(study, monke
 
 
 def test_new_api_survey_context_persistence_and_legacy_protection():
-    created = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True})
+    created = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"})
     assert created.status_code == 200
     pid = created.json()["participant_id"]
     assert client.get(f"/api/participants/{pid}/survey").json()["material_ratings_required"] is False

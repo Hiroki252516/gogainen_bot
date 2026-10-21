@@ -37,7 +37,9 @@ class PrefetchCoordinator:
             self._active_keys.add(key)
             future = self._ensure_executor().submit(self._run_batch, participant_id, source_session_id)
             self._futures.add(future)
-            future.add_done_callback(lambda completed: self._finished(key, completed))
+        # Already-completed futures invoke callbacks inline; _finished takes
+        # this same lock, so register only after leaving the critical section.
+        future.add_done_callback(lambda completed: self._finished(key, completed))
         return True
 
     def _finished(self, key: tuple[str, str], future: Future) -> None:

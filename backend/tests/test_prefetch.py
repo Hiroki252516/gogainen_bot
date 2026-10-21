@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import Future
 import threading
 import time
 
@@ -12,11 +13,35 @@ from app.main import app
 from app.models import AICallLog, EvaluationSummary, Term, TutorSession, TutorTurn
 from app.seed.content_loader import assessment_question_spec
 import app.services.experiment as experiment_service
-from app.services.prefetch import wait_for_prefetch_tasks
+from app.services.prefetch import PrefetchCoordinator, wait_for_prefetch_tasks
 from app.services.tutor_prefetch import TutorPrefetchRegistry
 
 
 client = TestClient(app)
+
+
+def test_immediately_completed_prefetch_does_not_deadlock(monkeypatch):
+    coordinator = PrefetchCoordinator()
+
+    class CompletedExecutor:
+        def submit(self, *_args):
+            future = Future()
+            future.set_result(None)
+            return future
+
+    monkeypatch.setattr(coordinator, "_ensure_executor", lambda: CompletedExecutor())
+    finished = threading.Event()
+
+    def schedule():
+        coordinator.schedule("participant", "session")
+        finished.set()
+
+    worker = threading.Thread(target=schedule, daemon=True)
+    worker.start()
+    assert finished.wait(timeout=2), "completed callback must not re-enter the scheduling lock"
+    worker.join(timeout=1)
+    assert not coordinator._active_keys
+    assert not coordinator._futures
 
 
 def test_prefetch_wait_propagates_caller_cancellation():
@@ -53,7 +78,7 @@ def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
 def _create_participant_with_pretest() -> str:
     participant = client.post(
         "/api/participants",
-        json={"assignment_code": "A", "consent_checked": True},
+        json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"},
     )
     assert participant.status_code == 200, participant.text
     pid = participant.json()["participant_id"]

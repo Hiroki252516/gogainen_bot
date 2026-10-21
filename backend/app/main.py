@@ -2,17 +2,19 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import Term, TutorSession, TutorTurn
+from app.models import Participant, Term, TutorSession, TutorTurn
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
@@ -52,8 +54,9 @@ from app.services.experiment import (
     submit_attempt,
     submit_survey,
 )
-from app.services.idempotency import run_idempotent
+from app.services.idempotency import normalize_idempotency_key, registration_key_was_deleted, run_idempotent
 from app.services.option_order import current_option_order_mode, save_option_order_mode
+from app.services import identity_mapping
 from app.services.research_protocol import SurveyPayload, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
 from app.services.prefetch import prefetch_coordinator, schedule_prefetch
@@ -171,9 +174,18 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def prevent_identifier_caching(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path in {"/api/participants", "/api/registrations"} or request.url.path.startswith("/api/admin/identity-mappings"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 class ParticipantCreate(BaseModel):
     assignment_code: str | None = None
     consent_checked: bool = False
+    student_number: str = ""
 
 
 class AttemptPayload(BaseModel):
@@ -240,15 +252,38 @@ def seed(db: Session = Depends(get_db)) -> dict:
     return {"seeded": True}
 
 
+@app.exception_handler(RequestValidationError)
+async def private_registration_validation(request: Request, exc: RequestValidationError):
+    # FastAPI's default validation body echoes rejected input, including identifiers.
+    if request.url.path in {"/api/participants", "/api/registrations"}:
+        return JSONResponse(status_code=422, content={"detail": "参加登録の入力形式を確認してください。"}, headers={"Cache-Control": "no-store"})
+    from fastapi.exception_handlers import request_validation_exception_handler
+    return await request_validation_exception_handler(request, exc)
+
+
+@app.post("/api/registrations")
 @app.post("/api/participants")
 async def api_create_participant(
     payload: ParticipantCreate,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
+    if not payload.consent_checked:
+        raise HTTPException(400, "同意書への同意が必要です。")
+    student_number = identity_mapping.validate_student_number(payload.student_number)
+    normalized_key = normalize_idempotency_key(idempotency_key)
+    registration_key = normalized_key or str(uuid4())
+    if normalized_key and registration_key_was_deleted(db, normalized_key):
+        raise HTTPException(409, "この参加登録は削除されています。再送による再登録はできません。")
+    staged_id: str | None = None
+
     def operation() -> dict:
+        nonlocal staged_id
         try:
             participant = create_participant(db, payload.assignment_code, payload.consent_checked)
+            staged_id = participant.id
+            identity_mapping.save_mapping(participant.id, participant.display_code, student_number,
+                                          participant.consented_at.isoformat(), registration_key)
         except OperationalError as exc:
             _raise_database_unavailable(db, exc)
         return {
@@ -258,16 +293,24 @@ async def api_create_participant(
         }
 
     try:
+        # Always reserve a transaction, even for clients without a supplied key.
         return await run_idempotent(
             db,
             scope="participant:create",
-            key=idempotency_key,
+            key=registration_key,
             participant_id=None,
-            request_data=payload.model_dump(mode="json"),
+            request_data={"assignment_code": payload.assignment_code, "consent_checked": payload.consent_checked,
+                          "consent_document_version": identity_mapping.CONSENT_DOCUMENT_VERSION},
             operation=operation,
         )
-    except OperationalError as exc:
-        _raise_database_unavailable(db, exc)
+    except Exception as exc:
+        # Do not remove a mapping if the research commit succeeded but the response failed.
+        db.rollback()
+        if staged_id and db.query(Participant.id).filter_by(id=staged_id).first() is None:
+            identity_mapping.delete_mapping(staged_id)
+        if isinstance(exc, OperationalError):
+            _raise_database_unavailable(db, exc)
+        raise
 
 
 @app.get("/api/participants/{participant_id}/current-step")
@@ -626,8 +669,47 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
 
 
 @app.delete("/api/admin/participants/{participant_id}")
-def api_delete_admin_participant(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return delete_participant(db, participant_id)
+async def api_delete_admin_participant(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    assert_current_experiment(get_participant(db, participant_id))
+    await tutor_prefetch_registry.cancel_for_participant(participant_id)
+    db.info["defer_commits"] = True
+    try:
+        result = delete_participant(db, participant_id)
+        identity_mapping.delete_mapping(participant_id)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.info["defer_commits"] = False
+
+
+def _visible_identity_mappings(db: Session) -> list[dict]:
+    # Hide orphaned staged registrations after a crash; never expose them as participants.
+    current_ids = {row[0] for row in db.query(Participant.id).all()}
+    return [row for row in identity_mapping.list_mappings() if row["participant_id"] in current_ids]
+
+
+@app.get("/api/admin/identity-mappings")
+def api_identity_mappings(db: Session = Depends(get_db)):
+    return JSONResponse({"mappings": _visible_identity_mappings(db)}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/admin/identity-mappings.csv")
+def api_identity_mapping_csv(db: Session = Depends(get_db)):
+    return Response(identity_mapping.mapping_csv(_visible_identity_mappings(db)), media_type="text/csv; charset=utf-8",
+                    headers={"Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="identity-mappings.csv"'})
+
+
+@app.delete("/api/admin/identity-mappings")
+def api_delete_all_identity_mappings():
+    return JSONResponse({"deleted_count": identity_mapping.delete_mapping()}, headers={"Cache-Control": "no-store"})
+
+
+@app.delete("/api/admin/identity-mappings/{participant_id}")
+def api_delete_identity_mapping(participant_id: str):
+    return JSONResponse({"deleted_count": identity_mapping.delete_mapping(participant_id)}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/admin/logs/overview")

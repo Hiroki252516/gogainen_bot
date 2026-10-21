@@ -67,12 +67,21 @@ class _CodexRpcClient:
 
     async def __aenter__(self) -> "_CodexRpcClient":
         headers = self._auth_headers()
-        self._ws = await websockets.connect(
-            self.url,
+        options = dict(
             open_timeout=min(10, self.timeout_sec),
             ping_interval=None,
             additional_headers=headers or None,
         )
+        if self.url.startswith("unix://"):
+            socket_path = self.url.removeprefix("unix://")
+            if not socket_path.startswith("/"):
+                raise CodexAppServerError(
+                    "invalid_app_server_url",
+                    "Unix socketの接続先には絶対パスを指定してください。",
+                )
+            self._ws = await websockets.unix_connect(path=socket_path, **options)
+        else:
+            self._ws = await websockets.connect(self.url, **options)
         return self
 
     async def __aexit__(self, *_: object) -> None:
@@ -117,6 +126,10 @@ class _CodexRpcClient:
             if "error" in message:
                 raise CodexAppServerError("jsonrpc_error", f"Codex app-serverで `{method}` が失敗しました。", json.dumps(message["error"], ensure_ascii=False))
             return message.get("result")
+
+    async def notify(self, method: str, params: dict[str, Any]) -> None:
+        # Codex app-server's wire protocol omits the generic JSON-RPC header.
+        await self._ws.send(json.dumps({"method": method, "params": params}))
 
     async def recv(self, notification_handler: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
         raw = await asyncio.wait_for(self._ws.recv(), timeout=self.timeout_sec)
@@ -332,6 +345,7 @@ class CodexAppServerBackend:
                 "capabilities": {},
             },
         )
+        await rpc.notify("initialized", {})
 
     async def _ensure_logged_in(self, rpc: _CodexRpcClient) -> dict[str, Any]:
         account_result = await rpc.call("account/read", {"refreshToken": False})

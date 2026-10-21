@@ -29,7 +29,7 @@ client = TestClient(app)
 
 
 def create_trial(group="A", labels="DEF"):
-    participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True}).json()
+    participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:

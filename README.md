@@ -1,5 +1,9 @@
 # 学習ログ駆動型AIチューター
 
+2026-10-21追加: 同意画面に提示された同意書と必須の学籍番号入力を追加しました。学籍番号は研究DB・AI入力・研究ログへ含めず、分離した対応表に保存します。管理画面下部で対応表CSVをダウンロードし、USBへの保存を確認してから個別/全件削除できます。対応表だけを削除しても研究データは残ります。撤回時の参加者削除では研究DB内の関連データも削除しますが、既出力CSV・USB・バックアップ等は研究者が別途処理してください。
+
+責任者・保存場所・保管期間は保留のため動作確認用表示です。管理者認証は今回追加していません。本実験開始前の課題は[対応表](docs/20_experiment_plan_alignment.md)と[運用手順](docs/19_experiment_operation_runbook.md)を参照してください。
+
 Wordと承認された実装計画に沿い、教材・low設定・新アンケート・6仮説の記述集計を実装しています。[採用判断と残課題](docs/20_experiment_plan_alignment.md)と[評価定義](docs/12_evaluation_metrics.md)を先に確認してください。
 
 実験仕様版は3を維持し、新規参加者にprotocol_id=experiment-plan-2026-10-18-v1を保存します。識別子のない既存版3を含む旧記録は閲覧・CSV出力専用で、進行・削除・補修・再計算・新集計をしません。更新前の資料はdocs/historyに保全しています。
@@ -29,7 +33,7 @@ Wordと承認された実装計画に沿い、教材・low設定・新アンケ�
 
 現行フローでは、参加者向けの表示名を「テスト」「再テスト1」「再テスト2」のように統一します。内部フェーズ `final_test` は、pretestで学習対象がない参加者にだけ使い、画面上は「再テスト1」と表示します。学習対象がある参加者は学習後に`retest`を受けます。retestで3項目すべて正解した場合は追加の確認を省略して`/survey`へ進み、不正解・未回答がある場合は学習対象へ戻ります。したがって、全参加者が同じ`final_test`を受ける設計ではありません。
 
-テスト系は `backend/app/seed/content/learning_content.yml`、学習確認は現行v2の `learning_questions_v2.yml` だけを使用します。テスト21問、学習確認30問で、各問は正解/M1/M3/unknownを3/3/3/1持ちます。管理画面の選択肢配置を「デバッグ配置」または「ランダム配置」に切り替えられます。初期値はデバッグ配置で、開始済み参加者には影響せず新規参加者から適用します。実験データ収集前にランダム配置を選んでください。ランダム配置は問題ごとに全員共通・再起動後も固定され、役割別ラベル数を問題バンク全体で均衡させます。採点は表示ラベルではなく選択肢ID・内部メタデータに基づきます。
+テスト系は `backend/app/seed/content/learning_content.yml`、学習確認は現行v2の `learning_questions_v2.yml` だけを使用します。テスト21問、学習確認30問で、各問は正解/M1/M3/unknownを3/3/3/1持ちます。管理画面の選択肢配置を「デバッグ配置」または「ランダム配置」に切り替えられます。初期値はデバッグ配置で、モードの切替は新規参加者から適用します。実験データ収集前にランダム配置を選んでください。2026-10-21の変更により、ランダム配置では「わからない」を最後のJに固定し、残る9択だけをA〜Iへ配置します。問題ごとに全員共通・再起動後も固定され、正解/M1/M3のラベル数を問題バンク全体で均衡させます。保存済みの回答・学習問題snapshotは書き換えません。採点は表示ラベルではなく選択肢ID・内部メタデータに基づきます。
 
 教材生成・正答要約・誤答解説では、両群に共通用語・構成要素・RAG・`interaction_history`を渡します。履歴は同じ参加者・用語の全フェーズの採点済み回答で、問題・選択・全体正誤・時刻だけを含み、診断ラベルやAI解説は含めません。実験群だけに診断・対象主張・taxonomy・教授方針を追加します。確認問題は両群とも同じ診断連動規則を使いますが、統制群のLLMには診断・段階を渡しません。教授方略はbackendで固定し、実験群の教授契約と教材内transfer_checkを維持します。
 
@@ -91,6 +95,25 @@ Wordと承認された実装計画に沿い、教材・low設定・新アンケ�
 | `docs/99_sources_and_notes.md` | 計画書の参考文献、理論と設計判断、旧資料の扱い |
 
 ## 起動方法
+
+### WSL + Docker Desktop（このリポジトリのoverride使用時）
+
+`docker-compose.override.yml` はfrontend/backend/dbをComposeネットワークに接続する。frontendは `backend:8000`、backendはPostgreSQLの `db:5432` を使う。既存PostgreSQL volumeを保持し、SQLiteからの自動移行はしない。
+
+WSLのCodex CLIが古いと `gpt-5.6-luna` が「newer version of Codex」で失敗する。CLIを更新してから、ターミナル1で次を実行し、開いたままにする。
+
+```bash
+codex update
+./scripts/start-codex-app-server.sh --docker
+```
+
+ターミナル2:
+
+```bash
+docker compose up --build
+```
+
+`--docker` は `.local/codex-app-server/server.sock` を作り、backendへsocketだけをread-only mountする。接続先は `unix:///codex-app-server.sock`。4500番の公開・ホストIP指定・認証ファイルのコンテナコピーは不要。app-serverを再起動した場合は、socketの再マウントのため `docker compose up -d --force-recreate backend` も実行する。`http://localhost:3000/admin` のAI状態で接続とログインを確認する。
 
 ### Docker Compose
 

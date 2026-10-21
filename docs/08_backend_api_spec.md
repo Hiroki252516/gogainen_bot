@@ -1,5 +1,17 @@
 # 現行API
 
+## 2026-10-21 同意・分離対応表
+
+- POST /api/registrations（互換URL /api/participants）: assignment_code、consent_checked、student_numberを受け取る。学籍番号は必須・trim後1〜64文字・改行/制御文字不可。同意なしは400、不正な型は識別情報を返さない422。研究DBには学籍番号もそのハッシュも保存しない。Idempotency-Keyの再送は登録結果だけを返し、削除済み対応表を再作成しない。
+- GET /api/admin/identity-mappings: アプリ内の対応表を返す。
+- GET /api/admin/identity-mappings.csv: BOM付きUTF-8 CSVを返す。数式開始文字は無害化し、ファイル名には識別情報を含めない。
+- DELETE /api/admin/identity-mappings/{participant_id}、DELETE /api/admin/identity-mappings: 対応表の個別/全件削除。研究データは残す。
+- DELETE /api/admin/participants/{participant_id}: 現行プロトコルの研究DB内の関連データとアプリ内の対応表を削除する。旧データの409を維持する。ダウンロード済みファイル・USB・バックアップ・Codex側の保持データは削除対象外。
+
+登録・対応表の応答はCache-Control: no-store。対応表APIも現状は認証なしであり、確認ポップアップは認可の代わりにはならない。
+
+削除済み登録キーの再送判定は、削除監査のregistration_keys配列をDB側で完全一致検索する。SQLiteはjson_each、PostgreSQLはjson_array_elements_textとEXISTSを使用し、監査JSONの全件取得・Pythonでの線形探索を行わない。既存監査を書き換えず、新規テーブル・列・起動時補修も追加しない。参加者削除は既存_commitのdefer_commits処理を維持し、対応表削除前に研究DBを確定しない。対応表削除が失敗した場合は研究DBをロールバックする。別DB間の分散トランザクションを実装したという意味ではない。
+
 ## 計画書対応の範囲
 
 現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。実験仕様版3と新protocol_idの両方で進行可否を判定する。
@@ -41,6 +53,6 @@ NULL・版1/2・未対応版・旧protocol_idの版3は、本文検証・冪等�
 
 参加者の出題APIに正答や分類メタデータを公開しない。回答後の結果確認では問題・選択内容・正誤を返す。Idempotency-Keyの再送、回答済みロックは維持する。旧試用の管理者閲覧・CSVは許可し、再計算は拒否する。
 
-選択肢配置はRuntimeSettingの単一行で管理する。未設定時は `debug_fixed`。管理APIのPUTで設定を保存し、GETは現在値と `applies_to=new_participants_only` を返す。新規参加者には開始時のモードを保存し、既存参加者のnull値は `debug_fixed` として扱う。`randomized` は問題バンクごとの固定・均衡配置で、同一問題は群や参加者をまたいで同じラベル・順序となる。採点は表示ラベルではなく選択肢IDと内部メタデータで行う。画面向け選択肢に追加する `exclusive` は「わからない」の単独選択を扱うための情報で、正誤やM1/M3分類は含まない。
+選択肢配置はRuntimeSettingの単一行で管理する。未設定時は `debug_fixed`。管理APIのPUTで設定を保存し、GETは現在値と `applies_to=new_participants_only` を返す。新規参加者には開始時のモードを保存し、既存参加者のnull値は `debug_fixed` として扱う。`randomized` は「わからない」を最後のJに固定し、残る9択をA〜Iへ固定・均衡配置する。同一問題は群や参加者をまたいで同じラベル・順序となる。採点は表示ラベルではなく選択肢IDと内部メタデータで行う。画面向け選択肢に追加する `exclusive` は「わからない」の単独選択を扱うための情報で、正誤やM1/M3分類は含まない。
 
 ランダム配置の学習問題で送る `option_id` は、表示済みのTutorTurnスナップショットに保存するランダムIDであり、元の選択肢ラベルや判定役割を符号化しない。回答時はそのスナップショットを内部選択肢へ照合する。設問再取得・送信再試行では保存済みTutorTurnを返すため、同じ表示に対するIDは維持される。問題の表示ラベルと順序自体は問題バンクから決定論的に生成する。

@@ -30,7 +30,7 @@ client = TestClient(app)
 
 
 def create_trial(group="A", labels="DEF"):
-    result = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True})
+    result = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "TEST-0001"})
     assert result.status_code == 200, result.text
     pid = result.json()["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
@@ -137,7 +137,7 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
     assert next(csv.reader(exported.text.splitlines())) == experiment.LOG_CSV_COLUMNS
     with SessionLocal() as db:
         assert trial_snapshot(db, pid) == before
-    new = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).json()
+    new = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     assert new["participant_id"] != pid
 
 

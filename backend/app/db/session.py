@@ -33,6 +33,8 @@ def _ensure_lightweight_schema_updates() -> None:
             ("experiment_spec_version", "INTEGER"),
             ("protocol_id", "VARCHAR(80)"),
             ("option_order_mode", "VARCHAR(32)"),
+            ("consent_document_version", "VARCHAR(80)"),
+            ("consented_at", datetime_type),
         ],
         "participant_surveys": [
             ("survey_version", "VARCHAR(80)"),
