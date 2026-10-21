@@ -12,6 +12,9 @@ DEBUG_FIXED = "debug_fixed"
 RANDOMIZED = "randomized"
 OPTION_ORDER_MODES = (DEBUG_FIXED, RANDOMIZED)
 OPTION_LABELS = tuple("ABCDEFGHIJ")
+SHUFFLED_OPTION_LABELS = OPTION_LABELS[:-1]
+UNKNOWN_DISPLAY_LABEL = OPTION_LABELS[-1]
+OPTION_ORDER_VERSION = "option-order-v2-unknown-last"
 ASSESSMENT_VARIANTS_PER_TERM = 7
 LEARNING_VARIANTS_PER_STAGE = 5
 
@@ -110,10 +113,12 @@ def _participant_option_id(option: Any, *, bank: str, mode: str) -> str:
     return _option_id(option)
 
 
-def _label_permutation(bank: str) -> list[str]:
+def _label_permutation(bank: str, block_index: int) -> list[str]:
     return sorted(
-        OPTION_LABELS,
-        key=lambda label: hashlib.sha256(f"option-order-v1:{bank}:label:{label}".encode()).digest(),
+        SHUFFLED_OPTION_LABELS,
+        key=lambda label: hashlib.sha256(
+            f"{OPTION_ORDER_VERSION}:{bank}:{block_index}:label:{label}".encode()
+        ).digest(),
     )
 
 
@@ -127,20 +132,23 @@ def _display_label_by_source(options: list[Any], bank: str, item_index: int) -> 
     if tuple(len(by_role[role]) for role in ("correct", "M1", "M3", "unknown")) != (3, 3, 3, 1):
         raise ValueError("randomized option order requires role counts 3/3/3/1")
 
-    labels = _label_permutation(bank)
-    start = (item_index * 3) % len(OPTION_LABELS)
+    # Rotate roles over each block of three questions so every A-I label is
+    # used once per role. Re-shuffle between blocks to vary the correct slots.
+    labels = _label_permutation(bank, item_index // 3)
+    label_count = len(labels)
+    start = (item_index % 3) * 3
     slots = {
-        "correct": [labels[(start + offset) % 10] for offset in range(0, 3)],
-        "M1": [labels[(start + offset) % 10] for offset in range(3, 6)],
-        "M3": [labels[(start + offset) % 10] for offset in range(6, 9)],
-        "unknown": [labels[(start + 9) % 10]],
+        "correct": [labels[(start + offset) % label_count] for offset in range(0, 3)],
+        "M1": [labels[(start + offset) % label_count] for offset in range(3, 6)],
+        "M3": [labels[(start + offset) % label_count] for offset in range(6, 9)],
+        "unknown": [UNKNOWN_DISPLAY_LABEL],
     }
     result: dict[str, str] = {}
     for role, role_options in by_role.items():
         role_options = sorted(
             role_options,
             key=lambda option: hashlib.sha256(
-                f"option-order-v1:{bank}:{item_index}:{role}:{_source_label(option)}".encode()
+                f"{OPTION_ORDER_VERSION}:{bank}:{item_index}:{role}:{_source_label(option)}".encode()
             ).digest(),
         )
         result.update(

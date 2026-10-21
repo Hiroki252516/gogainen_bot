@@ -418,7 +418,8 @@ export default function AdminPage() {
                   </button>
                 ))}
               </div>
-              <p className="muted">新規参加者から適用します。開始済みの参加者の配置は変わりません。</p>
+              <p className="muted">モードの切替は新規参加者から適用します。開始済みの参加者の配置モードは変わりません。</p>
+              <p className="muted">ランダム配置ではA〜Iを並べ替え、「わからない」は最後のJに固定します。</p>
               {optionOrder?.mode === "debug_fixed" ? (
                 <p className="danger" role="alert">デバッグ配置は正解位置の手掛かりになるため、実験データの収集には使用しないでください。</p>
               ) : null}

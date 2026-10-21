@@ -2781,6 +2781,9 @@ def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
         async def __aexit__(self, *_args):
             return None
 
+        async def notify(self, method, params):
+            self.calls.append((method, params))
+
         async def call(self, method, params=None, notification_handler=None, on_sent=None):
             self.calls.append((method, params))
             if on_sent:
@@ -2811,6 +2814,7 @@ def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
 
     assert result == {"ok": True}
     assert result.raw_text == '\n{"ok": true}\n'
+    assert [method for method, _ in rpc.calls][:3] == ["initialize", "initialized", "account/read"]
     turn_start = next(params for method, params in rpc.calls if method == "turn/start")
     assert turn_start["model"] == "gpt-5.6-luna"
     assert turn_start["effort"] == "low"
@@ -2890,6 +2894,9 @@ def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch
 
         async def __aexit__(self, *_args):
             return None
+
+        async def notify(self, method, params):
+            assert method == "initialized"
 
         async def call(self, method, params=None, notification_handler=None, on_sent=None):
             if on_sent:
@@ -2988,6 +2995,9 @@ def test_codex_failed_send_is_audited_as_not_sent(monkeypatch):
 
         async def __aexit__(self, *_args):
             return None
+
+        async def notify(self, method, params):
+            assert method == "initialized"
 
         async def call(self, method, params=None, notification_handler=None, on_sent=None):
             if method == "account/read":

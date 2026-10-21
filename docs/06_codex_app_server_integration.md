@@ -89,7 +89,13 @@ capability tokenを使う場合は、backendコンテナに同じtokenファイ�
 }
 ```
 
-実装時にschemaが `initialized` 通知を要求する場合は送る。要求がない場合は送らない。app-server部分は固定実装ではなく、schema駆動で小さく保つ。
+現行clientは `initialize` の応答後に `initialized` 通知を送り、それから `account/read` 等を実行する。app-server部分はschema駆動で小さく保つ。
+
+### WSL + Docker Desktopの接続
+
+2026-10-21の起動障害修正では、WSL CLIを0.140.0から0.163.0へ更新した。失敗ログの直接原因は `gpt-5.6-luna` が新しいCodexを要求したこと。モデル・推論設定は変更しない。将来の互換性は実際のCLIと実応答で確認する。
+
+WSL向けoverrideは `scripts/start-codex-app-server.sh --docker` のUnix socketをbackendへread-only mountし、`CODEX_APP_SERVER_URL=unix:///codex-app-server.sock` で接続する。`AIBackend` と既存WebSocket接続を維持し、Unix接続だけ `websockets.unix_connect` を使用する。socket用ディレクトリは700、ChatGPT認証ファイルはホストに保持する。socketの実体をmountするため、app-server再起動後はbackendもforce-recreateする。起動コマンドは[README](../README.md#wsl--docker-desktopこのリポジトリのoverride使用時)。
 
 ## アカウント状態確認
 

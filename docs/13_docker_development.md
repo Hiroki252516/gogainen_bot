@@ -13,6 +13,14 @@
 
 ## 現行Docker Compose構成
 
+### WSL向けoverride（2026-10-21）
+
+以下の基本構成とは別に、このリポジトリの `docker-compose.override.yml` は `network_mode: !reset null` でbackendのhost network設定を除去し、3サービスをdefaultネットワークへ接続する（タグ対応のComposeを使用する）。frontendから `http://backend:8000`、backendから `db:5432` を使い、既存PostgreSQL volumeを継続使用する。DB種別の切替や過去データの移行は自動実行しない。
+
+AI接続はWSL上のUnix socketをread-only mountする。先に `./scripts/start-codex-app-server.sh --docker`、別ターミナルで `docker compose up --build` を実行する。socketが存在しないときはディレクトリを自動作成せず起動を拒否する。app-server再起動後は `docker compose up -d --force-recreate backend` でsocketを再マウントする。`/api/admin/ai/status` のHTTP 200だけで接続成功とはせず、本文の `app_server_reachable` / `logged_in` を確認する。CLI更新を要求するモデルエラーには `codex update` を実行し、モデルを無断変更しない。
+
+### 基本構成（overrideなし）
+
 ```yaml
 services:
   frontend:
