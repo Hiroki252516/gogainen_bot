@@ -27,6 +27,8 @@ class Participant(Base):
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     assignment_method: Mapped[str] = mapped_column(String(32), default="manual", nullable=False)
     consent_checked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    consent_document_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    consented_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     current_step: Mapped[str] = mapped_column(String(64), default="start", nullable=False)
     learning_content_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     experiment_spec_version: Mapped[int | None] = mapped_column(Integer, nullable=True)

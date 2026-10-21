@@ -53,7 +53,7 @@ def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
 def _create_participant_with_pretest() -> str:
     participant = client.post(
         "/api/participants",
-        json={"assignment_code": "A", "consent_checked": True},
+        json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"},
     )
     assert participant.status_code == 200, participant.text
     pid = participant.json()["participant_id"]

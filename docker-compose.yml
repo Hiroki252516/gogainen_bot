@@ -31,9 +31,11 @@ services:
       MAX_LEARNING_TARGETS: ${MAX_LEARNING_TARGETS}
       MAX_TURNS_PER_TERM: ${MAX_TURNS_PER_TERM}
       EXPORT_DIR: ${EXPORT_DIR}
+      IDENTITY_MAPPING_PATH: /identity-mappings/mappings.sqlite3
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
     volumes:
       - ./exports:/app/exports
+      - identity_mappings:/identity-mappings
       - ./rag_agent_knowledge_base:/rag_agent_knowledge_base:ro
       - ./rag_ready_教材:/rag_ready_教材:ro
     depends_on:
@@ -52,3 +54,4 @@ services:
 
 volumes:
   pgdata:
+  identity_mappings:

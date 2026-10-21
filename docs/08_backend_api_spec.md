@@ -1,5 +1,15 @@
 # 現行API
 
+## 2026-10-21 同意・分離対応表
+
+- POST /api/registrations（互換URL /api/participants）: assignment_code、consent_checked、student_numberを受け取る。学籍番号は必須・trim後1〜64文字・改行/制御文字不可。同意なしは400、不正な型は識別情報を返さない422。研究DBには学籍番号もそのハッシュも保存しない。Idempotency-Keyの再送は登録結果だけを返し、削除済み対応表を再作成しない。
+- GET /api/admin/identity-mappings: アプリ内の対応表を返す。
+- GET /api/admin/identity-mappings.csv: BOM付きUTF-8 CSVを返す。数式開始文字は無害化し、ファイル名には識別情報を含めない。
+- DELETE /api/admin/identity-mappings/{participant_id}、DELETE /api/admin/identity-mappings: 対応表の個別/全件削除。研究データは残す。
+- DELETE /api/admin/participants/{participant_id}: 現行プロトコルの研究DB内の関連データとアプリ内の対応表を削除する。旧データの409を維持する。ダウンロード済みファイル・USB・バックアップ・Codex側の保持データは削除対象外。
+
+登録・対応表の応答はCache-Control: no-store。対応表APIも現状は認証なしであり、確認ポップアップは認可の代わりにはならない。
+
 ## 計画書対応の範囲
 
 現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。実験仕様版3と新protocol_idの両方で進行可否を判定する。

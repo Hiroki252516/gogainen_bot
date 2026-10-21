@@ -28,8 +28,9 @@ try {
     await page.goto(new URL("/start", base).href);
     await page.getByLabel("参加コード", { exact: true }).fill("A");
     await page.getByRole("button", { name: "同意書を確認する", exact: true }).click();
-    await page.getByRole("checkbox", { name: "上記を確認し、研究参加と研究用ログの保存に同意します。", exact: true }).check();
-    const created = page.waitForResponse((response) => response.url().endsWith("/api/participants") && response.request().method() === "POST");
+    await page.getByRole("textbox", { name: "学籍番号（必須）" }).fill("BROWSER-SYNTHETIC");
+    await page.getByRole("checkbox", { name: "説明を読み、その内容を理解した上で、本実験に参加することに同意します。", exact: true }).check();
+    const created = page.waitForResponse((response) => response.url().endsWith("/api/registrations") && response.request().method() === "POST");
     await page.getByRole("button", { name: "同意してテストを開始", exact: true }).click();
     const participant = await (await created).json();
     await answerTest(page, viewed);

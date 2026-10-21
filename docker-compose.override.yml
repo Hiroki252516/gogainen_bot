@@ -1,0 +1,18 @@
+# Local WSL settings; keep the existing .env intact.
+# Docker Compose loads this file automatically.
+services:
+  frontend:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    build:
+      args:
+        INTERNAL_API_BASE_URL: http://backend:8000
+    environment:
+      INTERNAL_API_BASE_URL: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: ""
+  backend:
+    environment:
+      CODEX_APP_SERVER_URL: ws://host.docker.internal:4500
+    volumes:
+      # Preserve the SQLite database used by the existing .env across rebuilds.
+      - ./.local/backend-data:/app/.local

@@ -1,5 +1,6 @@
 .venv
 .local
+.private-identities
 __pycache__
 .pytest_cache
 *.pyc

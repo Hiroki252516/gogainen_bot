@@ -8,6 +8,9 @@ test_db.parent.mkdir(parents=True, exist_ok=True)
 test_db.unlink(missing_ok=True)
 os.environ["DATABASE_URL"] = f"sqlite:///{test_db}"
 os.environ["EXPORT_DIR"] = str(test_db.parent / "exports")
+identity_test_db = test_db.parent / "test-identities.sqlite3"
+identity_test_db.unlink(missing_ok=True)
+os.environ["IDENTITY_MAPPING_PATH"] = str(identity_test_db)
 os.environ["RAG_BASE_DIR"] = str(Path(__file__).resolve().parents[2] / "rag_agent_knowledge_base")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

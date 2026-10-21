@@ -1,0 +1,177 @@
+import asyncio
+import json
+import sqlite3
+from uuid import uuid4
+
+import pytest
+from fastapi.testclient import TestClient
+from fastapi import HTTPException
+from sqlalchemy import text
+
+from app.main import app
+from app.db.session import SessionLocal, engine
+from app.core.config import get_settings
+from app.models import AICallLog, Participant, IdempotencyRecord
+from app.services import identity_mapping
+from app.services.experiment import _record_ai_log
+
+client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_mappings(tmp_path, monkeypatch):
+    monkeypatch.setattr(get_settings(), "identity_mapping_path", str(tmp_path / "identities.sqlite3"))
+
+
+def register(student="001-PRIVACY-UNIQUE", key=None):
+    return client.post("/api/registrations", json={"assignment_code": "A", "consent_checked": True,
+                                                "student_number": student},
+                       headers={"Idempotency-Key": key or str(uuid4())})
+
+
+@pytest.mark.parametrize("student", ["", "   ", "x" * 65, "abc\n", "abc\t", "a\x00b"])
+def test_invalid_student_numbers_are_not_echoed(student):
+    response = register(student)
+    assert response.status_code == 400
+    assert not identity_mapping.list_mappings()
+
+
+def test_registration_is_private_and_replay_does_not_restore_deleted_mapping():
+    key = str(uuid4())
+    response = register("  001-PRIVACY-UNIQUE  ", key)
+    assert response.status_code == 200
+    pid = response.json()["participant_id"]
+    assert register("001-PRIVACY-UNIQUE", key).json() == response.json()
+    rows = client.get("/api/admin/identity-mappings")
+    assert rows.headers["cache-control"] == "no-store"
+    assert rows.json()["mappings"][0]["student_number"] == "001-PRIVACY-UNIQUE"
+    csv = client.get("/api/admin/identity-mappings.csv")
+    assert csv.content.startswith(b"\xef\xbb\xbf")
+    assert "001-PRIVACY-UNIQUE" in csv.text
+    assert "PRIVACY" not in response.text
+    with SessionLocal() as db:
+        p = db.get(Participant, pid)
+        assert p.consented_at and p.consent_document_version == identity_mapping.CONSENT_DOCUMENT_VERSION
+        record = db.query(IdempotencyRecord).filter_by(idempotency_key=key).one()
+        assert "PRIVACY" not in json.dumps(record.response_json)
+    # Scan every table, including raw prompts, idempotency and audit data.
+    with engine.connect() as connection:
+        for table in connection.execute(text("SELECT name FROM sqlite_master WHERE type='table'")):
+            contents = connection.execute(text(f'SELECT * FROM "{table[0]}"')).all()
+            assert "001-PRIVACY-UNIQUE" not in str(contents)
+    exported = client.get(f"/api/admin/participants/{pid}/logs.csv")
+    assert exported.status_code == 200 and "PRIVACY" not in exported.text
+    assert client.delete(f"/api/admin/identity-mappings/{pid}").json()["deleted_count"] == 1
+    assert register("001-PRIVACY-UNIQUE", key).json() == response.json()
+    assert client.get("/api/admin/identity-mappings").json()["mappings"] == []
+    with SessionLocal() as db:
+        assert db.get(Participant, pid) is not None
+
+
+def test_delete_all_preserves_research_and_securely_removes_identifier():
+    ids = [register("DELETE-IDENTITY-" + str(i)).json()["participant_id"] for i in range(2)]
+    assert client.delete("/api/admin/identity-mappings").json() == {"deleted_count": 2}
+    assert not identity_mapping.list_mappings()
+    from pathlib import Path
+    assert b"DELETE-IDENTITY" not in Path(get_settings().identity_mapping_path).read_bytes()
+    with SessionLocal() as db:
+        assert all(db.get(Participant, pid) for pid in ids)
+
+
+def test_withdrawal_deletes_mapping_and_rejects_late_ai_log():
+    key = str(uuid4())
+    pid = register(key=key).json()["participant_id"]
+    result = client.delete(f"/api/admin/participants/{pid}")
+    assert result.status_code == 200
+    assert not identity_mapping.list_mappings()
+    assert register(key=key).status_code == 409
+    assert not identity_mapping.list_mappings()
+    with SessionLocal() as db:
+        with pytest.raises(HTTPException) as exc:
+            _record_ai_log(db, AICallLog(provider="mock", purpose="generate_tutoring_turn",
+                                       status="success", request_payload={"participant_id": pid}))
+        assert exc.value.status_code == 404
+        assert not db.query(AICallLog).filter(AICallLog.request_payload.contains(pid)).all()
+
+
+def test_mapping_failure_does_not_create_participant_and_same_key_can_retry(monkeypatch):
+    key = str(uuid4())
+    original = identity_mapping.save_mapping
+    with SessionLocal() as db:
+        before = db.query(Participant).count()
+    def fail(*args, **kwargs):
+        raise sqlite3.OperationalError("isolated failure")
+    monkeypatch.setattr(identity_mapping, "save_mapping", fail)
+    with TestClient(app, raise_server_exceptions=False) as no_raise:
+        response = no_raise.post("/api/registrations", json={"assignment_code": "A", "consent_checked": True,
+                                                            "student_number": "PRIVATE-FAILURE"},
+                                 headers={"Idempotency-Key": key})
+    assert response.status_code == 500 and "PRIVATE" not in response.text
+    with SessionLocal() as db:
+        assert db.query(Participant).count() == before
+    monkeypatch.setattr(identity_mapping, "save_mapping", original)
+    assert register("PRIVATE-FAILURE", key).status_code == 200
+
+
+def test_validation_does_not_echo_malformed_identifier():
+    response = client.post("/api/registrations", json={"student_number": {"secret": "DO-NOT-ECHO"}})
+    assert response.status_code == 422 and "DO-NOT-ECHO" not in response.text
+    assert client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True}).status_code == 400
+
+
+def test_delete_while_ai_is_pending_does_not_recreate_logs(monkeypatch):
+    from app.services import experiment
+    pid = register().json()["participant_id"]
+
+    async def scenario():
+        entered, release = asyncio.Event(), asyncio.Event()
+        class DelayedBackend:
+            provider = "mock"
+            async def generate_correct_answer_summary(self, payload):
+                entered.set()
+                await release.wait()
+                return {"summary": "合成の説明"}
+        monkeypatch.setattr(experiment, "get_ai_backend", lambda **kwargs: DelayedBackend())
+        with SessionLocal() as db:
+            task = asyncio.create_task(experiment._ai_call(db, "generate_correct_answer_summary", {"participant_id": pid}))
+            await entered.wait()
+            with SessionLocal() as deleting:
+                experiment.delete_participant(deleting, pid)
+            release.set()
+            with pytest.raises(HTTPException) as exc:
+                await task
+            assert exc.value.status_code == 404
+    asyncio.run(scenario())
+    with SessionLocal() as db:
+        assert not any((row.request_payload or {}).get("participant_id") == pid for row in db.query(AICallLog))
+
+
+def test_identity_store_cannot_use_research_database(monkeypatch):
+    from sqlalchemy.engine import make_url
+    monkeypatch.setattr(get_settings(), "identity_mapping_path", make_url(get_settings().database_url).database)
+    with pytest.raises(RuntimeError, match="研究DB"):
+        identity_mapping.list_mappings()
+
+
+def test_blank_retry_key_still_rolls_back_when_mapping_fails(monkeypatch):
+    def fail(*args):
+        raise sqlite3.OperationalError("isolated failure")
+    monkeypatch.setattr(identity_mapping, "save_mapping", fail)
+    with SessionLocal() as db:
+        before = db.query(Participant).count()
+    with TestClient(app, raise_server_exceptions=False) as no_raise:
+        response = no_raise.post("/api/registrations", json={"assignment_code": "A", "consent_checked": True,
+                                                            "student_number": "BLANK-KEY-PRIVATE"},
+                                 headers={"Idempotency-Key": "   "})
+    assert response.status_code == 500
+    with SessionLocal() as db:
+        assert db.query(Participant).count() == before
+
+
+def test_csv_formula_cells_are_neutralized():
+    import csv
+    import io
+    register("=SYNTHETIC-FORMULA")
+    response = client.get("/api/admin/identity-mappings.csv")
+    row = list(csv.reader(io.StringIO(response.text.lstrip("\ufeff"))))[1]
+    assert row[0] == "'=SYNTHETIC-FORMULA"

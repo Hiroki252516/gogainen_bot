@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ParticipantEntryGuard } from "@/components/ParticipantFlowGuard";
-import { postIdempotent } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { ConsentDocument } from "@/components/ConsentDocument";
 
 export default function ConsentPage() {
   const router = useRouter();
   const [assignmentCode, setAssignmentCode] = useState("");
   const [accepted, setAccepted] = useState(false);
+  const [studentNumber, setStudentNumber] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,20 +29,34 @@ export default function ConsentPage() {
       setError("開始画面から管理者の参加コードを入力してください。");
       return;
     }
+    if (!studentNumber.trim() || studentNumber.trim().length > 64 || /\p{C}/u.test(studentNumber)) {
+      setError("学籍番号を1〜64文字で入力してください。改行・制御文字は使用できません。");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
-      const data = await postIdempotent<{ participant_id: string; display_code: string; current_step: string }>(
-        "/api/participants",
-        { assignment_code: assignmentCode, consent_checked: true },
-        "participant:create",
-        { timeoutMs: 15000 },
-      );
+      // Persist only an opaque retry key. Never persist the body containing the student number.
+      let key = sessionStorage.getItem("registration_request_key");
+      if (!key) {
+        key = crypto.randomUUID();
+        sessionStorage.setItem("registration_request_key", key);
+      }
+      const data = await api<{ participant_id: string; display_code: string; current_step: string }>(
+        "/api/registrations", {
+          method: "POST", headers: { "Idempotency-Key": key }, timeoutMs: 15000,
+          body: JSON.stringify({ assignment_code: assignmentCode, consent_checked: true, student_number: studentNumber }),
+        });
+      setStudentNumber("");
+      sessionStorage.removeItem("registration_request_key");
       localStorage.setItem("participant_id", data.participant_id);
       localStorage.setItem("display_code", data.display_code);
       localStorage.removeItem("pending_assignment_code");
       router.replace("/pretest");
     } catch (err) {
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500 && !err.code?.startsWith("idempotency_")) {
+        sessionStorage.removeItem("registration_request_key");
+      }
       setError(err instanceof Error ? err.message : String(err));
       setSubmitting(false);
     }
@@ -50,22 +66,18 @@ export default function ConsentPage() {
     <ParticipantEntryGuard>
       <AppShell step="同意書">
         <section className="panel stack">
-          <h1>研究参加同意書（仮）</h1>
-          <div className="notice stack">
-            <strong>実験の概要</strong>
-            <p>専門用語についてテスト、学習セッション、再テストに回答します。</p>
-            <strong>保存する情報</strong>
-            <p>個人名やメールアドレスは収集せず、回答、回答時間、学習履歴、AI応答を研究用ログとして保存します。</p>
-            <strong>参加について</strong>
-            <p>参加は任意です。途中で実験を中止できます。保存された研究ログは研究目的で利用します。</p>
-          </div>
-          <div className="notice">
-            <strong>学習方法の割り当て</strong>
-            <p>研究計画に基づき、二つの学習支援方法のいずれかに割り当てられます。参加者が学習方法を選択することはありません。</p>
-          </div>
+          <h1>研究参加同意書</h1>
+          <p className="danger" role="status">未確定項目を含む動作確認用です。責任者・保存場所・保管期間および管理アクセス対策の確定前に、本実験のデータを収集しないでください。</p>
+          <ConsentDocument />
+          <label>学籍番号（必須）
+            <input value={studentNumber} onChange={(event) => setStudentNumber(event.target.value)}
+              required maxLength={64} autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={submitting} />
+          </label>
+          <p className="muted">学籍番号は撤回時の対応表にのみ使用し、研究用データやAIへの入力には含めません。</p>
+          <h2>同意確認</h2>
           <label className="option">
             <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={submitting} />
-            <span>上記を確認し、研究参加と研究用ログの保存に同意します。</span>
+            <span>説明を読み、その内容を理解した上で、本実験に参加することに同意します。</span>
           </label>
           {error ? <div className="danger" role="alert">{error}</div> : null}
           <div className="actions">
