@@ -1,6 +1,6 @@
 # 現行プロトコルの実装境界
 
-仕様版3を維持し、新規にexperiment-plan-2026-10-18-v1を保存する。旧プロトコルを並行稼働させず、識別子のない既存版3も閲覧専用にする。確定判断は[20](20_experiment_plan_alignment.md)。
+現行仕様版4として、新規にexperiment-plan-2026-10-22-v1を保存する。旧プロトコルを並行稼働させず、版3以下・NULL・旧識別子の記録は閲覧専用にする。学習後のretest採点回数を新規参加者ごとに0から記録し、最大3回で未達終了する。確定判断は[20](20_experiment_plan_alignment.md)。
 
 ## 実装の責務
 
@@ -12,7 +12,7 @@
 
 ## 追加するnullable列
 
-participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_json。SQLite/PostgreSQLの不足列追加で移行し、既存行を新プロトコルへ補完しない。
+participants.protocol_id/retest_cycles_completed、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_json。SQLite/PostgreSQLの不足列追加で移行し、既存行の回数・版・protocol_idを補完しない。
 
 ## 切替
 

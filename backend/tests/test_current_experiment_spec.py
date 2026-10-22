@@ -61,8 +61,15 @@ def trial_snapshot(db, pid):
     return json.dumps(output, default=str, sort_keys=True)
 
 
-@pytest.mark.parametrize("bank_version,spec_version", [(1, None), (2, None), (1, 1), (2, 1), (1, 2), (2, 2), (2, 3), (2, 99)])
-def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version):
+@pytest.mark.parametrize(
+    "bank_version,spec_version,protocol_id",
+    [
+        (1, None, None), (2, None, None), (1, 1, None), (2, 1, None),
+        (1, 2, None), (2, 2, None), (2, 3, None),
+        (2, 3, "experiment-plan-2026-10-18-v1"), (2, 99, None),
+    ],
+)
+def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):
     pid, questions = create_trial()
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
@@ -72,7 +79,7 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
         participant = db.get(Participant, pid)
         participant.learning_content_version = bank_version
         participant.experiment_spec_version = spec_version
-        participant.protocol_id = None
+        participant.protocol_id = protocol_id
         old_attempt = db.query(Attempt).filter_by(participant_id=pid, question_id=questions[0]["question_id"]).one()
         old_attempt_id = old_attempt.id
         old_attempt.legacy_selected_option_id = old_attempt.selected_option_ids[0]
@@ -139,6 +146,8 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
         assert trial_snapshot(db, pid) == before
     new = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     assert new["participant_id"] != pid
+    with SessionLocal() as db:
+        assert db.get(Participant, new["participant_id"]).retest_cycles_completed == 0
 
 
 def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkeypatch):
@@ -177,11 +186,13 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
     with isolated.begin() as connection:
         connection.execute(text("ALTER TABLE participants DROP COLUMN experiment_spec_version"))
         connection.execute(text("ALTER TABLE participants DROP COLUMN option_order_mode"))
+        connection.execute(text("ALTER TABLE participants DROP COLUMN retest_cycles_completed"))
     database.init_db()
     database.init_db()
     with Session(isolated) as db:
         assert db.get(Participant, pid).experiment_spec_version is None
         assert db.get(Participant, pid).option_order_mode is None
+        assert db.get(Participant, pid).retest_cycles_completed is None
         assert trial_snapshot(db, pid) == before
     isolated.dispose()
 

@@ -6,6 +6,8 @@
 
 3用語ごとに事前1・再5・最終1の計21問。新規seedはこの21問だけを作る。廃止フェーズ・旧variantは非activeにするだけで削除しない。旧追加選択肢も参照保全のため残し、現行出題はA〜Jに限定する。seed再実行で参加者記録を削除しない。
 
+実験仕様版4では学習後の`retest`を参加者あたり最大3回に制限するため、通常は各用語の`retest_v1`〜`retest_v3`を使用する。`retest_v4`・`retest_v5`は問題バンクに保持するが、このフローでは出題しない。内部`final_test`はカウンターに含まず、その後の最初の学習後retestは`retest_v1`から始まる。
+
 学習確認は現行v2の3用語×2意味的stage×5問=30問。適用・予測・比較・境界判断・事例診断を扱う。DB質問テーブルへseedせず提示時にTutorTurn.practice_question_jsonへ保存する。旧v1の出題/採点はない。
 
 両群とも同じ診断連動規則でstageを選ぶ。unknownはenrichment、M1/M3はconceptual_change、variantは同じturn_indexに従う。旧統制群の固定conceptual_change系列を使わない。問題本文・選択肢・採点データは変更しない。

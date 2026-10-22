@@ -15,6 +15,7 @@ type Participant = {
   current_step: string;
   can_resume: boolean;
   experiment_spec_version: number | null;
+  retest_cycles_completed: number | null;
   completed_at: string | null;
   completion_reason: string | null;
   give_up_learning_count: number;
@@ -98,6 +99,7 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   same_misconception_recurrence_rate: "同種再発率",
   completed: "完了",
   completion_reason: "終了理由",
+  retest_cycles_completed: "再テスト回数",
   actor: "実行者",
   action: "操作",
   purpose: "呼び出し目的",
@@ -489,6 +491,7 @@ export default function AdminPage() {
                 <th>条件</th>
                 <th>進捗</th>
                 <th>完了</th>
+                <th>再テスト回数</th>
                 <th>ギブアップ回数</th>
                 <th>ログ</th>
                 <th>操作</th>
@@ -501,6 +504,7 @@ export default function AdminPage() {
                   <td>{p.group_condition}</td>
                   <td>{p.can_resume ? p.current_step : `旧試用（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
+                  <td>{p.retest_cycles_completed ?? "-"}</td>
                   <td>
                     <div>学習: {p.give_up_learning_count ?? 0}回</div>
                     <div>実験: {p.give_up_experiment_count ?? 0}回</div>
@@ -534,6 +538,7 @@ export default function AdminPage() {
                 <p>
                   {participantLog.participant.group_condition} / {participantLog.participant.current_step}
                 </p>
+                <p>学習後の再テスト: {participantLog.participant.retest_cycles_completed ?? "-"}回</p>
                 <p>
                   終了理由: {participantLog.participant.completion_reason === "give_up"
                     ? "実験ギブアップ"
