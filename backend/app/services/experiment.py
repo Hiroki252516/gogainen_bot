@@ -828,7 +828,7 @@ def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
                 "registration_keys": registration_keys,
                 "completion_reason": participant.completion_reason,
             },
-            after_json={"deleted": True},
+            after_json={"deleted": True, "identity_mapping_cleanup": "pending"},
         )
         db.add(audit)
         db.delete(participant)

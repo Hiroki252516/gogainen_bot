@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from typing import Literal
 from uuid import uuid4
@@ -55,6 +56,14 @@ from app.services.experiment import (
     submit_survey,
 )
 from app.services.idempotency import normalize_idempotency_key, registration_key_was_deleted, run_idempotent
+from app.services.identity_mapping_cleanup import (
+    COMPLETE as IDENTITY_MAPPING_CLEANUP_COMPLETE,
+    PENDING as IDENTITY_MAPPING_CLEANUP_PENDING,
+    complete_identity_mapping_cleanup,
+    deletion_response,
+    participant_deletion_event,
+    recover_pending_identity_mapping_cleanups,
+)
 from app.services.option_order import current_option_order_mode, save_option_order_mode
 from app.services import identity_mapping
 from app.services.research_protocol import SurveyPayload, survey_context, record_material_view
@@ -63,6 +72,7 @@ from app.services.prefetch import prefetch_coordinator, schedule_prefetch
 
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 _PUBLIC_PRACTICE_QUESTION_FIELDS = {
@@ -131,6 +141,9 @@ async def lifespan(_: FastAPI):
     db = next(get_db())
     try:
         seed_database(db)
+        pending_cleanups = recover_pending_identity_mapping_cleanups(db)
+        if pending_cleanups:
+            logger.warning("%s participant identity mapping cleanup(s) remain pending", pending_cleanups)
     finally:
         db.close()
     try:
@@ -670,19 +683,40 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
 
 @app.delete("/api/admin/participants/{participant_id}")
 async def api_delete_admin_participant(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    previous_deletion = participant_deletion_event(db, participant_id)
+    if previous_deletion is not None:
+        cleanup_state = (previous_deletion.after_json or {}).get("identity_mapping_cleanup")
+        if cleanup_state == IDENTITY_MAPPING_CLEANUP_PENDING:
+            if not complete_identity_mapping_cleanup(db, previous_deletion):
+                raise HTTPException(
+                    status_code=503,
+                    detail="参加者データの削除は完了しましたが、対応表の削除が未完了です。時間をおいて再試行してください。",
+                )
+            return deletion_response(previous_deletion)
+        if cleanup_state == IDENTITY_MAPPING_CLEANUP_COMPLETE:
+            raise HTTPException(status_code=404, detail="被験者が見つかりません。")
+        raise HTTPException(status_code=409, detail="参加者削除の状態を確認できません。")
+
     assert_current_experiment(get_participant(db, participant_id))
     await tutor_prefetch_registry.cancel_for_participant(participant_id)
+    previous_defer_commit = db.info.get("defer_commits", False)
     db.info["defer_commits"] = True
     try:
         result = delete_participant(db, participant_id)
-        identity_mapping.delete_mapping(participant_id)
         db.commit()
-        return result
     except Exception:
         db.rollback()
         raise
     finally:
-        db.info["defer_commits"] = False
+        db.info["defer_commits"] = previous_defer_commit
+
+    deletion_event = participant_deletion_event(db, participant_id)
+    if deletion_event is None or not complete_identity_mapping_cleanup(db, deletion_event):
+        raise HTTPException(
+            status_code=503,
+            detail="参加者データの削除は完了しましたが、対応表の削除が未完了です。時間をおいて再試行してください。",
+        )
+    return result
 
 
 def _visible_identity_mappings(db: Session) -> list[dict]:

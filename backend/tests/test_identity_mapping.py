@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
 from sqlalchemy import text
+from sqlalchemy.orm import Session as SQLAlchemySession
 
 from app.main import app
 from app.db.session import SessionLocal, engine
@@ -88,6 +89,8 @@ def test_withdrawal_deletes_mapping_and_rejects_late_ai_log():
     assert register(key=key).status_code == 409
     assert not identity_mapping.list_mappings()
     with SessionLocal() as db:
+        deletion = db.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).one()
+        assert deletion.after_json["identity_mapping_cleanup"] == "complete"
         with pytest.raises(HTTPException) as exc:
             _record_ai_log(db, AICallLog(provider="mock", purpose="generate_tutoring_turn",
                                        status="success", request_payload={"participant_id": pid}))
@@ -121,27 +124,131 @@ def test_retired_registration_query_matches_exact_array_member_without_changing_
         assert {row.id: json.dumps(row.before_json, sort_keys=True) for row in events} == before
 
 
-def test_identity_deletion_failure_rolls_back_research_deletion(monkeypatch):
+def test_identity_deletion_failure_is_durable_and_retryable(monkeypatch):
     key = str(uuid4())
     pid = register(key=key).json()["participant_id"]
+    original_delete = identity_mapping.delete_mapping
 
     def fail_mapping_delete(participant_id):
         assert participant_id == pid
-        # The service has flushed deletes, but the API must not commit them yet.
+        # The durable research deletion and cleanup marker precede this DB.
         with SessionLocal() as observer:
-            assert observer.get(Participant, pid) is not None
+            assert observer.get(Participant, pid) is None
+            event = observer.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).one()
+            assert event.after_json["identity_mapping_cleanup"] == "pending"
         raise sqlite3.OperationalError("isolated mapping deletion failure")
 
     monkeypatch.setattr(identity_mapping, "delete_mapping", fail_mapping_delete)
     with TestClient(app, raise_server_exceptions=False) as no_raise:
         response = no_raise.delete(f"/api/admin/participants/{pid}")
+    assert response.status_code == 503
+    with SessionLocal() as db:
+        assert db.get(Participant, pid) is None
+        assert not db.query(IdempotencyRecord).filter_by(idempotency_key=key).one_or_none()
+        event = db.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).one()
+        assert event.after_json["identity_mapping_cleanup"] == "pending"
+    assert [row["participant_id"] for row in identity_mapping.list_mappings()] == [pid]
+    assert register(key=key).status_code == 409
+
+    monkeypatch.setattr(identity_mapping, "delete_mapping", original_delete)
+    retry = client.delete(f"/api/admin/participants/{pid}")
+    assert retry.status_code == 200
+    assert not identity_mapping.list_mappings()
+    with SessionLocal() as db:
+        event = db.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).one()
+        assert event.after_json["identity_mapping_cleanup"] == "complete"
+
+
+def test_research_delete_commit_failure_keeps_identity_mapping(monkeypatch):
+    pid = register().json()["participant_id"]
+    from app import main as main_module
+
+    original_delete = main_module.delete_participant
+    original_commit = SQLAlchemySession.commit
+    mapping_delete_calls = []
+    original_mapping_delete = identity_mapping.delete_mapping
+
+    def stage_then_fail_commit(db, participant_id):
+        result = original_delete(db, participant_id)
+        db.info["fail_research_delete_commit"] = True
+        return result
+
+    def fail_selected_commit(db):
+        if db.info.pop("fail_research_delete_commit", False):
+            raise sqlite3.OperationalError("isolated research commit failure")
+        return original_commit(db)
+
+    def record_mapping_delete(participant_id):
+        mapping_delete_calls.append(participant_id)
+        return original_mapping_delete(participant_id)
+
+    monkeypatch.setattr(main_module, "delete_participant", stage_then_fail_commit)
+    monkeypatch.setattr(SQLAlchemySession, "commit", fail_selected_commit)
+    monkeypatch.setattr(identity_mapping, "delete_mapping", record_mapping_delete)
+    with TestClient(app, raise_server_exceptions=False) as no_raise:
+        response = no_raise.delete(f"/api/admin/participants/{pid}")
+
     assert response.status_code == 500
+    assert mapping_delete_calls == []
+    assert [row["participant_id"] for row in identity_mapping.list_mappings()] == [pid]
     with SessionLocal() as db:
         assert db.get(Participant, pid) is not None
-        assert db.query(IdempotencyRecord).filter_by(idempotency_key=key).one()
-        assert not db.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).first()
+        assert not db.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).one_or_none()
+
+
+def test_cleanup_status_commit_failure_is_recovered_idempotently(monkeypatch):
+    pid = register().json()["participant_id"]
+    original_commit = SQLAlchemySession.commit
+
+    def fail_cleanup_status_commit(db):
+        if any(
+            isinstance(row, AuditEvent)
+            and (row.after_json or {}).get("identity_mapping_cleanup") == "complete"
+            for row in db.dirty
+        ):
+            raise sqlite3.OperationalError("isolated cleanup status commit failure")
+        return original_commit(db)
+
+    monkeypatch.setattr(SQLAlchemySession, "commit", fail_cleanup_status_commit)
+    with TestClient(app, raise_server_exceptions=False) as no_raise:
+        response = no_raise.delete(f"/api/admin/participants/{pid}")
+
+    assert response.status_code == 503
+    assert not identity_mapping.list_mappings()
+    with SessionLocal() as db:
+        assert db.get(Participant, pid) is None
+        event = db.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).one()
+        assert event.after_json["identity_mapping_cleanup"] == "pending"
+
+    monkeypatch.setattr(SQLAlchemySession, "commit", original_commit)
+    retry = client.delete(f"/api/admin/participants/{pid}")
+    assert retry.status_code == 200
+    assert not identity_mapping.list_mappings()
+    with SessionLocal() as db:
+        event = db.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).one()
+        assert event.after_json["identity_mapping_cleanup"] == "complete"
+
+
+def test_startup_recovers_pending_identity_mapping_deletion(monkeypatch):
+    pid = register().json()["participant_id"]
+    original_delete = identity_mapping.delete_mapping
+
+    def fail_once(participant_id):
+        raise sqlite3.OperationalError("simulated process-time identity store outage")
+
+    monkeypatch.setattr(identity_mapping, "delete_mapping", fail_once)
+    with TestClient(app, raise_server_exceptions=False) as no_raise:
+        response = no_raise.delete(f"/api/admin/participants/{pid}")
+    assert response.status_code == 503
     assert [row["participant_id"] for row in identity_mapping.list_mappings()] == [pid]
-    assert register(key=key).status_code == 200
+
+    monkeypatch.setattr(identity_mapping, "delete_mapping", original_delete)
+    with TestClient(app) as restarted:
+        assert restarted.get("/api/health").status_code == 200
+    assert not identity_mapping.list_mappings()
+    with SessionLocal() as db:
+        event = db.query(AuditEvent).filter_by(action="delete_participant", entity_id=pid).one()
+        assert event.after_json["identity_mapping_cleanup"] == "complete"
 
 
 def test_mapping_failure_does_not_create_participant_and_same_key_can_retry(monkeypatch):
