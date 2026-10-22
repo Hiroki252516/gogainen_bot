@@ -1524,10 +1524,10 @@ def test_control_sequence_uses_the_shared_diagnosis_route_but_excludes_diagnosis
         db.close()
 
 
-def test_retest_uses_five_variants_then_reuses_variant_five():
+def test_retest_uses_only_three_cycles_and_stops_after_the_third_failed_cycle():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     observed: list[str] = []
-    for _ in range(6):
+    for cycle in range(1, 4):
         questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
         assert len(questions) == 3
         target_question = next(question for question in questions if question["term_slug"] == "llm_knowledge")
@@ -1540,13 +1540,21 @@ def test_retest_uses_five_variants_then_reuses_variant_five():
             assert response.status_code == 200, response.text
         score = client.post(f"/api/participants/{pid}/score-retest")
         assert score.status_code == 200, score.text
-        assert score.json()["next_step"] == "learning_targets"
+        expected_step = "survey" if cycle == 3 else "learning_targets"
+        assert score.json()["next_step"] == expected_step
+        assert score.json()["retest_cycles_completed"] == cycle
+        assert score.json()["retest_cycle_limit_reached"] is (cycle == 3)
         assert score.json()["learning_target_slugs"] == list(ACTIVE_TERM_SLUGS)
         review = client.get(f"/api/participants/{pid}/learning-targets").json()["test_results"]
         llm_result = next(result for result in review["results"] if result["term_slug"] == "llm_knowledge")
         assert llm_result["question_body"] == target_question["body"]
-    assert len(set(observed[:5])) == 5
-    assert observed[5] == observed[4]
+    assert len(set(observed)) == 3
+    review = client.get(f"/api/participants/{pid}/learning-targets")
+    assert review.status_code == 200
+    assert review.json()["retest_cycle_limit_reached"] is True
+    assert review.json()["retest_cycles_completed"] == 3
+    assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+    assert client.post(f"/api/participants/{pid}/score-retest").status_code == 409
 
 
 def test_retest_non_mastery_routes_to_first_failed_learning_session_and_blocks_final_test():
@@ -1566,6 +1574,8 @@ def test_retest_non_mastery_routes_to_first_failed_learning_session_and_blocks_f
     payload = score.json()
     assert payload["next_step"] == "learning_targets"
     assert payload["next_url"] == "/learning/multi_agent"
+    assert payload["retest_cycles_completed"] == 1
+    assert payload["retest_cycle_limit_reached"] is False
     assert payload["learning_target_slugs"] == ["multi_agent"]
     assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "learning_targets"
     assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
@@ -1653,6 +1663,87 @@ def test_incomplete_retest_keeps_unanswered_term_as_learning_target():
     assert unanswered["result_label"] == "未回答"
     assert unanswered["question_body"]
     assert unanswered["selected_options"] == []
+
+
+def test_second_retest_mastery_stops_early_without_reporting_cycle_limit():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    first = client.post(f"/api/participants/{pid}/score-retest")
+    assert first.status_code == 200, first.text
+    assert first.json()["next_step"] == "learning_targets"
+    assert first.json()["retest_cycles_completed"] == 1
+
+    _submit_phase_questions(pid, "retest", ["A", "B", "C"])
+    second = client.post(f"/api/participants/{pid}/score-retest")
+    assert second.status_code == 200, second.text
+    assert second.json()["next_step"] == "survey"
+    assert second.json()["retest_cycles_completed"] == 2
+    assert second.json()["retest_cycle_limit_reached"] is False
+    assert client.get(f"/api/participants/{pid}/learning-targets").json()["retest_cycle_limit_reached"] is False
+
+
+def test_final_test_does_not_consume_post_learning_retest_cycle():
+    pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    _submit_phase_questions(pid, "final_test", ["D", "E", "F"])
+    final_score = client.post(f"/api/participants/{pid}/score-final-test")
+    assert final_score.status_code == 200, final_score.text
+    assert final_score.json()["next_step"] == "learning_targets"
+
+    with SessionLocal() as db:
+        assert db.get(Participant, pid).retest_cycles_completed == 0
+
+    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    first_retest = client.post(f"/api/participants/{pid}/score-retest")
+    assert first_retest.status_code == 200, first_retest.text
+    assert first_retest.json()["retest_cycles_completed"] == 1
+    assert first_retest.json()["next_step"] == "learning_targets"
+
+
+def test_retest_cycle_counter_counts_incomplete_batch_and_keeps_unanswered_target_after_limit():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    for cycle in range(1, 4):
+        questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+        for question in questions:
+            if question["term_slug"] == "memory_process":
+                continue
+            response = client.post(
+                "/api/attempts",
+                json={
+                    "participant_id": pid,
+                    "question_id": question["question_id"],
+                    "phase": "retest",
+                    "selected_option_ids": _ids_for_labels(question, ["A", "B", "C"]),
+                },
+            )
+            assert response.status_code == 200, response.text
+        scored = client.post(f"/api/participants/{pid}/score-retest")
+        assert scored.status_code == 200, scored.text
+        assert scored.json()["retest_cycles_completed"] == cycle
+        assert scored.json()["next_step"] == ("survey" if cycle == 3 else "learning_targets")
+
+    review = client.get(f"/api/participants/{pid}/learning-targets")
+    assert review.status_code == 200
+    assert review.json()["retest_cycle_limit_reached"] is True
+    assert review.json()["targets"][0]["term_slug"] == "memory_process"
+    assert review.json()["test_results"]["results"][-1]["is_correct"] is None
+    with SessionLocal() as db:
+        participant = db.get(Participant, pid)
+        assert participant.retest_cycles_completed == 3
+        missing_term = db.query(Term).filter_by(slug="memory_process").one()
+        assignment = db.query(TermAssignment).filter_by(participant_id=pid, term_id=missing_term.id).one()
+        assert assignment.is_learning_target is True
+
+
+def test_retest_score_idempotency_replay_does_not_increment_cycle_twice():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    headers = {"Idempotency-Key": f"score-retest:{pid}:first"}
+    first = client.post(f"/api/participants/{pid}/score-retest", headers=headers)
+    replay = client.post(f"/api/participants/{pid}/score-retest", headers=headers)
+    assert first.status_code == replay.status_code == 200
+    assert replay.json() == first.json()
+    with SessionLocal() as db:
+        assert db.get(Participant, pid).retest_cycles_completed == 1
 
 
 def test_learning_give_up_routes_to_retest_and_closes_current_session():

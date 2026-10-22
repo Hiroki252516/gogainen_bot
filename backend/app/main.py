@@ -19,7 +19,7 @@ from app.models import Participant, Term, TutorSession, TutorTurn
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
-from app.core.experiment_spec import assert_current_experiment, can_resume
+from app.core.experiment_spec import MAX_POST_LEARNING_RETEST_CYCLES, assert_current_experiment, can_resume
 from app.core.runtime_config import (
     ALLOWED_REASONING_EFFORTS,
     current_reasoning_effort,
@@ -403,11 +403,18 @@ async def api_diagnose_pretest(
 @app.get("/api/participants/{participant_id}/learning-targets")
 def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> dict:
     participant = get_participant(db, participant_id)
+    targets = learning_targets(db, participant_id)
     return {
         "current_step": participant.current_step,
-        "targets": learning_targets(db, participant_id),
+        "targets": targets,
         "pretest_results": pretest_results(db, participant_id),
         "test_results": latest_test_results(db, participant_id),
+        "retest_cycles_completed": participant.retest_cycles_completed,
+        "retest_cycle_limit_reached": (
+            participant.current_step in {"survey", "finish"}
+            and (participant.retest_cycles_completed or 0) >= MAX_POST_LEARNING_RETEST_CYCLES
+            and bool(targets)
+        ),
     }
 
 

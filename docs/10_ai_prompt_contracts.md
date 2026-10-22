@@ -48,9 +48,9 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 原文全体は[tutoring_prompt.py](../backend/app/ai/tutoring_prompt.py)のcompose_structured_prompt/build_tutoring_prompt、unknownの必須項目は[mandatory_elements.py](../backend/app/ai/mandatory_elements.py)を参照する。生成文の意味的な正しさまで機械検査したとは扱わない。
 
-## 現行契約（実行版3）
+## 現行契約（実行版4）
 
-実験仕様版3、新protocol_idはexperiment-plan-2026-10-18-v1。契約版はtutoring-teaching-contract-v6-plan-aligned、taxonomy版はm1-m3-unknown-v3。共通履歴interaction-history-v1、出題規則shared-diagnosis-route-v1は維持。
+実験仕様版4、新protocol_idはexperiment-plan-2026-10-22-v1。契約版はtutoring-teaching-contract-v6-plan-aligned、taxonomy版はm1-m3-unknown-v3。共通履歴interaction-history-v1、出題規則shared-diagnosis-route-v1は維持。仕様版4は学習後の再テストを最大3回に制限するが、AIのprompt契約や教授方略は変更しない。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 

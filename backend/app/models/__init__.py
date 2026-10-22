@@ -34,6 +34,7 @@ class Participant(Base):
     experiment_spec_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     protocol_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     option_order_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    retest_cycles_completed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completion_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)

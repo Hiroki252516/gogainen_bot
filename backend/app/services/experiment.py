@@ -36,7 +36,13 @@ from app.ai.teaching_contract import (
     validate_tutoring_material_length,
 )
 from app.core.config import get_settings
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, assert_current_experiment, can_resume
+from app.core.experiment_spec import (
+    CURRENT_EXPERIMENT_SPEC_VERSION,
+    CURRENT_PROTOCOL_ID,
+    MAX_POST_LEARNING_RETEST_CYCLES,
+    assert_current_experiment,
+    can_resume,
+)
 from app.services.research_protocol import SURVEY_VERSION, validate_survey_for_participant
 from app.services.hypothesis_metrics import METRICS_VERSION, participant_metrics, current_metrics, group_metrics, write_metrics_csv
 from app.core.runtime_config import current_reasoning_effort
@@ -709,6 +715,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
         protocol_id=CURRENT_PROTOCOL_ID,
         option_order_mode=current_option_order_mode(db),
+        retest_cycles_completed=0,
         started_at=now(),
     )
     db.add(participant)
@@ -2677,14 +2684,29 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         state.last_attempt_id = attempt.id
     db.flush()
     learning_target_slugs = _reset_test_learning_targets(db, participant, attempts)
-    if _is_mastery_test_batch(db, attempts):
+    achieved_mastery = _is_mastery_test_batch(db, attempts)
+    if phase == "retest":
+        participant.retest_cycles_completed = (participant.retest_cycles_completed or 0) + 1
+    retest_limit_reached = (
+        phase == "retest"
+        and not achieved_mastery
+        and (participant.retest_cycles_completed or 0) >= MAX_POST_LEARNING_RETEST_CYCLES
+    )
+    if achieved_mastery or retest_limit_reached:
         participant.current_step = "survey"
         next_url = _next_url(participant.current_step)
     else:
         participant.current_step = "learning_targets"
         next_url = f"/learning/{learning_target_slugs[0]}" if learning_target_slugs else _next_url(participant.current_step)
     _commit(db)
-    return {"status": "completed", "next_step": participant.current_step, "next_url": next_url, "learning_target_slugs": learning_target_slugs}
+    return {
+        "status": "completed",
+        "next_step": participant.current_step,
+        "next_url": next_url,
+        "learning_target_slugs": learning_target_slugs,
+        "retest_cycles_completed": participant.retest_cycles_completed,
+        "retest_cycle_limit_reached": retest_limit_reached,
+    }
 
 
 def _next_url(step: str) -> str:
@@ -3412,6 +3434,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "can_resume": can_resume(row),
                 "group_condition": row.group_condition,
                 "current_step": row.current_step,
+                "retest_cycles_completed": row.retest_cycles_completed,
                 "completed_at": _iso(row.completed_at),
                 "completion_reason": row.completion_reason,
                 "give_up_learning_count": give_up_counts.get((row.id, "give_up_learning"), 0),
@@ -3555,6 +3578,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "consent_document_version": participant.consent_document_version,
             "consented_at": _iso(participant.consented_at),
             "current_step": participant.current_step,
+            "retest_cycles_completed": participant.retest_cycles_completed,
             "started_at": _iso(participant.started_at),
             "completed_at": _iso(participant.completed_at),
             "completion_reason": participant.completion_reason,
