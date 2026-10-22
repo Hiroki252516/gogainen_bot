@@ -2545,7 +2545,7 @@ def test_admin_can_delete_participant_and_related_data():
         assert not any((log.request_payload or {}).get("participant_id") == pid for log in db.query(AICallLog).all())
         audit = db.query(AuditEvent).filter_by(entity_type="participant", entity_id=pid, action="delete_participant").first()
         assert audit is not None
-        assert audit.after_json == {"deleted": True}
+        assert audit.after_json == {"deleted": True, "identity_mapping_cleanup": "complete"}
     finally:
         db.close()
 
