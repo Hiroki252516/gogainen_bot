@@ -240,7 +240,7 @@ MVPではフロントエンドにAI生成途中のストリームを見せなく
 
 各Codex呼び出しでは、`AICallLog.request_payload.effective_request`に送信直前の実際の`thread/start`設定、`turn/start`の全文prompt・JSON Schema・モデル・推論レベルを保存する。併せてprompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、教材生成試行番号、送信状態を記録する。認証ヘッダー・tokenは保存しない。接続や送信前の失敗では、送信試行と実送信の状態を区別する。Mockの入力にはこのCodex実送信監査を付けない。
 
-仕様版4でも共通interaction_historyの版・件数・SHA-256、共通出題規則版とactual_ai_inputを記録する。モデルへは共通履歴の診断除外投影を送り、proposedだけに診断・対象主張・教授方針を追加する。input_projectionはサーバー側投影であり、送信済みかどうかはeffective_request.transmissionを確認する。仕様版4で追加した学習後retest回数制限はbackendの遷移制御であり、AI promptの送信内容を変更しない。
+仕様版5でも共通interaction_historyの版・件数・SHA-256、共通出題規則版とactual_ai_inputを記録する。モデルへは共通履歴の診断除外投影を送り、proposedだけに診断・対象主張・教授方針を追加する。input_projectionはサーバー側投影であり、送信済みかどうかはeffective_request.transmissionを確認する。仕様版4で追加した学習後retest回数制限はbackendの遷移制御であり、AI promptの送信内容を変更しない。
 
 章立てはAIが決め、本文構造と実験群の本文証拠をbackendで検査する。unknownのmandatory_elementsをtype/definitionへ変更し、teaching_contractの仕組み・適用確認と合わせる。不一致を補正せず同backendへ再生成させ、章立て・検証を保存する。契約版はtutoring-teaching-contract-v6-plan-aligned。
 

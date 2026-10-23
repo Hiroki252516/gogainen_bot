@@ -15,7 +15,7 @@
 | AI設定 | config、環境low、runtime_config | 不一致警告・実送信model/effort |
 | アンケート | research_protocol.SurveyPayload、survey画面 | 経験4有無・一般4/教材6の1〜10・必須自由記述 |
 | 学習後retest上限 | Participant.retest_cycles_completed、score_phase | 最大3回。未達の未回答・誤答を維持し、3回目後はsurvey |
-| 旧記録保護 | 仕様版4＋protocol_id、API/worker/補修ガード | 旧版3以下も閲覧専用・新集計から除外 |
+| 旧記録保護 | 仕様版5＋protocol_id、API/worker/補修ガード | 旧版4以下も閲覧専用・新集計から除外 |
 | 割付・アクセス・正答配置 | 既存A/Bコード・デバッグ問題を維持 | 自動割付・認証・位置復旧は今回対象外 |
 
 計算の正本はbackend/app/services/hypothesis_metrics.py。新指標はEvaluationSummary.hypothesis_metrics_jsonに分離し、統合CSVヘッダと旧値を維持する。専用CSVはhypothesis_metricsとhypothesis_group_summary。

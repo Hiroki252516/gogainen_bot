@@ -1,5 +1,6 @@
-# Local WSL settings; keep the existing .env intact.
-# Docker Compose loads this file automatically.
+# Local Docker settings. Copy this file to docker-compose.override.yml when
+# using the Unix-socket app-server setup locally. The copied file is ignored
+# because the actual override is machine-specific.
 services:
   frontend:
     ports: !override
@@ -11,7 +12,6 @@ services:
       INTERNAL_API_BASE_URL: http://backend:8000
       NEXT_PUBLIC_API_BASE_URL: ""
   backend:
-    # Remove the base host network setting and join frontend/db's project network.
     network_mode: !reset null
     networks:
       - default
@@ -19,13 +19,10 @@ services:
       DATABASE_URL: postgresql+psycopg://app:app@db:5432/ai_tutor
       CODEX_APP_SERVER_URL: unix:///codex-app-server.sock
     volumes:
-      # Start scripts/start-codex-app-server.sh --docker before creating backend.
-      # Mount the socket itself: Codex may make the visible path a symlink.
       - type: bind
         source: ./.local/codex-app-server/server.sock
         target: /codex-app-server.sock
         read_only: true
         bind:
           create_host_path: false
-      # Preserve the SQLite database used by the existing .env across rebuilds.
       - ./.local/backend-data:/app/.local

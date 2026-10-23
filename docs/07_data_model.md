@@ -8,7 +8,7 @@
 
 ## 現行の保存契約
 
-モデルの正本は `backend/app/models/__init__.py`。実験仕様版4を使用する。参加者の `option_order_mode` nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルを追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
+モデルの正本は `backend/app/models/__init__.py`。実験仕様版5を使用する。参加者の `option_order_mode` nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルを追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 学籍番号はSQLAlchemyの研究DBへ追加しない。IDENTITY_MAPPING_PATHが指す別SQLiteへ、学籍番号・参加者ID・表示コード・作成日時・再送処理用キーを保存する。研究用エクスポート・AI入力・AIログ・冪等性のrequest_hash/response_jsonには学籍番号を含めない。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、登録は対応表を先行保存してから研究DBを確定し、通常の失敗では補償削除する。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
@@ -17,7 +17,7 @@
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedはNULLのままとし、過去回数の推定や補完はしない。
 
-新規参加者だけ仕様版4とexperiment-plan-2026-10-22-v1を保存し、retest_cycles_completedを0で初期化する。既存版3以下を含む異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
+新規参加者だけ仕様版5とexperiment-plan-2026-10-23-learning-rotation-v1を保存し、retest_cycles_completedを0で初期化する。既存版4以下を含む異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 
@@ -31,9 +31,9 @@
 
 interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み出し、別テーブルへ複製しない。同じ参加者・用語の全周回を時系列で統合し、共通allowlistで診断・教授メタデータを除く。内部IDは並び順と参照照合にだけ使い、モデルへ送らない。
 
-既存JSONへinteraction-history-v1の件数/SHA-256、shared-diagnosis-route-v1、仕様版4を保存する。AICallLog.request_payload.input_projectionはサーバー側の入力投影であり、実送信はeffective_requestとtransmissionを確認する。Mockの投影を実app-server送信とみなさない。
+既存JSONへinteraction-history-v1の件数/SHA-256、shared-diagnosis-route-v1、仕様版5を保存する。AICallLog.request_payload.input_projectionはサーバー側の入力投影であり、実送信はeffective_requestとtransmissionを確認する。Mockの投影を実app-server送信とみなさない。
 
-`retest_cycles_completed`は学習後の`retest`を採点したバッチ数で、未回答項目を含むバッチも1回とする。学習前の`final_test`は含めない。冪等な再送では保存済み応答を返すため再加算しない。3回目の未達でも正誤・未達対象を維持し、習得済みへ書き換えない。版3以下の旧参加者ではNULLのまま履歴として扱う。
+`retest_cycles_completed`は学習後の`retest`を採点したバッチ数で、未回答項目を含むバッチも1回とする。学習前の`final_test`は含めない。冪等な再送では保存済み応答を返すため再加算しない。3回目の未達でも正誤・未達対象を維持し、習得済みへ書き換えない。版4以下の旧参加者ではNULLのまま履歴として扱う。
 
 章立て監査は既存のAICallLog.response_payload.generation_validation.material_structureとTutorTurn.diagnosis_json.material_structure_validationに保存する。見出し・順序・節数・本文文字数・必須証拠配置（節番号）・検証結果を含み、DB列追加はしない。重複見出しは節番号で区別する。旧教材と旧監査JSONは再解析・書換えせず保持する。
 

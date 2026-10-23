@@ -55,7 +55,7 @@ from app.seed.content_loader import (
     content_term,
     learning_question_spec,
     load_content,
-    load_learning_v2_content,
+    load_learning_v3_content,
 )
 import app.services.experiment as experiment_service
 from app import main as main_module
@@ -198,18 +198,18 @@ def _create_participant_with_pretest(group: str = "proposed", labels: list[str] 
     return pid
 
 
-def test_content_contract_has_three_terms_and_required_variant_counts():
+def test_content_contract_has_three_terms_and_required_learning_round_counts():
     content = load_content()
     assert tuple(term["slug"] for term in content["terms"]) == ACTIVE_TERM_SLUGS
     for term in content["terms"]:
         assert len(term["questions"]["pretest"]) == 1
-        assert len(term["questions"]["retest"]) == 5
-        assert len(term["questions"]["final_test"]) == 1
-        assert len(load_learning_v2_content()["terms"][term["slug"]]["enrichment"]["variants"]) == 5
-        assert len(load_learning_v2_content()["terms"][term["slug"]]["conceptual_change"]["variants"]) == 5
+        assert len(term["questions"]["retest"]) == 3
+        assert "final_test" not in term["questions"]
+        assert assessment_question_spec(term["slug"], "final_test")["variant_key"] == "retest_v1"
+        assert len(load_learning_v3_content()["terms"][term["slug"]]["variants"]) == 3
 
 
-def test_assessment_bank_has_21_scenario_variants_fixed_roles_and_option_lengths():
+def test_assessment_bank_has_12_active_scenario_variants_fixed_roles_and_option_lengths():
     content = load_content()
     bodies = set()
     choices = set()
@@ -246,7 +246,7 @@ def test_assessment_bank_has_21_scenario_variants_fixed_roles_and_option_lengths
                     choices.add(option["body"])
                 variant_count += 1
 
-    assert variant_count == 21
+    assert variant_count == 12
 
 
 def test_pretest_teaching_targets_follow_fixed_option_roles():
@@ -265,45 +265,41 @@ def test_pretest_teaching_targets_follow_fixed_option_roles():
                 assert target is None
 
 
-def test_learning_v2_bank_has_scenario_roles_and_fixed_labels():
-    content = load_learning_v2_content()
+def test_learning_v3_bank_has_scenario_roles_and_fixed_labels():
+    content = load_learning_v3_content()
     variant_count = 0
 
     for term_slug in ACTIVE_TERM_SLUGS:
-        for stage in ("enrichment", "conceptual_change"):
-            variants = content["terms"][term_slug][stage]["variants"]
-            assert len(variants) == 5
-            assert [variant["scenario_type"] for variant in variants] == [
-                "application", "prediction", "comparison", "boundary", "diagnosis"
-            ]
-            for variant_index, variant in enumerate(variants, start=1):
-                spec = learning_question_spec(
-                    term_slug, stage, variant_index
-                )
-                assert spec["body"] == f"{variant['scenario']}\n\n{variant['task']}"
-                assert len(spec["options"]) == 10
-                assert sum(option["is_correct"] for option in spec["options"]) == 3
-                assert sum(option["misconception_type"] == "M1" for option in spec["options"]) == 3
-                assert sum(option["misconception_type"] == "M3" for option in spec["options"]) == 3
-                assert spec["options"][-1] == {
-                    "label": "J", "body": "わからない。", "is_correct": False,
-                    "misconception_type": "unknown", "option_id": "J",
-                }
-                assert [option["label"] for option in spec["options"] if option["is_correct"]] == list("ABC")
-                assert [option["label"] for option in spec["options"] if option["misconception_type"] == "M1"] == list("DEF")
-                assert [option["label"] for option in spec["options"] if option["misconception_type"] == "M3"] == list("GHI")
-                variant_count += 1
+        variants = content["terms"][term_slug]["variants"]
+        assert len(variants) == 3
+        assert [variant["scenario_type"] for variant in variants] == [
+            "application", "prediction", "comparison"
+        ]
+        for variant_index, variant in enumerate(variants, start=1):
+            spec = learning_question_spec(
+                term_slug, "enrichment", variant_index
+            )
+            assert spec["body"] == f"{variant['scenario']}\n\n{variant['task']}"
+            assert len(spec["options"]) == 10
+            assert sum(option["is_correct"] for option in spec["options"]) == 3
+            assert sum(option["misconception_type"] == "M1" for option in spec["options"]) == 3
+            assert sum(option["misconception_type"] == "M3" for option in spec["options"]) == 3
+            assert spec["options"][-1] == {
+                "label": "J", "body": "わからない。", "is_correct": False,
+                "misconception_type": "unknown", "option_id": "J",
+            }
+            assert [option["label"] for option in spec["options"] if option["is_correct"]] == list("ABC")
+            assert [option["label"] for option in spec["options"] if option["misconception_type"] == "M1"] == list("DEF")
+            assert [option["label"] for option in spec["options"] if option["misconception_type"] == "M3"] == list("GHI")
+            variant_count += 1
 
-    assert variant_count == 30
+    assert variant_count == 9
 
 
-def test_llm_knowledge_conceptual_change_v1_prompt_and_option_roles():
-    task = (
-        "最新資料を回答に使う方法と、追加訓練でモデルの重みを更新する方法の違いを"
-        "正しく説明しているものを3つ選びなさい"
-    )
-    content = load_learning_v2_content()
-    variant = content["terms"]["llm_knowledge"]["conceptual_change"]["variants"][0]
+def test_llm_knowledge_round_v1_prompt_and_option_roles():
+    task = "この条件に合う仕組みの説明を三つ選びなさい。"
+    content = load_learning_v3_content()
+    variant = content["terms"]["llm_knowledge"]["variants"][0]
     spec = learning_question_spec(
         "llm_knowledge", "conceptual_change", 1
     )
@@ -319,6 +315,19 @@ def test_llm_knowledge_conceptual_change_v1_prompt_and_option_roles():
         "M1": ["D", "E", "F"],
         "M3": ["G", "H", "I"],
     }
+
+
+def test_learning_questions_are_shared_by_stage_and_rotate_by_session_round():
+    for term_slug in ACTIVE_TERM_SLUGS:
+        for round_index in (1, 2, 3):
+            enrichment = learning_question_spec(term_slug, "enrichment", round_index)
+            conceptual_change = learning_question_spec(term_slug, "conceptual_change", round_index)
+            assert enrichment["variant_key"] == f"learning_round_v{round_index}"
+            assert conceptual_change["variant_key"] == enrichment["variant_key"]
+            assert conceptual_change["body"] == enrichment["body"]
+            assert conceptual_change["options"] == enrichment["options"]
+        assert learning_question_spec(term_slug, "enrichment", 1)["body"] != learning_question_spec(term_slug, "enrichment", 2)["body"]
+        assert learning_question_spec(term_slug, "enrichment", 2)["body"] != learning_question_spec(term_slug, "enrichment", 3)["body"]
 
 
 def test_pretest_returns_three_multi_select_questions_with_ten_options():
@@ -835,6 +844,7 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    initial_question = turn["practice_question"]
 
     mixed_unknown = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
@@ -852,6 +862,10 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
 
     retry = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     assert retry["learning_stage"] == "conceptual_change"
+    assert retry["practice_question"]["learning_variant_index"] == initial_question["learning_variant_index"]
+    assert retry["practice_question"]["variant_key"] == initial_question["variant_key"]
+    assert retry["practice_question"]["body"] == initial_question["body"]
+    assert retry["practice_question"]["options"] == initial_question["options"]
     correct = client.post(
         f"/api/tutor-turns/{retry['turn_id']}/respond",
         json={"selected_option_ids": _ids_for_learning_role(retry["practice_question"], "llm_knowledge", retry["learning_stage"], "correct"), "response_time_sec": 2.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
@@ -1465,7 +1479,7 @@ def test_control_sequence_uses_the_shared_diagnosis_route_but_excludes_diagnosis
     first_misconception = first_turns[misconception_pid]
     assert first_unknown["learning_stage"] == "enrichment"
     assert first_misconception["learning_stage"] == "conceptual_change"
-    assert first_unknown["practice_question"] != first_misconception["practice_question"]
+    assert first_unknown["practice_question"] == first_misconception["practice_question"]
 
     for pid, labels in ((unknown_pid, ["A", "D", "G"]), (misconception_pid, ["A", "E", "H"])):
         response = client.post(
@@ -1482,7 +1496,7 @@ def test_control_sequence_uses_the_shared_diagnosis_route_but_excludes_diagnosis
     second_unknown = second_turns[unknown_pid]
     second_misconception = second_turns[misconception_pid]
     assert second_unknown["practice_question"] == second_misconception["practice_question"]
-    assert second_unknown["practice_question"]["variant_key"] == "learning_conceptual_change_v2"
+    assert second_unknown["practice_question"]["variant_key"] == "learning_round_v1"
 
     db = SessionLocal()
     try:
@@ -2276,7 +2290,7 @@ def test_learning_question_order_stays_fixed_when_adaptive_stage_changes():
     first = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
     assert first.status_code == 200, first.text
     first_payload = first.json()
-    assert first_payload["practice_question"]["variant_key"] == "learning_enrichment_v1"
+    assert first_payload["practice_question"]["variant_key"] == "learning_round_v1"
     assert first_payload["turn_index"] == 1
 
     wrong = client.post(
@@ -2292,7 +2306,7 @@ def test_learning_question_order_stays_fixed_when_adaptive_stage_changes():
     assert second.status_code == 200, second.text
     second_payload = second.json()
     assert second_payload["learning_stage"] == "conceptual_change"
-    assert second_payload["practice_question"]["variant_key"] == "learning_conceptual_change_v2"
+    assert second_payload["practice_question"]["variant_key"] == "learning_round_v1"
     assert second_payload["turn_index"] == first_payload["turn_index"] + 1
 
 
