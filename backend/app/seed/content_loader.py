@@ -179,7 +179,7 @@ def _validate_content(content: dict[str, Any]) -> None:
             raise ValueError(f"{slug} must not mention LangGraph")
 
     if sum(ASSESSMENT_VARIANT_COUNTS.values()) * len(ACTIVE_TERM_SLUGS) != 12:
-        raise ValueError("assessment bank must contain exactly 21 variants")
+        raise ValueError("assessment bank must contain exactly 12 variants")
     _validate_teaching_targets(content)
 
 
