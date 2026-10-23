@@ -316,7 +316,7 @@ def _validate_v3_content(content: dict[str, Any], assessment_content: dict[str, 
                 or max(lengths) - min(lengths) > 32
             ):
                 raise ValueError(f"{name} has a conspicuous option-length spread")
-            body = f"{variant['scenario']}\\n\\n{variant['task']}"
+            body = f"{variant['scenario']}\n\n{variant['task']}"
             if body in learning_bodies:
                 raise ValueError("learning v3 question bodies must be unique")
             learning_bodies.add(body)
