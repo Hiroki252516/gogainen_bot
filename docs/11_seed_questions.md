@@ -1,21 +1,17 @@
 # 現行問題バンク
 
-計画書の目標も問題本文・選択肢・採点基準を事前に用意し、AIに生成・採点させない。以下の21問/30問・variant数は現行バンクの内訳であり今回変更しない。問題と教材の役割、再テスト回次と評価上の比較回次を区別する。[計画書対応表](20_experiment_plan_alignment.md) を参照する。
+計画書の目標も問題本文・選択肢・採点基準を事前に用意し、AIに生成・採点させない。テスト系の固有問題12問と、現行学習確認バンクの9問を区別する。[計画書対応表](20_experiment_plan_alignment.md) を参照する。
 
-テスト系は `backend/app/seed/content/learning_content.yml`、学習確認は `learning_questions_v2.yml`。
+テスト系は backend/app/seed/content/learning_content.yml、学習確認は learning_questions_v3.yml。旧30問バンクは learning_questions_v2_unused.yml へ保存し、通常の問題としては使用しない。
 
-3用語ごとに事前1・再5・最終1の計21問。新規seedはこの21問だけを作る。廃止フェーズ・旧variantは非activeにするだけで削除しない。旧追加選択肢も参照保全のため残し、現行出題はA〜Jに限定する。seed再実行で参加者記録を削除しない。
+3用語ごとに事前1・再3のテスト問題をactiveなYAMLへ保持する。内部final_testは独立問題を持たず、retest_v1を使用する。retest_v4・v5と旧final_test_v1はアーカイブとして保全する。
 
-実験仕様版4では学習後の`retest`を参加者あたり最大3回に制限するため、通常は各用語の`retest_v1`〜`retest_v3`を使用する。`retest_v4`・`retest_v5`は問題バンクに保持するが、このフローでは出題しない。内部`final_test`はカウンターに含まず、その後の最初の学習後retestは`retest_v1`から始まる。
+実験仕様版5では学習後のretestを参加者あたり最大3回に制限するため、通常は各用語のretest_v1〜retest_v3を使用する。retest_v4・retest_v5と旧final_test_v1は learning_questions_v2_unused.yml に退避し、互換用の問題バンクとして保持するが、このフローでは出題しない。内部final_testはカウンターに含まず、その後の最初の学習後retestはretest_v1から始まる。
 
-学習確認は現行v2の3用語×2意味的stage×5問=30問。適用・予測・比較・境界判断・事例診断を扱う。DB質問テーブルへseedせず提示時にTutorTurn.practice_question_jsonへ保存する。旧v1の出題/採点はない。
+学習確認v3は3用語×3学習セッションvariant=9問である。各用語は学習セッション1でlearning_round_v1、2でlearning_round_v2、3でlearning_round_v3を使う。enrichmentとconceptual_changeは同じ問題本文・選択肢を使い、教材生成プロンプトだけが変わる。同一セッション内の誤答時は同じ問題で最大3回答し、教材だけを再生成する。
 
-両群とも同じ診断連動規則でstageを選ぶ。unknownはenrichment、M1/M3はconceptual_change、variantは同じturn_indexに従う。旧統制群の固定conceptual_change系列を使わない。問題本文・選択肢・採点データは変更しない。
+最大経路の固有問題数は、テスト系12問（pretest 3＋retest 3回×3）＋学習確認9問＝21問である。学習問題を各用語3回まで再回答するため、最大の採点回答イベント数はテスト12＋学習27＝39回となる。
 
-問題バンクのcanonicalな内部ラベルは、A〜C正解・D〜F=M1・G〜I=M3・J=unknownのデバッグ配置で管理する。管理画面の `debug_fixed` ではこの並びを表示する。2026-10-21のユーザー指定により、`randomized` でも「わからない」は最後のJへ固定し、テスト21問・学習確認30問の残る9択だけをA〜Iへ決定的に再配置する。再配置は問題ごとに固定され、全参加者・両群で共通、アプリ再起動後も変わらない。正解/M1/M3がA〜Iの各ラベルへ割り当たる回数は、各問題バンク全体で最大差1以内に均衡させる。3問ごとに役割を巡回し、3問のブロックごとに並べ替えを変える。配置アルゴリズム識別子は内部定数option-order-v2-unknown-lastであり、実験仕様版・protocol_id・DB列は変更しない。
+問題バンクのcanonicalな内部ラベルは、A〜C正解・D〜F=M1・G〜I=M3・J=unknownのデバッグ配置で管理する。管理画面のdebug_fixedではこの並びを表示する。randomizedでも「わからない」は最後のJへ固定し、残る9択をA〜Iへ決定的に再配置する。再配置は問題ごとに固定され、全参加者・両群で共通、アプリ再起動後も変わらない。選択肢配置はlearning_questions_v3.ymlの9問にも適用する。
 
-配置モードは参加者開始時にsnapshot化し、設定変更は新規参加者にだけ適用する。既存参加者のmode未記録値は `debug_fixed` として扱う。回答時の判定・教授対象選択は表示ラベルでなくoption IDと内部メタデータを使う。正解3つの完全選択、unknownの単独選択、M3優先を維持する。回答ログには実際に表示した選択肢ラベル・本文・順序を保存する。参加者向けAPIには正解や誤概念分類を返さない。
-
-teaching_targetsに研究者確認済み訂正・仕組み・対比・M3境界を保存する。observed_claimは選択肢本文から取得する。Jには対象主張を作らない。
-
-長さ、同文コピー、役割数、場面形式を検証する。配置モードは管理画面と `/api/admin/option-order` で確認する。デバッグ配置のまま研究データを収集しない。
+teaching_targetsに研究者確認済み訂正・仕組み・対比・M3境界を保存する。問題本文・選択肢・採点データは変更せず、participantのTutorTurn.practice_question_jsonへ提示時のsnapshotを保存する。過去v2 snapshotやv4以下の記録は書き換えない。

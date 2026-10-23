@@ -156,8 +156,8 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
     Base.metadata.create_all(isolated)
     with Session(isolated) as db:
         seed_database(db)
-        assert db.query(Question).count() == 21
-        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 3, "retest": 15, "final_test": 3}
+        assert db.query(Question).count() == 15
+        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 3, "retest": 9, "final_test": 3}
         participant = Participant(display_code="OLD", group_condition="proposed", current_step="finish", completion_reason=None)
         db.add(participant)
         db.flush()
@@ -175,8 +175,8 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
         pid = participant.id
         seed_database(db)
         seed_database(db)
-        assert db.query(Question).count() == 24
-        assert db.query(Question).filter_by(is_active=True).count() == 21
+        assert db.query(Question).count() == 18
+        assert db.query(Question).filter_by(is_active=True).count() == 15
         assert not old_question.is_active and not transfer.is_active
         db.refresh(retired_variant)
         assert not retired_variant.is_active

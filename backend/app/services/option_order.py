@@ -4,7 +4,7 @@ import hashlib
 import uuid
 from typing import Any
 
-from app.seed.content_loader import ACTIVE_TERM_SLUGS, LEARNING_STAGES
+from app.seed.content_loader import ACTIVE_TERM_SLUGS, LEARNING_SESSION_VARIANT_COUNT, LEARNING_STAGES
 from app.models import RuntimeSetting
 
 
@@ -15,8 +15,8 @@ OPTION_LABELS = tuple("ABCDEFGHIJ")
 SHUFFLED_OPTION_LABELS = OPTION_LABELS[:-1]
 UNKNOWN_DISPLAY_LABEL = OPTION_LABELS[-1]
 OPTION_ORDER_VERSION = "option-order-v2-unknown-last"
-ASSESSMENT_VARIANTS_PER_TERM = 7
-LEARNING_VARIANTS_PER_STAGE = 5
+ASSESSMENT_VARIANTS_PER_TERM = 4
+LEARNING_VARIANTS_PER_SESSION = LEARNING_SESSION_VARIANT_COUNT
 
 
 def effective_option_order_mode(value: str | None) -> str:
@@ -45,32 +45,32 @@ def assessment_bank_index(term_slug: str, phase: str, variant_key: str) -> int:
     if not isinstance(variant_key, str) or not variant_key:
         raise ValueError(f"invalid assessment variant key: {variant_key}")
     term_index = ACTIVE_TERM_SLUGS.index(term_slug)
-    phase_offsets = {"pretest": 0, "retest": 1, "final_test": 6}
+    phase_offsets = {"pretest": 0, "retest": 1, "final_test": 1}
     if phase not in phase_offsets:
         raise ValueError(f"unsupported assessment phase: {phase}")
     try:
         variant_index = int(variant_key.rsplit("_v", 1)[1])
     except (IndexError, ValueError) as exc:
         raise ValueError(f"invalid assessment variant key: {variant_key}") from exc
-    if phase == "retest" and not 1 <= variant_index <= 5:
+    if phase == "retest" and not 1 <= variant_index <= 3:
         raise ValueError(f"invalid retest variant: {variant_key}")
-    if phase != "retest" and variant_index != 1:
-        raise ValueError(f"invalid {phase} variant: {variant_key}")
+    if phase == "final_test" and variant_key != "retest_v1":
+        raise ValueError(f"final_test must use retest_v1: {variant_key}")
+    if phase == "pretest" and variant_key != "pretest_v1":
+        raise ValueError(f"invalid pretest variant: {variant_key}")
     offset = phase_offsets[phase] + (variant_index - 1 if phase == "retest" else 0)
     return term_index * ASSESSMENT_VARIANTS_PER_TERM + offset
 
 
 def learning_bank_index(term_slug: str, learning_stage: str, variant_index: int) -> int:
     term_index = ACTIVE_TERM_SLUGS.index(term_slug)
-    stage_index = LEARNING_STAGES.index(learning_stage)
-    if not 1 <= variant_index <= LEARNING_VARIANTS_PER_STAGE:
+    if learning_stage not in LEARNING_STAGES:
+        raise ValueError(f"unsupported learning stage: {learning_stage}")
+    if not 1 <= variant_index <= LEARNING_VARIANTS_PER_SESSION:
         raise ValueError(f"invalid learning variant index: {variant_index}")
-    return (
-        term_index * len(LEARNING_STAGES) * LEARNING_VARIANTS_PER_STAGE
-        + stage_index * LEARNING_VARIANTS_PER_STAGE
-        + variant_index
-        - 1
-    )
+    # The same question is used for both semantic learning stages. The stage
+    # changes the tutoring prompt, so the option-order index must not include it.
+    return term_index * LEARNING_VARIANTS_PER_SESSION + variant_index - 1
 
 
 def option_role(option: Any) -> str:

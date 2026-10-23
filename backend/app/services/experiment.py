@@ -51,6 +51,7 @@ from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import (
     ASSESSMENT_VARIANT_COUNTS,
     CURRENT_LEARNING_CONTENT_VERSION,
+    LEARNING_SESSION_VARIANT_COUNT,
     content_term,
     learning_question_spec,
     load_content,
@@ -907,7 +908,7 @@ def _question_for_phase_variant(
     elif phase == "pretest":
         expected_key = "pretest_v1"
     elif phase == "final_test":
-        expected_key = "final_test_v1"
+        expected_key = "retest_v1"
     else:
         raise HTTPException(status_code=400, detail="unsupported attempt phase")
     return next((question for question in candidates if question.variant_key == expected_key), candidates[0])
@@ -1520,7 +1521,7 @@ def _test_result_question(
     if test_round == "test":
         expected_variant = "pretest_v1"
     elif phase == "final_test":
-        expected_variant = "final_test_v1"
+        expected_variant = "retest_v1"
     elif phase == "retest":
         round_number = _round_number(test_round)
         if round_number is not None:
@@ -1678,7 +1679,7 @@ def _tutoring_generation_context(
         )
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
     turn_index = turn_count + 1
-    learning_variant_index = 1 if generation_origin == "prefetch" else min(turn_index, 5)
+    learning_variant_index = min(max(session.session_index, 1), LEARNING_SESSION_VARIANT_COUNT)
     position = _learning_position(db, session, term, participant)
     misconception_history = session_misconception_history(db, session.id) if participant.group_condition == "proposed" else []
     state_current_status = state.current_status
@@ -1727,10 +1728,23 @@ def _tutoring_generation_context(
         position["learning_stage"],
         learning_variant_index,
     )
+    previous_turn = (
+        db.query(TutorTurn)
+        .filter_by(tutor_session_id=session.id)
+        .order_by(TutorTurn.turn_index.desc())
+        .first()
+    )
+    previous_question = previous_turn.practice_question_json if previous_turn else None
+    saved_options = (
+        previous_question.get("options")
+        if isinstance(previous_question, dict)
+        and previous_question.get("learning_variant_index") == learning_variant_index
+        else None
+    )
     practice_question = {
         "body": spec["body"],
         "question_type": spec["question_type"],
-        "options": _public_learning_options(
+        "options": saved_options or _public_learning_options(
             spec,
             participant,
             term.slug,

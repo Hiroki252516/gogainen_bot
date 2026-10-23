@@ -9,15 +9,17 @@ import yaml
 
 
 CONTENT_PATH = Path(__file__).with_name("content") / "learning_content.yml"
-LEARNING_V2_CONTENT_PATH = Path(__file__).with_name("content") / "learning_questions_v2.yml"
+UNUSED_CONTENT_PATH = Path(__file__).with_name("content") / "learning_questions_v2_unused.yml"
+LEARNING_V3_CONTENT_PATH = Path(__file__).with_name("content") / "learning_questions_v3.yml"
 ACTIVE_TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
-QUESTION_PHASES = ("pretest", "retest", "final_test")
+QUESTION_PHASES = ("pretest", "retest")
 LEARNING_STAGES = ("enrichment", "conceptual_change")
-CURRENT_LEARNING_CONTENT_VERSION = 2
+LEARNING_SESSION_VARIANT_COUNT = 3
+CURRENT_LEARNING_CONTENT_VERSION = 3
 LEARNING_OPTION_ROLES = ("correct", "M1", "M3")
 LEARNING_SCENARIO_TYPES = ("application", "prediction", "comparison", "boundary", "diagnosis")
 ASSESSMENT_OPTION_ROLES = ("correct", "M1", "M3")
-ASSESSMENT_VARIANT_COUNTS = {"pretest": 1, "retest": 5, "final_test": 1}
+ASSESSMENT_VARIANT_COUNTS = {"pretest": 1, "retest": 3}
 ASSESSMENT_ROLE_SLOTS = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
 UNKNOWN_OPTION = {"label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"}
 
@@ -176,7 +178,7 @@ def _validate_content(content: dict[str, Any]) -> None:
         if _contains_langgraph(term) or _contains_langgraph(term.get("rag_sections")):
             raise ValueError(f"{slug} must not mention LangGraph")
 
-    if sum(ASSESSMENT_VARIANT_COUNTS.values()) * len(ACTIVE_TERM_SLUGS) != 21:
+    if sum(ASSESSMENT_VARIANT_COUNTS.values()) * len(ACTIVE_TERM_SLUGS) != 12:
         raise ValueError("assessment bank must contain exactly 21 variants")
     _validate_teaching_targets(content)
 
@@ -205,7 +207,7 @@ def _validate_assessment_variant(term_slug: str, phase: str, variant: Any) -> No
         raise ValueError(f"{name} must not mention LangGraph")
 
 
-def _v2_options(variant: dict[str, Any]) -> list[dict[str, Any]]:
+def _learning_options(variant: dict[str, Any]) -> list[dict[str, Any]]:
     choices = variant["choices"]
     options = []
     role_slots = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
@@ -225,9 +227,16 @@ def _v2_options(variant: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def assessment_question_spec(term_slug: str, phase: str, variant_index: int = 1) -> dict[str, Any]:
-    if phase not in QUESTION_PHASES:
+    if phase == "final_test":
+        # The route remains for compatibility, but it uses the first post-pretest
+        # question rather than maintaining a separate final_test variant.
+        source_phase = "retest"
+        variant_index = 1
+    elif phase in QUESTION_PHASES:
+        source_phase = phase
+    else:
         raise ValueError(f"unsupported assessment phase: {phase}")
-    variants = content_term(term_slug)["questions"][phase]
+    variants = content_term(term_slug)["questions"][source_phase]
     index = min(max(variant_index, 1), len(variants)) - 1
     variant = dict(variants[index])
     variant["body"] = f"{variant['scenario']}\n\n{variant['task']}"
@@ -237,12 +246,12 @@ def assessment_question_spec(term_slug: str, phase: str, variant_index: int = 1)
     return variant
 
 
-def _validate_v2_content(content: dict[str, Any], assessment_content: dict[str, Any]) -> None:
+def _validate_v3_content(content: dict[str, Any], assessment_content: dict[str, Any]) -> None:
     if content.get("version") != CURRENT_LEARNING_CONTENT_VERSION:
-        raise ValueError("learning_questions_v2.yml must have version 2")
+        raise ValueError("learning_questions_v3.yml must have version 3")
     terms = content.get("terms") or {}
     if tuple(terms) != ACTIVE_TERM_SLUGS:
-        raise ValueError(f"learning v2 terms must be exactly {ACTIVE_TERM_SLUGS}")
+        raise ValueError(f"learning v3 terms must be exactly {ACTIVE_TERM_SLUGS}")
 
     assessment_bodies = {
         f"{variant['scenario']}\n\n{variant['task']}"
@@ -258,60 +267,105 @@ def _validate_v2_content(content: dict[str, Any], assessment_content: dict[str, 
         for option in _assessment_options(variant)[:9]
     }
     variant_count = 0
+    learning_bodies: set[str] = set()
+    learning_option_bodies: set[str] = set()
 
     for term_slug in ACTIVE_TERM_SLUGS:
-        stage_data = terms.get(term_slug) or {}
-        if tuple(stage_data) != LEARNING_STAGES:
-            raise ValueError(f"learning v2 stages for {term_slug} must be {LEARNING_STAGES}")
-        for stage in LEARNING_STAGES:
-            variants = (stage_data.get(stage) or {}).get("variants") or []
-            if len(variants) != 5:
-                raise ValueError(f"{term_slug}.{stage} must contain five v2 variants")
-            expected_keys = [f"learning_{stage}_v{index}" for index in range(1, 6)]
-            if [variant.get("variant_key") for variant in variants] != expected_keys:
-                raise ValueError(f"{term_slug}.{stage} must use variant keys {expected_keys}")
-            if [variant.get("scenario_type") for variant in variants] != list(LEARNING_SCENARIO_TYPES):
-                raise ValueError(f"{term_slug}.{stage} must cover each scenario type once in order")
+        term_data = terms.get(term_slug) or {}
+        if tuple(term_data) != ("variants",):
+            raise ValueError(f"learning v3 term {term_slug} must contain only variants")
+        variants = term_data.get("variants") or []
+        if len(variants) != LEARNING_SESSION_VARIANT_COUNT:
+            raise ValueError(
+                f"{term_slug} must contain {LEARNING_SESSION_VARIANT_COUNT} learning-round variants"
+            )
+        expected_keys = [
+            f"learning_round_v{index}"
+            for index in range(1, LEARNING_SESSION_VARIANT_COUNT + 1)
+        ]
+        if [variant.get("variant_key") for variant in variants] != expected_keys:
+            raise ValueError(f"{term_slug} must use variant keys {expected_keys}")
+        if [variant.get("scenario_type") for variant in variants] != list(
+            LEARNING_SCENARIO_TYPES[:LEARNING_SESSION_VARIANT_COUNT]
+        ):
+            raise ValueError(
+                f"{term_slug} must cover the first three learning scenario types once in order"
+            )
 
-            for variant in variants:
-                if not str(variant.get("scenario") or "").strip() or not str(variant.get("task") or "").strip():
-                    raise ValueError(f"{term_slug}.{stage}.{variant.get('variant_key')} needs scenario and task")
-                choices = variant.get("choices") or {}
-                if tuple(choices) != LEARNING_OPTION_ROLES:
-                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} must define correct, M1, and M3 choices")
-                all_choice_bodies = []
-                for role in LEARNING_OPTION_ROLES:
-                    texts = choices.get(role)
-                    if not isinstance(texts, list) or len(texts) != 3 or any(not str(text).strip() for text in texts):
-                        raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} needs three nonempty {role} choices")
-                    all_choice_bodies.extend(str(text).strip() for text in texts)
-                lengths = [len(text) for text in all_choice_bodies]
-                if min(lengths) < 20 or max(lengths) > min(lengths) * 1.8 or max(lengths) - min(lengths) > 32:
-                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} has a conspicuous option-length spread")
-                if len(set(all_choice_bodies)) != 9:
-                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} has duplicate choices")
-                if any(body in assessment_bodies or body in assessment_options for body in all_choice_bodies):
-                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} copies fixed test wording")
-                if _contains_langgraph(variant):
-                    raise ValueError(f"{term_slug}.{stage}.{variant['variant_key']} must not mention LangGraph")
-                _validate_option_set(
-                    f"{term_slug}.{stage}.{variant['variant_key']}",
-                    _v2_options(variant),
-                )
-                variant_count += 1
+        for variant in variants:
+            name = f"{term_slug}.{variant.get('variant_key')}"
+            if not str(variant.get("scenario") or "").strip() or not str(variant.get("task") or "").strip():
+                raise ValueError(f"{name} needs scenario and task")
+            choices = variant.get("choices") or {}
+            if tuple(choices) != LEARNING_OPTION_ROLES:
+                raise ValueError(f"{name} must define correct, M1, and M3 choices")
+            all_choice_bodies = []
+            for role in LEARNING_OPTION_ROLES:
+                texts = choices.get(role)
+                if (
+                    not isinstance(texts, list)
+                    or len(texts) != 3
+                    or any(not str(text).strip() for text in texts)
+                ):
+                    raise ValueError(f"{name} needs three nonempty {role} choices")
+                all_choice_bodies.extend(str(text).strip() for text in texts)
+            lengths = [len(text) for text in all_choice_bodies]
+            if (
+                min(lengths) < 20
+                or max(lengths) > min(lengths) * 1.8
+                or max(lengths) - min(lengths) > 32
+            ):
+                raise ValueError(f"{name} has a conspicuous option-length spread")
+            body = f"{variant['scenario']}\\n\\n{variant['task']}"
+            if body in learning_bodies:
+                raise ValueError("learning v3 question bodies must be unique")
+            learning_bodies.add(body)
+            if any(body in learning_option_bodies for body in all_choice_bodies):
+                raise ValueError("learning v3 choices must be unique across variants")
+            learning_option_bodies.update(all_choice_bodies)
+            if len(set(all_choice_bodies)) != 9:
+                raise ValueError(f"{name} has duplicate choices")
+            if any(body in assessment_bodies or body in assessment_options for body in all_choice_bodies):
+                raise ValueError(f"{name} copies fixed test wording")
+            if _contains_langgraph(variant):
+                raise ValueError(f"{name} must not mention LangGraph")
+            _validate_option_set(name, _learning_options(variant))
+            variant_count += 1
 
-    if variant_count != 30:
-        raise ValueError("learning v2 bank must contain exactly 30 variants")
+    expected_variant_count = len(ACTIVE_TERM_SLUGS) * LEARNING_SESSION_VARIANT_COUNT
+    if variant_count != expected_variant_count:
+        raise ValueError(
+            f"learning v3 bank must contain exactly {expected_variant_count} variants"
+        )
 
 
 @lru_cache(maxsize=1)
-def load_learning_v2_content() -> dict[str, Any]:
-    with LEARNING_V2_CONTENT_PATH.open("r", encoding="utf-8") as handle:
+def load_learning_v3_content() -> dict[str, Any]:
+    with LEARNING_V3_CONTENT_PATH.open("r", encoding="utf-8") as handle:
         content = yaml.safe_load(handle)
     if not isinstance(content, dict):
-        raise ValueError("learning_questions_v2.yml must contain a mapping")
-    _validate_v2_content(content, load_content())
+        raise ValueError("learning_questions_v3.yml must contain a mapping")
+    _validate_v3_content(content, load_content())
     return content
+
+
+def _archived_assessment_variants() -> dict[str, dict[str, list[dict[str, Any]]]]:
+    with UNUSED_CONTENT_PATH.open("r", encoding="utf-8") as handle:
+        archive = yaml.safe_load(handle)
+    section = archive.get("unused_assessment_questions") if isinstance(archive, dict) else None
+    terms = section.get("terms") if isinstance(section, dict) else None
+    if not isinstance(terms, dict) or tuple(terms) != ACTIVE_TERM_SLUGS:
+        raise ValueError("unused assessment archive must contain all active terms")
+    expected_keys = ("retest_v4", "retest_v5")
+    for term_slug in ACTIVE_TERM_SLUGS:
+        term_data = terms.get(term_slug) or {}
+        variants = term_data.get("retest") or []
+        if [variant.get("variant_key") for variant in variants] != list(expected_keys):
+            raise ValueError(f"unused assessment archive for {term_slug} must contain retest_v4 and retest_v5")
+        final_variants = term_data.get("final_test") or []
+        if [variant.get("variant_key") for variant in final_variants] != ["final_test_v1"]:
+            raise ValueError(f"unused assessment archive for {term_slug} must contain final_test_v1")
+    return terms
 
 
 @lru_cache(maxsize=1)
@@ -320,6 +374,10 @@ def load_content() -> dict[str, Any]:
         content = yaml.safe_load(handle)
     if not isinstance(content, dict):
         raise ValueError("learning_content.yml must contain a mapping")
+
+    # Validate retired questions separately, but keep them out of the active
+    # content object so normal seed/debug inspection sees only active questions.
+    _archived_assessment_variants()
     _validate_content(content)
     return content
 
@@ -340,12 +398,14 @@ def learning_question_spec(
     variant_index: int = 1,
 ) -> dict[str, Any]:
     content_term(term_slug)
-    stage = learning_stage if learning_stage in LEARNING_STAGES else "conceptual_change"
-    variants = load_learning_v2_content()["terms"][term_slug][stage]["variants"]
+    # The semantic learning stage controls the tutoring prompt only. The
+    # question is selected by the learning-session round and is shared by
+    # enrichment and conceptual_change.
+    variants = load_learning_v3_content()["terms"][term_slug]["variants"]
     index = min(max(variant_index, 1), len(variants)) - 1
     variant = dict(variants[index])
     variant["body"] = f"{variant['scenario']}\n\n{variant['task']}"
-    variant["options"] = _v2_options(variant)
+    variant["options"] = _learning_options(variant)
     variant.pop("choices", None)
     variant.pop("scenario", None)
     variant.pop("task", None)

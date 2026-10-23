@@ -63,7 +63,7 @@ def test_randomized_assignment_is_stable_unique_and_balanced_for_both_banks():
     learning_items = []
     unknown_labels = set()
     for term_slug in ACTIVE_TERM_SLUGS:
-        for phase, variant_indexes in (("pretest", [1]), ("retest", range(1, 6)), ("final_test", [1])):
+        for phase, variant_indexes in (("pretest", [1]), ("retest", range(1, 4))):
             for variant_index in variant_indexes:
                 spec = assessment_question_spec(term_slug, phase, variant_index)
                 item_index = assessment_bank_index(term_slug, phase, spec["variant_key"])
@@ -77,24 +77,28 @@ def test_randomized_assignment_is_stable_unique_and_balanced_for_both_banks():
                     (option["label"], option["body"]) for option in repeated
                 ]
     for term_slug in ACTIVE_TERM_SLUGS:
-        for stage in LEARNING_STAGES:
-            for variant_index in range(1, 6):
-                spec = learning_question_spec(term_slug, stage, variant_index)
-                item_index = learning_bank_index(term_slug, stage, variant_index)
-                learning_items.append((item_index, spec["options"]))
-                fixed = present_options(spec["options"], mode=DEBUG_FIXED, bank="learning", item_index=item_index)
-                _assert_debug_roles(fixed, spec["options"])
-                displayed = present_options(spec["options"], mode=RANDOMIZED, bank="learning", item_index=item_index)
-                unknown_labels.add(next(option["label"] for option in displayed if option["exclusive"]))
-                assert len({option["option_id"] for option in displayed}) == 10
-                assert all(option["option_id"].startswith("lo_") for option in displayed)
-                repeated = present_options(spec["options"], mode=RANDOMIZED, bank="learning", item_index=item_index)
-                assert [(option["label"], option["body"]) for option in displayed] == [
-                    (option["label"], option["body"]) for option in repeated
-                ]
+        for variant_index in range(1, 4):
+            enrichment = learning_question_spec(term_slug, "enrichment", variant_index)
+            conceptual_change = learning_question_spec(term_slug, "conceptual_change", variant_index)
+            assert enrichment["body"] == conceptual_change["body"]
+            assert enrichment["options"] == conceptual_change["options"]
+            item_index = learning_bank_index(term_slug, "enrichment", variant_index)
+            assert item_index == learning_bank_index(term_slug, "conceptual_change", variant_index)
+            spec = enrichment
+            learning_items.append((item_index, spec["options"]))
+            fixed = present_options(spec["options"], mode=DEBUG_FIXED, bank="learning", item_index=item_index)
+            _assert_debug_roles(fixed, spec["options"])
+            displayed = present_options(spec["options"], mode=RANDOMIZED, bank="learning", item_index=item_index)
+            unknown_labels.add(next(option["label"] for option in displayed if option["exclusive"]))
+            assert len({option["option_id"] for option in displayed}) == 10
+            assert all(option["option_id"].startswith("lo_") for option in displayed)
+            repeated = present_options(spec["options"], mode=RANDOMIZED, bank="learning", item_index=item_index)
+            assert [(option["label"], option["body"]) for option in displayed] == [
+                (option["label"], option["body"]) for option in repeated
+            ]
 
-    assert len(assessment_items) == 21
-    assert len(learning_items) == 30
+    assert len(assessment_items) == 12
+    assert len(learning_items) == 9
     assert unknown_labels == {"J"}
     _assert_role_balance("assessment", assessment_items)
     _assert_role_balance("learning", learning_items)

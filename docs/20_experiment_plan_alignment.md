@@ -12,11 +12,19 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 4 |
-| 新プロトコル | experiment-plan-2026-10-22-v1 |
+| 実験仕様版 | 5 |
+| 新プロトコル | experiment-plan-2026-10-23-learning-rotation-v1 |
 | 教材契約版 | tutoring-teaching-contract-v6-plan-aligned |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
+
+## 2026-10-23 学習確認問題ローテーションの採用判断
+
+- 新規参加者は実験仕様版5 / experiment-plan-2026-10-23-learning-rotation-v1で開始する。仕様版4以下、旧protocol_id、NULLの記録は閲覧専用として保全する。
+- 学習確認はlearning_questions_v3.ymlの3用語×3学習セッションvariant=9問。各用語でsession_index 1〜3をlearning_round_v1〜learning_round_v3へ固定対応させる。
+- enrichmentとconceptual_changeは同じ問題を使い、stageは教材生成プロンプトだけを変更する。同一セッション内の誤答では問題を変えず、各用語最大3回答まで教材を再生成する。
+- 旧30問のv2バンクはlearning_questions_v2_unused.ymlへ保存し、現行の問題選択・検証・配置計算へ含めない。
+- 固有問題の最大経路はテスト12問＋学習9問＝21問。再回答を含む採点回答イベントは最大39回であり、問題数と回答回数を区別する。
 
 ## 計画書と仕様書の対応
 
