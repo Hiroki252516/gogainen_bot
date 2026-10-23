@@ -844,6 +844,7 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
+    initial_question = turn["practice_question"]
 
     mixed_unknown = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
@@ -861,6 +862,10 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
 
     retry = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     assert retry["learning_stage"] == "conceptual_change"
+    assert retry["practice_question"]["learning_variant_index"] == initial_question["learning_variant_index"]
+    assert retry["practice_question"]["variant_key"] == initial_question["variant_key"]
+    assert retry["practice_question"]["body"] == initial_question["body"]
+    assert retry["practice_question"]["options"] == initial_question["options"]
     correct = client.post(
         f"/api/tutor-turns/{retry['turn_id']}/respond",
         json={"selected_option_ids": _ids_for_learning_role(retry["practice_question"], "llm_knowledge", retry["learning_stage"], "correct"), "response_time_sec": 2.5, "question_shown_at": QUESTION_SHOWN_AT, "answered_at": ANSWERED_AT},
