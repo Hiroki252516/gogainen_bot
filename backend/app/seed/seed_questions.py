@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal, init_db
 from app.models import Question, QuestionOption, Term
 from app.seed.data import SEED_TERMS
-from app.seed.content_loader import ASSESSMENT_BANK_VERSION
+from app.seed.content_loader import seed_terms
+from app.core.question_sets import STANDARD, EASY, assessment_construct_key
 
 
 def _sync_options(db: Session, question: Question, options: list[tuple[str, str, bool, str | None]]) -> None:
@@ -68,7 +69,12 @@ def _upsert_question(
 def seed_database(db: Session) -> None:
     active_slugs = {item["slug"] for item in SEED_TERMS}
     active_question_ids = set()
-    for index, item in enumerate(SEED_TERMS, start=1):
+    bank_items = [
+        (mode, index, item)
+        for mode in (STANDARD, EASY)
+        for index, item in enumerate(SEED_TERMS if mode == STANDARD else seed_terms(mode), start=1)
+    ]
+    for mode, index, item in bank_items:
         term = db.query(Term).filter(Term.slug == item["slug"]).one_or_none()
         if not term:
             term = Term(
@@ -94,7 +100,7 @@ def seed_database(db: Session) -> None:
                     question_type="multi_select" if phase == "pretest" else "retest_multi_select",
                     body=qd["body"],
                     expected_answer=qd["expected"],
-                    construct_key=f"{item['slug']}_{ASSESSMENT_BANK_VERSION}",
+                    construct_key=assessment_construct_key(item["slug"], phase, mode),
                     variant_key=qd["variant_key"],
                     options=qd["options"],
                 )
@@ -109,7 +115,7 @@ def seed_database(db: Session) -> None:
                 question_type="final_multi_select",
                 body=final_q["body"],
                 expected_answer=final_q["expected"],
-                construct_key=f"{item['slug']}_final_test_{ASSESSMENT_BANK_VERSION}",
+                construct_key=assessment_construct_key(item["slug"], "final_test", mode),
                 variant_key=final_q["variant_key"],
                 options=final_q["options"],
             )

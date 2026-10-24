@@ -38,6 +38,14 @@ def compose_structured_prompt(
     rules: Sequence[str],
 ) -> str:
     """Compose the common text envelope used for structured app-server calls."""
+    if payload.get("explanation_level") == "beginner":
+        rules = [*rules,
+            "対象はAIや技術の知識が少ない学習者である。短い文を使い、一文には一つの話題だけを置く。",
+            "必要な専門語は初めて使う箇所で短く説明し、不要な専門語や抽象的な言い回しは日常の言葉へ置き換える。",
+            "学校、店、旅行、メモなど身近な具体例で説明する。比喩だけで説明を終えず、実際の仕組みとの違いも守る。",
+            "平易にするために正確さや指定された教授内容を省かない。教材の文字数条件、正答を直接示さない条件など既存ルールも守る。",
+            "平易化するのは説明の本文である。本文の証拠文を返す指定がある場合は、完成した本文から一致する箇所を抜き出し、言い換えたり入力資料の文を代用したりしない。",
+        ]
     prompt_parts = [
         f"目的: {purpose}",
         "",

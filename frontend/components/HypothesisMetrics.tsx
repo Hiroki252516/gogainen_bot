@@ -33,12 +33,13 @@ export function HypothesisMetrics({ data }: { data: any }) {
   if (!data) return null;
   return <section className="panel stack" aria-labelledby="hypotheses-title">
     <h2 id="hypotheses-title">6仮説の記述集計</h2>
+    <p>集計対象: {data.question_set_mode === "easy" ? "易しい版" : "通常版"}</p>
     <p>新プロトコル登録者のみ。統計検定・仮説支持の自動判定は行いません。欠測は補完しません。</p>
     <StatsTable groups={data.groups} />
     <p className="muted">仮説2は満点到達者のみの条件付き集計です。仮説2の未観測は満点までの総回数が未確定の人数であり、表示済みセッションの記録欠落を意味しません。仮説3は用語内平均→参加者内平均、仮説4は参加者ごとの率の平均です。</p>
     <div className="actions">
-      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_metrics.csv`}>6仮説・参加者別CSV</a>
-      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.csv`}>6仮説・群別CSV</a>
+      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_metrics.csv?question_set_mode=${data.question_set_mode || "standard"}`}>6仮説・参加者別CSV</a>
+      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.csv?question_set_mode=${data.question_set_mode || "standard"}`}>6仮説・群別CSV</a>
     </div>
     <h3>群間差（proposed − control）</h3>
     <ul>{Object.entries(LABELS).map(([key, label]) => {

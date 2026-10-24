@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.models import Attempt, Base, EvaluationSummary, Participant, Question, QuestionOption, Term
+from app.core.question_sets import ASSESSMENT_BANK_VERSIONS
 from app.seed.content_loader import ASSESSMENT_BANK_VERSION, CONTENT_PATH, load_content
 from app.seed.seed_questions import _upsert_question, seed_database
 from app.services import experiment
@@ -62,9 +63,9 @@ def test_replacement_seed_preserves_old_questions_options_and_snapshotless_resul
         before_options = {row.id: (row.question_id, row.option_label, row.body, row.is_correct, row.misconception_type) for row in db.query(QuestionOption)}
         seed_database(db)
         seed_database(db)
-        assert db.query(Question).count() == 27
-        assert db.query(Question).filter_by(is_active=True).count() == 12
-        assert db.query(QuestionOption).count() == 270
+        assert db.query(Question).count() == 39
+        assert db.query(Question).filter_by(is_active=True).count() == 24
+        assert db.query(QuestionOption).count() == 390
         for qid, expected in before_questions.items():
             row = db.get(Question, qid)
             assert not row.is_active
@@ -72,7 +73,8 @@ def test_replacement_seed_preserves_old_questions_options_and_snapshotless_resul
         for oid, expected in before_options.items():
             row = db.get(QuestionOption, oid)
             assert (row.question_id, row.option_label, row.body, row.is_correct, row.misconception_type) == expected
-        assert all(row.construct_key.endswith(ASSESSMENT_BANK_VERSION) for row in db.query(Question).filter_by(is_active=True))
+        for bank in ASSESSMENT_BANK_VERSIONS.values():
+            assert db.query(Question).filter(Question.is_active.is_(True), Question.construct_key.endswith(bank)).count() == 12
         logs = experiment.participant_logs(db, old_participant.id)
         assert logs["attempts"][0]["question_body"] == before_questions[question.id][0]
         assert logs["attempts"][0]["selected_option_body"] == "D"

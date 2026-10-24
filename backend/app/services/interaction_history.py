@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.ai.interaction_history import project_interaction_history
 from app.core.experiment_spec import assert_current_experiment
+from app.core.question_sets import question_set_mode
 from app.models import Attempt, Participant, Question, QuestionOption, Term, TutorSession, TutorTurn
 from app.seed.content_loader import learning_question_spec
+from app.services.option_order import assessment_bank_index, present_options
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -25,8 +27,13 @@ def _test_record(db: Session, attempt: Attempt) -> dict[str, Any]:
     snapshot = [row for row in attempt.option_order_snapshot or [] if isinstance(row, dict) and row.get("body") and (row.get("label") or row.get("option_label"))]
     existing = {row.get("option_id") for row in snapshot if isinstance(row, dict)}
     missing_ids = [option_id for option_id in selected_ids if option_id not in existing]
-    for option in db.query(QuestionOption).filter(QuestionOption.id.in_(missing_ids)).all() if missing_ids else []:
-        snapshot.append({"option_id": option.id, "label": option.option_label, "body": option.body})
+    if missing_ids:
+        saved_question = db.get(Question, attempt.question_id)
+        term = db.get(Term, attempt.term_id)
+        participant = db.get(Participant, attempt.participant_id)
+        options = db.query(QuestionOption).filter(QuestionOption.question_id == attempt.question_id, QuestionOption.option_label.in_(list("ABCDEFGHIJ"))).all()
+        displayed = present_options(options, mode=participant.option_order_mode, bank="assessment", item_index=assessment_bank_index(term.slug, attempt.phase, saved_question.variant_key))
+        snapshot.extend(row for row in displayed if row["option_id"] in missing_ids)
     question = db.get(Question, attempt.question_id) if not attempt.question_body_snapshot else None
     return {
         "source_type": "test_attempt", "phase": attempt.phase, "test_round": attempt.test_round,
@@ -48,7 +55,8 @@ def _learning_record(db: Session, session: TutorSession, turn: TutorTurn, projec
     if not question.get("body") or not set(selected_ids).issubset(available):
         term = db.get(Term, session.term_id)
         stage = grading.get("learning_stage") or (question.get("stage_meta") or {}).get("learning_stage") or "conceptual_change"
-        restored = learning_question_spec(term.slug, stage, int(question.get("learning_variant_index") or 1))
+        participant = db.get(Participant, session.participant_id)
+        restored = learning_question_spec(term.slug, stage, int(question.get("learning_variant_index") or 1), question_set_mode(participant.question_set_mode))
         snapshot = [*snapshot, *[row for row in restored["options"] if row["option_id"] not in available]]
         body = question.get("body") or turn.learner_prompt or restored["body"]
     else:

@@ -15,6 +15,7 @@ type Participant = {
   current_step: string;
   can_resume: boolean;
   experiment_spec_version: number | null;
+  question_set_mode: "standard" | "easy";
   retest_cycles_completed: number | null;
   post_pretest_tests_completed: number | null;
   post_pretest_test_limit: number | null;
@@ -28,6 +29,10 @@ const REASONING_EFFORTS = ["low", "medium", "high"] as const;
 type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
+type QuestionSetMode = "standard" | "easy";
+type QuestionSetSetting = { mode: QuestionSetMode; applies_to: "new_participants_only" };
+const QUESTION_SET_CHOICES = [["standard", "通常版"], ["easy", "易しい版"]] as const;
+const questionSetLabel = (mode: string | null | undefined) => mode === "easy" ? "易しい版" : "通常版";
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
   study_settings_warning?: string | null;
@@ -76,6 +81,7 @@ const MISCONCEPTION_TRANSITION_TYPES = Object.keys(MISCONCEPTION_TRANSITION_LABE
 const LOG_FIELD_LABELS: Record<string, string> = {
   display_code: "被験者",
   legacy_read_only: "試用区分",
+  question_set_mode: "問題版",
   source_type: "記録種別",
   test_round: "周回",
   term_slug: "用語",
@@ -137,6 +143,12 @@ export default function AdminPage() {
   const [optionOrder, setOptionOrder] = useState<OptionOrderSetting | null>(null);
   const [optionOrderSaving, setOptionOrderSaving] = useState(false);
   const [optionOrderError, setOptionOrderError] = useState("");
+  const [questionSet, setQuestionSet] = useState<QuestionSetSetting | null>(null);
+  const [questionSetSaving, setQuestionSetSaving] = useState(false);
+  const [questionSetError, setQuestionSetError] = useState("");
+  const [summaryMode, setSummaryMode] = useState<QuestionSetMode>("standard");
+  const [summaryError, setSummaryError] = useState("");
+  const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [login, setLogin] = useState<any>(null);
   const [loginError, setLoginError] = useState("");
   const [reasoningEffortSaving, setReasoningEffortSaving] = useState(false);
@@ -151,13 +163,23 @@ export default function AdminPage() {
     const activeParticipantId = participantId();
     if (activeParticipantId) rememberAdminResumeParticipant(activeParticipantId);
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants));
-    api("/api/admin/evaluation-summary").then(setSummary);
     api("/api/admin/logs/overview").then(setOverview);
+    api<QuestionSetSetting>("/api/admin/question-set").then(setQuestionSet).catch((err) => setQuestionSetError(err.message));
     api<AiStatus>("/api/admin/ai/status").then(setAi);
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
       .catch((err) => setOptionOrderError(err instanceof Error ? err.message : String(err)));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    setSummary(null);
+    setSummaryError("");
+    api(`/api/admin/evaluation-summary?question_set_mode=${summaryMode}`)
+      .then((data) => { if (active) setSummary(data); })
+      .catch((err) => { if (active) setSummaryError(err.message); });
+    return () => { active = false; };
+  }, [summaryMode, summaryRefresh]);
 
   useEffect(() => {
     setParticipantLog(null);
@@ -269,6 +291,20 @@ export default function AdminPage() {
     }
   }
 
+  async function updateQuestionSet(mode: QuestionSetMode) {
+    if (questionSetSaving || !questionSet || questionSet.mode === mode) return;
+    setQuestionSetSaving(true);
+    setQuestionSetError("");
+    try {
+      const updated = await api<QuestionSetSetting>("/api/admin/question-set", { method: "PUT", body: JSON.stringify({ mode }) });
+      setQuestionSet(updated);
+    } catch (err) {
+      setQuestionSetError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setQuestionSetSaving(false);
+    }
+  }
+
   async function loadParticipantLog(participantId: string) {
     setLogError("");
     try {
@@ -285,7 +321,7 @@ export default function AdminPage() {
     try {
       await api(`/api/participants/${participantId}/evaluation-summary/recalculate`, { method: "POST" });
       await loadParticipantLog(participantId);
-      api("/api/admin/evaluation-summary").then(setSummary);
+      setSummaryRefresh((count) => count + 1);
       api("/api/admin/logs/overview").then(setOverview);
     } catch (err) {
       setLogError(err instanceof Error ? err.message : String(err));
@@ -309,13 +345,12 @@ export default function AdminPage() {
       if (participantLog?.participant?.participant_id === participant.participant_id) {
         setParticipantLog(null);
       }
-      const [participantData, summaryData, overviewData] = await Promise.all([
+      const [participantData, overviewData] = await Promise.all([
         api<{ participants: Participant[] }>("/api/admin/participants"),
-        api("/api/admin/evaluation-summary"),
         api("/api/admin/logs/overview")
       ]);
       setParticipants(participantData.participants);
-      setSummary(summaryData);
+      setSummaryRefresh((count) => count + 1);
       setOverview(overviewData);
     } catch (err) {
       setLogError(err instanceof Error ? err.message : String(err));
@@ -325,14 +360,15 @@ export default function AdminPage() {
   }
 
   const activeParticipants = participants.filter((participant) => participant.group_condition === activeGroup);
-  const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume).length;
+  const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume && participant.question_set_mode === summaryMode).length;
+  const legacyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume).length;
   const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup);
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
-  const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only);
+  const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only && row.question_set_mode === summaryMode);
 
   return (
     <AppShell step="管理画面">
-      <div className="stack">
+      <div className="stack admin-content">
         <section className="panel stack">
           <h1>管理画面</h1>
           <div className="group-tabs" role="tablist" aria-label="実験群">
@@ -404,6 +440,19 @@ export default function AdminPage() {
                 </div>
               ) : null}
             </div>
+            <div className="notice question-set-setting">
+              <strong>新規参加者に適用する問題版</strong>
+              <p>{questionSet ? questionSetLabel(questionSet.mode) : "設定を確認中"}</p>
+              <div className="reasoning-effort-buttons option-order-buttons" role="group" aria-label="新規参加者に適用する問題版">
+                {QUESTION_SET_CHOICES.map(([mode, label]) => (
+                  <button key={mode} type="button" className={questionSet?.mode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
+                    aria-pressed={questionSet?.mode === mode} disabled={!questionSet || questionSetSaving} onClick={() => updateQuestionSet(mode)}>{label}</button>
+                ))}
+              </div>
+              <p className="muted">新規参加者から適用します。開始済みの参加者の問題版は変わりません。</p>
+              {questionSetSaving ? <p className="muted">保存中...</p> : null}
+              {questionSetError ? <p className="danger" role="alert">{questionSetError}</p> : null}
+            </div>
             <div className="notice">
               <strong>選択肢の配置</strong>
               <p>{optionOrder ? (optionOrder.mode === "debug_fixed" ? "デバッグ配置" : "ランダム配置") : "設定を確認中"}</p>
@@ -434,7 +483,7 @@ export default function AdminPage() {
             </div>
             {activeGroupSummary ? (
               <div className="notice">
-                <strong>{activeGroupSummary.group_condition}</strong>
+                <strong>{activeGroupSummary.group_condition} / {questionSetLabel(summaryMode)}</strong>
                 <p>参加者: {activeGroupSummary.participant_count}</p>
                 <p>確認テスト正答率: {formatRate(activeGroupSummary.attainment_correct_rate)}</p>
                 <p>事前比改善: {formatPoints(activeGroupSummary.avg_score_delta_from_pretest_pt)}</p>
@@ -469,21 +518,30 @@ export default function AdminPage() {
         </section>
         <section className="panel stack">
           <h2>全体ログ</h2>
+          <strong>集計する問題版</strong>
+          <div role="group" aria-label="集計する問題版" className="reasoning-effort-buttons option-order-buttons">
+            {QUESTION_SET_CHOICES.map(([mode, label]) => (
+              <button key={mode} type="button" className={summaryMode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
+                aria-pressed={summaryMode === mode} onClick={() => setSummaryMode(mode)}>{label}</button>
+            ))}
+          </div>
+          <p className="muted">集計対象: {questionSetLabel(summaryMode)}。新規参加者向け設定とは独立しています。生ログと被験者一覧は両版を表示します。</p>
+          {summaryError ? <p className="danger" role="alert">{summaryError}</p> : null}
           <p className="muted">{activeGroup}群の進捗、回答履歴、評価サマリーを確認します。</p>
           <div className="grid">
             <div className="notice">
-              <strong>現行参加者数</strong>
+              <strong>現行参加者数（集計版）</strong>
               <p>{currentParticipantCount}</p>
             </div>
             <div className="notice">
               <strong>旧試用数（閲覧専用）</strong>
-              <p>{activeParticipants.length - currentParticipantCount}</p>
+              <p>{legacyParticipantCount}</p>
             </div>
           </div>
           <p className="muted">以下の従来保存値・推移は参考情報です。6仮説の確定指標は専用の集計欄を参照してください。</p>
           <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
-          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
-          <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["question_set_mode", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+          <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["question_set_mode", "display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
         <HypothesisMetrics data={summary?.hypotheses} />
         <section className="panel">
@@ -493,6 +551,7 @@ export default function AdminPage() {
               <tr>
                 <th>ID</th>
                 <th>条件</th>
+                <th>問題版</th>
                 <th>進捗</th>
                 <th>完了</th>
                 <th>事前テスト後の回数</th>
@@ -506,6 +565,7 @@ export default function AdminPage() {
                 <tr key={p.participant_id}>
                   <td>{p.display_code}</td>
                   <td>{p.group_condition}</td>
+                  <td>{questionSetLabel(p.question_set_mode)}</td>
                   <td>{p.can_resume ? p.current_step : `旧試用（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
                   <td>
@@ -542,6 +602,7 @@ export default function AdminPage() {
             <>
               <div className="notice">
                 <strong>{participantLog.participant.display_code}</strong>
+                <p>問題版: {questionSetLabel(participantLog.participant.question_set_mode)}</p>
                 <p>
                   {participantLog.participant.group_condition} / {participantLog.participant.current_step}
                 </p>
@@ -585,7 +646,7 @@ export default function AdminPage() {
                 </details>
               ) : null}
               <LogList title="アンケート回答" rows={participantLog.surveys} fields={["phase", "survey_version", "responses", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]} />
-              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["question_set_mode", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
             </>
@@ -593,8 +654,8 @@ export default function AdminPage() {
             <p className="muted">被験者一覧の「被験者ログを見る」を押すと、1人分の流れを確認できます。</p>
           )}
         </section>
+        <IdentityMappings key={participants.length} />
       </div>
-      <IdentityMappings key={participants.length} />
     </AppShell>
   );
 }
@@ -931,6 +992,7 @@ function SessionLog({ sessions }: { sessions: any[] }) {
 
 function formatCell(field: string, value: any) {
   if (value === null || value === undefined) return "-";
+  if (field === "question_set_mode") return questionSetLabel(value);
   if (typeof value === "boolean") {
     if (field === "legacy_read_only") return value ? "旧試用（閲覧専用）" : "現行";
     if (field === "is_correct") return value ? "正解" : "不正解";

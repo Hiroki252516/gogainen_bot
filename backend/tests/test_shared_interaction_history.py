@@ -204,7 +204,7 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
     assert trials[0][2]["next_url"] == trials[1][2]["next_url"]
 
 
-@pytest.mark.parametrize("legacy_version", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("legacy_version", [1, 2, 3, 4, 5, 6])
 def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path, monkeypatch, legacy_version):
     isolated = create_engine(f"sqlite:///{tmp_path / 'versions.db'}")
     monkeypatch.setattr(database, "engine", isolated)
@@ -242,7 +242,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round == "test"
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 6
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 7
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION

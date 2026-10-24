@@ -46,12 +46,12 @@ from app.core.experiment_spec import (
 from app.services.research_protocol import SURVEY_VERSION, validate_survey_for_participant
 from app.services.hypothesis_metrics import METRICS_VERSION, participant_metrics, current_metrics, group_metrics, write_metrics_csv
 from app.core.runtime_config import current_reasoning_effort
+from app.core.question_sets import STANDARD, ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key, question_set_mode, explanation_context
+from app.services.question_sets import current_question_set_mode
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import (
-    ASSESSMENT_BANK_VERSION,
     ASSESSMENT_VARIANT_COUNTS,
-    CURRENT_LEARNING_CONTENT_VERSION,
     LEARNING_SESSION_VARIANT_COUNT,
     content_term,
     learning_question_spec,
@@ -149,9 +149,10 @@ def _learning_question_spec(
     term_slug: str,
     learning_stage: str,
     variant_index: int = 1,
+    mode: str = STANDARD,
 ) -> dict[str, Any]:
     try:
-        return learning_question_spec(term_slug, learning_stage, variant_index)
+        return learning_question_spec(term_slug, learning_stage, variant_index, mode)
     except (KeyError, StopIteration, ValueError) as exc:
         raise HTTPException(status_code=400, detail="fixed learning question not found") from exc
 
@@ -485,13 +486,13 @@ def _rag_context(term_slug: str, *parts: str | None) -> dict[str, Any]:
     )
 
 
-def _pretest_teaching_targets(term_slug: str, options: list[QuestionOption]) -> list[dict[str, Any]]:
+def _pretest_teaching_targets(term_slug: str, options: list[QuestionOption], mode: str = STANDARD) -> list[dict[str, Any]]:
     """Build proposal-only targets from selected pretest distractors and seed metadata."""
     targets: list[dict[str, Any]] = []
     for option in sorted(options, key=lambda item: item.option_label):
         if option.is_correct or option.misconception_type not in {"M1", "M3"}:
             continue
-        metadata = teaching_target_for_option(term_slug, option.option_label)
+        metadata = teaching_target_for_option(term_slug, option.option_label, mode)
         if not metadata:
             continue
         target = {
@@ -705,6 +706,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
     group_condition = group_condition_by_code.get(normalized_code)
     if group_condition is None:
         raise HTTPException(status_code=400, detail="管理者から伝えられた参加コード（AまたはB）が必要です。")
+    mode = current_question_set_mode(db)
     participant = Participant(
         display_code=next_display_code(db),
         group_condition=group_condition,
@@ -713,7 +715,8 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         consent_document_version=CONSENT_DOCUMENT_VERSION,
         consented_at=now(),
         current_step="pretest",
-        learning_content_version=CURRENT_LEARNING_CONTENT_VERSION,
+        learning_content_version=LEARNING_CONTENT_VERSIONS[mode],
+        question_set_mode=mode,
         experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
         protocol_id=CURRENT_PROTOCOL_ID,
         option_order_mode=current_option_order_mode(db),
@@ -906,6 +909,9 @@ def _test_round_display_label(test_round: str | None) -> str | None:
 def _question_query_for_phase(db: Session, participant: Participant, phase: str):
     source_phase = _source_question_phase(phase)
     query = db.query(Question).join(Term, Question.term_id == Term.id).filter(Question.phase == source_phase, Question.is_active.is_(True), Term.is_active.is_(True))
+    query = query.filter(Question.construct_key.in_([
+        assessment_construct_key(slug, phase, participant.question_set_mode) for slug in PRETEST_TERM_SLUGS
+    ]))
     if phase == "pretest":
         query = query.filter(Term.slug.in_(PRETEST_TERM_SLUGS))
     if phase == "retest":
@@ -1061,6 +1067,8 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
     term = db.get(Term, question.term_id)
     if not question.is_active or not term or not term.is_active:
         raise HTTPException(status_code=404, detail="question not found")
+    if question.construct_key != assessment_construct_key(term.slug, phase, participant.question_set_mode):
+        raise HTTPException(status_code=409, detail="この問題は参加者の問題版と一致しません。")
     if phase in TEST_PHASES and term.slug not in PRETEST_TERM_SLUGS:
         raise HTTPException(status_code=400, detail="question is outside the active experiment terms")
     if normalized_idempotency_key:
@@ -1513,6 +1521,12 @@ def _public_selected_options(db: Session, attempt: Attempt) -> list[dict[str, st
         for row in (attempt.option_order_snapshot or [])
         if isinstance(row, dict) and row.get("option_id")
     }
+    participant = db.get(Participant, attempt.participant_id)
+    if can_resume(participant) and any(not (snapshots.get(oid) or {}).get("label") for oid in selected_ids):
+        question = db.get(Question, attempt.question_id)
+        for row in _displayed_options(db, participant, question):
+            saved = {key: value for key, value in (snapshots.get(row["option_id"]) or {}).items() if value is not None}
+            snapshots[row["option_id"]] = {**row, **saved}
     selected: list[dict[str, str]] = []
     for option_id in selected_ids:
         snapshot = snapshots.get(option_id)
@@ -1544,7 +1558,7 @@ def _test_result_question(
     elif phase == "retest":
         round_number = _round_number(test_round)
         if round_number is not None:
-            has_final_test = not can_resume(participant) and db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
+            has_final_test = participant.experiment_spec_version not in {6, CURRENT_EXPERIMENT_SPEC_VERSION} and db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
             variant_number = max(
                 1,
                 min(
@@ -1562,10 +1576,13 @@ def _test_result_question(
         )
         .order_by(Question.created_at.desc(), Question.variant_key)
     )
-    if can_resume(participant):
-        query = query.filter(Question.is_active.is_(True))
+    if participant.experiment_spec_version in {6, CURRENT_EXPERIMENT_SPEC_VERSION}:
+        query = query.filter(Question.construct_key == assessment_construct_key(term.slug, phase, participant.question_set_mode))
+        if can_resume(participant):
+            query = query.filter(Question.is_active.is_(True))
     else:
-        query = query.filter(~Question.construct_key.endswith(ASSESSMENT_BANK_VERSION))
+        for bank_version in ASSESSMENT_BANK_VERSIONS.values():
+            query = query.filter(~Question.construct_key.endswith(bank_version))
     candidates = query.all()
     if expected_variant:
         return next((question for question in candidates if question.variant_key == expected_variant), None)
@@ -1744,11 +1761,13 @@ def _tutoring_generation_context(
         if not active_misconception_type and position["learning_stage"] == "enrichment":
             active_misconception_type = "unknown"
 
-    learning_content_version = CURRENT_LEARNING_CONTENT_VERSION
+    mode = question_set_mode(participant.question_set_mode)
+    learning_content_version = LEARNING_CONTENT_VERSIONS[mode]
     spec = _learning_question_spec(
         term.slug,
         position["learning_stage"],
         learning_variant_index,
+        mode,
     )
     previous_turn = (
         db.query(TutorTurn)
@@ -1778,8 +1797,12 @@ def _tutoring_generation_context(
         "max_selections": spec.get("max_selections", 3),
         "variant_key": spec["variant_key"],
         "learning_variant_index": learning_variant_index,
+        "question_set_mode": mode,
+        "learning_content_version": learning_content_version,
     }
     common_payload = {
+        **explanation_context(mode),
+        "question_set_mode": mode,
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "term": {"slug": term.slug, "label": term.label, "description": term.description},
@@ -1795,7 +1818,7 @@ def _tutoring_generation_context(
     }
     if participant.group_condition == "proposed":
         selected_pretest_options = _selected_options(db, pretest_attempt) if pretest_attempt else []
-        pretest_targets = _pretest_teaching_targets(term.slug, selected_pretest_options)
+        pretest_targets = _pretest_teaching_targets(term.slug, selected_pretest_options, mode)
         primary_pretest_target = _primary_pretest_target(pretest_targets, active_misconception_type)
         diagnostic_options = [
             {
@@ -1840,6 +1863,8 @@ def _tutoring_generation_context(
         payload = common_payload
     instruction_route = "shared_history_diagnostic" if participant.group_condition == "proposed" else "shared_history_general"
     payload["_generation_audit"] = {
+        "question_set_mode": mode,
+        "assessment_bank_version": ASSESSMENT_BANK_VERSIONS[mode],
         "origin": generation_origin,
         "prefetch": prefetch_audit,
         "instruction_route": instruction_route,
@@ -1952,6 +1977,7 @@ def _tutor_turn_from_generation(
         "prompt_contract_version": payload.get("prompt_contract_version"),
         "learning_content_version": learning_content_version,
         "generation_origin": generation_origin,
+        "question_set_mode": instruction_audit.get("question_set_mode", STANDARD),
         "prefetch": prefetch_audit or {"state": "not_applicable", "reused": False},
         "instruction_route": instruction_audit.get("instruction_route"),
         "question_route_version": SHARED_QUESTION_ROUTE_VERSION,
@@ -2480,6 +2506,7 @@ async def respond_tutor_turn(
         term.slug,
         learning_stage,
         variant_index,
+        question_set_mode(participant.question_set_mode),
     )
     selected_options = _selected_learning_options(
         spec,
@@ -2584,6 +2611,8 @@ async def respond_tutor_turn(
     ]
     selected_explanation_bodies = [option.get("body", "") for option in selected_explanation_options if option.get("body")]
     explanation_payload = {
+        **explanation_context(participant.question_set_mode),
+        "question_set_mode": question_set_mode(participant.question_set_mode),
         "participant_id": participant.id,
         "group_condition": participant.group_condition,
         "term": {"slug": term.slug, "label": term.label, "description": term.description},
@@ -2701,7 +2730,8 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         question = db.get(Question, attempt.question_id)
         if not question or "multi_select" not in question.question_type:
             raise HTTPException(status_code=400, detail="unsupported question type")
-        if not question.is_active or question.variant_key != expected_variant:
+        term = db.get(Term, question.term_id)
+        if not question.is_active or question.variant_key != expected_variant or question.construct_key != assessment_construct_key(term.slug, phase, participant.question_set_mode):
             raise HTTPException(status_code=409, detail="この問題は今回のテスト対象ではありません。")
         result = _fixed_attempt_result(_selected_options(db, attempt))
         attempt.is_correct = result["is_correct"]
@@ -3203,8 +3233,10 @@ def _group_misconception_transition_summary(
     return {"terms": output_terms}
 
 
-def admin_summary(db: Session) -> dict[str, Any]:
+def admin_summary(db: Session, mode: str = STANDARD) -> dict[str, Any]:
+    mode = question_set_mode(mode)
     participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID, consent_checked=True).all()
+    participants = [p for p in participants if question_set_mode(p.question_set_mode) == mode]
     terms = _term_map(db)
     rows = []
     for group in ["control", "proposed"]:
@@ -3237,7 +3269,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 "misconception_transition_summary": _group_misconception_transition_summary(group_participants, latest_summaries, terms),
             }
         )
-    return {"groups": rows, "hypotheses": group_metrics(current_metrics(db))}
+    return {"question_set_mode": mode, "groups": rows, "hypotheses": group_metrics(current_metrics(db, mode), mode)}
 
 
 EXPORTS = {
@@ -3289,6 +3321,7 @@ def _attempt_log_row(
         selected_option_body = legacy_selected_option_body(attempt, options)
     return {
         "attempt_id": attempt.id,
+        "question_set_mode": question_set_mode(participant.question_set_mode) if participant else None,
         **({"legacy_fields": legacy_fields(attempt)} if participant and not can_resume(participant) else {}),
         "participant_id": attempt.participant_id,
         "display_code": participant.display_code if participant else None,
@@ -3322,6 +3355,7 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
     diagnosis = turn.diagnosis_json or {}
     return {
         "tutor_turn_id": turn.id,
+        "question_set_mode": question_set_mode(participant.question_set_mode) if participant else None,
         **({"legacy_fields": legacy_fields(turn)} if participant and not can_resume(participant) else {}),
         "tutor_session_id": turn.tutor_session_id,
         "participant_id": session.participant_id,
@@ -3430,11 +3464,11 @@ def _ai_log_group_condition(log: AICallLog, participants: dict[str, Participant]
     return participant.group_condition if participant else None
 
 
-def admin_logs_overview(db: Session) -> dict[str, Any]:
+def admin_logs_overview(db: Session, mode: str = STANDARD) -> dict[str, Any]:
     participants = db.query(Participant).order_by(Participant.created_at.desc()).all()
     participant_by_id = {participant.id: participant for participant in participants}
     give_up_counts = participant_give_up_counts(db, list(participant_by_id))
-    groups = admin_summary(db)["groups"]
+    groups = admin_summary(db, mode)["groups"]
     terms = _term_map(db)
     questions = _question_map(db)
     options = _option_map(db)
@@ -3469,6 +3503,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "participant_id": row.id,
                 "display_code": row.display_code,
                 "experiment_spec_version": row.experiment_spec_version,
+                "question_set_mode": question_set_mode(row.question_set_mode),
                 "protocol_id": row.protocol_id,
                 "can_resume": can_resume(row),
                 "group_condition": row.group_condition,
@@ -3536,6 +3571,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "display_code": participant_by_id.get(row.participant_id).display_code if participant_by_id.get(row.participant_id) else None,
                 "group_condition": row.group_condition,
                 "pretest_score": row.pretest_score,
+                "question_set_mode": question_set_mode(participant_by_id[row.participant_id].question_set_mode) if row.participant_id in participant_by_id else None,
                 "legacy_read_only": not can_resume(participant_by_id[row.participant_id]) if row.participant_id in participant_by_id else True,
                 **({"legacy_fields": legacy_fields(row)} if participant_by_id.get(row.participant_id) and not can_resume(participant_by_id[row.participant_id]) else {}),
                 "retest_score": row.retest_score,
@@ -3611,6 +3647,8 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "participant_id": participant.id,
             "display_code": participant.display_code,
             "experiment_spec_version": participant.experiment_spec_version,
+            "question_set_mode": question_set_mode(participant.question_set_mode),
+            "learning_content_version": participant.learning_content_version,
             "protocol_id": participant.protocol_id,
             "can_resume": can_resume(participant),
             "group_condition": participant.group_condition,
@@ -3836,10 +3874,11 @@ def export_overview_logs_excel_csv(db: Session) -> Path:
     return _write_log_csv(path, rows, encoding="utf-8-sig")
 
 
-def export_csv(db: Session, name: str) -> Path:
+def export_csv(db: Session, name: str, mode: str = STANDARD) -> Path:
     if name in {"hypothesis_metrics", "hypothesis_group_summary"}:
-        path = Path(get_settings().export_dir) / f"{name}.csv"
-        return write_metrics_csv(path, current_metrics(db), grouped=name == "hypothesis_group_summary")
+        mode = question_set_mode(mode)
+        path = Path(get_settings().export_dir) / f"{name}_{mode}.csv"
+        return write_metrics_csv(path, current_metrics(db, mode), grouped=name == "hypothesis_group_summary", mode=mode)
     if name not in EXPORTS:
         raise HTTPException(status_code=404, detail="unknown export")
     model, columns = EXPORTS[name]

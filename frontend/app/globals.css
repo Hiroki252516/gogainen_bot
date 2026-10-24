@@ -58,6 +58,17 @@ a {
   box-shadow: 0 1px 2px rgba(18, 24, 31, 0.04);
 }
 
+.admin-content,
+.admin-content .panel,
+.admin-content .grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-content .panel {
+  overflow-x: auto;
+}
+
 .stack {
   display: grid;
   gap: 16px;
@@ -481,6 +492,10 @@ button:disabled {
 
 .option-order-buttons {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.question-set-setting {
+  align-self: start;
 }
 
 .reasoning-effort-button {

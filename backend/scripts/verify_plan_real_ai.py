@@ -28,6 +28,12 @@ async def main():
     init_db()
     with SessionLocal() as db:
         seed_database(db)
+    mode = os.environ.get("VERIFY_QUESTION_SET", "standard")
+    if mode not in {"standard", "easy"}:
+        raise SystemExit("VERIFY_QUESTION_SET must be standard or easy")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://isolated-verification") as client:
+        setting = await client.put("/api/admin/question-set", json={"mode": mode})
+        setting.raise_for_status()
 
     async def post(client, url, body=None):
         response = await client.post(url, json=body or {})
@@ -48,7 +54,7 @@ async def main():
             viewed = await post(client, f"/api/tutor-turns/{turn['turn_id']}/material-view")
             assert viewed["recorded"]
             assert 600 <= len(turn["tutor_message"]) <= 800
-            if kind == "M1":
+            if kind == "M1" or mode == "easy":
                 wrong_ids = {option["label"]: option["option_id"] for option in turn["practice_question"]["options"]}
                 wrong = await post(client, f"/api/tutor-turns/{turn['turn_id']}/respond", {"selected_option_ids": [wrong_ids[label] for label in "GHI"]})
                 assert not wrong["is_sufficient"] and wrong["feedback"]
@@ -80,6 +86,8 @@ async def main():
             effective = payload.get("effective_request") or {}
             assert effective.get("model") == "gpt-5.6-luna"
             assert effective.get("reasoning_effort") == "low"
+            if mode == "easy":
+                assert effective["actual_ai_input"]["explanation_level"] == "beginner"
             if payload.get("group_condition") == "control":
                 actual = effective.get("actual_ai_input") or {}
                 assert not {"misconception_taxonomy", "learner_state", "active_misconception_type", "pretest_targets", "learning_stage"}.intersection(actual)

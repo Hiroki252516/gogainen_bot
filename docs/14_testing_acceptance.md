@@ -1,8 +1,19 @@
 # 受け入れ条件と検証記録
 
-## 2026-10-24 仕様版6・事前込み最大3テスト
+## 2026-10-24 仕様版7・通常版と易しい版
 
-- 現行は仕様版6 / experiment-plan-2026-10-24-two-posttests-v1。事前後のテストをfinal_test込み最大2回に制限し、2回目未達は未達のままsurveyへ進む。学習後回数の保存列と共通の導出回数を区別する。
+- backend全336テスト、frontend smoke、production build/TypeScript検査、git diff --checkに合格。既存NumPy DeprecationWarningが1件ある。
+- 通常版の2 YAMLは変更前のSHA-256と一致。両版の役割数、文長、重複、分類理由、教授対象、別版ID拒否、版固定、履歴復元、先行生成、再送、回数上限を検証した。隔離SQLiteの列追加・seed再実行・旧版6記録とNULL保持・保存評価の保全を確認した。
+- 通常版/易しい版×両配置×両群×通常/事前満点経路の16通りを、Mockと合成記録だけを使う隔離DBでブラウザ完了した。最大3テスト・未達終了・結果レビュー・アンケート・版別記録を確認した。
+- 管理画面の版切替と独立した集計版切替、CSVリンク、保存値をブラウザ確認。1440px/390pxのスクリーンショットを目視し、ボタンの折り返しと管理表の横はみ出しを修正した。
+- 実AIは隔離DB・Codex app-server 4501番・gpt-5.6-luna/lowで、易しい版の両群×M1/M3/unknownをAPIとブラウザで確認した。教材生成、誤答解説、再教材、正答要約、600〜800文字、本文証拠、実送信beginner、統制群への診断非混入を照合した。
+- 途中の実AI試行では証拠文の不一致で3試行後503停止も観測した。検査を緩めず、本文を平易化した後の証拠コピーを明示する指示を追加し、最終ブラウザ実行の6条件は完了した。失敗ログも隔離DBに保持した。成功を生成成功率や初心者への有効性の実証とは扱わない。
+- 再実行用: frontend/tests/test-cycle-limit-browser.mjs（CYCLE_QUESTION_MODES=standard,easy / CYCLE_OPTION_MODES=debug_fixed,randomized）、question-set-admin-browser.mjs、easy-real-ai-browser.mjs。既存の隔離ガードと非3000ポート指定を必要とする。実AIのAPI検証はbackend/scripts/verify_plan_real_ai.pyへVERIFY_QUESTION_SET=easyを指定する。
+- 検証DBは/tmp/gogainen-easy-uiと/tmp/gogainen-easy-real。研究DB、稼働中3000番、Word、別仕様リポジトリ、過去の問題YAMLは変更していない。コミット・pushは行っていない。
+
+## 2026-10-24 仕様版6・事前込み最大3テスト（当時の検証記録）
+
+- 当時は仕様版6 / experiment-plan-2026-10-24-two-posttests-v1。事前後のテストをfinal_test込み最大2回に制限し、2回目未達は未達のままsurveyへ進む。学習後回数の保存列と共通の導出回数を区別する。
 - 行動選択型の9固有問題、final_testのretest_v1共用、次回の全用語retest_v2、未回答・前後回次ID拒否、再送時の非加算、旧版5の読取り専用を検証する。
 - 新問題は旧問題と別ID。隔離DBのseed再実行で旧本文・選択肢・snapshotなしの過去表示・保存評価が不変で、新問題を重複作成しないことを確認する。
 - backend全269件、frontend smoke、本番build/TypeScript検査、git diff --checkに合格。既存NumPy DeprecationWarningが1件あり、テスト失敗ではない。
@@ -121,7 +132,7 @@ git diff --check
 - 学習バンクはv3の9問。新規経路で3セッション目には到達しない。10択・3/3/3/1・M3優先を確認する。配置はdebug_fixedでA〜C正解/D〜F=M1/G〜I=M3/J=unknown、randomizedで「わからない」を最後のJに固定し、残る9択をA〜Iへ割り当てる。排他選択はラベルでなくexclusive/内部役割で検証する。
 - 採点・結果確認・再学習・ギブアップ・ロック・冪等性・先行生成の回帰検証。
 - final_test未採点の直接学習開始を拒否し、廃止専用URL/APIは404。
-- NULL・実験仕様版1〜5・未対応版は409。旧POST、cached再送、先行生成でも値が不変。
+- NULL・実験仕様版1〜6・未対応版は409。旧POST、cached再送、先行生成でも値が不変。
 - can_resume、ブラウザ新規開始、厳密入力、参加者向け正答非公開。
 - 全3タイプ/両群のprompt・Schemaに廃止教授や支援量がなく、方略enumを固定。transfer_checkは必須。
 - 履歴・生AI・保存評価・CSVを保持し、再計算/群集計しない。
@@ -196,3 +207,7 @@ git diff --check
 - 両群とも再テスト1のM3誤答から結果確認を経て再学習へ進み、事前/学習2回/再テストの4件履歴、自由な章立て、教授契約の検証を確認。
 - 生成各試行のmaterial_structureと保存TutorTurnの章立て・節数・証拠配置を照合。証拠不一致は再生成で修正し、検証を緩めなかった。最初の確認でモデル混雑エラーも記録したが、同モデルで再試行し、Mockへ切り替えていない。
 - desktop/mobileの表示と横方向のはみ出しがないことを確認。検証環境はbackend/.local/dynamic-sections-validation.dbを使用し、従来の試用DB・別仕様リポジトリ・履歴資料を変更していない。
+
+## 易しい版の受入条件
+
+通常版YAMLのSHA-256不変、各版18問の役割数・文長・重複・分類理由、4通りの版×配置と両群、登録時固定・他版ID拒否・欠落時停止、採点と正誤レビュー・履歴復元・先行生成・再送、版別集計/CSVの対象人数と分母、版6以下の閲覧専用とnullable移行を検証する。実AIは隔離DBで両群×3タイプと正誤解説を確認し、機械検査のみで初心者への理解しやすさを実証したとは扱わない。[22](22_question_set_modes.md)。過去の検証結果は当時のものとして保持する。

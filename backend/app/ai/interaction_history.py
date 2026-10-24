@@ -60,6 +60,8 @@ def project_interaction_history(value: Any) -> list[dict[str, Any]]:
 
 def project_model_payload(payload: dict[str, Any], *, proposed: bool, feedback: bool = False) -> dict[str, Any]:
     result = {key: payload[key] for key in COMMON_INPUT_KEYS if key in payload}
+    if payload.get("explanation_level") == "beginner":
+        result["explanation_level"] = "beginner"
     result["interaction_history"] = project_interaction_history(payload.get("interaction_history"))
     if isinstance(result.get("term"), dict):
         result["term"] = {key: result["term"][key] for key in ("slug", "label", "description") if key in result["term"] and (result["term"][key] is None or isinstance(result["term"][key], str))}
