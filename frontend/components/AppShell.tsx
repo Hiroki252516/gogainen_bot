@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { MouseEvent } from "react";
+import { ExperimentProgress } from "@/components/ExperimentProgress";
 
 const ADMIN_NAVIGATION_CONFIRM_MESSAGE =
   "管理画面を開きます。現在の実験画面から移動しますが、実験データは削除されません。よろしいですか？";
@@ -26,6 +27,7 @@ export function AppShell({ step, children }: { step: string; children: React.Rea
           管理画面
         </Link>
       </div>
+      {!isAdminPage ? <ExperimentProgress /> : null}
       {children}
     </main>
   );

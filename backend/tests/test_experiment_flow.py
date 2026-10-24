@@ -198,6 +198,89 @@ def _create_participant_with_pretest(group: str = "proposed", labels: list[str] 
     return pid
 
 
+def test_current_step_reports_read_only_experiment_progress_for_every_stage():
+    participant = client.post(
+        "/api/participants",
+        json={"assignment_code": "A", "consent_checked": True, "student_number": "PROGRESS-0001"},
+    ).json()
+    pid = participant["participant_id"]
+
+    current = client.get(f"/api/participants/{pid}/current-step").json()
+    assert current["progress"] == {
+        "stage_id": "pretest",
+        "label": "事前テスト・採点中",
+        "percent": 0,
+    }
+    assert set(current) == {"step", "next_url", "can_resume", "progress"}
+
+    _submit_phase_questions(pid, "pretest", ["D", "E", "F"])
+    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
+    current = client.get(f"/api/participants/{pid}/current-step").json()
+    assert current["progress"] == {
+        "stage_id": "post_pretest_1",
+        "label": "再テスト1までの学習・再テスト1",
+        "percent": 25,
+    }
+
+    assert client.post(f"/api/participants/{pid}/give-up-learning").status_code == 200
+    assert client.get(f"/api/participants/{pid}/current-step").json()["progress"]["percent"] == 25
+    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    assert client.post(f"/api/participants/{pid}/score-retest").status_code == 200
+    current = client.get(f"/api/participants/{pid}/current-step").json()
+    assert current["progress"] == {
+        "stage_id": "post_pretest_2",
+        "label": "再テスト2までの学習・再テスト2",
+        "percent": 50,
+    }
+
+    assert client.post(f"/api/participants/{pid}/give-up-learning").status_code == 200
+    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    assert client.post(f"/api/participants/{pid}/score-retest").status_code == 200
+    current = client.get(f"/api/participants/{pid}/current-step").json()
+    assert current["step"] == "survey"
+    assert current["progress"] == {"stage_id": "survey", "label": "アンケート", "percent": 75}
+
+    survey_payload = {
+        "experiences": {"chat": True, "coding_assistance": False, "cli": False, "api": False},
+        "general_ratings": {
+            "ai_usage_frequency": 4,
+            "self_rated_ai_knowledge": 3,
+            "system_usability": 5,
+            "system_clarity": 4,
+        },
+        "material_ratings": None,
+        "free_comment": "進捗表示のテスト",
+    }
+    survey = client.post(f"/api/participants/{pid}/survey", json=survey_payload)
+    assert survey.status_code == 200, survey.text
+    current = client.get(f"/api/participants/{pid}/current-step").json()
+    assert current["progress"] == {"stage_id": "complete", "label": "実験手続き完了", "percent": 100}
+    assert current["can_resume"] is True
+    assert current["step"] == "finish"
+
+
+def test_current_step_progress_counts_final_test_as_first_post_pretest_measurement():
+    pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    before = client.get(f"/api/participants/{pid}/current-step").json()
+    assert before["step"] == "final_test"
+    assert before["progress"]["percent"] == 25
+
+    _submit_phase_questions(pid, "final_test", ["D", "E", "F"])
+    scored = client.post(f"/api/participants/{pid}/score-final-test")
+    assert scored.status_code == 200, scored.text
+    after = client.get(f"/api/participants/{pid}/current-step").json()
+    assert after["progress"]["percent"] == 50
+    assert after["progress"]["stage_id"] == "post_pretest_2"
+
+    early_mastery_pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    _submit_phase_questions(early_mastery_pid, "final_test", ["A", "B", "C"])
+    mastered = client.post(f"/api/participants/{early_mastery_pid}/score-final-test")
+    assert mastered.status_code == 200, mastered.text
+    current = client.get(f"/api/participants/{early_mastery_pid}/current-step").json()
+    assert current["step"] == "survey"
+    assert current["progress"] == {"stage_id": "survey", "label": "アンケート", "percent": 75}
+
+
 def test_content_contract_has_three_terms_and_required_learning_round_counts():
     content = load_content()
     assert tuple(term["slug"] for term in content["terms"]) == ACTIVE_TERM_SLUGS
@@ -882,6 +965,7 @@ def test_learning_answer_correct_completes_and_incorrect_routes_by_type():
     assert client.get(f"/api/participants/{pid}/current-step").json() == {"can_resume": True,
         "step": "learning_targets",
         "next_url": "/learning-targets",
+        "progress": {"stage_id": "post_pretest_1", "label": "再テスト1までの学習・再テスト1", "percent": 25},
     }
     targets = client.get(f"/api/participants/{pid}/learning-targets").json()["targets"]
     assert [target["term_slug"] for target in targets] == ["multi_agent", "memory_process"]
@@ -1889,7 +1973,12 @@ def test_learning_give_up_routes_to_retest_and_closes_current_session():
     assert give_up.status_code == 200, give_up.text
     assert give_up.json()["next_step"] == "retest"
     assert give_up.json()["next_url"] == "/retest"
-    assert client.get(f"/api/participants/{pid}/current-step").json() == {"can_resume": True, "step": "retest", "next_url": "/retest"}
+    assert client.get(f"/api/participants/{pid}/current-step").json() == {
+        "can_resume": True,
+        "step": "retest",
+        "next_url": "/retest",
+        "progress": {"stage_id": "post_pretest_1", "label": "再テスト1までの学習・再テスト1", "percent": 25},
+    }
     assert client.get(f"/api/experiment/{pid}/retest").status_code == 200
     participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
     assert participant_logs.status_code == 200, participant_logs.text
@@ -1939,7 +2028,12 @@ def test_experiment_give_up_during_retest_routes_to_survey_and_blocks_retest_act
     assert give_up.json()["next_url"] == "/survey"
     current = client.get(f"/api/participants/{pid}/current-step")
     assert current.status_code == 200
-    assert current.json() == {"can_resume": True, "step": "survey", "next_url": "/survey"}
+    assert current.json() == {
+        "can_resume": True,
+        "step": "survey",
+        "next_url": "/survey",
+        "progress": {"stage_id": "survey", "label": "アンケート", "percent": 75},
+    }
 
     assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
     assert client.post(f"/api/participants/{pid}/score-retest").status_code == 409
@@ -2037,7 +2131,12 @@ def test_experiment_give_up_during_final_test_routes_to_survey_and_blocks_final_
     assert give_up.json()["next_url"] == "/survey"
     current = client.get(f"/api/participants/{pid}/current-step")
     assert current.status_code == 200
-    assert current.json() == {"can_resume": True, "step": "survey", "next_url": "/survey"}
+    assert current.json() == {
+        "can_resume": True,
+        "step": "survey",
+        "next_url": "/survey",
+        "progress": {"stage_id": "survey", "label": "アンケート", "percent": 75},
+    }
     assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
     assert client.post(f"/api/participants/{pid}/score-final-test").status_code == 409
     blocked_attempt = client.post(
