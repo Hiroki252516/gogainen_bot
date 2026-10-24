@@ -1,5 +1,11 @@
 # 受け入れ条件と検証記録
 
+## PR #162 採点時の用語データ欠落への対処
+
+- score_phaseでTermの存在を確認し、欠落時は503 question_term_unavailableで停止する。正常時の採点・分類・回数・実験仕様版は変更しない。他2件のレビュー指摘に対するコード変更は行わない。
+- 隔離SQLiteで最後の未採点回答の用語データを欠落させ、通常版/易しい版×retest/final_test×再送キー有無の8ケースを検証した。先に処理した回答も含め、採点・学習状態・教授対象・再発記録・参加者の進行と回数が確定されないこと、失敗時の再送でも不変なこと、用語復旧後に同じ再送キーで正常に採点でき回数が1回分だけ進むことを確認した。
+- backend全344テスト、frontend smoke・production build/TypeScript検査、git diff --checkに合格。既存NumPy DeprecationWarningが1件ある。今回の実AI・独立ブラウザ検証は行っていない。研究DB、稼働環境、プロンプト、問題YAML、旧データは変更せず、コミット・pushも行わない。
+
 ## 2026-10-24 仕様版7・通常版と易しい版
 
 - backend全336テスト、frontend smoke、production build/TypeScript検査、git diff --checkに合格。既存NumPy DeprecationWarningが1件ある。

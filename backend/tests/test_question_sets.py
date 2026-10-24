@@ -17,7 +17,7 @@ from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VE
 from app.db import session as database
 from app.db.session import get_db
 from app.main import app
-from app.models import Attempt, Base, Participant, Question, QuestionOption, RuntimeSetting, Term, TutorSession, TutorTurn
+from app.models import Attempt, Base, LearnerState, Participant, Question, QuestionOption, RecurrenceEvent, RuntimeSetting, Term, TermAssignment, TutorSession, TutorTurn
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, CONTENT_PATH, LEARNING_V3_CONTENT_PATH, assessment_question_spec, learning_question_spec, load_content, load_learning_easy_content, _validate_assessment_variant
 from app.seed.seed_questions import seed_database
 from app.services import experiment, prefetch
@@ -393,3 +393,60 @@ def test_inconsistent_mode_is_rejected_without_falling_back_and_old_six_review_k
     assert [q["question_body"] for q in review["results"]] == [q["body"] for q in questions]
     with factory() as db:
         assert before == [(a.id, a.is_correct) for a in db.query(Attempt).filter_by(participant_id=pid)]
+
+
+@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("phase", ["retest", "final_test"])
+@pytest.mark.parametrize("use_idempotency", [False, True])
+def test_missing_question_term_stops_scoring_without_partial_updates(isolated, mode, phase, use_idempotency):
+    client, factory, _ = isolated
+    pid = create(client, mode)
+    submit(client, pid, "pretest", mode, "correct" if phase == "final_test" else "M1")
+    path = "final-test" if phase == "final_test" else phase
+    questions = client.get(f"/api/experiment/{pid}/{path}").json()["questions"]
+    for question in questions:
+        spec = assessment_question_spec(question["term_slug"], phase, mode=mode)
+        saved = client.post("/api/attempts", json={
+            "participant_id": pid, "question_id": question["question_id"], "phase": phase,
+            "selected_option_ids": role_ids(question, spec, "M1"),
+        })
+        assert saved.status_code == 200, saved.text
+
+    with factory() as db:
+        pending = db.query(Attempt).filter_by(participant_id=pid, phase=phase, is_correct=None).all()
+        assert len(pending) == 3
+        # Corrupt the final pending answer's relation so earlier scoring must also roll back.
+        term = db.get(Term, pending[-1].term_id)
+        term_data = {attr.key: getattr(term, attr.key) for attr in Term.__mapper__.column_attrs}
+        db.execute(text("DELETE FROM terms WHERE id=:term_id"), {"term_id": term.id})
+        db.commit()
+
+    def stored_state():
+        with factory() as db:
+            result = {}
+            for model in (Participant, Attempt, LearnerState, TermAssignment, RecurrenceEvent):
+                column = model.id if model is Participant else model.participant_id
+                result[model.__tablename__] = [
+                    {attr.key: getattr(row, attr.key) for attr in model.__mapper__.column_attrs}
+                    for row in db.query(model).filter(column == pid).order_by(model.id)
+                ]
+            return result
+
+    before = stored_state()
+    headers = {"Idempotency-Key": "missing-term-score"} if use_idempotency else {}
+    endpoint = f"/api/participants/{pid}/score-{path}"
+    for _ in range(2):
+        response = client.post(endpoint, headers=headers)
+        assert response.status_code == 503, response.text
+        assert response.json()["detail"]["error_code"] == "question_term_unavailable"
+        assert stored_state() == before
+
+    with factory() as db:
+        db.add(Term(**term_data))
+        db.commit()
+    retried = client.post(endpoint, headers=headers)
+    assert retried.status_code == 200, retried.text
+    assert retried.json()["post_pretest_tests_completed"] == 1
+    with factory() as db:
+        assert db.query(Attempt).filter_by(participant_id=pid, phase=phase, is_correct=False).count() == 3
+        assert db.get(Participant, pid).retest_cycles_completed == (1 if phase == "retest" else 0)

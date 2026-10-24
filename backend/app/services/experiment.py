@@ -2731,6 +2731,14 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         if not question or "multi_select" not in question.question_type:
             raise HTTPException(status_code=400, detail="unsupported question type")
         term = db.get(Term, question.term_id)
+        if term is None:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error_code": "question_term_unavailable",
+                    "message": "問題に対応する用語データが見つかりません。管理者に連絡してください。",
+                },
+            )
         if not question.is_active or question.variant_key != expected_variant or question.construct_key != assessment_construct_key(term.slug, phase, participant.question_set_mode):
             raise HTTPException(status_code=409, detail="この問題は今回のテスト対象ではありません。")
         result = _fixed_attempt_result(_selected_options(db, attempt))
