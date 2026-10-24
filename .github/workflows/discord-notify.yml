@@ -1,0 +1,70 @@
+name: Discord PR Merge Notification
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  notify-discord:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      # PRのコードをcheckoutしたり実行したりしない。
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          MERGED_BY: ${{ github.event.pull_request.merged_by.login }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          webhook_url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+          if not webhook_url:
+              raise SystemExit("DISCORD_WEBHOOK_URL is not configured.")
+
+          parts = urllib.parse.urlsplit(webhook_url)
+          query = dict(urllib.parse.parse_qsl(parts.query))
+          query["wait"] = "true"
+          webhook_url = parts._replace(query=urllib.parse.urlencode(query)).geturl()
+
+          message = (
+              "✅ **main にPRがマージされました！**\n"
+              f"**PR:** #{os.environ['PR_NUMBER']} {os.environ['PR_TITLE']}\n"
+              f"**マージした人:** {os.environ['MERGED_BY']}\n"
+              f"{os.environ['PR_URL']}"
+          )
+          payload = json.dumps({
+              "username": "GitHub Merge Bot",
+              "content": message,
+              "allowed_mentions": {"parse": []}
+          }, ensure_ascii=False).encode("utf-8")
+
+          request = urllib.request.Request(
+              webhook_url,
+              data=payload,
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "DiscordBot (https://github.com/Hiroki252516/gogainen_bot, 1.0)"
+              },
+              method="POST"
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=15) as response:
+                  print(f"Discord response: {response.status}")
+          except urllib.error.HTTPError as error:
+              raise SystemExit(f"Discord notification failed: HTTP {error.code}") from None
+          except (urllib.error.URLError, TimeoutError):
+              raise SystemExit("Discord notification failed: connection error or timeout.") from None
+          PY
