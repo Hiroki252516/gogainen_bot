@@ -39,7 +39,7 @@ from app.core.config import get_settings
 from app.core.experiment_spec import (
     CURRENT_EXPERIMENT_SPEC_VERSION,
     CURRENT_PROTOCOL_ID,
-    MAX_POST_LEARNING_RETEST_CYCLES,
+    MAX_POST_PRETEST_TESTS,
     assert_current_experiment,
     can_resume,
 )
@@ -49,6 +49,7 @@ from app.core.runtime_config import current_reasoning_effort
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import (
+    ASSESSMENT_BANK_VERSION,
     ASSESSMENT_VARIANT_COUNTS,
     CURRENT_LEARNING_CONTENT_VERSION,
     LEARNING_SESSION_VARIANT_COUNT,
@@ -857,15 +858,39 @@ def _retest_variant_number(question: Question) -> int:
     return int(match.group(1)) if match else 1
 
 
+def post_pretest_tests_completed(db: Session, participant: Participant) -> int:
+    # final_test is the first post-pretest measurement, not a learning cycle.
+    scored_final = db.query(Attempt.id).filter(
+        Attempt.participant_id == participant.id,
+        Attempt.phase == "final_test",
+        Attempt.is_correct.is_not(None),
+    ).first() is not None
+    return (participant.retest_cycles_completed or 0) + int(scored_final)
+
+
+def post_pretest_test_progress(db: Session, participant: Participant) -> dict[str, int | None]:
+    return {
+        "post_pretest_tests_completed": post_pretest_tests_completed(db, participant) if can_resume(participant) else None,
+        "post_pretest_test_limit": MAX_POST_PRETEST_TESTS if can_resume(participant) else None,
+    }
+
+
+def _expected_test_variant(db: Session, participant: Participant, phase: str) -> str:
+    if phase == "pretest":
+        return "pretest_v1"
+    completed = post_pretest_tests_completed(db, participant)
+    if completed >= MAX_POST_PRETEST_TESTS or (phase == "final_test" and completed != 0):
+        raise HTTPException(status_code=409, detail="事前テスト後のテスト回数上限に達しています。")
+    return f"retest_v{completed + 1}"
+
+
 def _test_round_key_for_question(db: Session, participant: Participant, phase: str, question: Question) -> str | None:
     if phase == "pretest":
         return "test"
     if phase == "final_test":
         return "retest_1"
     if phase == "retest":
-        has_final_test = db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
-        offset = 1 if has_final_test else 0
-        return f"retest_{_retest_variant_number(question) + offset}"
+        return f"retest_{_retest_variant_number(question)}"
     return None
 
 
@@ -897,21 +922,11 @@ def _question_for_phase_variant(
 ) -> Question | None:
     if not candidates:
         return None
-    if phase == "retest":
-        previous_count = db.query(func.count(Attempt.id)).filter_by(
-            participant_id=participant.id,
-            term_id=term_id,
-            phase="retest",
-        ).scalar() or 0
-        variant_number = min(previous_count + 1, ASSESSMENT_VARIANT_COUNTS["retest"])
-        expected_key = f"retest_v{variant_number}"
-    elif phase == "pretest":
-        expected_key = "pretest_v1"
-    elif phase == "final_test":
-        expected_key = "retest_v1"
-    else:
-        raise HTTPException(status_code=400, detail="unsupported attempt phase")
-    return next((question for question in candidates if question.variant_key == expected_key), candidates[0])
+    expected_key = _expected_test_variant(db, participant, phase)
+    selected = next((question for question in candidates if question.variant_key == expected_key), None)
+    if selected is None:
+        raise HTTPException(status_code=503, detail="今回のテスト問題が見つかりません。管理者に連絡してください。")
+    return selected
 
 
 def _displayed_options(db: Session, participant: Participant, question: Question) -> list[dict[str, Any]]:
@@ -936,6 +951,8 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
     _assert_participant_active(participant)
     _assert_phase_available(participant, phase)
     all_questions = _question_query_for_phase(db, participant, phase).all()
+    if {db.get(Term, question.term_id).slug for question in all_questions} != PRETEST_TERM_SLUGS:
+        raise HTTPException(status_code=503, detail="今回のテスト問題が不足しています。管理者に連絡してください。")
     by_term: dict[str, list[Question]] = {}
     for question in all_questions:
         by_term.setdefault(question.term_id, []).append(question)
@@ -1062,6 +1079,8 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
                 attempt_id=existing.id,
             )
     _assert_phase_available(participant, phase)
+    if question.variant_key != _expected_test_variant(db, participant, phase):
+        raise HTTPException(status_code=409, detail="この問題は今回のテスト対象ではありません。")
     pending = (
         db.query(Attempt)
         .filter(
@@ -1525,11 +1544,11 @@ def _test_result_question(
     elif phase == "retest":
         round_number = _round_number(test_round)
         if round_number is not None:
-            has_final_test = db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
+            has_final_test = not can_resume(participant) and db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
             variant_number = max(
                 1,
                 min(
-                    ASSESSMENT_VARIANT_COUNTS["retest"],
+                    ASSESSMENT_VARIANT_COUNTS["retest"] if can_resume(participant) else 5,
                     round_number - (1 if has_final_test else 0),
                 ),
             )
@@ -1540,13 +1559,16 @@ def _test_result_question(
         .filter(
             Question.term_id == term.id,
             Question.phase == phase,
-            Question.is_active.is_(True),
         )
-        .order_by(Question.variant_key)
+        .order_by(Question.created_at.desc(), Question.variant_key)
     )
+    if can_resume(participant):
+        query = query.filter(Question.is_active.is_(True))
+    else:
+        query = query.filter(~Question.construct_key.endswith(ASSESSMENT_BANK_VERSION))
     candidates = query.all()
     if expected_variant:
-        return next((question for question in candidates if question.variant_key == expected_variant), candidates[0] if candidates else None)
+        return next((question for question in candidates if question.variant_key == expected_variant), None)
     return candidates[0] if candidates else None
 
 
@@ -2671,6 +2693,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
     if phase not in {"retest", "final_test"}:
         raise HTTPException(status_code=400, detail="unsupported score phase")
     _assert_phase_available(participant, phase)
+    expected_variant = _expected_test_variant(db, participant, phase)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase, is_correct=None).all()
     if not attempts:
         raise HTTPException(status_code=400, detail=f"{phase} attempts not found")
@@ -2678,6 +2701,8 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         question = db.get(Question, attempt.question_id)
         if not question or "multi_select" not in question.question_type:
             raise HTTPException(status_code=400, detail="unsupported question type")
+        if not question.is_active or question.variant_key != expected_variant:
+            raise HTTPException(status_code=409, detail="この問題は今回のテスト対象ではありません。")
         result = _fixed_attempt_result(_selected_options(db, attempt))
         attempt.is_correct = result["is_correct"]
         attempt.score = result["score"]
@@ -2702,9 +2727,8 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
     if phase == "retest":
         participant.retest_cycles_completed = (participant.retest_cycles_completed or 0) + 1
     retest_limit_reached = (
-        phase == "retest"
-        and not achieved_mastery
-        and (participant.retest_cycles_completed or 0) >= MAX_POST_LEARNING_RETEST_CYCLES
+        not achieved_mastery
+        and post_pretest_tests_completed(db, participant) >= MAX_POST_PRETEST_TESTS
     )
     if achieved_mastery or retest_limit_reached:
         participant.current_step = "survey"
@@ -2719,6 +2743,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         "next_url": next_url,
         "learning_target_slugs": learning_target_slugs,
         "retest_cycles_completed": participant.retest_cycles_completed,
+        **post_pretest_test_progress(db, participant),
         "retest_cycle_limit_reached": retest_limit_reached,
     }
 
@@ -3449,6 +3474,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "group_condition": row.group_condition,
                 "current_step": row.current_step,
                 "retest_cycles_completed": row.retest_cycles_completed,
+                **post_pretest_test_progress(db, row),
                 "completed_at": _iso(row.completed_at),
                 "completion_reason": row.completion_reason,
                 "give_up_learning_count": give_up_counts.get((row.id, "give_up_learning"), 0),
@@ -3593,6 +3619,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "consented_at": _iso(participant.consented_at),
             "current_step": participant.current_step,
             "retest_cycles_completed": participant.retest_cycles_completed,
+            **post_pretest_test_progress(db, participant),
             "started_at": _iso(participant.started_at),
             "completed_at": _iso(participant.completed_at),
             "completion_reason": participant.completion_reason,

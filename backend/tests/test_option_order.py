@@ -13,6 +13,7 @@ from app.main import app
 from app.models import Attempt, Base, Participant, Question, Term, TutorSession, TutorTurn
 from app.seed.content_loader import (
     ACTIVE_TERM_SLUGS,
+    ASSESSMENT_VARIANT_COUNTS,
     LEARNING_STAGES,
     assessment_question_spec,
     learning_question_spec,
@@ -63,7 +64,8 @@ def test_randomized_assignment_is_stable_unique_and_balanced_for_both_banks():
     learning_items = []
     unknown_labels = set()
     for term_slug in ACTIVE_TERM_SLUGS:
-        for phase, variant_indexes in (("pretest", [1]), ("retest", range(1, 4))):
+        for phase, count in ASSESSMENT_VARIANT_COUNTS.items():
+            variant_indexes = range(1, count + 1)
             for variant_index in variant_indexes:
                 spec = assessment_question_spec(term_slug, phase, variant_index)
                 item_index = assessment_bank_index(term_slug, phase, spec["variant_key"])
@@ -97,7 +99,7 @@ def test_randomized_assignment_is_stable_unique_and_balanced_for_both_banks():
                 (option["label"], option["body"]) for option in repeated
             ]
 
-    assert len(assessment_items) == 12
+    assert len(assessment_items) == 9
     assert len(learning_items) == 9
     assert unknown_labels == {"J"}
     _assert_role_balance("assessment", assessment_items)
@@ -230,6 +232,46 @@ def test_randomized_labels_do_not_change_assessment_scoring_or_unknown_exclusivi
             for index, question in enumerate(questions)
         }
     assert actual_types == expected_types
+
+
+@pytest.mark.parametrize("mode", [DEBUG_FIXED, RANDOMIZED])
+@pytest.mark.parametrize("assignment", ["A", "B"])
+def test_both_post_tests_grade_internal_roles_and_preserve_displayed_results(isolated_api, mode, assignment):
+    client, engine = isolated_api
+    assert client.put("/api/admin/option-order", json={"mode": mode}).status_code == 200
+    pid = _create(client, assignment)
+    pretest = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    for question in pretest:
+        unknown_id = next(option["option_id"] for option in question["options"] if option["exclusive"])
+        assert client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": [unknown_id]}).status_code == 200
+    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
+    for cycle in (1, 2):
+        questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+        for index, question in enumerate(questions):
+            spec = assessment_question_spec(question["term_slug"], "retest", cycle)
+            if index == 0:
+                selected_bodies = {spec["options"][i]["body"] for i in (0, 3, 6)}
+            else:
+                selected_bodies = {o["body"] for o in spec["options"] if o["misconception_type"] == "unknown"} if index == 1 else {o["body"] for o in spec["options"] if o["is_correct"]}
+            selected_ids = [o["option_id"] for o in question["options"] if o["body"] in selected_bodies]
+            response = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "phase": "retest", "selected_option_ids": selected_ids})
+            assert response.status_code == 200, response.text
+            assert all(set(o) == {"option_id", "label", "body", "exclusive"} for o in question["options"])
+        scored = client.post(f"/api/participants/{pid}/score-retest")
+        assert scored.status_code == 200
+        assert scored.json()["post_pretest_tests_completed"] == cycle
+        assert scored.json()["next_step"] == ("survey" if cycle == 2 else "learning_targets")
+        review = client.get(f"/api/participants/{pid}/learning-targets").json()["test_results"]
+        assert review["test_round"] == f"retest_{cycle}"
+        assert [r["is_correct"] for r in review["results"]] == [False, False, True]
+        with Session(engine) as db:
+            for index, question in enumerate(questions):
+                attempt = db.query(Attempt).filter_by(participant_id=pid, question_id=question["question_id"]).one()
+                assert attempt.misconception_type == ("M3", "unknown", None)[index]
+                assert attempt.option_order_snapshot == question["options"]
+                selected_options = [o for o in question["options"] if o["option_id"] in attempt.selected_option_ids]
+                assert review["results"][index]["selected_options"] == [{"label": o["label"], "body": o["body"]} for o in selected_options]
+    assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
 
 
 def test_randomized_learning_response_uses_internal_role_and_preserves_displayed_history(isolated_api, monkeypatch):

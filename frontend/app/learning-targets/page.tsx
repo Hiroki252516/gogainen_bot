@@ -41,6 +41,8 @@ type LearningTargetsResponse = {
   pretest_results: PretestResult[];
   test_results: TestResults;
   retest_cycles_completed: number | null;
+  post_pretest_tests_completed: number | null;
+  post_pretest_test_limit: number | null;
   retest_cycle_limit_reached: boolean;
 };
 
@@ -50,6 +52,7 @@ export default function LearningTargetsPage() {
   const [pretestResults, setPretestResults] = useState<PretestResult[]>([]);
   const [testResults, setTestResults] = useState<TestResults>({ test_round: null, test_round_label: null, results: [] });
   const [retestCycleLimitReached, setRetestCycleLimitReached] = useState(false);
+  const [postPretestTestLimit, setPostPretestTestLimit] = useState<number | null>(null);
   const [error, setError] = useState("");
   const isRetestResult = testResults.test_round?.startsWith("retest_") ?? false;
 
@@ -63,6 +66,7 @@ export default function LearningTargetsPage() {
         setPretestResults(data.pretest_results);
         setTestResults(data.test_results || { test_round: null, test_round_label: null, results: [] });
         setRetestCycleLimitReached(data.retest_cycle_limit_reached);
+        setPostPretestTestLimit(data.post_pretest_test_limit);
         localStorage.setItem("learning_targets", JSON.stringify(data.targets.map((t) => t.term_slug)));
       })
       .catch((err) => setError(err.message));
@@ -119,7 +123,7 @@ export default function LearningTargetsPage() {
         </div>
         {retestCycleLimitReached ? (
           <div className="notice pretest-result-incorrect" role="status">
-            再テストを3回実施しましたが、満点には届きませんでした。追加の学習・再テストは行わず、アンケートへ進んでください。
+            事前テスト後のテストを{postPretestTestLimit}回実施しましたが、満点には届きませんでした。追加の学習・再テストは行わず、アンケートへ進んでください。
           </div>
         ) : null}
         {currentStep === "learning_targets" && targets[0] ? (

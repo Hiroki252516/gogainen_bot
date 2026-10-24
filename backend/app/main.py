@@ -19,7 +19,7 @@ from app.models import Participant, Term, TutorSession, TutorTurn
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
-from app.core.experiment_spec import MAX_POST_LEARNING_RETEST_CYCLES, assert_current_experiment, can_resume
+from app.core.experiment_spec import MAX_POST_PRETEST_TESTS, assert_current_experiment, can_resume
 from app.core.runtime_config import (
     ALLOWED_REASONING_EFFORTS,
     current_reasoning_effort,
@@ -48,6 +48,7 @@ from app.services.experiment import (
     participant_logs,
     participant_give_up_counts,
     pretest_results,
+    post_pretest_test_progress,
     question_payloads,
     recalculate_evaluation,
     respond_tutor_turn,
@@ -404,15 +405,18 @@ async def api_diagnose_pretest(
 def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> dict:
     participant = get_participant(db, participant_id)
     targets = learning_targets(db, participant_id)
+    progress = post_pretest_test_progress(db, participant)
     return {
         "current_step": participant.current_step,
         "targets": targets,
         "pretest_results": pretest_results(db, participant_id),
         "test_results": latest_test_results(db, participant_id),
         "retest_cycles_completed": participant.retest_cycles_completed,
+        **progress,
         "retest_cycle_limit_reached": (
-            participant.current_step in {"survey", "finish"}
-            and (participant.retest_cycles_completed or 0) >= MAX_POST_LEARNING_RETEST_CYCLES
+            can_resume(participant)
+            and participant.current_step in {"survey", "finish"}
+            and (progress["post_pretest_tests_completed"] or 0) >= MAX_POST_PRETEST_TESTS
             and bool(targets)
         ),
     }
@@ -678,6 +682,8 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "protocol_id": row.protocol_id,
                 "can_resume": can_resume(row),
                 "current_step": row.current_step,
+                "retest_cycles_completed": row.retest_cycles_completed,
+                **post_pretest_test_progress(db, row),
                 "completed_at": row.completed_at.isoformat() if row.completed_at else None,
                 "completion_reason": row.completion_reason,
                 "give_up_learning_count": give_up_counts.get((row.id, "give_up_learning"), 0),
