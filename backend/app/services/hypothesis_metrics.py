@@ -9,6 +9,7 @@ from statistics import mean, median
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, assert_current_experiment
+from app.core.question_sets import STANDARD, question_set_mode
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION
 
@@ -119,6 +120,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     return {
         "metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
         "participant_id": participant.id, "display_code": participant.display_code,
+        "question_set_mode": question_set_mode(participant.question_set_mode),
         "group_condition": participant.group_condition, "completion_reason": participant.completion_reason,
         "route": "initial_perfect_final_test" if pre_score == 1 else "learning_retest" if pre_complete else "pretest_incomplete",
         "has_viewed_material": bool(displayed), "rounds": rounds,
@@ -137,10 +139,11 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     }
 
 
-def current_metrics(db: Session) -> list[dict]:
+def current_metrics(db: Session, mode: str = STANDARD) -> list[dict]:
+    mode = question_set_mode(mode)
     participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
                                                   protocol_id=CURRENT_PROTOCOL_ID, consent_checked=True).order_by(Participant.created_at, Participant.id).all()
-    return [participant_metrics(db, p) for p in participants]
+    return [participant_metrics(db, p) for p in participants if question_set_mode(p.question_set_mode) == mode]
 
 
 def _group(rows):
@@ -177,22 +180,26 @@ def _group(rows):
     return result
 
 
-def group_metrics(rows: list[dict]) -> dict:
+def group_metrics(rows: list[dict], mode: str = STANDARD) -> dict:
+    mode = question_set_mode(mode)
+    rows = [row for row in rows if row.get("question_set_mode", STANDARD) == mode]
     groups = [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group])} for group in ("control", "proposed")]
     differences = {key: groups[1][key]["mean"] - groups[0][key]["mean"] if all(g[key]["mean"] is not None for g in groups) else None for key in ("h1", "h2", "h3", "h4", "h5", "h6")}
     item_differences = {k: groups[1]["h5"]["items"][k]["mean"] - groups[0]["h5"]["items"][k]["mean"] if all(g["h5"]["items"][k]["mean"] is not None for g in groups) else None for k in MATERIAL_RATING_KEYS}
     routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("initial_perfect_final_test", "learning_retest", "pretest_incomplete")}
-    return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "groups": groups,
+    return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "question_set_mode": mode, "groups": groups,
             "differences_proposed_minus_control": differences, "material_item_differences": item_differences,
             "routes": routes, "descriptive_only": True}
 
 
-def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool) -> Path:
+def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool, mode: str = STANDARD) -> Path:
     """Long-form, spreadsheet-safe numeric exports with denominators and status."""
     fields = ["metrics_version", "protocol_id", "group_condition", "participant_id", "display_code", "route", "metric", "value", "n", "mean", "median", "numerator", "denominator", "missing_count", "not_applicable_count", "status", "details_json"]
     import json
     records = []
-    source = group_metrics(rows)
+    mode = question_set_mode(mode)
+    rows = [row for row in rows if row.get("question_set_mode", STANDARD) == mode]
+    source = group_metrics(rows, mode)
     if grouped:
         for group in source["groups"]:
             for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
@@ -217,5 +224,7 @@ def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool) -> Path:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for record in records:
+            details = json.loads(record.get("details_json") or "{}")
+            record["details_json"] = json.dumps({**details, "question_set_mode": mode}, ensure_ascii=False)
             writer.writerow({"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, **record})
     return path

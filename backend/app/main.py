@@ -66,6 +66,8 @@ from app.services.identity_mapping_cleanup import (
     recover_pending_identity_mapping_cleanups,
 )
 from app.services.option_order import current_option_order_mode, save_option_order_mode
+from app.services.question_sets import current_question_set_mode, save_question_set_mode
+from app.core.question_sets import QuestionSetMode, STANDARD, question_set_mode as effective_question_set_mode
 from app.services import identity_mapping
 from app.services.research_protocol import SurveyPayload, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
@@ -650,8 +652,23 @@ def api_recalculate(participant_id: str, db: Session = Depends(get_db)) -> dict:
 
 
 @app.get("/api/admin/evaluation-summary")
-def api_admin_summary(db: Session = Depends(get_db)) -> dict:
-    return admin_summary(db)
+def api_admin_summary(db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD) -> dict:
+    return admin_summary(db, question_set_mode)
+
+
+class QuestionSetPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: QuestionSetMode
+
+
+@app.get("/api/admin/question-set")
+def api_admin_question_set(db: Session = Depends(get_db)):
+    return JSONResponse({"mode": current_question_set_mode(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
+
+
+@app.put("/api/admin/question-set")
+def api_set_admin_question_set(payload: QuestionSetPayload, db: Session = Depends(get_db)):
+    return {"mode": save_question_set_mode(db, payload.mode), "applies_to": "new_participants_only"}
 
 
 @app.get("/api/admin/option-order")
@@ -678,6 +695,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,
                 "option_order_mode": row.option_order_mode or "debug_fixed",
+                "question_set_mode": effective_question_set_mode(row.question_set_mode),
                 "experiment_spec_version": row.experiment_spec_version,
                 "protocol_id": row.protocol_id,
                 "can_resume": can_resume(row),
@@ -760,8 +778,8 @@ def api_delete_identity_mapping(participant_id: str):
 
 
 @app.get("/api/admin/logs/overview")
-def api_admin_logs_overview(db: Session = Depends(get_db)) -> dict:
-    return admin_logs_overview(db)
+def api_admin_logs_overview(db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD) -> dict:
+    return admin_logs_overview(db, question_set_mode)
 
 
 @app.get("/api/admin/logs/overview.csv")
@@ -794,8 +812,8 @@ def api_admin_participant_logs_excel_csv(participant_id: str, db: Session = Depe
 
 
 @app.get("/api/admin/export/{name}.csv")
-def api_export_csv(name: str, db: Session = Depends(get_db)):
-    path = export_csv(db, name)
+def api_export_csv(name: str, db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD):
+    path = export_csv(db, name, question_set_mode)
     return FileResponse(path, media_type="text/csv", filename=path.name)
 
 

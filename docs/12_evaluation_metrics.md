@@ -4,8 +4,8 @@
 
 ## 対象と版
 
-- 実験仕様版6かつ `protocol_id=experiment-plan-2026-10-24-two-posttests-v1` で同意・参加コード登録を完了した参加者を対象とする。研究者の割付後の登録を母数とし、未登録の割当済み者はアプリ内では把握しない。
-- 既存の版5以下（protocol_idなしを含む）、NULL・未対応版は閲覧専用。新指標へ付け替えず、再計算・群集計しない。
+- 実験仕様版7かつ `protocol_id=experiment-plan-2026-10-24-easy-version-v1` で同意・参加コード登録を完了した参加者を対象とする。研究者の割付後の登録を母数とし、未登録の割当済み者はアプリ内では把握しない。
+- 既存の版6以下（protocol_idなしを含む）、NULL・未対応版は閲覧専用。新指標へ付け替えず、再計算・群集計しない。
 - 指標版は `six-hypotheses-v2`。v1から仮説2の未観測人数と未達の終了状況内訳を明示した。主指標の計算式・対象者・分母は変更しない。既存のretest_score、same_misconception_recurrence_rate、attainment_correct_rate、completedの意味を変更せず、新指標を専用JSONへ保存する。
 - 仮説上の測定回次では内部`final_test`を初回再テストに算入する。内部final_testも事前後1回目として共通の最大2回に含め、その後のretestはretest_2とする。学習後回数の保存列とは別に全体回次を導出する。事前満点経路・通常学習経路・事前未完了を別掲する。
 - 完答は対象3用語が重複なくそろい、すべて採点済みであること。部分回答や未採点を0点・満点としない。
@@ -58,3 +58,7 @@ EvaluationSummary.hypothesis_metrics_jsonに参加者指標と分子・分母・
 仮説2の到達者だけの平均は条件付き集計である。未達者の値はnullとし、群のmissing_count/censored_countに人数を計上する。ここで未観測なのは満点までの総回数であり、表示済みセッションの記録欠落を意味しない。未達人数と観測回数・終了状況を併記し、この平均だけで学習効率が改善したと断定しない。
 
 未達者はh2.censoring_reasonで「途中中断（give_up）」「継続中（in_progress）」「完了・満点未達（completed_without_mastery）」「終了状況不明（other）」に分ける。明示的な終了理由がなく未終了の場合だけ継続中とし、無操作時間から中断を推測しない。群のh2.censoring_breakdownには各内訳の人数と観測セッション数の平均・中央値を保存し、管理画面と専用CSVのdetails_jsonへ同じ内容を出す。未達者全体のobserved_nonattainer_sessionsも維持する。到達済みならその後の終了理由によらずcensoring_reasonはnullとする。仮説6の登録者母数・満点到達判定は変更しない。
+
+## 問題版別の集計
+
+全6仮説・群集計・対象人数・仮説CSVはquestion_set_mode=standard|easyで限定する（初期表示standard）。数式・欠測の扱いは変更しない。CSVのdetails_jsonへ版を保存する。生ログは全版を出力可能。易しい版は問題とAI説明条件の両方が異なり、版間差を問題難易度だけの効果とは説明しない。[22](22_question_set_modes.md)。

@@ -37,7 +37,7 @@ def study(tmp_path):
 
 def participant(db, code="T", group="proposed", protocol=CURRENT_PROTOCOL_ID):
     row = Participant(display_code=code, group_condition=group, protocol_id=protocol,
-                      experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, consent_checked=True, current_step="learning")
+                      experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, learning_content_version=3, consent_checked=True, current_step="learning")
     db.add(row)
     db.flush()
     return row

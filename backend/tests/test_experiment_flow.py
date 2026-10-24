@@ -916,6 +916,11 @@ def test_learning_v2_scores_presented_roles_and_keeps_m3_priority():
         db.commit()
     finally:
         db.close()
+    invalid = client.post(f"/api/tutor-turns/{correct_turn['turn_id']}/respond", json={"selected_option_ids": correct_ids})
+    assert invalid.status_code == 503
+    with SessionLocal() as db:
+        db.get(Participant, correct_pid).learning_content_version = CURRENT_LEARNING_CONTENT_VERSION
+        db.commit()
     correct_result = client.post(
         f"/api/tutor-turns/{correct_turn['turn_id']}/respond",
         json={"selected_option_ids": correct_ids},
@@ -1609,7 +1614,7 @@ def test_retest_non_mastery_routes_to_first_failed_learning_session_and_blocks_f
 
     db = SessionLocal()
     try:
-        final_question = db.query(Question).filter_by(phase="final_test").join(Term).filter(Term.slug == "llm_knowledge").one()
+        final_question = db.query(Question).filter_by(phase="final_test", construct_key="llm_knowledge_final_test_scenario-actions-v1").one()
     finally:
         db.close()
     blocked_attempt = client.post(
@@ -1840,7 +1845,7 @@ def test_test_submission_rejects_previous_and_future_variant_ids():
     first = client.get(f"/api/experiment/{pid}/retest").json()["questions"][0]
     with SessionLocal() as db:
         term = db.query(Term).filter_by(slug=first["term_slug"]).one()
-        future = db.query(Question).filter_by(term_id=term.id, phase="retest", variant_key="retest_v2", is_active=True).one()
+        future = db.query(Question).filter_by(term_id=term.id, phase="retest", variant_key="retest_v2", is_active=True, construct_key=f"{term.slug}_scenario-actions-v1").one()
         future_id = future.id
         option_ids = [row.id for row in db.query(QuestionOption).filter_by(question_id=future.id, is_correct=True)]
     assert client.post("/api/attempts", json={
@@ -2147,7 +2152,7 @@ def test_retest_mastery_skips_final_test_and_uses_retest_score():
         final_question = (
             db.query(Question)
             .join(Term, Question.term_id == Term.id)
-            .filter(Question.phase == "final_test", Question.is_active.is_(True), Term.slug == ACTIVE_TERM_SLUGS[0])
+            .filter(Question.phase == "final_test", Question.is_active.is_(True), Term.slug == ACTIVE_TERM_SLUGS[0], Question.construct_key == f"{ACTIVE_TERM_SLUGS[0]}_final_test_scenario-actions-v1")
             .one()
         )
         correct_option_ids = [

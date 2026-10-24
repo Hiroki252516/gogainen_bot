@@ -48,9 +48,9 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 原文全体は[tutoring_prompt.py](../backend/app/ai/tutoring_prompt.py)のcompose_structured_prompt/build_tutoring_prompt、unknownの必須項目は[mandatory_elements.py](../backend/app/ai/mandatory_elements.py)を参照する。生成文の意味的な正しさまで機械検査したとは扱わない。
 
-## 現行契約（実行版6）
+## 現行契約（実行版7）
 
-実験仕様版6、新protocol_idはexperiment-plan-2026-10-24-two-posttests-v1。契約版はtutoring-teaching-contract-v6-plan-aligned、taxonomy版はm1-m3-unknown-v3。共通履歴interaction-history-v1、出題規則shared-diagnosis-route-v1は維持。仕様版6は事前後のテストをfinal_test込み最大2回に制限するが、AIのprompt契約や教授方略は変更しない。
+実験仕様版7、新protocol_idはexperiment-plan-2026-10-24-easy-version-v1。契約版はtutoring-teaching-contract-v7-easy-level、taxonomy版はm1-m3-unknown-v3。共通履歴interaction-history-v1、出題規則shared-diagnosis-route-v1は維持。仕様版7は事前後のテストをfinal_test込み最大2回に制限するが、AIのprompt契約や教授方略は変更しない。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 
@@ -111,3 +111,7 @@ AICallLogの既存JSON内に実送信thread/start、turn/start全文、Schemaと
 監査ログ・CSVを研究者限定で取り扱うことは運用方針である。現行管理APIに管理者認証・権限確認はなく、アクセスがシステムで制限されているとはみなさない。[セキュリティ仕様](15_security_privacy.md) に未解決事項を記載する。
 
 `AICallLog.response_payload.generation_validation.material_structure` と `TutorTurn.diagnosis_json.material_structure_validation` に、headings（表示順）、section_count、sectionsの位置/見出し/本文文字数、evidence_placements（内部フィールド→節番号）、valid/missingを保存する。各生成試行を監査し、成功した最後の検証をTutorTurnに残す。AI出力Schema、公開API、DB列、CSV固定ヘッダは追加しない。Mockの決定論的な章立てはテスト専用で、実AIの見出しを固定する根拠にしない。
+
+## 易しい版の追加指示
+
+易しい版だけexplanation_level=beginnerを共通allowlistへ追加し、教材生成・正答要約・誤答解説の全タスクで短文、身近な例、必要な専門語の短い説明を求める。両群共通で、統制群へ診断情報は追加しない。通常版の指示・600〜800文字・必須内容・本文証拠・検査と停止条件は維持する。原文と版情報は[22](22_question_set_modes.md)に示す。

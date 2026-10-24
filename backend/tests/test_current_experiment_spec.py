@@ -69,6 +69,7 @@ def trial_snapshot(db, pid):
         (2, 3, "experiment-plan-2026-10-18-v1"), (2, 99, None),
         (3, 4, "experiment-plan-2026-10-22-v1"),
         (3, 5, "experiment-plan-2026-10-23-learning-rotation-v1"),
+        (3, 6, "experiment-plan-2026-10-24-two-posttests-v1"),
     ],
 )
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):
@@ -158,8 +159,8 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
     Base.metadata.create_all(isolated)
     with Session(isolated) as db:
         seed_database(db)
-        assert db.query(Question).count() == 12
-        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 3, "retest": 6, "final_test": 3}
+        assert db.query(Question).count() == 24
+        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 6, "retest": 12, "final_test": 6}
         participant = Participant(display_code="OLD", group_condition="proposed", current_step="finish", completion_reason=None)
         db.add(participant)
         db.flush()
@@ -177,8 +178,8 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
         pid = participant.id
         seed_database(db)
         seed_database(db)
-        assert db.query(Question).count() == 15
-        assert db.query(Question).filter_by(is_active=True).count() == 12
+        assert db.query(Question).count() == 27
+        assert db.query(Question).filter_by(is_active=True).count() == 24
         assert not old_question.is_active and not transfer.is_active
         db.refresh(retired_variant)
         assert not retired_variant.is_active

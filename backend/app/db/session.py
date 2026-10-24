@@ -28,6 +28,7 @@ def _ensure_lightweight_schema_updates() -> None:
     datetime_type = "DATETIME" if dialect_name == "sqlite" else "TIMESTAMP"
     additions = {
         "participants": [
+            ("question_set_mode", "VARCHAR(32)"),
             ("completion_reason", "TEXT"),
             ("learning_content_version", "INTEGER"),
             ("experiment_spec_version", "INTEGER"),
@@ -41,6 +42,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("survey_version", "VARCHAR(80)"),
             ("responses_json", json_type),
         ],
+        "runtime_settings": [("question_set_mode", "VARCHAR(32)")],
         "attempts": [
             ("test_round", "TEXT"),
             ("question_shown_at", datetime_type),
@@ -100,10 +102,6 @@ def _backfill_attempt_test_rounds(connection) -> None:
         return
 
     question_variants = dict(connection.execute(text("SELECT id, variant_key FROM questions")).all())
-    participants_with_final_test = {
-        row[0]
-        for row in connection.execute(text("SELECT DISTINCT participant_id FROM attempts WHERE phase = 'final_test'")).all()
-    }
     for row in rows:
         phase = row["phase"]
         if phase == "pretest":
@@ -116,8 +114,7 @@ def _backfill_attempt_test_rounds(connection) -> None:
                 variant_number = int(variant_key.removeprefix("retest_v"))
             except ValueError:
                 variant_number = 1
-            offset = 1 if row["participant_id"] in participants_with_final_test else 0
-            test_round = f"retest_{variant_number + offset}"
+            test_round = f"retest_{variant_number}"
         else:
             continue
         connection.execute(

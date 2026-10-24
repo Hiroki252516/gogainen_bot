@@ -1,6 +1,6 @@
 # 現行プロトコルの実装境界
 
-現行仕様版6として、新規にexperiment-plan-2026-10-24-two-posttests-v1を保存する。旧プロトコルを並行稼働させず、版5以下・NULL・旧識別子の記録は閲覧専用にする。学習後のretest採点回数を新規参加者ごとに0から記録し、final_test込みの事前後テスト最大2回で未達終了する。学習後回数の保存列は維持し、上限用の回数は導出する。確定判断は[20](20_experiment_plan_alignment.md)。
+現行仕様版7として、新規にexperiment-plan-2026-10-24-easy-version-v1を保存する。旧プロトコルを並行稼働させず、版6以下・NULL・旧識別子の記録は閲覧専用にする。学習後のretest採点回数を新規参加者ごとに0から記録し、final_test込みの事前後テスト最大2回で未達終了する。学習後回数の保存列は維持し、上限用の回数は導出する。確定判断は[20](20_experiment_plan_alignment.md)。
 
 ## 実装の責務
 
@@ -8,7 +8,7 @@
 - services/experiment：固定採点、群別入力、教材・回答後解説、再学習、履歴保護。
 - services/research_protocol：新アンケートの厳密型・必須/対象外判定、冪等な教材表示記録。
 - services/hypothesis_metrics：6仮説の根拠・参加者値・群別記述集計・専用CSV。既存評価列と分離。
-- ai：自由な章立て、本文証拠、群別allowlist、v6契約とv3taxonomy。AIBackendを経由しMockへ自動フォールバックしない。
+- ai：自由な章立て、本文証拠、群別allowlist、v7契約とv3taxonomy。AIBackendを経由しMockへ自動フォールバックしない。
 
 ## 追加するnullable列
 
