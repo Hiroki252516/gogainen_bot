@@ -1,6 +1,6 @@
 # 現行プロトコルの実装境界
 
-現行仕様版5として、新規にexperiment-plan-2026-10-23-learning-rotation-v1を保存する。旧プロトコルを並行稼働させず、版4以下・NULL・旧識別子の記録は閲覧専用にする。学習後のretest採点回数を新規参加者ごとに0から記録し、最大3回で未達終了する。確定判断は[20](20_experiment_plan_alignment.md)。
+現行仕様版6として、新規にexperiment-plan-2026-10-24-two-posttests-v1を保存する。旧プロトコルを並行稼働させず、版5以下・NULL・旧識別子の記録は閲覧専用にする。学習後のretest採点回数を新規参加者ごとに0から記録し、final_test込みの事前後テスト最大2回で未達終了する。学習後回数の保存列は維持し、上限用の回数は導出する。確定判断は[20](20_experiment_plan_alignment.md)。
 
 ## 実装の責務
 
@@ -17,7 +17,7 @@ participants.protocol_id/retest_cycles_completed、participant_surveys.survey_ve
 ## 切替
 
 1. 実行中リクエスト・workerを停止してから更新・再起動する。
-2. DBを保全し、旧記録の再開/再送/削除/再計算が拒否されることを確認する。
+2. DBを保全し、新版の問題を別construct_keyでseedする。旧問題・選択肢は非activeにするだけで本文を上書きしない。旧記録の再開/再送/削除/再計算が拒否されることを確認する。
 3. 新規IDを作り、protocol_id、AIモデル/effort、RAG、アンケート版を確認する。
 4. 試験データは隔離DBで扱い、研究収集DBへ混ぜない。
 5. デバッグ正答配置・管理アクセス等の未解決事項を確認する。

@@ -252,10 +252,13 @@ for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step
 }
 
 const learningTargetsPage = fs.readFileSync(new URL("../app/learning-targets/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["pretest_results", "test_results", "今回の確認結果", "test_round_label", "className=\"question-heading\"", "問{toFullWidthDigits(i + 1)}：<strong>{result.term_label}</strong>", "question_body", 'result.question_body || "問題文を確認できません。"', "selected_options", "自分が選んだ選択肢", "result_label", "result_summary", "is_learning_target", "current_stage_for_display", "pretest-result-correct", "pretest-result-incorrect", "result-verdict", "retest_cycle_limit_reached", "再テストを3回実施しましたが、満点には届きませんでした。追加の学習・再テストは行わず、アンケートへ進んでください。"]) {
+for (const expectedText of ["pretest_results", "test_results", "今回の確認結果", "test_round_label", "className=\"question-heading\"", "問{toFullWidthDigits(i + 1)}：<strong>{result.term_label}</strong>", "question_body", 'result.question_body || "問題文を確認できません。"', "selected_options", "自分が選んだ選択肢", "result_label", "result_summary", "is_learning_target", "current_stage_for_display", "pretest-result-correct", "pretest-result-incorrect", "result-verdict", "retest_cycle_limit_reached", "post_pretest_tests_completed", "post_pretest_test_limit", "事前テスト後のテストを{postPretestTestLimit}回実施しましたが、満点には届きませんでした。追加の学習・再テストは行わず、アンケートへ進んでください。"]) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing pretest result behavior: ${expectedText}`);
   }
+}
+for (const expectedText of ["post_pretest_tests_completed", "post_pretest_test_limit", "学習前の追加テストを含む"]) {
+  if (!groupAdminPage.includes(expectedText)) throw new Error(`admin page missing post-pretest test count: ${expectedText}`);
 }
 const globalStyles = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 for (const expectedText of [".pretest-result-correct .result-verdict {\n  color: var(--ok);", ".pretest-result-incorrect .result-verdict {\n  color: var(--danger);", ".question-heading {\n  font-family: inherit;\n  font-size: 1rem;", ".question-heading strong {\n  font: inherit;\n  font-weight: 700;"]) {

@@ -4,7 +4,7 @@ import hashlib
 import uuid
 from typing import Any
 
-from app.seed.content_loader import ACTIVE_TERM_SLUGS, LEARNING_SESSION_VARIANT_COUNT, LEARNING_STAGES
+from app.seed.content_loader import ACTIVE_TERM_SLUGS, ASSESSMENT_VARIANT_COUNTS, LEARNING_SESSION_VARIANT_COUNT, LEARNING_STAGES
 from app.models import RuntimeSetting
 
 
@@ -15,7 +15,7 @@ OPTION_LABELS = tuple("ABCDEFGHIJ")
 SHUFFLED_OPTION_LABELS = OPTION_LABELS[:-1]
 UNKNOWN_DISPLAY_LABEL = OPTION_LABELS[-1]
 OPTION_ORDER_VERSION = "option-order-v2-unknown-last"
-ASSESSMENT_VARIANTS_PER_TERM = 4
+ASSESSMENT_VARIANTS_PER_TERM = sum(ASSESSMENT_VARIANT_COUNTS.values())
 LEARNING_VARIANTS_PER_SESSION = LEARNING_SESSION_VARIANT_COUNT
 
 
@@ -52,7 +52,7 @@ def assessment_bank_index(term_slug: str, phase: str, variant_key: str) -> int:
         variant_index = int(variant_key.rsplit("_v", 1)[1])
     except (IndexError, ValueError) as exc:
         raise ValueError(f"invalid assessment variant key: {variant_key}") from exc
-    if phase == "retest" and not 1 <= variant_index <= 3:
+    if phase == "retest" and not 1 <= variant_index <= ASSESSMENT_VARIANT_COUNTS["retest"]:
         raise ValueError(f"invalid retest variant: {variant_key}")
     if phase == "final_test" and variant_key != "retest_v1":
         raise ValueError(f"final_test must use retest_v1: {variant_key}")

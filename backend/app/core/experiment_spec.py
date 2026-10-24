@@ -5,9 +5,9 @@ from typing import Any
 from fastapi import HTTPException
 
 
-CURRENT_EXPERIMENT_SPEC_VERSION = 5
-CURRENT_PROTOCOL_ID = "experiment-plan-2026-10-23-learning-rotation-v1"
-MAX_POST_LEARNING_RETEST_CYCLES = 3
+CURRENT_EXPERIMENT_SPEC_VERSION = 6
+CURRENT_PROTOCOL_ID = "experiment-plan-2026-10-24-two-posttests-v1"
+MAX_POST_PRETEST_TESTS = 2
 
 
 def can_resume(participant: Any) -> bool:

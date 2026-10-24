@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal, init_db
 from app.models import Question, QuestionOption, Term
 from app.seed.data import SEED_TERMS
+from app.seed.content_loader import ASSESSMENT_BANK_VERSION
 
 
 def _sync_options(db: Session, question: Question, options: list[tuple[str, str, bool, str | None]]) -> None:
@@ -30,11 +31,13 @@ def _upsert_question(
     variant_key: str,
     options: list[tuple[str, str, bool, str | None]] | None = None,
 ) -> Question:
+    # A retired bank must still resolve historical answers without snapshots.
     question = (
         db.query(Question)
         .filter(
             Question.term_id == term.id,
             Question.phase == phase,
+            Question.construct_key == construct_key,
             Question.variant_key == variant_key,
         )
         .one_or_none()
@@ -91,7 +94,7 @@ def seed_database(db: Session) -> None:
                     question_type="multi_select" if phase == "pretest" else "retest_multi_select",
                     body=qd["body"],
                     expected_answer=qd["expected"],
-                    construct_key=f"{item['slug']}_definition",
+                    construct_key=f"{item['slug']}_{ASSESSMENT_BANK_VERSION}",
                     variant_key=qd["variant_key"],
                     options=qd["options"],
                 )
@@ -106,7 +109,7 @@ def seed_database(db: Session) -> None:
                 question_type="final_multi_select",
                 body=final_q["body"],
                 expected_answer=final_q["expected"],
-                construct_key=f"{item['slug']}_final_test",
+                construct_key=f"{item['slug']}_final_test_{ASSESSMENT_BANK_VERSION}",
                 variant_key=final_q["variant_key"],
                 options=final_q["options"],
             )

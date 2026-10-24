@@ -203,13 +203,13 @@ def test_content_contract_has_three_terms_and_required_learning_round_counts():
     assert tuple(term["slug"] for term in content["terms"]) == ACTIVE_TERM_SLUGS
     for term in content["terms"]:
         assert len(term["questions"]["pretest"]) == 1
-        assert len(term["questions"]["retest"]) == 3
+        assert len(term["questions"]["retest"]) == 2
         assert "final_test" not in term["questions"]
         assert assessment_question_spec(term["slug"], "final_test")["variant_key"] == "retest_v1"
         assert len(load_learning_v3_content()["terms"][term["slug"]]["variants"]) == 3
 
 
-def test_assessment_bank_has_12_active_scenario_variants_fixed_roles_and_option_lengths():
+def test_assessment_bank_has_9_active_scenario_variants_fixed_roles_and_option_lengths():
     content = load_content()
     bodies = set()
     choices = set()
@@ -246,7 +246,7 @@ def test_assessment_bank_has_12_active_scenario_variants_fixed_roles_and_option_
                     choices.add(option["body"])
                 variant_count += 1
 
-    assert variant_count == 12
+    assert variant_count == 9
 
 
 def test_pretest_teaching_targets_follow_fixed_option_roles():
@@ -1538,10 +1538,11 @@ def test_control_sequence_uses_the_shared_diagnosis_route_but_excludes_diagnosis
         db.close()
 
 
-def test_retest_uses_only_three_cycles_and_stops_after_the_third_failed_cycle():
-    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+@pytest.mark.parametrize("group", ["proposed", "control"])
+def test_retest_uses_only_two_cycles_and_stops_after_the_second_failed_cycle(group):
+    pid = _create_participant_with_pretest(group=group, labels=["D", "E", "F"])
     observed: list[str] = []
-    for cycle in range(1, 4):
+    for cycle in range(1, 3):
         questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
         assert len(questions) == 3
         target_question = next(question for question in questions if question["term_slug"] == "llm_knowledge")
@@ -1554,19 +1555,22 @@ def test_retest_uses_only_three_cycles_and_stops_after_the_third_failed_cycle():
             assert response.status_code == 200, response.text
         score = client.post(f"/api/participants/{pid}/score-retest")
         assert score.status_code == 200, score.text
-        expected_step = "survey" if cycle == 3 else "learning_targets"
+        expected_step = "survey" if cycle == 2 else "learning_targets"
         assert score.json()["next_step"] == expected_step
         assert score.json()["retest_cycles_completed"] == cycle
-        assert score.json()["retest_cycle_limit_reached"] is (cycle == 3)
+        assert score.json()["retest_cycle_limit_reached"] is (cycle == 2)
+        assert score.json()["post_pretest_tests_completed"] == cycle
+        assert score.json()["post_pretest_test_limit"] == 2
         assert score.json()["learning_target_slugs"] == list(ACTIVE_TERM_SLUGS)
         review = client.get(f"/api/participants/{pid}/learning-targets").json()["test_results"]
         llm_result = next(result for result in review["results"] if result["term_slug"] == "llm_knowledge")
         assert llm_result["question_body"] == target_question["body"]
-    assert len(set(observed)) == 3
+    assert len(set(observed)) == 2
     review = client.get(f"/api/participants/{pid}/learning-targets")
     assert review.status_code == 200
     assert review.json()["retest_cycle_limit_reached"] is True
-    assert review.json()["retest_cycles_completed"] == 3
+    assert review.json()["retest_cycles_completed"] == 2
+    assert review.json()["post_pretest_tests_completed"] == 2
     assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
     assert client.post(f"/api/participants/{pid}/score-retest").status_code == 409
 
@@ -1696,26 +1700,36 @@ def test_second_retest_mastery_stops_early_without_reporting_cycle_limit():
     assert client.get(f"/api/participants/{pid}/learning-targets").json()["retest_cycle_limit_reached"] is False
 
 
-def test_final_test_does_not_consume_post_learning_retest_cycle():
-    pid = _create_participant_with_pretest(labels=["A", "B", "C"])
-    _submit_phase_questions(pid, "final_test", ["D", "E", "F"])
+@pytest.mark.parametrize("group", ["proposed", "control"])
+def test_final_test_counts_toward_total_but_not_post_learning_retest_counter(group):
+    pid = _create_participant_with_pretest(group=group, labels=["A", "B", "C"])
+    first_questions = _submit_phase_questions(pid, "final_test", ["D", "E", "F"])
     final_score = client.post(f"/api/participants/{pid}/score-final-test")
     assert final_score.status_code == 200, final_score.text
     assert final_score.json()["next_step"] == "learning_targets"
+    assert final_score.json()["post_pretest_tests_completed"] == 1
+    assert final_score.json()["post_pretest_test_limit"] == 2
 
     with SessionLocal() as db:
         assert db.get(Participant, pid).retest_cycles_completed == 0
 
-    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    second_questions = _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    assert all(question["test_round"] == "retest_2" for question in second_questions)
+    assert {question["body"] for question in first_questions}.isdisjoint(question["body"] for question in second_questions)
     first_retest = client.post(f"/api/participants/{pid}/score-retest")
     assert first_retest.status_code == 200, first_retest.text
     assert first_retest.json()["retest_cycles_completed"] == 1
-    assert first_retest.json()["next_step"] == "learning_targets"
+    assert first_retest.json()["post_pretest_tests_completed"] == 2
+    assert first_retest.json()["next_step"] == "survey"
+    assert first_retest.json()["retest_cycle_limit_reached"] is True
+    assert client.get(f"/api/participants/{pid}/learning-targets").json()["retest_cycle_limit_reached"] is True
+    assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+    assert client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).status_code == 409
 
 
 def test_retest_cycle_counter_counts_incomplete_batch_and_keeps_unanswered_target_after_limit():
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
-    for cycle in range(1, 4):
+    for cycle in range(1, 3):
         questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
         for question in questions:
             if question["term_slug"] == "memory_process":
@@ -1733,7 +1747,8 @@ def test_retest_cycle_counter_counts_incomplete_batch_and_keeps_unanswered_targe
         scored = client.post(f"/api/participants/{pid}/score-retest")
         assert scored.status_code == 200, scored.text
         assert scored.json()["retest_cycles_completed"] == cycle
-        assert scored.json()["next_step"] == ("survey" if cycle == 3 else "learning_targets")
+        assert scored.json()["next_step"] == ("survey" if cycle == 2 else "learning_targets")
+        assert all(question["test_round"] == f"retest_{cycle}" for question in questions)
 
     review = client.get(f"/api/participants/{pid}/learning-targets")
     assert review.status_code == 200
@@ -1742,7 +1757,7 @@ def test_retest_cycle_counter_counts_incomplete_batch_and_keeps_unanswered_targe
     assert review.json()["test_results"]["results"][-1]["is_correct"] is None
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.retest_cycles_completed == 3
+        assert participant.retest_cycles_completed == 2
         missing_term = db.query(Term).filter_by(slug="memory_process").one()
         assignment = db.query(TermAssignment).filter_by(participant_id=pid, term_id=missing_term.id).one()
         assert assignment.is_learning_target is True
@@ -1758,6 +1773,102 @@ def test_retest_score_idempotency_replay_does_not_increment_cycle_twice():
     assert replay.json() == first.json()
     with SessionLocal() as db:
         assert db.get(Participant, pid).retest_cycles_completed == 1
+
+
+def test_partial_final_test_advances_every_term_to_variant_two_and_keeps_review():
+    pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    first = client.get(f"/api/experiment/{pid}/final-test").json()["questions"]
+    question = first[0]
+    assert client.post("/api/attempts", json={
+        "participant_id": pid, "question_id": question["question_id"], "phase": "final_test",
+        "selected_option_ids": _ids_for_labels(question, ["A", "B", "C"]),
+    }).status_code == 200
+    headers = {"Idempotency-Key": f"partial-final:{pid}"}
+    scored = client.post(f"/api/participants/{pid}/score-final-test", headers=headers)
+    replay = client.post(f"/api/participants/{pid}/score-final-test", headers=headers)
+    assert scored.status_code == replay.status_code == 200
+    assert scored.json() == replay.json()
+    assert scored.json()["post_pretest_tests_completed"] == 1
+    assert scored.json()["retest_cycles_completed"] == 0
+    review = client.get(f"/api/participants/{pid}/learning-targets").json()
+    assert [result["question_body"] for result in review["test_results"]["results"]] == [q["body"] for q in first]
+    assert [result["is_correct"] for result in review["test_results"]["results"]] == [True, None, None]
+    second = _submit_phase_questions(pid, "retest", ["A", "B", "C"])
+    assert all(q["test_round"] == "retest_2" for q in second)
+    with SessionLocal() as db:
+        assert all(db.get(Question, q["question_id"]).variant_key == "retest_v2" for q in second)
+    final_headers = {"Idempotency-Key": f"last-score:{pid}"}
+    last = client.post(f"/api/participants/{pid}/score-retest", headers=final_headers)
+    assert last.status_code == 200, last.text
+    assert client.post(f"/api/participants/{pid}/score-retest", headers=final_headers).json() == last.json()
+    assert last.json()["post_pretest_tests_completed"] == 2
+    assert last.json()["retest_cycles_completed"] == 1
+    assert last.json()["next_step"] == "survey"
+    assert last.json()["retest_cycle_limit_reached"] is False
+    admin = next(row for row in client.get("/api/admin/participants").json()["participants"] if row["participant_id"] == pid)
+    assert admin["post_pretest_tests_completed"] == 2
+    assert admin["post_pretest_test_limit"] == 2
+    assert admin["retest_cycles_completed"] == 1
+
+
+def test_final_test_mastery_finishes_after_one_post_pretest_measurement():
+    pid = _create_participant_with_pretest(labels=["A", "B", "C"])
+    _submit_phase_questions(pid, "final_test", ["A", "B", "C"])
+    scored = client.post(f"/api/participants/{pid}/score-final-test")
+    assert scored.status_code == 200
+    assert scored.json()["next_step"] == "survey"
+    assert scored.json()["post_pretest_tests_completed"] == 1
+    assert scored.json()["retest_cycles_completed"] == 0
+    assert scored.json()["retest_cycle_limit_reached"] is False
+    assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+
+
+@pytest.mark.parametrize("pretest_labels,phase,endpoint", [
+    (["A", "B", "C"], "final_test", "score-final-test"),
+    (["D", "E", "F"], "retest", "score-retest"),
+])
+def test_empty_test_batch_does_not_consume_a_measurement(pretest_labels, phase, endpoint):
+    pid = _create_participant_with_pretest(labels=pretest_labels)
+    assert client.post(f"/api/participants/{pid}/{endpoint}").status_code == 400
+    review = client.get(f"/api/participants/{pid}/learning-targets").json()
+    assert review["post_pretest_tests_completed"] == 0
+    assert review["retest_cycles_completed"] == 0
+
+
+def test_test_submission_rejects_previous_and_future_variant_ids():
+    pid = _create_participant_with_pretest()
+    first = client.get(f"/api/experiment/{pid}/retest").json()["questions"][0]
+    with SessionLocal() as db:
+        term = db.query(Term).filter_by(slug=first["term_slug"]).one()
+        future = db.query(Question).filter_by(term_id=term.id, phase="retest", variant_key="retest_v2", is_active=True).one()
+        future_id = future.id
+        option_ids = [row.id for row in db.query(QuestionOption).filter_by(question_id=future.id, is_correct=True)]
+    assert client.post("/api/attempts", json={
+        "participant_id": pid, "question_id": future_id, "phase": "retest", "selected_option_ids": option_ids,
+    }).status_code == 409
+    _submit_phase_questions(pid, "retest", ["D", "E", "F"])
+    assert client.post(f"/api/participants/{pid}/score-retest").status_code == 200
+    assert client.post("/api/attempts", json={
+        "participant_id": pid, "question_id": first["question_id"], "phase": "retest",
+        "selected_option_ids": _ids_for_labels(first, ["A", "B", "C"]),
+    }).status_code == 409
+    with SessionLocal() as db:
+        assert db.query(Attempt).filter_by(participant_id=pid, phase="retest").count() == 3
+
+
+@pytest.mark.parametrize("remove_entire_term", [False, True])
+def test_missing_current_variant_fails_instead_of_falling_back_to_another_problem(remove_entire_term):
+    pid = _create_participant_with_pretest()
+    with SessionLocal() as db:
+        question = db.query(Question).filter_by(phase="retest", variant_key="retest_v1", is_active=True).first()
+        question.is_active = False
+        if remove_entire_term:
+            db.query(Question).filter_by(phase="retest", term_id=question.term_id).update({Question.is_active: False})
+        db.flush()
+        with pytest.raises(HTTPException) as caught:
+            experiment_service.question_payloads(db, pid, "retest")
+        assert caught.value.status_code == 503
+        db.rollback()
 
 
 def test_learning_give_up_routes_to_retest_and_closes_current_session():
@@ -2356,7 +2467,8 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
             "llm_knowledge:pretest:F",
         }
         e_target = next(target for target in proposed_log.request_payload["pretest_targets"] if target["option_label"] == "E")
-        assert "プロンプトエンジニアリングは入力文脈や指示を工夫する方法" in e_target["corrected_claim"]
+        assert e_target["corrected_claim"] == load_content()["teaching_targets"]["llm_knowledge"]["E"]["corrected_claim"]
+        assert "回答例を毎回入力へ加える" in e_target["corrected_claim"]
         assert "session_misconception_history" in proposed_log.request_payload
         assert "misconception_taxonomy" not in control_log.request_payload
         assert control_log.request_payload["taxonomy_version"] == TAXONOMY_VERSION

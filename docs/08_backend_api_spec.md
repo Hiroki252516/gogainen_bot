@@ -14,7 +14,7 @@
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。実験仕様版5と新protocol_idの両方で進行可否を判定する。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。実験仕様版6と新protocol_idの両方で進行可否を判定する。
 
 SurveyPayloadはservices/research_protocol.pyで定義する。experiences（chat/coding_assistance/cli/apiの厳密boolean）、general_ratings（ai_usage_frequency/self_rated_ai_knowledge/system_usability/system_clarity）、material_ratings（clarity/readability/japanese_clarity/difficulty_appropriateness/learning_usefulness/amount_appropriateness）、必須free_commentを受け付ける。評定は厳密な整数1〜10。material_ratingsは未表示者のみnull、表示者は6項目必須。余分なキー・旧フォーム・空白のみのコメントを拒否する。
 
@@ -49,11 +49,11 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 
 回答は `selected_option_ids` と時刻情報（response_time_sec、question_shown_at、answered_at）。テストはparticipant_id/question_id/phaseも指定する。廃止入力項目は422。
 
-NULL・版1〜3・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。新規版4＋現行protocol_idのみcan_resume=true。
+NULL・版1〜5・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。新規版6＋現行protocol_idのみcan_resume=true。
 
 参加者の出題APIに正答や分類メタデータを公開しない。回答後の結果確認では問題・選択内容・正誤を返す。Idempotency-Keyの再送、回答済みロックは維持する。旧試用の管理者閲覧・CSVは許可し、再計算は拒否する。
 
-`POST /api/participants/{id}/score-retest`は採点済みretestバッチ数を`retest_cycles_completed`として返す。新規版4参加者では0から始まり、採点済みバッチ（未回答項目を含む）ごとに1増える。1・2回目の未達は`learning_targets`、3回目の未達は`survey`へ進み、満点なら回数を問わず`survey`へ進む。`retest_cycle_limit_reached`は3回目の未達時だけtrue。GET `/api/participants/{id}/learning-targets`も回数と上限到達フラグを返し、上限到達時は未達対象を保持したまま結果画面に案内する。学習前の`final_test`はカウンターを増やさない。冪等再送は保存済み応答を返し、再加算しない。
+`POST /api/participants/{id}/score-retest`とscore-final-test、GET learning-targets、管理者一覧/ログはpost_pretest_tests_completedとpost_pretest_test_limitを返す。現行版の上限は2で、旧版は両値null。retest_cycles_completedは学習後retestだけの既存カウンターを維持し、共通回数は採点済みfinal_testの有無を加えて導出する。未回答を含むバッチも1回、全問未回答は400、冪等再送は加算しない。満点または事前後2回目未達でsurveyへ進む。retest_cycle_limit_reachedは上限時かつ未達の場合trueで、未達対象を保持する。問題取得・回答では現在の全体回次に合うvariantのみ認め、前後回次の問題IDは409、必要なvariant欠落は503とする。
 
 選択肢配置はRuntimeSettingの単一行で管理する。未設定時は `debug_fixed`。管理APIのPUTで設定を保存し、GETは現在値と `applies_to=new_participants_only` を返す。新規参加者には開始時のモードを保存し、既存参加者のnull値は `debug_fixed` として扱う。`randomized` は「わからない」を最後のJに固定し、残る9択をA〜Iへ固定・均衡配置する。同一問題は群や参加者をまたいで同じラベル・順序となる。採点は表示ラベルではなく選択肢IDと内部メタデータで行う。画面向け選択肢に追加する `exclusive` は「わからない」の単独選択を扱うための情報で、正誤やM1/M3分類は含まない。
 

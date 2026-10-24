@@ -1,5 +1,16 @@
 # 受け入れ条件と検証記録
 
+## 2026-10-24 仕様版6・事前込み最大3テスト
+
+- 現行は仕様版6 / experiment-plan-2026-10-24-two-posttests-v1。事前後のテストをfinal_test込み最大2回に制限し、2回目未達は未達のままsurveyへ進む。学習後回数の保存列と共通の導出回数を区別する。
+- 行動選択型の9固有問題、final_testのretest_v1共用、次回の全用語retest_v2、未回答・前後回次ID拒否、再送時の非加算、旧版5の読取り専用を検証する。
+- 新問題は旧問題と別ID。隔離DBのseed再実行で旧本文・選択肢・snapshotなしの過去表示・保存評価が不変で、新問題を重複作成しないことを確認する。
+- backend全269件、frontend smoke、本番build/TypeScript検査、git diff --checkに合格。既存NumPy DeprecationWarningが1件あり、テスト失敗ではない。
+- 隔離SQLiteで旧15問題・150選択肢を保持したまま新12active行（9固有問題＋final共用行）を追加し、再seedでも旧本文・判定情報・snapshotなしの過去表示・保存評価が不変であることを確認した。ブラウザ用隔離DBでもseedを2回再実行し、参加者行の不変と12active行/120選択肢を確認した。
+- 検証専用8001/3001、合成番号、Mockのみで、両群×通常/事前満点の4経路を完了した。各経路で9問/3テスト、事前後2回終了、全問題の非重複、未達維持、アンケート、満点到達指標0、管理画面の共通回数と学習後回数の区別を確認した。1440px/390pxのスクリーンショットと横方向のはみ出しも確認した。
+- 再実行はfrontend/tests/test-cycle-limit-browser.mjsへCYCLE_VERIFY_ISOLATED=1、隔離環境のCYCLE_UI_BASE_URL、CYCLE_PLAYWRIGHT_MODULE、CYCLE_SCREENSHOT_DIRを明示する。専用ChromiumがなければCYCLE_BROWSER_CHANNEL=chromeでインストール済みChromeを利用できる。Next devはlocalhostで接続する。研究用3000番には実行しない。
+- 実AIは呼び出さず、過去の実AI成功を今回の結果とは扱わない。研究DB・稼働中3000番・既存試用・Word・別仕様リポジトリを変更せず、コミット・pushは行っていない。
+
 ## 2026-10-23 学習確認v3・仕様版5
 
 - 新規参加者のみ実験仕様版5 / experiment-plan-2026-10-23-learning-rotation-v1とし、retest_cycles_completed=0で開始する。既存版4以下、旧protocol_id、NULL記録は閲覧専用である。
@@ -106,11 +117,11 @@ cd frontend && npm run build
 git diff --check
 ```
 
-- seedは事前3・再15・最終3。廃止問題は非activeで保存。
-- 学習はv2の30問のみ。10択・3/3/3/1・M3優先を確認する。配置はdebug_fixedでA〜C正解/D〜F=M1/G〜I=M3/J=unknown、randomizedで「わからない」を最後のJに固定し、残る9択をA〜Iへ割り当てる。排他選択はラベルでなくexclusive/内部役割で検証する。
+- seedは事前3・再6・最終の共用行3（12active行、9固有問題）。廃止問題は非activeで保存。
+- 学習バンクはv3の9問。新規経路で3セッション目には到達しない。10択・3/3/3/1・M3優先を確認する。配置はdebug_fixedでA〜C正解/D〜F=M1/G〜I=M3/J=unknown、randomizedで「わからない」を最後のJに固定し、残る9択をA〜Iへ割り当てる。排他選択はラベルでなくexclusive/内部役割で検証する。
 - 採点・結果確認・再学習・ギブアップ・ロック・冪等性・先行生成の回帰検証。
 - final_test未採点の直接学習開始を拒否し、廃止専用URL/APIは404。
-- NULL・実験仕様版1/2・未対応版は409。旧POST、cached再送、先行生成でも値が不変。
+- NULL・実験仕様版1〜5・未対応版は409。旧POST、cached再送、先行生成でも値が不変。
 - can_resume、ブラウザ新規開始、厳密入力、参加者向け正答非公開。
 - 全3タイプ/両群のprompt・Schemaに廃止教授や支援量がなく、方略enumを固定。transfer_checkは必須。
 - 履歴・生AI・保存評価・CSVを保持し、再計算/群集計しない。
@@ -119,7 +130,7 @@ git diff --check
 ## 選択肢配置切替（issue-143）
 
 - 管理APIの初期値・DB永続化・未知modeの拒否、既存参加者への非遡及、新規参加者へのmode snapshotを確認する。
-- テスト21問と学習確認30問それぞれで、同じ問題の決定的な表示順、全10ラベルの重複なし、「わからない」のJ/末尾固定、正解/M1/M3のA〜I内のラベル別回数差1以内を確認する。
+- テスト9固有問と学習確認9問それぞれで、同じ問題の決定的な表示順、全10ラベルの重複なし、「わからない」のJ/末尾固定、正解/M1/M3のA〜I内のラベル別回数差1以内を確認する。
 - 両群・参加者間・アプリ再起動後に同一問題の並びが変わらないことを確認する。
 - 採点・教授対象・unknown単独選択が表示ラベルではなく内部ID/メタデータに基づき、設問取得APIの選択肢に正誤属性やM1/M3分類を含まないことを確認する。
 - AttemptおよびTutorTurnのsnapshotが表示当時のラベル・本文・順序を保持し、既存mode未記録はdebug_fixedとして表示されることを確認する。

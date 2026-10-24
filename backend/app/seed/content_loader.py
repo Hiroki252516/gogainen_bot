@@ -19,7 +19,8 @@ CURRENT_LEARNING_CONTENT_VERSION = 3
 LEARNING_OPTION_ROLES = ("correct", "M1", "M3")
 LEARNING_SCENARIO_TYPES = ("application", "prediction", "comparison", "boundary", "diagnosis")
 ASSESSMENT_OPTION_ROLES = ("correct", "M1", "M3")
-ASSESSMENT_VARIANT_COUNTS = {"pretest": 1, "retest": 3}
+ASSESSMENT_BANK_VERSION = "scenario-actions-v1"
+ASSESSMENT_VARIANT_COUNTS = {"pretest": 1, "retest": 2}
 ASSESSMENT_ROLE_SLOTS = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
 UNKNOWN_OPTION = {"label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"}
 
@@ -128,6 +129,8 @@ def _validate_teaching_targets(content: dict[str, Any]) -> None:
 
 
 def _validate_content(content: dict[str, Any]) -> None:
+    if content.get("assessment_bank_version") != ASSESSMENT_BANK_VERSION:
+        raise ValueError("assessment bank version is invalid")
     if tuple(term.get("slug") for term in content.get("terms", [])) != ACTIVE_TERM_SLUGS:
         raise ValueError(f"active terms must be exactly {ACTIVE_TERM_SLUGS}")
     policy = content.get("selection_policy") or {}
@@ -178,8 +181,8 @@ def _validate_content(content: dict[str, Any]) -> None:
         if _contains_langgraph(term) or _contains_langgraph(term.get("rag_sections")):
             raise ValueError(f"{slug} must not mention LangGraph")
 
-    if sum(ASSESSMENT_VARIANT_COUNTS.values()) * len(ACTIVE_TERM_SLUGS) != 12:
-        raise ValueError("assessment bank must contain exactly 12 variants")
+    if sum(ASSESSMENT_VARIANT_COUNTS.values()) * len(ACTIVE_TERM_SLUGS) != 9:
+        raise ValueError("assessment bank must contain exactly 9 variants")
     _validate_teaching_targets(content)
 
 
