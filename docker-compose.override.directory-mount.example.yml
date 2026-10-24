@@ -1,0 +1,28 @@
+# Local Docker settings using a directory bind mount for the Codex app-server socket.
+# Copy this file to docker-compose.override.yml to use it locally.
+services:
+  frontend:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    build:
+      args:
+        INTERNAL_API_BASE_URL: http://backend:8000
+    environment:
+      INTERNAL_API_BASE_URL: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: ""
+
+  backend:
+    network_mode: !reset null
+    networks:
+      - default
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:app@db:5432/ai_tutor
+      CODEX_APP_SERVER_URL: unix:///codex-app-server/server.sock
+    volumes:
+      - type: bind
+        source: ./.local/codex-app-server
+        target: /codex-app-server
+        read_only: true
+        bind:
+          create_host_path: false
+      - ./.local/backend-data:/app/.local
