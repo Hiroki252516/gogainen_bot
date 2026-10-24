@@ -11,6 +11,18 @@
 - Docker Desktop for Mac
 - Docker Compose V2
 
+## CIでの起動確認
+
+PRでは`.github/workflows/ci.yml`がGitHub-hosted Ubuntu上でCompose設定の検証と、PostgreSQL・backend・frontendのMock構成での起動確認を行う。
+
+`.github/workflows/ci-macos.yml`はGitHub-hosted macOS 15 Intel runner上のDocker Desktopを使い、Mac標準起動と同じWebSocket/TCP app-server protocolを検査する。認証不要の偽app-serverをホスト上で起動し、Compose内backendが`host.docker.internal`経由で初期化と未ログイン応答を完了できること、frontendとAPI proxyが起動することを確認する。ただしCIはbridge networkを使うため、ローカル既定のhost networkと`127.0.0.1`を通る経路そのものは検査しない。Docker Desktopのhost networkingは別途有効化が必要な機能であり、CIではそれに依存しない。runnerはApple SiliconではなくIntelである。
+
+`.github/workflows/ci-wsl.yml`はDocker DesktopのWSL integrationを有効にしたWindows/WSL2 self-hosted runnerで実行する。checkoutをWSL内のLinuxファイルシステムへコピーした後、WSLからDocker Desktopのdaemonを利用し、WSL用のfile/directory socket overrideを検査する。Unix socketは偽app-serverを直接起動せず、実際の`scripts/start-codex-app-server.sh --docker`経由で作成する。GitHub-hosted Windows runnerではなく、専用ラベル`wsl2-docker-desktop`を持つrunnerを使う。Ubuntu-24.04、Docker Desktop WSL integration、Python 3.12（venv対応）、Node.js 22以上、npm、curl、Docker Composeを事前設定し、WSLの既定ユーザーをroot以外にする。Actions runnerはWindowsサービスではなくログインユーザーのセッションで起動し、CIはそのユーザー権限で実行する。PRごとのroot実行や外部パッケージインストーラー実行は行わない。
+
+macOS/WSLのplatform jobは、実際の`scripts/start-codex-app-server.sh`が起動する`codex`コマンドだけをCI用stubへ差し替え、認証不要の偽Codex app-serverをホスト上で起動する。backendコンテナに`AI_BACKEND=codex_app_server`と空のtoken fileを渡し、MacではWebSocket/TCP、WSLではUnix socket経由のprotocol初期化・未ログイン応答、Web画面、API proxyを検査する。実際のCodex認証情報はCIに渡さず、AI生成も実行しない。WSL self-hosted runnerはPRコードを実行するため、フォーク由来PRではjobを実行しない。runnerを専用または使い捨て環境で運用する。
+
+WSL jobはrunnerがオンラインになるまで待機する。各workflowには全テスト結果を集約する必須ゲートがある。workflowの実行とマージ禁止は別設定であり、マージを止めるにはGitHubのbranch protectionまたはrulesetで`CI required`、`macOS CI required`、`WSL CI required`をrequiredにする。フォーク由来PRではWSL jobを安全上skipし、その必須ゲートもskipを許容する。
+
 ## 現行Docker Compose構成
 
 ### WSL向けoverride（2026-10-21）

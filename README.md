@@ -172,6 +172,12 @@ cd frontend && npm test
 cd frontend && npm run build
 ```
 
+PRでは3つのGitHub Actions workflowも実行します。`CI`はGitHub-hosted Ubuntu上でMockを使った全体Compose起動を確認します。`macOS CI`はGitHub-hosted macOS 15 Intel上でDocker Desktopを使い、Mac標準起動と同じWebSocket/TCP app-server protocol、Web画面、API proxyを認証不要の偽app-serverで検査します。ただしCIはbridge networkを使うため、ローカル既定のhost network/`127.0.0.1`経路そのものは検査せず、Apple SiliconともCPUアーキテクチャが異なります。`WSL CI`はDocker DesktopのWSL統合を有効にしたWindows/WSL2 self-hosted runner上で実行し、checkoutをWSLのLinuxファイルシステムへコピーしてから、WSL用のfile/directory Unix socket overrideを検査します。Codex認証情報は渡さず、実AI生成もしません。
+
+WSL jobを動かすには、Ubuntu-24.04とDocker Desktop WSL integrationを設定したWindows 11/WSL2マシンにself-hosted runnerを登録し、`wsl2-docker-desktop`ラベルを付ける必要があります。WSLの既定ユーザーはroot以外とし、Python 3.12（venv対応）、Node.js 22以上、npm、curl、Docker DesktopのDocker CLI/Composeを事前に導入します。runnerはWindowsサービスではなくログインユーザーのセッションで起動し、CIはそのユーザー権限で実行します。self-hosted runnerはPRコードを実行するため、フォーク由来PRではjobを実行しません。runnerは専用または使い捨て環境で運用してください。Mac標準起動はWebSocket/TCP、WSL用overrideはUnix socketを使うため、OSごとに実際の接続方式を分けて検査します。macOS CIはUnix socket overrideの互換性を検証するものではありません。
+
+GitHub-hosted runnerではWSL2を安定して構成できないため、WSL jobは上記self-hosted runnerがオンラインになるまで待機します。各workflowには全テスト結果を集約する必須ゲートがあります。マージをブロックするには、branch protection/rulesetで`CI required`、`macOS CI required`、`WSL CI required`をrequired status checkに設定してください。フォーク由来PRではWSL jobを安全上skipし、その必須ゲートもskipを許容します。
+
 ## AIバックエンド
 
 通常実行の既定は `AI_BACKEND=codex_app_server` です。OpenAI APIキーは使わず、ホスト側のCodex app-serverが保持するChatGPT/Codexログインを使います。

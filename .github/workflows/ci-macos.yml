@@ -1,0 +1,65 @@
+name: macOS CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-tests-and-smoke:
+    name: macOS 15 Intel Docker Compose and app-server WebSocket smoke test
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      CI_APP_SERVER_MODES: tcp
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Docker Desktop
+        uses: gh-workflow/setup-docker-desktop-macos@0.0.14
+        with:
+          print_diagnostics: true
+
+      - name: Verify Docker Compose is available
+        run: docker compose version
+
+      - name: Run tests and Compose socket integration checks
+        run: bash scripts/ci/platform-checks.sh
+
+  macos-required:
+    name: macOS CI required
+    if: always()
+    needs: [macos-tests-and-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the macOS test job to pass
+        env:
+          MACOS_RESULT: ${{ needs.macos-tests-and-smoke.result }}
+        run: test "$MACOS_RESULT" = success

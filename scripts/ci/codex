@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "${1:-}" != app-server ] || [ "${2:-}" != --listen ] || [ -z "${3:-}" ]; then
+  printf 'CI stub only supports: codex app-server --listen URL\n' >&2
+  exit 2
+fi
+
+listen_url="$3"
+python_bin="${CI_PYTHON_BIN:-python3}"
+fake_server="${CI_FAKE_APP_SERVER_SCRIPT:?CI_FAKE_APP_SERVER_SCRIPT is required}"
+
+case "$listen_url" in
+  unix://*)
+    exec "$python_bin" "$fake_server" unix "${listen_url#unix://}"
+    ;;
+  ws://*)
+    address="${listen_url#ws://}"
+    host="${address%:*}"
+    port="${address##*:}"
+    port_file="${CI_FAKE_APP_SERVER_PORT_FILE:?CI_FAKE_APP_SERVER_PORT_FILE is required}"
+    exec "$python_bin" "$fake_server" tcp "$host" "$port" "$port_file"
+    ;;
+  *)
+    printf 'Unsupported CI stub URL: %s\n' "$listen_url" >&2
+    exit 2
+    ;;
+esac

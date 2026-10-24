@@ -1,0 +1,70 @@
+name: WSL CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wsl-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wsl-tests-and-smoke:
+    name: Ubuntu 24.04 on WSL 2 with Docker Desktop integration
+    runs-on: [self-hosted, Windows, X64, wsl2-docker-desktop]
+    timeout-minutes: 60
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      CI_APP_SERVER_MODES: file directory
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify the configured WSL 2 distribution
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $distribution = "Ubuntu-24.04"
+          $installed = wsl.exe --list --quiet | ForEach-Object { ($_ -replace "`0", "").Trim() }
+          if ($LASTEXITCODE -ne 0 -or $installed -notcontains $distribution) {
+            throw "Install Ubuntu-24.04 in WSL 2 and enable Docker Desktop WSL integration before registering this runner."
+          }
+          $kernel = (wsl.exe --distribution $distribution --exec uname -r).Trim()
+          if ($LASTEXITCODE -ne 0 -or $kernel -notmatch "microsoft-standard-WSL2") {
+            throw "The configured Ubuntu distribution is not running on the WSL 2 kernel: $kernel"
+          }
+
+      - name: Run the local WSL Docker Compose flow without Codex credentials
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $distribution = "Ubuntu-24.04"
+          $sourcePath = (wsl.exe --distribution $distribution --exec wslpath -u "$env:GITHUB_WORKSPACE").Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sourcePath)) { throw "Could not resolve the checkout path inside WSL." }
+          wsl.exe --distribution $distribution --exec bash "$sourcePath/scripts/ci/wsl-compose-runner.sh" "$sourcePath"
+          if ($LASTEXITCODE -ne 0) { throw "WSL tests or Docker Desktop socket integration test failed." }
+
+  wsl-required:
+    name: WSL CI required
+    if: always()
+    needs: [wsl-tests-and-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the WSL test job to pass when it runs
+        env:
+          WSL_RESULT: ${{ needs.wsl-tests-and-smoke.result }}
+        run: |
+          if [ "$WSL_RESULT" = skipped ]; then
+            echo "WSL self-hosted job is skipped for fork pull requests."
+            exit 0
+          fi
+          test "$WSL_RESULT" = success

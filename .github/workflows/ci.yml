@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -53,6 +55,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -69,3 +73,75 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  compose-smoke:
+    name: Docker Compose full-stack smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [backend-tests, frontend-checks]
+    env:
+      APP_ENV: ci
+      BACKEND_NETWORK_MODE: host
+      DATABASE_URL: postgresql+psycopg://app:app@db:5432/ai_tutor
+      AI_BACKEND: mock
+      CODEX_APP_SERVER_URL: unix:///tmp/unused-codex-app-server.sock
+      CODEX_WS_TOKEN_FILE: ""
+      CODEX_APP_SERVER_CWD: /tmp
+      CODEX_TURN_TIMEOUT_SEC: "5"
+      CODEX_MODEL: gpt-5.6-luna
+      CODEX_REASONING_EFFORT: low
+      RAG_BASE_DIR: /rag_agent_knowledge_base
+      MAX_LEARNING_TARGETS: "3"
+      MAX_TURNS_PER_TERM: "3"
+      EXPORT_DIR: /app/exports
+      FRONTEND_ORIGIN: http://localhost:3000
+      FRONTEND_PORT: "3000"
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: ai_tutor
+      POSTGRES_PORT: "5432"
+      FRONTEND_INTERNAL_API_BASE_URL: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: ""
+      COMPOSE_PROJECT_NAME: ci-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate Compose configuration
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml config --quiet
+
+      - name: Build and start the full stack
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up --build --detach --wait --wait-timeout 240
+
+      - name: Check web app, API proxy, and mock AI status
+        run: |
+          curl --fail --silent --show-error http://localhost:3000/ --output /dev/null
+          curl --fail --silent --show-error http://localhost:3000/api/health | jq --exit-status '.status == "ok"'
+          curl --fail --silent --show-error http://localhost:3000/api/admin/ai/status | jq --exit-status '.ai_backend == "mock" and .app_server_reachable == null and .logged_in == null'
+
+      - name: Print Compose logs after failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color
+
+      - name: Stop and remove CI containers and volumes
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down --volumes --remove-orphans
+
+  ci-required:
+    name: CI required
+    if: always()
+    needs: [backend-tests, frontend-checks, compose-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every CI job to pass
+        env:
+          BACKEND_RESULT: ${{ needs.backend-tests.result }}
+          FRONTEND_RESULT: ${{ needs.frontend-checks.result }}
+          COMPOSE_RESULT: ${{ needs.compose-smoke.result }}
+        run: |
+          test "$BACKEND_RESULT" = success
+          test "$FRONTEND_RESULT" = success
+          test "$COMPOSE_RESULT" = success
