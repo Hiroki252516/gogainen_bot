@@ -7,8 +7,8 @@ from fastapi import HTTPException
 from app.core.question_sets import LEARNING_CONTENT_VERSIONS, question_set_mode
 
 
-CURRENT_EXPERIMENT_SPEC_VERSION = 15
-CURRENT_PROTOCOL_ID = "experiment-plan-2026-10-25-multi-agent-round2-v1"
+CURRENT_EXPERIMENT_SPEC_VERSION = 16
+CURRENT_PROTOCOL_ID = "experiment-plan-2026-10-25-multi-agent-round3-v1"
 MAX_POST_PRETEST_TESTS = 2
 
 

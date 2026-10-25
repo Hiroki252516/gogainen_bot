@@ -1,6 +1,8 @@
 # マルチエージェント確認問題V2の改訂
 
-## 現行版と適用範囲
+本書は仕様版15・学習バンクv8を採用した際の記録である。現行版16・学習バンクv9でもV2の本文・選択肢・表示・通常経路は維持する。V3の改訂と現行の保存・検証条件は[29](29_multi_agent_round_three_revision.md)を参照する。
+
+## 採用時の版と適用範囲
 
 実験仕様版15 / `experiment-plan-2026-10-25-multi-agent-round2-v1`。新規通常版参加者は[learning_questions_v8.yml](../backend/app/seed/content/standard/learning_questions_v8.yml)と学習版8を使用する。易しい版は4を維持する。ファイル名のv8は学習バンクの改訂版であり、問題内のlearning_round_v2は2回目の学習セッションを指す。
 

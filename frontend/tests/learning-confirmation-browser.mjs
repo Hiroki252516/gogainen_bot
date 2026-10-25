@@ -1,15 +1,18 @@
 // Synthetic responses belong only in a separate Mock database.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const { LEARNING_VERIFY_ISOLATED, LEARNING_UI_BASE_URL, LEARNING_PLAYWRIGHT_MODULE, LEARNING_SCREENSHOT_DIR, LEARNING_TERM_SLUG, LEARNING_VARIANT_INDEX, LEARNING_QUESTION_SET_MODE } = process.env;
+const { LEARNING_VERIFY_ISOLATED, LEARNING_UI_BASE_URL, LEARNING_PLAYWRIGHT_MODULE, LEARNING_SCREENSHOT_DIR, LEARNING_TERM_SLUG, LEARNING_VARIANT_INDEX, LEARNING_QUESTION_SET_MODE, LEARNING_FIXTURE_DB_URL } = process.env;
 assert.equal(LEARNING_VERIFY_ISOLATED, "1");
 assert(LEARNING_UI_BASE_URL && LEARNING_PLAYWRIGHT_MODULE && LEARNING_SCREENSHOT_DIR);
 const base = new URL(LEARNING_UI_BASE_URL);
 const termSlug = LEARNING_TERM_SLUG ?? "llm_knowledge";
 const variantIndex = Number(LEARNING_VARIANT_INDEX ?? 1);
 const questionSet = LEARNING_QUESTION_SET_MODE ?? "standard";
-assert([1, 2].includes(variantIndex));
+assert([1, 2, 3].includes(variantIndex));
+if (variantIndex === 3) assert(LEARNING_FIXTURE_DB_URL, "V3 requires an explicit isolated fixture database.");
 assert(["standard", "easy"].includes(questionSet));
 assert(variantIndex === 1 || termSlug === "multi_agent");
 assert(questionSet === "standard" || (termSlug === "multi_agent" && variantIndex === 2));
@@ -68,8 +71,20 @@ const easyRoundTwoBodies = [
   "複数のAIの連携を、一つのモデルの処理速度を上げる機能として扱う。"
 ];
 const easyRoundTwoQuestionBody = "調査するAIと予定を作るAIを用意した。しかし調査結果を予定の担当へ送る処理は作っていない。\n\nこの場面について正しい説明を3つ選びなさい。";
-const bodies = questionSet === "easy" ? easyRoundTwoBodies : variantIndex === 2 ? roundTwoBodies : termSlug === "multi_agent" ? multiBodies : llmBodies;
-const questionBody = questionSet === "easy" ? easyRoundTwoQuestionBody : variantIndex === 2 ? roundTwoQuestionBody : termSlug === "multi_agent" ? multiQuestionBody : llmQuestionBody;
+const roundThreeBodies = [
+  "案1でWi-Fiの設定手順が検索ツールから返ってきた場合、その手順が学生の端末に合うかを確認し、どの対処を案内するかは、ツールを使うAIエージェントが判断する。",
+  "案2では、調査担当のAIが見つけた設定手順や障害情報を、回答担当のAIが受け取り、学生の問い合わせ内容に合わせて説明を組み立てることで、2つのAIが連携できる。",
+  "案1で検索ツールを2種類利用しても、AIエージェントが2つに増えるわけではない。案2では調査と回答を別々のAIに担当させ、結果を受け渡している。",
+  "案1でWi-Fiの設定手順が検索結果の上位に表示された場合、その手順は学生の端末やOSに合うものとして選ばれていると考え、適用条件を確かめずに案内する。",
+  "案2で調査担当のAIが設定マニュアルを調べ、接続設定のやり直しを提案した場合、同じ資料を共有する回答担当のAIも同じ対処方法を選ぶと考える。",
+  "案1でマニュアル検索と障害情報確認の2つのツールを使って回答すると、使った情報はそのAIの記憶に残るため、記録を保存する仕組みがなくても次の問い合わせに利用できる。",
+  "案1で検索ツールが返したWi-Fi設定手順の説明文は、学生への回答を作るために使われるので、その文章も案2の調査担当のAIと同じ、1つのエージェントとして数える。",
+  "案1ではマニュアル検索と障害情報確認という2つのツールが別々に結果を返すので、ツールが2つあることを、調査担当と回答担当の2つのAIが協力する構成と同じものとして扱う。",
+  "案2で調査担当のAIが資料を読んで質問に必要な情報を整理しても、その処理は案1のマニュアル検索ツールと同じ種類の検索機能として分類できる。"
+];
+const roundThreeQuestionBody = "大学が、学生からの「学内Wi-Fiにつながらない」という問い合わせに対応するAIシステムを開発している。開発担当者は、次の2つの設計を比較している。\n\n案1： 1つのAIエージェントが、Wi-Fiの設定マニュアルを検索するツールと、大学のネットワーク障害情報を調べるツールを使い、学生への回答を作成する。\n\n案2： 調査担当のAIエージェントが設定マニュアルや障害情報を調べて必要な内容を整理し、その結果を受け取った回答担当のAIエージェントが、学生への回答を作成する。\n\nなお、ここでいう検索ツールとは、指定された資料や情報を探して結果を返す機能を指す。\n\n案1と案2の仕組みの違いについて、適切な説明を3つ選びなさい。";
+const bodies = questionSet === "easy" ? easyRoundTwoBodies : variantIndex === 3 ? roundThreeBodies : variantIndex === 2 ? roundTwoBodies : termSlug === "multi_agent" ? multiBodies : llmBodies;
+const questionBody = questionSet === "easy" ? easyRoundTwoQuestionBody : variantIndex === 3 ? roundThreeQuestionBody : variantIndex === 2 ? roundTwoQuestionBody : termSlug === "multi_agent" ? multiQuestionBody : llmQuestionBody;
 
 async function assertQuestionLayout(page) {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -140,6 +155,37 @@ try {
         assert.equal(scored.next_step, "learning_targets");
       }
     }
+
+    if (variantIndex === 3) {
+      const session = await api(page.request, "/api/tutor-sessions", "POST", { participant_id: created.participant_id, term_slug: termSlug });
+      // Only the explicitly selected temporary Mock DB may contain a synthetic third session.
+      const fixture = spawnSync(fileURLToPath(new URL("../../backend/.venv/bin/python", import.meta.url)), ["-c", `
+import sys
+import tempfile
+from pathlib import Path
+from sqlalchemy import create_engine, select
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session
+from app.core.experiment_spec import can_resume
+from app.models import Participant, TutorSession, TutorTurn
+url = make_url(sys.argv[1])
+assert url.drivername == "sqlite" and url.database
+path = Path(url.database).resolve()
+assert path.is_file() and any(path.is_relative_to(root.resolve()) for root in (Path("/tmp"), Path(tempfile.gettempdir())))
+engine = create_engine(url)
+with Session(engine) as db:
+    participant = db.get(Participant, sys.argv[2])
+    session = db.get(TutorSession, sys.argv[3])
+    assert participant and can_resume(participant) and participant.question_set_mode == "standard"
+    assert participant.current_step == "learning_targets"
+    assert session and session.participant_id == participant.id and session.ended_at is None
+    assert db.scalar(select(TutorTurn.id).where(TutorTurn.tutor_session_id == session.id)) is None
+    session.session_index = 3
+    db.commit()
+engine.dispose()
+`, LEARNING_FIXTURE_DB_URL, created.participant_id, session.tutor_session_id], { cwd: fileURLToPath(new URL("../../backend", import.meta.url)), encoding: "utf8" });
+      assert.equal(fixture.status, 0, fixture.stderr || fixture.stdout);
+    }
     await page.addInitScript((record) => {
       localStorage.setItem("participant_id", record.participant_id);
       localStorage.setItem("display_code", record.display_code);
@@ -157,7 +203,7 @@ try {
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
     await assertQuestionLayout(page);
-    const preserveLines = questionSet === "standard" && termSlug === "multi_agent" && variantIndex === 2;
+    const preserveLines = questionSet === "standard" && termSlug === "multi_agent" && [2, 3].includes(variantIndex);
     assert.equal(await page.locator(".problem-block > p").evaluate((element) => getComputedStyle(element).whiteSpace), preserveLines ? "pre-wrap" : "normal");
     assert.equal(await page.locator(".problem-block > p strong").count(), 0);
     await page.screenshot({ path: `${LEARNING_SCREENSHOT_DIR}/${caseName}-question.png`, fullPage: true });
