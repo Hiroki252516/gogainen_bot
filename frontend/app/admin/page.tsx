@@ -436,7 +436,7 @@ export default function AdminPage() {
               ) : null}
               {loginError ? <p className="danger">{loginError}</p> : null}
               {ai ? (
-                <div className="reasoning-effort-control" aria-labelledby="reasoning-effort-title">
+                <div className="reasoning-effort-control" aria-labelledby="ai-model-title">
                   <strong id="ai-model-title">AIモデル</strong>
                   <p>{ai.ai_backend === "codex_app_server" ? "有効モデル" : "設定値（Mockでは未使用）"}: {ai.model || "不明"}</p>
                   <div className="reasoning-effort-buttons" role="group" aria-labelledby="ai-model-title">
