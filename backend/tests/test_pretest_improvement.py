@@ -11,8 +11,8 @@ from app.db import session as database
 from app.models import Attempt, Base, EvaluationSummary, Participant, Question, QuestionOption, Term
 from app.seed.content_loader import (
     EASY_CONTENT_PATH, LEARNING_EASY_CONTENT_PATH, SCENARIO_ACTIONS_V1_CONTENT_PATH, SCENARIO_ACTIONS_V2_CONTENT_PATH, SCENARIO_ACTIONS_V3_CONTENT_PATH,
-    _assessment_options, _validate_content, _validate_v3_content,
-    assessment_question_spec, load_content, load_learning_easy_content, load_learning_v3_content,
+    _assessment_options, _validate_content, _validate_learning_content,
+    assessment_question_spec, load_content, load_learning_easy_content, load_learning_content,
 )
 from app.seed.seed_questions import _upsert_question, seed_database
 from app.services import experiment
@@ -104,9 +104,9 @@ def test_option_lengths_are_unrestricted_but_structure_is_validated(mode, bank, 
         variant = content["terms"][0]["questions"]["pretest"][0]
         validate = lambda: _validate_content(content, mode)
     else:
-        content = deepcopy(load_learning_easy_content() if mode == "easy" else load_learning_v3_content())
+        content = deepcopy(load_learning_easy_content() if mode == "easy" else load_learning_content())
         variant = content["terms"]["llm_knowledge"]["variants"][0]
-        validate = lambda: _validate_v3_content(content, assessment, mode)
+        validate = lambda: _validate_learning_content(content, assessment, mode)
     choices = variant["choices"]
     if change == "lengths":
         choices["correct"][0] = "短"

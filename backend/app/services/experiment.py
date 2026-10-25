@@ -155,9 +155,10 @@ def _learning_question_spec(
     learning_stage: str,
     variant_index: int = 1,
     mode: str = STANDARD,
+    *, content_version: int | None = None,
 ) -> dict[str, Any]:
     try:
-        return learning_question_spec(term_slug, learning_stage, variant_index, mode)
+        return learning_question_spec(term_slug, learning_stage, variant_index, mode, content_version=content_version)
     except (KeyError, StopIteration, ValueError) as exc:
         raise HTTPException(status_code=400, detail="fixed learning question not found") from exc
 
@@ -1811,12 +1812,13 @@ def _tutoring_generation_context(
             active_misconception_type = "unknown"
 
     mode = question_set_mode(participant.question_set_mode)
-    learning_content_version = LEARNING_CONTENT_VERSIONS[mode]
+    learning_content_version = participant.learning_content_version
     spec = _learning_question_spec(
         term.slug,
         position["learning_stage"],
         learning_variant_index,
         mode,
+        content_version=learning_content_version,
     )
     previous_turn = (
         db.query(TutorTurn)
@@ -2557,6 +2559,7 @@ async def respond_tutor_turn(
         learning_stage,
         variant_index,
         question_set_mode(participant.question_set_mode),
+        content_version=participant.learning_content_version,
     )
     selected_options = _selected_learning_options(
         spec,

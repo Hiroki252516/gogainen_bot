@@ -12,6 +12,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, can_resume
+from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD
 from app.main import app
 from app.db import session as database
 from app.db.session import SessionLocal
@@ -37,7 +38,7 @@ def study(tmp_path):
 
 def participant(db, code="T", group="proposed", protocol=CURRENT_PROTOCOL_ID):
     row = Participant(display_code=code, group_condition=group, protocol_id=protocol,
-                      experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, learning_content_version=3, consent_checked=True, current_step="learning")
+                      experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD], consent_checked=True, current_step="learning")
     db.add(row)
     db.flush()
     return row
