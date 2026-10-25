@@ -29,6 +29,9 @@ for (const text of ["用語の補足", "!glossary?.entries.length", "<dl>", "<dt
   if (!glossary.includes(text)) throw new Error(`learning glossary missing: ${text}`);
 }
 const glossaryPage = fs.readFileSync(new URL("../app/learning/[termSlug]/page.tsx", import.meta.url), "utf8");
+for (const text of ['const preserveQuestionLines = termSlug === "multi_agent"', 'learning_variant_index === 2', 'questionBody.includes("\\n\\n案1：")', 'questionBody.includes("\\n\\n案2：")', 'className={preserveQuestionLines ? "preserve-lines" : undefined}']) {
+  if (!glossaryPage.includes(text)) throw new Error(`round-two comparison line breaks must stay scoped: ${text}`);
+}
 for (const text of ['glossary={turn.glossary}', 'glossary={feedback.glossary}']) {
   if (!glossaryPage.includes(text)) throw new Error(`learning glossary placement missing: ${text}`);
 }

@@ -1,6 +1,6 @@
 # 通常版LLM知識の確認問題改訂
 
-本書は実験仕様版12・通常版学習バンクv5を採用した際の改訂記録である。現行の仕様版14・学習バンクv7でも、このLLM知識の問題本文・選択肢は変更しない。マルチエージェントの改訂履歴は[26](26_multi_agent_confirmation_revision.md)、現行版の本文と適用範囲は[27](27_multi_agent_choice_revision.md)を参照する。
+本書は実験仕様版12・通常版学習バンクv5を採用した際の改訂記録である。現行の仕様版15・学習バンクv8でも、このLLM知識の問題本文・選択肢は変更しない。マルチエージェントのV1改訂は[26](26_multi_agent_confirmation_revision.md)・[27](27_multi_agent_choice_revision.md)、今回のV2改訂と現行条件は[28](28_multi_agent_round_two_revision.md)を参照する。
 
 ## 適用範囲と履歴
 
