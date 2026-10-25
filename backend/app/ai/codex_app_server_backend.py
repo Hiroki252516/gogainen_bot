@@ -13,7 +13,12 @@ from app.ai.interaction_history import SHARED_QUESTION_ROUTE_VERSION, interactio
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 
 from app.core.config import get_settings
-from app.core.runtime_config import normalize_reasoning_effort
+from app.core.runtime_config import (
+    STUDY_MODEL,
+    STUDY_REASONING_EFFORT,
+    current_ai_runtime_settings,
+    normalize_reasoning_effort,
+)
 from app.ai.mandatory_elements import (
     expected_mandatory_type,
     mandatory_elements_schema,
@@ -152,10 +157,15 @@ class _CodexRpcClient:
 class CodexAppServerBackend:
     provider = "codex_app_server"
 
-    def __init__(self, reasoning_effort: str | None = None) -> None:
+    def __init__(self, reasoning_effort: str | None = None, model: str | None = None) -> None:
         self.settings = get_settings()
-        configured_effort = reasoning_effort or self.settings.codex_reasoning_effort
-        self.reasoning_effort = normalize_reasoning_effort(configured_effort)
+        configured_model, configured_effort = (None, None)
+        if model is None or reasoning_effort is None:
+            configured_model, configured_effort = current_ai_runtime_settings()
+        self.model = model if model is not None else configured_model
+        self.reasoning_effort = normalize_reasoning_effort(
+            reasoning_effort if reasoning_effort is not None else configured_effort
+        )
 
     async def status(self) -> dict[str, Any]:
         try:
@@ -371,7 +381,7 @@ class CodexAppServerBackend:
             "approvalPolicy": "never",
             "sandbox": "read-only",
             "baseInstructions": _BASE_INSTRUCTIONS,
-            "model": self.settings.codex_model or None,
+            "model": self.model or None,
         }
         turn_start_params: dict[str, Any] = {
             "threadId": None,
@@ -379,7 +389,7 @@ class CodexAppServerBackend:
             "outputSchema": output_schema,
             "approvalPolicy": "never",
             "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
-            "model": self.settings.codex_model or None,
+            "model": self.model or None,
             "effort": self.reasoning_effort,
         }
         audit = {
@@ -394,8 +404,13 @@ class CodexAppServerBackend:
             "question_route_version": (audit_context or {}).get("question_route_version"),
             "actual_ai_input": (audit_context or {}).get("actual_ai_input"),
             "generation_attempt": (audit_context or {}).get("generation_attempt"),
-            "model": self.settings.codex_model,
+            "model": self.model,
             "reasoning_effort": self.reasoning_effort,
+            "study_settings_reference": {
+                "model": STUDY_MODEL,
+                "reasoning_effort": STUDY_REASONING_EFFORT,
+            },
+            "study_settings_match": self.model == STUDY_MODEL and self.reasoning_effort == STUDY_REASONING_EFFORT,
             "thread_start_params": thread_start_params,
             "turn_start_params": turn_start_params,
             "prompt": prompt,

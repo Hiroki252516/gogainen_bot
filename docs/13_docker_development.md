@@ -2,7 +2,7 @@
 
 ## 計画書の目標と環境例
 
-現行既定モデル/推論設定はgpt-5.6-luna / low。実施前に配布設定・管理上書き・実送信を確認する。[D04](20_experiment_plan_alignment.md#現行実装との差分)を参照する。今回の検証は隔離SQLiteとローカル実行であり、配布先PostgreSQL/Dockerの確認とは区別する。
+アプリ側標準モデル/推論設定はgpt-6-luna / low。Word計画書原本のgpt-5.6-luna / low記載は変更していない。未指定時のCompose/.env.example既定はgpt-6-lunaだが、明示されたCODEX_MODEL環境変数が優先する。管理画面での一時上書きはbackend再起動後に環境値へ戻る。実施前に配布設定・管理上書き・実送信を確認する。[D04](20_experiment_plan_alignment.md#現行実装との差分)を参照する。今回の検証は隔離SQLiteとローカル実行であり、配布先PostgreSQL/Dockerの確認とは区別する。
 
 ## Target Environment
 
@@ -49,7 +49,7 @@ services:
       CODEX_WS_TOKEN_FILE: ${CODEX_WS_TOKEN_FILE}
       CODEX_APP_SERVER_CWD: ${CODEX_APP_SERVER_CWD}
       CODEX_TURN_TIMEOUT_SEC: ${CODEX_TURN_TIMEOUT_SEC}
-      CODEX_MODEL: ${CODEX_MODEL}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-6-luna}
       CODEX_REASONING_EFFORT: ${CODEX_REASONING_EFFORT}
       RAG_BASE_DIR: ${RAG_BASE_DIR}
       MAX_LEARNING_TARGETS: ${MAX_LEARNING_TARGETS}
@@ -125,7 +125,7 @@ AI_BACKEND=codex_app_server
 CODEX_APP_SERVER_URL=ws://127.0.0.1:4500
 CODEX_APP_SERVER_LISTEN_URL=ws://127.0.0.1:4500
 CODEX_WS_TOKEN_FILE=
-CODEX_MODEL=gpt-5.6-luna
+CODEX_MODEL=gpt-6-luna
 CODEX_APP_SERVER_CWD=/tmp
 CODEX_TURN_TIMEOUT_SEC=120
 CODEX_REASONING_EFFORT=low

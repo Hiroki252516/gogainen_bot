@@ -236,7 +236,7 @@ MVPでは耐久キューを導入しない。#97の後続用語の先行教材�
 | `CODEX_WS_TOKEN_FILE` | optional | capability token。現行composeの既定環境では設定しない |
 | `CODEX_APP_SERVER_CWD` | `/tmp` | app-server threadの作業ディレクトリ |
 | `CODEX_TURN_TIMEOUT_SEC` | `120` | AI応答タイムアウト |
-| `CODEX_MODEL` | `gpt-5.6-luna` | Codex app-serverへ渡すモデル |
+| `CODEX_MODEL` | `gpt-6-luna` | Codex app-serverへ渡すモデル。環境設定が優先。管理画面の一時上書きはbackend再起動で消える |
 | `CODEX_REASONING_EFFORT` | `low` | 現行既定値。管理上書き不一致を警告・監査 |
 | `RAG_BASE_DIR` | `./rag_agent_knowledge_base` | read-only RAG資産のルート |
 | `MAX_LEARNING_TARGETS` | `3` | 学習対象数の上限。現行seedは3用語 |

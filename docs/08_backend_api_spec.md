@@ -42,6 +42,9 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 | 教材表示記録 | POST `/api/tutor-turns/{id}/material-view` |
 | 6仮説の群別集計 | GET `/api/admin/evaluation-summary` のhypotheses |
 | 6仮説CSV | GET `/api/admin/export/hypothesis_metrics.csv`, `/hypothesis_group_summary.csv` |
+| AI設定状態 | GET `/api/admin/ai/status` |
+| 推論レベル設定 | POST `/api/admin/ai/reasoning-effort` (`reasoning_effort`: `low`, `medium`, `high`) |
+| AIモデル設定 | POST `/api/admin/ai/model` (`model`: `gpt-6.1-sol` または `gpt-6-luna`) |
 | 選択肢配置設定の取得 | GET `/api/admin/option-order` |
 | 選択肢配置設定の更新 | PUT `/api/admin/option-order` (`mode`: `debug_fixed` または `randomized`) |
 | 管理者ログ | GET `/api/admin/participants/{id}/logs`, `/logs.csv`, `/logs_excel.csv` |
@@ -79,5 +82,7 @@ NULL・版1〜6・未対応版・旧protocol_idは、本文検証・冪等再送
 ランダム配置の学習問題で送る `option_id` は、表示済みのTutorTurnスナップショットに保存するランダムIDであり、元の選択肢ラベルや判定役割を符号化しない。回答時はそのスナップショットを内部選択肢へ照合する。設問再取得・送信再試行では保存済みTutorTurnを返すため、同じ表示に対するIDは維持される。問題の表示ラベルと順序自体は問題バンクから決定論的に生成する。
 
 ## 問題版と集計版
+
+AIモデル・推論レベル設定はDBへ保存しないbackendプロセス内の一時設定であり、両群・進行中参加者にも次のAI呼び出しから適用する。状態/更新応答は有効値と選択肢を返す。モデル選択はcodex_app_serverでのみ適用でき、Mockでは409で拒否する。実際に使ったモデル・推論レベルと標準条件への一致はAI監査JSONに残る。環境変数の明示値は既定値より優先し、backend再起動後に管理上書きは消える。
 
 GET/PUT /api/admin/question-setはmode=standard|easyを扱い、新規参加者だけに適用する。問題版と配置は別設定。evaluation-summary、logs/overview、仮説2種CSVのquery question_set_mode（既定standard）で集計版を選ぶ。生ログは全版保持。参加者向け問題APIへ正答・分類情報は追加しない。他版の問題IDは409、不足する自版問題は503。API一覧と保存契約は[22](22_question_set_modes.md)。

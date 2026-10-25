@@ -25,7 +25,13 @@ from app.ai.teaching_contract import (
     PROMPT_CONTRACT_VERSION,
 )
 from app.core.config import get_settings
-from app.core.runtime_config import reset_reasoning_effort_override, set_reasoning_effort
+from app.core.runtime_config import (
+    current_ai_runtime_settings,
+    reset_model_override,
+    reset_reasoning_effort_override,
+    set_model,
+    set_reasoning_effort,
+)
 from app.db.session import SessionLocal, _backfill_completion_reasons, _backfill_evaluation_completion_flags, engine
 from app.main import app
 from app.models import (
@@ -1319,7 +1325,7 @@ def test_wrong_learning_answer_prefetches_next_turn_and_reuses_one_open_turn(mon
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
     first_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     backend = CoordinatedBackend()
-    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: backend)
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None, model=None: backend)
     result: dict[str, object] = {}
 
     prefetch_client = TestClient(app, backend_options={"use_uvloop": True}) if uvloop else TestClient(app)
@@ -1377,7 +1383,7 @@ def test_prefetch_failure_keeps_answer_successful_and_falls_back_to_sync_generat
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
     first_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
     backend = FailingOnceBackend()
-    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: backend)
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None, model=None: backend)
 
     response_client = TestClient(app, backend_options={"use_uvloop": True}) if uvloop else TestClient(app)
     with response_client:
@@ -1504,7 +1510,7 @@ def test_learning_answer_does_not_commit_turn_when_explanation_fails(monkeypatch
     pid = _create_participant_with_pretest(labels=["D", "E", "F"])
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
     turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).json()
-    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: FailingBackend())
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None, model=None: FailingBackend())
     response = client.post(
         f"/api/tutor-turns/{turn['turn_id']}/respond",
         json={"selected_option_ids": _ids_for_learning_role_mix(turn["practice_question"], "llm_knowledge", turn["learning_stage"])},
@@ -3034,22 +3040,29 @@ def test_rag_is_limited_by_topic_and_excludes_langgraph():
 
 def test_model_and_reasoning_settings_are_updated():
     settings = get_settings()
-    assert settings.codex_model == "gpt-5.6-luna"
-    assert settings.codex_reasoning_effort == "low"
+    assert type(settings).model_fields["codex_model"].default == "gpt-6-luna"
+    assert type(settings).model_fields["codex_reasoning_effort"].default == "low"
     backend = CodexAppServerBackend()
-    assert backend.settings.codex_model == "gpt-5.6-luna"
-    assert backend.settings.codex_reasoning_effort == "low"
+    assert backend.model == current_ai_runtime_settings()[0]
+    assert backend.reasoning_effort == current_ai_runtime_settings()[1]
 
 
-def test_admin_reasoning_effort_status_and_updates():
+def test_admin_reasoning_effort_status_and_updates(monkeypatch):
     reset_reasoning_effort_override()
+    reset_model_override()
+    monkeypatch.setattr(get_settings(), "codex_model", "gpt-6-luna")
     try:
         status = client.get("/api/admin/ai/status")
         assert status.status_code == 200, status.text
         assert status.json()["reasoning_effort"] == "low"
         assert status.json()["study_settings_match"] is True
+        assert status.json()["model"] == "gpt-6-luna"
+        assert status.json()["allowed_models"] == ["gpt-6.1-sol", "gpt-6-luna"]
+        assert status.json()["study_settings_reference"] == {"model": "gpt-6-luna", "reasoning_effort": "low"}
         assert status.json()["allowed_reasoning_efforts"] == ["low", "medium", "high"]
         assert status.json()["can_change_reasoning_effort"] is True
+        assert status.json()["can_change_model"] is False
+        assert client.post("/api/admin/ai/model", json={"model": "gpt-6.1-sol"}).status_code == 409
 
         for effort in ("low", "medium", "high"):
             response = client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": effort})
@@ -3061,6 +3074,36 @@ def test_admin_reasoning_effort_status_and_updates():
         assert invalid.status_code == 422, invalid.text
     finally:
         reset_reasoning_effort_override()
+        reset_model_override()
+
+
+def test_admin_model_selection_updates_effective_setting_independently(monkeypatch):
+    reset_reasoning_effort_override()
+    reset_model_override()
+    monkeypatch.setattr(get_settings(), "ai_backend", "codex_app_server")
+    monkeypatch.setattr(get_settings(), "codex_model", "gpt-6-luna")
+    try:
+        for model in ("gpt-6.1-sol", "gpt-6-luna"):
+            response = client.post("/api/admin/ai/model", json={"model": model})
+            assert response.status_code == 200, response.text
+            assert response.json()["model"] == model
+            assert response.json()["reasoning_effort"] == "low"
+            assert response.json()["study_settings_match"] is (model == "gpt-6-luna")
+            assert response.json()["allowed_models"] == ["gpt-6.1-sol", "gpt-6-luna"]
+            assert current_ai_runtime_settings() == (model, "low")
+
+        effort_response = client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": "high"})
+        assert effort_response.status_code == 200, effort_response.text
+        assert effort_response.json()["model"] == "gpt-6-luna"
+        assert effort_response.json()["reasoning_effort"] == "high"
+
+        invalid = client.post("/api/admin/ai/model", json={"model": "gpt-5.6-luna"})
+        assert invalid.status_code == 422, invalid.text
+        reset_model_override()
+        assert current_ai_runtime_settings() == ("gpt-6-luna", "high")
+    finally:
+        reset_reasoning_effort_override()
+        reset_model_override()
 
 
 def test_admin_reasoning_effort_update_is_allowed_while_participant_is_active():
@@ -3089,8 +3132,10 @@ def test_admin_reasoning_effort_update_is_allowed_while_participant_is_active():
             reset_reasoning_effort_override()
 
 
-def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
-    backend = CodexAppServerBackend(reasoning_effort="low")
+@pytest.mark.parametrize("model", ["gpt-6.1-sol", "gpt-6-luna"])
+@pytest.mark.parametrize("effort", ["low", "medium", "high"])
+def test_codex_turn_start_uses_requested_model_and_reasoning_effort(monkeypatch, model, effort):
+    backend = CodexAppServerBackend(model=model, reasoning_effort=effort)
 
     class FakeRpc:
         def __init__(self):
@@ -3136,11 +3181,16 @@ def test_codex_turn_start_uses_requested_reasoning_effort(monkeypatch):
     assert result == {"ok": True}
     assert result.raw_text == '\n{"ok": true}\n'
     assert [method for method, _ in rpc.calls][:3] == ["initialize", "initialized", "account/read"]
+    thread_start = next(params for method, params in rpc.calls if method == "thread/start")
     turn_start = next(params for method, params in rpc.calls if method == "turn/start")
-    assert turn_start["model"] == "gpt-5.6-luna"
-    assert turn_start["effort"] == "low"
+    assert thread_start["model"] == model
+    assert turn_start["model"] == model
+    assert turn_start["effort"] == effort
     assert result.request_audit["transmission"]["turn_start_sent"] is True
     assert result.request_audit["transmission"]["turn_completed"] is True
+    assert result.request_audit["model"] == model
+    assert result.request_audit["reasoning_effort"] == effort
+    assert result.request_audit["study_settings_match"] is (model == "gpt-6-luna" and effort == "low")
     assert result.request_audit["output_schema_sha256"]
 
 
@@ -3155,7 +3205,7 @@ def test_ai_call_logs_effective_reasoning_effort(monkeypatch):
             assert payload["marker"] == "runtime-effort-test"
             return {"ok": True}
 
-    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: FakeBackend())
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None, model=None: FakeBackend())
     db = SessionLocal()
     try:
         result = asyncio.run(
@@ -3177,6 +3227,50 @@ def test_ai_call_logs_effective_reasoning_effort(monkeypatch):
     finally:
         db.close()
         reset_reasoning_effort_override()
+
+
+def test_ai_call_pins_model_and_reasoning_for_each_invocation(monkeypatch):
+    reset_reasoning_effort_override()
+    reset_model_override()
+    monkeypatch.setattr(get_settings(), "codex_model", "gpt-6-luna")
+    set_model("gpt-6.1-sol")
+    set_reasoning_effort("medium")
+    selected_settings = []
+
+    class FakeBackend:
+        provider = "test_backend"
+
+        async def capture_runtime_settings(self, _payload):
+            set_model("gpt-6-luna")
+            set_reasoning_effort("high")
+            return {"ok": True}
+
+    def backend_factory(*, model, reasoning_effort):
+        selected_settings.append((model, reasoning_effort))
+        return FakeBackend()
+
+    monkeypatch.setattr(experiment_service, "get_ai_backend", backend_factory)
+    db = SessionLocal()
+    try:
+        asyncio.run(experiment_service._ai_call(db, "capture_runtime_settings", {}))
+        first_log = (
+            db.query(AICallLog)
+            .filter_by(purpose="capture_runtime_settings")
+            .order_by(AICallLog.created_at.desc())
+            .first()
+        )
+        assert first_log is not None
+        assert selected_settings[0] == ("gpt-6.1-sol", "medium")
+        assert first_log.request_payload["model"] == "gpt-6.1-sol"
+        assert first_log.request_payload["reasoning_effort"] == "medium"
+        assert first_log.request_payload["study_settings_match"] is False
+
+        asyncio.run(experiment_service._ai_call(db, "capture_runtime_settings", {}))
+        assert selected_settings[1] == ("gpt-6-luna", "high")
+    finally:
+        db.close()
+        reset_reasoning_effort_override()
+        reset_model_override()
 
 
 def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch):
@@ -3243,7 +3337,7 @@ def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch
             return {"method": "turn/completed", "params": {"turn": {"id": "turn-id", "status": "completed"}}}
 
     monkeypatch.setattr(backend, "_client", lambda: FakeRpc())
-    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: backend)
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None, model=None: backend)
 
     db = SessionLocal()
     try:
@@ -3264,7 +3358,8 @@ def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch
         validation = experiment_service.validate_teaching_contract(normalized_response, "M1", payload, "記憶プロセス")
         assert "corrected_claim:evidence_not_in_section" in validation["missing"]
         audit = log.request_payload["effective_request"]
-        assert audit["model"] == "gpt-5.6-luna"
+        assert audit["model"] == log.request_payload["model"]
+        assert audit["study_settings_reference"] == {"model": "gpt-6-luna", "reasoning_effort": "low"}
         assert audit["reasoning_effort"] == log.request_payload["reasoning_effort"]
         assert audit["generation_attempt"] == 1
         assert audit["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
@@ -3335,7 +3430,7 @@ def test_codex_failed_send_is_audited_as_not_sent(monkeypatch):
             raise AssertionError("turn/start was rejected before a response was expected")
 
     monkeypatch.setattr(backend, "_client", lambda: FakeRpc())
-    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: backend)
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None, model=None: backend)
     db = SessionLocal()
     try:
         with pytest.raises(HTTPException) as error:
@@ -3384,7 +3479,7 @@ def test_codex_json_parse_failure_keeps_raw_response_in_ai_log(monkeypatch):
                 raw_text=raw_text,
             )
 
-    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None: FakeBackend())
+    monkeypatch.setattr(experiment_service, "get_ai_backend", lambda reasoning_effort=None, model=None: FakeBackend())
     db = SessionLocal()
     try:
         with pytest.raises(HTTPException):

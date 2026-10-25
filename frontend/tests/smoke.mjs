@@ -67,6 +67,12 @@ for (const expectedText of ['"proposed", "control"', "role=\"tablist\"", "active
   }
 }
 for (const expectedText of [
+  '"gpt-6.1-sol", "GPT-6.1 Sol"',
+  '"gpt-6-luna", "GPT-6 Luna"',
+  "/api/admin/ai/model",
+  "設定値（Mockでは未使用）",
+  "次回のAI呼び出しから適用します",
+  "同じ参加者の記録内でモデルが混在する場合があります",
   "REASONING_EFFORTS",
   '"low", "medium", "high"',
   "reasoning-effort-buttons",

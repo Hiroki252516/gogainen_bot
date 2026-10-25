@@ -27,6 +27,8 @@ type Participant = {
 type GroupCondition = "control" | "proposed";
 const REASONING_EFFORTS = ["low", "medium", "high"] as const;
 type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"]] as const;
+type AiModel = (typeof AI_MODELS)[number][0];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
 type QuestionSetMode = "standard" | "easy";
@@ -42,6 +44,9 @@ type AiStatus = {
   logged_in?: boolean | null;
   last_error?: string | null;
   model?: string;
+  allowed_models?: AiModel[];
+  can_change_model?: boolean;
+  model_applies?: boolean;
   reasoning_effort?: ReasoningEffort;
   allowed_reasoning_efforts?: ReasoningEffort[];
   can_change_reasoning_effort?: boolean;
@@ -153,6 +158,8 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState("");
   const [reasoningEffortSaving, setReasoningEffortSaving] = useState(false);
   const [reasoningEffortError, setReasoningEffortError] = useState("");
+  const [modelSaving, setModelSaving] = useState(false);
+  const [modelError, setModelError] = useState("");
   const [logError, setLogError] = useState("");
   const [recalculating, setRecalculating] = useState(false);
   const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null);
@@ -251,7 +258,7 @@ export default function AdminPage() {
 
   async function updateReasoningEffort(reasoningEffort: ReasoningEffort) {
     if (
-      reasoningEffortSaving ||
+      reasoningEffortSaving || modelSaving ||
       !ai ||
       ai.ai_backend !== "codex_app_server" ||
       ai.reasoning_effort === reasoningEffort
@@ -271,6 +278,23 @@ export default function AdminPage() {
       setReasoningEffortError(err instanceof Error ? err.message : String(err));
     } finally {
       setReasoningEffortSaving(false);
+    }
+  }
+
+  async function updateAiModel(model: AiModel) {
+    if (modelSaving || reasoningEffortSaving || !ai || ai.ai_backend !== "codex_app_server" || ai.model === model) return;
+    setModelError("");
+    setModelSaving(true);
+    try {
+      const result = await api<AiStatus>("/api/admin/ai/model", {
+        method: "POST",
+        body: JSON.stringify({ model })
+      });
+      setAi((current) => ({ ...current, ...result }));
+    } catch (err) {
+      setModelError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setModelSaving(false);
     }
   }
 
@@ -412,6 +436,37 @@ export default function AdminPage() {
               ) : null}
               {loginError ? <p className="danger">{loginError}</p> : null}
               {ai ? (
+                <div className="reasoning-effort-control" aria-labelledby="ai-model-title">
+                  <strong id="ai-model-title">AIモデル</strong>
+                  <p>{ai.ai_backend === "codex_app_server" ? "有効モデル" : "設定値（Mockでは未使用）"}: {ai.model || "不明"}</p>
+                  <div className="reasoning-effort-buttons" role="group" aria-labelledby="ai-model-title">
+                    {AI_MODELS.map(([model, label]) => (
+                      <button
+                        key={model}
+                        type="button"
+                        className={ai.model === model ? "reasoning-effort-button active" : "reasoning-effort-button"}
+                        aria-pressed={ai.model === model}
+                        disabled={
+                          modelSaving || reasoningEffortSaving ||
+                          ai.ai_backend !== "codex_app_server" ||
+                          ai.can_change_model === false ||
+                          !(ai.allowed_models || []).includes(model)
+                        }
+                        onClick={() => updateAiModel(model)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {modelSaving ? <p className="muted">切替中...</p> : null}
+                  <p className="muted">次回のAI呼び出しから適用します。実験中に切り替えると、同じ参加者の記録内でモデルが混在する場合があります。</p>
+                  {ai.ai_backend !== "codex_app_server" ? (
+                    <p className="muted">Mock実行中のためモデル切替は適用されません。</p>
+                  ) : null}
+                  {modelError ? <p className="danger" role="alert">{modelError}</p> : null}
+                </div>
+              ) : null}
+              {ai ? (
                 <div className="reasoning-effort-control" aria-labelledby="reasoning-effort-title">
                   <strong id="reasoning-effort-title">推論レベル</strong>
                   <div className="reasoning-effort-buttons" role="group" aria-label="Codex推論レベル">
@@ -422,7 +477,7 @@ export default function AdminPage() {
                         className={ai.reasoning_effort === effort ? "reasoning-effort-button active" : "reasoning-effort-button"}
                         aria-pressed={ai.reasoning_effort === effort}
                         disabled={
-                          reasoningEffortSaving ||
+                          reasoningEffortSaving || modelSaving ||
                           ai.ai_backend !== "codex_app_server"
                         }
                         onClick={() => updateReasoningEffort(effort)}

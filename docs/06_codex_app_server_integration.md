@@ -2,7 +2,9 @@
 
 ## 目標設定と現行設定
 
-現行既定値は両群共通のgpt-5.6-luna / low。管理APIの上書き機能を残し、low以外は条件不一致として表示・監査する。配布設定と実送信model/effortを照合する。過去のmedium検証記録は書き換えない。[対応表](20_experiment_plan_alignment.md)を参照する。
+アプリ側標準条件は両群共通のgpt-6-luna / low。Word計画書原本にあるgpt-5.6-luna / lowの記載は別の目標記録であり、原本は変更していない。管理画面でgpt-6.1-sol / gpt-6-lunaと推論レベルlow/medium/highを一時切替できる。モデル・推論レベルは一呼び出しの開始時に一緒に確定し、その呼び出しのthread/start、turn/start、監査ログに同一値を使う。切替は両群・進行中参加者にも次回呼び出しから適用し、backend再起動後は環境値へ戻る。収集中の切替は同一参加者内のモデル混在を生み得るため、実験前に設定を固定する。実送信model/effortを監査し、過去の検証記録は書き換えない。[対応表](20_experiment_plan_alignment.md)を参照する。
+
+利用可能性は設定候補への掲載だけでは保証されない。モデルがアカウントで利用できない場合、app-serverのエラーをそのまま失敗として扱い、別モデルやMockへ自動変更しない。接続中アカウントでの実際の生成成功を実験開始前に確認する。
 
 ## 重要
 
@@ -169,7 +171,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
   "method": "thread/start",
   "id": 10,
   "params": {
-    "model": "gpt-5.6-luna",
+    "model": "gpt-6-luna",
     "cwd": "/tmp",
     "approvalPolicy": "never",
     "sandbox": "read-only",
@@ -179,7 +181,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 }
 ```
 
-モデルは設定値 `CODEX_MODEL` から渡し、現行実験設定は `gpt-5.6-luna` とする。
+モデルは起動時の `CODEX_MODEL` を基準とし、管理画面での一時上書きを含む有効値をthread/startとturn/startへ渡す。管理選択肢は `gpt-6.1-sol` と `gpt-6-luna`、アプリ標準値は `gpt-6-luna` である。未指定の環境既定もこれに合わせるが、明示された環境変数は優先する。
 
 `cwd` は既定で `/tmp` にする。アプリが研究仕様リポジトリ配下の `AGENTS.md` をAIタスクへ混入させないためである。
 
@@ -238,7 +240,7 @@ MVPではフロントエンドにAI生成途中のストリームを見せなく
 9. `ai_call_logs` にrequest/response/errorを保存
 10. 用途ごとのJSON辞書を呼び出し側へ返す
 
-各Codex呼び出しでは、`AICallLog.request_payload.effective_request`に送信直前の実際の`thread/start`設定、`turn/start`の全文prompt・JSON Schema・モデル・推論レベルを保存する。併せてprompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、教材生成試行番号、送信状態を記録する。認証ヘッダー・tokenは保存しない。接続や送信前の失敗では、送信試行と実送信の状態を区別する。Mockの入力にはこのCodex実送信監査を付けない。
+各Codex呼び出しでは、`AICallLog.request_payload.effective_request`に送信直前の実際の`thread/start`設定、`turn/start`の全文prompt・JSON Schema・モデル・推論レベルを保存する。両値とアプリ標準比較基準・一致判定も記録する。併せてprompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、教材生成試行番号、送信状態を記録する。認証ヘッダー・tokenは保存しない。接続や送信前の失敗では、送信試行と実送信の状態を区別する。Mockの入力にはこのCodex実送信監査を付けない。
 
 仕様版7でも共通interaction_historyの版・件数・SHA-256、共通出題規則版とactual_ai_inputを記録する。モデルへは共通履歴の診断除外投影を送り、proposedだけに診断・対象主張・教授方針を追加する。input_projectionはサーバー側投影であり、送信済みかどうかはeffective_request.transmissionを確認する。仕様版4で追加した学習後retest回数制限はbackendの遷移制御であり、AI promptの送信内容を変更しない。
 

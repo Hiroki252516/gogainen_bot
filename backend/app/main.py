@@ -21,8 +21,12 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServe
 from app.core.config import get_settings
 from app.core.experiment_spec import MAX_POST_PRETEST_TESTS, assert_current_experiment, can_resume
 from app.core.runtime_config import (
+    ALLOWED_MODELS,
     ALLOWED_REASONING_EFFORTS,
-    current_reasoning_effort,
+    STUDY_MODEL,
+    STUDY_REASONING_EFFORT,
+    current_ai_runtime_settings,
+    set_model,
     set_reasoning_effort,
 )
 from app.db.session import get_db, init_db
@@ -126,16 +130,24 @@ def _public_practice_question(question: object) -> dict | None:
 
 
 def _reasoning_effort_status() -> dict:
-    effort = current_reasoning_effort()
-    study_settings_match = effort == "low" and settings.codex_model == "gpt-5.6-luna"
+    model, effort = current_ai_runtime_settings()
+    study_settings_match = effort == STUDY_REASONING_EFFORT and model == STUDY_MODEL
     return {
+        "model": model,
+        "allowed_models": list(ALLOWED_MODELS),
+        "can_change_model": settings.ai_backend == "codex_app_server",
+        "model_applies": settings.ai_backend == "codex_app_server",
         "reasoning_effort": effort,
         "allowed_reasoning_efforts": list(ALLOWED_REASONING_EFFORTS),
         "can_change_reasoning_effort": True,
         "reasoning_effort_change_block_reason": None,
         "reasoning_effort_applies": settings.ai_backend == "codex_app_server",
         "study_settings_match": study_settings_match,
-        "study_settings_warning": None if study_settings_match else "計画書の実験条件（gpt-5.6-luna / low）と一致していません。",
+        "study_settings_reference": {
+            "model": STUDY_MODEL,
+            "reasoning_effort": STUDY_REASONING_EFFORT,
+        },
+        "study_settings_warning": None if study_settings_match else "アプリ標準条件（gpt-6-luna / low）と一致していません。計画書原本のモデル記載とは区別してください。",
     }
 
 
@@ -239,6 +251,10 @@ class AILoginCancel(BaseModel):
 
 class ReasoningEffortPayload(BaseModel):
     reasoning_effort: Literal["low", "medium", "high"]
+
+
+class AIModelPayload(BaseModel):
+    model: Literal["gpt-6.1-sol", "gpt-6-luna"]
 
 
 class OptionOrderPayload(BaseModel):
@@ -830,13 +846,11 @@ async def api_ai_status() -> dict:
         status = await CodexAppServerBackend().status()
         return {
             "ai_backend": settings.ai_backend,
-            "model": settings.codex_model,
             **status,
             **reasoning_status,
         }
     return {
         "ai_backend": "mock",
-        "model": settings.codex_model,
         "app_server_reachable": None,
         "logged_in": None,
         "account_label": "MockAIBackend (test only)",
@@ -850,7 +864,17 @@ def api_set_reasoning_effort(payload: ReasoningEffortPayload) -> dict:
     set_reasoning_effort(payload.reasoning_effort)
     return {
         "ai_backend": "codex_app_server" if settings.ai_backend == "codex_app_server" else "mock",
-        "model": settings.codex_model,
+        **_reasoning_effort_status(),
+    }
+
+
+@app.post("/api/admin/ai/model")
+def api_set_ai_model(payload: AIModelPayload) -> dict:
+    if settings.ai_backend != "codex_app_server":
+        raise HTTPException(status_code=409, detail="AI_BACKEND=mockではモデル設定を適用できません。")
+    set_model(payload.model)
+    return {
+        "ai_backend": "codex_app_server" if settings.ai_backend == "codex_app_server" else "mock",
         **_reasoning_effort_status(),
     }
 
