@@ -50,6 +50,25 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 | 管理者ログ | GET `/api/admin/participants/{id}/logs`, `/logs.csv`, `/logs_excel.csv` |
 | 評価再計算 | POST `/api/participants/{id}/evaluation-summary/recalculate` |
 
+`GET /api/participants/{id}/current-step` は既存の `step`、`next_url`、`can_resume` を維持し、新規参加者向けに `progress` を追加する。進捗は現在の保存済み状態と採点済みテスト回数から読み取り専用で算出し、DB列追加や評価再計算は行わない。
+
+```json
+{
+  "step": "learning_targets",
+  "next_url": "/learning-targets",
+  "can_resume": true,
+  "progress": {
+    "stage_id": "post_pretest_1",
+    "label": "再テスト1までの学習・再テスト1",
+    "percent": 25
+  }
+}
+```
+
+割合は、事前テスト・採点中0％、事前後1回目までの学習/再テスト1が25％、事前後2回目までの学習/再テスト2が50％、アンケート75％、アンケート保存後の終了画面100％とする。初回満点で学習を省略する場合も、内部 `final_test` を再テスト1として数える。満点による早期終了、未達上限、ギブアップのいずれもアンケートは75％、終了は100％であり、100％は手続き完了を示して成績とは区別する。
+
+`progress` は `{stage_id, label, percent}` または `null`。旧試用・未対応状態では `progress: null` とする。未知・整合しない状態も推測値を返さずnullとし、取得は回答・採点・状態を変更しない。
+
 回答は `selected_option_ids` と時刻情報（response_time_sec、question_shown_at、answered_at）。テストはparticipant_id/question_id/phaseも指定する。廃止入力項目は422。
 
 NULL・版1〜6・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。新規版7＋現行protocol_idのみcan_resume=true。

@@ -37,6 +37,7 @@ from app.services.experiment import (
     create_participant,
     delete_participant,
     create_tutor_session,
+    experiment_progress,
     export_overview_logs_excel_csv,
     export_overview_logs_csv,
     export_participant_logs_excel_csv,
@@ -349,7 +350,7 @@ async def api_create_participant(
 def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
     participant = get_participant(db, participant_id)
     if not can_resume(participant):
-        return {"step": "legacy_read_only", "next_url": "/start", "can_resume": False}
+        return {"step": "legacy_read_only", "next_url": "/start", "can_resume": False, "progress": None}
     mapping = {
         "pretest": "/pretest",
         "learning_targets": "/learning-targets",
@@ -358,7 +359,12 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
         "survey": "/survey",
         "finish": "/finish",
     }
-    return {"step": participant.current_step, "next_url": mapping.get(participant.current_step, "/start"), "can_resume": True}
+    return {
+        "step": participant.current_step,
+        "next_url": mapping.get(participant.current_step, "/start"),
+        "can_resume": True,
+        "progress": experiment_progress(db, participant),
+    }
 
 
 @app.get("/api/experiment/{participant_id}/pretest")

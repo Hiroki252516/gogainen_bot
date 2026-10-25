@@ -10,6 +10,7 @@ const required = [
   "app/admin/page.tsx",
   "components/QuestionRunner.tsx",
   "components/GiveUpButton.tsx",
+  "components/ExperimentProgress.tsx",
   "components/ParticipantFlowGuard.tsx",
   "components/MarkdownText.tsx"
 ];
@@ -33,6 +34,25 @@ for (const expectedText of [
   if (!appShell.includes(expectedText)) {
     throw new Error(`app shell is missing admin navigation confirmation: ${expectedText}`);
   }
+}
+if (!appShell.includes("ExperimentProgress") || !appShell.includes("!isAdminPage ? <ExperimentProgress /> : null")) {
+  throw new Error("app shell must show the shared progress meter only outside admin");
+}
+const experimentProgress = fs.readFileSync(new URL("../components/ExperimentProgress.tsx", import.meta.url), "utf8");
+for (const expectedText of [
+  '"/pretest"',
+  '"/diagnosing"',
+  '"/learning-targets"',
+  '"/survey"',
+  '"/finish"',
+  "/current-step",
+  'cache: "no-store"',
+  'pathname === "/learning-targets" ? "テストの結果確認"',
+  "<progress",
+  "再取得",
+  "data.progress",
+]) {
+  if (!experimentProgress.includes(expectedText)) throw new Error(`experiment progress meter missing: ${expectedText}`);
 }
 const groupAdminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
 for (const text of ["/api/admin/question-set", "新規参加者に適用する問題版", "集計する問題版", "question_set_mode=${summaryMode}", "開始済みの参加者の問題版は変わりません", '"standard", "通常版"', '"easy", "易しい版"']) {
