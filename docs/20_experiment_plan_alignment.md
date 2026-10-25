@@ -12,13 +12,19 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 10 |
-| 新プロトコル | experiment-plan-2026-10-25-pretest-wording-v1 |
+| 実験仕様版 | 11 |
+| 新プロトコル | experiment-plan-2026-10-25-pretest-f-wording-v1 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-25 事前テスト問1 A・Bの表現改善（版10）
+## 2026-10-25 事前テスト問1 Fの表現改善（版11）
+
+- fix/pretest-impで通常版事前テスト問1のFだけを指定文へ変更する。「プロンプトへの指示追加で重みも更新される」という主張をM1として扱い、既存の訂正情報はそのまま対応するため変更しない。他の本文・役割・教授対象も不変。
+- 新規だけ版11 / experiment-plan-2026-10-25-pretest-f-wording-v1 / scenario-actions-v4を使用する。旧v3のYAMLをarchive/learning_content_scenario_actions_v3.ymlへ保全し、別問題IDでseedする。旧版10以下は既存の閲覧専用境界で保護し、版10のsnapshot不足時はv3を参照する。
+- DB構造・易しい版・学習確認・生成契約・AIプロンプト・採点・配置規則は変更しない。研究DB・3000番・Word・別仕様リポジトリは対象外。
+
+## 2026-10-25 事前テスト問1 A・Bの表現改善（版10採用時の記録）
 
 - fix/pretest-impの承認により、通常版事前テスト問1のA・Bだけを指定文へ変更する。どちらも正解のままであり、訂正情報・問題文・他選択肢・他問題の本文は変更しない。「問2のB」ではなく「問1のB」と確認済み。全文は[21](21_assessment_action_questions.md)。
 - 通常版テストをscenario-actions-v3とし、旧v2をarchive/learning_content_scenario_actions_v2.ymlへ保全する。新バンクは別問題IDでseedし、既存問題・回答・教材・評価・snapshotを上書きしない。旧版9のsnapshot不足時も当時のv2を参照する。
