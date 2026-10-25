@@ -62,7 +62,7 @@ def test_easy_mode_cannot_load_standard_v6():
 
 
 @pytest.mark.parametrize("snapshot", [False, True])
-@pytest.mark.parametrize("version", [3, 5, 6, 7, 8, 9])
+@pytest.mark.parametrize("version", [3, 5, 6, 7, 8, 9, 10])
 def test_multi_agent_history_restores_saved_version_without_rewriting_records(tmp_path, monkeypatch, snapshot, version):
     isolated = create_engine(f"sqlite:///{tmp_path / 'history.db'}")
     monkeypatch.setattr(database, "engine", isolated)
@@ -70,8 +70,8 @@ def test_multi_agent_history_restores_saved_version_without_rewriting_records(tm
     try:
         with Session(isolated) as db:
             participant = Participant(display_code="MULTI-HISTORY", group_condition="control", question_set_mode="standard",
-                                      learning_content_version=version, experiment_spec_version={3: 11, 5: 12, 6: 13, 7: 14, 8: 15, 9: CURRENT_EXPERIMENT_SPEC_VERSION}[version],
-                                      protocol_id={3: "experiment-plan-2026-10-25-pretest-f-wording-v1", 5: PREVIOUS_PROTOCOL, 6: "experiment-plan-2026-10-25-multi-agent-confirmation-v1", 7: "experiment-plan-2026-10-25-multi-agent-confirmation-v2", 8: "experiment-plan-2026-10-25-multi-agent-round2-v1", 9: CURRENT_PROTOCOL_ID}[version])
+                                      learning_content_version=version, experiment_spec_version={3: 11, 5: 12, 6: 13, 7: 14, 8: 15, 9: 16, 10: CURRENT_EXPERIMENT_SPEC_VERSION}[version],
+                                      protocol_id={3: "experiment-plan-2026-10-25-pretest-f-wording-v1", 5: PREVIOUS_PROTOCOL, 6: "experiment-plan-2026-10-25-multi-agent-confirmation-v1", 7: "experiment-plan-2026-10-25-multi-agent-confirmation-v2", 8: "experiment-plan-2026-10-25-multi-agent-round2-v1", 9: "experiment-plan-2026-10-25-multi-agent-round3-v1", 10: CURRENT_PROTOCOL_ID}[version])
             term = Term(slug="multi_agent", label="マルチエージェント", description="description", display_order=2)
             db.add_all([participant, term])
             db.flush()
@@ -84,7 +84,7 @@ def test_multi_agent_history_restores_saved_version_without_rewriting_records(tm
                              grading_json={"is_sufficient": False, "selected_option_ids": ["I"]})
             db.add(turn)
             db.commit()
-            if version != 9:
+            if version != 10:
                 before = {model: deepcopy(db.execute(select(model.__table__)).mappings().all()) for model in (Participant, TutorSession, TutorTurn)}
                 seed_database(db)
                 seed_database(db)
@@ -99,7 +99,7 @@ def test_multi_agent_history_restores_saved_version_without_rewriting_records(tm
             assert record["selected_options"] == [{"label": "I", "body": "保存時の選択本文" if snapshot else original["options"][8]["body"]}]
             assert json.dumps([turn.practice_question_json, turn.diagnosis_json, turn.grading_json], sort_keys=True) == before_json
             if not snapshot:
-                assert (record["question_body"] == SCENARIO + "\n\n" + TASK) == (version in (6, 7, 8, 9))
+                assert (record["question_body"] == SCENARIO + "\n\n" + TASK) == (version in (6, 7, 8, 9, 10))
                 assert (record["selected_options"][0]["body"] == CHOICE_I) == (version == 6)
     finally:
         isolated.dispose()

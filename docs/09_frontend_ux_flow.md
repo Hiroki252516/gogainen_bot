@@ -1,8 +1,10 @@
 # 現行画面
 
-## 通常版マルチエージェント確認問題V2・V3の表示
+## 確認問題の段落表示
 
-通常版multi_agentのV2と、仕様版16で改訂するV3は案1・案2などの段落を空行で区切り、既存preserve-linesで改行表示する。V3は導入文・案1・案2・検索ツールの説明・設問の5段落とする。太字・Markdown記号・重複する「問題：」は付けない。公開APIの既存情報（用語・variant番号2/3・本文の案1/案2段落）で対象を限定し、易しい版、通常版V1、他用語やテストの表示は変更しない。通常の最大2周ではV3は出題されず、検証用の3回目セッションは隔離DBだけに用意する。小画面での折り返し・非重複・横はみ出しを確認する。[全文と検証条件](29_multi_agent_round_three_revision.md)・[V2](28_multi_agent_round_two_revision.md)。
+仕様版17の通常版memory_process・learning_round_v1は、大学・学生の説明、開発担当者の目的、設問を空行で区切る3段落とし、既存preserve-linesで改行表示する。太字・装飾用Markdown記号・重複する「問題：」は保存しない。用語・variant番号1・本文の導入文と開発担当者の段落で対象を限定し、易しい版・旧問題・他用語・各テストの表示は変えない。[全文と検証条件](30_memory_confirmation_revision.md)。
+
+既存の通常版multi_agent・V2/V3は案1・案2の段落とvariant番号2/3で限定する改行表示を維持する。V3は仕様版16で改訂した5段落の問題で、通常進行は最大2周のままなので出題されない。検証用の3回目セッションは隔離DBだけに用意する。[V3](29_multi_agent_round_three_revision.md)・[V2](28_multi_agent_round_two_revision.md)。
 
 ## 用語の補足
 

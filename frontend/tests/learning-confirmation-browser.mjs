@@ -15,8 +15,8 @@ assert([1, 2, 3].includes(variantIndex));
 if (variantIndex === 3) assert(LEARNING_FIXTURE_DB_URL, "V3 requires an explicit isolated fixture database.");
 assert(["standard", "easy"].includes(questionSet));
 assert(variantIndex === 1 || termSlug === "multi_agent");
-assert(questionSet === "standard" || (termSlug === "multi_agent" && variantIndex === 2));
-assert(["llm_knowledge", "multi_agent"].includes(termSlug));
+assert(questionSet === "standard" || (termSlug === "multi_agent" && variantIndex === 2) || (termSlug === "memory_process" && variantIndex === 1));
+assert(["llm_knowledge", "multi_agent", "memory_process"].includes(termSlug));
 assert(["127.0.0.1", "localhost", "[::1]"].includes(base.hostname));
 assert(base.port && base.port !== "3000", "Never use the study frontend.");
 const { chromium } = await import(LEARNING_PLAYWRIGHT_MODULE);
@@ -83,8 +83,42 @@ const roundThreeBodies = [
   "案2で調査担当のAIが資料を読んで質問に必要な情報を整理しても、その処理は案1のマニュアル検索ツールと同じ種類の検索機能として分類できる。"
 ];
 const roundThreeQuestionBody = "大学が、学生からの「学内Wi-Fiにつながらない」という問い合わせに対応するAIシステムを開発している。開発担当者は、次の2つの設計を比較している。\n\n案1： 1つのAIエージェントが、Wi-Fiの設定マニュアルを検索するツールと、大学のネットワーク障害情報を調べるツールを使い、学生への回答を作成する。\n\n案2： 調査担当のAIエージェントが設定マニュアルや障害情報を調べて必要な内容を整理し、その結果を受け取った回答担当のAIエージェントが、学生への回答を作成する。\n\nなお、ここでいう検索ツールとは、指定された資料や情報を探して結果を返す機能を指す。\n\n案1と案2の仕組みの違いについて、適切な説明を3つ選びなさい。";
-const bodies = questionSet === "easy" ? easyRoundTwoBodies : variantIndex === 3 ? roundThreeBodies : variantIndex === 2 ? roundTwoBodies : termSlug === "multi_agent" ? multiBodies : llmBodies;
-const questionBody = questionSet === "easy" ? easyRoundTwoQuestionBody : variantIndex === 3 ? roundThreeQuestionBody : variantIndex === 2 ? roundTwoQuestionBody : termSlug === "multi_agent" ? multiQuestionBody : llmQuestionBody;
+const memoryBodies = [
+  "学生が「具体例を先に示してほしい」と伝えたら、その希望を学生ごとの記録に保存し、別の日に質問があった際に関係する記録を取り出して、説明の仕方に反映させる。",
+  "説明の順番や文章の詳しさなど、記録する希望の項目を決め、学生ごとに情報を管理できるようにするとともに、記録を保持する期間や削除方法も設定する。",
+  "「具体例を先に」と希望していた学生が後から「結論を先に」と伝えた場合、以前の記録を新しい希望に合わせて更新し、次回の説明には変更後の希望を反映する。",
+  "以前「具体例を先に」と希望した学生が後から「結論を先に」と伝えても、最初の希望がその学生の基本的な好みを表すと考え、次回以降も古い記録を優先して使う。",
+  "過去の会話をすべて保存しておけば、そこに書かれた説明方法の希望が次の相談でも自動的に使われると考え、今回必要な情報を取り出す方法は特に設計しない。",
+  "以前の会話から取り出した「箇条書きで説明してほしい」という希望を回答時に何度も利用すると、その希望がモデルの重みに保存され、次回は記録を取り出さなくても反映されると考える。",
+  "学生の説明方法の希望を記憶するため、会話から得た希望を追加訓練のデータに使い、更新されたモデルの重みを、学生ごとの希望を保存する記録として扱う。",
+  "学生が過去の相談を見返せる履歴画面に「具体例を先に」といった希望を表示し、その画面の表示機能を、AIが希望を保存・検索する記憶管理の仕組みとして扱う。",
+  "前回の会話を次の質問と一緒にプロンプトへ貼り付ける操作を、学生ごとの希望を継続して保存し、変更に応じて更新できる記憶管理の仕組みと同じものとして扱う。"
+];
+const memoryQuestionBody = "大学が、授業内容について質問できる学習支援AIを開発している。学生は会話の中で「具体例を先に示してほしい」「結論から説明してほしい」など、説明の仕方について希望を伝えることがある。また、同じ学生でも、相談を重ねる中で希望が変わることがある。\n\n開発担当者は、別の日に同じ学生が質問した際にも、その時点の希望に合った説明ができる仕組みを作りたいと考えている。\n\nこのAIに記憶機能を設ける場合の対応として、適切なものを3つ選びなさい。";
+const easyMemoryBodies = [
+  "説明の希望を必要な要点だけ記録し、次回の相談で取り出す。",
+  "保存する内容と、次にその記録を使う手順を決めておく。",
+  "希望が変わったときに、前の記録を直せるようにしておく。",
+  "一度聞いた希望は変わらないと考え、その後の変更は確かめず使い続ける。",
+  "会話を全部残せば探す処理はいらないと考え、必要な記録を選ぶ機能を省く。",
+  "一度答えに使った情報はAI自体に残ると考え、保存する処理を用意しない。",
+  "希望を記録する仕組みをモデルの訓練とみなし、追加学習だけで置き換える。",
+  "記憶を保存する処理を利用者の検索画面とみなし、画面だけを作って済ませる。",
+  "今回の質問へ希望を貼るだけで、次回の保存や更新の機能もあるとみなす。"
+];
+const easyMemoryQuestionBody = "利用者は「例を多くして説明して」と希望した。会話を終えた後の相談にも、この希望を使わせたい。\n\n適切な対応を3つ選びなさい。";
+const questionFixtures = {
+  "standard:llm_knowledge:1": [llmBodies, llmQuestionBody],
+  "standard:multi_agent:1": [multiBodies, multiQuestionBody],
+  "standard:multi_agent:2": [roundTwoBodies, roundTwoQuestionBody],
+  "standard:multi_agent:3": [roundThreeBodies, roundThreeQuestionBody],
+  "standard:memory_process:1": [memoryBodies, memoryQuestionBody],
+  "easy:multi_agent:2": [easyRoundTwoBodies, easyRoundTwoQuestionBody],
+  "easy:memory_process:1": [easyMemoryBodies, easyMemoryQuestionBody],
+};
+const fixture = questionFixtures[`${questionSet}:${termSlug}:${variantIndex}`];
+assert(fixture, "Missing browser question fixture.");
+const [bodies, questionBody] = fixture;
 
 async function assertQuestionLayout(page) {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -203,7 +237,7 @@ engine.dispose()
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
     await assertQuestionLayout(page);
-    const preserveLines = questionSet === "standard" && termSlug === "multi_agent" && [2, 3].includes(variantIndex);
+    const preserveLines = questionSet === "standard" && ((termSlug === "multi_agent" && [2, 3].includes(variantIndex)) || (termSlug === "memory_process" && variantIndex === 1));
     assert.equal(await page.locator(".problem-block > p").evaluate((element) => getComputedStyle(element).whiteSpace), preserveLines ? "pre-wrap" : "normal");
     assert.equal(await page.locator(".problem-block > p strong").count(), 0);
     await page.screenshot({ path: `${LEARNING_SCREENSHOT_DIR}/${caseName}-question.png`, fullPage: true });

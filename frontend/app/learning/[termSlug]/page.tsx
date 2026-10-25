@@ -330,10 +330,14 @@ export default function LearningPage() {
   const progress = questionProgress || (turn ? progressForNewQuestion(termSlug, turn) : null);
   const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;
   const questionBody = turn?.practice_question?.body || turn?.learner_prompt || "";
-  const preserveQuestionLines = termSlug === "multi_agent"
+  const preserveQuestionLines = (termSlug === "multi_agent"
     && [2, 3].includes(turn?.practice_question?.learning_variant_index ?? 0)
     && questionBody.includes("\n\n案1：")
-    && questionBody.includes("\n\n案2：");
+    && questionBody.includes("\n\n案2："))
+    || (termSlug === "memory_process"
+      && turn?.practice_question?.learning_variant_index === 1
+      && questionBody.startsWith("大学が、授業内容について質問できる学習支援AI")
+      && questionBody.includes("\n\n開発担当者は、"));
 
   return (
     <AppShell step="学習セッション">
