@@ -38,6 +38,8 @@ try {
         "利用者の質問に応じて最新の取扱説明書を検索し、該当箇所を質問と一緒にAIへ渡して回答を作らせる仕組みを実装する。",
         "利用者からの質問に回答するとき、「結論・操作手順・注意点」の順に説明するよう、AIに指示するプロンプトを設定する。",
       ]);
+      assert.equal(canonical[0].options.find((option) => option.label === "F").body,
+        "回答を「結論・操作手順・注意点」の順にする指示をプロンプトに加えることで、モデルの重みも更新されると考え、質問と回答の事例を使った追加訓練は行わない。");
     }
     const record = await create(page.request, mode, layout);
     const questions = (await api(page.request, `/api/experiment/${record.participant_id}/pretest`)).questions;
