@@ -1,5 +1,16 @@
 # 受け入れ条件と検証記録
 
+## 2026-10-25 仕様版8・共通の用語注釈
+
+- feature/issue-132で教材・回答後解説の下へ固定辞書25語の補足一覧を追加する。両群・両問題版に同じ辞書と抽出規則を使い、問題・選択肢・各テスト・結果確認には付けない。AI本文・プロンプト・出力Schema・生成契約版v7・教材600〜800文字は変更しない。
+- 新規参加者だけ仕様版8 / experiment-plan-2026-10-25-glossary-v1とする。版7以下の操作・再送・worker・起動時補修・集計の境界を保ち、注釈のない旧JSONや問題snapshot欠落時の版7問題復元を確認する。
+- 抽出は表示文字列、長い語の優先、表記揺れ、英字境界、出現順・重複排除を検証する。不正辞書はDB初期化前に起動を拒否する。指紋・表示文snapshot、再取得・再送・先行生成、管理ログ・CSV、モデル入力への非混入をテストする。
+- backend全385テスト、frontend smoke、Next.js本番build/TypeScript、git diff --checkに合格。既存のStarlette/NumPyのDeprecationWarningが2件ある。
+- 隔離SQLiteとMock API（8013番）・検証用画面（3013番）で、1440px/390px×通常版/易しい版×両群×正答/誤答の16ケースをPlaywrightで確認した。表示された用語・説明とAPIの保存snapshotを照合し、横はみ出しなし、回答後の続行操作を確認した。空の注釈欄の非表示は専用API応答fixtureで確認し、抽出処理そのものの該当語なしはbackend単体テストで確認した。スクリーンショットを目視した。
+- 再実行用はfrontend/tests/learning-glossary-browser.mjs。GLOSSARY_VERIFY_ISOLATED=1、非3000ポートのGLOSSARY_UI_BASE_URL、GLOSSARY_PLAYWRIGHT_MODULE、GLOSSARY_SCREENSHOT_DIRを明示し、Mockのみの隔離環境を使う。必要時はGLOSSARY_BROWSER_CHANNEL=chromeを指定する。
+- ブラウザ検証の隔離DBへ版7の合成旧記録を加え、起動時補修・seedを2回再実行した。参加者・回答・セッション・教材・保存評価の全行の指紋が前後で一致し、active問題24行も維持された。DB列・問題バンク・既存snapshotを追加変更していない。
+- 実AI生成は再実行していない。注釈表示の検証を実AI成功や初心者への理解しやすさの実証とせず、現在のモデル非対応エラーと区別する。研究DB・稼働中3000番・Word・別仕様リポジトリ・問題YAML・モデル設定・過去の検証記録は変更しない。辞書全文と出典は[24](24_learning_glossary.md)。
+
 ## 2026-10-25 管理画面のAIモデル切替
 
 - 管理画面にGPT-6.1 Sol / GPT-6 Lunaを追加。選択値と推論レベルはbackendプロセス内だけに保持し、AI呼び出しごとにモデル/effortを固定してthread/start、turn/start、監査へ同じ値を渡す。既定はgpt-6-luna / low。明示的な環境設定は優先する。
@@ -156,7 +167,7 @@ git diff --check
 - 学習バンクはv3の9問。新規経路で3セッション目には到達しない。10択・3/3/3/1・M3優先を確認する。配置はdebug_fixedでA〜C正解/D〜F=M1/G〜I=M3/J=unknown、randomizedで「わからない」を最後のJに固定し、残る9択をA〜Iへ割り当てる。排他選択はラベルでなくexclusive/内部役割で検証する。
 - 採点・結果確認・再学習・ギブアップ・ロック・冪等性・先行生成の回帰検証。
 - final_test未採点の直接学習開始を拒否し、廃止専用URL/APIは404。
-- NULL・実験仕様版1〜6・未対応版は409。旧POST、cached再送、先行生成でも値が不変。
+- NULL・実験仕様版1〜7・未対応版は409。旧POST、cached再送、先行生成でも値が不変。
 - can_resume、ブラウザ新規開始、厳密入力、参加者向け正答非公開。
 - 全3タイプ/両群のprompt・Schemaに廃止教授や支援量がなく、方略enumを固定。transfer_checkは必須。
 - 履歴・生AI・保存評価・CSVを保持し、再計算/群集計しない。

@@ -6,7 +6,7 @@
 
 3用語ごとに事前1・再2のテスト問題をactiveなYAMLへ保持する。内部final_testは独立問題を持たず、retest_v1を使用する。retest_v4・v5と旧final_test_v1はアーカイブとして保全する。
 
-通常版（実験仕様版7 / scenario-actions-v1）ではpretest_v1、retest_v1/v2のみをactiveにする。LLM知識は製品サポート・問い合わせ分類・議事録作成の承認済み3案を文面どおり使用する。他2用語は既存場面を基に行動選択型へ更新した。全文と分類根拠・妥当性の限界は[21](21_assessment_action_questions.md)を参照する。事前後のテストはfinal_test込み2回までで、final_test後はretest_v2を使い、未回答用語も全体回次に合わせる。
+通常版（実験仕様版8 / scenario-actions-v1）ではpretest_v1、retest_v1/v2のみをactiveにする。LLM知識は製品サポート・問い合わせ分類・議事録作成の承認済み3案を文面どおり使用する。他2用語は既存場面を基に行動選択型へ更新した。全文と分類根拠・妥当性の限界は[21](21_assessment_action_questions.md)を参照する。事前後のテストはfinal_test込み2回までで、final_test後はretest_v2を使い、未回答用語も全体回次に合わせる。
 
 学習確認v3は3用語×3学習セッションvariant=9問である。各用語は学習セッション1でlearning_round_v1、2でlearning_round_v2、3でlearning_round_v3を使う。enrichmentとconceptual_changeは同じ問題本文・選択肢を使い、教材生成プロンプトだけが変わる。同一セッション内の誤答時は同じ問題で最大3回答し、教材だけを再生成する。問題内容は変更しないが、現行の上限では3セッション目に到達しない。
 

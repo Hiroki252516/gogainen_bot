@@ -52,6 +52,7 @@ from app.core.runtime_config import (
 )
 from app.core.question_sets import STANDARD, ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key, question_set_mode, explanation_context
 from app.services.question_sets import current_question_set_mode
+from app.services.learning_glossary import glossary_snapshot, public_glossary
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import (
@@ -1596,7 +1597,7 @@ def _test_result_question(
     elif phase == "retest":
         round_number = _round_number(test_round)
         if round_number is not None:
-            has_final_test = participant.experiment_spec_version not in {6, CURRENT_EXPERIMENT_SPEC_VERSION} and db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
+            has_final_test = participant.experiment_spec_version not in {6, 7, CURRENT_EXPERIMENT_SPEC_VERSION} and db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
             variant_number = max(
                 1,
                 min(
@@ -1614,7 +1615,7 @@ def _test_result_question(
         )
         .order_by(Question.created_at.desc(), Question.variant_key)
     )
-    if participant.experiment_spec_version in {6, CURRENT_EXPERIMENT_SPEC_VERSION}:
+    if participant.experiment_spec_version in {6, 7, CURRENT_EXPERIMENT_SPEC_VERSION}:
         query = query.filter(Question.construct_key == assessment_construct_key(term.slug, phase, participant.question_set_mode))
         if can_resume(participant):
             query = query.filter(Question.is_active.is_(True))
@@ -2000,6 +2001,7 @@ def _tutor_turn_from_generation(
         learning_content_version = context["learning_content_version"]
     instruction_audit = dict(payload.get("_generation_audit") or {})
     diagnosis = {
+        "material_glossary": glossary_snapshot(result["tutor_message"]),
         "material_source": "ai",
         "material_generation_ms": material_generation_ms,
         "mandatory_elements": result.get("mandatory_elements"),
@@ -2693,6 +2695,7 @@ async def respond_tutor_turn(
     if not feedback_text.strip():
         raise RuntimeError("AI explanation response was empty")
 
+    grading_json["feedback_glossary"] = glossary_snapshot(feedback_text)
     turn.learner_response = response
     turn.question_shown_at = _naive_datetime(payload.get("question_shown_at"))
     turn.answered_at = _naive_datetime(payload.get("answered_at"))
@@ -2737,6 +2740,7 @@ async def respond_tutor_turn(
     _commit(db)
     return {
         "feedback": turn.ai_feedback,
+        "glossary": public_glossary(grading_json["feedback_glossary"]),
         "next_action": next_action,
         "is_sufficient": is_sufficient,
         "session_completed": session_completed,
@@ -3430,6 +3434,7 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "prefetch_state": _prefetch_state(session),
         "prefetch_source_session_id": session.prefetch_source_session_id,
         "tutor_message": turn.tutor_message,
+        "material_glossary": diagnosis.get("material_glossary"),
         "learner_prompt": turn.learner_prompt,
         "question_body": practice_question.get("body"),
         "selected_option_body": grading.get("selected_option_body"),
@@ -3437,6 +3442,7 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "is_sufficient": grading.get("is_sufficient"),
         "learning_misconception_type": grading.get("learning_misconception_type"),
         "ai_feedback": turn.ai_feedback,
+        "feedback_glossary": grading.get("feedback_glossary"),
         "practice_question": practice_question,
         "grading_json": turn.grading_json,
         "response_time_sec": turn.response_time_sec if turn.response_time_sec is not None else grading.get("response_time_sec"),

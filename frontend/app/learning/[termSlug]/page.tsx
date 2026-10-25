@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { GiveUpButton } from "@/components/GiveUpButton";
 import { MarkdownText } from "@/components/MarkdownText";
+import { LearningGlossary, type Glossary } from "@/components/LearningGlossary";
 import { CheckingFlow, useLearningTargetFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, postIdempotent, requireParticipant } from "@/lib/api";
 
@@ -15,6 +16,7 @@ type Turn = {
   term_slug?: string;
   term_label?: string;
   tutor_message: string;
+  glossary?: Glossary | null;
   learner_prompt: string;
   practice_question: { body: string; options?: Option[]; selection_mode?: "multiple"; min_selections?: number; max_selections?: number; learning_variant_index?: number };
   turn_index: number;
@@ -26,6 +28,7 @@ type Turn = {
 
 type Feedback = {
   feedback: string;
+  glossary?: Glossary | null;
   next_action: string;
   is_sufficient: boolean;
   session_completed: boolean;
@@ -356,6 +359,7 @@ export default function LearningPage() {
               <section className="learning-block material-block" aria-labelledby="material-title">
                 <h2 id="material-title">教材</h2>
                 <MarkdownText>{turn.tutor_message}</MarkdownText>
+                <LearningGlossary glossary={turn.glossary} label="教材の用語の補足" />
               </section>
               <section className="learning-block problem-block" aria-labelledby="problem-title">
                 <h2 id="problem-title">問題</h2>
@@ -426,6 +430,7 @@ export default function LearningPage() {
                   {feedback.is_sufficient ? "正解です。" : "不正解です。"}
                 </strong>
                 <MarkdownText>{feedback.feedback}</MarkdownText>
+                <LearningGlossary glossary={feedback.glossary} label="回答後解説の用語の補足" />
               </section>
             ) : null}
             {submitting ? (feedback ? <ContinueProgress /> : <SubmitProgress />) : null}

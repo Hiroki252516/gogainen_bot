@@ -1,6 +1,11 @@
 # Repository Instructions for Codex
 
-このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は7です。目標を実装済みと扱わないでください。
+## 用語注釈の不変条件
+
+- 実験仕様版8は教材・回答後解説に共通固定辞書learning-glossary-v1を表示する。問題・選択肢・テストは対象外。辞書の正本・全文・確認元はdocs/24を参照する。
+- 注釈は表示用JSONとして保存し、AI入力・生成本文・共通回答履歴に混ぜない。600〜800文字・教授契約版v7は変更しない。再表示はsnapshotを使い、旧教材へ後付けしない。登録語しか扱わず、AIで未知語を補わない。
+
+このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は8です。目標を実装済みと扱わないでください。
 
 ## Authoritative Documents
 
@@ -25,7 +30,7 @@
 - 学習確認は1用語・1セッションあたり最大3回答。事前テスト後のテストはfinal_testも含め最大2回、事前込み最大3回。未回答を含む採点済みバッチを1回とし、全問未回答は採点しない。1回目未達は学習、2回目未達は未達のままアンケートへ進める。満点ならいつでもアンケートへ進める。
 - テストはscenario-actions-v1の9固有問題で、activeキーはpretest_v1、retest_v1/v2。final_testはretest_v1を共用し、その後は全用語をretest_v2へ進める。用語別回答件数で選ばない。旧問題・retest_v3はlearning_content_pre_issue156.yml、さらに古い問題は従来アーカイブへ保全する。seedは版付きconstruct_keyで旧本文・選択肢を上書きしない。学習確認v3の9問は維持するが、3セッション目は新規経路で到達しない。
 - 選択肢配置は管理画面のDB保存設定で切り替える。既定値は `debug_fixed` で、新規参加者だけに適用する。実験データ収集前に `randomized` へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
-- 新規だけ仕様版7とprotocol_id=experiment-plan-2026-10-24-easy-version-v1を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数え、共通上限用のpost_pretest_tests_completedは採点済みfinal_testを加えて導出する。DB列は追加しない。既存版6以下を含む旧protocol_id/NULL・未対応版は閲覧専用。旧行の版・進行・回答・評価・回数を更新/削除せず、補修も版とprotocol_idで限定する。
+- 新規だけ仕様版8とprotocol_id=experiment-plan-2026-10-25-glossary-v1を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数え、共通上限用のpost_pretest_tests_completedは採点済みfinal_testを加えて導出する。DB列は追加しない。既存版7以下を含む旧protocol_id/NULL・未対応版は閲覧専用。旧行の版・進行・回答・評価・回数を更新/削除せず、補修も版とprotocol_idで限定する。
 - 両群の教材の小見出し・数・順序・まとめ方はAIが決める。冒頭の##用語名と非空の###セクションだけを要求し、実験群の必須教授内容・transfer_checkは本文内証拠で検証する。固定見出しから証拠文を自動補正しない。
 - 教材内のtransfer_checkは維持するが、独立した追加テスト・旧支援量・自由回答処理を戻さない。
 - 現行MVP対象用語は `llm_knowledge`、`multi_agent`、`memory_process` の3項目とする。

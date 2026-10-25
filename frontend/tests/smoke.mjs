@@ -12,7 +12,8 @@ const required = [
   "components/GiveUpButton.tsx",
   "components/ExperimentProgress.tsx",
   "components/ParticipantFlowGuard.tsx",
-  "components/MarkdownText.tsx"
+  "components/MarkdownText.tsx",
+  "components/LearningGlossary.tsx"
 ];
 
 for (const file of required) {
@@ -22,6 +23,20 @@ for (const file of required) {
 }
 
 console.log("frontend smoke ok");
+
+const glossary = fs.readFileSync(new URL("../components/LearningGlossary.tsx", import.meta.url), "utf8");
+for (const text of ["用語の補足", "!glossary?.entries.length", "<dl>", "<dt>", "<dd>", "entry.definition"]) {
+  if (!glossary.includes(text)) throw new Error(`learning glossary missing: ${text}`);
+}
+const glossaryPage = fs.readFileSync(new URL("../app/learning/[termSlug]/page.tsx", import.meta.url), "utf8");
+for (const text of ['glossary={turn.glossary}', 'glossary={feedback.glossary}']) {
+  if (!glossaryPage.includes(text)) throw new Error(`learning glossary placement missing: ${text}`);
+}
+for (const file of ["components/QuestionRunner.tsx", "app/learning-targets/page.tsx"]) {
+  if (fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8").includes("LearningGlossary")) {
+    throw new Error(`test questions/results must not display glossary: ${file}`);
+  }
+}
 
 const appShell = fs.readFileSync(new URL("../components/AppShell.tsx", import.meta.url), "utf8");
 for (const expectedText of [
