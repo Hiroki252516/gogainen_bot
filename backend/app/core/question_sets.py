@@ -5,7 +5,12 @@ QuestionSetMode = Literal["standard", "easy"]
 STANDARD = "standard"
 EASY = "easy"
 QUESTION_SET_MODES = (STANDARD, EASY)
-ASSESSMENT_BANK_VERSIONS = {STANDARD: "scenario-actions-v1", EASY: "scenario-actions-easy-v1"}
+ASSESSMENT_BANK_VERSIONS = {STANDARD: "scenario-actions-v2", EASY: "scenario-actions-easy-v1"}
+HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
+    6: {STANDARD: "scenario-actions-v1"},
+    7: {STANDARD: "scenario-actions-v1", EASY: "scenario-actions-easy-v1"},
+    8: {STANDARD: "scenario-actions-v1", EASY: "scenario-actions-easy-v1"},
+}
 LEARNING_CONTENT_VERSIONS = {STANDARD: 3, EASY: 4}
 
 
@@ -17,8 +22,10 @@ def question_set_mode(value: str | None) -> QuestionSetMode:
     return value
 
 
-def assessment_construct_key(term_slug: str, phase: str, mode: str | None = STANDARD) -> str:
-    bank = ASSESSMENT_BANK_VERSIONS[question_set_mode(mode)]
+def assessment_construct_key(
+    term_slug: str, phase: str, mode: str | None = STANDARD, *, bank_version: str | None = None,
+) -> str:
+    bank = bank_version or ASSESSMENT_BANK_VERSIONS[question_set_mode(mode)]
     return f"{term_slug}_{'final_test_' if phase == 'final_test' else ''}{bank}"
 
 

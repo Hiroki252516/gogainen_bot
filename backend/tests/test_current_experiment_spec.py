@@ -72,6 +72,8 @@ def trial_snapshot(db, pid):
         (3, 6, "experiment-plan-2026-10-24-two-posttests-v1"),
         (3, 7, "experiment-plan-2026-10-24-easy-version-v1"),
         (4, 7, "experiment-plan-2026-10-24-easy-version-v1"),
+        (3, 8, "experiment-plan-2026-10-25-glossary-v1"),
+        (4, 8, "experiment-plan-2026-10-25-glossary-v1"),
     ],
 )
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):

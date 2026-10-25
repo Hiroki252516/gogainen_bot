@@ -24,4 +24,4 @@ surveyは経験4有無・一般4/教材6の1〜10段階・必須自由記述。�
 
 学習確認の出題規則は両群共通で、unknownはenrichment、M1/M3はconceptual_change。同じ状態・回答・ターンなら同じ問題とvariantを使う。統制群の旧固定系列は使わない。
 
-NULL・版1〜7・未対応版・旧protocol_idの記録はcurrent-stepでlegacy_read_only/can_resume=falseを返す。新規開始はブラウザの参加者・進行・保留送信だけを消し、同意を取り直して新規ID・版8・現行protocol_idを保存する。旧DB記録を残す。
+NULL・版1〜8・未対応版・旧protocol_idの記録はcurrent-stepでlegacy_read_only/can_resume=falseを返す。新規開始はブラウザの参加者・進行・保留送信だけを消し、同意を取り直して新規ID・版9・現行protocol_idを保存する。旧DB記録を残す。

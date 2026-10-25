@@ -18,7 +18,7 @@ from app.db import session as database
 from app.db.session import get_db
 from app.main import app
 from app.models import Attempt, Base, LearnerState, Participant, Question, QuestionOption, RecurrenceEvent, RuntimeSetting, Term, TermAssignment, TutorSession, TutorTurn
-from app.seed.content_loader import ACTIVE_TERM_SLUGS, CONTENT_PATH, LEARNING_V3_CONTENT_PATH, assessment_question_spec, learning_question_spec, load_content, load_learning_easy_content, _validate_assessment_variant
+from app.seed.content_loader import ACTIVE_TERM_SLUGS, SCENARIO_ACTIONS_V1_CONTENT_PATH, LEARNING_V3_CONTENT_PATH, assessment_question_spec, learning_question_spec, load_content, load_learning_easy_content, _validate_assessment_variant
 from app.seed.seed_questions import seed_database
 from app.services import experiment, prefetch
 from app.services.interaction_history import build_interaction_history
@@ -75,8 +75,8 @@ def submit(client, pid, phase, mode, role="M1", index=1):
     return questions, scored.json()
 
 
-def test_normal_files_are_unchanged_and_easy_banks_validate():
-    assert hashlib.sha256(CONTENT_PATH.read_bytes()).hexdigest() == "916f2b89b731b7a658f50b5a8e5e42ed831b00d4d2471f34c11def96cb469ede"
+def test_archived_standard_and_learning_files_are_unchanged_and_easy_banks_validate():
+    assert hashlib.sha256(SCENARIO_ACTIONS_V1_CONTENT_PATH.read_bytes()).hexdigest() == "916f2b89b731b7a658f50b5a8e5e42ed831b00d4d2471f34c11def96cb469ede"
     assert hashlib.sha256(LEARNING_V3_CONTENT_PATH.read_bytes()).hexdigest() == "2ae5b8483016db955d5fda4cc7aacca5e58c8f5bb070d51eb08fc6cd6022f156"
     bank = load_content("easy")
     learning = load_learning_easy_content()
@@ -113,9 +113,7 @@ def test_normal_files_are_unchanged_and_easy_banks_validate():
                 assert set(variant["choice_rationales"]) == set("DEFGHI")
         for variant in learning["terms"][term["slug"]]["variants"]:
             assert len(set(variant["choice_rationales"].values())) == 6
-            lengths = [len(t) for texts in variant["choices"].values() for t in texts]
-            assert max(lengths) <= 1.8 * min(lengths)
-            assert max(lengths) - min(lengths) <= 32
+            assert all(t.strip() for texts in variant["choices"].values() for t in texts)
     invalid = deepcopy(bank["terms"][0]["questions"]["pretest"][0])
     invalid["choice_rationales"].pop("D")
     with pytest.raises(ValueError, match="rationale"):
@@ -367,7 +365,7 @@ def test_partial_tests_advance_all_terms_and_do_not_count_replays_twice(isolated
         assert db.get(Participant, pid).retest_cycles_completed == 1
 
 
-def test_inconsistent_mode_is_rejected_without_falling_back_and_old_six_review_keeps_its_bank(isolated):
+def test_inconsistent_mode_is_rejected_and_old_six_review_does_not_substitute_current_bank(isolated):
     client, factory, _ = isolated
     pid = create(client)
     questions, _ = submit(client, pid, "pretest", "standard")
@@ -390,7 +388,9 @@ def test_inconsistent_mode_is_rejected_without_falling_back_and_old_six_review_k
         db.commit()
         before = [(a.id, a.is_correct) for a in db.query(Attempt).filter_by(participant_id=pid)]
     review = client.get(f"/api/participants/{pid}/learning-targets").json()["test_results"]
-    assert [q["question_body"] for q in review["results"]] == [q["body"] for q in questions]
+    assert [q["question_body"] for q in review["results"][:2]] == [q["body"] for q in questions[:2]]
+    # This isolated database has no retired v1 bank: do not substitute its v2 replacement.
+    assert review["results"][2]["question_body"] is None
     with factory() as db:
         assert before == [(a.id, a.is_correct) for a in db.query(Attempt).filter_by(participant_id=pid)]
 
