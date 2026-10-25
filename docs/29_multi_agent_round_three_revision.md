@@ -1,6 +1,8 @@
 # マルチエージェント確認問題V3の改訂
 
-## 現行版と適用範囲
+本書は仕様版16・学習バンクv9の採用時記録である。現行版17・学習バンクv10でも、このV3の内容・表示と通常非出題の条件は維持する。記憶プロセスV1の改訂と現行保存・検証条件は[30](30_memory_confirmation_revision.md)を参照する。
+
+## 採用時の版と適用範囲
 
 実験仕様版16 / `experiment-plan-2026-10-25-multi-agent-round3-v1`。新規通常版参加者は[learning_questions_v9.yml](../backend/app/seed/content/standard/learning_questions_v9.yml)と学習版9を使用する。易しい版は4を維持する。ファイル名のv9はバンクの改訂版、learning_round_v3は3回目の学習セッション用のvariantであり、同じセッション内の3回目の回答を意味しない。
 
