@@ -2,7 +2,7 @@ name: Antigravity PR Review
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, hiroki-app, soma1025]
     types:
       - opened
       - synchronize
