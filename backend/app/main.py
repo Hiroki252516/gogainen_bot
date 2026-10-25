@@ -72,6 +72,7 @@ from app.services.identity_mapping_cleanup import (
 )
 from app.services.option_order import current_option_order_mode, save_option_order_mode
 from app.services.question_sets import current_question_set_mode, save_question_set_mode
+from app.services.learning_glossary import load_learning_glossary, public_glossary
 from app.core.question_sets import QuestionSetMode, STANDARD, question_set_mode as effective_question_set_mode
 from app.services import identity_mapping
 from app.services.research_protocol import SurveyPayload, survey_context, record_material_view
@@ -153,6 +154,7 @@ def _reasoning_effort_status() -> dict:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    load_learning_glossary()
     init_db()
     db = next(get_db())
     try:
@@ -554,6 +556,7 @@ async def api_generate_tutor_turn(
             "term_slug": term.slug if term else None,
             "term_label": term.label if term else None,
             "tutor_message": turn.tutor_message,
+            "glossary": public_glossary((turn.diagnosis_json or {}).get("material_glossary")),
             "learner_prompt": turn.learner_prompt,
             "practice_question": _public_practice_question(turn.practice_question_json),
             "requires_learner_response": True,

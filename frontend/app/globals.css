@@ -230,6 +230,37 @@ p {
   font-size: 0.95rem;
 }
 
+.learning-glossary {
+  border-top: 1px solid #cbd5e1;
+  margin-top: 20px;
+  padding-top: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+
+.learning-glossary h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.learning-glossary dl {
+  margin: 0;
+  font-size: 14px;
+}
+
+.learning-glossary dl > div + div {
+  margin-top: 12px;
+}
+
+.learning-glossary dt {
+  font-weight: 700;
+}
+
+.learning-glossary dd {
+  margin: 2px 0 0;
+}
+
 label {
   display: grid;
   gap: 6px;

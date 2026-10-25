@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, or_, text
 from sqlalchemy.orm import Session
 
 from app.ai.backend import AIBackend, strategy_for
@@ -70,6 +70,8 @@ def trial_snapshot(db, pid):
         (3, 4, "experiment-plan-2026-10-22-v1"),
         (3, 5, "experiment-plan-2026-10-23-learning-rotation-v1"),
         (3, 6, "experiment-plan-2026-10-24-two-posttests-v1"),
+        (3, 7, "experiment-plan-2026-10-24-easy-version-v1"),
+        (4, 7, "experiment-plan-2026-10-24-easy-version-v1"),
     ],
 )
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):
@@ -83,6 +85,8 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
         participant.learning_content_version = bank_version
         participant.experiment_spec_version = spec_version
         participant.protocol_id = protocol_id
+        historical_turn = db.get(TutorTurn, turn["turn_id"])
+        historical_turn.diagnosis_json = {key: value for key, value in historical_turn.diagnosis_json.items() if key != "material_glossary"}
         old_attempt = db.query(Attempt).filter_by(participant_id=pid, question_id=questions[0]["question_id"]).one()
         old_attempt_id = old_attempt.id
         old_attempt.legacy_selected_option_id = old_attempt.selected_option_ids[0]
@@ -134,6 +138,7 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
     assert logs.status_code == 200
     assert logs.json()["participant"]["can_resume"] is False
     assert logs.json()["latest_evaluation_summary"]["pretest_score"] == 0.125
+    assert logs.json()["tutor_sessions"][0]["turns"][0]["material_glossary"] is None
     assert "legacy_fields" in logs.json()["learner_states"][0]
     saved_attempt = next(row for row in logs.json()["attempts"] if row["attempt_id"] == old_attempt_id)
     assert saved_attempt["question_body"] == "記録当時の問題文"
@@ -146,7 +151,7 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
     assert all(row["legacy_read_only"] for row in overview["recent_answer_history"] if row["participant_id"] == pid)
     with SessionLocal() as db:
         for group in summary["groups"]:
-            assert group["participant_count"] == db.query(Participant).filter_by(group_condition=group["group_condition"], experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID).count()
+            assert group["participant_count"] == db.query(Participant).filter_by(group_condition=group["group_condition"], experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID).filter(or_(Participant.question_set_mode.is_(None), Participant.question_set_mode == "standard")).count()
     exported = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert exported.status_code == 200
     assert next(csv.reader(exported.text.splitlines())) == experiment.LOG_CSV_COLUMNS

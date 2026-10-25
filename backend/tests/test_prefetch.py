@@ -15,6 +15,7 @@ from app.seed.content_loader import assessment_question_spec
 import app.services.experiment as experiment_service
 from app.services.prefetch import PrefetchCoordinator, wait_for_prefetch_tasks
 from app.services.tutor_prefetch import TutorPrefetchRegistry
+from app.services.learning_glossary import glossary_snapshot, public_glossary
 
 
 client = TestClient(app)
@@ -131,6 +132,7 @@ def test_first_learning_turn_prefetches_all_later_targets():
             assert prefetched_turn.learner_response is None
             assert prefetched_turn.practice_question_json["variant_key"].endswith("v1")
             assert prefetched_turn.diagnosis_json["generation_origin"] == "prefetch"
+            assert prefetched_turn.diagnosis_json["material_glossary"] == glossary_snapshot(prefetched_turn.tutor_message)
             assert prefetched_turn.diagnosis_json["prefetch"]["state"] == "ready"
             assert prefetched_session.prefetch_source_session_id == session["tutor_session_id"]
         summary = db.query(EvaluationSummary).filter_by(participant_id=pid).order_by(EvaluationSummary.created_at.desc()).first()
@@ -202,6 +204,9 @@ def test_next_term_reuses_prefetched_turn_without_new_material_generation():
     next_turn = client.post(f"/api/tutor-sessions/{next_session.json()['tutor_session_id']}/turns", json={})
     assert next_turn.status_code == 200, next_turn.text
     assert next_turn.json()["turn_id"] == prefetched_turn_id
+    with SessionLocal() as glossary_db:
+        saved = glossary_db.get(TutorTurn, prefetched_turn_id)
+        assert next_turn.json()["glossary"] == public_glossary(saved.diagnosis_json["material_glossary"])
 
     db = SessionLocal()
     try:
