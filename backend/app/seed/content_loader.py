@@ -17,6 +17,7 @@ ARCHIVE_CONTENT_DIR = CONTENT_DIR / "archive"
 CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_content.yml"
 UNUSED_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_questions_v2_unused.yml"
 PRE_ISSUE156_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_pre_issue156.yml"
+SCENARIO_ACTIONS_V1_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scenario_actions_v1.yml"
 LEARNING_V3_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v3.yml"
 EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_content_easy.yml"
 LEARNING_EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_questions_v4_easy.yml"
@@ -28,7 +29,7 @@ CURRENT_LEARNING_CONTENT_VERSION = 3
 LEARNING_OPTION_ROLES = ("correct", "M1", "M3")
 LEARNING_SCENARIO_TYPES = ("application", "prediction", "comparison", "boundary", "diagnosis")
 ASSESSMENT_OPTION_ROLES = ("correct", "M1", "M3")
-ASSESSMENT_BANK_VERSION = "scenario-actions-v1"
+ASSESSMENT_BANK_VERSION = ASSESSMENT_BANK_VERSIONS[STANDARD]
 ASSESSMENT_VARIANT_COUNTS = {"pretest": 1, "retest": 2}
 ASSESSMENT_ROLE_SLOTS = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
 UNKNOWN_OPTION = {"label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"}
@@ -210,9 +211,6 @@ def _validate_assessment_variant(term_slug: str, phase: str, variant: Any, mode:
         if not isinstance(items, list) or len(items) != 3 or any(not str(item).strip() for item in items):
             raise ValueError(f"{name} needs three nonempty {role} choices")
         texts.extend(str(item).strip() for item in items)
-    lengths = [len(text) for text in texts]
-    if min(lengths) < (1 if mode == EASY else 20) or max(lengths) > min(lengths) * 1.8 or max(lengths) - min(lengths) > 32:
-        raise ValueError(f"{name} has a conspicuous option-length spread")
     if len(set(texts)) != len(texts):
         raise ValueError(f"{name} has duplicate choice text")
     if _contains_langgraph(variant):
@@ -331,13 +329,6 @@ def _validate_v3_content(content: dict[str, Any], assessment_content: dict[str, 
                 ):
                     raise ValueError(f"{name} needs three nonempty {role} choices")
                 all_choice_bodies.extend(str(text).strip() for text in texts)
-            lengths = [len(text) for text in all_choice_bodies]
-            if (
-                min(lengths) < (1 if mode == EASY else 20)
-                or max(lengths) > min(lengths) * 1.8
-                or max(lengths) - min(lengths) > 32
-            ):
-                raise ValueError(f"{name} has a conspicuous option-length spread")
             body = f"{variant['scenario']}\n\n{variant['task']}"
             if body in learning_bodies:
                 raise ValueError("learning v3 question bodies must be unique")

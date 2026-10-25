@@ -12,13 +12,20 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 8 |
-| 新プロトコル | experiment-plan-2026-10-25-glossary-v1 |
+| 実験仕様版 | 9 |
+| 新プロトコル | experiment-plan-2026-10-25-pretest-improvement-v1 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-25 用語注釈の追加判断
+## 2026-10-25 事前テスト選択肢の改善（版9）
+
+- 承認された通常版の事前テスト6選択肢と、そのうち誤答4選択肢の訂正情報を更新する。場面・設問・その他の選択肢、再テスト、学習確認、易しい版の本文は変更しない。全文・分類根拠は[21](21_assessment_action_questions.md)。
+- 通常版テストをscenario-actions-v2とし、旧v1のYAMLはarchive/learning_content_scenario_actions_v1.ymlへ保全する。別のQuestion/QuestionOptionをseedし、既存ID・本文・判定・回答・教材・評価・snapshotを上書きしない。旧版6〜8のsnapshot不足時も当時のバンクを参照する。
+- 通常版・易しい版の全テスト・学習確認から、選択肢の20文字下限・文長比1.8・文字数差32の検査を撤廃する。非空・重複・選択肢数・役割数・教授対象の検査は維持する。文長の均一性は保証せず、長さが回答の手掛かりとなり得るため予備調査で確認する。
+- 新規参加者だけ版9と現行protocolを使用し、版8以下・NULL・旧protocolは閲覧専用。DB列、易しい版と学習確認のバンク版、生成契約v7、AIプロンプト、注釈、採点、研究仮説・評価式は変更しない。教材600〜800文字は引き続き検査する。
+
+## 2026-10-25 用語注釈の追加判断（版8採用時の記録）
 
 - feature/issue-132の承認により、両群・両問題版の教材と回答後解説の下へ、共通固定辞書による用語一覧を追加する。AI指示・本文・生成契約版v7・問題バンク・評価式は変更しない。注釈は600〜800文字とは別枠。
 - 新規参加者だけ版8と新protocolを使う。版7以下を途中から注釈ありに変更せず、既存の閲覧専用境界で保護する。保存snapshot・回答・評価・AIログは不変。

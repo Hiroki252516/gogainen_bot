@@ -7,15 +7,15 @@ from sqlalchemy.orm import Session
 
 from app.models import Attempt, Base, EvaluationSummary, Participant, Question, QuestionOption, Term
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS
-from app.seed.content_loader import ASSESSMENT_BANK_VERSION, CONTENT_PATH, PRE_ISSUE156_CONTENT_PATH, load_content
+from app.seed.content_loader import ASSESSMENT_BANK_VERSION, CONTENT_PATH, PRE_ISSUE156_CONTENT_PATH, SCENARIO_ACTIONS_V1_CONTENT_PATH, load_content
 from app.seed.seed_questions import _upsert_question, seed_database
 from app.services import experiment
 
 
-def test_llm_proposals_are_preserved_verbatim_in_all_three_measurements():
+def test_original_llm_proposals_are_preserved_verbatim_in_archived_bank():
     fixture = Path(__file__).with_name("fixtures") / "issue156_llm_proposals.json"
     expected = json.loads(fixture.read_text(encoding="utf-8"))
-    questions = load_content()["terms"][0]["questions"]
+    questions = yaml.safe_load(SCENARIO_ACTIONS_V1_CONTENT_PATH.read_text(encoding="utf-8"))["terms"][0]["questions"]
     assert [questions["pretest"][0], *questions["retest"]] == expected
 
 

@@ -1,0 +1,177 @@
+from copy import deepcopy
+import hashlib
+
+import pytest
+import yaml
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
+
+from app.core.question_sets import assessment_construct_key
+from app.db import session as database
+from app.models import Attempt, Base, EvaluationSummary, Participant, Question, QuestionOption, Term
+from app.seed.content_loader import (
+    EASY_CONTENT_PATH, LEARNING_EASY_CONTENT_PATH, SCENARIO_ACTIONS_V1_CONTENT_PATH,
+    _assessment_options, _validate_content, _validate_v3_content,
+    assessment_question_spec, load_content, load_learning_easy_content, load_learning_v3_content,
+)
+from app.seed.seed_questions import _upsert_question, seed_database
+from app.services import experiment
+
+
+REPLACEMENTS = {
+    ("llm_knowledge", "correct", 2): "担当者が確認した質問と回答の見本を使ってAIを追加訓練し、「結論・操作手順・注意点」の順で答えるように調整する。",
+    ("llm_knowledge", "M3", 2): "取扱説明書を保存・検索する仕組みとして、説明書の本文をプロンプトに登録し、プロンプトそのものを文書データベースとして利用するように設計する。",
+    ("multi_agent", "M1", 0): "蔵書を調べる担当と利用条件を確認する担当にそれぞれ指示を出し、調査結果を受け渡したり統合したりする仕組みを設けずに、担当同士が自動的に連携して案内を作るように設計する。",
+    ("memory_process", "correct", 0): "利用者が会話で伝えた食事の好みや避けたい食材から、次回以降の提案に必要な情報を選んで利用者ごとに保存し、次の相談時に関連する情報を検索して、AIがその情報を参考に食事を提案できる仕組みを実装する。",
+    ("memory_process", "M1", 0): "利用者の食事の希望を次回も覚えておくには、必要な情報だけを保存する方法では記憶できないため、過去の会話をすべて全文のまま保存する仕組みを実装する。",
+    ("memory_process", "M3", 2): "前回の会話をプロンプトに貼り付けるだけで、会話終了後も情報を保存・検索・更新する記憶機能を実現できる。",
+}
+
+
+def archived_content():
+    return yaml.safe_load(SCENARIO_ACTIONS_V1_CONTENT_PATH.read_text(encoding="utf-8"))
+
+
+def test_only_six_standard_choices_and_four_targets_changed():
+    before = archived_content()
+    expected = deepcopy(before)
+    for (slug, role, index), text in REPLACEMENTS.items():
+        term = next(term for term in expected["terms"] if term["slug"] == slug)
+        term["questions"]["pretest"][0]["choices"][role][index] = text
+        label = "ABCDEFGHI"[("correct", "M1", "M3").index(role) * 3 + index]
+        option = next(o for o in assessment_question_spec(slug, "pretest")["options"] if o["label"] == label)
+        assert option["body"] == text
+        assert option["is_correct"] == (role == "correct")
+        assert option["misconception_type"] == (None if role == "correct" else role)
+    current = deepcopy(load_content())
+    assert current["assessment_bank_version"] == "scenario-actions-v2"
+    current["assessment_bank_version"] = before["assessment_bank_version"]
+    changed_targets = {(slug, label) for slug in before["teaching_targets"] for label in before["teaching_targets"][slug]
+                       if before["teaching_targets"][slug][label] != current["teaching_targets"][slug][label]}
+    assert changed_targets == {("llm_knowledge", "I"), ("multi_agent", "D"), ("memory_process", "D"), ("memory_process", "I")}
+    current["teaching_targets"] = before["teaching_targets"]
+    assert current == expected
+    targets = load_content()["teaching_targets"]
+    assert "本文をプロンプトへ含めて参照させることはできる" in targets["llm_knowledge"]["I"]["corrected_claim"]
+    assert "全文保存という方法自体を誤りとするものではない" in targets["memory_process"]["D"]["mechanism_explanation"]
+    assert "保存済み履歴を入力へ戻すこと自体は記憶利用の一部" in targets["memory_process"]["I"]["mechanism_explanation"]
+
+
+def test_easy_question_files_remain_unchanged():
+    assert hashlib.sha256(EASY_CONTENT_PATH.read_bytes()).hexdigest() == "9b096d2a275a272e719976e07e007afa5b67423abb1eda4ae0c75a09e966f6bb"
+    assert hashlib.sha256(LEARNING_EASY_CONTENT_PATH.read_bytes()).hexdigest() == "586e892f63ab4fd0df1f6cfb1a66fe7630763415e91df1c59cf43830655a1206"
+
+
+@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("bank", ["assessment", "learning"])
+@pytest.mark.parametrize("change", ["lengths", "empty", "duplicate", "count", "role"])
+def test_option_lengths_are_unrestricted_but_structure_is_validated(mode, bank, change):
+    assessment = deepcopy(load_content(mode))
+    if bank == "assessment":
+        content = assessment
+        variant = content["terms"][0]["questions"]["pretest"][0]
+        validate = lambda: _validate_content(content, mode)
+    else:
+        content = deepcopy(load_learning_easy_content() if mode == "easy" else load_learning_v3_content())
+        variant = content["terms"]["llm_knowledge"]["variants"][0]
+        validate = lambda: _validate_v3_content(content, assessment, mode)
+    choices = variant["choices"]
+    if change == "lengths":
+        choices["correct"][0] = "短"
+        choices["M1"][0] = "長い選択肢の表現" * 100
+    elif change == "empty":
+        choices["M1"][0] = "  "
+    elif change == "duplicate":
+        choices["M3"][0] = choices["correct"][0]
+    elif change == "count":
+        choices["correct"].pop()
+    else:
+        choices["M2"] = choices.pop("M1")
+    if change == "lengths":
+        validate()
+    else:
+        with pytest.raises(ValueError):
+            validate()
+
+
+def seed_historical_banks(db):
+    old = archived_content()
+    for index, item in enumerate(old["terms"], start=1):
+        term = Term(slug=item["slug"], label=item["label"], description=item["description"], display_order=index)
+        db.add(term)
+        db.flush()
+        for mode, bank in (("standard", old), ("easy", load_content("easy"))):
+            term_item = next(t for t in bank["terms"] if t["slug"] == term.slug)
+            for phase in ("pretest", "retest", "final_test"):
+                variants = term_item["questions"]["retest"][:1] if phase == "final_test" else term_item["questions"][phase]
+                for variant in variants:
+                    _upsert_question(
+                        db, term, phase=phase, question_type={"pretest": "multi_select", "retest": "retest_multi_select", "final_test": "final_multi_select"}[phase],
+                        body=f"{variant['scenario']}\n\n{variant['task']}", expected_answer="A、B、Cをすべて選択し、それ以外を選ばない。",
+                        construct_key=assessment_construct_key(term.slug, phase, mode, bank_version=bank["assessment_bank_version"]),
+                        variant_key=variant["variant_key"],
+                        options=[(o["label"], o["body"], o["is_correct"], o["misconception_type"]) for o in _assessment_options(variant)],
+                    )
+    db.commit()
+
+
+@pytest.mark.parametrize("spec_version,mode", [(6, "standard"), (7, "standard"), (8, "standard"), (7, "easy"), (8, "easy")])
+def test_seed_keeps_old_ids_and_snapshotless_reviews_on_historical_bank(tmp_path, monkeypatch, spec_version, mode):
+    engine = create_engine(f"sqlite:///{tmp_path / 'history.db'}")
+    monkeypatch.setattr(database, "engine", engine)
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        seed_historical_banks(db)
+        questions_before = {q.id: (q.body, q.expected_answer, q.construct_key, q.variant_key) for q in db.query(Question)}
+        options_before = {o.id: (o.question_id, o.body, o.is_correct, o.misconception_type) for o in db.query(QuestionOption)}
+        protocol = {6: "experiment-plan-2026-10-24-two-posttests-v1", 7: "experiment-plan-2026-10-24-easy-version-v1", 8: "experiment-plan-2026-10-25-glossary-v1"}[spec_version]
+        participant = Participant(display_code="OLD", group_condition="proposed", current_step="learning_targets",
+                                  experiment_spec_version=spec_version, protocol_id=protocol, question_set_mode=mode,
+                                  learning_content_version=4 if mode == "easy" else 3, retest_cycles_completed=1)
+        db.add(participant)
+        db.flush()
+        term = db.query(Term).filter_by(slug="llm_knowledge").one()
+        bank = "scenario-actions-easy-v1" if mode == "easy" else "scenario-actions-v1"
+        final = db.query(Question).filter_by(term_id=term.id, phase="final_test", construct_key=assessment_construct_key(term.slug, "final_test", mode, bank_version=bank)).one()
+        db.add(Attempt(participant_id=participant.id, term_id=term.id, question_id=final.id, phase="final_test", test_round="retest_1", is_correct=False))
+        pretest = db.query(Question).filter_by(term_id=term.id, phase="pretest", construct_key=assessment_construct_key(term.slug, "pretest", mode, bank_version=bank)).one()
+        selected = db.query(QuestionOption).filter_by(question_id=pretest.id, option_label="I").one()
+        saved = Attempt(participant_id=participant.id, term_id=term.id, question_id=pretest.id, phase="pretest", test_round="test",
+                        selected_option_ids=[selected.id], is_correct=False, misconception_type="M3", question_body_snapshot=None, option_order_snapshot=None)
+        db.add(saved)
+        db.add(EvaluationSummary(participant_id=participant.id, group_condition="proposed", pretest_score=0.125))
+        db.commit()
+        records_before = {model: deepcopy(db.execute(select(model.__table__)).mappings().all()) for model in (Participant, Attempt, EvaluationSummary)}
+        seed_database(db)
+        seed_database(db)
+        database.init_db()
+        database.init_db()
+        for model, records in records_before.items():
+            assert db.execute(select(model.__table__)).mappings().all() == records
+        assert db.query(Question).count() == 36
+        assert db.query(Question).filter_by(is_active=True).count() == 24
+        assert db.query(QuestionOption).count() == 360
+        for qid, expected in questions_before.items():
+            q = db.get(Question, qid)
+            assert (q.body, q.expected_answer, q.construct_key, q.variant_key) == expected
+            assert q.is_active == q.construct_key.endswith("scenario-actions-easy-v1")
+        for oid, expected in options_before.items():
+            o = db.get(QuestionOption, oid)
+            assert (o.question_id, o.body, o.is_correct, o.misconception_type) == expected
+        for t in db.query(Term):
+            for round_name, phase, key in (("test", "pretest", "pretest_v1"), ("retest_1", "final_test", "retest_v1"), ("retest_2", "retest", "retest_v2")):
+                q = experiment._test_result_question(db, participant, t, round_name, phase)
+                assert q.id in questions_before
+                assert q.construct_key.endswith(bank)
+                assert q.variant_key == key
+        assert experiment._public_selected_options(db, saved) == [{"label": "I", "body": selected.body}]
+        review = experiment.latest_test_results(db, participant.id)
+        assert review["results"][0]["question_body"] == questions_before[final.id][0]
+        for row in review["results"][1:]:
+            t = db.query(Term).filter_by(slug=row["term_slug"]).one()
+            q = experiment._test_result_question(db, participant, t, "retest_1", "final_test")
+            assert row["question_body"] == questions_before[q.id][0]
+        assert db.get(Attempt, saved.id).option_order_snapshot is None
+        assert participant.experiment_spec_version == spec_version
+        assert db.query(EvaluationSummary).one().pretest_score == 0.125
+    engine.dispose()

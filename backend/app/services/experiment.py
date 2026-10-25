@@ -50,7 +50,7 @@ from app.core.runtime_config import (
     STUDY_REASONING_EFFORT,
     current_ai_runtime_settings,
 )
-from app.core.question_sets import STANDARD, ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key, question_set_mode, explanation_context
+from app.core.question_sets import STANDARD, ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key, question_set_mode, explanation_context
 from app.services.question_sets import current_question_set_mode
 from app.services.learning_glossary import glossary_snapshot, public_glossary
 from app.db.session import SessionLocal
@@ -1589,6 +1589,8 @@ def _test_result_question(
     test_round: str,
     phase: str,
 ) -> Question | None:
+    historical_banks = HISTORICAL_ASSESSMENT_BANK_VERSIONS.get(participant.experiment_spec_version)
+    uses_scenario_bank = historical_banks is not None or participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
     expected_variant: str | None = None
     if test_round == "test":
         expected_variant = "pretest_v1"
@@ -1597,11 +1599,11 @@ def _test_result_question(
     elif phase == "retest":
         round_number = _round_number(test_round)
         if round_number is not None:
-            has_final_test = participant.experiment_spec_version not in {6, 7, CURRENT_EXPERIMENT_SPEC_VERSION} and db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
+            has_final_test = not uses_scenario_bank and db.query(Attempt.id).filter_by(participant_id=participant.id, phase="final_test").first() is not None
             variant_number = max(
                 1,
                 min(
-                    ASSESSMENT_VARIANT_COUNTS["retest"] if can_resume(participant) else 5,
+                    ASSESSMENT_VARIANT_COUNTS["retest"] if uses_scenario_bank else 5,
                     round_number - (1 if has_final_test else 0),
                 ),
             )
@@ -1615,12 +1617,20 @@ def _test_result_question(
         )
         .order_by(Question.created_at.desc(), Question.variant_key)
     )
-    if participant.experiment_spec_version in {6, 7, CURRENT_EXPERIMENT_SPEC_VERSION}:
-        query = query.filter(Question.construct_key == assessment_construct_key(term.slug, phase, participant.question_set_mode))
+    if uses_scenario_bank:
+        mode = question_set_mode(participant.question_set_mode)
+        banks = historical_banks if historical_banks is not None else ASSESSMENT_BANK_VERSIONS
+        bank_version = banks.get(mode)
+        if bank_version is None:
+            return None
+        query = query.filter(Question.construct_key == assessment_construct_key(term.slug, phase, mode, bank_version=bank_version))
         if can_resume(participant):
             query = query.filter(Question.is_active.is_(True))
     else:
-        for bank_version in ASSESSMENT_BANK_VERSIONS.values():
+        bank_versions = set(ASSESSMENT_BANK_VERSIONS.values())
+        for banks in HISTORICAL_ASSESSMENT_BANK_VERSIONS.values():
+            bank_versions.update(banks.values())
+        for bank_version in bank_versions:
             query = query.filter(~Question.construct_key.endswith(bank_version))
     candidates = query.all()
     if expected_variant:
