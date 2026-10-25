@@ -45,9 +45,9 @@ def test_only_llm_first_learning_variant_changes_and_v3_is_preserved():
     expected = deepcopy(load_learning_v3_content())
     expected["version"] = 5
     expected["terms"]["llm_knowledge"]["variants"][0] = EXPECTED
-    assert load_learning_content() == expected
+    assert load_learning_content(content_version=5) == expected
     for stage in ("enrichment", "conceptual_change"):
-        spec = learning_question_spec("llm_knowledge", stage)
+        spec = learning_question_spec("llm_knowledge", stage, content_version=5)
         assert spec["_content_version"] == 5
         assert spec["body"] == EXPECTED["scenario"] + "\n\n" + EXPECTED["task"]
         for role, labels in (("correct", "ABC"), ("M1", "DEF"), ("M3", "GHI")):
@@ -69,19 +69,20 @@ def test_missing_v5_file_does_not_use_v3(tmp_path, monkeypatch):
         patch.setattr(content_loader, "LEARNING_V5_CONTENT_PATH", tmp_path / "missing.yml")
         load_learning_content.cache_clear()
         with pytest.raises(FileNotFoundError):
-            load_learning_content()
+            load_learning_content(content_version=5)
     load_learning_content.cache_clear()
 
 
-@pytest.mark.parametrize("version,spec_version", [(3, 11), (5, CURRENT_EXPERIMENT_SPEC_VERSION)])
+@pytest.mark.parametrize("version,spec_version", [(3, 11), (5, 12), (6, CURRENT_EXPERIMENT_SPEC_VERSION)])
 @pytest.mark.parametrize("snapshot", [False, True])
 def test_history_uses_saved_snapshot_or_saved_learning_version_without_writes(tmp_path, monkeypatch, version, spec_version, snapshot):
     engine = create_engine(f"sqlite:///{tmp_path / 'history.db'}")
     monkeypatch.setattr(database, "engine", engine)
     Base.metadata.create_all(engine)
     with Session(engine) as db:
+        protocol = {3: "experiment-plan-2026-10-25-pretest-f-wording-v1", 5: "experiment-plan-2026-10-25-learning-confirmation-v1", 6: CURRENT_PROTOCOL_ID}[version]
         participant = Participant(display_code="HISTORY", group_condition="proposed", learning_content_version=version,
-                                  experiment_spec_version=spec_version, protocol_id=CURRENT_PROTOCOL_ID if version == 5 else "experiment-plan-2026-10-25-pretest-f-wording-v1")
+                                  experiment_spec_version=spec_version, protocol_id=protocol)
         term = Term(slug="llm_knowledge", label="LLM", description="description", display_order=1)
         db.add_all([participant, term])
         db.flush()
@@ -95,7 +96,7 @@ def test_history_uses_saved_snapshot_or_saved_learning_version_without_writes(tm
                          grading_json={"is_sufficient": False, "selected_option_ids": ["D"]})
         db.add(turn)
         db.commit()
-        if version == 3:
+        if version in (3, 5):
             before_rows = {model: deepcopy(db.execute(select(model.__table__)).mappings().all()) for model in (Participant, TutorSession, TutorTurn)}
             seed_database(db)
             seed_database(db)
@@ -108,5 +109,5 @@ def test_history_uses_saved_snapshot_or_saved_learning_version_without_writes(tm
         assert record["question_body"] == ("保存時の問題" if snapshot else spec["body"])
         assert record["selected_options"] == [{"label": "D", "body": "保存時の選択本文" if snapshot else spec["options"][3]["body"]}]
         assert json.dumps([turn.practice_question_json, turn.diagnosis_json, turn.grading_json, participant.learning_content_version], sort_keys=True) == before
-        assert "履修規程" in record["question_body"] if version == 5 and not snapshot else "履修規程" not in record["question_body"]
+        assert "履修規程" in record["question_body"] if version in (5, 6) and not snapshot else "履修規程" not in record["question_body"]
     engine.dispose()

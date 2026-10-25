@@ -12,13 +12,19 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 12 |
-| 新プロトコル | experiment-plan-2026-10-25-learning-confirmation-v1 |
+| 実験仕様版 | 13 |
+| 新プロトコル | experiment-plan-2026-10-25-multi-agent-confirmation-v1 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-25 LLM知識の確認問題改訂（版12）
+## 2026-10-25 マルチエージェントの確認問題改訂（版13）
+
+- fix/conf-test-multiの承認により、通常版multi_agent・learning_round_v1の場面・設問とM3選択肢H・Iだけを指定文へ変更する。新しい通常版学習バンクv6を追加し、旧v3・v5を原文のまま保持する。残る8確認問題、易しい版v4、テスト問題、事前テストの訂正情報は変更しない。[全文と分類根拠](26_multi_agent_confirmation_revision.md)。
+- 新規だけ版13 / experiment-plan-2026-10-25-multi-agent-confirmation-v1を保存し、通常版の学習版を6、易しい版を4に固定する。旧版12以下は閲覧専用で、既存参加者の版・進行・回答・教材・保存済み評価・snapshotを更新しない。復元は保存された学習版を参照し、別版へフォールバックしない。
+- 出題・採点・同期生成・先行生成の版を統一し、両群・両学習段階で同じ問題を使用する。公開API・DB列・AI生成契約・教授プロンプト・採点・配置・回数制限は維持する。研究DB・3000番環境・Word・別仕様リポジトリ・実AI呼び出しは対象外。
+
+## 2026-10-25 LLM知識の確認問題改訂（版12採用時の記録）
 
 - fix/conf-test-impの承認により通常版LLM知識・learning_round_v1を履修案内AIの指定文へ変更する。新しい通常版学習バンクv5を追加し、旧v3を原文のまま履歴参照用に残す。残る8問・易しい版v4・テストバンク・訂正情報は変更しない。全文と分類根拠は[25](25_learning_confirmation_revision.md)。
 - 新規だけ版12 / experiment-plan-2026-10-25-learning-confirmation-v1を保存し、通常版の学習バンク版を5に固定する。旧版11以下の記録・保存評価・snapshotは変更しない。履歴復元も保存されたバンク版を使い、別版へフォールバックしない。

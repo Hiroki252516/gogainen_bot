@@ -1,5 +1,7 @@
 # 通常版LLM知識の確認問題改訂
 
+本書は実験仕様版12・通常版学習バンクv5を採用した際の改訂記録である。現行の仕様版13・学習バンクv6でも、このLLM知識の問題本文・選択肢は変更しない。今回のマルチエージェント改訂と現行版の適用範囲は[26](26_multi_agent_confirmation_revision.md)を参照する。
+
 ## 適用範囲と履歴
 
 実験仕様版12 / `experiment-plan-2026-10-25-learning-confirmation-v1`。通常版の学習バンクは[learning_questions_v5.yml](../backend/app/seed/content/standard/learning_questions_v5.yml)で、LLM知識の`learning_round_v1`だけを変更する。残る8確認問題は旧v3と同一。通常版の事前・再・最終テスト、易しい版v4、事前テストの訂正情報は変更しない。
