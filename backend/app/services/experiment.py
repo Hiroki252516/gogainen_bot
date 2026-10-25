@@ -878,6 +878,36 @@ def post_pretest_test_progress(db: Session, participant: Participant) -> dict[st
     }
 
 
+def experiment_progress(db: Session, participant: Participant) -> dict[str, str | int] | None:
+    if not can_resume(participant):
+        return None
+
+    if participant.current_step == "pretest":
+        return {"stage_id": "pretest", "label": "事前テスト・採点中", "percent": 0}
+    if participant.current_step in {"learning_targets", "retest", "final_test"}:
+        completed = post_pretest_tests_completed(db, participant)
+        if participant.current_step == "final_test" and completed != 0:
+            return None
+        if completed == 0:
+            return {
+                "stage_id": "post_pretest_1",
+                "label": "再テスト1までの学習・再テスト1",
+                "percent": 25,
+            }
+        if completed == 1:
+            return {
+                "stage_id": "post_pretest_2",
+                "label": "再テスト2までの学習・再テスト2",
+                "percent": 50,
+            }
+        return None
+    if participant.current_step == "survey":
+        return {"stage_id": "survey", "label": "アンケート", "percent": 75}
+    if participant.current_step == "finish":
+        return {"stage_id": "complete", "label": "実験手続き完了", "percent": 100}
+    return None
+
+
 def _expected_test_variant(db: Session, participant: Participant, phase: str) -> str:
     if phase == "pretest":
         return "pretest_v1"

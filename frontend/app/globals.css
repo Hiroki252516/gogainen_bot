@@ -50,6 +50,79 @@ a {
   font-size: 14px;
 }
 
+.experiment-progress,
+.experiment-progress-loading,
+.experiment-progress-error {
+  margin: -4px 0 18px;
+}
+
+.experiment-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.experiment-progress-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.experiment-progress-heading strong {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.experiment-progress progress {
+  display: block;
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #e4e8ee;
+  accent-color: var(--ok);
+}
+
+.experiment-progress progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #e4e8ee;
+}
+
+.experiment-progress progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--ok);
+}
+
+.experiment-progress progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--ok);
+}
+
+.experiment-progress small {
+  line-height: 1.5;
+}
+
+.experiment-progress-loading {
+  min-height: 28px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.experiment-progress-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.experiment-progress-error button {
+  flex: 0 0 auto;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -989,6 +1062,14 @@ button:disabled {
 }
 
 @media (max-width: 760px) {
+  .experiment-progress-heading {
+    align-items: flex-start;
+  }
+
+  .experiment-progress-error {
+    align-items: flex-start;
+  }
+
   .learning-layout {
     grid-template-columns: 1fr;
   }

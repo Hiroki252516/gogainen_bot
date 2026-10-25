@@ -124,7 +124,12 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
         assert response.status_code == 409, (path, response.text)
         assert response.json()["detail"]["error_code"] == "legacy_experiment_read_only"
     assert client.delete(f"/api/admin/participants/{pid}").status_code == 409
-    assert client.get(f"/api/participants/{pid}/current-step").json() == {"step": "legacy_read_only", "can_resume": False, "next_url": "/start"}
+    assert client.get(f"/api/participants/{pid}/current-step").json() == {
+        "step": "legacy_read_only",
+        "can_resume": False,
+        "next_url": "/start",
+        "progress": None,
+    }
     logs = client.get(f"/api/admin/participants/{pid}/logs")
     assert logs.status_code == 200
     assert logs.json()["participant"]["can_resume"] is False
