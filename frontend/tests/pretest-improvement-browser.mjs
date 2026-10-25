@@ -33,6 +33,12 @@ try {
     assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
     const reference = await create(page.request, mode, "debug_fixed");
     const canonical = (await api(page.request, `/api/experiment/${reference.participant_id}/pretest`)).questions;
+    if (mode === "standard") {
+      assert.deepEqual(canonical[0].options.slice(0, 2).map((option) => option.body), [
+        "利用者の質問に応じて最新の取扱説明書を検索し、該当箇所を質問と一緒にAIへ渡して回答を作らせる仕組みを実装する。",
+        "利用者からの質問に回答するとき、「結論・操作手順・注意点」の順に説明するよう、AIに指示するプロンプトを設定する。",
+      ]);
+    }
     const record = await create(page.request, mode, layout);
     const questions = (await api(page.request, `/api/experiment/${record.participant_id}/pretest`)).questions;
     await page.addInitScript((created) => {

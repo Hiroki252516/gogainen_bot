@@ -12,13 +12,19 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 9 |
-| 新プロトコル | experiment-plan-2026-10-25-pretest-improvement-v1 |
+| 実験仕様版 | 10 |
+| 新プロトコル | experiment-plan-2026-10-25-pretest-wording-v1 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-25 事前テスト選択肢の改善（版9）
+## 2026-10-25 事前テスト問1 A・Bの表現改善（版10）
+
+- fix/pretest-impの承認により、通常版事前テスト問1のA・Bだけを指定文へ変更する。どちらも正解のままであり、訂正情報・問題文・他選択肢・他問題の本文は変更しない。「問2のB」ではなく「問1のB」と確認済み。全文は[21](21_assessment_action_questions.md)。
+- 通常版テストをscenario-actions-v3とし、旧v2をarchive/learning_content_scenario_actions_v2.ymlへ保全する。新バンクは別問題IDでseedし、既存問題・回答・教材・評価・snapshotを上書きしない。旧版9のsnapshot不足時も当時のv2を参照する。
+- 新規だけ版10 / experiment-plan-2026-10-25-pretest-wording-v1を使い、版9以下・NULL・旧protocolは閲覧専用。DB構造、易しい版・学習確認・生成契約の版、AIプロンプト、採点・配置規則は維持する。研究DBと3000番環境へは反映しない。
+
+## 2026-10-25 事前テスト選択肢の改善（版9採用時の記録）
 
 - 承認された通常版の事前テスト6選択肢と、そのうち誤答4選択肢の訂正情報を更新する。場面・設問・その他の選択肢、再テスト、学習確認、易しい版の本文は変更しない。全文・分類根拠は[21](21_assessment_action_questions.md)。
 - 通常版テストをscenario-actions-v2とし、旧v1のYAMLはarchive/learning_content_scenario_actions_v1.ymlへ保全する。別のQuestion/QuestionOptionをseedし、既存ID・本文・判定・回答・教材・評価・snapshotを上書きしない。旧版6〜8のsnapshot不足時も当時のバンクを参照する。

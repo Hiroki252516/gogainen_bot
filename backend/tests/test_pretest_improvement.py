@@ -10,7 +10,7 @@ from app.core.question_sets import assessment_construct_key
 from app.db import session as database
 from app.models import Attempt, Base, EvaluationSummary, Participant, Question, QuestionOption, Term
 from app.seed.content_loader import (
-    EASY_CONTENT_PATH, LEARNING_EASY_CONTENT_PATH, SCENARIO_ACTIONS_V1_CONTENT_PATH,
+    EASY_CONTENT_PATH, LEARNING_EASY_CONTENT_PATH, SCENARIO_ACTIONS_V1_CONTENT_PATH, SCENARIO_ACTIONS_V2_CONTENT_PATH,
     _assessment_options, _validate_content, _validate_v3_content,
     assessment_question_spec, load_content, load_learning_easy_content, load_learning_v3_content,
 )
@@ -28,11 +28,12 @@ REPLACEMENTS = {
 }
 
 
-def archived_content():
-    return yaml.safe_load(SCENARIO_ACTIONS_V1_CONTENT_PATH.read_text(encoding="utf-8"))
+def archived_content(version=1):
+    path = SCENARIO_ACTIONS_V2_CONTENT_PATH if version == 2 else SCENARIO_ACTIONS_V1_CONTENT_PATH
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def test_only_six_standard_choices_and_four_targets_changed():
+def test_v2_changed_only_six_standard_choices_and_four_targets():
     before = archived_content()
     expected = deepcopy(before)
     for (slug, role, index), text in REPLACEMENTS.items():
@@ -43,7 +44,7 @@ def test_only_six_standard_choices_and_four_targets_changed():
         assert option["body"] == text
         assert option["is_correct"] == (role == "correct")
         assert option["misconception_type"] == (None if role == "correct" else role)
-    current = deepcopy(load_content())
+    current = archived_content(2)
     assert current["assessment_bank_version"] == "scenario-actions-v2"
     current["assessment_bank_version"] = before["assessment_bank_version"]
     changed_targets = {(slug, label) for slug in before["teaching_targets"] for label in before["teaching_targets"][slug]
@@ -55,6 +56,25 @@ def test_only_six_standard_choices_and_four_targets_changed():
     assert "本文をプロンプトへ含めて参照させることはできる" in targets["llm_knowledge"]["I"]["corrected_claim"]
     assert "全文保存という方法自体を誤りとするものではない" in targets["memory_process"]["D"]["mechanism_explanation"]
     assert "保存済み履歴を入力へ戻すこと自体は記憶利用の一部" in targets["memory_process"]["I"]["mechanism_explanation"]
+
+
+def test_v3_changes_only_llm_pretest_a_and_b_and_keeps_both_correct():
+    assert hashlib.sha256(SCENARIO_ACTIONS_V2_CONTENT_PATH.read_bytes()).hexdigest() == "57d27c53e1e1b15cfe4eb1bd1a2cb2817f95fa22cc092ceabd26e8f3dad9569b"
+    expected = archived_content(2)
+    assert expected["assessment_bank_version"] == "scenario-actions-v2"
+    choices = expected["terms"][0]["questions"]["pretest"][0]["choices"]["correct"]
+    choices[:2] = [
+        "利用者の質問に応じて最新の取扱説明書を検索し、該当箇所を質問と一緒にAIへ渡して回答を作らせる仕組みを実装する。",
+        "利用者からの質問に回答するとき、「結論・操作手順・注意点」の順に説明するよう、AIに指示するプロンプトを設定する。",
+    ]
+    expected["assessment_bank_version"] = "scenario-actions-v3"
+    assert load_content() == expected
+    options = assessment_question_spec("llm_knowledge", "pretest")["options"]
+    for label, text in zip("AB", choices[:2], strict=True):
+        option = next(o for o in options if o["label"] == label)
+        assert option["body"] == text
+        assert option["is_correct"] is True
+        assert option["misconception_type"] is None
 
 
 def test_easy_question_files_remain_unchanged():
@@ -94,8 +114,8 @@ def test_option_lengths_are_unrestricted_but_structure_is_validated(mode, bank, 
             validate()
 
 
-def seed_historical_banks(db):
-    old = archived_content()
+def seed_historical_banks(db, version=1):
+    old = archived_content(version)
     for index, item in enumerate(old["terms"], start=1):
         term = Term(slug=item["slug"], label=item["label"], description=item["description"], display_order=index)
         db.add(term)
@@ -115,27 +135,28 @@ def seed_historical_banks(db):
     db.commit()
 
 
-@pytest.mark.parametrize("spec_version,mode", [(6, "standard"), (7, "standard"), (8, "standard"), (7, "easy"), (8, "easy")])
+@pytest.mark.parametrize("spec_version,mode", [(6, "standard"), (7, "standard"), (8, "standard"), (7, "easy"), (8, "easy"), (9, "standard"), (9, "easy")])
 def test_seed_keeps_old_ids_and_snapshotless_reviews_on_historical_bank(tmp_path, monkeypatch, spec_version, mode):
     engine = create_engine(f"sqlite:///{tmp_path / 'history.db'}")
     monkeypatch.setattr(database, "engine", engine)
     Base.metadata.create_all(engine)
     with Session(engine) as db:
-        seed_historical_banks(db)
+        seed_historical_banks(db, version=2 if spec_version == 9 else 1)
         questions_before = {q.id: (q.body, q.expected_answer, q.construct_key, q.variant_key) for q in db.query(Question)}
         options_before = {o.id: (o.question_id, o.body, o.is_correct, o.misconception_type) for o in db.query(QuestionOption)}
-        protocol = {6: "experiment-plan-2026-10-24-two-posttests-v1", 7: "experiment-plan-2026-10-24-easy-version-v1", 8: "experiment-plan-2026-10-25-glossary-v1"}[spec_version]
+        protocol = {6: "experiment-plan-2026-10-24-two-posttests-v1", 7: "experiment-plan-2026-10-24-easy-version-v1", 8: "experiment-plan-2026-10-25-glossary-v1", 9: "experiment-plan-2026-10-25-pretest-improvement-v1"}[spec_version]
         participant = Participant(display_code="OLD", group_condition="proposed", current_step="learning_targets",
                                   experiment_spec_version=spec_version, protocol_id=protocol, question_set_mode=mode,
                                   learning_content_version=4 if mode == "easy" else 3, retest_cycles_completed=1)
         db.add(participant)
         db.flush()
         term = db.query(Term).filter_by(slug="llm_knowledge").one()
-        bank = "scenario-actions-easy-v1" if mode == "easy" else "scenario-actions-v1"
+        bank = "scenario-actions-easy-v1" if mode == "easy" else f"scenario-actions-v{2 if spec_version == 9 else 1}"
         final = db.query(Question).filter_by(term_id=term.id, phase="final_test", construct_key=assessment_construct_key(term.slug, "final_test", mode, bank_version=bank)).one()
         db.add(Attempt(participant_id=participant.id, term_id=term.id, question_id=final.id, phase="final_test", test_round="retest_1", is_correct=False))
         pretest = db.query(Question).filter_by(term_id=term.id, phase="pretest", construct_key=assessment_construct_key(term.slug, "pretest", mode, bank_version=bank)).one()
-        selected = db.query(QuestionOption).filter_by(question_id=pretest.id, option_label="I").one()
+        selected_label = "A" if spec_version == 9 else "I"
+        selected = db.query(QuestionOption).filter_by(question_id=pretest.id, option_label=selected_label).one()
         saved = Attempt(participant_id=participant.id, term_id=term.id, question_id=pretest.id, phase="pretest", test_round="test",
                         selected_option_ids=[selected.id], is_correct=False, misconception_type="M3", question_body_snapshot=None, option_order_snapshot=None)
         db.add(saved)
@@ -164,7 +185,9 @@ def test_seed_keeps_old_ids_and_snapshotless_reviews_on_historical_bank(tmp_path
                 assert q.id in questions_before
                 assert q.construct_key.endswith(bank)
                 assert q.variant_key == key
-        assert experiment._public_selected_options(db, saved) == [{"label": "I", "body": selected.body}]
+        assert experiment._public_selected_options(db, saved) == [{"label": selected_label, "body": selected.body}]
+        if spec_version == 9 and mode == "standard":
+            assert selected.body != assessment_question_spec("llm_knowledge", "pretest")["options"][0]["body"]
         review = experiment.latest_test_results(db, participant.id)
         assert review["results"][0]["question_body"] == questions_before[final.id][0]
         for row in review["results"][1:]:
