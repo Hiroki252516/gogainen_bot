@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
+from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD
 from app.db import session as database
 from app.db.session import SessionLocal
 from app.main import app
@@ -34,11 +35,9 @@ def test_v6_only_changes_multi_agent_first_question_and_two_m3_choices():
     variant["scenario"] = SCENARIO
     variant["task"] = TASK
     variant["choices"]["M3"][1:] = [CHOICE_H, CHOICE_I]
-    assert load_learning_content() == expected
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 13
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-25-multi-agent-confirmation-v1"
+    assert load_learning_content(content_version=6) == expected
     for stage in ("enrichment", "conceptual_change"):
-        spec = learning_question_spec("multi_agent", stage)
+        spec = learning_question_spec("multi_agent", stage, content_version=6)
         assert spec["body"] == SCENARIO + "\n\n" + TASK
         assert spec["scenario_type"] == "application"
         assert spec["_content_version"] == 6
@@ -53,7 +52,7 @@ def test_missing_v6_does_not_fall_back_to_v5(tmp_path, monkeypatch):
         patch.setattr(content_loader, "LEARNING_V6_CONTENT_PATH", tmp_path / "missing.yml")
         load_learning_content.cache_clear()
         with pytest.raises(FileNotFoundError):
-            load_learning_content()
+            load_learning_content(content_version=6)
     load_learning_content.cache_clear()
 
 
@@ -63,7 +62,7 @@ def test_easy_mode_cannot_load_standard_v6():
 
 
 @pytest.mark.parametrize("snapshot", [False, True])
-@pytest.mark.parametrize("version", [3, 5, 6])
+@pytest.mark.parametrize("version", [3, 5, 6, 7])
 def test_multi_agent_history_restores_saved_version_without_rewriting_records(tmp_path, monkeypatch, snapshot, version):
     isolated = create_engine(f"sqlite:///{tmp_path / 'history.db'}")
     monkeypatch.setattr(database, "engine", isolated)
@@ -71,8 +70,8 @@ def test_multi_agent_history_restores_saved_version_without_rewriting_records(tm
     try:
         with Session(isolated) as db:
             participant = Participant(display_code="MULTI-HISTORY", group_condition="control", question_set_mode="standard",
-                                      learning_content_version=version, experiment_spec_version={3: 11, 5: 12, 6: 13}[version],
-                                      protocol_id={3: "experiment-plan-2026-10-25-pretest-f-wording-v1", 5: PREVIOUS_PROTOCOL, 6: CURRENT_PROTOCOL_ID}[version])
+                                      learning_content_version=version, experiment_spec_version={3: 11, 5: 12, 6: 13, 7: CURRENT_EXPERIMENT_SPEC_VERSION}[version],
+                                      protocol_id={3: "experiment-plan-2026-10-25-pretest-f-wording-v1", 5: PREVIOUS_PROTOCOL, 6: "experiment-plan-2026-10-25-multi-agent-confirmation-v1", 7: CURRENT_PROTOCOL_ID}[version])
             term = Term(slug="multi_agent", label="マルチエージェント", description="description", display_order=2)
             db.add_all([participant, term])
             db.flush()
@@ -85,7 +84,7 @@ def test_multi_agent_history_restores_saved_version_without_rewriting_records(tm
                              grading_json={"is_sufficient": False, "selected_option_ids": ["I"]})
             db.add(turn)
             db.commit()
-            if version != 6:
+            if version != 7:
                 before = {model: deepcopy(db.execute(select(model.__table__)).mappings().all()) for model in (Participant, TutorSession, TutorTurn)}
                 seed_database(db)
                 seed_database(db)
@@ -100,7 +99,7 @@ def test_multi_agent_history_restores_saved_version_without_rewriting_records(tm
             assert record["selected_options"] == [{"label": "I", "body": "保存時の選択本文" if snapshot else original["options"][8]["body"]}]
             assert json.dumps([turn.practice_question_json, turn.diagnosis_json, turn.grading_json], sort_keys=True) == before_json
             if not snapshot:
-                assert (record["question_body"] == SCENARIO + "\n\n" + TASK) == (version == 6)
+                assert (record["question_body"] == SCENARIO + "\n\n" + TASK) == (version in (6, 7))
                 assert (record["selected_options"][0]["body"] == CHOICE_I) == (version == 6)
     finally:
         isolated.dispose()
@@ -109,16 +108,16 @@ def test_multi_agent_history_restores_saved_version_without_rewriting_records(tm
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("initial", ["unknown", "M1"])
-@pytest.mark.parametrize("labels,expected_type", [("ABC", None), ("J", "unknown"), ("ADH", "M3"), ("ADI", "M3")])
-def test_multi_agent_v6_display_grading_feedback_replay_and_prefetch(group, layout, initial, labels, expected_type):
+@pytest.mark.parametrize("labels,expected_type", [("ABC", None), ("J", "unknown"), ("DEF", "M1"), ("ADH", "M3"), ("ADI", "M3")])
+def test_current_multi_agent_display_grading_feedback_replay_and_prefetch(group, layout, initial, labels, expected_type):
     client = TestClient(app)
     created = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "MULTI-CONFIRMATION"})
     assert created.status_code == 200, created.text
     pid = created.json()["participant_id"]
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.learning_content_version == 6
-        assert participant.experiment_spec_version == 13
+        assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS[STANDARD]
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
         participant.option_order_mode = layout
         db.commit()
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
@@ -159,7 +158,7 @@ def test_multi_agent_v6_display_grading_feedback_replay_and_prefetch(group, layo
     wait_for_prefetch_tasks()
     with SessionLocal() as db:
         saved = db.get(TutorTurn, turn["turn_id"])
-        assert saved.diagnosis_json["learning_content_version"] == 6
+        assert saved.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]
         assert saved.practice_question_json["options"] == question["options"]
         session = db.get(TutorSession, sid)
         history = build_interaction_history(db, pid, session.term_id)
@@ -172,4 +171,4 @@ def test_multi_agent_v6_display_grading_feedback_replay_and_prefetch(group, layo
         assert retry.status_code == 200, retry.text
         assert retry.json()["practice_question"] == question
         with SessionLocal() as db:
-            assert db.get(TutorTurn, retry.json()["turn_id"]).diagnosis_json["learning_content_version"] == 6
+            assert db.get(TutorTurn, retry.json()["turn_id"]).diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]
