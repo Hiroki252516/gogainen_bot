@@ -2,7 +2,7 @@
 
 ## 両版に共通の用語注釈
 
-現行実験仕様版12では両版・両群の教材と回答後解説に同じ固定辞書を適用する。注釈処理はexplanation_level、生成契約v7を変更しない。通常版学習バンクの更新は下記の保存と出題で説明する。注釈は本文とは別枠で、正答情報や個別診断で選ばない。[辞書全文と保存](24_learning_glossary.md)。
+現行実験仕様版13では両版・両群の教材と回答後解説に同じ固定辞書を適用する。注釈処理はexplanation_level、生成契約v7を変更しない。通常版学習バンクの更新は下記の保存と出題で説明する。注釈は本文とは別枠で、正答情報や個別診断で選ばない。[辞書全文と保存](24_learning_glossary.md)。
 
 ## 目的と比較の範囲
 
@@ -15,19 +15,19 @@ AI・技術の予備知識が少ない参加者にも設問を読めるように
 3. 新しい参加者IDで開始する。開始時の問題版と配置を記録し、以後の設定変更・再起動・再送で変えない。
 4. 「集計する問題版」は上記の設定とは独立して選ぶ。初期表示は通常版。群集計、対象人数、6仮説、仮説CSVは選択版に限定する。被験者一覧・生ログは両版を表示し、問題版を併記する。
 
-旧版11以下の試用は新規版へ付け替えず閲覧専用にする。更新前からの進行中試用をそのまま継続する運用ではない。旧記録・保存済み評価・AIログは再計算しない。
+旧版12以下の試用は新規版へ付け替えず閲覧専用にする。更新前からの進行中試用をそのまま継続する運用ではない。旧記録・保存済み評価・AIログは再計算しない。
 
 ## 保存と出題
 
-仕様版12では通常版の学習確認だけをv5へ更新する。旧standard/learning_questions_v3.ymlは履歴用に保持し、変更はLLM知識・learning_round_v1だけ。易しい版v4とテストバンクは不変。snapshotを優先し、復元は保存された学習版に限定する。[確認問題全文](25_learning_confirmation_revision.md)。
+仕様版13では通常版の学習確認をv6へ更新する。v5からの変更はmulti_agent・learning_round_v1の場面・設問とM3選択肢H・Iだけで、LLM知識の前回改訂は維持する。旧standard/learning_questions_v3.yml・v5.ymlは履歴用に保持する。易しい版v4とテストバンクは不変。snapshotを優先し、復元は保存された学習版に限定する。[今回の確認問題全文](26_multi_agent_confirmation_revision.md)・[LLM知識の改訂](25_learning_confirmation_revision.md)。
 
 | 項目 | 通常版 | 易しい版 |
 | --- | --- | --- |
 | question_set_mode | standard | easy |
 | テストYAML | `backend/app/seed/content/standard/learning_content.yml` | `backend/app/seed/content/easy/learning_content_easy.yml` |
 | assessment_bank_version | scenario-actions-v4 | scenario-actions-easy-v1 |
-| 学習YAML | `backend/app/seed/content/standard/learning_questions_v5.yml` | `backend/app/seed/content/easy/learning_questions_v4_easy.yml` |
-| learning_content_version | 5 | 4 |
+| 学習YAML | `backend/app/seed/content/standard/learning_questions_v6.yml` | `backend/app/seed/content/easy/learning_questions_v4_easy.yml` |
+| learning_content_version | 6 | 4 |
 | 固有問題数 | テスト9・学習確認9 | テスト9・学習確認9 |
 | 追加AI入力 | なし | explanation_level=beginner |
 
@@ -70,6 +70,6 @@ RuntimeSetting（ID=1）とParticipantへnullableなquestion_set_modeを追加�
 
 ## 版と検査
 
-実験仕様版12、protocol experiment-plan-2026-10-25-learning-confirmation-v1、生成契約tutoring-teaching-contract-v7-easy-level。taxonomyはm1-m3-unknown-v3、共通履歴interaction-history-v1、共通出題shared-diagnosis-route-v1を維持する。
+実験仕様版13、protocol experiment-plan-2026-10-25-multi-agent-confirmation-v1、生成契約tutoring-teaching-contract-v7-easy-level。taxonomyはm1-m3-unknown-v3、共通履歴interaction-history-v1、共通出題shared-diagnosis-route-v1を維持する。
 
 通常版・易しい版の全テスト・学習確認で、選択肢の20文字下限・最大/最小文長比1.8・文字数差32の検査を撤廃した。非空・重複・選択肢数・役割数・教授対象の検査は維持する。文長の均一性は保証せず、長さが回答の手掛かりとなり得る。教材本文の600〜800文字検査は別の条件として維持する。各誤答の個別分類理由と事前テストの教授対象は別途保持する。易しい版の内容は[問題全文](23_easy_question_bank.md)、通常版の6選択肢の改訂と旧バンク保全は[21](21_assessment_action_questions.md)を参照する。
