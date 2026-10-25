@@ -331,7 +331,7 @@ export default function LearningPage() {
   const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;
   const questionBody = turn?.practice_question?.body || turn?.learner_prompt || "";
   const preserveQuestionLines = termSlug === "multi_agent"
-    && turn?.practice_question?.learning_variant_index === 2
+    && [2, 3].includes(turn?.practice_question?.learning_variant_index ?? 0)
     && questionBody.includes("\n\n案1：")
     && questionBody.includes("\n\n案2：");
 

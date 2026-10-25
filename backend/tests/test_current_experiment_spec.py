@@ -86,6 +86,8 @@ def trial_snapshot(db, pid):
         (4, 13, "experiment-plan-2026-10-25-multi-agent-confirmation-v1"),
         (7, 14, "experiment-plan-2026-10-25-multi-agent-confirmation-v2"),
         (4, 14, "experiment-plan-2026-10-25-multi-agent-confirmation-v2"),
+        (8, 15, "experiment-plan-2026-10-25-multi-agent-round2-v1"),
+        (4, 15, "experiment-plan-2026-10-25-multi-agent-round2-v1"),
     ],
 )
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):

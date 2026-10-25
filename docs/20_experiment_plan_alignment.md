@@ -12,13 +12,19 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 15 |
-| 新プロトコル | experiment-plan-2026-10-25-multi-agent-round2-v1 |
+| 実験仕様版 | 16 |
+| 新プロトコル | experiment-plan-2026-10-25-multi-agent-round3-v1 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-25 マルチエージェント確認問題V2の改訂（版15）
+## 2026-10-25 マルチエージェント確認問題V3の改訂（版16）
+
+- fix/conf-test-multi-v3の承認により、通常版multi_agent・learning_round_v3を学内Wi-Fi問い合わせの2案比較へ変更する。場面・設問・9選択肢を指定順で採用し、Hの文末だけ「構成と同じものとして扱う。」へ補正する。scenario_type=comparison、正解/M1/M3各3つとJを維持する。[全文・分類理由](29_multi_agent_round_three_revision.md)。
+- 導入文・案1・案2・検索ツールの説明・設問を空行で区切り、V2と同じ改行表示をV3にも適用する。太字・Markdown装飾・重複する問題ラベルは付けない。V1・V2を含む残り8確認問題、易しい版、各テストと訂正情報、教授プロンプト・生成契約・採点・配置・挑戦上限は変更しない。通常進行は最大2周で、V3は通常出題されない。検証用の3回目セッションは隔離DBだけに直接用意する。
+- 新規だけ版16 / experiment-plan-2026-10-25-multi-agent-round3-v1と通常版学習バンクv9（易しい版4）を保存する。旧v3・v5・v6・v7・v8、旧仕様版15以下の記録と評価を変更しない。旧記録は操作・再送・worker・削除・補修・再計算・現行集計から保護し、snapshot優先・保存版で復元する。公開API・DB列・AI生成契約の追加変更、研究DB・3000番・Word・別仕様リポジトリ・実AI呼び出しは対象外。
+
+## 2026-10-25 マルチエージェント確認問題V2の改訂（版15採用時の記録）
 
 - fix/conf-test-multi-v2の承認により、通常版multi_agent・learning_round_v2の場面・設問・9選択肢を、単一AIと役割別AIの2案の比較問題へ変更する。scenario_type=predictionと役割数・Jは維持する。導入文・案1・案2・設問を空行で区切り、太字と装飾用記号、重複する「問題：」は付けない。[全文と分類理由](28_multi_agent_round_two_revision.md)。
 - 公開APIに項目を追加せず、用語・variant番号と本文の案1/案2段落で対象を限定し、今回の通常版V2だけ既存preserve-linesで改行表示する。易しい版V2を含む他問題の表示は変更しない。確認問題V1を含む残り8問、易しい版、テスト問題・訂正情報、教授プロンプト・生成契約、採点・配置・挑戦上限は維持する。
