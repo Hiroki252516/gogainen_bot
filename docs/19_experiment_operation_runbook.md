@@ -1,8 +1,8 @@
 # 19. Experiment Operation Runbook
 
-## 用語注釈の配布確認（仕様版11）
+## 用語注釈の配布確認（仕様版12）
 
-更新後は新しい参加者IDで開始する。旧版10以下を途中再開しない。教材・正答要約・誤答解説の下に、その文章の登録語だけが出ることを両群・両問題版で確認し、問題・選択肢・テストには出ないことを確認する。辞書と表示snapshotは[24](24_learning_glossary.md)を参照し、収集開始後に同じ辞書版の説明を差し替えない。本文600〜800文字とは別枠であり、初心者に理解できるかは内容確認・予備調査で確認する。
+更新後は新しい参加者IDで開始する。旧版11以下を途中再開しない。教材・正答要約・誤答解説の下に、その文章の登録語だけが出ることを両群・両問題版で確認し、問題・選択肢・テストには出ないことを確認する。辞書と表示snapshotは[24](24_learning_glossary.md)を参照し、収集開始後に同じ辞書版の説明を差し替えない。本文600〜800文字とは別枠であり、初心者に理解できるかは内容確認・予備調査で確認する。
 
 この文書は、計画書に沿う研究運用の目標と、現行MVPの操作を区別して示す。文書更新だけで実験開始可能とはしない。[計画書の未対応・要確認一覧](20_experiment_plan_alignment.md) を併読する。
 
@@ -15,7 +15,7 @@
 - 新6仮説は[12の承認済み定義](12_evaluation_metrics.md)で集計する。従来保存値を新指標と混同せず、専用CSVの対象人数・欠測・経路を確認する。
 - unknownと共通/統制群指示の変更、アンケートの画面・入力型・保存・集計などD01〜D07の対応状況を確認する。
 
-計画書の予定は10月上旬〜中旬に承認・小規模事前実験、10月中旬に募集、10月下旬〜11月中旬に実験、11月中旬〜下旬に分析、11月下旬〜12月に執筆。承認・募集・収集が完了したとは扱わず、指導教員の承認と準備確認後に開始する。以下は現行版11の操作説明である。
+計画書の予定は10月上旬〜中旬に承認・小規模事前実験、10月中旬に募集、10月下旬〜11月中旬に実験、11月中旬〜下旬に分析、11月下旬〜12月に執筆。承認・募集・収集が完了したとは扱わず、指導教員の承認と準備確認後に開始する。以下は現行版12の操作説明である。
 
 ## Before Experiment
 
@@ -31,9 +31,9 @@
 
 Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バックアップから分離する。ローカル実行はIDENTITY_MAPPING_PATH（既定 ./.private-identities/mappings.sqlite3）を使う。研究DBだけをバックアップし、対応表を研究用バックアップへ含めない。対応表の削除はこのアプリ内SQLiteのレコード削除であり、USB・OSバックアップ・ダウンロードファイル・外部AIサービスの保持データの完全消去を保証しない。
 
-**実験開始前の必須確認:** テスト系・学習確認v3ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
+**実験開始前の必須確認:** テスト系・学習確認v5ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
 
-実験仕様版11と現行protocol_idの両方で進行・補修・集計を限定する。既存版10以下を含む旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。旧行を付け替えず、retest_cycles_completedも保存値のままにする。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで検証してから配布する。
+実験仕様版12と現行protocol_idの両方で進行・補修・集計を限定する。既存版11以下を含む旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。旧行を付け替えず、retest_cycles_completedも保存値のままにする。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで検証してから配布する。
 
 **本実験開始前の未解決事項:** 管理画面・管理APIの管理者認証・権限確認は未実装であり、参加者画面にも管理画面リンクがある。ログ・CSVを研究者限定で扱う運用方針だけではアクセスを防げない。参加者が管理機能・生AIログ・CSVへアクセスできないよう対策を決定し、有効性を確認する必要がある。ローカル実行や移動確認ダイアログをアクセス制御とみなさない。詳細は [セキュリティ仕様](15_security_privacy.md) を参照する。
 
@@ -45,7 +45,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 2. ルート`.env`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動する
 3. `codex` または管理画面のログイン導線でChatGPT/Codexログインを確認する
 4. `docker compose up --build` を実行する
-5. `standard/learning_content.yml`、`standard/learning_questions_v3.yml`、`easy/learning_content_easy.yml`、`easy/learning_questions_v4_easy.yml`の形式検証がbackend起動時に自動実行されることを確認する。固定テスト問題はseedされ、学習確認問題は参加者に固定された版からターン生成時に組み立てられる
+5. `standard/learning_content.yml`、`standard/learning_questions_v5.yml`、`easy/learning_content_easy.yml`、`easy/learning_questions_v4_easy.yml`の形式検証がbackend起動時に自動実行されることを確認する。固定テスト問題はseedされ、学習確認問題は参加者に固定された版からターン生成時に組み立てられる
 6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する（AI status APIは `/api/admin/ai/status`）
 7. `/admin` の選択肢配置が「ランダム配置」であることを確認する（設定APIは `GET /api/admin/option-order`）。必要なら「ランダム配置」へ切り替える（`PUT /api/admin/option-order`）。
 8. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
@@ -94,7 +94,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 
 現行MVPのテスト・再テスト対象は、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語である。`attempts.test_round` に `test`、`retest_1`、`retest_2` 以降を保存する。`/survey` は仮フォームで、送信時に`participant_surveys`へ保存する。
 
-問題YAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分けて管理する。activeなテストは各問題版でpretest_v1とretest_v1/v2の9固有問。LLM知識は製品サポート・社内問い合わせ分類・議事録作成の3案、他2用語も行動選択型である。内部final_testはretest_v1を共用し、その後はretest_v2。全用語を採点済みの全体回次で選び、未回答でも同じ問題を再出題しない。置換前の問題・retest_v3は`archive/learning_content_pre_issue156.yml`、さらに古い問題は`archive/learning_questions_v2_unused.yml`へ保全する。新問題は版付きconstruct_keyで別レコードとなり、旧本文や選択肢を上書きしない。学習確認v3は9問を保持するが3セッション目は新規経路で到達しない。同一セッション内は同じ問題を最大3回答し、誤答時は教材だけを再生成する。問題APIは正答・分類を非公開、結果確認の正誤表示を維持する。全文と根拠は[21](21_assessment_action_questions.md)。
+問題YAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分けて管理する。activeなテストは各問題版でpretest_v1とretest_v1/v2の9固有問。LLM知識は製品サポート・社内問い合わせ分類・議事録作成の3案、他2用語も行動選択型である。内部final_testはretest_v1を共用し、その後はretest_v2。全用語を採点済みの全体回次で選び、未回答でも同じ問題を再出題しない。置換前の問題・retest_v3は`archive/learning_content_pre_issue156.yml`、さらに古い問題は`archive/learning_questions_v2_unused.yml`へ保全する。新問題は版付きconstruct_keyで別レコードとなり、旧本文や選択肢を上書きしない。学習確認v5は9問を保持するが3セッション目は新規経路で到達しない。同一セッション内は同じ問題を最大3回答し、誤答時は教材だけを再生成する。問題APIは正答・分類を非公開、結果確認の正誤表示を維持する。全文と根拠は[21](21_assessment_action_questions.md)。
 
 ランダム配置は各問題に対して固定され、参加者や群、アプリ再起動で変わらない。「わからない」は最後のJへ固定し、残る9択だけをA〜Iへ並べ替える。正解/M1/M3は問題バンク内でA〜Iへ均等に近く割り当てる。回答判定には内部IDとメタデータを使い、AttemptおよびTutorTurnの問題snapshotで実際に表示したラベル・本文・順序を監査する。2026-10-21の変更前に保存した学習問題は元の並びで再利用し、過去のsnapshotを再配置しない。更新時は回答途中を避け、未回答画面を再取得して新しい配置を確認する。
 
@@ -207,4 +207,4 @@ attainment_correct_rateはis_correctから計算した最終到達率で、final
 
 ## 問題版を選ぶ手順
 
-配布前に管理画面で新規参加者の通常版／易しい版と選択肢配置を選び、新規IDで確認する。既存参加者の版は変えない。実験収集時はランダム配置を選ぶ。集計版は別に選び、対象人数と仮説CSVの版が一致することを確認する。旧版10以下は閲覧専用。[22](22_question_set_modes.md)にAPI・版の対応を示す。研究DBへの検証用回答は作成せず、隔離DBで検証する。
+配布前に管理画面で新規参加者の通常版／易しい版と選択肢配置を選び、新規IDで確認する。既存参加者の版は変えない。実験収集時はランダム配置を選ぶ。集計版は別に選び、対象人数と仮説CSVの版が一致することを確認する。旧版11以下は閲覧専用。[22](22_question_set_modes.md)にAPI・版の対応を示す。研究DBへの検証用回答は作成せず、隔離DBで検証する。

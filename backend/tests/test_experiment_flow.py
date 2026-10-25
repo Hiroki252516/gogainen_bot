@@ -62,7 +62,7 @@ from app.seed.content_loader import (
     content_term,
     learning_question_spec,
     load_content,
-    load_learning_v3_content,
+    load_learning_content,
 )
 import app.services.experiment as experiment_service
 from app import main as main_module
@@ -296,7 +296,7 @@ def test_content_contract_has_three_terms_and_required_learning_round_counts():
         assert len(term["questions"]["retest"]) == 2
         assert "final_test" not in term["questions"]
         assert assessment_question_spec(term["slug"], "final_test")["variant_key"] == "retest_v1"
-        assert len(load_learning_v3_content()["terms"][term["slug"]]["variants"]) == 3
+        assert len(load_learning_content()["terms"][term["slug"]]["variants"]) == 3
 
 
 def test_assessment_bank_has_9_active_scenario_variants_fixed_roles_and_nonempty_options():
@@ -353,8 +353,8 @@ def test_pretest_teaching_targets_follow_fixed_option_roles():
                 assert target is None
 
 
-def test_learning_v3_bank_has_scenario_roles_and_fixed_labels():
-    content = load_learning_v3_content()
+def test_current_learning_bank_has_scenario_roles_and_fixed_labels():
+    content = load_learning_content()
     variant_count = 0
 
     for term_slug in ACTIVE_TERM_SLUGS:
@@ -385,8 +385,8 @@ def test_learning_v3_bank_has_scenario_roles_and_fixed_labels():
 
 
 def test_llm_knowledge_round_v1_prompt_and_option_roles():
-    task = "この条件に合う仕組みの説明を三つ選びなさい。"
-    content = load_learning_v3_content()
+    task = "担当者の対応として、適切なものを3つ選びなさい。"
+    content = load_learning_content()
     variant = content["terms"]["llm_knowledge"]["variants"][0]
     spec = learning_question_spec(
         "llm_knowledge", "conceptual_change", 1
