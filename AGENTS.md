@@ -28,7 +28,7 @@
 - 被験者画面に内部分類、群名、教授方略を直接表示しない。
 - テスト回答中はチャット・ヒント・即時正解を表示せず、回答送信後の結果確認では正誤を表示する。
 - 学習確認は1用語・1セッションあたり最大3回答。事前テスト後のテストはfinal_testも含め最大2回、事前込み最大3回。未回答を含む採点済みバッチを1回とし、全問未回答は採点しない。1回目未達は学習、2回目未達は未達のままアンケートへ進める。満点ならいつでもアンケートへ進める。
-- テストはscenario-actions-v1の9固有問題で、activeキーはpretest_v1、retest_v1/v2。final_testはretest_v1を共用し、その後は全用語をretest_v2へ進める。用語別回答件数で選ばない。旧問題・retest_v3はlearning_content_pre_issue156.yml、さらに古い問題は従来アーカイブへ保全する。seedは版付きconstruct_keyで旧本文・選択肢を上書きしない。学習確認v3の9問は維持するが、3セッション目は新規経路で到達しない。
+- テストはscenario-actions-v1の9固有問題で、activeキーはpretest_v1、retest_v1/v2。final_testはretest_v1を共用し、その後は全用語をretest_v2へ進める。用語別回答件数で選ばない。通常版・易しい版・アーカイブのYAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分ける。旧問題・retest_v3はarchive/learning_content_pre_issue156.yml、さらに古い問題はarchive/learning_questions_v2_unused.ymlへ保全する。seedは版付きconstruct_keyで旧本文・選択肢を上書きしない。学習確認v3の9問は維持するが、3セッション目は新規経路で到達しない。
 - 選択肢配置は管理画面のDB保存設定で切り替える。既定値は `debug_fixed` で、新規参加者だけに適用する。実験データ収集前に `randomized` へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
 - 新規だけ仕様版8とprotocol_id=experiment-plan-2026-10-25-glossary-v1を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数え、共通上限用のpost_pretest_tests_completedは採点済みfinal_testを加えて導出する。DB列は追加しない。既存版7以下を含む旧protocol_id/NULL・未対応版は閲覧専用。旧行の版・進行・回答・評価・回数を更新/削除せず、補修も版とprotocol_idで限定する。
 - 両群の教材の小見出し・数・順序・まとめ方はAIが決める。冒頭の##用語名と非空の###セクションだけを要求し、実験群の必須教授内容・transfer_checkは本文内証拠で検証する。固定見出しから証拠文を自動補正しない。

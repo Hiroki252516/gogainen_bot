@@ -46,7 +46,7 @@ M1反駁・M3再分類の理論と、本研究の選択肢分類、M3優先の�
 
 ## 2026-10-23 学習確認問題の固定ローテーション
 
-ユーザー承認により、新規参加者は実験仕様版5 / experiment-plan-2026-10-23-learning-rotation-v1を使う。学習確認は3用語×3学習セッションの9問とし、各用語のsession_index 1〜3をv1〜v3へ固定対応させる。enrichmentとconceptual_changeは同じ問題を使い、教材プロンプトだけを変える。同一セッション内の誤答時は問題を変更せず、各用語最大3回答まで教材を再生成する。旧30問v2はlearning_questions_v2_unused.ymlへ保全し、旧版参加者の保存snapshot・回答・評価・AIログは変更しない。
+ユーザー承認により、新規参加者は実験仕様版5 / experiment-plan-2026-10-23-learning-rotation-v1を使う。学習確認は3用語×3学習セッションの9問とし、各用語のsession_index 1〜3をv1〜v3へ固定対応させる。enrichmentとconceptual_changeは同じ問題を使い、教材プロンプトだけを変える。同一セッション内の誤答時は問題を変更せず、各用語最大3回答まで教材を再生成する。旧30問v2は`backend/app/seed/content/archive/learning_questions_v2_unused.yml`へ保全し、旧版参加者の保存snapshot・回答・評価・AIログは変更しない。
 
 ## 2026-10-24 テスト上限と問題更新
 

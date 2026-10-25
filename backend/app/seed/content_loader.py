@@ -10,11 +10,16 @@ import yaml
 from app.core.question_sets import STANDARD, EASY, ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, question_set_mode
 
 
-CONTENT_PATH = Path(__file__).with_name("content") / "learning_content.yml"
-UNUSED_CONTENT_PATH = Path(__file__).with_name("content") / "learning_questions_v2_unused.yml"
-LEARNING_V3_CONTENT_PATH = Path(__file__).with_name("content") / "learning_questions_v3.yml"
-EASY_CONTENT_PATH = CONTENT_PATH.with_name("learning_content_easy.yml")
-LEARNING_EASY_CONTENT_PATH = CONTENT_PATH.with_name("learning_questions_v4_easy.yml")
+CONTENT_DIR = Path(__file__).with_name("content")
+STANDARD_CONTENT_DIR = CONTENT_DIR / "standard"
+EASY_CONTENT_DIR = CONTENT_DIR / "easy"
+ARCHIVE_CONTENT_DIR = CONTENT_DIR / "archive"
+CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_content.yml"
+UNUSED_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_questions_v2_unused.yml"
+PRE_ISSUE156_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_pre_issue156.yml"
+LEARNING_V3_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v3.yml"
+EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_content_easy.yml"
+LEARNING_EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_questions_v4_easy.yml"
 ACTIVE_TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
 QUESTION_PHASES = ("pretest", "retest")
 LEARNING_STAGES = ("enrichment", "conceptual_change")

@@ -22,9 +22,9 @@ AI・技術の予備知識が少ない参加者にも設問を読めるように
 | 項目 | 通常版 | 易しい版 |
 | --- | --- | --- |
 | question_set_mode | standard | easy |
-| テストYAML | learning_content.yml | learning_content_easy.yml |
+| テストYAML | `backend/app/seed/content/standard/learning_content.yml` | `backend/app/seed/content/easy/learning_content_easy.yml` |
 | assessment_bank_version | scenario-actions-v1 | scenario-actions-easy-v1 |
-| 学習YAML | learning_questions_v3.yml | learning_questions_v4_easy.yml |
+| 学習YAML | `backend/app/seed/content/standard/learning_questions_v3.yml` | `backend/app/seed/content/easy/learning_questions_v4_easy.yml` |
 | learning_content_version | 3 | 4 |
 | 固有問題数 | テスト9・学習確認9 | テスト9・学習確認9 |
 | 追加AI入力 | なし | explanation_level=beginner |

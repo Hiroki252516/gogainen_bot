@@ -187,9 +187,9 @@ LLM知識の3問は、このチャットで提示して承認された製品サ�
 
 ## 旧問題と教授対象
 
-旧問題の原文・教授対象は [learning_content_pre_issue156.yml](../backend/app/seed/content/learning_content_pre_issue156.yml) に変更前のまま保存した。retest_v3もこのアーカイブに含み、通常出題しない。さらに古いretest_v4/v5・独立final_test_v1・旧学習v2は従来のアーカイブに保持する。
+旧問題の原文・教授対象は [archive/learning_content_pre_issue156.yml](../backend/app/seed/content/archive/learning_content_pre_issue156.yml) に変更前のまま保存した。retest_v3もこのアーカイブに含み、通常出題しない。さらに古いretest_v4/v5・独立final_test_v1・旧学習v2は[archive/learning_questions_v2_unused.yml](../backend/app/seed/content/archive/learning_questions_v2_unused.yml)に保持する。
 
-現行の訂正・仕組み・対比例・M3の境界は [learning_content.yml](../backend/app/seed/content/learning_content.yml) のteaching_targetsを参照する。新しい事前選択肢のD〜Iに対応し、LLM知識Hは訓練と検索、Iは入力と保存機構を対象とする。旧問題の選択肢IDと本文は別DBレコードとして保持し、旧回答やsnapshotを書き換えない。
+現行の訂正・仕組み・対比例・M3の境界は [standard/learning_content.yml](../backend/app/seed/content/standard/learning_content.yml) のteaching_targetsを参照する。新しい事前選択肢のD〜Iに対応し、LLM知識Hは訓練と検索、Iは入力と保存機構を対象とする。旧問題の選択肢IDと本文は別DBレコードとして保持し、旧回答やsnapshotを書き換えない。
 
 ## 版7での位置づけ
 

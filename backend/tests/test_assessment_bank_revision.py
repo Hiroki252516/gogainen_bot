@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Attempt, Base, EvaluationSummary, Participant, Question, QuestionOption, Term
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS
-from app.seed.content_loader import ASSESSMENT_BANK_VERSION, CONTENT_PATH, load_content
+from app.seed.content_loader import ASSESSMENT_BANK_VERSION, CONTENT_PATH, PRE_ISSUE156_CONTENT_PATH, load_content
 from app.seed.seed_questions import _upsert_question, seed_database
 from app.services import experiment
 
@@ -22,7 +22,7 @@ def test_llm_proposals_are_preserved_verbatim_in_all_three_measurements():
 def test_replacement_seed_preserves_old_questions_options_and_snapshotless_results(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'old-bank.db'}")
     Base.metadata.create_all(engine)
-    old_content = yaml.safe_load(CONTENT_PATH.with_name("learning_content_pre_issue156.yml").read_text(encoding="utf-8"))
+    old_content = yaml.safe_load(PRE_ISSUE156_CONTENT_PATH.read_text(encoding="utf-8"))
     with Session(engine) as db:
         old_questions = []
         for index, item in enumerate(old_content["terms"], start=1):

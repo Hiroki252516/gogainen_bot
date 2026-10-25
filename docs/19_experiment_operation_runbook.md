@@ -45,7 +45,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 2. ルート`.env`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動する
 3. `codex` または管理画面のログイン導線でChatGPT/Codexログインを確認する
 4. `docker compose up --build` を実行する
-5. `learning_content.yml` と `learning_questions_v3.yml` の形式検証がbackend起動時に自動実行されることを確認する。固定テスト問題はseedされ、学習確認問題は参加者に固定された版からターン生成時に組み立てられる
+5. `standard/learning_content.yml`、`standard/learning_questions_v3.yml`、`easy/learning_content_easy.yml`、`easy/learning_questions_v4_easy.yml`の形式検証がbackend起動時に自動実行されることを確認する。固定テスト問題はseedされ、学習確認問題は参加者に固定された版からターン生成時に組み立てられる
 6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する（AI status APIは `/api/admin/ai/status`）
 7. `/admin` の選択肢配置が「ランダム配置」であることを確認する（設定APIは `GET /api/admin/option-order`）。必要なら「ランダム配置」へ切り替える（`PUT /api/admin/option-order`）。
 8. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
@@ -94,7 +94,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 
 現行MVPのテスト・再テスト対象は、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語である。`attempts.test_round` に `test`、`retest_1`、`retest_2` 以降を保存する。`/survey` は仮フォームで、送信時に`participant_surveys`へ保存する。
 
-問題はYAMLで管理する。activeなテストはpretest_v1とretest_v1/v2の9固有問。LLM知識は製品サポート・社内問い合わせ分類・議事録作成の3案、他2用語も行動選択型である。内部final_testはretest_v1を共用し、その後はretest_v2。全用語を採点済みの全体回次で選び、未回答でも同じ問題を再出題しない。置換前の問題・retest_v3はlearning_content_pre_issue156.yml、さらに古い問題は従来アーカイブへ保全する。新問題は版付きconstruct_keyで別レコードとなり、旧本文や選択肢を上書きしない。学習確認v3は9問を保持するが3セッション目は新規経路で到達しない。同一セッション内は同じ問題を最大3回答し、誤答時は教材だけを再生成する。問題APIは正答・分類を非公開、結果確認の正誤表示を維持する。全文と根拠は[21](21_assessment_action_questions.md)。
+問題YAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分けて管理する。activeなテストは各問題版でpretest_v1とretest_v1/v2の9固有問。LLM知識は製品サポート・社内問い合わせ分類・議事録作成の3案、他2用語も行動選択型である。内部final_testはretest_v1を共用し、その後はretest_v2。全用語を採点済みの全体回次で選び、未回答でも同じ問題を再出題しない。置換前の問題・retest_v3は`archive/learning_content_pre_issue156.yml`、さらに古い問題は`archive/learning_questions_v2_unused.yml`へ保全する。新問題は版付きconstruct_keyで別レコードとなり、旧本文や選択肢を上書きしない。学習確認v3は9問を保持するが3セッション目は新規経路で到達しない。同一セッション内は同じ問題を最大3回答し、誤答時は教材だけを再生成する。問題APIは正答・分類を非公開、結果確認の正誤表示を維持する。全文と根拠は[21](21_assessment_action_questions.md)。
 
 ランダム配置は各問題に対して固定され、参加者や群、アプリ再起動で変わらない。「わからない」は最後のJへ固定し、残る9択だけをA〜Iへ並べ替える。正解/M1/M3は問題バンク内でA〜Iへ均等に近く割り当てる。回答判定には内部IDとメタデータを使い、AttemptおよびTutorTurnの問題snapshotで実際に表示したラベル・本文・順序を監査する。2026-10-21の変更前に保存した学習問題は元の並びで再利用し、過去のsnapshotを再配置しない。更新時は回答途中を避け、未回答画面を再取得して新しい配置を確認する。
 
