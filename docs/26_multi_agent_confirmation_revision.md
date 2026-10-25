@@ -1,5 +1,7 @@
 # 通常版マルチエージェントの確認問題改訂
 
+本書は実験仕様版13・通常版学習バンクv6を採用した際の改訂記録である。現行の仕様版14・学習バンクv7では、この場面と設問を維持して9選択肢を具体化する。現行本文・M1先頭Dの曖昧さ・履歴保全は[27](27_multi_agent_choice_revision.md)を参照する。
+
 ## 適用範囲と版
 
 実験仕様版13 / `experiment-plan-2026-10-25-multi-agent-confirmation-v1`。新規通常版参加者には[learning_questions_v6.yml](../backend/app/seed/content/standard/learning_questions_v6.yml)を使い、`learning_content_version=6`を保存する。易しい版は従来の4を維持する。出題・採点・同期生成・先行生成を参加者の保存版に統一する。

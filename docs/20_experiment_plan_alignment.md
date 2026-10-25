@@ -12,13 +12,19 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 13 |
-| 新プロトコル | experiment-plan-2026-10-25-multi-agent-confirmation-v1 |
+| 実験仕様版 | 14 |
+| 新プロトコル | experiment-plan-2026-10-25-multi-agent-confirmation-v2 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-25 マルチエージェントの確認問題改訂（版13）
+## 2026-10-25 マルチエージェント確認問題V1の9選択肢改訂（版14）
+
+- fix/conf-test-multi-v1の承認により、通常版multi_agent・learning_round_v1の9選択肢を提示文どおり具体化する。場面・設問・役割数・Jは維持し、YAMLの字下げと欠落したM1先頭のリスト記号のみを補正する。M1先頭Dも原文を採用することが明示的に選択されており、適切な連携にも読める曖昧さを[27](27_multi_agent_choice_revision.md)に記録する。
+- 通常版学習バンクv7 / 実験仕様版14 / experiment-plan-2026-10-25-multi-agent-confirmation-v2を新規参加者だけに適用し、易しい版は学習版4を維持する。旧v3・v5・v6、仕様版13以下の記録・保存評価・snapshotは更新しない。旧試用は進行・再送・worker・補修・削除・再計算・現行集計の対象外とし、閲覧・CSV出力で保持する。
+- 残り8確認問題、易しい版、事前・再・最終テストと訂正情報、教授プロンプト・生成契約、公開API・DB列、採点・配置・挑戦上限は変更しない。出題・採点・同期生成・先行生成は参加者の保存版に統一し、不足した履歴は当時の版から復元する。研究DB・3000番環境・Word・別仕様リポジトリ・実AI呼び出しは対象外。
+
+## 2026-10-25 マルチエージェントの確認問題改訂（版13採用時の記録）
 
 - fix/conf-test-multiの承認により、通常版multi_agent・learning_round_v1の場面・設問とM3選択肢H・Iだけを指定文へ変更する。新しい通常版学習バンクv6を追加し、旧v3・v5を原文のまま保持する。残る8確認問題、易しい版v4、テスト問題、事前テストの訂正情報は変更しない。[全文と分類根拠](26_multi_agent_confirmation_revision.md)。
 - 新規だけ版13 / experiment-plan-2026-10-25-multi-agent-confirmation-v1を保存し、通常版の学習版を6、易しい版を4に固定する。旧版12以下は閲覧専用で、既存参加者の版・進行・回答・教材・保存済み評価・snapshotを更新しない。復元は保存された学習版を参照し、別版へフォールバックしない。
