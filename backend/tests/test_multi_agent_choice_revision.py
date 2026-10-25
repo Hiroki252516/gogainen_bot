@@ -3,7 +3,6 @@ import hashlib
 
 import pytest
 
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.seed import content_loader
 from app.seed.content_loader import learning_question_spec, load_learning_content
 
@@ -32,14 +31,12 @@ def test_v7_only_replaces_the_nine_choices_in_multi_agent_round_one():
     expected = deepcopy(load_learning_content(content_version=6))
     expected["version"] = 7
     expected["terms"]["multi_agent"]["variants"][0]["choices"] = EXPECTED_CHOICES
-    assert load_learning_content() == expected
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 14
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-25-multi-agent-confirmation-v2"
+    assert load_learning_content(content_version=7) == expected
 
 
 @pytest.mark.parametrize("stage", ["enrichment", "conceptual_change"])
 def test_v7_preserves_the_scenario_and_role_assignment(stage):
-    current = learning_question_spec("multi_agent", stage)
+    current = learning_question_spec("multi_agent", stage, content_version=7)
     previous = learning_question_spec("multi_agent", stage, content_version=6)
     assert current["body"] == previous["body"]
     assert current["variant_key"] == previous["variant_key"] == "learning_round_v1"
@@ -61,7 +58,7 @@ def test_missing_v7_does_not_fall_back_to_an_older_bank(tmp_path, monkeypatch):
             patch.setattr(content_loader, "LEARNING_V7_CONTENT_PATH", tmp_path / "missing.yml")
             load_learning_content.cache_clear()
             with pytest.raises(FileNotFoundError):
-                load_learning_content()
+                load_learning_content(content_version=7)
     finally:
         load_learning_content.cache_clear()
 

@@ -12,13 +12,19 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 14 |
-| 新プロトコル | experiment-plan-2026-10-25-multi-agent-confirmation-v2 |
+| 実験仕様版 | 15 |
+| 新プロトコル | experiment-plan-2026-10-25-multi-agent-round2-v1 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-25 マルチエージェント確認問題V1の9選択肢改訂（版14）
+## 2026-10-25 マルチエージェント確認問題V2の改訂（版15）
+
+- fix/conf-test-multi-v2の承認により、通常版multi_agent・learning_round_v2の場面・設問・9選択肢を、単一AIと役割別AIの2案の比較問題へ変更する。scenario_type=predictionと役割数・Jは維持する。導入文・案1・案2・設問を空行で区切り、太字と装飾用記号、重複する「問題：」は付けない。[全文と分類理由](28_multi_agent_round_two_revision.md)。
+- 公開APIに項目を追加せず、用語・variant番号と本文の案1/案2段落で対象を限定し、今回の通常版V2だけ既存preserve-linesで改行表示する。易しい版V2を含む他問題の表示は変更しない。確認問題V1を含む残り8問、易しい版、テスト問題・訂正情報、教授プロンプト・生成契約、採点・配置・挑戦上限は維持する。
+- 新規だけ版15 / experiment-plan-2026-10-25-multi-agent-round2-v1と通常版学習バンクv8を使用する。易しい版は4、旧v3・v5・v6・v7は履歴用に保持する。旧仕様版14以下の進行・回答・評価・snapshotを更新せず、操作・再送・worker・削除・補修・再計算・現行集計から保護する。出題・採点・同期生成・先行生成は保存版に統一し、履歴はsnapshot優先・保存版で復元する。研究DB・3000番・Word・別仕様リポジトリ・実AI呼び出しは対象外。
+
+## 2026-10-25 マルチエージェント確認問題V1の9選択肢改訂（版14採用時の記録）
 
 - fix/conf-test-multi-v1の承認により、通常版multi_agent・learning_round_v1の9選択肢を提示文どおり具体化する。場面・設問・役割数・Jは維持し、YAMLの字下げと欠落したM1先頭のリスト記号のみを補正する。M1先頭Dも原文を採用することが明示的に選択されており、適切な連携にも読める曖昧さを[27](27_multi_agent_choice_revision.md)に記録する。
 - 通常版学習バンクv7 / 実験仕様版14 / experiment-plan-2026-10-25-multi-agent-confirmation-v2を新規参加者だけに適用し、易しい版は学習版4を維持する。旧v3・v5・v6、仕様版13以下の記録・保存評価・snapshotは更新しない。旧試用は進行・再送・worker・補修・削除・再計算・現行集計の対象外とし、閲覧・CSV出力で保持する。

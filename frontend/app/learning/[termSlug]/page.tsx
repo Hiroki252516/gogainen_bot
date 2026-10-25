@@ -329,6 +329,11 @@ export default function LearningPage() {
 
   const progress = questionProgress || (turn ? progressForNewQuestion(termSlug, turn) : null);
   const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;
+  const questionBody = turn?.practice_question?.body || turn?.learner_prompt || "";
+  const preserveQuestionLines = termSlug === "multi_agent"
+    && turn?.practice_question?.learning_variant_index === 2
+    && questionBody.includes("\n\n案1：")
+    && questionBody.includes("\n\n案2：");
 
   return (
     <AppShell step="学習セッション">
@@ -363,7 +368,7 @@ export default function LearningPage() {
               </section>
               <section className="learning-block problem-block" aria-labelledby="problem-title">
                 <h2 id="problem-title">問題</h2>
-                <p>{turn.practice_question?.body || turn.learner_prompt}</p>
+                <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{questionBody}</p>
                 {turn.practice_question?.options?.length ? (
                   <>
                     {turn.practice_question.selection_mode === "multiple" ? (() => {

@@ -1,5 +1,7 @@
 # マルチエージェント確認問題V1の9選択肢改訂
 
+本書は実験仕様版14・学習バンクv7を採用した際の記録である。現行の仕様版15・学習バンクv8でも、このV1の本文・選択肢と先頭Dの曖昧さは変更しない。今回のV2改訂と現行版の保存・表示条件は[28](28_multi_agent_round_two_revision.md)を参照する。
+
 ## 現行版と変更範囲
 
 実験仕様版14 / `experiment-plan-2026-10-25-multi-agent-confirmation-v2`。新規通常版参加者には[learning_questions_v7.yml](../backend/app/seed/content/standard/learning_questions_v7.yml)を使い、`learning_content_version=7`を保存する。易しい版は4のままとする。学習バンクのv7と、変更しないAI生成契約のv7は独立した版番号である。
