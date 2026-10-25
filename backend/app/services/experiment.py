@@ -45,7 +45,11 @@ from app.core.experiment_spec import (
 )
 from app.services.research_protocol import SURVEY_VERSION, validate_survey_for_participant
 from app.services.hypothesis_metrics import METRICS_VERSION, participant_metrics, current_metrics, group_metrics, write_metrics_csv
-from app.core.runtime_config import current_reasoning_effort
+from app.core.runtime_config import (
+    STUDY_MODEL,
+    STUDY_REASONING_EFFORT,
+    current_ai_runtime_settings,
+)
 from app.core.question_sets import STANDARD, ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key, question_set_mode, explanation_context
 from app.services.question_sets import current_question_set_mode
 from app.db.session import SessionLocal
@@ -1183,8 +1187,8 @@ def _effective_request_with_instruction_audit(
 
 
 async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[str, Any]:
-    reasoning_effort = current_reasoning_effort()
-    backend = get_ai_backend(reasoning_effort=reasoning_effort)
+    model, reasoning_effort = current_ai_runtime_settings()
+    backend = get_ai_backend(reasoning_effort=reasoning_effort, model=model)
     # Generation provenance is server-side audit metadata.  Keep it in the
     # database log, but never send it to the model as part of the teaching
     # contract or prompt input.
@@ -1195,8 +1199,12 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
         "reasoning_effort": reasoning_effort,
         "experiment_spec_version": CURRENT_EXPERIMENT_SPEC_VERSION,
         "protocol_id": CURRENT_PROTOCOL_ID,
-        "model": get_settings().codex_model,
-        "study_settings_match": reasoning_effort == "low" and get_settings().codex_model == "gpt-5.6-luna",
+        "model": model,
+        "study_settings_reference": {
+            "model": STUDY_MODEL,
+            "reasoning_effort": STUDY_REASONING_EFFORT,
+        },
+        "study_settings_match": model == STUDY_MODEL and reasoning_effort == STUDY_REASONING_EFFORT,
         "question_route_version": SHARED_QUESTION_ROUTE_VERSION,
         "interaction_history_audit": interaction_history_audit(backend_payload),
         "input_projection": project_model_payload(backend_payload, proposed=backend_payload.get("group_condition", "proposed") == "proposed", feedback=purpose != "generate_tutoring_turn"),

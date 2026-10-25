@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ai_backend: str = "codex_app_server"
     codex_app_server_url: str = "ws://127.0.0.1:4500"
     codex_ws_token_file: str | None = None
-    codex_model: str = "gpt-5.6-luna"
+    codex_model: str = "gpt-6-luna"
     codex_app_server_cwd: str = "/tmp"
     codex_turn_timeout_sec: int = 120
     codex_reasoning_effort: str = "low"

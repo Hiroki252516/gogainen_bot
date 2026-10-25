@@ -1,5 +1,13 @@
 # 受け入れ条件と検証記録
 
+## 2026-10-25 管理画面のAIモデル切替
+
+- 管理画面にGPT-6.1 Sol / GPT-6 Lunaを追加。選択値と推論レベルはbackendプロセス内だけに保持し、AI呼び出しごとにモデル/effortを固定してthread/start、turn/start、監査へ同じ値を渡す。既定はgpt-6-luna / low。明示的な環境設定は優先する。
+- APIで両モデルの選択、推論設定との独立性、許可外モデルの422、Mockでの409を確認。呼び出し中に設定が変わっても開始済み要求・監査は固定され、次の呼び出しから変更されることをbackend testで確認した。
+- backend全351テスト、frontend smoke・production build/TypeScript、git diff --checkに合格。macOSのpytest既定一時パスではUnix socketテストがパス長上限に当たったため、`TMPDIR=/tmp`で全体を再実行して通過した。既存DeprecationWarningが2件ある。
+- 隔離SQLite・app-server未接続のローカル管理画面/APIを起動し、状態取得・切替・無効値を確認した。実AI app-server検証では、GPT-6.1 Sol / GPT-6 Lunaのlow/medium/high全6要求が現在のChatGPTアカウントでmodel_not_found（アカウント非対応）となった。自動フォールバックはせず、実際のモデル生成成功は確認できていない。
+- 研究計画書原本、DB schema、実験仕様版、protocol、問題/教授指示は変更していない。作業は未commit・未pushで、稼働確認は隔離DBだけを使用した。
+
 ## PR #162 採点時の用語データ欠落への対処
 
 - score_phaseでTermの存在を確認し、欠落時は503 question_term_unavailableで停止する。正常時の採点・分類・回数・実験仕様版は変更しない。他2件のレビュー指摘に対するコード変更は行わない。
