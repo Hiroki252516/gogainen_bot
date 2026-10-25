@@ -2,7 +2,7 @@
 
 計画書の目標も問題本文・選択肢・採点基準を事前に用意し、AIに生成・採点させない。テスト系の固有問題9問と、現行学習確認バンクの9問を区別する。[計画書対応表](20_experiment_plan_alignment.md) を参照する。
 
-テスト系は backend/app/seed/content/learning_content.yml、学習確認は learning_questions_v3.yml。旧30問バンクは learning_questions_v2_unused.yml へ保存し、通常の問題としては使用しない。
+通常版のテスト・学習確認は`backend/app/seed/content/standard/`、易しい版は`backend/app/seed/content/easy/`に置く。旧30問バンクは`backend/app/seed/content/archive/learning_questions_v2_unused.yml`へ保存し、通常の問題としては使用しない。
 
 3用語ごとに事前1・再2のテスト問題をactiveなYAMLへ保持する。内部final_testは独立問題を持たず、retest_v1を使用する。retest_v4・v5と旧final_test_v1はアーカイブとして保全する。
 
@@ -12,10 +12,10 @@
 
 通常経路の最大はテスト9問＋学習6問＝15固有問題、採点回答イベントはテスト9＋学習18＝27回。事前満点経路では学習が最大1周となり、テスト9＋学習3＝12固有問題、採点回答イベント18回である。
 
-問題バンクのcanonicalな内部ラベルは、A〜C正解・D〜F=M1・G〜I=M3・J=unknownのデバッグ配置で管理する。管理画面のdebug_fixedではこの並びを表示する。randomizedでも「わからない」は最後のJへ固定し、残る9択をA〜Iへ決定的に再配置する。再配置は問題ごとに固定され、全参加者・両群で共通、アプリ再起動後も変わらない。選択肢配置はlearning_questions_v3.ymlの9問にも適用する。
+問題バンクのcanonicalな内部ラベルは、A〜C正解・D〜F=M1・G〜I=M3・J=unknownのデバッグ配置で管理する。管理画面のdebug_fixedではこの並びを表示する。randomizedでも「わからない」は最後のJへ固定し、残る9択をA〜Iへ決定的に再配置する。再配置は問題ごとに固定され、全参加者・両群で共通、アプリ再起動後も変わらない。選択肢配置は通常版`standard/learning_questions_v3.yml`と易しい版`easy/learning_questions_v4_easy.yml`の両方に適用する。
 
-teaching_targetsの訂正・仕組み・対比例・M3境界を新事前選択肢へ合わせる。旧問題全12固有問と教授対象はlearning_content_pre_issue156.ymlに原文のまま保全する。新しいconstruct_keyで別Question/QuestionOptionを作り、旧DB問題は削除せず非activeにする。snapshot・旧回答・教材・評価は書き換えず、seed再実行でも新問題を重複作成しない。
+teaching_targetsの訂正・仕組み・対比例・M3境界を新事前選択肢へ合わせる。旧問題全12固有問と教授対象は`archive/learning_content_pre_issue156.yml`に原文のまま保全する。新しいconstruct_keyで別Question/QuestionOptionを作り、旧DB問題は削除せず非activeにする。snapshot・旧回答・教材・評価は書き換えず、seed再実行でも新問題を重複作成しない。
 
 ## 通常版と易しい版の並行保持
 
-通常版の2 YAMLは変更しない。易しい版のlearning_content_easy.ymlとlearning_questions_v4_easy.ymlを別バンクとして追加し、各版にテスト9固有問・学習確認9問を持つ。両版は同時にactiveで、参加者の固定版で絞る。easyの文長下限は非空、比1.8以下・差32以下とし、standardの20文字下限は維持する。個別の誤答理由・教授対象は[23](23_easy_question_bank.md)、保存・seed件数は[22](22_question_set_modes.md)を参照する。
+通常版の2 YAMLは`standard/`に保持する。易しい版の`easy/learning_content_easy.yml`と`easy/learning_questions_v4_easy.yml`は別バンクとして管理し、各版にテスト9固有問・学習確認9問を持つ。両版は同時にactiveで、参加者の固定版で絞る。easyの文長下限は非空、比1.8以下・差32以下とし、standardの20文字下限は維持する。個別の誤答理由・教授対象は[23](23_easy_question_bank.md)、保存・seed件数は[22](22_question_set_modes.md)を参照する。

@@ -37,15 +37,15 @@
 - 事前後のテストはfinal_test込み最大2回、事前込み最大3回。満点なら早期終了し、2回目未達は未達のままアンケート。未回答を含む採点バッチも1回、全問未回答は拒否する。
 - 回次とvariantを全用語共通に対応させる。通常は事前→学習→retest_v1→未達なら学習→retest_v2。事前満点はfinal_testでretest_v1→未達なら学習→retest_v2。
 - LLM知識の承認済み3案をそのまま使い、他2用語も行動選択型へ更新する。9固有問題と分類根拠・限界は[21](21_assessment_action_questions.md)。難易度の同等性やM3の理論上の妥当性を実証済みとは扱わない。
-- 学習後回数の列は維持し、final_testを加えた共通回数を導出する。問題は版付きconstruct_keyでseedし旧本文を保全、旧バンクとretest_v3はlearning_content_pre_issue156.ymlへ保存する。新DB列は追加しない。
+- 学習後回数の列は維持し、final_testを加えた共通回数を導出する。問題は版付きconstruct_keyでseedし旧本文を保全、旧バンクとretest_v3は`backend/app/seed/content/archive/learning_content_pre_issue156.yml`へ保存する。新DB列は追加しない。
 - 学習確認v3の9問・同一セッション最大3回答は変更しない。3セッション目は新規経路で到達しない。通常経路の最大15固有問題・27採点回答イベントと、保存バンクの件数を区別する。研究仮説・評価式・教授プロンプト・管理アクセスは変更しない。
 
 ## 2026-10-23 学習確認問題ローテーションの採用判断（当時の記録）
 
 - 新規参加者は実験仕様版5 / experiment-plan-2026-10-23-learning-rotation-v1で開始する。仕様版4以下、旧protocol_id、NULLの記録は閲覧専用として保全する。
-- 学習確認はlearning_questions_v3.ymlの3用語×3学習セッションvariant=9問。各用語でsession_index 1〜3をlearning_round_v1〜learning_round_v3へ固定対応させる。
+- 学習確認は`backend/app/seed/content/standard/learning_questions_v3.yml`の3用語×3学習セッションvariant=9問。各用語でsession_index 1〜3をlearning_round_v1〜learning_round_v3へ固定対応させる。
 - enrichmentとconceptual_changeは同じ問題を使い、stageは教材生成プロンプトだけを変更する。同一セッション内の誤答では問題を変えず、各用語最大3回答まで教材を再生成する。
-- 旧30問のv2バンクはlearning_questions_v2_unused.ymlへ保存し、現行の問題選択・検証・配置計算へ含めない。
+- 旧30問のv2バンクは`backend/app/seed/content/archive/learning_questions_v2_unused.yml`へ保存し、現行の問題選択・検証・配置計算へ含めない。
 - 固有問題の最大経路はテスト12問＋学習9問＝21問。再回答を含む採点回答イベントは最大39回であり、問題数と回答回数を区別する。
 
 ## 計画書と仕様書の対応

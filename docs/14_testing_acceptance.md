@@ -60,7 +60,7 @@
 ## 2026-10-23 学習確認v3・仕様版5
 
 - 新規参加者のみ実験仕様版5 / experiment-plan-2026-10-23-learning-rotation-v1とし、retest_cycles_completed=0で開始する。既存版4以下、旧protocol_id、NULL記録は閲覧専用である。
-- learning_questions_v3.ymlは3用語×3学習セッションvariantの9問で、learning_questions_v2_unused.ymlはアーカイブとして検証・保存するが、通常の出題には使わない。
+- `standard/learning_questions_v3.yml`は3用語×3学習セッションvariantの9問で、`archive/learning_questions_v2_unused.yml`はアーカイブとして検証・保存するが、通常の出題には使わない。易しい版の確認問題は`easy/learning_questions_v4_easy.yml`から読み込む。
 - 各用語の学習セッションはsession_indexに対応するv1→v2→v3の固定順。同一セッション内は同じ問題を最大3回答し、誤答時は教材だけを再生成する。
 - enrichmentとconceptual_changeの問題本文・選択肢・正答は一致し、教材生成のstageだけが変わる。
 - 最大経路の固有問題数はテスト12問＋学習9問＝21問、採点回答イベントの最大数は39回である。

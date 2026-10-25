@@ -104,12 +104,12 @@ entries:
     term: ワークフロー
     aliases: [ワークフロー, ワーク・フロー]
     definition: 作業をどの順番で進め、条件によってどこへ進むかを決めた流れのことです。
-    sources: ["backend/app/seed/content/learning_content.yml:teaching_targets.multi_agent.I"]
+    sources: ["backend/app/seed/content/standard/learning_content.yml:teaching_targets.multi_agent.I"]
   - id: memory_process
     term: 記憶プロセス
     aliases: [記憶プロセス, メモリ機能, メモリー機能, 記憶機能]
     definition: 過去の会話などから必要な情報を保存し、後で取り出したり、新しい内容へ更新したりする処理です。
-    sources: ["rag_agent_knowledge_base/sources/source_01.txt:47-49,216-222", "backend/app/seed/content/learning_content.yml:terms.memory_process"]
+    sources: ["rag_agent_knowledge_base/sources/source_01.txt:47-49,216-222", "backend/app/seed/content/standard/learning_content.yml:terms.memory_process"]
   - id: persistence
     term: 永続化
     aliases: [永続化, 永続保存]

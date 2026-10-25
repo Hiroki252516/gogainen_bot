@@ -171,14 +171,14 @@ AIが今回の回答を作るときに参照する情報。質問、指示、会
 作業をどの順番で進め、条件によってどこへ進むかを決めた流れのことです。
 
 - 別表記: `ワークフロー`、`ワーク・フロー`
-- 確認元: [backend/app/seed/content/learning_content.yml](../backend/app/seed/content/learning_content.yml)（teaching_targets.multi_agent.I）
+- 確認元: [backend/app/seed/content/standard/learning_content.yml](../backend/app/seed/content/standard/learning_content.yml)（teaching_targets.multi_agent.I）
 
 ### 記憶プロセス (`memory_process`)
 
 過去の会話などから必要な情報を保存し、後で取り出したり、新しい内容へ更新したりする処理です。
 
 - 別表記: `記憶プロセス`、`メモリ機能`、`メモリー機能`、`記憶機能`
-- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（47-49,216-222）、[backend/app/seed/content/learning_content.yml](../backend/app/seed/content/learning_content.yml)（terms.memory_process）
+- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（47-49,216-222）、[backend/app/seed/content/standard/learning_content.yml](../backend/app/seed/content/standard/learning_content.yml)（terms.memory_process）
 
 ### 永続化 (`persistence`)
 
