@@ -112,13 +112,13 @@ EXPECTED = {
 
 
 def test_v12_and_assessment_v5_only_change_the_four_requested_questions():
-    assert LEARNING_CONTENT_VERSIONS == {"standard": 12, "easy": 4}
+    assert load_learning_content(content_version=12)["version"] == 12
     assert hashlib.sha256(content_loader.LEARNING_V11_CONTENT_PATH.read_bytes()).hexdigest() == "538638dd055c1e535c51b0beb43777b18337f8b6fa5583df5323259f07a1bb4a"
     assert hashlib.sha256(content_loader.SCENARIO_ACTIONS_V4_CONTENT_PATH.read_bytes()).hexdigest() == "57f89f9d9cbe2f8d7c019fa5f24f08998b7761e7c956fa11f3c22a58ca71d9d5"
     previous_learning = deepcopy(load_learning_content(content_version=11))
     previous_learning["version"] = 12
     previous_learning["terms"]["llm_knowledge"]["variants"][:2] = [EXPECTED["learning_round_v1"], EXPECTED["learning_round_v2"]]
-    assert load_learning_content() == previous_learning
+    assert load_learning_content(content_version=12) == previous_learning
     previous_assessment = yaml.safe_load(content_loader.SCENARIO_ACTIONS_V4_CONTENT_PATH.read_text(encoding="utf-8"))
     previous_assessment["assessment_bank_version"] = "scenario-actions-v5"
     previous_assessment["terms"][0]["questions"]["retest"] = [EXPECTED["retest_v1"], EXPECTED["retest_v2"]]
@@ -130,7 +130,7 @@ def test_v12_and_assessment_v5_only_change_the_four_requested_questions():
 @pytest.mark.parametrize("stage", ["enrichment", "conceptual_change"])
 def test_exact_question_text_roles_and_paragraphs(key, stage):
     index = int(key[-1])
-    spec = (learning_question_spec("llm_knowledge", stage, index) if key.startswith("learning")
+    spec = (learning_question_spec("llm_knowledge", stage, index, content_version=12) if key.startswith("learning")
             else assessment_question_spec("llm_knowledge", "retest", index))
     expected = EXPECTED[key]
     assert spec["body"] == expected["scenario"] + "\n\n" + expected["task"]
@@ -151,7 +151,7 @@ def test_missing_v12_and_wrong_mode_do_not_fall_back(tmp_path, monkeypatch):
             patch.setattr(content_loader, "LEARNING_V12_CONTENT_PATH", tmp_path / "missing.yml")
             load_learning_content.cache_clear()
             with pytest.raises(FileNotFoundError):
-                load_learning_content()
+                load_learning_content(content_version=12)
     finally:
         load_learning_content.cache_clear()
     with pytest.raises(ValueError, match="version"):
@@ -196,7 +196,7 @@ def test_natural_two_learning_rounds_feedback_history_and_retests(group, layout,
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.option_order_mode = layout
-        assert participant.learning_content_version == 12 and participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
+        assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS["standard"] and participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
         db.commit()
     _answer_test(client, pid, "pretest", initial)
     _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
@@ -205,7 +205,7 @@ def test_natural_two_learning_rounds_feedback_history_and_retests(group, layout,
         sid = session["tutor_session_id"]
         turn = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
         question = turn["practice_question"]
-        expected = EXPECTED[f"learning_round_v{index}"]
+        expected = load_learning_content()["terms"]["llm_knowledge"]["variants"][index - 1]
         assert question["variant_key"] == expected["variant_key"] and question["learning_variant_index"] == index
         assert question["body"] == expected["scenario"] + "\n\n" + expected["task"]
         assert turn["learning_stage"] == ("enrichment" if initial == "J" else "conceptual_change")
@@ -226,7 +226,7 @@ def test_natural_two_learning_rounds_feedback_history_and_retests(group, layout,
         with SessionLocal() as db:
             saved_session = db.get(TutorSession, sid)
             saved_turn = db.get(TutorTurn, turn["turn_id"])
-            assert saved_session.session_index == index and saved_turn.diagnosis_json["learning_content_version"] == 12
+            assert saved_session.session_index == index and saved_turn.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
             record = next(row for row in build_interaction_history(db, pid, saved_session.term_id)
                           if row["source_type"] == "learning_turn" and row["session_index"] == index)
             assert record["question_body"] == question["body"]

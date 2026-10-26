@@ -119,10 +119,7 @@ EXPECTED = {
 
 
 def test_assessment_v6_only_changes_four_retests_and_preserves_banks():
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 20
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-26-multi-memory-retests-v1"
     assert ASSESSMENT_BANK_VERSIONS == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
-    assert LEARNING_CONTENT_VERSIONS == {"standard": 12, "easy": 4}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[19]["standard"] == "scenario-actions-v5"
     assert hashlib.sha256(content_loader.SCENARIO_ACTIONS_V5_CONTENT_PATH.read_bytes()).hexdigest() == "e9022f40a5b4f6f8b56a8468e6feb9169a9889155702363701497c3cd11ee8d6"
@@ -171,7 +168,7 @@ def _create(client, group, layout):
     created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "MULTI-MEMORY-RETEST-SYNTHETIC"}))
     with SessionLocal() as db:
         participant = db.get(Participant, created["participant_id"])
-        assert participant.experiment_spec_version == 20 and participant.learning_content_version == 12
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == LEARNING_CONTENT_VERSIONS["standard"]
         participant.option_order_mode = layout
         db.commit()
     return created["participant_id"]

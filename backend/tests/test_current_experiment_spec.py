@@ -96,6 +96,8 @@ def trial_snapshot(db, pid):
         (4, 18, "experiment-plan-2026-10-26-memory-round2-v1"),
         (12, 19, "experiment-plan-2026-10-26-llm-confirmation-retest-v1"),
         (4, 19, "experiment-plan-2026-10-26-llm-confirmation-retest-v1"),
+        (12, 20, "experiment-plan-2026-10-26-multi-memory-retests-v1"),
+        (4, 20, "experiment-plan-2026-10-26-multi-memory-retests-v1"),
     ],
 )
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):
