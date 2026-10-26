@@ -337,7 +337,11 @@ export default function LearningPage() {
     || (termSlug === "memory_process"
       && turn?.practice_question?.learning_variant_index === 1
       && questionBody.startsWith("大学が、授業内容について質問できる学習支援AI")
-      && questionBody.includes("\n\n開発担当者は、"));
+      && questionBody.includes("\n\n開発担当者は、"))
+    || (termSlug === "memory_process"
+      && turn?.practice_question?.learning_variant_index === 2
+      && questionBody.startsWith("料理の献立を提案するAIを開発している。")
+      && questionBody.includes("\n\nこのAIが過去の会話を記憶として利用する場合、"));
 
   return (
     <AppShell step="学習セッション">

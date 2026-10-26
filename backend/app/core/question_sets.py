@@ -6,6 +6,7 @@ STANDARD = "standard"
 EASY = "easy"
 QUESTION_SET_MODES = (STANDARD, EASY)
 ASSESSMENT_BANK_VERSIONS = {STANDARD: "scenario-actions-v4", EASY: "scenario-actions-easy-v1"}
+# The current spec uses the map above; this map only restores historical results.
 HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     6: {STANDARD: "scenario-actions-v1"},
     7: {STANDARD: "scenario-actions-v1", EASY: "scenario-actions-easy-v1"},
@@ -18,8 +19,9 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     14: {STANDARD: "scenario-actions-v4", EASY: "scenario-actions-easy-v1"},
     15: {STANDARD: "scenario-actions-v4", EASY: "scenario-actions-easy-v1"},
     16: {STANDARD: "scenario-actions-v4", EASY: "scenario-actions-easy-v1"},
+    17: {STANDARD: "scenario-actions-v4", EASY: "scenario-actions-easy-v1"},
 }
-LEARNING_CONTENT_VERSIONS = {STANDARD: 10, EASY: 4}
+LEARNING_CONTENT_VERSIONS = {STANDARD: 11, EASY: 4}
 
 
 def question_set_mode(value: str | None) -> QuestionSetMode:

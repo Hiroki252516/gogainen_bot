@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
+from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD
 from app.db import session as database
 from app.db.session import SessionLocal
 from app.main import app
@@ -50,14 +51,12 @@ def test_v10_only_changes_memory_first_question_and_preserves_v9():
     previous = deepcopy(load_learning_content(content_version=9))
     previous["version"] = 10
     previous["terms"]["memory_process"]["variants"][0] = EXPECTED
-    assert load_learning_content() == previous
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 17
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-25-memory-confirmation-v1"
+    assert load_learning_content(content_version=10) == previous
 
 
 @pytest.mark.parametrize("stage", ["enrichment", "conceptual_change"])
 def test_memory_first_question_body_and_role_assignment(stage):
-    spec = learning_question_spec("memory_process", stage, 1)
+    spec = learning_question_spec("memory_process", stage, 1, content_version=10)
     assert spec["body"] == EXPECTED["scenario"] + "\n\n" + EXPECTED["task"]
     assert len(spec["body"].split("\n\n")) == 3
     assert "**" not in spec["body"] and "問題：" not in spec["body"]
@@ -77,7 +76,7 @@ def test_missing_v10_never_falls_back(tmp_path, monkeypatch):
             patch.setattr(content_loader, "LEARNING_V10_CONTENT_PATH", tmp_path / "missing.yml")
             load_learning_content.cache_clear()
             with pytest.raises(FileNotFoundError):
-                load_learning_content()
+                load_learning_content(content_version=10)
     finally:
         load_learning_content.cache_clear()
 
@@ -87,7 +86,7 @@ def test_easy_mode_cannot_load_v10():
         load_learning_content("easy", 10)
 
 
-@pytest.mark.parametrize("version,spec_version,protocol", [(9, 16, OLD_PROTOCOL), (10, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
+@pytest.mark.parametrize("version,spec_version,protocol", [(9, 16, OLD_PROTOCOL), (10, 17, "experiment-plan-2026-10-25-memory-confirmation-v1")])
 @pytest.mark.parametrize("snapshot", [False, True])
 def test_memory_first_question_history_preserves_snapshot_and_saved_bank(tmp_path, monkeypatch, version, spec_version, protocol, snapshot):
     engine = create_engine(f"sqlite:///{tmp_path / 'history.db'}")
@@ -155,7 +154,7 @@ def test_natural_memory_first_question_grading_feedback_replay_and_prefetch(grou
     pid = created["participant_id"]
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == 17 and participant.learning_content_version == 10
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == LEARNING_CONTENT_VERSIONS[STANDARD]
         participant.option_order_mode = layout
         db.commit()
     _answer_phase(client, pid, "pretest", initial)
@@ -187,7 +186,7 @@ def test_natural_memory_first_question_grading_feedback_replay_and_prefetch(grou
         saved_session = db.get(TutorSession, sid)
         assert saved_session.session_index == 1
         saved = db.get(TutorTurn, current["turn_id"])
-        assert saved.diagnosis_json["learning_content_version"] == 10
+        assert saved.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]
         assert saved.practice_question_json["options"] == question["options"]
         history = build_interaction_history(db, pid, saved_session.term_id)
         record = next(row for row in history if row["source_type"] == "learning_turn" and row["session_index"] == 1)
@@ -197,4 +196,4 @@ def test_natural_memory_first_question_grading_feedback_replay_and_prefetch(grou
         retry = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
         assert retry["practice_question"] == question
         with SessionLocal() as db:
-            assert db.get(TutorTurn, retry["turn_id"]).diagnosis_json["learning_content_version"] == 10
+            assert db.get(TutorTurn, retry["turn_id"]).diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]

@@ -14,8 +14,8 @@ const questionSet = LEARNING_QUESTION_SET_MODE ?? "standard";
 assert([1, 2, 3].includes(variantIndex));
 if (variantIndex === 3) assert(LEARNING_FIXTURE_DB_URL, "V3 requires an explicit isolated fixture database.");
 assert(["standard", "easy"].includes(questionSet));
-assert(variantIndex === 1 || termSlug === "multi_agent");
-assert(questionSet === "standard" || (termSlug === "multi_agent" && variantIndex === 2) || (termSlug === "memory_process" && variantIndex === 1));
+assert(variantIndex === 1 || termSlug === "multi_agent" || (termSlug === "memory_process" && variantIndex === 2));
+assert(questionSet === "standard" || (termSlug === "multi_agent" && variantIndex === 2) || (termSlug === "memory_process" && [1, 2].includes(variantIndex)));
 assert(["llm_knowledge", "multi_agent", "memory_process"].includes(termSlug));
 assert(["127.0.0.1", "localhost", "[::1]"].includes(base.hostname));
 assert(base.port && base.port !== "3000", "Never use the study frontend.");
@@ -107,14 +107,40 @@ const easyMemoryBodies = [
   "今回の質問へ希望を貼るだけで、次回の保存や更新の機能もあるとみなす。"
 ];
 const easyMemoryQuestionBody = "利用者は「例を多くして説明して」と希望した。会話を終えた後の相談にも、この希望を使わせたい。\n\n適切な対応を3つ選びなさい。";
+const memoryRoundTwoBodies = [
+  "最初の会話から「辛い料理が好き」「20分以内で作りたい」といった希望を取り出して短い記録にまとめれば、会話の全文を保存せずに必要な情報だけを残す方法も選べる。",
+  "利用者から次の献立を尋ねられたとき、保存した希望の中から料理の辛さや調理時間に関係する記録を取り出し、その情報を参考に献立を提案できる。",
+  "新たに「辛い料理を控えたい」と伝えられたら、以前の「辛い料理が好き」という記録の扱いを更新し、次の相談では変更後の希望を反映できる。",
+  "以前の「辛い料理が好き」と新しい「辛い料理を控えたい」が食い違っても、次の質問に最も関連する記録を検索すれば、新旧の違いを確認しなくても現在の希望を正しく判断できると考える。",
+  "以前の「20分以内で作りたい」という希望を一度検索してAIの回答に使うと、その内容がモデルの重みに保存されるため、次回は記録を取り出さずに同じ希望を反映できると考える。",
+  "過去の希望を「辛さ」「調理時間」などに分けて要約して保存すれば、AIは次回の相談に必要な記録を自動的に探せると考え、保存先から情報を取り出す方法は設計しない。",
+  "「辛い料理が好き」などの希望を短くまとめた要約文を、過去の記録を探し出す検索機能と同じ種類のものとして扱い、要約文を作ることを検索機能の実装とみなす。",
+  "保存した「辛い料理を控えたい」という記録を検索してAIの回答に利用する処理を、会話データでモデルを追加訓練して重みを変更する仕組みと同じ種類のものとして扱う。",
+  "利用者が過去の希望を見返せる履歴画面を作り、その画面で「辛い料理を控えたい」という記録を表示できることを、AIが提案に使う記憶の検索機能と同じものとして扱う。"
+];
+const memoryRoundTwoQuestionBody = "料理の献立を提案するAIを開発している。ある利用者は以前の相談で「辛い料理が好き」「調理は20分以内がよい」と伝えていた。その後、同じ利用者が「最近は辛い料理を控えたい」と希望を変更した。開発担当者は、過去の会話で伝えられた希望と新しい希望を、次回以降の提案に役立てる記憶機能を考えている。\n\nこのAIが過去の会話を記憶として利用する場合、情報の扱いについて適切な記述を3つ選びなさい。";
+const easyMemoryRoundTwoBodies = [
+  "新しい好みを保存しておけば、次回に今の希望を読み出せる。",
+  "古い記録を直さないまま使うと、今の希望に合わない提案になり得る。",
+  "次の相談に関係する記録を選んで取り出し、その回答に使える。",
+  "前の好みも記録してあるので、今も変わらず正しいものとして使える。",
+  "新しい希望を入力しただけで保存先も直ると考え、更新する処理を省く。",
+  "一度答えに使えば後にも残ると考え、新しい好みを保存しない。",
+  "記録を取り出す機能をモデルの訓練とみなし、読み出す代わりに追加学習する。",
+  "保存した好みの文章自体を検索の仕組みとみなし、取り出す処理を作らない。",
+  "記録管理を画面の表示と同じ機能とみなし、希望を画面に出すだけで済ませる。"
+];
+const easyMemoryRoundTwoQuestionBody = "AIが覚えていた好みを、利用者が「今は違うものが好き」と変えた。次の相談で使う記録を考える。\n\nこの場面について正しい説明を3つ選びなさい。";
 const questionFixtures = {
   "standard:llm_knowledge:1": [llmBodies, llmQuestionBody],
   "standard:multi_agent:1": [multiBodies, multiQuestionBody],
   "standard:multi_agent:2": [roundTwoBodies, roundTwoQuestionBody],
   "standard:multi_agent:3": [roundThreeBodies, roundThreeQuestionBody],
   "standard:memory_process:1": [memoryBodies, memoryQuestionBody],
+  "standard:memory_process:2": [memoryRoundTwoBodies, memoryRoundTwoQuestionBody],
   "easy:multi_agent:2": [easyRoundTwoBodies, easyRoundTwoQuestionBody],
   "easy:memory_process:1": [easyMemoryBodies, easyMemoryQuestionBody],
+  "easy:memory_process:2": [easyMemoryRoundTwoBodies, easyMemoryRoundTwoQuestionBody],
 };
 const fixture = questionFixtures[`${questionSet}:${termSlug}:${variantIndex}`];
 assert(fixture, "Missing browser question fixture.");
@@ -237,7 +263,7 @@ engine.dispose()
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
     await assertQuestionLayout(page);
-    const preserveLines = questionSet === "standard" && ((termSlug === "multi_agent" && [2, 3].includes(variantIndex)) || (termSlug === "memory_process" && variantIndex === 1));
+    const preserveLines = questionSet === "standard" && ((termSlug === "multi_agent" && [2, 3].includes(variantIndex)) || (termSlug === "memory_process" && [1, 2].includes(variantIndex)));
     assert.equal(await page.locator(".problem-block > p").evaluate((element) => getComputedStyle(element).whiteSpace), preserveLines ? "pre-wrap" : "normal");
     assert.equal(await page.locator(".problem-block > p strong").count(), 0);
     await page.screenshot({ path: `${LEARNING_SCREENSHOT_DIR}/${caseName}-question.png`, fullPage: true });
