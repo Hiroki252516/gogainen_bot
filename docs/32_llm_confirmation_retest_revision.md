@@ -1,8 +1,10 @@
 # LLM知識の確認問題・再テストの改訂
 
-## 現行版と適用範囲
+本書は仕様版19・通常版テストv5・学習バンクv12の採用時記録である。現行版20でも、このLLM知識4問の本文・選択肢・段落表示と学習バンク12は維持する。マルチエージェント・記憶の再テスト4問の改訂と現行の保存契約は[33](33_multi_memory_retest_revision.md)を参照する。
 
-実験仕様版19 / `experiment-plan-2026-10-26-llm-confirmation-retest-v1`。新規通常版参加者は[学習バンクv12](../backend/app/seed/content/standard/learning_questions_v12.yml)と[テストバンクscenario-actions-v5](../backend/app/seed/content/standard/learning_content.yml)を使用する。易しい版は学習4・テストscenario-actions-easy-v1を維持する。
+## 採用時の仕様と適用範囲
+
+実験仕様版19 / `experiment-plan-2026-10-26-llm-confirmation-retest-v1`。新規通常版参加者は[学習バンクv12](../backend/app/seed/content/standard/learning_questions_v12.yml)と[テストバンクscenario-actions-v5](../backend/app/seed/content/archive/learning_content_scenario_actions_v5.yml)を使用する。易しい版は学習4・テストscenario-actions-easy-v1を維持する。
 
 変更するのは通常版llm_knowledgeのlearning_round_v1/v2とretest_v1/v2の場面・設問・計36選択肢のみ。正解/M1/M3各3つ、J「わからない」、学習V1のapplication・V2のpredictionを維持する。残り7確認問題・7テスト問題、事前テストの訂正情報、用語説明・共通RAG、教授プロンプト・生成契約・注釈・採点・配置・回数上限・評価式は変更しない。各版にテスト9固有問・確認9問を保持し、通常進行で3回目の学習には到達しない。
 

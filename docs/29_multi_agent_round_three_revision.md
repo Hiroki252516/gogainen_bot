@@ -1,6 +1,6 @@
 # マルチエージェント確認問題V3の改訂
 
-本書は仕様版16・学習バンクv9の採用時記録である。現行版19・学習バンクv12でも、このV3の内容・表示と通常非出題の条件は維持する。記憶V1の採用時記録は[30](30_memory_confirmation_revision.md)、記憶V2の採用時記録は[31](31_memory_round_two_revision.md)を参照する。 現行版19のLLM知識4問の改訂・保存契約は[32](32_llm_confirmation_retest_revision.md)を参照する。
+本書は仕様版16・学習バンクv9の採用時記録である。現行版20・学習バンクv12でも、このV3の内容・表示と通常非出題の条件は維持する。記憶V1の採用時記録は[30](30_memory_confirmation_revision.md)、記憶V2の採用時記録は[31](31_memory_round_two_revision.md)を参照する。 仕様版19のLLM知識4問の採用時記録は[32](32_llm_confirmation_retest_revision.md)を参照する。 現行版20の再テスト4問の改訂と保存契約は[33](33_multi_memory_retest_revision.md)を参照する。
 
 ## 採用時の版と適用範囲
 

@@ -12,13 +12,19 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 19 |
-| 新プロトコル | experiment-plan-2026-10-26-llm-confirmation-retest-v1 |
+| 実験仕様版 | 20 |
+| 新プロトコル | experiment-plan-2026-10-26-multi-memory-retests-v1 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-26 LLM知識の確認問題・再テストの改訂（版19）
+## 2026-10-26 マルチエージェント・記憶の再テスト改訂（版20）
+
+- fix/conf-test-llmknowledge-v1v2の承認により、通常版multi_agentとmemory_processのretest_v1/v2、計4問の場面・設問・36選択肢を指定文へ更新する。正解/M1/M3各3つとJを維持する。マルチエージェントV1と記憶V2は場面3段落・設問の4段落、残る2問は場面・設問の2段落で表示し、段落内の途中改行はつなぐ。太字・装飾用Markdown・重複する場面/問題見出しは保存しない。内部final_testも各用語の改訂V1を共用する。前回のLLM知識4問、残り5テスト問題、全9確認問題、事前の訂正情報、易しい版、教授プロンプト・採点・配置・回数上限は維持する。[全文と分類理由](33_multi_memory_retest_revision.md)。
+- 新規だけ仕様版20と現行protocolを保存し、通常版はテストscenario-actions-v6・学習12、易しい版はテストscenario-actions-easy-v1・学習4を使う。旧テストv5以下と全学習バンクを保持し、旧仕様版19以下は閲覧専用で記録を付け替えない。再表示はsnapshot優先・当時の問題IDと保存バンクで復元する。旧テストv5はarchive/learning_content_scenario_actions_v5.ymlへ原文のまま保全し、新版は別問題ID・選択肢IDでseedする。旧仕様版19の結果復元は履歴用対応表のv5、現行20は現行版用定義を参照する。
+- 学習YAMLを追加せず、保存学習版を同期生成・先行生成でも維持する。公開API・DB構造・AI生成契約・研究仮説・評価式は変更しない。研究DB・3000番・Word・別仕様リポジトリ・実AI呼び出し・既存データ削除・コミット・pushは対象外。分類妥当性や読みやすさを機械検査だけで実証したとは扱わない。
+
+## 2026-10-26 LLM知識の確認問題・再テストの改訂（版19採用時の記録）
 
 - fix/conf-test-llmknowledge-v1v2の承認により、通常版のLLM知識・確認問題V1/V2と再テストV1/V2の場面・設問・計36選択肢を指定文へ更新する。正解/M1/M3各3つとJを維持し、確認V1はapplication・V2はpredictionのままとする。確認V1/V2と再テストV1は場面・設問の2段落、再テストV2は場面3段落・設問の4段落で表示し、太字・Markdown装飾・重複する問題ラベルは付けない。改行表示は今回の4問に限定し、既存の記憶・マルチエージェントの表示は維持する。残り7確認問題・7テスト問題、事前の訂正情報、易しい版、教授プロンプト・生成契約・採点・配置・回数上限は変更しない。[全文と分類理由](32_llm_confirmation_retest_revision.md)。
 - 新規通常版は学習12・テストscenario-actions-v5、易しい版は学習4・テストscenario-actions-easy-v1を使う。旧学習v11以下とテストv4以下を保持し、出題・採点・同期生成・先行生成は保存版に統一する。履歴はsnapshot優先・当時のバンクで復元する。仕様版18以下は閲覧専用で、版・進行・保存済み記録を付け替えない。テストv4はarchive/learning_content_scenario_actions_v4.ymlへ保全し、新版は別DB IDでseedする。旧仕様版18のテスト対応を履歴用定義へ追加し、現行19は現行版用定義を使う。

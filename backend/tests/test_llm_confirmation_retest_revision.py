@@ -112,10 +112,7 @@ EXPECTED = {
 
 
 def test_v12_and_assessment_v5_only_change_the_four_requested_questions():
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 19
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-26-llm-confirmation-retest-v1"
     assert LEARNING_CONTENT_VERSIONS == {"standard": 12, "easy": 4}
-    assert ASSESSMENT_BANK_VERSIONS == {"standard": "scenario-actions-v5", "easy": "scenario-actions-easy-v1"}
     assert hashlib.sha256(content_loader.LEARNING_V11_CONTENT_PATH.read_bytes()).hexdigest() == "538638dd055c1e535c51b0beb43777b18337f8b6fa5583df5323259f07a1bb4a"
     assert hashlib.sha256(content_loader.SCENARIO_ACTIONS_V4_CONTENT_PATH.read_bytes()).hexdigest() == "57f89f9d9cbe2f8d7c019fa5f24f08998b7761e7c956fa11f3c22a58ca71d9d5"
     previous_learning = deepcopy(load_learning_content(content_version=11))
@@ -125,7 +122,8 @@ def test_v12_and_assessment_v5_only_change_the_four_requested_questions():
     previous_assessment = yaml.safe_load(content_loader.SCENARIO_ACTIONS_V4_CONTENT_PATH.read_text(encoding="utf-8"))
     previous_assessment["assessment_bank_version"] = "scenario-actions-v5"
     previous_assessment["terms"][0]["questions"]["retest"] = [EXPECTED["retest_v1"], EXPECTED["retest_v2"]]
-    assert load_content() == previous_assessment
+    adopted = yaml.safe_load(content_loader.SCENARIO_ACTIONS_V5_CONTENT_PATH.read_text(encoding="utf-8"))
+    assert adopted == previous_assessment
 
 
 @pytest.mark.parametrize("key", list(EXPECTED))
@@ -198,7 +196,7 @@ def test_natural_two_learning_rounds_feedback_history_and_retests(group, layout,
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.option_order_mode = layout
-        assert participant.learning_content_version == 12 and participant.experiment_spec_version == 19
+        assert participant.learning_content_version == 12 and participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
         db.commit()
     _answer_test(client, pid, "pretest", initial)
     _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))

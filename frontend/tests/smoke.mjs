@@ -252,6 +252,9 @@ const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx
 for (const text of ['current?.term_slug === "llm_knowledge"', '企業が、社員からの「パスワードを忘れた」', '企業が、会議の文字起こしをもとに議事録を作成するAI']) {
   if (!questionRunner.includes(text)) throw new Error(`Missing scoped retest paragraph display: ${text}`);
 }
+for (const text of ['current?.term_slug === "multi_agent"', 'current?.term_slug === "memory_process"', '旅行会社が、公共交通を利用する日帰り観光プラン', '博物館が、来館者に短い見学コースを提案するAI', '料理の献立を提案するAIサービスを開発している。', '企業が、利用者からの問い合わせに対応するAIを開発している。']) {
+  if (!questionRunner.includes(text)) throw new Error(`Missing scoped multi-agent/memory retest paragraphs: ${text}`);
+}
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow the backend transition after scoring");
 }
