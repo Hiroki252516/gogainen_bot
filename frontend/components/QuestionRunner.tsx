@@ -75,6 +75,11 @@ export function QuestionRunner({
   const [questionStartedAt, setQuestionStartedAt] = useState(() => Date.now());
   const [questionShownAt, setQuestionShownAt] = useState(() => new Date().toISOString());
   const current = questions[index];
+  const preserveQuestionLines = current?.term_slug === "llm_knowledge"
+    && ((current.body.startsWith("企業が、社員からの「パスワードを忘れた」")
+        && current.body.includes("\n\nこれらの目的を実現するための開発担当者の対応として、"))
+      || (current.body.startsWith("企業が、会議の文字起こしをもとに議事録を作成するAI")
+        && current.body.includes("\n\n現在は、AIが作成する議事録の文章構成や表現に")));
 
   useEffect(() => {
     const id = requireParticipant();
@@ -218,7 +223,7 @@ export function QuestionRunner({
           <span>問{toFullWidthDigits(index + 1)}：</span>
           <strong>{current.term_label}</strong>
         </div>
-        <p>{current.body}</p>
+        <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{current.body}</p>
       </div>
       {isAnswered ? (
         <div className="notice answer-locked" role="status">

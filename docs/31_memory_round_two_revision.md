@@ -1,6 +1,8 @@
 # 記憶プロセス確認問題V2の改訂
 
-## 現行版と適用範囲
+本書は仕様版18・学習バンクv11の採用時記録である。現行版19・学習v12でも、この記憶V2の本文・選択肢・2段落表示と出題条件は維持する。現行のLLM知識4問の改訂・保存契約は[32](32_llm_confirmation_retest_revision.md)を参照する。
+
+## 採用時の仕様と適用範囲
 
 実験仕様版18 / `experiment-plan-2026-10-26-memory-round2-v1`。新規通常版参加者は[learning_questions_v11.yml](../backend/app/seed/content/standard/learning_questions_v11.yml)と学習版11を使用する。易しい版は4を維持する。ファイル名のv11は学習バンクの改訂版、learning_round_v2は当該用語の2回目の学習セッション用の問題であり、同じセッション内の2回目の回答を意味しない。
 

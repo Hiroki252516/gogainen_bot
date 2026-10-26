@@ -1,6 +1,6 @@
 # 通常版マルチエージェントの確認問題改訂
 
-本書は実験仕様版13・通常版学習バンクv6を採用した際の改訂記録である。版14・学習バンクv7で、この場面と設問を維持してV1の9選択肢を具体化した。現行の仕様版18・v11でもV1は変更しない。V1本文と先頭Dの曖昧さは[27](27_multi_agent_choice_revision.md)、V2の採用時記録は[28](28_multi_agent_round_two_revision.md)、V3の採用時記録は[29](29_multi_agent_round_three_revision.md)、記憶V1の採用時記録は[30](30_memory_confirmation_revision.md)、現行版18の記憶V2改訂・保存と検証条件は[31](31_memory_round_two_revision.md)を参照する。
+本書は実験仕様版13・通常版学習バンクv6を採用した際の改訂記録である。版14・学習バンクv7で、この場面と設問を維持してV1の9選択肢を具体化した。現行の仕様版19・v12でもV1は変更しない。V1本文と先頭Dの曖昧さは[27](27_multi_agent_choice_revision.md)、V2の採用時記録は[28](28_multi_agent_round_two_revision.md)、V3の採用時記録は[29](29_multi_agent_round_three_revision.md)、記憶V1の採用時記録は[30](30_memory_confirmation_revision.md)、記憶V2の採用時記録は[31](31_memory_round_two_revision.md)を参照する。 現行版19のLLM知識4問の改訂・保存契約は[32](32_llm_confirmation_retest_revision.md)を参照する。
 
 ## 適用範囲と版
 

@@ -52,14 +52,12 @@ def test_v11_only_changes_memory_round_two_and_preserves_v10():
     previous = deepcopy(load_learning_content(content_version=10))
     previous["version"] = 11
     previous["terms"]["memory_process"]["variants"][1] = EXPECTED
-    assert load_learning_content() == previous
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 18
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-26-memory-round2-v1"
+    assert load_learning_content(content_version=11) == previous
 
 
 @pytest.mark.parametrize("stage", ["enrichment", "conceptual_change"])
 def test_memory_round_two_body_and_role_assignment(stage):
-    spec = learning_question_spec("memory_process", stage, 2)
+    spec = learning_question_spec("memory_process", stage, 2, content_version=11)
     assert spec["body"] == EXPECTED["scenario"] + "\n\n" + EXPECTED["task"]
     assert len(spec["body"].split("\n\n")) == 2
     assert "**" not in spec["body"] and "問題：" not in spec["body"]
@@ -79,7 +77,7 @@ def test_missing_v11_never_falls_back(tmp_path, monkeypatch):
             patch.setattr(content_loader, "LEARNING_V11_CONTENT_PATH", tmp_path / "missing.yml")
             load_learning_content.cache_clear()
             with pytest.raises(FileNotFoundError):
-                load_learning_content()
+                load_learning_content(content_version=11)
     finally:
         load_learning_content.cache_clear()
 
@@ -89,7 +87,7 @@ def test_easy_mode_cannot_load_v11():
         load_learning_content("easy", 11)
 
 
-@pytest.mark.parametrize("version,spec_version,protocol", [(10, 17, OLD_PROTOCOL), (11, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
+@pytest.mark.parametrize("version,spec_version,protocol", [(10, 17, OLD_PROTOCOL), (11, 18, "experiment-plan-2026-10-26-memory-round2-v1"), (12, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
 @pytest.mark.parametrize("snapshot", [False, True])
 def test_memory_round_two_history_preserves_snapshot_and_saved_bank(tmp_path, monkeypatch, version, spec_version, protocol, snapshot):
     engine = create_engine(f"sqlite:///{tmp_path / 'history.db'}")
@@ -111,7 +109,7 @@ def test_memory_round_two_history_preserves_snapshot_and_saved_bank(tmp_path, mo
                              grading_json={"is_sufficient": False, "selected_option_ids": ["H"]})
             db.add(turn)
             db.commit()
-            if version == 10:
+            if version in (10, 11):
                 before = {model: deepcopy(db.execute(select(model.__table__)).mappings().all()) for model in (Participant, TutorSession, TutorTurn)}
                 seed_database(db)
                 seed_database(db)
@@ -126,7 +124,7 @@ def test_memory_round_two_history_preserves_snapshot_and_saved_bank(tmp_path, mo
             assert restored["selected_options"] == [{"label": "H", "body": "保存時の選択肢" if snapshot else source["options"][7]["body"]}]
             assert json.dumps([turn.practice_question_json, turn.diagnosis_json, turn.grading_json], sort_keys=True) == before_json
             if not snapshot:
-                assert ("料理の献立" in restored["question_body"]) == (version == 11)
+                assert ("料理の献立" in restored["question_body"]) == (version >= 11)
     finally:
         engine.dispose()
 
@@ -222,7 +220,7 @@ def test_current_spec_resolves_without_historical_mapping(mode):
         question = next(question for question in questions if question["term_slug"] == "memory_process")
         with SessionLocal() as db:
             participant = db.get(Participant, created["participant_id"])
-            assert participant.experiment_spec_version == 18
+            assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
             assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS[mode]
             term = db.query(Term).filter_by(slug="memory_process").one()
             restored = _test_result_question(db, participant, term, "test", "pretest")

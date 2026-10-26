@@ -2,7 +2,7 @@
 
 ## 用語注釈と生成契約の境界
 
-実験仕様版18の注釈はbackendの固定辞書処理であり、AIは生成しない。注釈のために入力・プロンプト・出力Schema・生成契約版v7を変更せず、tutor_message/summary/feedbackの文字列にも追記しない。回答後解説へ渡すmaterialも従来の本文だけ。共通履歴へ注釈を入れない。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照する。
+実験仕様版19の注釈はbackendの固定辞書処理であり、AIは生成しない。注釈のために入力・プロンプト・出力Schema・生成契約版v7を変更せず、tutor_message/summary/feedbackの文字列にも追記しない。回答後解説へ渡すmaterialも従来の本文だけ。共通履歴へ注釈を入れない。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照する。
 
 Wordと承認された実装判断を[20](20_experiment_plan_alignment.md)に記録する。6.7の共通・統制群指示を実装し、unknownの証拠Schema・taxonomy・検査・Mockも更新した。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
 
@@ -52,9 +52,9 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 原文全体は[tutoring_prompt.py](../backend/app/ai/tutoring_prompt.py)のcompose_structured_prompt/build_tutoring_prompt、unknownの必須項目は[mandatory_elements.py](../backend/app/ai/mandatory_elements.py)を参照する。生成文の意味的な正しさまで機械検査したとは扱わない。
 
-## 現行契約（実行版18）
+## 現行契約（実行版19）
 
-実験仕様版18、新protocol_idはexperiment-plan-2026-10-26-memory-round2-v1。契約版はtutoring-teaching-contract-v7-easy-level、taxonomy版はm1-m3-unknown-v3。共通履歴interaction-history-v1、出題規則shared-diagnosis-route-v1は維持。仕様版18は事前後のテストをfinal_test込み最大2回に制限するが、AIのprompt契約や教授方略は変更しない。
+実験仕様版19、新protocol_idはexperiment-plan-2026-10-26-llm-confirmation-retest-v1。契約版はtutoring-teaching-contract-v7-easy-level、taxonomy版はm1-m3-unknown-v3。共通履歴interaction-history-v1、出題規則shared-diagnosis-route-v1は維持。仕様版19は事前後のテストをfinal_test込み最大2回に制限するが、AIのprompt契約や教授方略は変更しない。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 

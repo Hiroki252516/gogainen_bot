@@ -14,8 +14,8 @@ const questionSet = LEARNING_QUESTION_SET_MODE ?? "standard";
 assert([1, 2, 3].includes(variantIndex));
 if (variantIndex === 3) assert(LEARNING_FIXTURE_DB_URL, "V3 requires an explicit isolated fixture database.");
 assert(["standard", "easy"].includes(questionSet));
-assert(variantIndex === 1 || termSlug === "multi_agent" || (termSlug === "memory_process" && variantIndex === 2));
-assert(questionSet === "standard" || (termSlug === "multi_agent" && variantIndex === 2) || (termSlug === "memory_process" && [1, 2].includes(variantIndex)));
+assert(variantIndex === 1 || termSlug === "multi_agent" || (["llm_knowledge", "memory_process"].includes(termSlug) && variantIndex === 2));
+assert(questionSet === "standard" || (termSlug === "multi_agent" && variantIndex === 2) || (["llm_knowledge", "memory_process"].includes(termSlug) && [1, 2].includes(variantIndex)));
 assert(["llm_knowledge", "multi_agent", "memory_process"].includes(termSlug));
 assert(["127.0.0.1", "localhost", "[::1]"].includes(base.hostname));
 assert(base.port && base.port !== "3000", "Never use the study frontend.");
@@ -23,17 +23,30 @@ const { chromium } = await import(LEARNING_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true, channel: "chrome" });
 await mkdir(LEARNING_SCREENSHOT_DIR, { recursive: true });
 const llmBodies = [
-  "利用者の質問に応じて履修規程の該当箇所を検索し、質問と一緒にAIへ渡して回答を作らせる。",
-  "「必要な手続き・提出期限・注意点」の順に説明するよう、AIへ渡すプロンプトに指示を加える。",
-  "担当者が確認した質問と回答の例を学習用データにして、AIを追加訓練する。",
-  "履修規程を一度AIへ渡せば、その内容がモデルの重みに保存され、以後は検索しなくてもよい。",
-  "回答例を毎回の質問に加えれば、学習用データによる訓練をしなくてもモデルの重みを調整できる。",
-  "回答の順番を指示する文章をプロンプトに加えることで、モデルの重みを更新する。",
-  "回答例をRAGの検索対象に登録すれば、回答方法の追加訓練が完了する。",
-  "履修規程の該当箇所を探すには、文書検索ではなくファインチューニングを使う。",
-  "履修規程の本文をプロンプトに含めれば、プロンプト自体を文書の保存・検索先として使える。",
+  "学生から履修登録の変更期限を尋ねられたとき、改訂後の履修規程から質問に関係する箇所を検索し、見つけた内容をAIに示して、その情報を参考に案内を作成させる。",
+  "学生への回答を「必要な手続き・提出期限・注意点」の順にそろえるため、AIへ渡す指示文（プロンプト）に説明の順序を指定し、問い合わせへの回答時にその指示を利用する。",
+  "担当職員が確認した履修登録の質問と適切な回答の組を学習用データとしてまとめ、その例を使ってAIモデルを追加訓練し、回答の構成や表現を調整する。",
+  "改訂後の履修規程を開発時に一度AIへ入力すれば、その内容がモデルの重みに記憶されると考え、学生からの新しい問い合わせで規程を検索する仕組みは設けない。",
+  "職員が確認した質問と回答の例を学生の問い合わせのたびにAIへ渡せば、回答を重ねるうちにモデルの重みも更新されると考え、別の追加訓練は行わない。",
+  "「必要な手続き・提出期限・注意点」の順に説明する指示文をAIへ与えると、その順序がモデルの重みに定着すると考え、以後の問い合わせには同じ指示を与えずに回答させる。",
+  "職員が確認した質問と回答の例を文書検索の対象として登録し、似た質問が来たときに取り出せるようにする処理を、回答方法を覚えさせる追加訓練と同じ仕組みとして扱う。",
+  "学生が履修変更の期限を質問したとき、改訂後の履修規程から該当する箇所を探す文書検索の仕組みの代わりに、ファインチューニングを検索機能として組み込む。",
+  "改訂後の履修規程の本文をAIへの指示文（プロンプト）に書き込み、そのプロンプトそのものを、規程を継続的に保存したり必要な条文を検索したりする文書データベースとして扱う。"
 ];
-const llmQuestionBody = "大学の履修案内AIに、更新された履修規程を使わせたい。回答は「必要な手続き・提出期限・注意点」の順にそろえ、担当者が確認した質問と回答の例も改善に利用したい。\n\n担当者の対応として、適切なものを3つ選びなさい。";
+const llmQuestionBody = "大学が、学生からの履修登録に関する質問に回答するAIを開発している。今年度は履修規程が改訂され、履修登録の変更手続きや提出期限が以前と異なっている。学生への回答は「必要な手続き・提出期限・注意点」の順にそろえたいが、質問によって説明の仕方にばらつきがある。また、担当職員が内容を確認した過去の質問と回答の例も用意しており、回答の改善に活用したい。\n\nこれらの目的を実現する開発担当者の対応として、適切なものを3つ選びなさい。";
+
+const llmRoundTwoBodies = [
+  "同じAIモデルでも、「表でまとめて」と指示すれば内容を表に整理し、「一段落で説明して」と指示すれば文章にまとめるなど、モデルの重みを変更せずに回答形式を変えられる。",
+  "開発担当者は、学生への回答を表形式にしたい場合、AIに渡す指示文（プロンプト）で表の形式を指定できるため、モデルを追加訓練せずに回答の見せ方を調整できる。",
+  "表形式の回答方法をモデルの重みに反映させたい場合は、適切な回答例などを学習用データとして用意し、そのデータを使ってモデルを追加訓練する工程が必要になる。",
+  "「表でまとめて」という指示で表形式の回答が生成された場合、AIがその回答方法を新たに学習したと考え、出力形式が変わったことをモデルの重みも更新された証拠として扱う。",
+  "一度「表でまとめて」と指示して表形式の回答が得られれば、その形式はモデル自身に記憶されると考え、別の日の新しい会話でも同じ指示を与えずに表形式で回答させる。",
+  "AIが自習室の利用方法について新しい説明文を生成すると、その文章は回答を作成した時点でモデルの重みに保存されると考え、次回の質問ではその内容を学習済みの情報として利用する。",
+  "「表でまとめて」というプロンプトの指示によって回答形式を変える操作を、表形式の回答例を学習用データにしてモデルを追加訓練する工程と同じ種類の仕組みとして扱う。",
+  "表形式で回答するようモデルを追加訓練する工程を、質問に「表で答えて」という指示を書き加えるプロンプトの設定と同じ種類の操作として扱い、両者を区別せずに設計する。",
+  "「表でまとめて」と指示したAIと「一段落で説明して」と指示したAIは、使っているモデルが同じでも回答形式が異なるため、それぞれ別の学習済みモデルとして扱う。"
+];
+const llmRoundTwoQuestionBody = "大学が、学生に学内施設の利用方法を案内するAIを開発している。開発担当者は、同じAIモデルに「自習室の利用方法を教えて」という質問を与え、回答形式を変えて比較することにした。1回目は「手順と注意点を表でまとめて」と指示し、2回目は「同じ内容を一段落の文章で説明して」と指示する。どちらも同じAIモデルを使用し、回答形式の指示以外は変更せず、追加訓練も行っていない。\n\n回答形式の指示を変えた場合に起こり得る変化と、モデルの学習との違いについて、適切な説明を3つ選びなさい。";
 
 const multiBodies = [
   "被害状況や道路の情報を集めるAIが調査結果を避難方法の検討担当へ渡し、その検討結果を避難案内文作成担当に引き継ぐようにすれば、複数のAIが分担した作業を順番に繋げられる。",
@@ -133,6 +146,7 @@ const easyMemoryRoundTwoBodies = [
 const easyMemoryRoundTwoQuestionBody = "AIが覚えていた好みを、利用者が「今は違うものが好き」と変えた。次の相談で使う記録を考える。\n\nこの場面について正しい説明を3つ選びなさい。";
 const questionFixtures = {
   "standard:llm_knowledge:1": [llmBodies, llmQuestionBody],
+  "standard:llm_knowledge:2": [llmRoundTwoBodies, llmRoundTwoQuestionBody],
   "standard:multi_agent:1": [multiBodies, multiQuestionBody],
   "standard:multi_agent:2": [roundTwoBodies, roundTwoQuestionBody],
   "standard:multi_agent:3": [roundThreeBodies, roundThreeQuestionBody],
@@ -263,7 +277,7 @@ engine.dispose()
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
     await assertQuestionLayout(page);
-    const preserveLines = questionSet === "standard" && ((termSlug === "multi_agent" && [2, 3].includes(variantIndex)) || (termSlug === "memory_process" && [1, 2].includes(variantIndex)));
+    const preserveLines = questionSet === "standard" && ((termSlug === "multi_agent" && [2, 3].includes(variantIndex)) || (["llm_knowledge", "memory_process"].includes(termSlug) && [1, 2].includes(variantIndex)));
     assert.equal(await page.locator(".problem-block > p").evaluate((element) => getComputedStyle(element).whiteSpace), preserveLines ? "pre-wrap" : "normal");
     assert.equal(await page.locator(".problem-block > p strong").count(), 0);
     await page.screenshot({ path: `${LEARNING_SCREENSHOT_DIR}/${caseName}-question.png`, fullPage: true });

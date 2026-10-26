@@ -2,7 +2,7 @@
 
 ## 確認問題の段落表示
 
-仕様版18の通常版memory_process・learning_round_v2は、場面説明と設問を空行で区切る2段落とし、既存preserve-linesで改行表示する。用語・variant番号2・献立提案AIの導入文と設問段落で今回の問題だけを限定する。太字・装飾用Markdown記号・重複する「問題：」は保存しない。易しい版・旧問題・他用語・各テストの表示は変えない。[全文と検証条件](31_memory_round_two_revision.md)。
+仕様版19の通常版LLM知識・確認V1/V2と再テストV1/V2だけに既存preserve-linesを適用する。確認V1/V2と再テストV1は場面・設問の2段落、再テストV2は場面3段落・設問の4段落。太字・装飾用Markdown・重複する問題ラベルは保存しない。用語・学習variant番号と改訂文の導入・段落で対象を限定し、易しい版・旧問題・他問題の表示は維持する。内部final_testも改訂後のretest_v1を共用する。[今回の全文・分類理由・保存と検証条件](32_llm_confirmation_retest_revision.md)。
 
 通常版memory_process・V1は、大学・学生の説明、開発担当者の目的、設問を空行で区切る既存の3段落表示を維持する。用語・variant番号1・導入文と開発担当者の段落で対象を限定する。[V1の採用時記録](30_memory_confirmation_revision.md)。
 
