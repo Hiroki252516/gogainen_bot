@@ -26,7 +26,7 @@ AI・技術の予備知識が少ない参加者にも設問を読めるように
 | assessment_bank_version | scenario-actions-v4 | scenario-actions-easy-v1 |
 | 学習YAML | `backend/app/seed/content/standard/learning_questions_v3.yml` | `backend/app/seed/content/easy/learning_questions_v4_easy.yml` |
 | learning_content_version | 3 | 4 |
-| 固有問題数 | テスト9・学習確認9 | テスト9・学習確認9 |
+| 固有問題数 | テスト9・学習確認6 | テスト9・学習確認6 |
 | 追加AI入力 | なし | explanation_level=beginner |
 
 RuntimeSetting（ID=1）とParticipantへnullableなquestion_set_modeを追加する。既存行はNULLのまま通常版として読み、補完しない。新規登録だけ選択した版と対応する学習版を保存する。無効な版や学習版の不整合はエラーにして、他版を代用しない。
@@ -37,7 +37,7 @@ RuntimeSetting（ID=1）とParticipantへnullableなquestion_set_modeを追加�
 
 各問の役割は正解3・M1誤答3・M3誤答3・unknown 1。表示順と採点を分離し、内部選択肢IDとメタデータで完全選択・M3優先を判定する。参加者向けAPIへ正答・分類は返さない。配置アルゴリズムは各版内で再現可能・役割ラベル数を均衡させる。
 
-事前込み最大3テスト、事前後最大2回、満点時早期終了、未達終了、学習確認1用語・1セッション最大3回答は変更しない。学習確認3セッション目も保存するが現行経路では到達しない。同一セッションの再回答では問題を変えない。
+事前込み最大3テスト、事前後最大2回、満点時早期終了、未達終了、学習確認1用語・1セッション最大3回答は変更しない。学習確認は1用語あたり2セッションとし、旧3セッション目は`archive/learning_round_v3_archived.yml`へ保全する。同一セッションの再回答では問題を変えない。
 
 ## 平易化指示と群別分離
 

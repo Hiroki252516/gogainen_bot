@@ -79,7 +79,7 @@ def test_randomized_assignment_is_stable_unique_and_balanced_for_both_banks():
                     (option["label"], option["body"]) for option in repeated
                 ]
     for term_slug in ACTIVE_TERM_SLUGS:
-        for variant_index in range(1, 4):
+        for variant_index in range(1, 3):
             enrichment = learning_question_spec(term_slug, "enrichment", variant_index)
             conceptual_change = learning_question_spec(term_slug, "conceptual_change", variant_index)
             assert enrichment["body"] == conceptual_change["body"]
@@ -100,7 +100,7 @@ def test_randomized_assignment_is_stable_unique_and_balanced_for_both_banks():
             ]
 
     assert len(assessment_items) == 9
-    assert len(learning_items) == 9
+    assert len(learning_items) == 6
     assert unknown_labels == {"J"}
     _assert_role_balance("assessment", assessment_items)
     _assert_role_balance("learning", learning_items)

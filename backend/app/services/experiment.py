@@ -1718,6 +1718,8 @@ def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> Tu
     if existing:
         return existing
     count = db.query(func.count(TutorSession.id)).filter_by(participant_id=participant.id, term_id=term.id).scalar() or 0
+    if count >= LEARNING_SESSION_VARIANT_COUNT:
+        raise HTTPException(status_code=409, detail="この用語の学習セッション上限に達しています。")
     session = TutorSession(participant_id=participant.id, term_id=term.id, session_index=count + 1, group_condition=participant.group_condition)
     db.add(session)
     _commit(db)
@@ -1767,7 +1769,9 @@ def _tutoring_generation_context(
         )
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
     turn_index = turn_count + 1
-    learning_variant_index = min(max(session.session_index, 1), LEARNING_SESSION_VARIANT_COUNT)
+    if not 1 <= session.session_index <= LEARNING_SESSION_VARIANT_COUNT:
+        raise HTTPException(status_code=409, detail="この学習セッションの問題は利用できません。")
+    learning_variant_index = session.session_index
     position = _learning_position(db, session, term, participant)
     misconception_history = session_misconception_history(db, session.id) if participant.group_condition == "proposed" else []
     state_current_status = state.current_status
@@ -2255,6 +2259,8 @@ def prepare_prefetch_sessions(db: Session, participant_id: str, source_session_i
                 prepared_ids.append(existing.id)
             continue
         count = db.query(func.count(TutorSession.id)).filter_by(participant_id=participant.id, term_id=term.id).scalar() or 0
+        if count >= LEARNING_SESSION_VARIANT_COUNT:
+            continue
         session = TutorSession(
             participant_id=participant.id,
             term_id=term.id,

@@ -296,7 +296,7 @@ def test_content_contract_has_three_terms_and_required_learning_round_counts():
         assert len(term["questions"]["retest"]) == 2
         assert "final_test" not in term["questions"]
         assert assessment_question_spec(term["slug"], "final_test")["variant_key"] == "retest_v1"
-        assert len(load_learning_v3_content()["terms"][term["slug"]]["variants"]) == 3
+        assert len(load_learning_v3_content()["terms"][term["slug"]]["variants"]) == 2
 
 
 def test_assessment_bank_has_9_active_scenario_variants_fixed_roles_and_nonempty_options():
@@ -359,9 +359,9 @@ def test_learning_v3_bank_has_scenario_roles_and_fixed_labels():
 
     for term_slug in ACTIVE_TERM_SLUGS:
         variants = content["terms"][term_slug]["variants"]
-        assert len(variants) == 3
+        assert len(variants) == 2
         assert [variant["scenario_type"] for variant in variants] == [
-            "application", "prediction", "comparison"
+            "application", "prediction"
         ]
         for variant_index, variant in enumerate(variants, start=1):
             spec = learning_question_spec(
@@ -381,7 +381,7 @@ def test_learning_v3_bank_has_scenario_roles_and_fixed_labels():
             assert [option["label"] for option in spec["options"] if option["misconception_type"] == "M3"] == list("GHI")
             variant_count += 1
 
-    assert variant_count == 9
+    assert variant_count == 6
 
 
 def test_llm_knowledge_round_v1_prompt_and_option_roles():
@@ -407,7 +407,7 @@ def test_llm_knowledge_round_v1_prompt_and_option_roles():
 
 def test_learning_questions_are_shared_by_stage_and_rotate_by_session_round():
     for term_slug in ACTIVE_TERM_SLUGS:
-        for round_index in (1, 2, 3):
+        for round_index in (1, 2):
             enrichment = learning_question_spec(term_slug, "enrichment", round_index)
             conceptual_change = learning_question_spec(term_slug, "conceptual_change", round_index)
             assert enrichment["variant_key"] == f"learning_round_v{round_index}"
@@ -415,7 +415,46 @@ def test_learning_questions_are_shared_by_stage_and_rotate_by_session_round():
             assert conceptual_change["body"] == enrichment["body"]
             assert conceptual_change["options"] == enrichment["options"]
         assert learning_question_spec(term_slug, "enrichment", 1)["body"] != learning_question_spec(term_slug, "enrichment", 2)["body"]
-        assert learning_question_spec(term_slug, "enrichment", 2)["body"] != learning_question_spec(term_slug, "enrichment", 3)["body"]
+        assert learning_question_spec(term_slug, "enrichment", 1)["body"] != learning_question_spec(term_slug, "enrichment", 2)["body"]
+
+
+def test_third_learning_session_is_rejected_after_two_sessions():
+    pid = _create_participant_with_pretest(labels=["D", "E", "F"])
+    first = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "llm_knowledge"},
+    )
+    assert first.status_code == 200, first.text
+
+    db = SessionLocal()
+    try:
+        first_session = db.get(TutorSession, first.json()["tutor_session_id"])
+        assert first_session is not None
+        first_session.ended_at = first_session.started_at
+        db.commit()
+    finally:
+        db.close()
+
+    second = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "llm_knowledge"},
+    )
+    assert second.status_code == 200, second.text
+
+    db = SessionLocal()
+    try:
+        second_session = db.get(TutorSession, second.json()["tutor_session_id"])
+        assert second_session is not None
+        second_session.ended_at = second_session.started_at
+        db.commit()
+    finally:
+        db.close()
+
+    third = client.post(
+        "/api/tutor-sessions",
+        json={"participant_id": pid, "term_slug": "llm_knowledge"},
+    )
+    assert third.status_code == 409
 
 
 def test_pretest_returns_three_multi_select_questions_with_ten_options():

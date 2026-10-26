@@ -1,6 +1,6 @@
 # 易しい版の問題全文と誤答分類根拠
 
-この資料は研究者向けで、正解・M分類を含む。参加者画面には表示しない。正本は `backend/app/seed/content/easy/learning_content_easy.yml` と `backend/app/seed/content/easy/learning_questions_v4_easy.yml`。運用・版・解釈の範囲は[22](22_question_set_modes.md)を参照する。
+この資料は研究者向けで、正解・M分類を含む。参加者画面には表示しない。activeな正本は `backend/app/seed/content/easy/learning_content_easy.yml` と `backend/app/seed/content/easy/learning_questions_v4_easy.yml` のv1/v2で、旧v3は `backend/app/seed/content/archive/learning_round_v3_archived.yml` に保全する。運用・版・解釈の範囲は[22](22_question_set_modes.md)を参照する。
 
 分類は本研究の操作的設計である。M1は働き・条件・結果に関する個別の誤った主張、M3は処理・データ・判断主体などの種類の取り違えを狙う。単なる用語の言い違いと分類する可能性を含み、Chiの理論に照らした妥当性・初心者への読みやすさ・版間の難易度同等性を実証したものではない。RAGは記憶管理を支援でき、同じモデルを複数担当に使うこともできるため、これらを一律に禁止する選択肢として解釈しない。
 
