@@ -22,8 +22,9 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     17: {STANDARD: "scenario-actions-v4", EASY: "scenario-actions-easy-v1"},
     18: {STANDARD: "scenario-actions-v4", EASY: "scenario-actions-easy-v1"},
     19: {STANDARD: "scenario-actions-v5", EASY: "scenario-actions-easy-v1"},
+    20: {STANDARD: "scenario-actions-v6", EASY: "scenario-actions-easy-v1"},
 }
-LEARNING_CONTENT_VERSIONS = {STANDARD: 12, EASY: 4}
+LEARNING_CONTENT_VERSIONS = {STANDARD: 13, EASY: 4}
 
 
 def question_set_mode(value: str | None) -> QuestionSetMode:

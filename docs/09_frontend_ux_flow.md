@@ -2,7 +2,9 @@
 
 ## 問題の段落表示
 
-仕様版20では通常版マルチエージェント・記憶プロセスの再テストV1/V2へ既存preserve-linesを追加する。マルチエージェントV1と記憶V2は場面3段落・設問の4段落、残る2問は場面・設問の2段落。段落内の途中改行はつなぎ、太字・装飾用Markdown・重複する場面/問題見出しは保存しない。用語・改訂文の導入と設問段落で今回の4問を限定する。内部final_testも改訂V1を共用する。前回のLLM知識の確認V1/V2・再テストV1/V2の表示、易しい版・旧問題・他問題は維持する。[今回の全文と検証条件](33_multi_memory_retest_revision.md)・[LLMの採用時記録](32_llm_confirmation_retest_revision.md)。
+仕様版21では通常版LLM知識・確認V1のD/Hだけを指定文へ変更し、場面・設問の2段落表示と既存preserve-linesの適用条件を維持する。今回の表示コード変更はない。長文選択肢の折り返しをdesktop/mobileで検証する。[本文と検証条件](34_llm_round_one_dh_revision.md)。
+
+仕様版20で採用した通常版マルチエージェント・記憶プロセスの再テストV1/V2へ既存preserve-linesを追加する。マルチエージェントV1と記憶V2は場面3段落・設問の4段落、残る2問は場面・設問の2段落。段落内の途中改行はつなぎ、太字・装飾用Markdown・重複する場面/問題見出しは保存しない。用語・改訂文の導入と設問段落で今回の4問を限定する。内部final_testも改訂V1を共用する。前回のLLM知識の確認V1/V2・再テストV1/V2の表示、易しい版・旧問題・他問題は維持する。[今回の全文と検証条件](33_multi_memory_retest_revision.md)・[LLMの採用時記録](32_llm_confirmation_retest_revision.md)。
 
 通常版memory_process・V1は、大学・学生の説明、開発担当者の目的、設問を空行で区切る既存の3段落表示を維持する。用語・variant番号1・導入文と開発担当者の段落で対象を限定する。[V1の採用時記録](30_memory_confirmation_revision.md)。
 

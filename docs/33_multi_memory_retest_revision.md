@@ -1,6 +1,8 @@
 # マルチエージェント・記憶プロセスの再テスト改訂
 
-## 現行版と適用範囲
+本書は仕様版20・通常版テストv6・学習12の採用時記録である。現行版21でも再テスト4問の本文・選択肢・表示・テストバンクv6は維持する。現行版はLLM確認V1のD/Hだけを学習v13へ改訂し、その本文と保存契約は[34](34_llm_round_one_dh_revision.md)を参照する。
+
+## 採用時の仕様と適用範囲
 
 実験仕様版20 / `experiment-plan-2026-10-26-multi-memory-retests-v1`。通常版テストは[learning_content.yml](../backend/app/seed/content/standard/learning_content.yml)のscenario-actions-v6を使う。今回変更するのはmulti_agentとmemory_processのretest_v1/v2、計4問の場面・設問・36選択肢だけである。
 
