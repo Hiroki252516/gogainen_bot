@@ -385,7 +385,7 @@ def test_current_learning_bank_has_scenario_roles_and_fixed_labels():
 
 
 def test_llm_knowledge_round_v1_prompt_and_option_roles():
-    task = "担当者の対応として、適切なものを3つ選びなさい。"
+    task = "これらの目的を実現する開発担当者の対応として、適切なものを3つ選びなさい。"
     content = load_learning_content()
     variant = content["terms"]["llm_knowledge"]["variants"][0]
     spec = learning_question_spec(

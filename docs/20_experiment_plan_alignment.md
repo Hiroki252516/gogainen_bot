@@ -12,13 +12,20 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 18 |
-| 新プロトコル | experiment-plan-2026-10-26-memory-round2-v1 |
+| 実験仕様版 | 19 |
+| 新プロトコル | experiment-plan-2026-10-26-llm-confirmation-retest-v1 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-26 記憶プロセス確認問題V2の改訂（版18）
+## 2026-10-26 LLM知識の確認問題・再テストの改訂（版19）
+
+- fix/conf-test-llmknowledge-v1v2の承認により、通常版のLLM知識・確認問題V1/V2と再テストV1/V2の場面・設問・計36選択肢を指定文へ更新する。正解/M1/M3各3つとJを維持し、確認V1はapplication・V2はpredictionのままとする。確認V1/V2と再テストV1は場面・設問の2段落、再テストV2は場面3段落・設問の4段落で表示し、太字・Markdown装飾・重複する問題ラベルは付けない。改行表示は今回の4問に限定し、既存の記憶・マルチエージェントの表示は維持する。残り7確認問題・7テスト問題、事前の訂正情報、易しい版、教授プロンプト・生成契約・採点・配置・回数上限は変更しない。[全文と分類理由](32_llm_confirmation_retest_revision.md)。
+- 新規通常版は学習12・テストscenario-actions-v5、易しい版は学習4・テストscenario-actions-easy-v1を使う。旧学習v11以下とテストv4以下を保持し、出題・採点・同期生成・先行生成は保存版に統一する。履歴はsnapshot優先・当時のバンクで復元する。仕様版18以下は閲覧専用で、版・進行・保存済み記録を付け替えない。テストv4はarchive/learning_content_scenario_actions_v4.ymlへ保全し、新版は別DB IDでseedする。旧仕様版18のテスト対応を履歴用定義へ追加し、現行19は現行版用定義を使う。
+- 確認V1/V2は当該用語の初回・2回目の学習用で、同一セッション内の再回答では同じ問題を使う。内部final_testも改訂後のretest_v1を共用する。両経路とも事前込み最大3テストを維持し、未達を満点扱いにしない。
+- 公開API・DB構造・生成契約・評価式は変更せず、研究DB・3000番・Word・別仕様リポジトリ・実AI呼び出し・既存データ削除・コミット・pushは対象外。機械検査・Mockで分類妥当性や読みやすさを実証したとは扱わない。
+
+## 2026-10-26 記憶プロセス確認問題V2の改訂（版18採用時の記録）
 
 - fix/conf-test-memory-v2の承認により、通常版memory_process・learning_round_v2の場面・設問・9選択肢を献立提案AIの指定文へ変更する。scenario_type=prediction、正解/M1/M3各3つとJを維持する。場面説明と設問の2段落を空行で区切り、この通常版V2だけpreserve-linesを追加する。太字・Markdown装飾・重複する「問題：」は保存しない。[全文・分類理由](31_memory_round_two_revision.md)。
 - 当該用語の2回目の学習セッションに両群・両学習段階で共通適用する。同一セッション内の2回目の回答とは区別する。残り8確認問題、易しい版、各テストと訂正情報、教授プロンプト・生成契約・採点・配置・回数上限は変更しない。記憶V1の3段落とマルチエージェントV2/V3の既存表示も維持する。

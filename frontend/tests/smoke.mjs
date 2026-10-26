@@ -244,7 +244,14 @@ for (const removedText of ["term_understanding", "concept_understanding"]) {
   }
 }
 
+for (const text of ['termSlug === "llm_knowledge"', '学生からの履修登録に関する質問に回答するAI', '学生に学内施設の利用方法を案内するAI']) {
+  if (!learningPage.includes(text)) throw new Error(`Missing scoped LLM question paragraph display: ${text}`);
+}
+
 const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
+for (const text of ['current?.term_slug === "llm_knowledge"', '企業が、社員からの「パスワードを忘れた」', '企業が、会議の文字起こしをもとに議事録を作成するAI']) {
+  if (!questionRunner.includes(text)) throw new Error(`Missing scoped retest paragraph display: ${text}`);
+}
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow the backend transition after scoring");
 }
@@ -258,7 +265,7 @@ for (const expectedText of ["test_round_label", "setDisplayTitle"]) {
     throw new Error(`question runner missing test round display behavior: ${expectedText}`);
   }
 }
-for (const expectedText of ["${index + 1} / ${questions.length}", "question-heading", "問{toFullWidthDigits(index + 1)}：", "<strong>{current.term_label}</strong>", "<p>{current.body}</p>", "className=\"muted question-progress\""]) {
+for (const expectedText of ["${index + 1} / ${questions.length}", "question-heading", "問{toFullWidthDigits(index + 1)}：", "<strong>{current.term_label}</strong>", '<p className={preserveQuestionLines ? "preserve-lines" : undefined}>{current.body}</p>', "className=\"muted question-progress\""]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`QuestionRunner missing question progress display: ${expectedText}`);
   }
