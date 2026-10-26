@@ -6,9 +6,9 @@
 
 3用語ごとに事前1・再2のテスト問題をactiveなYAMLへ保持する。内部final_testは独立問題を持たず、retest_v1を使用する。retest_v4・v5と旧final_test_v1はアーカイブとして保全する。
 
-通常版（実験仕様版19 / scenario-actions-v5）ではpretest_v1、retest_v1/v2のみをactiveにする。事前の版9〜11の改訂・訂正情報を維持し、今回はLLM知識の再テストV1/V2だけを指定文へ更新する。内部final_testも改訂後のretest_v1を共用し、その後は全用語retest_v2へ進める。旧テストv4はarchive/learning_content_scenario_actions_v4.ymlと別DB IDで保全する。事前後のテスト上限はfinal_test込み2回のまま。[今回の全文・分類理由・保存と検証条件](32_llm_confirmation_retest_revision.md)・[テスト全文](21_assessment_action_questions.md)を参照する。
+通常版（実験仕様版20 / scenario-actions-v6）ではpretest_v1、retest_v1/v2のみをactiveにする。今回変更するのはmulti_agentとmemory_processのretest_v1/v2、計4問の場面・設問・36選択肢だけ。内部final_testも各用語の改訂V1を共用し、その後は全用語retest_v2を使う。前回のLLM知識と事前問題・訂正情報は不変。旧テストv5はarchive/learning_content_scenario_actions_v5.ymlと別DB IDで保全する。事前後上限はfinal_test込み2回のまま。[今回の全文・分類理由・保存と検証条件](33_multi_memory_retest_revision.md)。
 
-通常版学習確認v12は、v11からllm_knowledge・learning_round_v1/v2の場面・設問・各9選択肢だけを指定文へ変更する。application/prediction、正解/M1/M3各3つとJを維持し、両問を場面・設問の2段落で表示する。残り7確認問題と旧学習v11以下・易しい版4は変更しない。[今回の全文・分類理由・保存と検証条件](32_llm_confirmation_retest_revision.md)を参照する。
+仕様版19で採用した通常版学習確認v12は、v11からllm_knowledge・learning_round_v1/v2の場面・設問・各9選択肢だけを指定文へ変更する。application/prediction、正解/M1/M3各3つとJを維持し、両問を場面・設問の2段落で表示する。残り7確認問題と旧学習v11以下・易しい版4は変更しない。[前回のLLM改訂記録](32_llm_confirmation_retest_revision.md)を参照する。
 
 学習確認v12は3用語×3学習セッションvariant=9問である。各用語は学習セッション1でlearning_round_v1、2でlearning_round_v2、3でlearning_round_v3を使う。enrichmentとconceptual_changeは同じ問題本文・選択肢を使い、教材生成プロンプトだけが変わる。同一セッション内の誤答時は同じ問題で最大3回答し、教材だけを再生成する。同一セッション内の再回答では問題内容を変えない。現行の上限では3セッション目に到達しない。
 
@@ -22,4 +22,4 @@ teaching_targetsの訂正・仕組み・対比例・M3境界を新事前選択�
 
 通常版の現行2 YAMLと履歴用v3・v5・v6・v7・v8・v9・v10・v11は`standard/`に保持する。易しい版の`easy/learning_content_easy.yml`と`easy/learning_questions_v4_easy.yml`は別バンクとして管理し、各版にテスト9固有問・学習確認9問を持つ。両版は同時にactiveで、参加者の固定版で絞る。両版・両問題種別で選択肢の数値的な文長検査を撤廃し、非空・重複・役割数・教授対象の検査を維持する。文長の均一性は保証しない。個別の誤答理由・教授対象は[23](23_easy_question_bank.md)、保存・seed件数は[22](22_question_set_modes.md)を参照する。
 
-旧scenario-actions-v1/v2/v3/v4の原文・教授対象をarchive/learning_content_scenario_actions_v1.yml・v2.yml・v3.yml・v4.ymlへ保全する（各ファイル名の共通接頭辞は同じ）。現行v5は別IDの12行をseedし、旧通常版は非activeにする。旧通常版1バンク＋易しい版だけを持つDBなら更新後は計36行、旧通常版が複数あれば保全済みバンクごとに12行ずつ多くなる。activeは24行、新DBも24行。さらに古い問題も削除しない。旧版6〜18の結果復元は当時のバンク識別子で行い、新版へ置き換えない。
+旧scenario-actions-v1/v2/v3/v4/v5の原文・教授対象をarchive/learning_content_scenario_actions_v1.yml・v2.yml・v3.yml・v4.yml・v5.ymlへ保全する（各ファイル名の共通接頭辞は同じ）。現行v6は別IDの12行をseedし、旧通常版は非activeにする。旧通常版1バンク＋易しい版だけを持つDBなら更新後は計36行、旧通常版が複数あれば保全済みバンクごとに12行ずつ多くなる。activeは24行、新DBも24行。さらに古い問題も削除しない。旧版6〜19の結果復元は当時のバンク識別子で行い、新版へ置き換えない。
