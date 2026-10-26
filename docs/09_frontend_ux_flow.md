@@ -2,7 +2,9 @@
 
 ## 確認問題の段落表示
 
-仕様版17の通常版memory_process・learning_round_v1は、大学・学生の説明、開発担当者の目的、設問を空行で区切る3段落とし、既存preserve-linesで改行表示する。太字・装飾用Markdown記号・重複する「問題：」は保存しない。用語・variant番号1・本文の導入文と開発担当者の段落で対象を限定し、易しい版・旧問題・他用語・各テストの表示は変えない。[全文と検証条件](30_memory_confirmation_revision.md)。
+仕様版18の通常版memory_process・learning_round_v2は、場面説明と設問を空行で区切る2段落とし、既存preserve-linesで改行表示する。用語・variant番号2・献立提案AIの導入文と設問段落で今回の問題だけを限定する。太字・装飾用Markdown記号・重複する「問題：」は保存しない。易しい版・旧問題・他用語・各テストの表示は変えない。[全文と検証条件](31_memory_round_two_revision.md)。
+
+通常版memory_process・V1は、大学・学生の説明、開発担当者の目的、設問を空行で区切る既存の3段落表示を維持する。用語・variant番号1・導入文と開発担当者の段落で対象を限定する。[V1の採用時記録](30_memory_confirmation_revision.md)。
 
 既存の通常版multi_agent・V2/V3は案1・案2の段落とvariant番号2/3で限定する改行表示を維持する。V3は仕様版16で改訂した5段落の問題で、通常進行は最大2周のままなので出題されない。検証用の3回目セッションは隔離DBだけに用意する。[V3](29_multi_agent_round_three_revision.md)・[V2](28_multi_agent_round_two_revision.md)。
 

@@ -1,6 +1,8 @@
 # 記憶プロセス確認問題V1の改訂
 
-## 現行版と適用範囲
+本書は仕様版17・学習バンクv10の採用時記録である。現行版18・学習バンクv11でも、このV1の本文・選択肢・3段落表示と初回出題条件は維持する。記憶V2の改訂と現行保存・検証条件は[31](31_memory_round_two_revision.md)を参照する。
+
+## 採用時の版と適用範囲
 
 実験仕様版17 / `experiment-plan-2026-10-25-memory-confirmation-v1`。新規通常版参加者は[learning_questions_v10.yml](../backend/app/seed/content/standard/learning_questions_v10.yml)と学習版10を使用する。易しい版は4を維持する。ファイル名のv10は学習バンクの改訂版であり、learning_round_v1はその用語の初回学習セッション用の問題を指す。
 
