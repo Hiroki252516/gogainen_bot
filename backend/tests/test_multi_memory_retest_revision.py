@@ -136,7 +136,9 @@ def test_assessment_v6_only_changes_four_retests_and_preserves_banks():
 @pytest.mark.parametrize("index", [1, 2])
 def test_exact_retest_text_roles_and_paragraphs(slug, index):
     source = EXPECTED[slug][index - 1]
-    spec = assessment_question_spec(slug, "retest", index)
+    adopted = yaml.safe_load(content_loader.SCENARIO_ACTIONS_V6_CONTENT_PATH.read_text(encoding="utf-8"))
+    variant = next(term for term in adopted["terms"] if term["slug"] == slug)["questions"]["retest"][index - 1]
+    spec = {"body": variant["scenario"] + "\n\n" + variant["task"], "options": content_loader._assessment_options(variant)}
     assert spec["body"] == source["scenario"] + "\n\n" + source["task"]
     paragraphs = 4 if (slug, index) in {("multi_agent", 1), ("memory_process", 2)} else 2
     assert len(spec["body"].split("\n\n")) == paragraphs

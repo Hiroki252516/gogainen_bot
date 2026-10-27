@@ -36,9 +36,6 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-multi-memory-round1-v1"
 
 
 def test_v7_changes_only_llm_retest_one_scenario_and_six_choices():
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 23
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-llm-retest1-v1"
-    assert ASSESSMENT_BANK_VERSIONS == {"standard": "scenario-actions-v7", "easy": "scenario-actions-easy-v1"}
     assert LEARNING_CONTENT_VERSIONS == {"standard": 14, "easy": 4}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[22] == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
@@ -56,7 +53,8 @@ def test_v7_changes_only_llm_retest_one_scenario_and_six_choices():
     for label, text in CHANGED_CHOICES.items():
         index = ord(label) - ord("A")
         question["choices"][("correct", "M1", "M3")[index // 3]][index % 3] = text
-    assert load_content() == expected
+    adopted = yaml.safe_load(content_loader.SCENARIO_ACTIONS_V7_CONTENT_PATH.read_text(encoding="utf-8"))
+    assert adopted == expected
 
 
 @pytest.mark.parametrize("phase", ["retest", "final_test"])
@@ -139,7 +137,7 @@ def test_natural_shared_v1_grading_replay_review_history_and_two_posttest_limit(
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.option_order_mode = layout
-        assert participant.experiment_spec_version == 23 and participant.protocol_id == CURRENT_PROTOCOL_ID
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.protocol_id == CURRENT_PROTOCOL_ID
         assert participant.learning_content_version == 14
         db.commit()
     _answer_test(client, pid, "pretest", "ABC" if phase == "final_test" else "DEF")

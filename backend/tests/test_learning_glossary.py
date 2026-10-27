@@ -141,8 +141,8 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 23
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-llm-retest1-v1"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 24
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-multi-memory-retest1-v1"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material
         assert 600 <= len(stored.tutor_message) <= 800

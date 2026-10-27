@@ -12,7 +12,7 @@ feature/issue-132の承認済み計画に基づき、通常版・易しい版、
 
 ## 保存・再現・版
 
-実験仕様版23、protocolは `experiment-plan-2026-10-27-llm-retest1-v1`、辞書版は `learning-glossary-v1`。新規登録のみ新版を使い、版22以下・NULL・旧protocolは既存の閲覧専用境界で保護する。既存の教材・注釈・回答・評価を補完・再計算しない。
+実験仕様版24、protocolは `experiment-plan-2026-10-27-multi-memory-retest1-v1`、辞書版は `learning-glossary-v1`。新規登録のみ新版を使い、版23以下・NULL・旧protocolは既存の閲覧専用境界で保護する。既存の教材・注釈・回答・評価を補完・再計算しない。
 
 辞書の正本は [learning_glossary_v1.yml](../backend/app/seed/content/learning_glossary_v1.yml)。起動時に版、非空項目、出典、IDと正規化した別表記の一意性を検証する。説明の変更は辞書改訂として版と運用条件を更新し、収集中に同一版の内容を差し替えない。
 

@@ -23,6 +23,7 @@ SCENARIO_ACTIONS_V3_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scena
 SCENARIO_ACTIONS_V4_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scenario_actions_v4.yml"
 SCENARIO_ACTIONS_V5_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scenario_actions_v5.yml"
 SCENARIO_ACTIONS_V6_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scenario_actions_v6.yml"
+SCENARIO_ACTIONS_V7_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scenario_actions_v7.yml"
 LEARNING_V3_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v3.yml"
 LEARNING_V5_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v5.yml"
 LEARNING_V6_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v6.yml"
