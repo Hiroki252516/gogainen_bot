@@ -1,6 +1,6 @@
 # LLM知識の再テストV1の場面説明・6選択肢改訂
 
-本書は仕様版23・テストv7の採用時記録である。現行版24・テストv8でも本書のLLM再テストV1の本文・判定・5段落表示は維持する。マルチエージェント・記憶V1の5選択肢改訂と現行保存契約は[37](37_multi_memory_retest_one_revision.md)を参照する。
+本書は仕様版23・テストv7の採用時記録である。旧原文・採用時の検証記録を保持する。現行仕様版25の通常版学習v15・テストv9、確認問題・再テストV2の5問改訂と例外・保存契約は[38](38_round_two_revision.md)を参照する。V1の採用時記録は[35](35_multi_memory_round_one_revision.md)・[36](36_llm_retest_one_revision.md)・[37](37_multi_memory_retest_one_revision.md)に保持する。
 
 ## 採用時の仕様と適用範囲
 

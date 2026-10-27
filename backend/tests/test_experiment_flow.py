@@ -330,7 +330,9 @@ def test_assessment_bank_has_9_active_scenario_variants_fixed_roles_and_nonempty
                 lengths = [len(option["body"]) for option in visible_options]
                 assert min(lengths) > 0
                 for option in visible_options:
-                    assert option["body"] not in choices
+                    if option["body"] in choices:
+                        assert (term["slug"], phase, variant["variant_key"], option["label"]) == ("llm_knowledge", "retest", "retest_v2", "F")
+                        assert option["body"] == "問い合わせを3種類に分類するよう毎回同じ指示をAIへ送れば、分類を繰り返すうちにモデルの重みも調整されると考え、担当者が確認した事例を使う追加訓練は行わない。"
                     choices.add(option["body"])
                 variant_count += 1
 
@@ -360,9 +362,8 @@ def test_current_learning_bank_has_scenario_roles_and_fixed_labels():
     for term_slug in ACTIVE_TERM_SLUGS:
         variants = content["terms"][term_slug]["variants"]
         assert len(variants) == 3
-        assert [variant["scenario_type"] for variant in variants] == [
-            "application", "prediction", "comparison"
-        ]
+        expected_types = ["application", "application" if term_slug in {"llm_knowledge", "memory_process"} else "prediction", "comparison"]
+        assert [variant["scenario_type"] for variant in variants] == expected_types
         for variant_index, variant in enumerate(variants, start=1):
             spec = learning_question_spec(
                 term_slug, "enrichment", variant_index

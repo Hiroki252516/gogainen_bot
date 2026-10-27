@@ -87,7 +87,7 @@ def test_easy_mode_cannot_load_v11():
         load_learning_content("easy", 11)
 
 
-@pytest.mark.parametrize("version,spec_version,protocol", [(10, 17, OLD_PROTOCOL), (11, 18, "experiment-plan-2026-10-26-memory-round2-v1"), (12, 20, "experiment-plan-2026-10-26-multi-memory-retests-v1"), (13, 21, "experiment-plan-2026-10-26-llm-round1-dh-v1"), (14, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
+@pytest.mark.parametrize("version,spec_version,protocol", [(10, 17, OLD_PROTOCOL), (11, 18, "experiment-plan-2026-10-26-memory-round2-v1"), (12, 20, "experiment-plan-2026-10-26-multi-memory-retests-v1"), (13, 21, "experiment-plan-2026-10-26-llm-round1-dh-v1"), (14, 24, "experiment-plan-2026-10-27-multi-memory-retest1-v1"), (15, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
 @pytest.mark.parametrize("snapshot", [False, True])
 def test_memory_round_two_history_preserves_snapshot_and_saved_bank(tmp_path, monkeypatch, version, spec_version, protocol, snapshot):
     engine = create_engine(f"sqlite:///{tmp_path / 'history.db'}")
@@ -109,7 +109,7 @@ def test_memory_round_two_history_preserves_snapshot_and_saved_bank(tmp_path, mo
                              grading_json={"is_sufficient": False, "selected_option_ids": ["H"]})
             db.add(turn)
             db.commit()
-            if version in (10, 11, 12, 13):
+            if version in (10, 11, 12, 13, 14):
                 before = {model: deepcopy(db.execute(select(model.__table__)).mappings().all()) for model in (Participant, TutorSession, TutorTurn)}
                 seed_database(db)
                 seed_database(db)
@@ -176,7 +176,8 @@ def test_natural_memory_round_two_grading_feedback_replay_and_prefetch(group, la
     question = current["practice_question"]
     assert current["learning_stage"] == ("enrichment" if initial == "unknown" else "conceptual_change")
     assert question["variant_key"] == "learning_round_v2" and question["learning_variant_index"] == 2
-    assert question["body"] == EXPECTED["scenario"] + "\n\n" + EXPECTED["task"]
+    expected = load_learning_content()["terms"]["memory_process"]["variants"][1]
+    assert question["body"] == expected["scenario"] + "\n\n" + expected["task"]
     assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
     assert question["options"][-1]["exclusive"] and question["options"][-1]["label"] == "J"
     invalid = client.post(f"/api/tutor-turns/{current['turn_id']}/respond", json={"selected_option_ids": [question["options"][0]["option_id"], question["options"][-1]["option_id"]]})

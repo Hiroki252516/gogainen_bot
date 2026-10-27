@@ -15,7 +15,7 @@ from app.db.session import SessionLocal
 from app.main import app
 from app.models import Attempt, Base, EvaluationSummary, Participant, Question, QuestionOption, Term, TutorSession, TutorTurn
 from app.seed import content_loader
-from app.seed.content_loader import assessment_question_spec, learning_question_spec, load_content
+from app.seed.content_loader import assessment_question_spec, learning_question_spec, load_content, load_learning_content
 from app.seed.seed_questions import _upsert_question, seed_database
 from app.services import experiment
 from app.services.interaction_history import _test_record, build_interaction_history
@@ -36,7 +36,7 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-multi-memory-round1-v1"
 
 
 def test_v7_changes_only_llm_retest_one_scenario_and_six_choices():
-    assert LEARNING_CONTENT_VERSIONS == {"standard": 14, "easy": 4}
+    assert load_learning_content(content_version=14)["version"] == 14
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[22] == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     for path, digest in (
@@ -138,7 +138,7 @@ def test_natural_shared_v1_grading_replay_review_history_and_two_posttest_limit(
         participant = db.get(Participant, pid)
         participant.option_order_mode = layout
         assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.protocol_id == CURRENT_PROTOCOL_ID
-        assert participant.learning_content_version == 14
+        assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS["standard"]
         db.commit()
     _answer_test(client, pid, "pretest", "ABC" if phase == "final_test" else "DEF")
     _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))

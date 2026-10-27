@@ -1,6 +1,6 @@
 # マルチエージェント・記憶プロセス確認問題V1の4か所改訂
 
-本書は仕様版22・学習v14の採用時記録である。現行仕様版23でも確認問題・学習v14は変更しない。LLM再テストV1の現行改訂と保存契約は[36](36_llm_retest_one_revision.md)を参照する。 現行仕様版24・テストv8の5選択肢改訂と保存契約は[37](37_multi_memory_retest_one_revision.md)を参照する。
+本書は仕様版22・学習v14の採用時記録である。旧原文・採用時の検証記録を保持する。現行仕様版25の通常版学習v15・テストv9、確認問題・再テストV2の5問改訂と例外・保存契約は[38](38_round_two_revision.md)を参照する。V1の採用時記録は[35](35_multi_memory_round_one_revision.md)・[36](36_llm_retest_one_revision.md)・[37](37_multi_memory_retest_one_revision.md)に保持する。
 
 ## 採用時の版と変更範囲
 

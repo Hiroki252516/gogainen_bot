@@ -24,6 +24,7 @@ SCENARIO_ACTIONS_V4_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scena
 SCENARIO_ACTIONS_V5_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scenario_actions_v5.yml"
 SCENARIO_ACTIONS_V6_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scenario_actions_v6.yml"
 SCENARIO_ACTIONS_V7_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scenario_actions_v7.yml"
+SCENARIO_ACTIONS_V8_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_content_scenario_actions_v8.yml"
 LEARNING_V3_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v3.yml"
 LEARNING_V5_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v5.yml"
 LEARNING_V6_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v6.yml"
@@ -35,6 +36,7 @@ LEARNING_V11_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v11.yml"
 LEARNING_V12_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v12.yml"
 LEARNING_V13_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v13.yml"
 LEARNING_V14_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v14.yml"
+LEARNING_V15_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v15.yml"
 EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_content_easy.yml"
 LEARNING_EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_questions_v4_easy.yml"
 ACTIVE_TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
@@ -49,6 +51,24 @@ ASSESSMENT_BANK_VERSION = ASSESSMENT_BANK_VERSIONS[STANDARD]
 ASSESSMENT_VARIANT_COUNTS = {"pretest": 1, "retest": 2}
 ASSESSMENT_ROLE_SLOTS = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
 UNKNOWN_OPTION = {"label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"}
+
+# Only these exact texts and locations may be reused in the approved new banks.
+APPROVED_LEARNING_V15_REPEATS = {
+    "職員が確認した質問と回答の例を学生の問い合わせのたびにAIへ渡せば、回答を重ねるうちにモデルの重みも更新されると考え、別の追加訓練は行わない。": frozenset({
+        ("llm_knowledge", "learning_round_v1", "E"),
+        ("llm_knowledge", "learning_round_v2", "E"),
+    }),
+    "職員が確認した質問と回答の例を文書検索の対象として登録し、似た質問が来たときに取り出せるようにする処理を、回答方法を覚えさせる追加訓練と同じ仕組みとして扱う。": frozenset({
+        ("llm_knowledge", "learning_round_v1", "G"),
+        ("llm_knowledge", "learning_round_v2", "G"),
+    }),
+}
+APPROVED_ASSESSMENT_V9_REPEATS = {
+    "問い合わせを3種類に分類するよう毎回同じ指示をAIへ送れば、分類を繰り返すうちにモデルの重みも調整されると考え、担当者が確認した事例を使う追加訓練は行わない。": frozenset({
+        ("llm_knowledge", "retest_v1", "F"),
+        ("llm_knowledge", "retest_v2", "F"),
+    }),
+}
 
 
 def _contains_langgraph(value: Any) -> bool:
@@ -170,7 +190,8 @@ def _validate_content(content: dict[str, Any], mode: str = STANDARD) -> None:
         raise ValueError("assessment selection policy is invalid")
 
     all_bodies: set[str] = set()
-    all_choice_bodies: set[str] = set()
+    all_choice_locations: dict[str, set[tuple[str, str, str]]] = {}
+    approved_repeats = APPROVED_ASSESSMENT_V9_REPEATS if mode == STANDARD and content.get("assessment_bank_version") == "scenario-actions-v9" else {}
 
     for term in content["terms"]:
         slug = term["slug"]
@@ -201,9 +222,11 @@ def _validate_content(content: dict[str, Any], mode: str = STANDARD) -> None:
                 visible_bodies = [option["body"] for option in options[:9]]
                 if len(set(visible_bodies)) != 9:
                     raise ValueError(f"{slug}.{phase}.{variant['variant_key']} has duplicate choices")
-                if any(option_body in all_choice_bodies for option_body in visible_bodies):
-                    raise ValueError("assessment choices must not be reused across variants")
-                all_choice_bodies.update(visible_bodies)
+                for option in options[:9]:
+                    locations = all_choice_locations.setdefault(option["body"], set())
+                    locations.add((slug, variant["variant_key"], option["label"]))
+                    if len(locations) > 1 and frozenset(locations) != approved_repeats.get(option["body"]):
+                        raise ValueError("assessment choices must not be reused across variants")
         if _contains_langgraph(term) or _contains_langgraph(term.get("rag_sections")):
             raise ValueError(f"{slug} must not mention LangGraph")
 
@@ -305,7 +328,8 @@ def _validate_learning_content(
     }
     variant_count = 0
     learning_bodies: set[str] = set()
-    learning_option_bodies: set[str] = set()
+    learning_choice_locations: dict[str, set[tuple[str, str, str]]] = {}
+    approved_repeats = APPROVED_LEARNING_V15_REPEATS if mode == STANDARD and content.get("version") == 15 else {}
 
     for term_slug in ACTIVE_TERM_SLUGS:
         term_data = terms.get(term_slug) or {}
@@ -322,12 +346,11 @@ def _validate_learning_content(
         ]
         if [variant.get("variant_key") for variant in variants] != expected_keys:
             raise ValueError(f"{term_slug} must use variant keys {expected_keys}")
-        if [variant.get("scenario_type") for variant in variants] != list(
-            LEARNING_SCENARIO_TYPES[:LEARNING_SESSION_VARIANT_COUNT]
-        ):
-            raise ValueError(
-                f"{term_slug} must cover the first three learning scenario types once in order"
-            )
+        expected_types = list(LEARNING_SCENARIO_TYPES[:LEARNING_SESSION_VARIANT_COUNT])
+        if mode == STANDARD and content.get("version") == 15 and term_slug in {"llm_knowledge", "memory_process"}:
+            expected_types[1] = "application"
+        if [variant.get("scenario_type") for variant in variants] != expected_types:
+            raise ValueError(f"{term_slug} must use learning scenario types {expected_types}")
 
         for variant in variants:
             name = f"{term_slug}.{variant.get('variant_key')}"
@@ -352,9 +375,11 @@ def _validate_learning_content(
             if body in learning_bodies:
                 raise ValueError("learning question bodies must be unique")
             learning_bodies.add(body)
-            if any(body in learning_option_bodies for body in all_choice_bodies):
-                raise ValueError("learning choices must be unique across variants")
-            learning_option_bodies.update(all_choice_bodies)
+            for index, choice_body in enumerate(all_choice_bodies):
+                locations = learning_choice_locations.setdefault(choice_body, set())
+                locations.add((term_slug, variant["variant_key"], chr(ord("A") + index)))
+                if len(locations) > 1 and frozenset(locations) != approved_repeats.get(choice_body):
+                    raise ValueError("learning choices must be unique across variants")
             if len(set(all_choice_bodies)) != 9:
                 raise ValueError(f"{name} has duplicate choices")
             if any(body in assessment_bodies or body in assessment_options for body in all_choice_bodies):
@@ -388,6 +413,7 @@ def load_learning_content(mode: str = STANDARD, content_version: int | None = No
         12: (STANDARD, LEARNING_V12_CONTENT_PATH),
         13: (STANDARD, LEARNING_V13_CONTENT_PATH),
         14: (STANDARD, LEARNING_V14_CONTENT_PATH),
+        15: (STANDARD, LEARNING_V15_CONTENT_PATH),
     }
     if version not in banks or banks[version][0] != mode:
         raise ValueError("learning bank version does not match question set")

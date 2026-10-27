@@ -37,10 +37,6 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-llm-retest1-v1"
 
 
 def test_v8_changes_only_five_retest_choices_and_preserves_banks():
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 24
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-multi-memory-retest1-v1"
-    assert ASSESSMENT_BANK_VERSIONS == {"standard": "scenario-actions-v8", "easy": "scenario-actions-easy-v1"}
-    assert LEARNING_CONTENT_VERSIONS == {"standard": 14, "easy": 4}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[23] == {"standard": "scenario-actions-v7", "easy": "scenario-actions-easy-v1"}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     for path, digest in (
@@ -56,7 +52,8 @@ def test_v8_changes_only_five_retest_choices_and_preserves_banks():
         for label, body in CHANGED_CHOICES.get(term["slug"], {}).items():
             index = ord(label) - ord("A")
             term["questions"]["retest"][0]["choices"][("correct", "M1", "M3")[index // 3]][index % 3] = body
-    assert load_content() == expected
+    adopted = yaml.safe_load(content_loader.SCENARIO_ACTIONS_V8_CONTENT_PATH.read_text(encoding="utf-8"))
+    assert adopted == expected
 
 
 @pytest.mark.parametrize("slug", list(CHANGED_CHOICES))
@@ -141,8 +138,8 @@ def test_natural_shared_v1_grading_replay_review_history_and_two_posttest_limit(
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.option_order_mode = layout
-        assert participant.experiment_spec_version == 24 and participant.protocol_id == CURRENT_PROTOCOL_ID
-        assert participant.learning_content_version == 14
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.protocol_id == CURRENT_PROTOCOL_ID
+        assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS["standard"]
         db.commit()
     _answer_test(client, pid, slug, "pretest", "ABC" if phase == "final_test" else "DEF")
     _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))

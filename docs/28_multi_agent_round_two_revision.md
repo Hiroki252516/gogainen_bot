@@ -1,6 +1,6 @@
 # マルチエージェント確認問題V2の改訂
 
-本書は仕様版15・学習バンクv8を採用した際の記録である。現行版24・学習バンクv14でもV2の本文・選択肢・表示・通常経路は維持する。V3の採用時記録は[29](29_multi_agent_round_three_revision.md)、記憶V1の採用時記録は[30](30_memory_confirmation_revision.md)、記憶V2の採用時記録は[31](31_memory_round_two_revision.md)を参照する。 仕様版19のLLM知識4問の採用時記録は[32](32_llm_confirmation_retest_revision.md)を参照する。 仕様版20の再テスト4問の採用時記録は[33](33_multi_memory_retest_revision.md)を参照する。 仕様版21のLLM確認V1 D/Hの採用時記録は[34](34_llm_round_one_dh_revision.md)を参照する。 仕様版22・学習v14の4か所の採用時記録は[35](35_multi_memory_round_one_revision.md)を参照する。 仕様版23で採用したLLM再テストV1と採用時の保存契約は[36](36_llm_retest_one_revision.md)を参照する。 現行仕様版24・テストv8の5選択肢改訂と保存契約は[37](37_multi_memory_retest_one_revision.md)を参照する。
+本書は仕様版15・学習バンクv8を採用した際の記録である。旧原文・採用時の検証記録を保持する。現行仕様版25の通常版学習v15・テストv9、確認問題・再テストV2の5問改訂と例外・保存契約は[38](38_round_two_revision.md)を参照する。V1の採用時記録は[35](35_multi_memory_round_one_revision.md)・[36](36_llm_retest_one_revision.md)・[37](37_multi_memory_retest_one_revision.md)に保持する。
 
 ## 採用時の版と適用範囲
 
