@@ -169,10 +169,10 @@ export default function AdminPage() {
   useEffect(() => {
     const activeParticipantId = participantId();
     if (activeParticipantId) rememberAdminResumeParticipant(activeParticipantId);
-    api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants));
-    api("/api/admin/logs/overview").then(setOverview);
+    api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants)).catch((err) => setLogError(err.message));
+    api("/api/admin/logs/overview").then(setOverview).catch((err) => setLogError(err.message));
     api<QuestionSetSetting>("/api/admin/question-set").then(setQuestionSet).catch((err) => setQuestionSetError(err.message));
-    api<AiStatus>("/api/admin/ai/status").then(setAi);
+    api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setLoginError(err.message));
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
       .catch((err) => setOptionOrderError(err instanceof Error ? err.message : String(err)));

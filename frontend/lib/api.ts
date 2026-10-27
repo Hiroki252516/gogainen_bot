@@ -23,6 +23,7 @@ export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
 
   try {
     const res = await fetch(`${API_BASE}${path}`, {
+      credentials: "include",
       ...requestInit,
       signal: controller?.signal ?? requestInit.signal,
       headers: {
@@ -31,6 +32,9 @@ export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
       }
     });
     if (!res.ok) {
+      if (res.status === 401 && path.startsWith("/api/admin/") && !path.startsWith("/api/admin/auth/")) {
+        if (typeof window !== "undefined") window.dispatchEvent(new Event("admin-auth-required"));
+      }
       const text = await res.text();
       let message = "";
       let code: string | undefined;

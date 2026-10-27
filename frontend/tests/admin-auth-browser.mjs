@@ -1,0 +1,74 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+
+if (process.env.CYCLE_VERIFY_ISOLATED !== "1" || !process.env.CYCLE_UI_BASE_URL || !process.env.CYCLE_PLAYWRIGHT_MODULE || !process.env.CYCLE_SCREENSHOT_DIR) throw new Error("Explicit isolated UI and screenshot directory are required.");
+const base = new URL(process.env.CYCLE_UI_BASE_URL);
+assert(["localhost", "127.0.0.1"].includes(base.hostname) && base.port && base.port !== "3000");
+const { chromium } = await import(process.env.CYCLE_PLAYWRIGHT_MODULE);
+const browser = await chromium.launch({ headless: true });
+try {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
+  const errors = [];
+  const adminReads = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("request", (r) => { if (r.url().includes("/api/admin/") && r.method() === "GET") adminReads.push(r.url()); });
+  await page.goto(new URL("/admin", base).href);
+  const popup = page.getByRole("dialog", { name: "管理画面のパスワード", exact: true });
+  await popup.waitFor();
+  assert.equal(adminReads.length, 0, "locked UI must not request admin data");
+  assert.equal(await page.getByLabel("パスワード", { exact: true }).getAttribute("type"), "password");
+  assert.equal((await page.request.get(new URL("/api/admin/participants", base).href)).status(), 401);
+  await page.getByLabel("パスワード", { exact: true }).fill("wrong");
+  await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
+  await page.getByRole("alert").getByText("パスワードが違います。", { exact: true }).waitFor();
+  assert.equal(adminReads.length, 0);
+  await fs.mkdir(process.env.CYCLE_SCREENSHOT_DIR, { recursive: true });
+  await page.screenshot({ path: `${process.env.CYCLE_SCREENSHOT_DIR}/password-desktop.png` });
+  await page.getByLabel("パスワード", { exact: true }).fill("abc");
+  await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
+  await page.getByRole("button", { name: "管理画面をロック", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "学籍番号と参加者IDの対応表", exact: true }).waitFor();
+  assert.equal((await page.request.get(new URL("/api/admin/participants", base).href)).status(), 200);
+  const download = page.waitForEvent("download");
+  await page.getByRole("link", { name: "対応表CSVをダウンロード", exact: true }).click();
+  assert((await download).suggestedFilename().endsWith(".csv"));
+  assert.equal((await context.cookies()).find((c) => c.name === "tutor_admin_session").httpOnly, true);
+  assert.equal(await page.evaluate(() => Object.values(localStorage).includes("abc") || Object.values(sessionStorage).includes("abc")), false);
+  await page.getByRole("button", { name: "管理画面をロック", exact: true }).click();
+  await popup.waitFor();
+  assert.equal((await page.request.get(new URL("/api/admin/identity-mappings.csv", base).href)).status(), 401);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: `${process.env.CYCLE_SCREENSHOT_DIR}/password-mobile.png` });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await page.getByRole("button", { name: "キャンセル", exact: true }).click();
+  await page.waitForURL("**/start");
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("link", { name: "管理画面", exact: true }).click();
+  await popup.waitFor();
+  await page.getByLabel("パスワード", { exact: true }).fill("abc");
+  await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
+  await page.getByRole("button", { name: "管理画面をロック", exact: true }).waitFor();
+  await page.reload();
+  await popup.waitFor();
+  await page.getByLabel("パスワード", { exact: true }).fill("abc");
+  await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
+  await page.getByRole("button", { name: "管理画面をロック", exact: true }).waitFor();
+  // Session loss returns to the prompt without displaying stale admin records.
+  await page.request.post(new URL("/api/admin/auth/logout", base).href);
+  await page.getByRole("group", { name: "集計する問題版", exact: true }).getByRole("button", { name: "易しい版", exact: true }).click();
+  await popup.waitFor();
+  await page.getByLabel("パスワード", { exact: true }).fill("abc");
+  await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
+  await page.getByRole("button", { name: "管理画面をロック", exact: true }).waitFor();
+  await page.goto(new URL("/start", base).href);
+  for (let i = 0; i < 20; i++) {
+    if ((await page.request.get(new URL("/api/admin/participants", base).href)).status() === 401) break;
+    await page.waitForTimeout(100);
+  }
+  assert.equal((await page.request.get(new URL("/api/admin/participants", base).href)).status(), 401, "leaving admin must log out");
+  await page.goto(new URL("/admin", base).href);
+  await popup.waitFor();
+  assert.equal(errors.length, 0, errors.join("\n"));
+  console.log("admin popup: anonymous/wrong/correct password, CSV, lock, cancel, both entry paths, expiry, leaving, desktop/mobile passed");
+} finally { await browser.close(); }

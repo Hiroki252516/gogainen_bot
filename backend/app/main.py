@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, SecretStr, Field
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -19,6 +19,7 @@ from app.models import Participant, Term, TutorSession, TutorTurn
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
+from app.core.admin_auth import require_admin, login as admin_login, logout as admin_logout
 from app.core.experiment_spec import MAX_POST_PRETEST_TESTS, assert_current_experiment, can_resume
 from app.core.runtime_config import (
     ALLOWED_MODELS,
@@ -195,7 +196,7 @@ async def guard_current_mutation(request: Request, db: Session = Depends(get_db)
         assert_current_experiment(get_participant(db, participant_id))
 
 
-app = FastAPI(title="Learning Log AI Tutor", lifespan=lifespan, dependencies=[Depends(guard_current_mutation)])
+app = FastAPI(title="Learning Log AI Tutor", lifespan=lifespan, dependencies=[Depends(require_admin), Depends(guard_current_mutation)])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin, "http://127.0.0.1:3000"],
@@ -208,9 +209,26 @@ app.add_middleware(
 @app.middleware("http")
 async def prevent_identifier_caching(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path in {"/api/participants", "/api/registrations"} or request.url.path.startswith("/api/admin/identity-mappings"):
+    if request.url.path in {"/api/participants", "/api/registrations", "/api/seed"} or request.url.path.startswith("/api/admin/"):
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+class AdminLoginPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: SecretStr = Field(min_length=1, max_length=256)
+
+
+@app.post("/api/admin/auth/login")
+def api_admin_login(payload: AdminLoginPayload, request: Request, response: Response) -> dict:
+    admin_login(payload.password.get_secret_value(), request, response)
+    return {"authenticated": True}
+
+
+@app.post("/api/admin/auth/logout")
+def api_admin_logout(request: Request, response: Response) -> dict:
+    admin_logout(request, response)
+    return {"authenticated": False}
 
 
 class ParticipantCreate(BaseModel):
@@ -292,6 +310,8 @@ async def private_registration_validation(request: Request, exc: RequestValidati
     # FastAPI's default validation body echoes rejected input, including identifiers.
     if request.url.path in {"/api/participants", "/api/registrations"}:
         return JSONResponse(status_code=422, content={"detail": "参加登録の入力形式を確認してください。"}, headers={"Cache-Control": "no-store"})
+    if request.url.path.rstrip("/") == "/api/admin/auth/login":
+        return JSONResponse(status_code=422, content={"detail": "パスワードの入力形式を確認してください。"}, headers={"Cache-Control": "no-store"})
     from fastapi.exception_handlers import request_validation_exception_handler
     return await request_validation_exception_handler(request, exc)
 

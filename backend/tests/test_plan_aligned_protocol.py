@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
+from admin_client import AuthenticatedTestClient as TestClient
 from pydantic import ValidationError
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session

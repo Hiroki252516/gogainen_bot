@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
+from admin_client import AuthenticatedTestClient as TestClient
 
 try:
     import uvloop
