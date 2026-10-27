@@ -28,11 +28,9 @@ OLD_PROTOCOL = "experiment-plan-2026-10-26-llm-round1-dh-v1"
 
 
 def test_v14_changes_only_the_four_requested_locations_and_keeps_v13():
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 22
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-multi-memory-round1-v1"
     assert LEARNING_CONTENT_VERSIONS == {"standard": 14, "easy": 4}
-    assert ASSESSMENT_BANK_VERSIONS == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[21] == ASSESSMENT_BANK_VERSIONS
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[22] == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[21] == HISTORICAL_ASSESSMENT_BANK_VERSIONS[22]
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     assert hashlib.sha256(content_loader.LEARNING_V13_CONTENT_PATH.read_bytes()).hexdigest() == "78fe46d82b29ab5cfcaab969def2410732d19e7306dfd96244a6325d4de78c57"
     expected = deepcopy(load_learning_content(content_version=13))
@@ -42,7 +40,7 @@ def test_v14_changes_only_the_four_requested_locations_and_keeps_v13():
     memory["scenario"] = memory["scenario"].split("\n\n")[0] + "\n\n" + NEW_MEMORY_PURPOSE
     memory["choices"]["M1"][2] = NEW_MEMORY_F
     memory["choices"]["M3"][1] = NEW_MEMORY_H
-    assert load_learning_content() == expected
+    assert load_learning_content(content_version=14) == expected
 
 
 @pytest.mark.parametrize("term_slug", ["multi_agent", "memory_process"])
@@ -105,7 +103,7 @@ def test_round_one_display_scoring_feedback_retry_replay_history_and_prefetch(te
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.option_order_mode = layout
-        assert participant.experiment_spec_version == 22 and participant.learning_content_version == 14
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == 14
         assert participant.protocol_id == CURRENT_PROTOCOL_ID
         db.commit()
     for question in _ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]:
