@@ -67,4 +67,7 @@ def login(password: str, request: Request, response: Response) -> None:
 def logout(request: Request, response: Response) -> None:
     with _lock:
         _sessions.pop(request.cookies.get(COOKIE_NAME, ""), None)
-    response.delete_cookie(COOKIE_NAME, path="/api", httponly=True, samesite="strict")
+    response.delete_cookie(
+        COOKIE_NAME, path="/api", httponly=True, samesite="strict",
+        secure=request.url.scheme == "https",
+    )

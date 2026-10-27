@@ -8,15 +8,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const unlocked = useRef(false);
+  const logoutPending = useRef(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [logoutRequired, setLogoutRequired] = useState(false);
 
   useEffect(() => {
-    const lock = () => { unlocked.current = false; setAuthenticated(false); };
+    const lock = () => {
+      if (logoutPending.current) return;
+      unlocked.current = false;
+      setAuthenticated(false);
+    };
     const logout = () => {
-      if (!unlocked.current) return;
+      if (!unlocked.current && !logoutPending.current) return;
       unlocked.current = false;
       void fetch(`${API_BASE}/api/admin/auth/logout`, {
         method: "POST", credentials: "include", keepalive: true,
@@ -53,13 +59,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   async function lock() {
+    // Hide sensitive data immediately, even if the server cannot be reached.
+    unlocked.current = false;
+    logoutPending.current = true;
+    setAuthenticated(false);
+    setLogoutRequired(true);
+    setPassword("");
     setBusy(true); setError("");
     try {
-      await api("/api/admin/auth/logout", { method: "POST" });
-      unlocked.current = false;
-      setAuthenticated(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "終了できませんでした。");
+      await api("/api/admin/auth/logout", { method: "POST", timeoutMs: 5000 });
+      logoutPending.current = false;
+      setLogoutRequired(false);
+    } catch {
+      setError("画面はロックしましたが、認証解除を確認できません。接続を確認して再試行してください。");
     } finally { setBusy(false); }
   }
 
@@ -77,10 +89,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <h1 id="admin-password-title">管理画面のパスワード</h1>
         <label htmlFor="admin-password">パスワード</label>
         <input id="admin-password" name="password" type="password" autoComplete="current-password" autoFocus required
-          maxLength={256} value={password} onChange={(event) => setPassword(event.target.value)} disabled={busy} />
+          maxLength={256} value={password} onChange={(event) => setPassword(event.target.value)} disabled={busy || logoutRequired} />
         {error ? <p className="danger" role="alert">{error}</p> : null}
         <div className="actions">
-          <button type="submit" disabled={busy}>{busy ? "確認中..." : "管理画面を開く"}</button>
+          <button type="submit" disabled={busy || logoutRequired}>{busy ? "確認中..." : "管理画面を開く"}</button>
+          {logoutRequired ? <button type="button" className="secondary" disabled={busy} onClick={lock}>認証解除を再試行</button> : null}
           <button type="button" className="secondary" disabled={busy} onClick={() => router.replace("/start")}>キャンセル</button>
         </div>
       </form>

@@ -156,6 +156,7 @@ export default function AdminPage() {
   const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [login, setLogin] = useState<any>(null);
   const [loginError, setLoginError] = useState("");
+  const [aiStatusError, setAiStatusError] = useState("");
   const [reasoningEffortSaving, setReasoningEffortSaving] = useState(false);
   const [reasoningEffortError, setReasoningEffortError] = useState("");
   const [modelSaving, setModelSaving] = useState(false);
@@ -172,7 +173,7 @@ export default function AdminPage() {
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants)).catch((err) => setLogError(err.message));
     api("/api/admin/logs/overview").then(setOverview).catch((err) => setLogError(err.message));
     api<QuestionSetSetting>("/api/admin/question-set").then(setQuestionSet).catch((err) => setQuestionSetError(err.message));
-    api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setLoginError(err.message));
+    api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setAiStatusError(err instanceof Error ? err.message : String(err)));
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
       .catch((err) => setOptionOrderError(err instanceof Error ? err.message : String(err)));
@@ -411,7 +412,7 @@ export default function AdminPage() {
           <div className="grid">
             <div className="notice">
               <strong>AI Backend</strong>
-              <p>{ai ? `${ai.ai_backend} / ${ai.account_label}` : "確認中"}</p>
+              <p>{ai ? `${ai.ai_backend} / ${ai.account_label}` : aiStatusError ? "取得できません" : "確認中"}</p>
               {ai?.app_server_reachable === false ? <p className="danger">Codex app-serverに接続できません。</p> : null}
               {ai?.last_error ? <p className="muted">{ai.last_error}</p> : null}
               {ai?.study_settings_warning ? <p className="danger" role="alert">{ai.study_settings_warning}</p> : null}
@@ -434,6 +435,7 @@ export default function AdminPage() {
                   <strong>{login.userCode}</strong>
                 </p>
               ) : null}
+              {aiStatusError ? <p className="danger" role="alert">AI接続状態を取得できませんでした: {aiStatusError}</p> : null}
               {loginError ? <p className="danger">{loginError}</p> : null}
               {ai ? (
                 <div className="reasoning-effort-control" aria-labelledby="ai-model-title">

@@ -36,7 +36,10 @@ def test_login_cookie_csv_logout_and_revocation():
     assert client.get("/api/admin/participants").status_code == 200
     assert client.get("/api/admin/logs/overview.csv").status_code == 200
     assert client.get("/api/admin/identity-mappings.csv").status_code == 200
-    assert client.post("/api/admin/auth/logout").status_code == 200
+    logout = client.post("/api/admin/auth/logout")
+    assert logout.status_code == 200
+    assert "Secure" not in logout.headers["set-cookie"]
+    assert "Max-Age=0" in logout.headers["set-cookie"]
     client.cookies.set(admin_auth.COOKIE_NAME, token)
     assert client.get("/api/admin/participants").status_code == 401
 
@@ -81,6 +84,14 @@ def test_configured_password_and_https_cookie(monkeypatch):
     assert response.status_code == 200
     assert "Secure" in response.headers["set-cookie"]
     assert client.get("/api/admin/participants").status_code == 200
+    token = client.cookies.get(admin_auth.COOKIE_NAME)
+    logout = client.post("/api/admin/auth/logout")
+    assert logout.status_code == 200
+    assert "Secure" in logout.headers["set-cookie"]
+    assert "Max-Age=0" in logout.headers["set-cookie"]
+    assert client.get("/api/admin/participants").status_code == 401
+    client.cookies.set(admin_auth.COOKIE_NAME, token, path="/api")
+    assert client.get("/api/admin/participants").status_code == 401
 
 
 @pytest.mark.parametrize("origin", ["http://localhost:3000", "http://127.0.0.1:3000"])
