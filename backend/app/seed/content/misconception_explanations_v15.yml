@@ -1,0 +1,567 @@
+# 誤概念の説明ファイル（問題バンク version: 15 に対応）
+# M1/M3の各選択肢を、各カテゴリー内の上から1〜3番目で対応付ける。
+# source_excerptは選択肢全体ではなく、誤りの箇所を示す短い抜粋。
+# 問題バンクそのもの・正解選択肢・採点設定は変更しない。
+source_question_bank_version: 15
+explanation_schema_version: 1
+purpose: 学習確認問題・再テストのM1/M3選択肢について、誤っている箇所と分類根拠を説明する。問題・選択肢の原文は変更しない。
+mapping_rules:
+  choice_index: 各問題のchoices.M1またはchoices.M3の上から1〜3番目。問題の選択肢順が変わった場合は再対応付けが必要。
+  source_excerpt: 提示されたversion 15の該当選択肢から、誤解の焦点がわかる部分を引用。原文全体ではない。
+  error_point: どの考え方が誤っているかの説明。
+  classification_reason: なぜM1（働きの誤解）またはM3（仕組みのカテゴリー混同）に分類したか。
+  correct_understanding: 選択肢を訂正するときに伝えるべき理解。
+  qualification: 正しい場合もあり得る条件や、分類・設問としての注意点（該当項目のみ）。
+definitions:
+  M1: 仕組みの働き・因果関係・条件・結果についての誤信念。
+  M3: 異なる種類の対象・技術・処理を同じカテゴリーの仕組みとして扱う誤認。
+  scope_note: 分類は本研究の操作的定義であり、選択された誤答だけで学習者の内的な誤概念を確定できない。
+references:
+- subject: RAGと追加訓練
+  url: https://learn.microsoft.com/en-us/azure/ai-foundry/concepts/retrieval-augmented-generation
+- subject: AIエージェントの連携
+  url: https://openai.github.io/openai-agents-python/multi_agent/
+- subject: エージェントが使うツール
+  url: https://openai.github.io/openai-agents-python/tools/
+- subject: 記憶の抽出・統合・検索
+  url: https://learn.microsoft.com/en-us/azure/ai-foundry/agents/concepts/what-is-memory?view=foundry
+- subject: 誤答選択肢の設計指針
+  url: https://www.kuleuven.be/english/stuvo/education/leuvenlearninglab/support/assessment-feedback/design-assessment-and-feedback/designing-an-exam-or-test/multiple-choice-questions
+terms:
+  llm_knowledge:
+    variants:
+    - variant_key: learning_round_v1
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: モデルの重みが更新されたことで、新しい規程をAIが覚えた
+          error_point: テスト時に規程を入力して正答できたことを、学習済み重みの更新が起きた証拠だと誤って判断している。
+          classification_reason: 入力を参照して答えられる動作から、重み更新という起きていない因果関係を推測するためM1。
+          correct_understanding: 通常の回答生成で規程を見せても、それだけで重みは更新されない。別の会話で必要なら規程を再取得して参照させる。
+        - choice_index: 2
+          source_excerpt: 問い合わせのたびにAIへ渡せば、回答を重ねるうちにモデルの重みも更新される
+          error_point: 回答例を毎回入力へ含めるだけで、その反復によって追加訓練が進むと思っている。
+          classification_reason: 回答例の提示による出力の誘導を、重み更新が発生する仕組みの働きと誤って解釈しているためM1。
+          correct_understanding: 例を入力に含める少数例提示と、訓練データでモデルの重みを更新する追加訓練は別。
+        - choice_index: 3
+          source_excerpt: その順序がモデルの重みに定着する
+          error_point: 回答順序の指示を一度入力すればモデルの重みが変わり、以後も指示なしで維持されると思っている。
+          classification_reason: プロンプト入力の効果と重み更新の因果関係についての誤信念のためM1。
+          correct_understanding: プロンプトはその回答の形式を誘導する。継続適用は共通指示の再使用などで行い、重み更新とは区別する。
+        M3:
+        - choice_index: 1
+          source_excerpt: 取り出せるようにする処理を、回答方法を覚えさせる追加訓練と同じ仕組みとして扱う
+          error_point: 過去の回答例を検索して見せる機構と、モデルを追加訓練する機構を同じものとして分類している。
+          classification_reason: 回答時の外部検索と学習時のモデル調整という異なる技術カテゴリーの同一視なのでM3。
+          correct_understanding: 例を検索してプロンプトへ渡しても、その処理自体はモデルの重みを更新しない。
+        - choice_index: 2
+          source_excerpt: 学習に使った規程の該当箇所を探して参照できるものとして、文書検索の仕組みの代わりに用いる
+          error_point: 追加訓練によって学習元の規程の原文を検索・取得する機能まで得られると扱っている。
+          classification_reason: モデル調整と外部文書検索のカテゴリーを混同しているためM3。
+          correct_understanding: 追加訓練で規程に関する応答が可能になる場合はあるが、元文書の検索・引用は別の取得機構が必要。
+          qualification: 追加訓練で関連知識を出力できる可能性自体は否定しない。
+        - choice_index: 3
+          source_excerpt: プロンプトそのものを、規程を継続的に保存したり必要な条文を検索したりする文書データベースとして扱う
+          error_point: 規程の本文を含んだプロンプトを、文書の管理・検索をするデータベースと同じものと考えている。
+          classification_reason: 今回の入力内容と、継続保存・検索のシステムを同一視するカテゴリー誤りなのでM3。
+          correct_understanding: プロンプトに規程本文を含めて回答させることは可能だが、それだけで文書データベースが実装されるわけではない。
+          qualification: プロンプトを保存・検索できる構成も存在するため、単に本文を入力した行為自体は誤りではない。
+    - variant_key: learning_round_v2
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: モデルの重みが更新されたことで、新しい規程をAIが覚えた
+          error_point: 施設利用規程を見せたテストで正答したことを、追加訓練による重みの変更が起きたと誤解している。
+          classification_reason: 文書参照時の正答と重み更新を誤った因果関係で結んでいるためM1。
+          correct_understanding: テストで見せた規程を参照して回答することと、モデルを訓練して重みを変えることは別。
+        - choice_index: 2
+          source_excerpt: 問い合わせのたびにAIへ渡せば、回答を重ねるうちにモデルの重みも更新される
+          error_point: 職員が確認した回答例を繰り返し入力するだけで、モデルが追加学習すると考えている。
+          classification_reason: プロンプトへ例を入力する処理の効果を過大に推測しているためM1。
+          correct_understanding: 例示を回答に利用することはできるが、重みの調整には別途追加訓練を行う。
+        - choice_index: 3
+          source_excerpt: その順序がモデルの重みに定着する
+          error_point: 案内の順序を指示文で一度指定すれば、その指示がモデルに学習されると思っている。
+          classification_reason: 指示による一時的な出力制御を重み更新と誤解するためM1。
+          correct_understanding: 「手続き・申請期限・注意点」の形式は回答時のプロンプトで指定でき、重みは通常変わらない。
+        M3:
+        - choice_index: 1
+          source_excerpt: 取り出せるようにする処理を、回答方法を覚えさせる追加訓練と同じ仕組みとして扱う
+          error_point: 検索対象に回答例を置いて参照する方法を追加訓練と同一視している。
+          classification_reason: 外部情報の検索・利用とモデルの重み調整を同じ技術に分類するためM3。
+          correct_understanding: 過去の回答例の検索・提示は、学習データを使って重みを調整する訓練工程とは異なる。
+        - choice_index: 2
+          source_excerpt: 学習に使った規程の該当箇所を探して参照できるものとして、文書検索の仕組みの代わりに用いる
+          error_point: 施設利用規程で追加訓練すると、学習元規程の該当条文を検索できると思っている。
+          classification_reason: 追加訓練を文書検索・取得機構のカテゴリーとして扱うためM3。
+          correct_understanding: モデルが訓練内容について回答できる場合もあるが、最新版の原文検索は別の仕組みで行う。
+        - choice_index: 3
+          source_excerpt: プロンプトそのものを、規程を継続的に保存したり必要な条文を検索したりする文書データベースとして扱う
+          error_point: 施設利用規程を書き込んだ指示文を文書保存・検索機構と同一視する。
+          classification_reason: 入力文とデータベースという別カテゴリーの混同のためM3。
+          correct_understanding: 指示文に資料を含めて参照させることと、改訂文書を継続管理・検索することは異なる。
+          qualification: 保存された共通プロンプトも存在するので、「入力へ含めること」そのものを誤りにしない。
+    - variant_key: learning_round_v3
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: FAQを検索して入力へ加えると、その文章が重みの更新にも反映される
+          error_point: 回答時に検索結果を入力へ渡すだけで、モデルの重みも更新されると思っている。
+          classification_reason: 検索結果の入力と訓練時の重み更新の因果関係を誤って捉えるためM1。
+          correct_understanding: RAGによる入力の補足は、通常の回答生成では重みを変更しない。
+        - choice_index: 2
+          source_excerpt: 訓練データを使うと、例題が回答時の参照資料として添付される
+          error_point: 学習時に使用した例題が、そのまま回答時に自動添付されると考えている。
+          classification_reason: 訓練データ利用の結果について誤った動作を想定しているためM1。
+          correct_understanding: 追加訓練はモデルの重みを調整する。例題の原文を回答時に渡すには別の保存・取得処理が要る。
+        - choice_index: 3
+          source_excerpt: 外部文書を入力へ添付すると、訓練データによる重み調整も起こる
+          error_point: 外部文書を入力へ加えたことを原因として、同時に追加訓練まで始まると考えている。
+          classification_reason: 入力への資料添付が重み更新を引き起こすという誤信念なのでM1。
+          correct_understanding: 文書を参照して生成する処理と、訓練用データで重みを更新する工程は分離できる。
+          qualification: 1つ目のM1とほぼ同じ因果誤認なので、診断上の重複に注意。
+        M3:
+        - choice_index: 1
+          source_excerpt: RAGは、訓練データから重みを更新する学習工程の名称
+          error_point: RAGを追加訓練の別名として分類している。
+          classification_reason: 検索・参照による回答生成と学習工程のカテゴリーを取り違えるためM3。
+          correct_understanding: RAGは回答時に関連文書を取得して利用する方法で、重み更新を意味しない。
+        - choice_index: 2
+          source_excerpt: ファインチューニングは、資料を回答時に取得する検索機能
+          error_point: ファインチューニングを外部資料の検索機能として分類している。
+          classification_reason: 学習工程と文書取得機能を同じカテゴリーとするためM3。
+          correct_understanding: ファインチューニングはデータによるモデル調整であり、回答時の検索とは異なる。
+        - choice_index: 3
+          source_excerpt: 追加訓練とプロンプト設計は、同じ種類の入力編集
+          error_point: 追加訓練を、質問の指示文を編集する操作と同一視している。
+          classification_reason: 重み調整工程と入力文の設計という異なるカテゴリーの混同なのでM3。
+          correct_understanding: プロンプト編集は通常モデルの重みを変えない。追加訓練は対応モデルを訓練データで調整する。
+    retest:
+    - variant_key: retest_v1
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: モデル自体がその分類方法を学習した
+          error_point: 分類例を添えて正しく分類できた結果から、モデル自身が訓練され分類規則を覚えたと判断する。
+          classification_reason: 例示による推論時の正答を重み更新の証拠とする因果的な誤解なのでM1。
+          correct_understanding: 例を入力に含めた分類と追加訓練は別。例なしでも分類できることはあるが、例を示しただけで重みは変わらない。
+        - choice_index: 2
+          source_excerpt: 対応手順書を最新版に差し替えると、それに合わせてAIの学習済みの重みも更新される
+          error_point: 外部フォルダーの手順書差し替えで、モデルの内部パラメーターも更新されると思っている。
+          classification_reason: 外部文書更新と重み更新の間に存在しない自動的な因果関係を想定するためM1。
+          correct_understanding: 新しい手順を利用するには、更新文書を検索・取得するなどの構成が必要。
+        - choice_index: 3
+          source_excerpt: 毎回同じ指示をAIへ送れば、分類を繰り返すうちにモデルの重みも調整される
+          error_point: 同じ分類指示に何度も従わせることが追加訓練になると思っている。
+          classification_reason: 繰り返し推論の効果を重み調整と取り違えた動作に関する誤信念なのでM1。
+          correct_understanding: 通常の問い合わせ分類の反復だけでモデルの重みは更新されない。
+        M3:
+        - choice_index: 1
+          source_excerpt: システムが似た事例を検索してAIに渡すようにする方法を、モデル自体を追加訓練する仕組みとして扱う
+          error_point: 類似する分類例を検索して今回の入力へ与える方式を、追加訓練と同種と考えている。
+          classification_reason: 回答時の事例検索とモデル調整のカテゴリー混同なのでM3。
+          correct_understanding: 検索した分類例を参照して答えることは有効だが、モデル自体の追加訓練ではない。
+        - choice_index: 2
+          source_excerpt: 学習した内容から回答する方法を、問い合わせのたびに最新の手順書を検索して確認する方法と同じ仕組みとして扱う
+          error_point: 訓練で得た知識からの回答を、最新の外部手順書の検索・確認と同一視する。
+          classification_reason: 追加訓練と回答時の情報検索を同じカテゴリーと捉えるためM3。
+          correct_understanding: モデルが手順を回答できることと、その時点で最新文書を検索して根拠を確認できることは別。
+        - choice_index: 3
+          source_excerpt: その指示文を、手順書から必要な箇所を検索して取り出す仕組みと同じものとして扱う
+          error_point: 「最新版を確認して」と記したプロンプトを、資料の検索・取得機構と同じものと分類する。
+          classification_reason: 指示文と実際の外部検索機能を同一視するためM3。
+          correct_understanding: 適切な検索ツールを接続して指示で呼び出すことは可能だが、指示文だけが検索機能になるわけではない。
+    - variant_key: retest_v2
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: モデル自体がその分類方法を学習した
+          error_point: 学内ポータルの分類例を示して正答したため、モデル自体の学習が成立したと推定する。
+          classification_reason: 例を参照した回答から重み更新を推測する誤った因果理解なのでM1。
+          correct_understanding: Few-shotの例示は通常の推論であり、重みを変える追加訓練とは別。
+        - choice_index: 2
+          source_excerpt: ITサポートマニュアルを最新版に差し替えると、それに合わせてAIの学習済みの重みも更新される
+          error_point: マニュアル更新が自動的にモデルの重みに反映されると思っている。
+          classification_reason: 外部ファイル更新と学習済みパラメーター更新の誤った因果関係なのでM1。
+          correct_understanding: 最新版を検索できるように文書の取得処理を整えることと、モデルの重み更新は別。
+        - choice_index: 3
+          source_excerpt: 分類を繰り返すうちにモデルの重みも調整される
+          error_point: 3分類を指示して何度も回答させるだけで、モデルが追加学習すると考える。
+          classification_reason: 推論を繰り返すことの効果への誤信念なのでM1。
+          correct_understanding: 同じ指示を繰り返し与えても、通常はモデルの重みは変わらない。
+        M3:
+        - choice_index: 1
+          source_excerpt: 似た事例を検索してAIに渡すようにする方法を、モデル自体を追加訓練する仕組みとして扱う
+          error_point: 正解分類例を検索して渡す検索方式を、訓練工程と同じものに分類する。
+          classification_reason: 検索・参照と追加訓練のカテゴリーを混同するためM3。
+          correct_understanding: 過去の分類例を参照して分類する方式自体は有効だが、追加訓練とは別。
+        - choice_index: 2
+          source_excerpt: 学習した内容から回答する方法を、問い合わせのたびに最新のマニュアルを検索して確認する方法と同じ仕組みとして扱う
+          error_point: ITマニュアルによるモデル追加訓練と、最新版の検索・取得を同じ仕組みとする。
+          classification_reason: モデルの学習工程と外部文書取得機能のカテゴリー混同なのでM3。
+          correct_understanding: 訓練内容を回答できても、原文の検索や最新性の確認が自動で起こるわけではない。
+        - choice_index: 3
+          source_excerpt: その指示文を、マニュアルから必要な箇所を検索して取り出す仕組みと同じものとして扱う
+          error_point: 「最新版を確認して答える」という指示を検索機能の実体として分類する。
+          classification_reason: プロンプトによる指示と文書検索ツールの混同なのでM3。
+          correct_understanding: 指示に従って検索するには、文書を参照できる入力や検索機能の接続が必要。
+  multi_agent:
+    variants:
+    - variant_key: learning_round_v1
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 検討担当は情報源が十分に確認されていると考え
+          error_point: 情報収集専門のAIから渡されたというだけで、情報源の信頼性も確認済みだと考える。
+          classification_reason: 担当を分けたことによる情報の信頼性についての誤った動作理解なのでM1。
+          correct_understanding: 誰が調べたかだけでは情報の検証の有無は決まらない。必要な確認・確認結果の受け渡しを設計する。
+          qualification: 情報収集担当が実際に検証した根拠を渡したなら、後続の担当がそれを利用すること自体は適切。
+        - choice_index: 2
+          source_excerpt: 役割名を各AIに付ければ、どの情報をどの順番で渡すかも自動的に決まる
+          error_point: 役割名を設定するだけで、受け渡し内容や順序も確定し連携できると思う。
+          classification_reason: 役割名の設定が情報連携を自動的に生むとする因果の誤信念なのでM1。
+          correct_understanding: 各担当が利用できる情報の受け渡し先・内容・手順を連携機構として用意する。
+        - choice_index: 3
+          source_excerpt: 両者が同じ回答内容を出さなければ、結果を引き継いで連携することはできない
+          error_point: 情報収集担当と案内文作成担当の出力が同一でなければ連携できないと考える。
+          classification_reason: 異なる役割の担当が連携するための条件を誤って捉えているためM1。
+          correct_understanding: 調査報告と住民向け案内は目的が異なるため出力が異なってよく、必要な情報を引き継げることが重要。
+        M3:
+        - choice_index: 1
+          source_excerpt: そのツールも情報を調べて結果を渡すので、別のAIエージェントとして数える
+          error_point: 道路データベースの検索ツールを独立したエージェントとして数えている。
+          classification_reason: 単純な情報取得ツールと、役割を持つAIエージェントのカテゴリー混同なのでM3。
+          correct_understanding: 今回の検索ツールは指定された結果を返す機能であり、検索ツールの数がそのままエージェント数になるわけではない。
+          qualification: 別のAIエージェントをツールとして呼べる実装もあるため、検索ツールの機能範囲を前提に判断する。
+        - choice_index: 2
+          source_excerpt: 案内の方法が2つあるので、AIエージェントも2つ存在する
+          error_point: 1つのAI内にある通行可否による条件分岐を、2つのエージェントの存在として数える。
+          classification_reason: 処理の分岐と独立エージェントのカテゴリーを混同しているためM3。
+          correct_understanding: 単一エージェントが複数の条件に対応しても、それだけで複数エージェントにはならない。
+        - choice_index: 3
+          source_excerpt: すべて担当させれば、複数のエージェントが連携するマルチエージェントの仕組みになる
+          error_point: 高性能な1つのAIが3つの仕事をすることを、複数AIの連携として分類している。
+          classification_reason: 単一エージェントの複数タスクと複数エージェントの構成を同一視するためM3。
+          correct_understanding: 複数の仕事を持つAIが1つなら、原則として単一エージェントの設計である。
+    - variant_key: learning_round_v2
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 調査内容の信頼性も確保されており、避難方法の検討担当はその報告を確認せずに利用する
+          error_point: 調査担当が専門化されているというだけで、情報の信頼性が自動的に確保されると考える。
+          classification_reason: 役割分担から誤った品質保証の効果を推測するためM1。
+          correct_understanding: 検証の実施とその根拠の共有は役割の名称と別に確認する。
+        - choice_index: 2
+          source_excerpt: 役割に必要な情報が自動的に選ばれて届く
+          error_point: 情報を渡す設定さえあれば、受け手の目的に合った内容へ自動で選別されると考える。
+          classification_reason: 受け渡し機構の実際の動作を過大に推測しているためM1。
+          correct_understanding: 何をどの担当へ渡すかは、明示的な指定またはその選別を行う別の処理が必要。
+          qualification: 自動選別する仕組みを実装・設定済みなら、その利用自体は正しい。
+        - choice_index: 3
+          source_excerpt: 担当同士の結論が一致していないため、両者の判断をそろえなければ連携を続けられない
+          error_point: 道路Aが通れるという報告と、道路Bを使うという計画は両立し得るのに、結論の不一致を連携失敗と捉える。
+          classification_reason: 連携成立の条件についての誤った信念なのでM1。
+          correct_understanding: 担当によって役割や評価基準が異なり、出力も異なってよい。受け渡し内容を適切に解釈する。
+        M3:
+        - choice_index: 1
+          source_excerpt: 3つの手順に分けて行っているため、3つのAIエージェントが連携している構成として分類
+          error_point: 1つのエージェント内部の3段階の処理を、3つのエージェントの存在と同一視する。
+          classification_reason: 処理手順とAIエージェントのカテゴリー混同なのでM3。
+          correct_understanding: 工程数とエージェント数は別。案1は1つのエージェントが複数工程を実行する。
+        - choice_index: 2
+          source_excerpt: 報告ファイルも、計画担当が避難方法を判断する際に利用されるため
+          error_point: 道路情報の報告ファイルをAIエージェントとして数えている。
+          classification_reason: 情報を保持する成果物と、判断・処理するAIを同じカテゴリーに分類するためM3。
+          correct_understanding: 報告ファイルは引き渡されるデータであり、それ自体を別のAIエージェントとは数えない。
+        - choice_index: 3
+          source_excerpt: 内部計算を複数に分割して処理速度を上げる方式と同じ種類の仕組み
+          error_point: 3つのAIが役割分担することを、単一モデルの計算並列化と同じ仕組みとみなす。
+          classification_reason: 作業分担によるエージェント連携と計算資源の並列化のカテゴリー混同なのでM3。
+          correct_understanding: マルチエージェントは担当間の役割とやり取りの構成で、計算高速化そのものの方式ではない。
+    - variant_key: learning_round_v3
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 検索結果の上位に表示された場合、その手順は学生の端末やOSに合う
+          error_point: 検索順位が高ければその学生の環境に適用できると判断している。
+          classification_reason: 検索結果の表示順位と適用条件の関係についての誤った働きの推測なのでM1。
+          correct_understanding: 表示順位だけではOSや端末との適合性は決まらない。適用条件を確認する。
+          qualification: マルチエージェント自体より検索品質を問うため、測定対象の逸脱に注意。
+        - choice_index: 2
+          source_excerpt: 同じ資料を共有する回答担当のAIも同じ対処方法を選ぶ
+          error_point: 同じマニュアルを参照すれば、調査担当と回答担当は必ず同じ結論になると思っている。
+          classification_reason: 情報共有後の担当ごとの判断結果についての誤信念なのでM1。
+          correct_understanding: 役割や追加情報によって適切な判断は異なり得る。結論の一致は連携の必須条件ではない。
+        - choice_index: 3
+          source_excerpt: 記録を保存する仕組みがなくても次の問い合わせに利用できる
+          error_point: ツールで取得した情報が、その使用だけで次の会話でも自動的に記憶されると思っている。
+          classification_reason: ツール利用の継続的な効果について誤った因果関係を想定するためM1。
+          correct_understanding: 別の問い合わせで再利用するなら、その場で再取得するか保存・履歴取得などの機構が必要。
+          qualification: 記憶プロセス領域とも重なりがある。
+        M3:
+        - choice_index: 1
+          source_excerpt: その文章も案2の調査担当のAIと同じ、1つのエージェントとして数える
+          error_point: 検索ツールが返した説明文を、判断を行うエージェントと同類だと数える。
+          classification_reason: テキストデータとAIエージェントのカテゴリー混同なのでM3。
+          correct_understanding: 説明文はAIが利用する情報であり、それ自体はエージェントではない。
+        - choice_index: 2
+          source_excerpt: ツールが2つあることを、調査担当と回答担当の2つのAIが協力する構成と同じものとして扱う
+          error_point: 2つの検索ツールの利用を、2つのエージェントの協力と同一視する。
+          classification_reason: 単純な検索ツールと役割を持つエージェントのカテゴリー混同なのでM3。
+          correct_understanding: ツール数だけでエージェント数は決まらない。ここでは案1のエージェントは1つ。
+          qualification: AIエージェントをツールとして呼び出す例はあるため、設問の検索ツールの定義に依存する。
+        - choice_index: 3
+          source_excerpt: 案1のマニュアル検索ツールと同じ種類の検索機能として分類できる
+          error_point: 資料を選び整理して回答担当に渡す調査AIを、検索結果を返すだけの機能と同じ分類にしている。
+          classification_reason: 判断・整理するエージェントと資料取得機能のカテゴリー混同なのでM3。
+          correct_understanding: 調査AIは検索ツールを使いながら情報を整理することができるが、今回の単純な検索機能そのものとは異なる。
+          qualification: 一部の実装ではエージェントをツールとして包めるので、何を同一視しているかの確認が必要。
+    retest:
+    - variant_key: retest_v1
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 他の担当が出した結果も共有されると考え
+          error_point: 別々のAIに役割を与えて質問するだけで、担当間に結果が伝達されると考える。
+          classification_reason: 役割付与によって情報共有が自動成立するとする動作の誤信念なのでM1。
+          correct_understanding: 担当間で必要な情報を引き継げる連携手順や共有機構を用意する。
+        - choice_index: 2
+          source_excerpt: 別の候補を求めると役割分担が崩れると考え
+          error_point: 日程担当が観光候補担当に修正を依頼すると、分担そのものが破綻すると考える。
+          classification_reason: 担当間での再依頼・調整ができないと誤認するためM1。
+          correct_understanding: 各AIの役割を分けたまま、条件に応じて候補の再検討を依頼してよい。
+        - choice_index: 3
+          source_excerpt: 各担当の結果を組み合わせるだけで17時までに出発駅へ戻れる
+          error_point: 個別に得た営業時間・交通情報が正しければ、全行程の時間制約も満たすと考える。
+          classification_reason: 部分結果を結合したときの整合性についての誤信念なのでM1。
+          correct_understanding: 予定時刻や滞在時間を統合し、17時帰着が可能か全体を照合する。
+        M3:
+        - choice_index: 1
+          source_excerpt: 各見出しが別のAIの担当に当たると考え
+          error_point: 1つのAIの回答を3つの見出しに分けるだけで、エージェントが3つ存在すると分類する。
+          classification_reason: 出力文の区分と独立エージェントの混同なのでM3。
+          correct_understanding: 見出しや作業の数ではなく、実際に別のエージェントが動作しているかで判断する。
+        - choice_index: 2
+          source_excerpt: 乗換検索ツールも、日程担当へ交通情報を渡す役割があるので
+          error_point: 発着時刻を返す乗換検索ツールを、判断担当のAIエージェントとして数える。
+          classification_reason: 検索ツールと役割を持つエージェントの混同なのでM3。
+          correct_understanding: 今回のツールは時刻データを返す機能であり、単にデータを渡すだけでAIエージェントにはならない。
+        - choice_index: 3
+          source_excerpt: 切り替え先の処理をそれぞれ独立したAIエージェントとして数え
+          error_point: 徒歩・電車の条件分岐を、独立したエージェントと同じものと考えている。
+          classification_reason: 条件分岐という処理構造とエージェントのカテゴリー混同なのでM3。
+          correct_understanding: 単一AIで経路案内を切り替えるだけでは、複数エージェント構成にはならない。
+    - variant_key: retest_v2
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 他の担当が出した結果も共有されると考え
+          error_point: 展示調査・計画・移動の担当を分ければ、その結果が別担当に自動伝達されると考える。
+          classification_reason: 役割設定の効果について誤って情報共有を想定するためM1。
+          correct_understanding: 結果を利用するには受け渡しの仕組みが必要。
+        - choice_index: 2
+          source_excerpt: 別の候補を求めると役割分担が崩れると考え
+          error_point: 見学計画担当が展示候補の再検討を頼むと、役割分担が崩れると思っている。
+          classification_reason: 担当間の調整・再依頼が連携を壊すという誤信念なのでM1。
+          correct_understanding: 移動や公開時間に合わない場合、候補担当に再検討を依頼できる構成が適切。
+        - choice_index: 3
+          source_excerpt: 各担当の結果を組み合わせるだけで40分以内に入口へ戻れる
+          error_point: 個別に調べた公開時間と館内経路を統合すれば、全体の40分制約も必ず満たせると思っている。
+          classification_reason: 部分的な成果物の統合結果についての誤った保証を想定するためM1。
+          correct_understanding: 展示の見学・移動に要する時間を全体で照合し、40分以内か確かめる。
+        M3:
+        - choice_index: 1
+          source_excerpt: 各見出しが別のAIの担当に当たると考え
+          error_point: 1つのAIの回答の3区分を、複数エージェントの存在として扱っている。
+          classification_reason: 文章の区分とAIエージェントという異なるカテゴリーの同一視なのでM3。
+          correct_understanding: 「展示候補」「見学計画」「移動」という見出しを付けただけでは1つのAIのまま。
+        - choice_index: 2
+          source_excerpt: 館内経路検索ツールも、見学計画担当へ移動情報を渡す役割があるので
+          error_point: 所要時間を返す館内経路検索ツールを、移動条件を判断するエージェントとして数える。
+          classification_reason: 検索ツールと判断担当のAIを同じカテゴリーとみなすためM3。
+          correct_understanding: 指定した経路の所要時間を返す機能だけでは、独立した判断担当エージェントではない。
+        - choice_index: 3
+          source_excerpt: 切り替え先の処理をそれぞれ独立したAIエージェントとして数え
+          error_point: 階段・エレベーターの案内分岐を、別々のAIエージェントだと数える。
+          classification_reason: プログラムの条件分岐とエージェントのカテゴリー混同なのでM3。
+          correct_understanding: 1つのAIが条件により案内を切り替えても、その分岐数はAIの数ではない。
+  memory_process:
+    variants:
+    - variant_key: learning_round_v1
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 次回以降も古い記録を優先して使う
+          error_point: 学生が希望を変更しても、最初に登録した好みを現在の希望として優先すべきだと考える。
+          classification_reason: 記憶の新旧と更新時の適用条件についての誤信念なのでM1。
+          correct_understanding: 新たに継続的な希望が示されたら、現在有効な希望を識別・更新して使用する。
+        - choice_index: 2
+          source_excerpt: 今回必要な情報を取り出す方法は特に設計しない
+          error_point: 会話全文を保存すれば、その内容が次の会話へ自動的に渡されると思っている。
+          classification_reason: 保存という操作の効果を、次回の取得まで含むと誤解しているためM1。
+          correct_understanding: 全文保存も可能だが、次回の入力へ関連情報を取得する機構が必要。
+          qualification: 取得機能を自動提供するセッション管理サービスも存在する。
+        - choice_index: 3
+          source_excerpt: AIはその希望を新たに覚えたと考え、次の相談では記録を参照させない
+          error_point: 保存した希望をAIへ渡して正しく回答できたことを、モデルが新たに記憶を形成した証拠とする。
+          classification_reason: 回答時の参照がモデル自体の学習を引き起こしたという誤った因果推論なのでM1。
+          correct_understanding: 今回の入力に含めた希望で回答できても、別の会話で使うには記録の取得などが必要。
+        M3:
+        - choice_index: 1
+          source_excerpt: 更新されたモデルの重みを、学生ごとの希望を保存する記録として扱う
+          error_point: モデルの追加訓練と、学生ごとの変更可能な記憶記録を同じ種類として扱う。
+          classification_reason: 学習済みパラメーターと利用者別の記憶ストアのカテゴリー混同なのでM3。
+          correct_understanding: 重み調整は個人別の希望記録を保存・検索・更新する機能そのものではない。
+        - choice_index: 2
+          source_excerpt: 会話中の履歴を利用する仕組みを、別の日の新しい会話でも希望を保持する長期記憶と同じものとして扱う
+          error_point: 同じ会話で以前の発言を参照できることを、会話をまたぐ継続記憶と同一視している。
+          classification_reason: 会話内コンテキストと長期の保存・取得機構のカテゴリー混同なのでM3。
+          correct_understanding: 同じ会話での参照だけでは別セッションで使える保証はなく、継続利用するには保存・取得が必要。
+          qualification: セッションの保存と再利用が設定されていれば会話履歴で長期的な連続性を持たせることも可能。
+        - choice_index: 3
+          source_excerpt: プロンプトへ貼り付ける操作を、学生ごとの希望を継続して保存し、変更に応じて更新できる記憶管理の仕組みと同じものとして扱う
+          error_point: 過去の会話を今回の入力へ追加する行為を、記録の保存・更新を担う機能そのものと同じだと捉える。
+          classification_reason: その場の入力操作と永続的な記憶管理システムのカテゴリー混同なのでM3。
+          correct_understanding: 入力へ履歴を渡すことは記憶活用の一工程になり得るが、それ自体は記録の保存・更新を行わない。
+    - variant_key: learning_round_v2
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 次回以降も古い記録を優先して使う
+          error_point: 辛い料理を控えたいと変更しても、最初の「辛い料理が好き」を優先し続けると考える。
+          classification_reason: 記録の更新と有効な希望の判断についての誤信念なのでM1。
+          correct_understanding: 本人の変更後の継続希望を適切に記録し、現在有効な情報を使う。
+        - choice_index: 2
+          source_excerpt: 今回必要な情報を取り出す方法は特に設計しない
+          error_point: 会話を全文保存するだけで、別の日の献立相談にも好みが自動的に伝わると思う。
+          classification_reason: 保存操作と次回の取得処理の因果関係を誤解しているためM1。
+          correct_understanding: 全文保存であっても、相談時に必要な記録を取得してAIが使えるようにする機能が要る。
+        - choice_index: 3
+          source_excerpt: AIはその希望を新たに覚えたと考え、次の相談では記録を参照させない
+          error_point: 保存した辛い料理の好みで一度献立を提案できたら、モデル自体が好みを記憶したと思う。
+          classification_reason: 記憶の参照による正答を、モデルの学習効果と取り違えているためM1。
+          correct_understanding: 今回の入力で利用できた情報は、それだけで次回のモデル重みに保存されない。
+        M3:
+        - choice_index: 1
+          source_excerpt: 更新されたモデルの重みを、利用者ごとの希望を保存する記録として扱う
+          error_point: モデルの追加訓練による重み変更を、利用者別に編集できる記憶と同一視している。
+          classification_reason: 重みと個人用記録のカテゴリー混同なのでM3。
+          correct_understanding: 追加訓練と利用者ごとの保存・検索・更新は別の機構。
+        - choice_index: 2
+          source_excerpt: 会話中の履歴を利用する仕組みを、別の日の新しい会話でも希望を保持する長期記憶と同じものとして扱う
+          error_point: 同じ会話で辛い料理の好みを参照できることを、長期の会話横断記憶と同じ扱いにしている。
+          classification_reason: 会話内履歴と長期記憶という仕組みのカテゴリー混同なのでM3。
+          correct_understanding: 別の日にも好みを利用するには、会話をまたいで記録・取得できる構成が必要。
+        - choice_index: 3
+          source_excerpt: プロンプトへ貼り付ける操作を、利用者ごとの希望を継続して保存し、変更に応じて更新できる記憶管理の仕組みと同じものとして扱う
+          error_point: 過去の相談文を現在の入力に追加するだけの操作を、継続的な記憶管理と同じものに分類する。
+          classification_reason: 入力の編集と記憶の保存・更新のカテゴリー混同なのでM3。
+          correct_understanding: プロンプトへ追加した文章を回答に使うのは可能だが、保存・更新とは別。
+    - variant_key: learning_round_v3
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 入力へ貼る機能を設けると、保存記録も同時に更新される
+          error_point: 前回の会話文を今回の入力へ追加するだけで、永続記録も自動的に更新されると思う。
+          classification_reason: 入力操作による保存記録の更新という誤った因果関係なのでM1。
+          correct_understanding: 入力への貼り付けと、保存記録への書き込み・更新は別の処理。
+        - choice_index: 2
+          source_excerpt: 保存操作がなくても次の相談で参照される
+          error_point: 一度の回答で使用した会話情報は、保存・継続取得なしでも別の相談で参照できると考える。
+          classification_reason: 回答に情報を使ったことの継続効果への誤信念なのでM1。
+          correct_understanding: 次の相談でも利用するには、履歴または記憶の保存・取得が必要。
+        - choice_index: 3
+          source_excerpt: 項目や形式の違いは検索結果に影響しない
+          error_point: 同じ意味の情報が保存されていれば、記録の表現や保存形式は検索に全く影響しないと思っている。
+          classification_reason: 保存形式と検索結果の関係についての誤信念なのでM1。
+          correct_understanding: 検索法によっては項目名・形式・表記ゆれが検索結果や検索精度に影響する。
+          qualification: 検索手法次第では形式差が小さい場合もある。「影響しない」という断定が誤り。
+        M3:
+        - choice_index: 1
+          source_excerpt: 入力に含める操作は、保存・検索・更新を行う記憶機構である
+          error_point: 会話文を今回の入力へ入れる操作を、持続的な記憶システム全体として分類している。
+          classification_reason: 入力操作と記憶管理機構のカテゴリー混同なのでM3。
+          correct_understanding: 入力への追加は一工程であり、継続保存や更新を自動的には意味しない。
+        - choice_index: 2
+          source_excerpt: 記憶機能はモデルの訓練済み重みそのもの
+          error_point: 利用者の保存記録とモデルの学習済み重みを同じ種類のものと捉える。
+          classification_reason: 利用者別の可変記憶とモデルパラメーターのカテゴリー混同なのでM3。
+          correct_understanding: 会話横断の好み管理は保存・検索・更新可能な記憶ストアなどで実現でき、重みそのものではない。
+        - choice_index: 3
+          source_excerpt: 保存された希望は、利用者が操作するアプリ画面と同じ仕組み
+          error_point: 利用者の希望データを、表示・操作のためのアプリ画面と同一視している。
+          classification_reason: 記憶データとユーザーインターフェースのカテゴリー混同なのでM3。
+          correct_understanding: 保存記録は画面に表示できるが、データそのものと表示画面は別。
+          qualification: 表示画面と記憶管理が同じアプリで提供される場合もあり、設問のもっともらしさは要検証。
+    retest:
+    - variant_key: retest_v1
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 保存した会話から必要な情報を取り出す処理は設けない
+          error_point: 全文履歴を保存しただけで、次回の献立相談でもAIに必要な好みが渡ると考える。
+          classification_reason: 保存操作に次回の取得機能まであると誤解するためM1。
+          correct_understanding: 必要な情報を保存記録から取り出し、回答時にAIが利用できるようにする。
+        - choice_index: 2
+          source_excerpt: どちらが現在の希望かを判断する仕組みがなくても、次回はAIが新しい方を使う
+          error_point: 古い「ピーマンを避けたい」と新しい「使ってほしい」を両方追加保存すれば、新しい記録が自動的に優先されると思う。
+          classification_reason: 記録の追加が希望の新旧判定まで保証するという誤った働きの推測なのでM1。
+          correct_understanding: 現在有効な希望を選ぶための更新・競合解決・時系列判断などの処理を用意する。
+          qualification: サービスが自動的に競合解決を行う構成なら新しい希望を適用できる。
+        - choice_index: 3
+          source_excerpt: その改善内容は次の相談にも引き継がれると考え、感想や新しい希望を保存する処理は設けない
+          error_point: 今回の会話で薄味の献立を一度提案できれば、感想を記録せずとも次回へ引き継がれると思う。
+          classification_reason: 今回の回答改善が継続的な記憶を形成するという誤信念なのでM1。
+          correct_understanding: 別の日にも薄味希望を使うには、継続的な記録・取得などが必要。
+        M3:
+        - choice_index: 1
+          source_excerpt: 追加訓練でモデルの重みに覚えさせる処理を、利用者別の好みを保存し、必要に応じて更新・検索する記憶管理と同じ仕組みとして扱う
+          error_point: モデルの追加訓練を利用者ごとに更新できる好みの記憶ストアと同一視している。
+          classification_reason: 重み調整と記憶管理のカテゴリー混同なのでM3。
+          correct_understanding: モデルの学習と、個別の希望の保存・検索・変更は別の処理。
+        - choice_index: 2
+          source_excerpt: AIが提案した「ピーマンを使わない献立」の履歴を保存し、その履歴を、利用者自身が伝えた現在の食材の希望を管理する記憶と同じものとして扱う
+          error_point: AIが過去に出した献立の履歴を、本人が現在希望する食材条件の記録と同じ種類として扱う。
+          classification_reason: 過去の生成結果の履歴と、利用者の現在有効な希望を管理する記録のカテゴリー混同なのでM3。
+          correct_understanding: 過去の提案を使って好みを推測することは可能だが、提案履歴そのものが本人の現在の希望と同じとは限らない。
+          qualification: この選択肢は、履歴から好みを推定する正しい設計とも近く、分類妥当性には注意が必要。
+        - choice_index: 3
+          source_excerpt: 会話中の発言を参照する仕組みを、別の日の新しい会話でも好みを保存・更新する記憶機能と同じものとして扱う
+          error_point: 同一会話で利用者の希望を参照できる仕組みを、別会話にも記憶が残る構成と同一視する。
+          classification_reason: 会話内コンテキストと長期記憶のカテゴリー混同なのでM3。
+          correct_understanding: 別の日に希望を使うには、会話をまたぐ保存と取得の仕組みが必要。
+    - variant_key: retest_v2
+      explanations:
+        M1:
+        - choice_index: 1
+          source_excerpt: 保存した会話から必要な情報を取り出す処理は設けない
+          error_point: 連絡方法の履歴を全文保存すれば、新しい相談でAIが自動的に読むと思う。
+          classification_reason: 保存から次回の取得への誤った因果関係なのでM1。
+          correct_understanding: 別セッションで過去の希望を利用する取得機構が要る。
+        - choice_index: 2
+          source_excerpt: どちらが現在の希望かを判断する仕組みがなくても、次回はAIが新しい方を使う
+          error_point: 電話希望とメール希望を両方保存するだけで、現在の指定が自動的に選ばれると考える。
+          classification_reason: 新旧の記録の扱いという動作・条件への誤信念なのでM1。
+          correct_understanding: どちらが現在有効か識別できるよう、保存情報を更新・統合・整理する。
+        - choice_index: 3
+          source_excerpt: 改善内容は次の相談にも引き継がれると考え、感想や新しい希望を保存する処理は設けない
+          error_point: 一度「要点を先に書く」文章を作れたら、その希望が次回の会話にも残ると思う。
+          classification_reason: その場の応答が継続保存まで引き起こすという誤信念なのでM1。
+          correct_understanding: 次回に案内文の希望を引き継ぐなら、希望の記録と適切な取得が必要。
+        M3:
+        - choice_index: 1
+          source_excerpt: 追加訓練でモデルの重みに覚えさせる処理を、利用者別の連絡方法の好みを保存し、必要に応じて更新・検索する記憶管理と同じ仕組みとして扱う
+          error_point: 追加訓練と利用者ごとの連絡方法の記憶管理を同じものと分類する。
+          classification_reason: モデルパラメーターと個人別の変更可能な記憶のカテゴリー混同なのでM3。
+          correct_understanding: 連絡方法が変わるたびに利用者別の希望記録を更新する処理と、モデル追加訓練は別。
+        - choice_index: 2
+          source_excerpt: AIが提案した「電話で連絡する方法」の履歴を保存し、その履歴を、利用者自身が伝えた現在の連絡方法の希望を管理する記憶と同じものとして扱う
+          error_point: 以前AIが提案した連絡方法の記録を、本人が現在指定している連絡方法と同じ種類として扱う。
+          classification_reason: 過去のAIの提案履歴と本人の現在有効な希望のカテゴリー混同なのでM3。
+          correct_understanding: AIが電話を提案した履歴だけでは、利用者が現在電話を希望していると確定しない。
+          qualification: 推奨履歴から希望を推測する正しい設計もあり得るため、区別の妥当性に注意。
+        - choice_index: 3
+          source_excerpt: 会話中の発言を参照する仕組みを、別の日の新しい会話でも連絡方法の好みを保存・更新する記憶機能と同じものとして扱う
+          error_point: 同一会話内のメール希望の参照を、セッションをまたいで保存・更新する長期記憶と同一視する。
+          classification_reason: 会話内の履歴利用と会話横断の長期記憶のカテゴリー混同なのでM3。
+          correct_understanding: 別の新しい会話で使うなら、継続的な保存・取得が必要。
