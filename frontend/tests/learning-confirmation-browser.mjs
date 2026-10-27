@@ -55,7 +55,7 @@ const multiBodies = [
   "情報収集担当のAIが道路の通行状況を調べて避難方法の検討担当へ渡した場合、検討担当は情報源が十分に確認されていると考え、その報告をもとに避難経路を決める。",
   "情報収集担当、避難方法の検討担当、避難案内文作成担当という役割名を各AIに付ければ、どの情報をどの順番で渡すかも自動的に決まるので、受け渡しの仕組みを設計する必要はない。",
   "情報収集担当が道路の通行状況を報告し、避難案内文作成担当がその情報を使って説明を作る場合でも、両者が同じ回答内容を出さなければ、結果を引き継いで連携することはできない。",
-  "情報収集担当のAIが被害状況や道路の情報をまとめたファイルは、避難方法の検討担当に情報を渡すために使われるので、そのファイルも連携するAIエージェントの一つとして数える。",
+  "情報収集担当のAIが道路情報のデータベースから通行止めの一覧を取得する検索ツールを使う場合、そのツールも情報を調べて結果を渡すので、別のAIエージェントとして数える。",
   "1つのAIエージェントに、道路が通れる場合と通れない場合で避難案内内容を切り替える仕組みを設け、案内の方法が2つあるので、AIエージェントも2つ存在する。",
   "性能の高いAIエージェントを1つ用意し、情報収集、避難方法の検討、住民向けの避難案内文作成をすべて担当させれば、複数のエージェントが連携するマルチエージェントの仕組みになる。"
 ];
@@ -102,12 +102,12 @@ const memoryBodies = [
   "「具体例を先に」と希望していた学生が後から「結論を先に」と伝えた場合、以前の記録を新しい希望に合わせて更新し、次回の説明には変更後の希望を反映する。",
   "以前「具体例を先に」と希望した学生が後から「結論を先に」と伝えても、最初の希望がその学生の基本的な好みを表すと考え、次回以降も古い記録を優先して使う。",
   "過去の会話をすべて保存しておけば、そこに書かれた説明方法の希望が次の相談でも自動的に使われると考え、今回必要な情報を取り出す方法は特に設計しない。",
-  "以前の会話から取り出した「箇条書きで説明してほしい」という希望を回答時に何度も利用すると、その希望がモデルの重みに保存され、次回は記録を取り出さなくても反映されると考える。",
+  "以前保存した「具体例を先に」という希望をAIに渡して説明させたところ、希望どおりに回答できたので、AIはその希望を新たに覚えたと考え、次の相談では記録を参照させない。",
   "学生の説明方法の希望を記憶するため、会話から得た希望を追加訓練のデータに使い、更新されたモデルの重みを、学生ごとの希望を保存する記録として扱う。",
-  "学生が過去の相談を見返せる履歴画面に「具体例を先に」といった希望を表示し、その画面の表示機能を、AIが希望を保存・検索する記憶管理の仕組みとして扱う。",
+  "同じ会話で「具体例を先に」と伝えた後、続く質問にも希望が反映されたので、会話中の履歴を利用する仕組みを、別の日の新しい会話でも希望を保持する長期記憶と同じものとして扱う。",
   "前回の会話を次の質問と一緒にプロンプトへ貼り付ける操作を、学生ごとの希望を継続して保存し、変更に応じて更新できる記憶管理の仕組みと同じものとして扱う。"
 ];
-const memoryQuestionBody = "大学が、授業内容について質問できる学習支援AIを開発している。学生は会話の中で「具体例を先に示してほしい」「結論から説明してほしい」など、説明の仕方について希望を伝えることがある。また、同じ学生でも、相談を重ねる中で希望が変わることがある。\n\n開発担当者は、別の日に同じ学生が質問した際にも、その時点の希望に合った説明ができる仕組みを作りたいと考えている。\n\nこのAIに記憶機能を設ける場合の対応として、適切なものを3つ選びなさい。";
+const memoryQuestionBody = "大学が、授業内容について質問できる学習支援AIを開発している。学生は会話の中で「具体例を先に示してほしい」「結論から説明してほしい」など、説明の仕方について希望を伝えることがある。また、同じ学生でも、相談を重ねる中で希望が変わることがある。\n\n開発担当者は、同じ学生が別の日に新しく質問したとき、説明の仕方について希望を毎回伝え直さなくても、その学生が最後に伝えた希望に合わせて説明できるようにしたいと考えている。\n\nこのAIに記憶機能を設ける場合の対応として、適切なものを3つ選びなさい。";
 const easyMemoryBodies = [
   "説明の希望を必要な要点だけ記録し、次回の相談で取り出す。",
   "保存する内容と、次にその記録を使う手順を決めておく。",
@@ -281,7 +281,10 @@ engine.dispose()
     assert.equal(await page.locator(".problem-block > p").evaluate((element) => getComputedStyle(element).whiteSpace), preserveLines ? "pre-wrap" : "normal");
     assert.equal(await page.locator(".problem-block > p strong").count(), 0);
     await page.screenshot({ path: `${LEARNING_SCREENSHOT_DIR}/${caseName}-question.png`, fullPage: true });
-    const lastChoice = question.options.find((option) => option.body === bodies[8]);
+    const focusIndex = questionSet === "standard" && variantIndex === 1
+      ? termSlug === "multi_agent" ? 6 : termSlug === "memory_process" ? 7 : 8
+      : 8;
+    const lastChoice = question.options.find((option) => option.body === bodies[focusIndex]);
     await page.getByRole("checkbox", { name: `${lastChoice.label}. ${lastChoice.body}`, exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${LEARNING_SCREENSHOT_DIR}/${caseName}-long-choice.png` });
     const unknown = page.getByRole("checkbox", { name: /^J\./ });
@@ -289,14 +292,18 @@ engine.dispose()
     assert.equal(await page.getByRole("checkbox", { checked: true }).count(), 1);
     await unknown.uncheck();
     const responseRole = role === "M3" ? "correct" : role === "M1" ? "unknown" : "mixed";
-    const mixedCategoryIndex = termSlug === "llm_knowledge" && variantIndex === 1 ? 7 : 6;
-    const selectedBodies = responseRole === "correct" ? bodies.slice(0, 3) : responseRole === "unknown" ? ["わからない。"] : [bodies[0], bodies[3], bodies[mixedCategoryIndex]];
+    const revisedMemory = questionSet === "standard" && termSlug === "memory_process" && variantIndex === 1;
+    const mixedBeliefIndex = revisedMemory ? 5 : 3;
+    const mixedCategoryIndex = (termSlug === "llm_knowledge" && variantIndex === 1) || revisedMemory ? 7 : 6;
+    const selectedBodies = responseRole === "correct" ? bodies.slice(0, 3) : responseRole === "unknown" ? ["わからない。"] : [bodies[0], bodies[mixedBeliefIndex], bodies[mixedCategoryIndex]];
     for (const option of question.options.filter((option) => selectedBodies.includes(option.body))) {
       await page.getByRole("checkbox", { name: `${option.label}. ${option.body}`, exact: true }).check();
     }
     const feedbackResponse = page.waitForResponse((response) => /\/api\/tutor-turns\/[^/]+\/respond$/.test(response.url()));
     await page.getByRole("button", { name: "回答を確認", exact: true }).click();
-    await feedbackResponse;
+    const feedback = await (await feedbackResponse).json();
+    assert.equal(feedback.is_sufficient, responseRole === "correct");
+    if (responseRole !== "correct") assert.equal(feedback.learning_misconception_type, responseRole === "mixed" ? "M3" : "unknown");
     await page.getByText(responseRole === "correct" ? "正解です。" : "不正解です。", { exact: true }).waitFor();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({ path: `${LEARNING_SCREENSHOT_DIR}/${caseName}.png`, fullPage: true });

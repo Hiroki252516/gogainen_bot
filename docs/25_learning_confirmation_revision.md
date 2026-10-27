@@ -1,6 +1,6 @@
 # 通常版LLM知識の確認問題改訂
 
-本書は実験仕様版12・学習バンクv5の採用時記録である。LLM知識V1は仕様版19・学習v12で再改訂し、現行版21・学習v13ではD/Hだけを追加改訂した。旧v5の本文と検証記録は保持する。仕様版19の全文は[32](32_llm_confirmation_retest_revision.md)、現行D/Hと保存契約は[34](34_llm_round_one_dh_revision.md)、再テスト改訂の採用時記録は[33](33_multi_memory_retest_revision.md)を参照する。
+本書は実験仕様版12・学習バンクv5の採用時記録である。LLM知識V1は仕様版19・学習v12で再改訂し、仕様版21・学習v13ではD/Hだけを追加改訂した。旧v5の本文と検証記録は保持する。仕様版19の全文は[32](32_llm_confirmation_retest_revision.md)、LLM確認V1 D/Hの採用時記録は[34](34_llm_round_one_dh_revision.md)、再テスト改訂の採用時記録は[33](33_multi_memory_retest_revision.md)を参照する。 現行仕様版22・学習v14の4か所の原文と保存契約は[35](35_multi_memory_round_one_revision.md)を参照する。
 
 ## 適用範囲と履歴
 

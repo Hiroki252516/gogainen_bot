@@ -165,7 +165,8 @@ def test_natural_memory_first_question_grading_feedback_replay_and_prefetch(grou
     question = current["practice_question"]
     assert current["learning_stage"] == ("enrichment" if initial == "unknown" else "conceptual_change")
     assert question["variant_key"] == "learning_round_v1" and question["learning_variant_index"] == 1
-    assert question["body"] == EXPECTED["scenario"] + "\n\n" + EXPECTED["task"]
+    source = learning_question_spec("memory_process", current["learning_stage"], 1)
+    assert question["body"] == source["body"]
     assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
     assert question["options"][-1]["exclusive"] and question["options"][-1]["label"] == "J"
     assert _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))["practice_question"] == question

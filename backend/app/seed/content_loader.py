@@ -32,6 +32,7 @@ LEARNING_V10_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v10.yml"
 LEARNING_V11_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v11.yml"
 LEARNING_V12_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v12.yml"
 LEARNING_V13_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v13.yml"
+LEARNING_V14_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v14.yml"
 EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_content_easy.yml"
 LEARNING_EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_questions_v4_easy.yml"
 ACTIVE_TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
@@ -384,6 +385,7 @@ def load_learning_content(mode: str = STANDARD, content_version: int | None = No
         11: (STANDARD, LEARNING_V11_CONTENT_PATH),
         12: (STANDARD, LEARNING_V12_CONTENT_PATH),
         13: (STANDARD, LEARNING_V13_CONTENT_PATH),
+        14: (STANDARD, LEARNING_V14_CONTENT_PATH),
     }
     if version not in banks or banks[version][0] != mode:
         raise ValueError("learning bank version does not match question set")

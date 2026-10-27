@@ -26,9 +26,6 @@ OLD_PROTOCOL = "experiment-plan-2026-10-26-multi-memory-retests-v1"
 
 
 def test_v13_changes_only_llm_round_one_d_and_h():
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 21
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-26-llm-round1-dh-v1"
-    assert LEARNING_CONTENT_VERSIONS == {"standard": 13, "easy": 4}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[20] == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
     assert hashlib.sha256(content_loader.LEARNING_V12_CONTENT_PATH.read_bytes()).hexdigest() == "87dc5c40081f113350b9b7ffabef5f46fe6fe0fd0e68949eb68755c68de6eb4b"
     expected = deepcopy(load_learning_content(content_version=12))
@@ -36,13 +33,13 @@ def test_v13_changes_only_llm_round_one_d_and_h():
     question = expected["terms"]["llm_knowledge"]["variants"][0]
     question["choices"]["M1"][0] = NEW_D
     question["choices"]["M3"][1] = NEW_H
-    assert load_learning_content() == expected
+    assert load_learning_content(content_version=13) == expected
 
 
 @pytest.mark.parametrize("stage", ["enrichment", "conceptual_change"])
 def test_revised_choices_keep_their_roles_and_display(stage):
     old = learning_question_spec("llm_knowledge", stage, 1, content_version=12)
-    current = learning_question_spec("llm_knowledge", stage, 1)
+    current = learning_question_spec("llm_knowledge", stage, 1, content_version=13)
     assert current["body"] == old["body"]
     assert len(current["body"].split("\n\n")) == 2
     assert current["_content_version"] == 13
@@ -59,7 +56,7 @@ def test_missing_v13_and_wrong_mode_never_fall_back(tmp_path, monkeypatch):
             patch.setattr(content_loader, "LEARNING_V13_CONTENT_PATH", tmp_path / "missing.yml")
             load_learning_content.cache_clear()
             with pytest.raises(FileNotFoundError):
-                load_learning_content()
+                load_learning_content(content_version=13)
     finally:
         load_learning_content.cache_clear()
     with pytest.raises(ValueError, match="version"):
@@ -88,7 +85,7 @@ def test_revised_round_one_scoring_feedback_replay_history_and_prefetch(group, l
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.option_order_mode = layout
-        assert participant.experiment_spec_version == 21 and participant.learning_content_version == 13
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == LEARNING_CONTENT_VERSIONS['standard']
         db.commit()
     questions = _ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
     for question in questions:
@@ -118,7 +115,7 @@ def test_revised_round_one_scoring_feedback_replay_history_and_prefetch(group, l
     with SessionLocal() as db:
         saved_session = db.get(TutorSession, sid)
         saved_turn = db.get(TutorTurn, turn["turn_id"])
-        assert saved_turn.diagnosis_json["learning_content_version"] == 13
+        assert saved_turn.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
         record = next(row for row in build_interaction_history(db, pid, saved_session.term_id) if row["source_type"] == "learning_turn")
         assert record["question_body"] == question["body"]
         assert {option["body"] for option in record["selected_options"]} == {option["body"] for option in source["options"] if option["label"] in labels}
@@ -126,10 +123,10 @@ def test_revised_round_one_scoring_feedback_replay_history_and_prefetch(group, l
         retry = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
         assert retry["practice_question"] == question
         with SessionLocal() as db:
-            assert db.get(TutorTurn, retry["turn_id"]).diagnosis_json["learning_content_version"] == 13
+            assert db.get(TutorTurn, retry["turn_id"]).diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
 
 
-@pytest.mark.parametrize("version,spec_version,protocol", [(12, 20, OLD_PROTOCOL), (13, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
+@pytest.mark.parametrize("version,spec_version,protocol", [(12, 20, OLD_PROTOCOL), (13, 21, "experiment-plan-2026-10-26-llm-round1-dh-v1"), (14, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
 @pytest.mark.parametrize("snapshot", [False, True])
 @pytest.mark.parametrize("label,new_text", [("D", NEW_D), ("H", NEW_H)])
 def test_history_restores_snapshot_or_original_bank_without_changes(tmp_path, monkeypatch, version, spec_version, protocol, snapshot, label, new_text):
@@ -152,7 +149,7 @@ def test_history_restores_snapshot_or_original_bank_without_changes(tmp_path, mo
                              grading_json={"is_sufficient": False, "selected_option_ids": [label]})
             db.add(turn)
             db.commit()
-            if version == 12:
+            if version in (12, 13):
                 protected = {model: deepcopy(db.execute(select(model.__table__)).mappings().all()) for model in (Participant, TutorSession, TutorTurn)}
                 seed_database(db)
                 seed_database(db)
@@ -167,7 +164,7 @@ def test_history_restores_snapshot_or_original_bank_without_changes(tmp_path, mo
             assert restored["question_body"] == ("保存時の問題" if snapshot else original["body"])
             assert restored["selected_options"] == [{"label": label, "body": "保存時の選択肢" if snapshot else selected["body"]}]
             if not snapshot:
-                assert (selected["body"] == new_text) == (version == 13)
+                assert (selected["body"] == new_text) == (version >= 13)
             assert json.dumps([turn.practice_question_json, turn.diagnosis_json, turn.grading_json], sort_keys=True) == before_json
     finally:
         engine.dispose()
