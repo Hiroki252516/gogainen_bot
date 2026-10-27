@@ -29,6 +29,9 @@ for (const text of ["用語の補足", "!glossary?.entries.length", "<dl>", "<dt
   if (!glossary.includes(text)) throw new Error(`learning glossary missing: ${text}`);
 }
 const glossaryPage = fs.readFileSync(new URL("../app/learning/[termSlug]/page.tsx", import.meta.url), "utf8");
+for (const text of ['const preserveQuestionLines = (termSlug === "multi_agent"', '[2, 3].includes(turn?.practice_question?.learning_variant_index ?? 0)', 'questionBody.includes("\\n\\n案1：")', 'questionBody.includes("\\n\\n案2：")', 'termSlug === "memory_process"', 'learning_variant_index === 1', 'questionBody.startsWith("大学が、授業内容について質問できる学習支援AI")', 'questionBody.includes("\\n\\n開発担当者は、")', 'learning_variant_index === 2', 'questionBody.startsWith("料理の献立を提案するAIを開発している。")', 'questionBody.includes("\\n\\nこのAIが過去の会話を記憶として利用する場合、")', 'className={preserveQuestionLines ? "preserve-lines" : undefined}']) {
+  if (!glossaryPage.includes(text)) throw new Error(`learning question line breaks must stay scoped: ${text}`);
+}
 for (const text of ['glossary={turn.glossary}', 'glossary={feedback.glossary}']) {
   if (!glossaryPage.includes(text)) throw new Error(`learning glossary placement missing: ${text}`);
 }
@@ -241,7 +244,17 @@ for (const removedText of ["term_understanding", "concept_understanding"]) {
   }
 }
 
+for (const text of ['termSlug === "llm_knowledge"', '学生からの履修登録に関する質問に回答するAI', '学生に学内施設の利用方法を案内するAI']) {
+  if (!learningPage.includes(text)) throw new Error(`Missing scoped LLM question paragraph display: ${text}`);
+}
+
 const questionRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
+for (const text of ['current?.term_slug === "llm_knowledge"', '企業が、社員からの「パスワードを忘れた」', '企業が、会議の文字起こしをもとに議事録を作成するAI']) {
+  if (!questionRunner.includes(text)) throw new Error(`Missing scoped retest paragraph display: ${text}`);
+}
+for (const text of ['current?.term_slug === "multi_agent"', 'current?.term_slug === "memory_process"', '旅行会社が、公共交通を利用する日帰り観光プラン', '博物館が、来館者に短い見学コースを提案するAI', '料理の献立を提案するAIサービスを開発している。', '企業が、利用者からの問い合わせに対応するAIを開発している。']) {
+  if (!questionRunner.includes(text)) throw new Error(`Missing scoped multi-agent/memory retest paragraphs: ${text}`);
+}
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow the backend transition after scoring");
 }
@@ -255,7 +268,7 @@ for (const expectedText of ["test_round_label", "setDisplayTitle"]) {
     throw new Error(`question runner missing test round display behavior: ${expectedText}`);
   }
 }
-for (const expectedText of ["${index + 1} / ${questions.length}", "question-heading", "問{toFullWidthDigits(index + 1)}：", "<strong>{current.term_label}</strong>", "<p>{current.body}</p>", "className=\"muted question-progress\""]) {
+for (const expectedText of ["${index + 1} / ${questions.length}", "question-heading", "問{toFullWidthDigits(index + 1)}：", "<strong>{current.term_label}</strong>", '<p className={preserveQuestionLines ? "preserve-lines" : undefined}>{current.body}</p>', "className=\"muted question-progress\""]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`QuestionRunner missing question progress display: ${expectedText}`);
   }

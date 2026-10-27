@@ -2,10 +2,10 @@
 
 ## 用語注釈の不変条件
 
-- 実験仕様版11は教材・回答後解説に共通固定辞書learning-glossary-v1を表示する。問題・選択肢・テストは対象外。辞書の正本・全文・確認元はdocs/24を参照する。
+- 実験仕様版25は教材・回答後解説に共通固定辞書learning-glossary-v1を表示する。問題・選択肢・テストは対象外。辞書の正本・全文・確認元はdocs/24を参照する。
 - 注釈は表示用JSONとして保存し、AI入力・生成本文・共通回答履歴に混ぜない。600〜800文字・教授契約版v7は変更しない。再表示はsnapshotを使い、旧教材へ後付けしない。登録語しか扱わず、AIで未知語を補わない。
 
-このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は11です。目標を実装済みと扱わないでください。
+このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は25です。目標を実装済みと扱わないでください。
 
 ## Authoritative Documents
 
@@ -16,7 +16,9 @@
 
 ## Research Invariants
 
-- 通常版は版9の6選択肢・版10の問1 A・Bの改訂を維持し、版11では問1 Fだけを追加改訂したscenario-actions-v4を使う。M1判定と訂正情報は維持する。旧v1/v2/v3をarchive/配下の各learning_content_scenario_actions_vN.ymlと別DB IDで保全し、旧版6〜10の結果復元に当時のバンクを使う。
+- 通常版LLM知識・記憶プロセスの確認V2と3用語の再テストV2、計5問・45選択肢を指定文どおり改訂する。LLM再テストは大学・教職員版を採用し、企業・従業員案とマルチエージェント確認V2は採用・変更しない。確認V2の対象2用語をapplicationとし、通常版学習v15だけ種類構成をapplication/application/comparisonへ変更する。LLM確認V1/V2のE・G、LLM再テストV1/V2のFの3組だけ、本文・問題・ラベルを限定して同文再使用を許可する。同一問題内・指定外の重複と確認問題への固定テスト文の転載は引き続き禁止する。新規だけ仕様版25・protocol_id=experiment-plan-2026-10-27-round2-revision-v1、通常版学習15・テストscenario-actions-v9を保存し、易しい版は学習4のまま。旧学習v14と旧テストv8を保全し、新テストは別IDでseedする。仕様版24以下は閲覧専用とし、履歴はsnapshot優先・当時の保存版で復元する。V1・内部final_test・他の問題と訂正情報・教授条件・採点・配置・回数上限、公開API・DB構造・AI生成契約は変更しない。今回の本文・分類理由・種類構成と例外はdocs/38、旧V1の採用時記録はdocs/35〜37、過去の再テストはdocs/32・33。
+
+- 通常版事前の版9〜11、過去のV1改訂を保持し、今回変更するのは通常版V2の5問だけとする。旧テストv1〜v8と全旧学習バンクを保持し、旧仕様版6〜24の結果は当時のバンクで復元する。
 - 両版の全テスト・学習確認で、選択肢の文字数下限・文長比・文字数差による拒否はしない。非空・重複・役割数・教授対象の検査を維持する。教材600〜800文字の検査とは区別し、文長均一や難易度同等を保証しない。
 
 - 問題版は管理設定standard/easyを登録時に固定する。通常版YAMLは保持し、易しい版は別バンク（テストscenario-actions-easy-v1、学習確認v4）でseedする。各版にテスト9固有問・確認9問。版が欠落しても他版にフォールバックしない。
@@ -31,9 +33,9 @@
 - 被験者画面に内部分類、群名、教授方略を直接表示しない。
 - テスト回答中はチャット・ヒント・即時正解を表示せず、回答送信後の結果確認では正誤を表示する。
 - 学習確認は1用語・1セッションあたり最大3回答。事前テスト後のテストはfinal_testも含め最大2回、事前込み最大3回。未回答を含む採点済みバッチを1回とし、全問未回答は採点しない。1回目未達は学習、2回目未達は未達のままアンケートへ進める。満点ならいつでもアンケートへ進める。
-- テストはscenario-actions-v4の9固有問題で、activeキーはpretest_v1、retest_v1/v2。final_testはretest_v1を共用し、その後は全用語をretest_v2へ進める。用語別回答件数で選ばない。通常版・易しい版・アーカイブのYAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分ける。旧問題・retest_v3はarchive/learning_content_pre_issue156.yml、さらに古い問題はarchive/learning_questions_v2_unused.ymlへ保全する。seedは版付きconstruct_keyで旧本文・選択肢を上書きしない。学習確認v3の9問は維持するが、3セッション目は新規経路で到達しない。
+- テストはscenario-actions-v9の9固有問題で、activeキーはpretest_v1、retest_v1/v2。final_testはretest_v1を共用し、その後は全用語をretest_v2へ進める。用語別回答件数で選ばない。通常版・易しい版・アーカイブのYAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分ける。旧問題・retest_v3はarchive/learning_content_pre_issue156.yml、さらに古い問題はarchive/learning_questions_v2_unused.ymlへ保全する。seedは版付きconstruct_keyで旧本文・選択肢を上書きしない。学習確認v15の9問は維持するが、3セッション目は新規経路で到達しない。
 - 選択肢配置は管理画面のDB保存設定で切り替える。既定値は `debug_fixed` で、新規参加者だけに適用する。実験データ収集前に `randomized` へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
-- 新規だけ仕様版11とprotocol_id=experiment-plan-2026-10-25-pretest-f-wording-v1を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数え、共通上限用のpost_pretest_tests_completedは採点済みfinal_testを加えて導出する。DB列は追加しない。既存版10以下を含む旧protocol_id/NULL・未対応版は閲覧専用。旧行の版・進行・回答・評価・回数を更新/削除せず、補修も版とprotocol_idで限定する。
+- 新規だけ仕様版25とprotocol_id=experiment-plan-2026-10-27-round2-revision-v1を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数え、共通上限用のpost_pretest_tests_completedは採点済みfinal_testを加えて導出する。DB列は追加しない。既存版24以下を含む旧protocol_id/NULL・未対応版は閲覧専用。旧行の版・進行・回答・評価・回数を更新/削除せず、補修も版とprotocol_idで限定する。
 - 両群の教材の小見出し・数・順序・まとめ方はAIが決める。冒頭の##用語名と非空の###セクションだけを要求し、実験群の必須教授内容・transfer_checkは本文内証拠で検証する。固定見出しから証拠文を自動補正しない。
 - 教材内のtransfer_checkは維持するが、独立した追加テスト・旧支援量・自由回答処理を戻さない。
 - 現行MVP対象用語は `llm_knowledge`、`multi_agent`、`memory_process` の3項目とする。

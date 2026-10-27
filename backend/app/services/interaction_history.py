@@ -56,7 +56,11 @@ def _learning_record(db: Session, session: TutorSession, turn: TutorTurn, projec
         term = db.get(Term, session.term_id)
         stage = grading.get("learning_stage") or (question.get("stage_meta") or {}).get("learning_stage") or "conceptual_change"
         participant = db.get(Participant, session.participant_id)
-        restored = learning_question_spec(term.slug, stage, int(question.get("learning_variant_index") or 1), question_set_mode(participant.question_set_mode))
+        content_version = (turn.diagnosis_json or {}).get("learning_content_version") or participant.learning_content_version
+        restored = learning_question_spec(
+            term.slug, stage, int(question.get("learning_variant_index") or session.session_index or 1),
+            question_set_mode(participant.question_set_mode), content_version=content_version,
+        )
         snapshot = [*snapshot, *[row for row in restored["options"] if row["option_id"] not in available]]
         body = question.get("body") or turn.learner_prompt or restored["body"]
     else:

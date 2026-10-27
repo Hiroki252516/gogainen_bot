@@ -329,6 +329,33 @@ export default function LearningPage() {
 
   const progress = questionProgress || (turn ? progressForNewQuestion(termSlug, turn) : null);
   const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;
+  const questionBody = turn?.practice_question?.body || turn?.learner_prompt || "";
+  const preserveQuestionLines = (termSlug === "multi_agent"
+    && [2, 3].includes(turn?.practice_question?.learning_variant_index ?? 0)
+    && questionBody.includes("\n\n案1：")
+    && questionBody.includes("\n\n案2："))
+    || (termSlug === "memory_process"
+      && turn?.practice_question?.learning_variant_index === 1
+      && questionBody.startsWith("大学が、授業内容について質問できる学習支援AI")
+      && questionBody.includes("\n\n開発担当者は、"))
+    || (termSlug === "memory_process"
+      && turn?.practice_question?.learning_variant_index === 2
+      && questionBody.startsWith("料理の献立を提案するAIを開発している。")
+      && (questionBody.includes("\n\nこのAIが過去の会話を記憶として利用する場合、")
+        || (questionBody.includes("\n\n開発担当者は、")
+          && questionBody.includes("\n\nこのAIに記憶機能を設ける場合の対応として、"))))
+    || (termSlug === "llm_knowledge"
+      && turn?.practice_question?.learning_variant_index === 1
+      && questionBody.startsWith("大学が、学生からの履修登録に関する質問に回答するAI")
+      && questionBody.includes("\n\nこれらの目的を実現する開発担当者の対応として、"))
+    || (termSlug === "llm_knowledge"
+      && turn?.practice_question?.learning_variant_index === 2
+      && questionBody.startsWith("大学が、学生に学内施設の利用方法を案内するAI")
+      && questionBody.includes("\n\n回答形式の指示を変えた場合に起こり得る変化と、"))
+    || (termSlug === "llm_knowledge"
+      && turn?.practice_question?.learning_variant_index === 2
+      && questionBody.startsWith("大学が、学生からの自習室の利用予約に関する質問に回答するAI")
+      && questionBody.includes("\n\nこれらの目的を実現する開発担当者の対応として、"));
 
   return (
     <AppShell step="学習セッション">
@@ -363,7 +390,7 @@ export default function LearningPage() {
               </section>
               <section className="learning-block problem-block" aria-labelledby="problem-title">
                 <h2 id="problem-title">問題</h2>
-                <p>{turn.practice_question?.body || turn.learner_prompt}</p>
+                <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{questionBody}</p>
                 {turn.practice_question?.options?.length ? (
                   <>
                     {turn.practice_question.selection_mode === "multiple" ? (() => {

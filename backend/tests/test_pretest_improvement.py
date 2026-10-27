@@ -10,9 +10,9 @@ from app.core.question_sets import assessment_construct_key
 from app.db import session as database
 from app.models import Attempt, Base, EvaluationSummary, Participant, Question, QuestionOption, Term
 from app.seed.content_loader import (
-    EASY_CONTENT_PATH, LEARNING_EASY_CONTENT_PATH, SCENARIO_ACTIONS_V1_CONTENT_PATH, SCENARIO_ACTIONS_V2_CONTENT_PATH, SCENARIO_ACTIONS_V3_CONTENT_PATH,
-    _assessment_options, _validate_content, _validate_v3_content,
-    assessment_question_spec, load_content, load_learning_easy_content, load_learning_v3_content,
+    EASY_CONTENT_PATH, LEARNING_EASY_CONTENT_PATH, SCENARIO_ACTIONS_V1_CONTENT_PATH, SCENARIO_ACTIONS_V2_CONTENT_PATH, SCENARIO_ACTIONS_V3_CONTENT_PATH, SCENARIO_ACTIONS_V4_CONTENT_PATH, SCENARIO_ACTIONS_V5_CONTENT_PATH,
+    _assessment_options, _validate_content, _validate_learning_content,
+    assessment_question_spec, load_content, load_learning_easy_content, load_learning_content,
 )
 from app.seed.seed_questions import _upsert_question, seed_database
 from app.services import experiment
@@ -29,7 +29,7 @@ REPLACEMENTS = {
 
 
 def archived_content(version=1):
-    path = {1: SCENARIO_ACTIONS_V1_CONTENT_PATH, 2: SCENARIO_ACTIONS_V2_CONTENT_PATH, 3: SCENARIO_ACTIONS_V3_CONTENT_PATH}[version]
+    path = {1: SCENARIO_ACTIONS_V1_CONTENT_PATH, 2: SCENARIO_ACTIONS_V2_CONTENT_PATH, 3: SCENARIO_ACTIONS_V3_CONTENT_PATH, 4: SCENARIO_ACTIONS_V4_CONTENT_PATH, 5: SCENARIO_ACTIONS_V5_CONTENT_PATH}[version]
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
@@ -82,7 +82,7 @@ def test_v4_changes_only_llm_pretest_f_and_keeps_m1():
     text = "回答を「結論・操作手順・注意点」の順にする指示をプロンプトに加えることで、モデルの重みも更新されると考え、質問と回答の事例を使った追加訓練は行わない。"
     expected["terms"][0]["questions"]["pretest"][0]["choices"]["M1"][2] = text
     expected["assessment_bank_version"] = "scenario-actions-v4"
-    assert load_content() == expected
+    assert archived_content(4) == expected
     option = next(o for o in assessment_question_spec("llm_knowledge", "pretest")["options"] if o["label"] == "F")
     assert option["body"] == text
     assert option["is_correct"] is False
@@ -104,9 +104,9 @@ def test_option_lengths_are_unrestricted_but_structure_is_validated(mode, bank, 
         variant = content["terms"][0]["questions"]["pretest"][0]
         validate = lambda: _validate_content(content, mode)
     else:
-        content = deepcopy(load_learning_easy_content() if mode == "easy" else load_learning_v3_content())
+        content = deepcopy(load_learning_easy_content() if mode == "easy" else load_learning_content())
         variant = content["terms"]["llm_knowledge"]["variants"][0]
-        validate = lambda: _validate_v3_content(content, assessment, mode)
+        validate = lambda: _validate_learning_content(content, assessment, mode)
     choices = variant["choices"]
     if change == "lengths":
         choices["correct"][0] = "短"
@@ -147,20 +147,20 @@ def seed_historical_banks(db, version=1):
     db.commit()
 
 
-@pytest.mark.parametrize("spec_version,mode", [(6, "standard"), (7, "standard"), (8, "standard"), (7, "easy"), (8, "easy"), (9, "standard"), (9, "easy"), (10, "standard"), (10, "easy")])
+@pytest.mark.parametrize("spec_version,mode", [(6, "standard"), (7, "standard"), (8, "standard"), (7, "easy"), (8, "easy"), (9, "standard"), (9, "easy"), (10, "standard"), (10, "easy"), (18, "standard"), (18, "easy"), (19, "standard"), (19, "easy")])
 def test_seed_keeps_old_ids_and_snapshotless_reviews_on_historical_bank(tmp_path, monkeypatch, spec_version, mode):
     engine = create_engine(f"sqlite:///{tmp_path / 'history.db'}")
     monkeypatch.setattr(database, "engine", engine)
     Base.metadata.create_all(engine)
     with Session(engine) as db:
-        historical_version = {9: 2, 10: 3}.get(spec_version, 1)
+        historical_version = {9: 2, 10: 3, 18: 4, 19: 5}.get(spec_version, 1)
         seed_historical_banks(db, version=historical_version)
         questions_before = {q.id: (q.body, q.expected_answer, q.construct_key, q.variant_key) for q in db.query(Question)}
         options_before = {o.id: (o.question_id, o.body, o.is_correct, o.misconception_type) for o in db.query(QuestionOption)}
-        protocol = {6: "experiment-plan-2026-10-24-two-posttests-v1", 7: "experiment-plan-2026-10-24-easy-version-v1", 8: "experiment-plan-2026-10-25-glossary-v1", 9: "experiment-plan-2026-10-25-pretest-improvement-v1", 10: "experiment-plan-2026-10-25-pretest-wording-v1"}[spec_version]
+        protocol = {6: "experiment-plan-2026-10-24-two-posttests-v1", 7: "experiment-plan-2026-10-24-easy-version-v1", 8: "experiment-plan-2026-10-25-glossary-v1", 9: "experiment-plan-2026-10-25-pretest-improvement-v1", 10: "experiment-plan-2026-10-25-pretest-wording-v1", 18: "experiment-plan-2026-10-26-memory-round2-v1", 19: "experiment-plan-2026-10-26-llm-confirmation-retest-v1"}[spec_version]
         participant = Participant(display_code="OLD", group_condition="proposed", current_step="learning_targets",
                                   experiment_spec_version=spec_version, protocol_id=protocol, question_set_mode=mode,
-                                  learning_content_version=4 if mode == "easy" else 3, retest_cycles_completed=1)
+                                  learning_content_version=4 if mode == "easy" else 12 if spec_version == 19 else 11 if spec_version == 18 else 3, retest_cycles_completed=1)
         db.add(participant)
         db.flush()
         term = db.query(Term).filter_by(slug="llm_knowledge").one()

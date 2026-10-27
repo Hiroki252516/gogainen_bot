@@ -75,6 +75,25 @@ export function QuestionRunner({
   const [questionStartedAt, setQuestionStartedAt] = useState(() => Date.now());
   const [questionShownAt, setQuestionShownAt] = useState(() => new Date().toISOString());
   const current = questions[index];
+  const preserveQuestionLines = (current?.term_slug === "llm_knowledge"
+    && ((current.body.startsWith("企業が、社員からの「パスワードを忘れた」")
+        && current.body.includes("\n\nこれらの目的を実現するための開発担当者の対応として、"))
+      || (current.body.startsWith("大学が、教職員からの「学内ポータルのパスワードを忘れた」")
+        && current.body.includes("\n\nこれらの目的を実現するための開発担当者の対応として、"))
+      || (current.body.startsWith("企業が、会議の文字起こしをもとに議事録を作成するAI")
+        && current.body.includes("\n\n現在は、AIが作成する議事録の文章構成や表現に"))))
+    || (current?.term_slug === "multi_agent"
+      && ((current.body.startsWith("旅行会社が、公共交通を利用する日帰り観光プラン")
+          && current.body.includes("\n\nこのような旅行計画AIを実現するための"))
+        || (current.body.startsWith("博物館が、館内を移動する短時間の見学コースを提案するAI")
+          && current.body.includes("\n\nこのような見学計画AIを実現するための"))
+        || (current.body.startsWith("博物館が、来館者に短い見学コースを提案するAI")
+          && current.body.includes("\n\nこのAIシステムで複数のAIエージェントを協力させる設計として、"))))
+    || (current?.term_slug === "memory_process"
+      && (current.body.startsWith("料理の献立を提案するAIサービスを開発している。")
+        || current.body.startsWith("企業が、利用者からの問い合わせに対応するAIを開発している。")
+        || current.body.startsWith("企業が、利用者からの問い合わせに対応するAIサービスを開発している。"))
+      && current.body.includes("\n\nこの目的を実現するための情報の保存・利用方法として、"));
 
   useEffect(() => {
     const id = requireParticipant();
@@ -218,7 +237,7 @@ export function QuestionRunner({
           <span>問{toFullWidthDigits(index + 1)}：</span>
           <strong>{current.term_label}</strong>
         </div>
-        <p>{current.body}</p>
+        <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{current.body}</p>
       </div>
       {isAnswered ? (
         <div className="notice answer-locked" role="status">

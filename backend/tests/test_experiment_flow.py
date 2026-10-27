@@ -62,7 +62,7 @@ from app.seed.content_loader import (
     content_term,
     learning_question_spec,
     load_content,
-    load_learning_v3_content,
+    load_learning_content,
 )
 import app.services.experiment as experiment_service
 from app import main as main_module
@@ -296,7 +296,7 @@ def test_content_contract_has_three_terms_and_required_learning_round_counts():
         assert len(term["questions"]["retest"]) == 2
         assert "final_test" not in term["questions"]
         assert assessment_question_spec(term["slug"], "final_test")["variant_key"] == "retest_v1"
-        assert len(load_learning_v3_content()["terms"][term["slug"]]["variants"]) == 3
+        assert len(load_learning_content()["terms"][term["slug"]]["variants"]) == 3
 
 
 def test_assessment_bank_has_9_active_scenario_variants_fixed_roles_and_nonempty_options():
@@ -330,7 +330,9 @@ def test_assessment_bank_has_9_active_scenario_variants_fixed_roles_and_nonempty
                 lengths = [len(option["body"]) for option in visible_options]
                 assert min(lengths) > 0
                 for option in visible_options:
-                    assert option["body"] not in choices
+                    if option["body"] in choices:
+                        assert (term["slug"], phase, variant["variant_key"], option["label"]) == ("llm_knowledge", "retest", "retest_v2", "F")
+                        assert option["body"] == "問い合わせを3種類に分類するよう毎回同じ指示をAIへ送れば、分類を繰り返すうちにモデルの重みも調整されると考え、担当者が確認した事例を使う追加訓練は行わない。"
                     choices.add(option["body"])
                 variant_count += 1
 
@@ -353,16 +355,15 @@ def test_pretest_teaching_targets_follow_fixed_option_roles():
                 assert target is None
 
 
-def test_learning_v3_bank_has_scenario_roles_and_fixed_labels():
-    content = load_learning_v3_content()
+def test_current_learning_bank_has_scenario_roles_and_fixed_labels():
+    content = load_learning_content()
     variant_count = 0
 
     for term_slug in ACTIVE_TERM_SLUGS:
         variants = content["terms"][term_slug]["variants"]
         assert len(variants) == 3
-        assert [variant["scenario_type"] for variant in variants] == [
-            "application", "prediction", "comparison"
-        ]
+        expected_types = ["application", "application" if term_slug in {"llm_knowledge", "memory_process"} else "prediction", "comparison"]
+        assert [variant["scenario_type"] for variant in variants] == expected_types
         for variant_index, variant in enumerate(variants, start=1):
             spec = learning_question_spec(
                 term_slug, "enrichment", variant_index
@@ -385,8 +386,8 @@ def test_learning_v3_bank_has_scenario_roles_and_fixed_labels():
 
 
 def test_llm_knowledge_round_v1_prompt_and_option_roles():
-    task = "この条件に合う仕組みの説明を三つ選びなさい。"
-    content = load_learning_v3_content()
+    task = "これらの目的を実現する開発担当者の対応として、適切なものを3つ選びなさい。"
+    content = load_learning_content()
     variant = content["terms"]["llm_knowledge"]["variants"][0]
     spec = learning_question_spec(
         "llm_knowledge", "conceptual_change", 1
