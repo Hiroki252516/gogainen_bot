@@ -1,10 +1,10 @@
 # マルチエージェント・記憶プロセスの再テスト改訂
 
-本書は仕様版20・通常版テストv6・学習12の採用時記録である。現行版22でも再テスト4問の本文・選択肢・表示・テストバンクv6は維持する。仕様版21はLLM確認V1のD/Hだけを学習v13へ改訂し、その本文と保存契約は[34](34_llm_round_one_dh_revision.md)を参照する。 現行仕様版22・学習v14の4か所の原文と保存契約は[35](35_multi_memory_round_one_revision.md)を参照する。
+本書は仕様版20・通常版テストv6・学習12の採用時記録である。現行版23でも再テスト4問の本文・選択肢・表示を維持し、テストバンクはv7を使う。仕様版21はLLM確認V1のD/Hだけを学習v13へ改訂し、その本文と保存契約は[34](34_llm_round_one_dh_revision.md)を参照する。 仕様版22・学習v14の4か所の採用時記録は[35](35_multi_memory_round_one_revision.md)を参照する。 現行仕様版23のLLM再テストV1と保存契約は[36](36_llm_retest_one_revision.md)を参照する。
 
 ## 採用時の仕様と適用範囲
 
-実験仕様版20 / `experiment-plan-2026-10-26-multi-memory-retests-v1`。通常版テストは[learning_content.yml](../backend/app/seed/content/standard/learning_content.yml)のscenario-actions-v6を使う。今回変更するのはmulti_agentとmemory_processのretest_v1/v2、計4問の場面・設問・36選択肢だけである。
+実験仕様版20 / `experiment-plan-2026-10-26-multi-memory-retests-v1`。通常版テストは[learning_content_scenario_actions_v6.yml](../backend/app/seed/content/archive/learning_content_scenario_actions_v6.yml)のscenario-actions-v6を使う。今回変更するのはmulti_agentとmemory_processのretest_v1/v2、計4問の場面・設問・36選択肢だけである。
 
 正解A〜C・M1誤答D〜F・M3誤答G〜I・J「わからない」を維持する。内部ラベルはデバッグ配置を指し、ランダム配置でも同じ内部選択肢を採点する。Jは末尾固定、完全選択・M3優先・J単独を維持し、参加者向け問題APIへ正答・分類を返さない。
 

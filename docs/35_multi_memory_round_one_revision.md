@@ -1,6 +1,8 @@
 # マルチエージェント・記憶プロセス確認問題V1の4か所改訂
 
-## 現行版と変更範囲
+本書は仕様版22・学習v14の採用時記録である。現行仕様版23でも確認問題・学習v14は変更しない。LLM再テストV1の現行改訂と保存契約は[36](36_llm_retest_one_revision.md)を参照する。
+
+## 採用時の版と変更範囲
 
 実験仕様版22 / `experiment-plan-2026-10-27-multi-memory-round1-v1`。通常版は[learning_questions_v14.yml](../backend/app/seed/content/standard/learning_questions_v14.yml)、易しい版は学習4を使用する。旧[学習v13](../backend/app/seed/content/standard/learning_questions_v13.yml)は原文のまま保持する。旧v13のSHA-256は`78fe46d82b29ab5cfcaab969def2410732d19e7306dfd96244a6325d4de78c57`。
 

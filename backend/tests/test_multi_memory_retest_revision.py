@@ -119,7 +119,6 @@ EXPECTED = {
 
 
 def test_assessment_v6_only_changes_four_retests_and_preserves_banks():
-    assert ASSESSMENT_BANK_VERSIONS == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[19]["standard"] == "scenario-actions-v5"
     assert hashlib.sha256(content_loader.SCENARIO_ACTIONS_V5_CONTENT_PATH.read_bytes()).hexdigest() == "e9022f40a5b4f6f8b56a8468e6feb9169a9889155702363701497c3cd11ee8d6"
@@ -129,7 +128,8 @@ def test_assessment_v6_only_changes_four_retests_and_preserves_banks():
     for term in expected["terms"]:
         if term["slug"] in EXPECTED:
             term["questions"]["retest"] = EXPECTED[term["slug"]]
-    assert load_content() == expected
+    adopted = yaml.safe_load(content_loader.SCENARIO_ACTIONS_V6_CONTENT_PATH.read_text(encoding="utf-8"))
+    assert adopted == expected
 
 
 @pytest.mark.parametrize("slug", list(EXPECTED))

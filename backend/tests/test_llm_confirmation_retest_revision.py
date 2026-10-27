@@ -130,8 +130,13 @@ def test_v12_and_assessment_v5_only_change_the_four_requested_questions():
 @pytest.mark.parametrize("stage", ["enrichment", "conceptual_change"])
 def test_exact_question_text_roles_and_paragraphs(key, stage):
     index = int(key[-1])
-    spec = (learning_question_spec("llm_knowledge", stage, index, content_version=12) if key.startswith("learning")
-            else assessment_question_spec("llm_knowledge", "retest", index))
+    if key.startswith("learning"):
+        spec = learning_question_spec("llm_knowledge", stage, index, content_version=12)
+    else:
+        adopted = yaml.safe_load(content_loader.SCENARIO_ACTIONS_V5_CONTENT_PATH.read_text(encoding="utf-8"))
+        term = next(term for term in adopted["terms"] if term["slug"] == "llm_knowledge")
+        source = term["questions"]["retest"][index - 1]
+        spec = {"body": source["scenario"] + "\n\n" + source["task"], "options": content_loader._assessment_options(source)}
     expected = EXPECTED[key]
     assert spec["body"] == expected["scenario"] + "\n\n" + expected["task"]
     assert len(spec["body"].split("\n\n")) == (4 if key == "retest_v2" else 2)
@@ -142,7 +147,7 @@ def test_exact_question_text_roles_and_paragraphs(key, stage):
         assert all(option["is_correct"] == (role == "correct") for option in selected)
         assert all(option["misconception_type"] == (None if role == "correct" else role) for option in selected)
     assert {key: spec["options"][-1][key] for key in content_loader.UNKNOWN_OPTION} == content_loader.UNKNOWN_OPTION
-    assert assessment_question_spec("llm_knowledge", "final_test")["body"] == EXPECTED["retest_v1"]["scenario"] + "\n\n" + EXPECTED["retest_v1"]["task"]
+    assert assessment_question_spec("llm_knowledge", "final_test")["body"] == assessment_question_spec("llm_knowledge", "retest", 1)["body"]
 
 
 def test_missing_v12_and_wrong_mode_do_not_fall_back(tmp_path, monkeypatch):
@@ -173,8 +178,8 @@ def _answer_test(client, pid, phase, labels, index=1):
     questions = _ok(client.get(f"/api/experiment/{pid}/{route}"))["questions"]
     llm = next(question for question in questions if question["term_slug"] == "llm_knowledge")
     if phase != "pretest":
-        expected = EXPECTED[f"retest_v{index}"]
-        assert llm["body"] == expected["scenario"] + "\n\n" + expected["task"]
+        expected = assessment_question_spec("llm_knowledge", phase, index)
+        assert llm["body"] == expected["body"]
     for question in questions:
         assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
         source = assessment_question_spec(question["term_slug"], phase, index)
@@ -246,8 +251,8 @@ def test_natural_two_learning_rounds_feedback_history_and_retests(group, layout,
         assert scored["next_step"] == ("learning_targets" if index == 1 else "survey")
         review = _ok(client.get(f"/api/participants/{pid}/learning-targets"))["test_results"]
         row = next(row for row in review["results"] if row["term_slug"] == "llm_knowledge")
-        expected = EXPECTED[f"retest_v{index}"]
-        assert row["question_body"] == expected["scenario"] + "\n\n" + expected["task"]
+        expected = assessment_question_spec("llm_knowledge", "retest", index)
+        assert row["question_body"] == expected["body"]
         assert row["is_correct"] == (index == 2 and expected_type is None)
 
 

@@ -1,6 +1,6 @@
 # 研究計画と仕様・実装の対応
 
-用語注釈はservices/learning_glossary、固定YAML、LearningGlossary表示コンポーネントで処理し、TutorTurnの既存JSONと統合CSVのvalue_jsonへsnapshotを保持する。AI契約版はv7を維持し、実験仕様版22・共通固定辞書v1として区別する。[24](24_learning_glossary.md)。
+用語注釈はservices/learning_glossary、固定YAML、LearningGlossary表示コンポーネントで処理し、TutorTurnの既存JSONと統合CSVのvalue_jsonへsnapshotを保持する。AI契約版はv7を維持し、実験仕様版23・共通固定辞書v1として区別する。[24](24_learning_glossary.md)。
 
 出典・採用判断は[20](20_experiment_plan_alignment.md)、式と欠測定義は[12](12_evaluation_metrics.md)を正本とする。
 
@@ -17,8 +17,8 @@
 | AI設定 | config、環境low、runtime_config | 不一致警告・実送信model/effort |
 | アンケート | research_protocol.SurveyPayload、survey画面 | 経験4有無・一般4/教材6の1〜10・必須自由記述 |
 | テスト上限・回次 | 学習後回数＋採点済みfinal_testから全体回次を導出 | 事前後最大2回、事前込み最大3回。未達を維持してsurvey |
-| 行動選択型問題 | scenario-actions-v6、9固有問、版付きconstruct_key | 旧問題非active保全、分類根拠は21 |
-| 旧記録保護 | 仕様版22＋protocol_id、API/worker/補修ガード | 旧版21以下も閲覧専用・新集計から除外 |
+| 行動選択型問題 | scenario-actions-v7、9固有問、版付きconstruct_key | 旧問題非active保全、分類根拠は21 |
+| 旧記録保護 | 仕様版23＋protocol_id、API/worker/補修ガード | 旧版22以下も閲覧専用・新集計から除外 |
 | 割付・アクセス・正答配置 | 既存A/Bコード・デバッグ問題を維持 | 自動割付・認証・位置復旧は今回対象外 |
 
 計算の正本はbackend/app/services/hypothesis_metrics.py。新指標はEvaluationSummary.hypothesis_metrics_jsonに分離し、統合CSVヘッダと旧値を維持する。専用CSVはhypothesis_metricsとhypothesis_group_summary。
