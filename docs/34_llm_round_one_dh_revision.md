@@ -1,6 +1,6 @@
 # LLM知識の確認問題V1・D/H選択肢の改訂
 
-本書は仕様版21・学習v13の採用時記録である。現行仕様版23・学習v14でもLLM確認V1のD/Hは維持する。マルチエージェント・記憶の初回確認問題4か所の現行改訂と保存契約は[35](35_multi_memory_round_one_revision.md)を参照する。 現行仕様版23のLLM再テストV1と保存契約は[36](36_llm_retest_one_revision.md)を参照する。
+本書は仕様版21・学習v13の採用時記録である。現行仕様版23・学習v14でもLLM確認V1のD/Hは維持する。マルチエージェント・記憶の初回確認問題4か所の現行改訂と保存契約は[35](35_multi_memory_round_one_revision.md)を参照する。 仕様版23で採用したLLM再テストV1と採用時の保存契約は[36](36_llm_retest_one_revision.md)を参照する。 現行仕様版24・テストv8の5選択肢改訂と保存契約は[37](37_multi_memory_retest_one_revision.md)を参照する。
 
 ## 採用時の版と適用範囲
 

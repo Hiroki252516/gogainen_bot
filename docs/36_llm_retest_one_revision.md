@@ -1,8 +1,10 @@
 # LLM知識の再テストV1の場面説明・6選択肢改訂
 
-## 現行版と適用範囲
+本書は仕様版23・テストv7の採用時記録である。現行版24・テストv8でも本書のLLM再テストV1の本文・判定・5段落表示は維持する。マルチエージェント・記憶V1の5選択肢改訂と現行保存契約は[37](37_multi_memory_retest_one_revision.md)を参照する。
 
-実験仕様版23 / `experiment-plan-2026-10-27-llm-retest1-v1`。通常版テストは[learning_content.yml](../backend/app/seed/content/standard/learning_content.yml)の`scenario-actions-v7`を使用する。旧v6は[アーカイブ](../backend/app/seed/content/archive/learning_content_scenario_actions_v6.yml)へ原文のまま保全する。旧v6のSHA-256は`a9161a01940f112b96bdeec37c4243e69009ba463bebca415760f14ea1c59e04`。
+## 採用時の仕様と適用範囲
+
+実験仕様版23 / `experiment-plan-2026-10-27-llm-retest1-v1`。通常版テストは[learning_content_scenario_actions_v7.yml](../backend/app/seed/content/archive/learning_content_scenario_actions_v7.yml)の`scenario-actions-v7`を使用する。旧v6は[アーカイブ](../backend/app/seed/content/archive/learning_content_scenario_actions_v6.yml)へ原文のまま保全する。旧v6のSHA-256は`a9161a01940f112b96bdeec37c4243e69009ba463bebca415760f14ea1c59e04`。
 
 通常版llm_knowledge・retest_v1の場面説明とA/B/D/G/H/Iの6選択肢を指定文どおり改訂する。場面4項目と設問を空行で区切る5段落表示とし、既存の表示条件を維持する。内部final_testも同じV1を共用する。C/E/F/Jと残り8テスト問題、全確認問題、事前の訂正情報・易しい版・教授プロンプト・注釈・採点・配置・回数上限は変更しない。新規だけ仕様版23・protocol_id=experiment-plan-2026-10-27-llm-retest1-v1を保存し、通常版テストscenario-actions-v7を使用する。学習版は通常版14・易しい版4のまま。旧テストv6をアーカイブし、新バンクは別問題ID・選択肢IDでseedする。仕様版22以下は閲覧専用で記録を付け替えず、履歴はsnapshot優先・当時の問題とバンクで復元する。公開API・DB構造・AI生成契約は変更しない。
 

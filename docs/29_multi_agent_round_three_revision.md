@@ -1,6 +1,6 @@
 # マルチエージェント確認問題V3の改訂
 
-本書は仕様版16・学習バンクv9の採用時記録である。現行版23・学習バンクv14でも、このV3の内容・表示と通常非出題の条件は維持する。記憶V1の採用時記録は[30](30_memory_confirmation_revision.md)、記憶V2の採用時記録は[31](31_memory_round_two_revision.md)を参照する。 仕様版19のLLM知識4問の採用時記録は[32](32_llm_confirmation_retest_revision.md)を参照する。 仕様版20の再テスト4問の採用時記録は[33](33_multi_memory_retest_revision.md)を参照する。 仕様版21のLLM確認V1 D/Hの採用時記録は[34](34_llm_round_one_dh_revision.md)を参照する。 仕様版22・学習v14の4か所の採用時記録は[35](35_multi_memory_round_one_revision.md)を参照する。 現行仕様版23のLLM再テストV1と保存契約は[36](36_llm_retest_one_revision.md)を参照する。
+本書は仕様版16・学習バンクv9の採用時記録である。現行版24・学習バンクv14でも、このV3の内容・表示と通常非出題の条件は維持する。記憶V1の採用時記録は[30](30_memory_confirmation_revision.md)、記憶V2の採用時記録は[31](31_memory_round_two_revision.md)を参照する。 仕様版19のLLM知識4問の採用時記録は[32](32_llm_confirmation_retest_revision.md)を参照する。 仕様版20の再テスト4問の採用時記録は[33](33_multi_memory_retest_revision.md)を参照する。 仕様版21のLLM確認V1 D/Hの採用時記録は[34](34_llm_round_one_dh_revision.md)を参照する。 仕様版22・学習v14の4か所の採用時記録は[35](35_multi_memory_round_one_revision.md)を参照する。 仕様版23で採用したLLM再テストV1と採用時の保存契約は[36](36_llm_retest_one_revision.md)を参照する。 現行仕様版24・テストv8の5選択肢改訂と保存契約は[37](37_multi_memory_retest_one_revision.md)を参照する。
 
 ## 採用時の版と適用範囲
 
