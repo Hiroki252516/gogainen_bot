@@ -1,6 +1,8 @@
 # LLM知識の確認問題V1・D/H選択肢の改訂
 
-## 現行版と適用範囲
+本書は仕様版21・学習v13の採用時記録である。現行仕様版22・学習v14でもLLM確認V1のD/Hは維持する。マルチエージェント・記憶の初回確認問題4か所の現行改訂と保存契約は[35](35_multi_memory_round_one_revision.md)を参照する。
+
+## 採用時の版と適用範囲
 
 実験仕様版21 / `experiment-plan-2026-10-26-llm-round1-dh-v1`。通常版学習バンクは[learning_questions_v13.yml](../backend/app/seed/content/standard/learning_questions_v13.yml)、易しい版は4を使う。旧[学習v12](../backend/app/seed/content/standard/learning_questions_v12.yml)を原文のまま保全する。旧v12のSHA-256は`87dc5c40081f113350b9b7ffabef5f46fe6fe0fd0e68949eb68755c68de6eb4b`。
 

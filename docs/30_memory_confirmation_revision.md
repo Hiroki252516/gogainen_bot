@@ -1,6 +1,6 @@
 # 記憶プロセス確認問題V1の改訂
 
-本書は仕様版17・学習バンクv10の採用時記録である。現行版21・学習バンクv13でも、このV1の本文・選択肢・3段落表示と初回出題条件は維持する。記憶V2の改訂と現行保存・検証条件は[31](31_memory_round_two_revision.md)を参照する。 仕様版19のLLM知識4問の採用時記録は[32](32_llm_confirmation_retest_revision.md)を参照する。 仕様版20の再テスト4問の採用時記録は[33](33_multi_memory_retest_revision.md)を参照する。 現行版21のLLM確認V1 D/Hと保存契約は[34](34_llm_round_one_dh_revision.md)を参照する。
+本書は仕様版17・学習バンクv10の採用時記録である。現行版22・学習バンクv14では、このV1の場面説明後半・F・Hを追加改訂し、3段落表示と初回出題条件は維持する。記憶V2の改訂と現行保存・検証条件は[31](31_memory_round_two_revision.md)を参照する。 仕様版19のLLM知識4問の採用時記録は[32](32_llm_confirmation_retest_revision.md)を参照する。 仕様版20の再テスト4問の採用時記録は[33](33_multi_memory_retest_revision.md)を参照する。 仕様版21のLLM確認V1 D/Hの採用時記録は[34](34_llm_round_one_dh_revision.md)を参照する。 現行仕様版22・学習v14の4か所の原文と保存契約は[35](35_multi_memory_round_one_revision.md)を参照する。
 
 ## 採用時の版と適用範囲
 
