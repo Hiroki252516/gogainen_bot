@@ -12,13 +12,18 @@
 | 先行するdocs整理の原本 | 卒業研究計画書 - 10:28.docx（旧保存先 /Users/hiroki/Documents/） |
 | 先行原本のSHA-256 | b13ed5a9a54d8d895818ce9acb4911cb88951d6b9681ffedc34f0d141cc188eb |
 | 先行照合HEAD | 747cf361d83ceaaf41aaa98438a98c8f39b688fb |
-| 実験仕様版 | 24 |
-| 新プロトコル | experiment-plan-2026-10-27-multi-memory-retest1-v1 |
+| 実験仕様版 | 25 |
+| 新プロトコル | experiment-plan-2026-10-27-round2-revision-v1 |
 | 教材契約版 | tutoring-teaching-contract-v7-easy-level |
 | taxonomy版 | m1-m3-unknown-v3 |
 | アンケート版 / 指標版 | posttest-10point-v1 / six-hypotheses-v2 |
 
-## 2026-10-27 再テストV1の5選択肢改訂（版24）
+## 2026-10-27 確認問題・再テストV2の改訂（版25）
+
+- 通常版LLM知識・記憶プロセスの確認V2と3用語の再テストV2、計5問・45選択肢を指定文どおり改訂する。LLM再テストは大学・教職員版を採用し、企業・従業員案とマルチエージェント確認V2は採用・変更しない。確認V2の対象2用語をapplicationとし、通常版学習v15だけ種類構成をapplication/application/comparisonへ変更する。LLM確認V1/V2のE・G、LLM再テストV1/V2のFの3組だけ、本文・問題・ラベルを限定して同文再使用を許可する。同一問題内・指定外の重複と確認問題への固定テスト文の転載は引き続き禁止する。新規だけ仕様版25・protocol_id=experiment-plan-2026-10-27-round2-revision-v1、通常版学習15・テストscenario-actions-v9を保存し、易しい版は学習4のまま。旧学習v14と旧テストv8を保全し、新テストは別IDでseedする。仕様版24以下は閲覧専用とし、履歴はsnapshot優先・当時の保存版で復元する。V1・内部final_test・他の問題と訂正情報・教授条件・採点・配置・回数上限、公開API・DB構造・AI生成契約は変更しない。[問題全文・分類理由・例外と保存契約](38_round_two_revision.md)。
+- LLM再テストは大学・教職員版を選択し、企業・従業員案は採用しない。マルチエージェントの確認V2は現行のまま。同文再使用と類似した構成による練習効果の可能性を残し、独立性・難易度同等性を実証済みとしない。研究DB・3000番・Word・別仕様リポジトリ・実AI呼び出し・既存データ削除・コミット・pushは対象外。
+
+## 2026-10-27 再テストV1の5選択肢改訂（版24採用時の記録）
 
 - 通常版multi_agent・retest_v1のE/F（M1）、memory_process・retest_v1のE（M1）とH/I（M3）を指定文どおり改訂する。場面・設問・段落表示・判定と指定外の選択肢を維持し、内部final_testも改訂V1を共用する。残り7テスト問題、全確認問題、事前の訂正情報・易しい版・教授プロンプト・注釈・採点・配置・回数上限は変更しない。新規だけ仕様版24・protocol_id=experiment-plan-2026-10-27-multi-memory-retest1-v1と通常版テストscenario-actions-v8を使用する。学習版は通常版14・易しい版4を維持する。旧テストv7をアーカイブし、新バンクは別問題ID・選択肢IDでseedする。仕様版23以下は閲覧専用で記録を付け替えず、履歴はsnapshot優先・当時の問題とバンクで復元する。公開API・DB構造・AI生成契約は変更しない。[原文・分類理由・保存と検証条件](37_multi_memory_retest_one_revision.md)。
 - 旧仕様版23のテスト復元対応にscenario-actions-v7を追加し、現行24は現行版用定義を使う。研究DB・3000番・Word・別仕様リポジトリ・モデル設定・実AI呼び出し・既存データ削除・コミット・pushは対象外。機械検査を分類妥当性や読みやすさの実証としない。

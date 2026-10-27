@@ -181,8 +181,8 @@ def _answer_test(client, pid, slug, phase, labels, index=1):
     questions = _ok(client.get(f"/api/experiment/{pid}/{route}"))["questions"]
     target_question = next(question for question in questions if question["term_slug"] == slug)
     if phase != "pretest":
-        source = EXPECTED[slug][index - 1]
-        assert target_question["body"] == source["scenario"] + "\n\n" + source["task"]
+        source = assessment_question_spec(slug, phase, index)
+        assert target_question["body"] == source["body"]
     for question in questions:
         assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
         source = assessment_question_spec(question["term_slug"], phase, index)

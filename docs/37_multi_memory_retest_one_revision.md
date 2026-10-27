@@ -1,8 +1,10 @@
 # 再テストV1の5選択肢改訂
 
-## 現行版と変更範囲
+本書は仕様版24・通常版テストv8の採用時記録である。現行版25でも本書のV1本文・判定・段落表示は保持する。V2の5問改訂と現行保存契約は[38](38_round_two_revision.md)を参照する。
 
-実験仕様版24 / `experiment-plan-2026-10-27-multi-memory-retest1-v1`。通常版テストは[learning_content.yml](../backend/app/seed/content/standard/learning_content.yml)の`scenario-actions-v8`を使用する。旧v7は[アーカイブ](../backend/app/seed/content/archive/learning_content_scenario_actions_v7.yml)へ原文のまま保全する。SHA-256は`315455197bc0b5833dea365845dff6e41c1b47a28db4ad0dcc033545a105cfe4`。
+## 採用時の仕様と変更範囲
+
+実験仕様版24 / `experiment-plan-2026-10-27-multi-memory-retest1-v1`。通常版テストは[learning_content_scenario_actions_v8.yml](../backend/app/seed/content/archive/learning_content_scenario_actions_v8.yml)の`scenario-actions-v8`を使用する。旧v7は[アーカイブ](../backend/app/seed/content/archive/learning_content_scenario_actions_v7.yml)へ原文のまま保全する。SHA-256は`315455197bc0b5833dea365845dff6e41c1b47a28db4ad0dcc033545a105cfe4`。
 
 通常版multi_agent・retest_v1のE/F（M1）、memory_process・retest_v1のE（M1）とH/I（M3）を指定文どおり改訂する。場面・設問・段落表示・判定と指定外の選択肢を維持し、内部final_testも改訂V1を共用する。残り7テスト問題、全確認問題、事前の訂正情報・易しい版・教授プロンプト・注釈・採点・配置・回数上限は変更しない。新規だけ仕様版24・protocol_id=experiment-plan-2026-10-27-multi-memory-retest1-v1と通常版テストscenario-actions-v8を使用する。学習版は通常版14・易しい版4を維持する。旧テストv7をアーカイブし、新バンクは別問題ID・選択肢IDでseedする。仕様版23以下は閲覧専用で記録を付け替えず、履歴はsnapshot優先・当時の問題とバンクで復元する。公開API・DB構造・AI生成契約は変更しない。
 

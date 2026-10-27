@@ -28,7 +28,7 @@ OLD_PROTOCOL = "experiment-plan-2026-10-26-llm-round1-dh-v1"
 
 
 def test_v14_changes_only_the_four_requested_locations_and_keeps_v13():
-    assert LEARNING_CONTENT_VERSIONS == {"standard": 14, "easy": 4}
+    assert load_learning_content(content_version=14)["version"] == 14
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[22] == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[21] == HISTORICAL_ASSESSMENT_BANK_VERSIONS[22]
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
@@ -49,7 +49,7 @@ def test_revised_round_one_roles_and_paragraphs(term_slug, stage):
     old = learning_question_spec(term_slug, stage, 1, content_version=13)
     current = learning_question_spec(term_slug, stage, 1)
     assert current["variant_key"] == "learning_round_v1" and current["scenario_type"] == "application"
-    assert current["_content_version"] == 14
+    assert current["_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
     assert len(current["options"]) == 10
     changed = {"G": (NEW_MULTI_G, "M3")} if term_slug == "multi_agent" else {"F": (NEW_MEMORY_F, "M1"), "H": (NEW_MEMORY_H, "M3")}
     options = {option["label"]: option for option in current["options"]}
@@ -73,7 +73,7 @@ def test_missing_v14_or_wrong_mode_never_falls_back(tmp_path, monkeypatch):
             patch.setattr(content_loader, "LEARNING_V14_CONTENT_PATH", tmp_path / "missing.yml")
             load_learning_content.cache_clear()
             with pytest.raises(FileNotFoundError):
-                load_learning_content()
+                load_learning_content(content_version=14)
     finally:
         load_learning_content.cache_clear()
     with pytest.raises(ValueError, match="version"):
@@ -103,7 +103,7 @@ def test_round_one_display_scoring_feedback_retry_replay_history_and_prefetch(te
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.option_order_mode = layout
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == 14
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == LEARNING_CONTENT_VERSIONS["standard"]
         assert participant.protocol_id == CURRENT_PROTOCOL_ID
         db.commit()
     for question in _ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]:
@@ -137,7 +137,7 @@ def test_round_one_display_scoring_feedback_retry_replay_history_and_prefetch(te
         saved_session = db.get(TutorSession, sid)
         saved_turn = db.get(TutorTurn, turn["turn_id"])
         assert saved_session.session_index == 1
-        assert saved_turn.diagnosis_json["learning_content_version"] == 14
+        assert saved_turn.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
         assert saved_turn.practice_question_json["options"] == question["options"]
         record = next(row for row in build_interaction_history(db, pid, saved_session.term_id) if row["source_type"] == "learning_turn")
         assert record["question_body"] == question["body"]
@@ -147,11 +147,11 @@ def test_round_one_display_scoring_feedback_retry_replay_history_and_prefetch(te
         assert retry["practice_question"] == question
         with SessionLocal() as db:
             saved = db.get(TutorTurn, retry["turn_id"])
-            assert saved.diagnosis_json["learning_content_version"] == 14
+            assert saved.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
             assert saved.diagnosis_json["generation_origin"] == "same_session_prefetch"
 
 
-@pytest.mark.parametrize("version,spec_version,protocol", [(13, 21, OLD_PROTOCOL), (14, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
+@pytest.mark.parametrize("version,spec_version,protocol", [(13, 21, OLD_PROTOCOL), (14, 24, "experiment-plan-2026-10-27-multi-memory-retest1-v1"), (15, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
 @pytest.mark.parametrize("snapshot", [False, True])
 @pytest.mark.parametrize("term_slug,label,new_text", [("multi_agent", "G", NEW_MULTI_G), ("memory_process", "F", NEW_MEMORY_F), ("memory_process", "H", NEW_MEMORY_H)])
 def test_snapshot_or_saved_bank_restoration_and_old_rows_survive_seed_and_startup(tmp_path, monkeypatch, version, spec_version, protocol, snapshot, term_slug, label, new_text):
@@ -190,9 +190,9 @@ def test_snapshot_or_saved_bank_restoration_and_old_rows_survive_seed_and_startu
             assert restored["question_body"] == ("保存時の問題" if snapshot else original["body"])
             assert restored["selected_options"] == [{"label": label, "body": "保存時の選択肢" if snapshot else selected["body"]}]
             if not snapshot:
-                assert (selected["body"] == new_text) == (version == 14)
+                assert (selected["body"] == new_text) == (version >= 14)
                 if term_slug == "memory_process":
-                    assert (NEW_MEMORY_PURPOSE in restored["question_body"]) == (version == 14)
+                    assert (NEW_MEMORY_PURPOSE in restored["question_body"]) == (version >= 14)
             assert json.dumps([turn.practice_question_json, turn.diagnosis_json, turn.grading_json], sort_keys=True) == before_json
     finally:
         engine.dispose()

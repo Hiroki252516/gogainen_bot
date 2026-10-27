@@ -341,7 +341,9 @@ export default function LearningPage() {
     || (termSlug === "memory_process"
       && turn?.practice_question?.learning_variant_index === 2
       && questionBody.startsWith("料理の献立を提案するAIを開発している。")
-      && questionBody.includes("\n\nこのAIが過去の会話を記憶として利用する場合、"))
+      && (questionBody.includes("\n\nこのAIが過去の会話を記憶として利用する場合、")
+        || (questionBody.includes("\n\n開発担当者は、")
+          && questionBody.includes("\n\nこのAIに記憶機能を設ける場合の対応として、"))))
     || (termSlug === "llm_knowledge"
       && turn?.practice_question?.learning_variant_index === 1
       && questionBody.startsWith("大学が、学生からの履修登録に関する質問に回答するAI")
@@ -349,7 +351,11 @@ export default function LearningPage() {
     || (termSlug === "llm_knowledge"
       && turn?.practice_question?.learning_variant_index === 2
       && questionBody.startsWith("大学が、学生に学内施設の利用方法を案内するAI")
-      && questionBody.includes("\n\n回答形式の指示を変えた場合に起こり得る変化と、"));
+      && questionBody.includes("\n\n回答形式の指示を変えた場合に起こり得る変化と、"))
+    || (termSlug === "llm_knowledge"
+      && turn?.practice_question?.learning_variant_index === 2
+      && questionBody.startsWith("大学が、学生からの自習室の利用予約に関する質問に回答するAI")
+      && questionBody.includes("\n\nこれらの目的を実現する開発担当者の対応として、"));
 
   return (
     <AppShell step="学習セッション">
