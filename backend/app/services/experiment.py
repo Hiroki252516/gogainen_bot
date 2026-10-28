@@ -1049,7 +1049,6 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "body": body,
                 "question_type": question.question_type,
                 "options": public_options,
-                **({"answer_key": {option.id: option.is_correct for option in db.query(QuestionOption).filter_by(question_id=question.id).all()}} if submitted_attempt else {}),
                 "glossary": public_glossary(glossary),
                 "test_round": test_round,
                 "test_round_label": _test_round_display_label(test_round),
