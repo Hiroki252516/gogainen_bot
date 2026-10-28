@@ -193,8 +193,6 @@ def test_natural_memory_first_question_grading_feedback_replay_and_prefetch(grou
         record = next(row for row in history if row["source_type"] == "learning_turn" and row["session_index"] == 1)
         assert record["question_body"] == question["body"]
         assert {option["body"] for option in record["selected_options"]} == selected_bodies
-    if expected_type is not None:
-        retry = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
-        assert retry["practice_question"] == question
-        with SessionLocal() as db:
-            assert db.get(TutorTurn, retry["turn_id"]).diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]
+    assert result["session_completed"] and result["max_turns"] == 1
+    assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
+    assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409

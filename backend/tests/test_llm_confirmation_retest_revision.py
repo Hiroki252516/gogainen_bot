@@ -210,9 +210,9 @@ def test_natural_two_learning_rounds_feedback_history_and_retests(group, layout,
         sid = session["tutor_session_id"]
         turn = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
         question = turn["practice_question"]
-        expected = load_learning_content()["terms"]["llm_knowledge"]["variants"][index - 1]
-        assert question["variant_key"] == expected["variant_key"] and question["learning_variant_index"] == index
-        assert question["body"] == expected["scenario"] + "\n\n" + expected["task"]
+        expected = assessment_question_spec("llm_knowledge", "pretest" if index == 1 else "retest", 1)
+        assert question["variant_key"] == f"learning_round_v{index}" and question["learning_variant_index"] == index
+        assert question["body"] == expected["body"]
         assert turn["learning_stage"] == ("enrichment" if initial == "J" else "conceptual_change")
         assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
         assert question["options"][-1]["label"] == "J" and question["options"][-1]["exclusive"]
@@ -237,12 +237,9 @@ def test_natural_two_learning_rounds_feedback_history_and_retests(group, layout,
             assert record["question_body"] == question["body"]
             assert {option["body"] for option in record["selected_options"]} == {
                 option["body"] for option in source["options"] if option["label"] in labels}
-        if expected_type is not None:
-            retry = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
-            assert retry["practice_question"] == question
-            _ok(client.post(f"/api/tutor-turns/{retry['turn_id']}/respond",
-                            json={"selected_option_ids": _selected(question, source, "ABC")}))
-            wait_for_prefetch_tasks()
+        assert result["session_completed"] and result["max_turns"] == 1
+        assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
+        assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409
         _answer_test(client, pid, "retest", initial if index == 1 else labels, index)
         score_headers = {"Idempotency-Key": f"llm-four-question-score-{index}"}
         scored = _ok(client.post(f"/api/participants/{pid}/score-retest", json={}, headers=score_headers))

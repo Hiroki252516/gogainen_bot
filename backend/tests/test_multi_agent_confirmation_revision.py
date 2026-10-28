@@ -134,7 +134,7 @@ def test_current_multi_agent_display_grading_feedback_replay_and_prefetch(group,
     assert generated.status_code == 200, generated.text
     turn = generated.json()
     question = turn["practice_question"]
-    assert question["body"] == SCENARIO + "\n\n" + TASK
+    assert question["body"] == assessment_question_spec("multi_agent", "pretest")["body"]
     assert turn["learning_stage"] == ("enrichment" if initial == "unknown" else "conceptual_change")
     assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
     assert question["options"][-1]["label"] == "J" and question["options"][-1]["exclusive"] is True
@@ -166,9 +166,6 @@ def test_current_multi_agent_display_grading_feedback_replay_and_prefetch(group,
         assert record["question_body"] == question["body"]
         assert {row["body"] for row in record["selected_options"]} == selected_bodies
         assert record["is_correct"] == (expected_type is None)
-    if expected_type is not None:
-        retry = client.post(f"/api/tutor-sessions/{sid}/turns", json={})
-        assert retry.status_code == 200, retry.text
-        assert retry.json()["practice_question"] == question
-        with SessionLocal() as db:
-            assert db.get(TutorTurn, retry.json()["turn_id"]).diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]
+    assert result["session_completed"] and result["max_turns"] == 1
+    assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
+    assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409

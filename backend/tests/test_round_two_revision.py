@@ -56,7 +56,7 @@ def test_v25_exact_banks_and_unchanged_content():
 @pytest.mark.parametrize("slug", list(EXPECTED["learning"]))
 @pytest.mark.parametrize("stage", ["enrichment", "conceptual_change"])
 def test_learning_v2_exact_body_roles_and_application(slug, stage):
-    spec = learning_question_spec(slug, stage, 2)
+    spec = learning_question_spec(slug, stage, 2, content_version=15, use_current_assessment_source=False)
     expected = EXPECTED["learning"][slug]
     assert spec["body"] == expected["scenario"] + "\n\n" + expected["task"]
     assert len(spec["body"].split("\n\n")) == (2 if slug == "llm_knowledge" else 3)
@@ -208,11 +208,10 @@ def _learn(client, pid, slug, expected_index):
     assert question["learning_variant_index"] == expected_index
     source = learning_question_spec(slug, turn["learning_stage"], expected_index)
     assert question["body"] == source["body"]
-    if expected_index == 2 and slug in EXPECTED["learning"]:
-        expected = EXPECTED["learning"][slug]
-        assert question["body"] == expected["scenario"] + "\n\n" + expected["task"]
-        assert source["scenario_type"] == "application"
-        assert [option["body"] for option in question["options"][:9]] != []
+    expected_phase = "pretest" if expected_index == 1 else "retest"
+    expected = assessment_question_spec(slug, expected_phase, 1)
+    assert question["body"] == expected["body"]
+    assert {option["body"] for option in question["options"]} == {option["body"] for option in expected["options"]}
     result = _ok(client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json={"selected_option_ids": _selected(question, source, "ABC")}))
     assert result["is_sufficient"] and result["feedback"]
     wait_for_prefetch_tasks()

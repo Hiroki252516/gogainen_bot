@@ -174,7 +174,7 @@ def test_natural_round_two_route_grading_feedback_replay_and_prefetch(group, lay
     question = current["practice_question"]
     assert current["learning_stage"] == ("enrichment" if initial == "unknown" else "conceptual_change")
     assert question["variant_key"] == "learning_round_v2" and question["learning_variant_index"] == 2
-    assert question["body"] == EXPECTED["scenario"] + "\n\n" + EXPECTED["task"]
+    assert question["body"] == assessment_question_spec("multi_agent", "retest", 1)["body"]
     assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
     assert question["options"][-1]["exclusive"] and question["options"][-1]["label"] == "J"
     invalid = client.post(f"/api/tutor-turns/{current['turn_id']}/respond", json={"selected_option_ids": [question["options"][0]["option_id"], question["options"][-1]["option_id"]]})
@@ -198,8 +198,6 @@ def test_natural_round_two_route_grading_feedback_replay_and_prefetch(group, lay
         record = next(row for row in history if row["source_type"] == "learning_turn" and row["session_index"] == 2)
         assert record["question_body"] == question["body"]
         assert {option["body"] for option in record["selected_options"]} == selected_bodies
-    if expected_type is not None:
-        retry = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
-        assert retry["practice_question"] == question
-        with SessionLocal() as db:
-            assert db.get(TutorTurn, retry["turn_id"]).diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]
+    assert result["session_completed"] and result["max_turns"] == 1
+    assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
+    assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409
