@@ -26,7 +26,7 @@ def ids(message):
 
 def test_dictionary_and_snapshot_are_versioned_and_do_not_expose_sources():
     glossary = load_learning_glossary()
-    assert len(glossary.entries) == 25
+    assert len(glossary.entries) == 16
     assert glossary.version == GLOSSARY_VERSION
     snapshot = glossary_snapshot("## 重み\n\n**モデル**のパラメータと重みを確認する。")
     assert [entry["id"] for entry in snapshot["entries"]] == ["weights", "model", "parameters"]
@@ -40,13 +40,13 @@ def test_dictionary_and_snapshot_are_versioned_and_do_not_expose_sources():
 
 
 @pytest.mark.parametrize("message,expected", [
-    ("マルチエージェントとプロンプトエンジニアリング、タスク分解。", ["multi_agent", "prompt_engineering", "task_decomposition"]),
-    ("マルチ**エージェント**を使い、別のエージェントに渡す。", ["multi_agent", "agent"]),
-    ("RAG、rag、ＲＡＧ。LLM、ｌｌｍ、人工知能、AI。", ["rag", "llm", "ai"]),
+    ("マルチエージェントとプロンプトエンジニアリング、タスク分解。", ["task_decomposition"]),
+    ("マルチ**エージェント**を使い、別のエージェントに渡す。", ["agent"]),
+    ("RAG、rag、ＲＡＧ。LLM、ｌｌｍ、人工知能、AI。", ["llm"]),
     ("パラメータとパラメーター。エンベッディングと埋め込み。", ["parameters", "embedding"]),
     ("trait RAGged email DBASE my_llm embeddingstuff", []),
     ("[参考資料](https://example.org/RAG/LLM)\n\n<div data-name='AI'>\n</div>", []),
-    ("[RAG](https://example.org)から資料を探す。", ["rag"]),
+    ("[RAG](https://example.org)から資料を探す。", []),
     ("ここには登録されていない言葉だけを書きます。", []),
     ("### 永続化\n\n情報を残す。\n\n### 推論\n\n回答を作る。", ["persistence", "inference"]),
 ])
@@ -66,7 +66,7 @@ def test_invalid_dictionary_is_rejected(invalid):
     elif invalid == "duplicate_alias":
         content["entries"][1]["aliases"].append("重み")
     elif invalid == "normalized_alias":
-        content["entries"][0]["aliases"].append("ｒａｇ")
+        content["entries"][0]["aliases"].append("ｌｌｍ")
     elif invalid == "definition":
         content["entries"][0]["definition"] = " "
     elif invalid == "alias":
@@ -116,7 +116,7 @@ def start_learning(mode, group):
     participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "GLOSSARY-TEST"}).json()
     pid = participant["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
-    assert all("glossary" not in question for question in questions)
+    assert all(question["glossary"]["version"] == GLOSSARY_VERSION for question in questions)
     for question in questions:
         labels = "DEF" if question["term_slug"] == "llm_knowledge" else "ABC"
         selected = [option["option_id"] for option in question["options"] if option["label"] in labels]
@@ -141,8 +141,8 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 25
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-round2-revision-v1"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 26
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-test-glossary-v2"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material
         assert 600 <= len(stored.tutor_message) <= 800

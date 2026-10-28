@@ -1,8 +1,8 @@
 # 現行API
 
-## 教材・解説の用語注釈（仕様版25）
+## 教材・解説・テストの用語注釈（仕様版26）
 
-POST /api/tutor-sessions/{id}/turnsとPOST /api/tutor-turns/{id}/respondのレスポンスへ`glossary: {version, entries: [{id, term, definition}]}`を追加する。語がなければentriesは空配列。保存snapshotだけを返し、辞書指紋・出典・診断・正答情報を公開しない。新規ルート・DB列・管理設定は追加しない。AI入力と共通履歴には含めない。[保存仕様](24_learning_glossary.md)。
+教材・回答後解説に加え、GET /api/experiment/{id}/pretest、/retest、/final-testの各questions項目へ`glossary: {version, entries: [{id, term, definition}]}`を返す。テストは用語見出し・問題文・全選択肢から抽出し、選択・正誤・診断を使わない。未回答GETはDBへ保存せず、回答時に同じ不変辞書からAttempt.glossary_snapshotへ保存する。回答済みの再取得・再送は保存値を使い、欠落は後付けしない。該当語なしは空配列、snapshot欠落時はnull。指紋・出典・正答・分類情報は公開しない。新規ルート・管理設定は追加せず、nullable JSON列を1つ追加する。AI入力・共通履歴には含めない。[保存仕様](24_learning_glossary.md)。
 
 ## 2026-10-21 同意・分離対応表
 
@@ -18,7 +18,7 @@ POST /api/tutor-sessions/{id}/turnsとPOST /api/tutor-turns/{id}/respondのレ�
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。実験仕様版25と新protocol_idの両方で進行可否を判定する。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。実験仕様版26と新protocol_idの両方で進行可否を判定する。
 
 SurveyPayloadはservices/research_protocol.pyで定義する。experiences（chat/coding_assistance/cli/apiの厳密boolean）、general_ratings（ai_usage_frequency/self_rated_ai_knowledge/system_usability/system_clarity）、material_ratings（clarity/readability/japanese_clarity/difficulty_appropriateness/learning_usefulness/amount_appropriateness）、必須free_commentを受け付ける。評定は厳密な整数1〜10。material_ratingsは未表示者のみnull、表示者は6項目必須。余分なキー・旧フォーム・空白のみのコメントを拒否する。
 
@@ -75,7 +75,7 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 
 回答は `selected_option_ids` と時刻情報（response_time_sec、question_shown_at、answered_at）。テストはparticipant_id/question_id/phaseも指定する。廃止入力項目は422。
 
-NULL・版1〜24・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。新規版25＋現行protocol_idのみcan_resume=true。
+NULL・版1〜25・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。新規版26＋現行protocol_idのみcan_resume=true。
 
 参加者の出題APIに正答や分類メタデータを公開しない。回答後の結果確認では問題・選択内容・正誤を返す。Idempotency-Keyの再送、回答済みロックは維持する。旧試用の管理者閲覧・CSVは許可し、再計算は拒否する。
 

@@ -27,6 +27,7 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     22: {STANDARD: "scenario-actions-v6", EASY: "scenario-actions-easy-v1"},
     23: {STANDARD: "scenario-actions-v7", EASY: "scenario-actions-easy-v1"},
     24: {STANDARD: "scenario-actions-v8", EASY: "scenario-actions-easy-v1"},
+    25: {STANDARD: "scenario-actions-v9", EASY: "scenario-actions-easy-v1"},
 }
 LEARNING_CONTENT_VERSIONS = {STANDARD: 15, EASY: 4}
 

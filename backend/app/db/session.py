@@ -49,6 +49,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("answered_at", datetime_type),
             ("question_body_snapshot", "TEXT"),
             ("option_order_snapshot", json_type),
+            ("glossary_snapshot", json_type),
             ("selected_option_ids", json_type),
         ],
         "tutor_turns": [

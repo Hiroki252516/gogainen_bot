@@ -35,7 +35,14 @@ for (const text of ['const preserveQuestionLines = (termSlug === "multi_agent"',
 for (const text of ['glossary={turn.glossary}', 'glossary={feedback.glossary}']) {
   if (!glossaryPage.includes(text)) throw new Error(`learning glossary placement missing: ${text}`);
 }
-for (const file of ["components/QuestionRunner.tsx", "app/learning-targets/page.tsx"]) {
+const testRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
+for (const text of ['glossary?: Glossary | null', 'glossary={current.glossary}', 'label="テストの用語の補足"']) {
+  if (!testRunner.includes(text)) throw new Error(`test glossary placement missing: ${text}`);
+}
+if (testRunner.indexOf('glossary={current.glossary}') < testRunner.indexOf('current.options.map')) {
+  throw new Error("test glossary must follow the displayed options");
+}
+for (const file of ["app/learning-targets/page.tsx"]) {
   if (fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8").includes("LearningGlossary")) {
     throw new Error(`test questions/results must not display glossary: ${file}`);
   }

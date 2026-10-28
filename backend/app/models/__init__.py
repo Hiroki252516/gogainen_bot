@@ -181,6 +181,7 @@ class Attempt(Base):
     answered_at: Mapped[datetime | None] = mapped_column(DateTime)
     question_body_snapshot: Mapped[str | None] = mapped_column(Text)
     option_order_snapshot: Mapped[list | None] = mapped_column(JSON)
+    glossary_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_correct: Mapped[bool | None] = mapped_column(Boolean)
     score: Mapped[float | None] = mapped_column(Float)
     diagnosed_status: Mapped[str | None] = mapped_column(String(64))
