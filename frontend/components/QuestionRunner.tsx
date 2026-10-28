@@ -6,7 +6,7 @@ import { GiveUpButton } from "@/components/GiveUpButton";
 import { LearningGlossary, type Glossary } from "@/components/LearningGlossary";
 import { ApiError, api, clearPendingIdempotency, postIdempotent, requireParticipant } from "@/lib/api";
 
-type Option = { option_id: string; label: string; body: string; exclusive?: boolean };
+type Option = { option_id: string; label: string; body: string; exclusive?: boolean; is_correct?: boolean };
 type SubmittedAnswer = {
   selected_option_ids?: string[] | null;
 };
@@ -25,6 +25,7 @@ type Question = {
   max_selections?: number;
   answer_status?: "unanswered" | "submitted";
   submitted_answer?: SubmittedAnswer | null;
+  answer_key?: Record<string, boolean>;
 };
 type ScoreResult = { next_url?: string; learning_target_slugs?: string[] };
 
@@ -270,7 +271,7 @@ export function QuestionRunner({
                 (!isUnknown && selectionState.reachedLimit) ||
                 (isUnknown && selectionState.normalSelectedCount > 0));
             return (
-              <label className={`option ${isDisabled ? "option-disabled" : ""} ${isAnswered && isSelected ? "option-selected-locked" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
+              <label className={`option ${isDisabled ? "option-disabled" : ""} ${isAnswered && isSelected ? "option-selected-locked" : ""} ${isAnswered && current.answer_key?.[option.option_id] ? "option-answer-correct" : ""} ${isAnswered && current.answer_key?.[option.option_id] === false ? "option-answer-incorrect" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
                 <input
                   type="checkbox"
                   name="option"
@@ -283,6 +284,8 @@ export function QuestionRunner({
                 />
                 <span>
                   <strong>{option.label}.</strong> {option.body}
+                  {isAnswered && typeof option.is_correct === "boolean" ? <strong className="option-verdict">{option.is_correct ? "正解" : "不正解"}</strong> : null}
+                  {isAnswered && typeof current.answer_key?.[option.option_id] === "boolean" ? <strong className="option-verdict">{current.answer_key[option.option_id] ? "正解" : "不正解"}</strong> : null}
                 </span>
               </label>
             );
@@ -291,7 +294,7 @@ export function QuestionRunner({
       ) : null}
       <LearningGlossary glossary={current.glossary} label="テストの用語の補足" />
       {error ? <div className="danger">{error}</div> : null}
-      <div className="actions">
+      <div className="actions corner-primary">
         <button
           type="button"
           onClick={submit}
@@ -302,7 +305,7 @@ export function QuestionRunner({
         <span className="muted">このフェーズでは正誤や正解の解説は表示されません。</span>
       </div>
       {allowExperimentGiveUp ? (
-        <div className="give-up-footer">
+        <div className="give-up-footer corner-exit">
           <GiveUpButton mode="experiment" disabled={saving} />
         </div>
       ) : null}

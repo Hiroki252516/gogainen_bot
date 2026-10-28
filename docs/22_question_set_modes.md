@@ -2,7 +2,7 @@
 
 ## 両版に共通の用語注釈
 
-現行実験仕様版26では両版・両群の教材・回答後解説と事前/再テストに固定辞書v2（16語）を適用する。注釈処理はexplanation_level、生成契約v7を変更しない。通常版学習バンクの更新は下記の保存と出題で説明する。注釈は本文とは別枠で、正答情報や個別診断で選ばない。[辞書全文と保存](24_learning_glossary.md)。
+現行実験仕様版26では両版・両群の教材・回答後解説と事前/再テストに固定辞書v2（16語）を適用する。注釈処理はexplanation_level、生成契約v7を変更しない。現行の学習確認は同用語のテストバンクから組み立て、旧学習バンクは履歴復元用に保持する。注釈は本文とは別枠で、正答情報や個別診断で選ばない。[辞書全文と保存](24_learning_glossary.md)。
 
 ## 目的と比較の範囲
 
@@ -19,14 +19,15 @@ AI・技術の予備知識が少ない参加者にも設問を読めるように
 
 ## 保存と出題
 
-仕様版26は版25の問題バンクを維持し、問題本文・訂正情報・問題IDを変更しない。通常版学習15・テストscenario-actions-v9、易しい版学習4・テストscenario-actions-easy-v1を使う。版25で採用した種類構成と同文再使用の3組だけの例外も維持する。[問題全文・例外と分類理由](38_round_two_revision.md)。旧仕様版25のテスト復元はscenario-actions-v9を指定する。新規参加者だけに仕様版26・現行protocolを保存し、版25以下は閲覧専用。教材600〜800文字・AI契約は維持する。
+仕様版26は版25の問題バンクを維持し、問題本文・訂正情報・問題IDを変更しない。通常版・易しい版ともテストバンクを使い、学習確認1/2は同用語のpretest_v1/retest_v1へ対応させる。確認3は互換上retest_v2へ対応させる。版25で採用した種類構成と同文再使用の3組だけの例外も維持する。[問題全文・例外と分類理由](38_round_two_revision.md)。旧仕様版25のテスト復元はscenario-actions-v9を指定する。新規参加者だけに仕様版26・現行protocolを保存し、版25以下は閲覧専用。教材600〜800文字・AI契約は維持する。
 
 | 項目 | 通常版 | 易しい版 |
 | --- | --- | --- |
 | question_set_mode | standard | easy |
 | テストYAML | `backend/app/seed/content/standard/learning_content.yml` | `backend/app/seed/content/easy/learning_content_easy.yml` |
 | assessment_bank_version | scenario-actions-v9 | scenario-actions-easy-v1 |
-| 学習YAML | `backend/app/seed/content/standard/learning_questions_v15.yml` | `backend/app/seed/content/easy/learning_questions_v4_easy.yml` |
+| 学習確認問題の現行ソース | 同用語の `pretest_v1` / `retest_v1`（確認3は `retest_v2`） | 同用語の `pretest_v1` / `retest_v1`（確認3は `retest_v2`） |
+| 旧学習YAML（履歴復元用） | `backend/app/seed/content/standard/learning_questions_v15.yml` | `backend/app/seed/content/easy/learning_questions_v4_easy.yml` |
 | learning_content_version | 15 | 4 |
 | 固有問題数 | テスト9・学習確認9 | テスト9・学習確認9 |
 | 追加AI入力 | なし | explanation_level=beginner |

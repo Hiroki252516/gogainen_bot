@@ -60,6 +60,7 @@ def _learning_record(db: Session, session: TutorSession, turn: TutorTurn, projec
         restored = learning_question_spec(
             term.slug, stage, int(question.get("learning_variant_index") or session.session_index or 1),
             question_set_mode(participant.question_set_mode), content_version=content_version,
+            use_current_assessment_source=can_resume(participant),
         )
         snapshot = [*snapshot, *[row for row in restored["options"] if row["option_id"] not in available]]
         body = question.get("body") or turn.learner_prompt or restored["body"]

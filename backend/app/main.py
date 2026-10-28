@@ -121,6 +121,7 @@ def _public_practice_question(question: object) -> dict | None:
                     "label": option.get("label"),
                     "body": option.get("body"),
                     "exclusive": bool(option.get("exclusive", option.get("body") == "わからない。")),
+                    **({"is_correct": bool(option.get("is_correct"))} if item.get("answered") else {}),
                 }
                 for option in options
                 if isinstance(option, dict)
@@ -128,6 +129,7 @@ def _public_practice_question(question: object) -> dict | None:
         return result
 
     result = public_item(question, _PUBLIC_PRACTICE_QUESTION_FIELDS)
+    result["answered"] = bool(question.get("answered"))
     return result
 
 
@@ -539,7 +541,7 @@ async def api_create_tutor_session(
 ) -> dict:
     def operation() -> dict:
         session = create_tutor_session(db, payload.participant_id, payload.term_slug)
-        return {"tutor_session_id": session.id, "session_index": session.session_index, "max_turns": settings.max_turns_per_term}
+        return {"tutor_session_id": session.id, "session_index": session.session_index, "max_turns": 1}
 
     return await run_idempotent(
         db,
@@ -581,7 +583,7 @@ async def api_generate_tutor_turn(
             "practice_question": _public_practice_question(turn.practice_question_json),
             "requires_learner_response": True,
             "turn_index": turn.turn_index,
-            "max_turns": settings.max_turns_per_term,
+            "max_turns": 1,
             "learning_stage": stage_meta.get("learning_stage"),
             "learning_stage_label": stage_meta.get("learning_stage_label"),
             "stage_completed": False,
