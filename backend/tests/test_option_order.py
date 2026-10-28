@@ -348,6 +348,13 @@ def test_randomized_learning_response_uses_internal_role_and_preserves_displayed
     assert response.status_code == 200, response.text
     assert response.json()["is_sufficient"] is False
     assert response.json()["learning_misconception_type"] == "unknown"
+    expected_by_body = {
+        option["body"]: option["is_correct"]
+        for option in assessment_question_spec("llm_knowledge", "pretest")["options"]
+    }
+    assert response.json()["answer_key"] == {
+        option["option_id"]: expected_by_body[option["body"]] for option in options
+    }
 
     with Session(engine) as db:
         saved_turn = db.get(TutorTurn, turn["turn_id"])

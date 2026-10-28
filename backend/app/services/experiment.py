@@ -2704,11 +2704,13 @@ async def respond_tutor_turn(
     grading_json["feedback_glossary"] = glossary_snapshot(feedback_text)
     turn.learner_response = response
     displayed_answer_options = (turn.practice_question_json or {}).get("options") or []
-    displayed_answer_ids = [option["option_id"] for option in displayed_answer_options]
-    answer_options = _selected_learning_options(spec, displayed_answer_ids, displayed_answer_options)
+    # Resolve each displayed ID using the same snapshot mapping as grading.
+    # Randomized IDs are participant-facing and differ from the source IDs.
     answer_key = {
-        option_id: bool(option.get("is_correct"))
-        for option_id, option in zip(displayed_answer_ids, answer_options, strict=True)
+        option["option_id"]: bool(
+            _selected_learning_options(spec, [option["option_id"]], displayed_answer_options)[0].get("is_correct")
+        )
+        for option in displayed_answer_options
     }
     turn.question_shown_at = _naive_datetime(payload.get("question_shown_at"))
     turn.answered_at = _naive_datetime(payload.get("answered_at"))

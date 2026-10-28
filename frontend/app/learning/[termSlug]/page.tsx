@@ -439,7 +439,7 @@ export default function LearningPage() {
                               name="learning-option"
                               value={option.option_id}
                               checked={isSelected}
-                              disabled={submitting || Boolean(feedback) || isDisabled}
+                              disabled={submitting || Boolean(feedback) || Boolean(turn.practice_question.answered) || isDisabled}
                               onChange={() => {
                                 setSelectedOptionIds((currentIds) => nextMultipleSelection(turn.practice_question?.options || [], currentIds, option, requiredSelections));
                               }}

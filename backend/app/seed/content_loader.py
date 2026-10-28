@@ -521,7 +521,7 @@ def learning_question_spec(
         variant = {
             "variant_key": f"learning_round_v{min(max(variant_index, 1), len(CURRENT_LEARNING_ASSESSMENT_SOURCES))}",
             "body": source["body"],
-            "options": source["options"],
+            "options": [dict(option) for option in source["options"]],
         }
     else:
         # The semantic learning stage controls the tutoring prompt only. The
