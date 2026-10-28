@@ -1,8 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
 
-from app.core.experiment_spec import MAX_LEARNING_CONFIRMATION_ATTEMPTS
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import SecretStr
 
@@ -19,7 +17,6 @@ class Settings(BaseSettings):
     codex_reasoning_effort: str = "low"
     rag_base_dir: str = "./rag_agent_knowledge_base"
     max_learning_targets: int = 3
-    max_turns_per_term: int = MAX_LEARNING_CONFIRMATION_ATTEMPTS
     export_dir: str = "./exports"
     identity_mapping_path: str = "./.private-identities/mappings.sqlite3"
     frontend_origin: str = "http://localhost:3000"
