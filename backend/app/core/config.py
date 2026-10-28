@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import SecretStr
 
 
 class Settings(BaseSettings):
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     export_dir: str = "./exports"
     identity_mapping_path: str = "./.private-identities/mappings.sqlite3"
     frontend_origin: str = "http://localhost:3000"
+    admin_password: SecretStr = SecretStr("abc")
 
     model_config = SettingsConfigDict(
         env_file=".env",

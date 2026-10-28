@@ -19,6 +19,7 @@ services:
     network_mode: ${BACKEND_NETWORK_MODE}
     environment:
       APP_ENV: ${APP_ENV}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-abc}
       DATABASE_URL: ${DATABASE_URL}
       AI_BACKEND: ${AI_BACKEND}
       CODEX_APP_SERVER_URL: ${CODEX_APP_SERVER_URL}

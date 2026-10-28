@@ -4,7 +4,7 @@ import json
 
 import pytest
 import yaml
-from fastapi.testclient import TestClient
+from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 

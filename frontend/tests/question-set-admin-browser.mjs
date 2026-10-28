@@ -12,9 +12,12 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(new URL("/admin", base).href);
+  await page.getByLabel("パスワード", { exact: true }).fill("abc");
+  await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
   const settings = page.getByRole("group", { name: "新規参加者に適用する問題版", exact: true });
   const aggregate = page.getByRole("group", { name: "集計する問題版", exact: true });
   await settings.getByRole("button", { name: "通常版", exact: true }).waitFor();
+  await page.waitForFunction(() => !document.querySelector('[aria-label="新規参加者に適用する問題版"] button')?.disabled);
   assert.equal(await aggregate.getByRole("button", { name: "通常版", exact: true }).getAttribute("aria-pressed"), "true");
   for (const [mode, label] of [["standard", "通常版"], ["easy", "易しい版"]]) {
     const button = settings.getByRole("button", { name: label, exact: true });

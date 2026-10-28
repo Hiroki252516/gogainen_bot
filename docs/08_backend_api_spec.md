@@ -12,7 +12,7 @@
 - DELETE /api/admin/identity-mappings/{participant_id}、DELETE /api/admin/identity-mappings: 対応表の個別/全件削除。研究データは残す。
 - DELETE /api/admin/participants/{participant_id}: 現行プロトコルの研究DB内の関連データとアプリ内の対応表を削除する。旧データの409を維持する。ダウンロード済みファイル・USB・バックアップ・Codex側の保持データは削除対象外。
 
-登録・対応表の応答はCache-Control: no-store。対応表APIも現状は認証なしであり、確認ポップアップは認可の代わりにはならない。
+登録・全管理APIの応答はCache-Control: no-store。POST /api/admin/auth/loginはpasswordを受け、backendで照合する（既定abc、ADMIN_PASSWORDで変更）。POST /api/admin/auth/logoutはセッションを失効させる。ログイン時の入力エラーでは受信パスワードを返さない。管理API全体・POST /api/seed・管理用の評価再計算は有効なHttpOnly/SameSite=Strict Cookieがなければ401。管理書込みはOriginがある場合に設定済みfrontend・既存のhttp://127.0.0.1:3000・API自身のいずれにも一致しなければ403。HTTPSではSecureを付ける。セッションは単一backendプロセス内に30分保持し、再起動でも失効する。ChatGPT/Codexログインとは別の認証であり、研究DB・実験版・回答状態は変更しない。
 
 削除済み登録キーの再送判定は、削除監査のregistration_keys配列をDB側で完全一致検索する。SQLiteはjson_each、PostgreSQLはjson_array_elements_textとEXISTSを使用し、監査JSONの全件取得・Pythonでの線形探索を行わない。参加者削除では、研究DBの削除と対応表削除待ち状態を同時にcommitし、その後に対応表を削除して監査状態を完了へ更新する。対応表削除に失敗しても研究DBの削除は巻き戻さず、監査のpendingを起動時または同じDELETE APIの再試行時に回復する。研究DBのcommitに失敗した場合は対応表に触れない。別DB間の分散トランザクションを保証するのではなく、研究DB内の削除outboxで片側だけの処理を再試行可能にする。
 

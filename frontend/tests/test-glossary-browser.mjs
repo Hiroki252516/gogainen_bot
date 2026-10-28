@@ -20,6 +20,8 @@ async function api(request, path, method = "GET", data) {
 }
 
 async function create(request, mode, layout, group) {
+  await api(request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD || "abc" });
+  assert.equal((await api(request, "/api/admin/ai/status")).ai_backend, "mock");
   await api(request, "/api/admin/question-set", "PUT", { mode });
   await api(request, "/api/admin/option-order", "PUT", { mode: layout });
   return api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "TEST-GLOSSARY-BROWSER-SYNTHETIC" });
@@ -74,6 +76,7 @@ async function runTest(page, pid, phase, perfect, capture) {
 
 try {
   const baseline = await browser.newContext();
+  await api(baseline.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD || "abc" });
   assert.equal((await api(baseline.request, "/api/admin/ai/status")).ai_backend, "mock");
   for (const mode of ["standard", "easy"]) {
     const record = await create(baseline.request, mode, "debug_fixed", "B");

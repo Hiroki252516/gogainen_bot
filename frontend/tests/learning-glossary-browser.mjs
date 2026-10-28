@@ -19,6 +19,8 @@ async function api(request, path, method = "GET", data) {
 }
 
 async function participant(request, mode, group) {
+  await api(request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD || "abc" });
+  assert.equal((await api(request, "/api/admin/ai/status")).ai_backend, "mock");
   await api(request, "/api/admin/question-set", "PUT", { mode });
   await api(request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
   const created = await api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "GLOSSARY-BROWSER-SYNTHETIC" });
@@ -50,8 +52,6 @@ try {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const page = await context.newPage();
     page.setDefaultTimeout(30_000);
-    const status = await api(page.request, "/api/admin/ai/status");
-    assert.equal(status.ai_backend, "mock");
     const created = await participant(page.request, mode, group);
     await page.addInitScript((record) => {
       localStorage.setItem("participant_id", record.participant_id);

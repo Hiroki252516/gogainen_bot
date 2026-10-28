@@ -1,3 +1,14 @@
+.admin-password-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+}
+.admin-password-dialog::backdrop { background: rgb(0 0 0 / 35%); }
+.admin-password-dialog h1 { margin: 0; font-size: 22px; }
+.admin-lock-bar { width: min(1080px, calc(100vw - 32px)); margin: 16px auto 0; text-align: right; }
+
 :root {
   color-scheme: light;
   --bg: #f6f7f9;
