@@ -241,6 +241,8 @@ cd frontend && npm test
 cd frontend && npm run build
 ```
 
+GitHub ActionsのBackend testsは、収集したテストをファイル単位で3つの独立したジョブへ分割し、全ジョブを実行します。各ジョブのログには所要時間上位20件が表示され、集約チェック`Backend tests`は全ジョブが成功した場合にのみ成功します。ジョブごとにテストDBは分離されます。同一環境内で複数のpytestを並列実行するとテストDBが競合するため、ローカルでは上記の全件実行を使ってください。
+
 ## AIバックエンド
 
 通常実行の既定は `AI_BACKEND=codex_app_server` です。OpenAI APIキーは使わず、ホスト側のCodex app-serverが保持するChatGPT/Codexログインを使います。
