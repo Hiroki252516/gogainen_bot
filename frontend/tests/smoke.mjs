@@ -188,7 +188,7 @@ for (const expectedText of ["学習内容：", "教材フィードバック", "�
 if (learningPage.indexOf("className=\"learning-layout\"") > learningPage.indexOf("{feedback ? (")) {
   throw new Error("learning page must keep the question layout above feedback");
 }
-for (const expectedText of ["disabled={submitting || Boolean(feedback) || isDisabled}", "submitting ? (feedback ? <ContinueProgress /> : <SubmitProgress />)", "!feedback ? ("]) {
+for (const expectedText of ["disabled={submitting || Boolean(feedback) || Boolean(turn.practice_question.answered) || isDisabled}", "submitting ? (feedback ? <ContinueProgress /> : <SubmitProgress />)", "!feedback ? ("]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing inline feedback behavior: ${expectedText}`);
   }
