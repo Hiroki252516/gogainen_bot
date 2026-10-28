@@ -1049,7 +1049,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "body": body,
                 "question_type": question.question_type,
                 "options": public_options,
-                **({"answer_key": {option["id"]: option.is_correct for option in db.query(QuestionOption).filter_by(question_id=question.id).all()}} if submitted_attempt else {}),
+                **({"answer_key": {option.id: option.is_correct for option in db.query(QuestionOption).filter_by(question_id=question.id).all()}} if submitted_attempt else {}),
                 "glossary": public_glossary(glossary),
                 "test_round": test_round,
                 "test_round_label": _test_round_display_label(test_round),
@@ -2703,15 +2703,12 @@ async def respond_tutor_turn(
 
     grading_json["feedback_glossary"] = glossary_snapshot(feedback_text)
     turn.learner_response = response
-    turn.practice_question_json = {**(turn.practice_question_json or {}), "answered": True}
     answer_key = {
         option.get("option_id"): bool(
             next((candidate.get("is_correct") for candidate in spec["options"] if candidate["body"] == option.get("body")), False)
         )
         for option in turn.practice_question_json.get("options") or []
     }
-    for question_option in turn.practice_question_json.get("options") or []:
-        question_option["is_correct"] = answer_key.get(question_option.get("option_id"), False)
     turn.question_shown_at = _naive_datetime(payload.get("question_shown_at"))
     turn.answered_at = _naive_datetime(payload.get("answered_at"))
     turn.response_time_sec = payload.get("response_time_sec")
