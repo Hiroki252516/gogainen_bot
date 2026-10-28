@@ -6,7 +6,7 @@ import threading
 import time
 
 import pytest
-from fastapi.testclient import TestClient
+from admin_client import AuthenticatedTestClient as TestClient
 
 from app.db.session import SessionLocal
 from app.main import app

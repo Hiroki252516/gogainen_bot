@@ -16,6 +16,13 @@ export class ApiError extends Error {
 
 type ApiRequestInit = RequestInit & { timeoutMs?: number };
 
+function isProtectedAdminRequest(path: string): boolean {
+  const pathname = path.split(/[?#]/, 1)[0].replace(/\/+$/, "");
+  return (pathname.startsWith("/api/admin/") && !pathname.startsWith("/api/admin/auth/")) ||
+    pathname === "/api/seed" ||
+    (pathname.startsWith("/api/participants/") && pathname.endsWith("/evaluation-summary/recalculate"));
+}
+
 export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const { timeoutMs, ...requestInit } = init ?? {};
   const controller = timeoutMs === undefined ? undefined : new AbortController();
@@ -23,6 +30,7 @@ export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
 
   try {
     const res = await fetch(`${API_BASE}${path}`, {
+      credentials: "include",
       ...requestInit,
       signal: controller?.signal ?? requestInit.signal,
       headers: {
@@ -31,6 +39,9 @@ export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
       }
     });
     if (!res.ok) {
+      if (res.status === 401 && isProtectedAdminRequest(path)) {
+        if (typeof window !== "undefined") window.dispatchEvent(new Event("admin-auth-required"));
+      }
       const text = await res.text();
       let message = "";
       let code: string | undefined;

@@ -4,7 +4,7 @@ import sqlite3
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
+from admin_client import AuthenticatedTestClient as TestClient
 from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session as SQLAlchemySession

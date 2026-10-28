@@ -6,7 +6,7 @@ from collections import Counter
 from copy import deepcopy
 
 import pytest
-from fastapi.testclient import TestClient
+from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 

@@ -3,7 +3,7 @@ import hashlib
 
 import pytest
 import yaml
-from fastapi.testclient import TestClient
+from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID

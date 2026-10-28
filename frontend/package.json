@@ -6,7 +6,7 @@
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
-    "test": "node tests/smoke.mjs"
+    "test": "node tests/smoke.mjs && node tests/admin-api-auth.mjs"
   },
   "dependencies": {
     "next": "^16.2.6",
