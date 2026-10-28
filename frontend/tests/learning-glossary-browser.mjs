@@ -19,6 +19,8 @@ async function api(request, path, method = "GET", data) {
 }
 
 async function participant(request, mode, group) {
+  await api(request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD || "abc" });
+  assert.equal((await api(request, "/api/admin/ai/status")).ai_backend, "mock");
   await api(request, "/api/admin/question-set", "PUT", { mode });
   await api(request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
   const created = await api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "GLOSSARY-BROWSER-SYNTHETIC" });
@@ -34,6 +36,10 @@ async function participant(request, mode, group) {
 
 async function verifyNotes(page, label, expected) {
   const notes = page.getByRole("complementary", { name: label, exact: true });
+  if (!expected.entries.length) {
+    assert.equal(await notes.count(), 0);
+    return;
+  }
   assert(await notes.isVisible());
   assert.deepEqual(await notes.locator("dt").allTextContents(), expected.entries.map((entry) => entry.term));
   assert.deepEqual(await notes.locator("dd").allTextContents(), expected.entries.map((entry) => entry.definition));
@@ -46,8 +52,6 @@ try {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const page = await context.newPage();
     page.setDefaultTimeout(30_000);
-    const status = await api(page.request, "/api/admin/ai/status");
-    assert.equal(status.ai_backend, "mock");
     const created = await participant(page.request, mode, group);
     await page.addInitScript((record) => {
       localStorage.setItem("participant_id", record.participant_id);
@@ -81,7 +85,7 @@ try {
   await page.route("**/api/tutor-sessions/*/turns", async (route) => {
     const response = await route.fetch();
     const data = await response.json();
-    await route.fulfill({ response, json: { ...data, tutor_message: "## 読み物\n\n### 内容\n\n必要な情報を確かめて読み進めます。", glossary: { version: "learning-glossary-v1", entries: [] } } });
+    await route.fulfill({ response, json: { ...data, tutor_message: "## 読み物\n\n### 内容\n\n必要な情報を確かめて読み進めます。", glossary: { version: "learning-glossary-v2", entries: [] } } });
   });
   await page.goto(new URL("/learning/llm_knowledge", base).href);
   await page.getByRole("heading", { name: "読み物", exact: true }).waitFor();

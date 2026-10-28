@@ -1,8 +1,8 @@
 # 現行プロトコルの実装境界
 
-用語注釈はbackendの共通辞書処理へ分離し、教材生成・回答後解説の確定時に保存する。LLM・採点・診断の責務へ追加せず、frontendは保存された公開項目だけを表示する。新規登録は版25、旧版24以下は閲覧専用。[24](24_learning_glossary.md)。
+用語注釈はbackendの共通辞書処理へ分離し、教材生成・回答後解説の確定時と、テスト回答時に保存する。LLM・採点・診断の責務へ追加せず、frontendは保存された公開項目だけを表示する。新規登録は版26、旧版25以下は閲覧専用。[24](24_learning_glossary.md)。
 
-現行仕様版25として、新規にexperiment-plan-2026-10-27-round2-revision-v1を保存する。旧プロトコルを並行稼働させず、版24以下・NULL・旧識別子の記録は閲覧専用にする。学習後のretest採点回数を新規参加者ごとに0から記録し、final_test込みの事前後テスト最大2回で未達終了する。学習後回数の保存列は維持し、上限用の回数は導出する。確定判断は[20](20_experiment_plan_alignment.md)。
+現行仕様版26として、新規にexperiment-plan-2026-10-27-test-glossary-v2を保存する。旧プロトコルを並行稼働させず、版25以下・NULL・旧識別子の記録は閲覧専用にする。学習後のretest採点回数を新規参加者ごとに0から記録し、final_test込みの事前後テスト最大2回で未達終了する。学習後回数の保存列は維持し、上限用の回数は導出する。確定判断は[20](20_experiment_plan_alignment.md)。
 
 ## 実装の責務
 
@@ -13,6 +13,8 @@
 - ai：自由な章立て、本文証拠、群別allowlist、v7契約とv3taxonomy。AIBackendを経由しMockへ自動フォールバックしない。
 
 ## 追加するnullable列
+
+仕様版26ではテスト注釈用のattempts.glossary_snapshot（JSON/JSONB）を追加する。既存行はNULLで保持し、補完しない。
 
 participants.protocol_id/retest_cycles_completed、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_json。SQLite/PostgreSQLの不足列追加で移行し、既存行の回数・版・protocol_idを補完しない。
 

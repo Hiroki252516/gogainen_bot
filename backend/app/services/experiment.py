@@ -988,6 +988,10 @@ def _displayed_options(db: Session, participant: Participant, question: Question
     )
 
 
+def _test_glossary(term_label: str, body: str, options: list[dict[str, Any]]) -> dict[str, Any]:
+    return glossary_snapshot("\n\n".join([term_label, body, *(option["body"] for option in options)]))
+
+
 def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict[str, Any]]:
     participant = get_participant(db, participant_id)
     _assert_participant_active(participant)
@@ -1026,6 +1030,12 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
         public_options = _displayed_options(db, participant, question)
         test_round = _test_round_key_for_question(db, participant, phase, question)
         submitted_attempt = submitted_attempts_by_question.get(question.id)
+        body = _variant_body_for_round(db, participant.id, question, phase)
+        glossary = (
+            submitted_attempt.glossary_snapshot
+            if submitted_attempt
+            else _test_glossary(term.label, body, public_options)
+        )
         submitted_option_ids = [
             str(option_id)
             for option_id in (submitted_attempt.selected_option_ids or [])
@@ -1036,9 +1046,10 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
                 "question_id": question.id,
                 "term_slug": term.slug,
                 "term_label": term.label,
-                "body": _variant_body_for_round(db, participant.id, question, phase),
+                "body": body,
                 "question_type": question.question_type,
                 "options": public_options,
+                "glossary": public_glossary(glossary),
                 "test_round": test_round,
                 "test_round_label": _test_round_display_label(test_round),
                 "answer_status": "submitted" if submitted_attempt else "unanswered",
@@ -1158,6 +1169,8 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         .scalar()
         or 0
     ) + 1
+    body = _variant_body_for_round(db, participant.id, question, phase)
+    public_options = _displayed_options(db, participant, question)
     attempt = Attempt(
         participant_id=participant.id,
         term_id=question.term_id,
@@ -1169,8 +1182,9 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         response_time_sec=payload.get("response_time_sec"),
         question_shown_at=_naive_datetime(payload.get("question_shown_at")),
         answered_at=_naive_datetime(payload.get("answered_at")),
-        question_body_snapshot=_variant_body_for_round(db, participant.id, question, phase),
-        option_order_snapshot=_displayed_options(db, participant, question),
+        question_body_snapshot=body,
+        option_order_snapshot=public_options,
+        glossary_snapshot=_test_glossary(term.label, body, public_options),
         idempotency_key=normalized_idempotency_key,
     )
     db.add(attempt)
@@ -3399,6 +3413,7 @@ def _attempt_log_row(
         "selected_option_ids": attempt.selected_option_ids,
         "question_body_snapshot": attempt.question_body_snapshot,
         "option_order_snapshot": attempt.option_order_snapshot,
+        "test_glossary": attempt.glossary_snapshot,
         "response_time_sec": attempt.response_time_sec,
         "question_shown_at": _iso(attempt.question_shown_at),
         "answered_at": _iso(attempt.answered_at),

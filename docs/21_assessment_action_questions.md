@@ -2,7 +2,7 @@
 
 ## 適用範囲
 
-実験仕様版25 / `experiment-plan-2026-10-27-round2-revision-v1`。通常版問題バンク識別子は `scenario-actions-v9`。3用語×3回次＝9固有問題で、各回に3問を出題する。内部final_testは事前後1回目のretest_v1を共用し、その後はretest_v2へ進む。両経路とも事前テストを含め最大3回である。
+実験仕様版26 / `experiment-plan-2026-10-27-test-glossary-v2`。問題本文・判定は版25から変更しない。通常版問題バンク識別子は `scenario-actions-v9`。3用語×3回次＝9固有問題で、各回に3問を出題する。内部final_testは事前後1回目のretest_v1を共用し、その後はretest_v2へ進む。両経路とも事前テストを含め最大3回である。
 
 現行の通常版LLM知識は、事前の製品サポート、再テストV1の社員の問い合わせ分類、再テストV2の大学・教職員のIT問い合わせ分類を使用する。以前の議事録案は旧テストv8に保持する。版9で通常版事前の問1 C/I、問2 D、問3 A/D/Iと対応する誤答4選択肢の教授対象を改訂した。場面・設問・その他の選択肢・再テストは変更しない。変更前のscenario-actions-v1は[アーカイブ](../backend/app/seed/content/archive/learning_content_scenario_actions_v1.yml)へ保全する。
 
@@ -234,7 +234,7 @@
 
 版6で作成した通常版は版7・8でも本文を変更せず使用した。版9では上記6選択肢、版10では問1のA・B、版11では問1のFを改訂した。版12はテスト本文を変更せず、通常版LLM知識の学習確認1問だけを更新した。版13ではマルチエージェント確認問題V1の場面・設問とM3選択肢H・Iを更新した。版14ではV1の9選択肢を具体化した。版15では確認問題V2を2案の比較へ更新した。版16では確認問題V3を学内Wi-Fi問い合わせの比較へ更新した。版17では記憶プロセス確認問題V1を改訂した。版18では記憶プロセス確認問題V2だけを更新した。版19ではLLM知識の確認V1/V2と再テストV1/V2を改訂した。版20ではマルチエージェントと記憶の再テスト4問を改訂した。版21ではLLM確認V1のD/Hだけを学習13へ変更し、テストバンクv6と本文・訂正情報・回数上限は変更しない。[D/Hの改訂](34_llm_round_one_dh_revision.md)。旧テストv5は[アーカイブ](../backend/app/seed/content/archive/learning_content_scenario_actions_v5.yml)に保全し、旧仕様版19の復元にはv5を使う。旧テストv4は[アーカイブ](../backend/app/seed/content/archive/learning_content_scenario_actions_v4.yml)に保全し、仕様版11〜18の結果には当時のバンクを参照する。旧本文は各版のYAMLアーカイブ、旧問題ID・選択肢ID・snapshotはDBで保持し、旧試用を新版へ付け替えない。旧テストv6も[アーカイブ](../backend/app/seed/content/archive/learning_content_scenario_actions_v6.yml)へ保全し、旧仕様版20〜22の結果はv6で復元する。版23はLLM再テストV1だけをテストv7へ改訂し、学習v14を維持した。[今回の改訂](36_llm_retest_one_revision.md)。易しい版は別バンクのまま変更しない。切替は[22](22_question_set_modes.md)、易しい版全文は[23](23_easy_question_bank.md)。版22ではマルチエージェント・記憶の初回確認問題4か所だけを学習v14へ改訂し、本書のテスト本文・訂正情報・テストv6は維持する。[確認問題の現行改訂](35_multi_memory_round_one_revision.md)。
 
-版8の用語注釈も問題本文・選択肢を変更せず、問題やテストには付けない。[24](24_learning_glossary.md)を参照する。
+版8導入時は教材・解説だけだったが、仕様版26は9語を除外した固定辞書v2をテスト回答中にも表示する。問題本文・選択肢・採点は変更しない。[24](24_learning_glossary.md)を参照する。
 
 ## 仕様版24の追加改訂と解釈
 

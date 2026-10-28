@@ -28,8 +28,8 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-multi-memory-retest1-v1"
 
 
 def test_v25_exact_banks_and_unchanged_content():
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 25
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-round2-revision-v1"
+    assert CURRENT_EXPERIMENT_SPEC_VERSION >= 25
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[25] == ASSESSMENT_BANK_VERSIONS
     assert ASSESSMENT_BANK_VERSIONS == {"standard": "scenario-actions-v9", "easy": "scenario-actions-easy-v1"}
     assert LEARNING_CONTENT_VERSIONS == {"standard": 15, "easy": 4}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[24] == {"standard": "scenario-actions-v8", "easy": "scenario-actions-easy-v1"}
@@ -231,7 +231,7 @@ def test_natural_round2_routes_grading_replay_review_and_limit(slug, group, layo
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.option_order_mode = layout
-        assert participant.experiment_spec_version == 25 and participant.learning_content_version == 15
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == 15
         db.commit()
     _answer_test(client, pid, slug, "pretest", "ABC" if initial_perfect else "DEF")
     _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))

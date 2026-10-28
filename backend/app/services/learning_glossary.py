@@ -13,8 +13,8 @@ import yaml
 from markdown_it import MarkdownIt
 
 
-GLOSSARY_PATH = Path(__file__).resolve().parents[1] / "seed/content/learning_glossary_v1.yml"
-GLOSSARY_VERSION = "learning-glossary-v1"
+GLOSSARY_PATH = Path(__file__).resolve().parents[1] / "seed/content/learning_glossary_v2.yml"
+GLOSSARY_VERSION = "learning-glossary-v2"
 
 
 def _normalized(text: str) -> str:
@@ -34,6 +34,7 @@ class LearningGlossary:
     version: str
     sha256: str
     entries: tuple[GlossaryEntry, ...]
+    excluded_aliases: tuple[re.Pattern[str], ...]
 
 
 def parse_learning_glossary(content: Any) -> LearningGlossary:
@@ -45,6 +46,18 @@ def parse_learning_glossary(content: Any) -> LearningGlossary:
     entries = []
     ids: set[str] = set()
     aliases: set[str] = set()
+
+    def alias_pattern(alias: Any) -> re.Pattern[str]:
+        if not isinstance(alias, str) or not alias.strip() or alias != alias.strip():
+            raise ValueError("learning glossary alias must be non-empty and trimmed")
+        normalized = _normalized(alias)
+        if normalized in aliases:
+            raise ValueError(f"learning glossary alias conflicts: {alias}")
+        aliases.add(normalized)
+        left = r"(?<![a-z0-9_])" if re.match(r"[a-z0-9_]", normalized) else ""
+        right = r"(?![a-z0-9_])" if re.search(r"[a-z0-9_]$", normalized) else ""
+        return re.compile(left + re.escape(normalized) + right)
+
     for raw in raw_entries:
         if not isinstance(raw, dict):
             raise ValueError("learning glossary entry must be an object")
@@ -60,20 +73,14 @@ def parse_learning_glossary(content: Any) -> LearningGlossary:
         raw_aliases = raw.get("aliases")
         if not isinstance(raw_aliases, list) or not raw_aliases:
             raise ValueError("learning glossary aliases must be non-empty")
-        patterns = []
-        for alias in raw_aliases:
-            if not isinstance(alias, str) or not alias.strip() or alias != alias.strip():
-                raise ValueError("learning glossary alias must be non-empty and trimmed")
-            normalized = _normalized(alias)
-            if normalized in aliases:
-                raise ValueError(f"learning glossary alias conflicts: {alias}")
-            aliases.add(normalized)
-            left = r"(?<![a-z0-9_])" if re.match(r"[a-z0-9_]", normalized) else ""
-            right = r"(?![a-z0-9_])" if re.search(r"[a-z0-9_]$", normalized) else ""
-            patterns.append(re.compile(left + re.escape(normalized) + right))
+        patterns = [alias_pattern(alias) for alias in raw_aliases]
         entries.append(GlossaryEntry(raw["id"], raw["term"], raw["definition"], tuple(patterns)))
+    raw_excluded = content.get("excluded_aliases", [])
+    if not isinstance(raw_excluded, list):
+        raise ValueError("learning glossary excluded aliases must be a list")
+    excluded = tuple(alias_pattern(alias) for alias in raw_excluded)
     canonical = json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return LearningGlossary(content["version"], hashlib.sha256(canonical.encode("utf-8")).hexdigest(), tuple(entries))
+    return LearningGlossary(content["version"], hashlib.sha256(canonical.encode("utf-8")).hexdigest(), tuple(entries), excluded)
 
 
 @lru_cache(maxsize=1)
@@ -93,12 +100,19 @@ def glossary_snapshot(message: str) -> dict[str, Any]:
                 if child.type in {"text", "code_inline", "softbreak", "hardbreak"}
             ))
     text = _normalized("\n".join(blocks))
-    matches = sorted(
+    matches = list(
         (match.start(), -len(match.group()), index, match.end())
         for index, entry in enumerate(glossary.entries)
         for pattern in entry.aliases
         for match in pattern.finditer(text)
     )
+    # Excluded compound terms still mask their shorter, registered substrings.
+    matches.extend(
+        (match.start(), -len(match.group()), -1, match.end())
+        for pattern in glossary.excluded_aliases
+        for match in pattern.finditer(text)
+    )
+    matches.sort()
     entries = []
     seen: set[str] = set()
     end = -1
@@ -106,6 +120,8 @@ def glossary_snapshot(message: str) -> dict[str, Any]:
         if start < end:
             continue
         end = match_end
+        if index == -1:
+            continue
         entry = glossary.entries[index]
         if entry.id not in seen:
             seen.add(entry.id)

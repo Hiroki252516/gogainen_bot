@@ -1,28 +1,38 @@
-# 教材・回答後解説の用語注釈
+# 教材・回答後解説・テストの用語注釈
 
 ## 目的と比較条件
 
-feature/issue-132の承認済み計画に基づき、通常版・易しい版、実験群・統制群に共通の固定辞書を追加する。注釈は語の意味を補う追加学習支援であり、誤答タイプ別の教授指示ではない。AIの入力・プロンプト・出力Schema・生成契約版・採点・問題バンク・評価式は変更しない。
+feature/issue-132で導入した固定辞書を、fix/issue-188-tyusyakuのユーザー依頼に従って改訂する。指定9語を除外し、残る16語を通常版・易しい版、両群に共通表示する。教材・回答後解説に加え、事前/再テスト（画面上で再テスト1と表示する内部final_testも含む）を対象にする。AI入力・プロンプト・出力Schema・生成契約版・問題本文・採点・評価式は変更しない。
 
 教材と回答後解説の各文章について、登録された用語を出現順に一度ずつ「用語の補足」として常時表示する。本文・見出しの表示文字列から抽出し、Markdownの装飾をまたぐ語も扱う。リンクの宛先やHTMLの属性は検索対象にしない。Unicode NFKCと英字の大小文字を正規化し、同じ位置では長い別表記を優先する。長い語の一部としてしか出ていない短い語は追加しないが、短い語が別に登場すれば掲載する。英字略語は英数字・アンダースコアに接する部分一致を認めない。
 
-問題・選択肢・事前/再/最終テスト・結果確認画面には注釈を出さない。注釈は教材本文に挿入せず、600〜800文字の検査にも含めない。教材と解説に同じ語が登場した場合は、それぞれの下に掲載する。該当語なしでは補足欄自体を表示しない。
+テストでは用語見出し・問題文・全選択肢を表示順につなぎ、登録語を一度ずつ抽出して選択肢の下に一覧表示する。選択・正誤・診断によって項目を変えず、誤答選択肢だけに登場した語も対象にする。確認問題自体と結果確認画面には追加しない。本文へ挿入せず、教材600〜800文字に含めない。空配列・旧snapshot欠落時は補足欄を出さない。
+
+除外語はAI（人工知能）、事前学習、ファインチューニング、プロンプトエンジニアリング、RAG（検索拡張生成）、データベース、マルチエージェント、タスク、記憶プロセス。別表記も対象外。excluded_aliasesにはプロンプトエンジニアリング・マルチエージェントの別表記を登録し、残したプロンプト・エージェントへの部分一致を抑える。これらが独立して登場した場合は補足し、タスク分解など指定されていない語は維持する。
 
 未登録の語はAIで補わない。この辞書だけで全専門語の網羅や初心者への理解しやすさを保証しない。研究者による内容確認・予備調査を行い、収集開始前に表現と範囲を確定する。両群で同じ規則を使うが、生成文に登場する語が違えば表示する語の組合せも異なる。
 
 ## 保存・再現・版
 
-実験仕様版25、protocolは `experiment-plan-2026-10-27-round2-revision-v1`、辞書版は `learning-glossary-v1`。新規登録のみ新版を使い、版24以下・NULL・旧protocolは既存の閲覧専用境界で保護する。既存の教材・注釈・回答・評価を補完・再計算しない。
+実験仕様版26、protocolは `experiment-plan-2026-10-27-test-glossary-v2`、辞書版は `learning-glossary-v2`。新規登録だけ適用し、版25以下・NULL・旧protocolは閲覧専用とする。旧教材・注釈・回答・評価を補完・再計算しない。旧仕様版25のテスト結果復元にはscenario-actions-v9を指定し、問題バンク自体は変更しない。
 
-辞書の正本は [learning_glossary_v1.yml](../backend/app/seed/content/learning_glossary_v1.yml)。起動時に版、非空項目、出典、IDと正規化した別表記の一意性を検証する。説明の変更は辞書改訂として版と運用条件を更新し、収集中に同一版の内容を差し替えない。
+現行辞書の正本は [learning_glossary_v2.yml](../backend/app/seed/content/learning_glossary_v2.yml)。旧25語の[learning_glossary_v1.yml](../backend/app/seed/content/learning_glossary_v1.yml)は履歴用に無変更で保持する。起動時に版・非空項目・出典・ID・正規化した別表記の一意性と、除外語の型・競合を検査する。指紋にはexcluded_aliasesも含める。収集中に同じ版の説明・除外語を変更しない。
 
 backendが生成成功後に表示用snapshotを作る。教材分は `TutorTurn.diagnosis_json.material_glossary`、回答後解説分は `TutorTurn.grading_json.feedback_glossary` に、version、dictionary_sha256、entries（id/term/definition）を保存する。指紋は辞書全体をキー順に正規化したJSONのSHA-256。出現順・当時の説明文を保持し、先行生成の消費・再取得・冪等再送で辞書を引き直さない。AI出力本文は変更しない。
 
 未利用の先行生成に注釈snapshotがあっても表示実績には数えない。教材の表示確認は従来のmaterial-viewと先行生成の利用状態で区別する。
 
-教材・回答後解説の既存APIに `glossary: {version, entries: [{id, term, definition}]}` を追加する。出典と辞書指紋は参加者APIに含めない。DB列・新規ルート・管理切替は追加しない。管理ログと統合CSVのvalue_jsonには保存snapshotを出し、CSV固定ヘッダを維持する。注釈snapshotは表示に供した内容の記録であり、読了の証明ではない。注釈はLLMへの入力と共通回答履歴に含めない。
+教材・解説と各テスト問題の既存APIへ `glossary: {version, entries: [{id, term, definition}]}` を返す。出典・辞書指紋・正答・分類情報は公開しない。新規ルート・管理切替は追加しない。テスト用にnullableなAttempt.glossary_snapshot（SQLiteはJSON、PostgreSQLはJSONB）だけを追加し、旧行はNULLのまま保持する。
 
-## 固定辞書全文
+テストの未回答GETはDBへ書き込まず、不変のv2辞書と固定問題から導出する。回答時に同じ本文・全表示選択肢から辞書版・指紋・表示順・説明文を保存し、回答済みの再取得・冪等再送で再計算しない。未回答の再読み込み・backend再起動でも同じ辞書・問題なら同じ一覧となる。これは読了・表示の証明ではなく、未回答の注釈閲覧イベントも追加しない。
+
+管理ログはtest_glossary、教材/解説は従来のmaterial_glossary/feedback_glossaryを出し、統合CSVのvalue_jsonにも保存値を含める。CSV固定ヘッダは維持する。欠落時は後付けしない。注釈をLLM入力・共通回答履歴へ追加しない。
+
+## 測定上の注意
+
+テスト時の補足は用語の意味を提供する支援であり、特定選択肢の正解や診断を示さないが、解答の判断材料になり得る。両群共通の条件として収集し、従来のテスト注釈なし条件の得点と混ぜない。注釈の個別効果・理解しやすさを機械検査だけで実証したとは扱わない。
+
+## 固定辞書全文（16語）
 
 以下は研究用に平易化した説明であり、出典の逐語引用ではない。「重み」と「パラメーター」は関連するが同義語にまとめない。出典の語義と共通教材の説明に照合し、用語の範囲を本システムで使う文脈に限定する。学習対象の正誤・個人の診断・選択肢の訂正情報としては使わない。
 
@@ -47,13 +57,6 @@ AIの動作を決める内部の数値の総称です。学習で調整される
 - 別表記: `モデル`
 - 確認元: [Google Machine Learning Glossary](https://developers.google.com/machine-learning/glossary/fundamentals#model)
 
-### AI（人工知能） (`ai`)
-
-文章を作る、画像を見分けるなど、人の知的な活動に関わる処理をコンピューターで行う技術です。
-
-- 別表記: `AI`、`人工知能`
-- 確認元: [Google Machine Learning Glossary](https://developers.google.com/machine-learning/glossary#artificial_intelligence)
-
 ### LLM（大規模言語モデル） (`llm`)
 
 大量の文章などを使って学習し、入力に応じた文章を作るAIの仕組みです。
@@ -61,26 +64,12 @@ AIの動作を決める内部の数値の総称です。学習で調整される
 - 別表記: `LLM`、`大規模言語モデル`
 - 確認元: [Google Machine Learning Glossary](https://developers.google.com/machine-learning/glossary/generative#large_language_model)
 
-### 事前学習 (`pretraining`)
-
-様々な用途に使うための土台として、大量のデータから言葉の使い方や特徴を学ぶ処理です。
-
-- 別表記: `事前学習`、`事前訓練`、`プレトレーニング`
-- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（30-32）
-
 ### 追加学習 (`additional_training`)
 
 すでに学習したAIに対し、さらにデータを使って内部の数値を調整する処理です。
 
 - 別表記: `追加学習`、`追加訓練`、`追加トレーニング`
 - 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（34-36）、[Google Machine Learning Glossary](https://developers.google.com/machine-learning/glossary/fundamentals#training)
-
-### ファインチューニング (`fine_tuning`)
-
-学習済みのAIを特定の用途に合わせるため、その用途のデータを使ってさらに学習させる方法です。
-
-- 別表記: `ファインチューニング`、`ファインチューン`、`ファインチューニング処理`、`fine-tuning`、`fine tuning`
-- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（34-36）
 
 ### 推論 (`inference`)
 
@@ -96,33 +85,12 @@ AIへ渡す質問や指示、参考となる情報を含む入力のことです
 - 別表記: `プロンプト`
 - 確認元: [Google Machine Learning Glossary](https://developers.google.com/machine-learning/glossary/generative#prompt)
 
-### プロンプトエンジニアリング (`prompt_engineering`)
-
-望む回答を得られるよう、AIへ渡す質問や指示、参考情報の書き方を工夫することです。
-
-- 別表記: `プロンプトエンジニアリング`、`prompt engineering`
-- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（38-40）
-
-### RAG（検索拡張生成） (`rag`)
-
-質問に関係する資料を外部から検索し、取り出した情報を使ってAIに回答を作らせる仕組みです。
-
-- 別表記: `RAG`、`検索拡張生成`
-- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（43-45）
-
 ### コンテキスト (`context`)
 
 AIが今回の回答を作るときに参照する情報。質問、指示、会話や資料の内容などが含まれます。
 
 - 別表記: `コンテキスト`、`入力文脈`
 - 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（26-49）、[Google Machine Learning Glossary](https://developers.google.com/machine-learning/glossary/generative#context_window)
-
-### データベース (`database`)
-
-多くの情報を整理して保存し、必要な情報を探したり書き換えたりできるようにした仕組みです。
-
-- 別表記: `データベース`、`DB`
-- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（51-66）
 
 ### 知識ベース (`knowledge_base`)
 
@@ -138,26 +106,12 @@ AIが今回の回答を作るときに参照する情報。質問、指示、会
 - 別表記: `エージェント`
 - 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（71-80）
 
-### マルチエージェント (`multi_agent`)
-
-複数の担当がそれぞれ判断し、情報や結果をやり取りしながら課題を進める仕組みです。
-
-- 別表記: `マルチエージェント`、`マルチ・エージェント`、`multi-agent`、`multi agent`
-- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（71-84）
-
 ### ツール (`tool`)
 
 検索や計算など、特定の処理を実行するために呼び出して使う機能です。
 
 - 別表記: `ツール`
 - 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（180-194）
-
-### タスク (`task`)
-
-調べる、予定を作るなど、達成したい作業や課題のことです。
-
-- 別表記: `タスク`
-- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（74-84）
 
 ### タスク分解 (`task_decomposition`)
 
@@ -172,13 +126,6 @@ AIが今回の回答を作るときに参照する情報。質問、指示、会
 
 - 別表記: `ワークフロー`、`ワーク・フロー`
 - 確認元: [backend/app/seed/content/standard/learning_content.yml](../backend/app/seed/content/standard/learning_content.yml)（teaching_targets.multi_agent.I）
-
-### 記憶プロセス (`memory_process`)
-
-過去の会話などから必要な情報を保存し、後で取り出したり、新しい内容へ更新したりする処理です。
-
-- 別表記: `記憶プロセス`、`メモリ機能`、`メモリー機能`、`記憶機能`
-- 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（47-49,216-222）、[backend/app/seed/content/standard/learning_content.yml](../backend/app/seed/content/standard/learning_content.yml)（terms.memory_process）
 
 ### 永続化 (`persistence`)
 

@@ -1,0 +1,89 @@
+version: learning-glossary-v2
+excluded_aliases:
+  - プロンプトエンジニアリング
+  - prompt engineering
+  - マルチエージェント
+  - マルチ・エージェント
+  - multi-agent
+  - multi agent
+entries:
+  - id: weights
+    term: 重み
+    aliases: [重み, ウェイト]
+    definition: AIの内部の計算で、ある情報をどれくらい結果に反映するかに関わる数値。学習の過程で調整されます。
+    sources: ["https://developers.google.com/machine-learning/glossary/fundamentals#weight"]
+  - id: parameters
+    term: パラメーター
+    aliases: [パラメーター, パラメータ]
+    definition: AIの動作を決める内部の数値の総称です。学習で調整される重みなどが含まれます。
+    sources: ["https://developers.google.com/machine-learning/glossary/fundamentals#parameter"]
+  - id: model
+    term: モデル
+    aliases: [モデル]
+    definition: 入力された情報を計算で処理し、予測や文章などの結果を出す仕組み。ここでは、学習済みのAIの仕組みを指します。
+    sources: ["https://developers.google.com/machine-learning/glossary/fundamentals#model"]
+  - id: llm
+    term: LLM（大規模言語モデル）
+    aliases: [LLM, 大規模言語モデル]
+    definition: 大量の文章などを使って学習し、入力に応じた文章を作るAIの仕組みです。
+    sources: ["https://developers.google.com/machine-learning/glossary/generative#large_language_model"]
+  - id: additional_training
+    term: 追加学習
+    aliases: [追加学習, 追加訓練, 追加トレーニング]
+    definition: すでに学習したAIに対し、さらにデータを使って内部の数値を調整する処理です。
+    sources: ["rag_agent_knowledge_base/sources/source_01.txt:34-36", "https://developers.google.com/machine-learning/glossary/fundamentals#training"]
+  - id: inference
+    term: 推論
+    aliases: [推論]
+    definition: ここでは、学習済みのAIが入力を処理し、予測や回答を作る処理を指します。
+    sources: ["https://developers.google.com/machine-learning/glossary/fundamentals#inference"]
+  - id: prompt
+    term: プロンプト
+    aliases: [プロンプト]
+    definition: AIへ渡す質問や指示、参考となる情報を含む入力のことです。
+    sources: ["https://developers.google.com/machine-learning/glossary/generative#prompt"]
+  - id: context
+    term: コンテキスト
+    aliases: [コンテキスト, 入力文脈]
+    definition: AIが今回の回答を作るときに参照する情報。質問、指示、会話や資料の内容などが含まれます。
+    sources: ["rag_agent_knowledge_base/sources/source_01.txt:26-49", "https://developers.google.com/machine-learning/glossary/generative#context_window"]
+  - id: knowledge_base
+    term: 知識ベース
+    aliases: [知識ベース, ナレッジベース]
+    definition: 回答や判断に使う情報をまとめた保存先。説明書や案内文などを整理して入れておきます。
+    sources: ["rag_agent_knowledge_base/sources/source_01.txt:43-66"]
+  - id: agent
+    term: エージェント
+    aliases: [エージェント]
+    definition: 与えられた目的に向けて、状況を見ながら次の行動を判断して進める担当のような仕組みです。
+    sources: ["rag_agent_knowledge_base/sources/source_01.txt:71-80"]
+  - id: tool
+    term: ツール
+    aliases: [ツール]
+    definition: 検索や計算など、特定の処理を実行するために呼び出して使う機能です。
+    sources: ["rag_agent_knowledge_base/sources/source_01.txt:180-194"]
+  - id: task_decomposition
+    term: タスク分解
+    aliases: [タスク分解, タスクの分解]
+    definition: 大きな課題を、調査、比較、まとめなどの小さな作業に分けることです。
+    sources: ["rag_agent_knowledge_base/sources/source_01.txt:180-198"]
+  - id: workflow
+    term: ワークフロー
+    aliases: [ワークフロー, ワーク・フロー]
+    definition: 作業をどの順番で進め、条件によってどこへ進むかを決めた流れのことです。
+    sources: ["backend/app/seed/content/standard/learning_content.yml:teaching_targets.multi_agent.I"]
+  - id: persistence
+    term: 永続化
+    aliases: [永続化, 永続保存]
+    definition: 今回の処理や会話が終わった後でも使えるよう、情報を保存先に残しておくことです。
+    sources: ["rag_agent_knowledge_base/sources/source_02.txt:64-76"]
+  - id: vector
+    term: ベクトル
+    aliases: [ベクトル]
+    definition: ここでは、文章などの特徴を表すために、複数の数値をひとまとめにしたものを指します。
+    sources: ["rag_agent_knowledge_base/sources/source_01.txt:64-66", "https://developers.google.com/machine-learning/glossary#vector"]
+  - id: embedding
+    term: 埋め込み
+    aliases: [埋め込み, 埋込み, エンベディング, エンベッディング, embedding, embeddings]
+    definition: 文章などの特徴を数値の並びで表すこと。意味や特徴が近い情報を探す際などに使います。
+    sources: ["rag_agent_knowledge_base/sources/source_01.txt:64-66", "https://developers.google.com/machine-learning/glossary#embedding"]

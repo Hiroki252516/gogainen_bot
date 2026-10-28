@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GiveUpButton } from "@/components/GiveUpButton";
+import { LearningGlossary, type Glossary } from "@/components/LearningGlossary";
 import { ApiError, api, clearPendingIdempotency, postIdempotent, requireParticipant } from "@/lib/api";
 
 type Option = { option_id: string; label: string; body: string; exclusive?: boolean };
@@ -16,6 +17,7 @@ type Question = {
   body: string;
   question_type: string;
   options: Option[];
+  glossary?: Glossary | null;
   test_round?: string | null;
   test_round_label?: string | null;
   selection_mode?: "multiple";
@@ -287,6 +289,7 @@ export function QuestionRunner({
           })}
         </div>
       ) : null}
+      <LearningGlossary glossary={current.glossary} label="テストの用語の補足" />
       {error ? <div className="danger">{error}</div> : null}
       <div className="actions">
         <button
@@ -296,7 +299,7 @@ export function QuestionRunner({
         >
           {isAnswered ? (index + 1 === questions.length ? "完了" : "次の問題へ") : index + 1 === questions.length ? "完了" : "次へ"}
         </button>
-        <span className="muted">このフェーズでは正誤やヒントは表示されません。</span>
+        <span className="muted">このフェーズでは正誤や正解の解説は表示されません。</span>
       </div>
       {allowExperimentGiveUp ? (
         <div className="give-up-footer">
