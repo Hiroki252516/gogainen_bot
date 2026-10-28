@@ -7,10 +7,11 @@
 }
 .admin-password-dialog::backdrop { background: rgb(0 0 0 / 35%); }
 .admin-password-dialog h1 { margin: 0; font-size: 22px; }
-.admin-lock-bar { width: min(1080px, calc(100vw - 32px)); margin: 16px auto 0; text-align: right; }
+.admin-lock-bar { width: min(var(--shell-max-width), calc(100vw - 32px)); margin: 16px auto 0; text-align: right; }
 
 :root {
   color-scheme: light;
+  --shell-max-width: 1440px;
   --bg: #f6f7f9;
   --surface: #ffffff;
   --line: #d8dde5;
@@ -38,7 +39,7 @@ a {
 }
 
 .shell {
-  width: min(1080px, calc(100vw - 32px));
+  width: min(var(--shell-max-width), calc(100vw - 32px));
   margin: 0 auto;
   padding: 28px 0 56px;
 }
