@@ -40,6 +40,7 @@ from app.core.experiment_spec import (
     CURRENT_EXPERIMENT_SPEC_VERSION,
     CURRENT_PROTOCOL_ID,
     MAX_POST_PRETEST_TESTS,
+    MAX_LEARNING_CONFIRMATION_ATTEMPTS,
     assert_current_experiment,
     can_resume,
 )
@@ -2626,7 +2627,7 @@ async def respond_tutor_turn(
     )
     attempts_used = answered_turn_count + 1
     # A learning session allows one confirmation response per term.
-    attempt_limit_reached = not is_sufficient and attempts_used >= 1
+    attempt_limit_reached = not is_sufficient and attempts_used >= MAX_LEARNING_CONFIRMATION_ATTEMPTS
     session_completed = is_sufficient or attempt_limit_reached
     next_action = "move_next" if session_completed else "continue"
     target_rows_before_completion = learning_targets(db, participant.id) if session_completed else []
@@ -2702,11 +2703,12 @@ async def respond_tutor_turn(
 
     grading_json["feedback_glossary"] = glossary_snapshot(feedback_text)
     turn.learner_response = response
+    displayed_answer_options = (turn.practice_question_json or {}).get("options") or []
+    displayed_answer_ids = [option["option_id"] for option in displayed_answer_options]
+    answer_options = _selected_learning_options(spec, displayed_answer_ids, displayed_answer_options)
     answer_key = {
-        option.get("option_id"): bool(
-            next((candidate.get("is_correct") for candidate in spec["options"] if candidate["body"] == option.get("body")), False)
-        )
-        for option in turn.practice_question_json.get("options") or []
+        option_id: bool(option.get("is_correct"))
+        for option_id, option in zip(displayed_answer_ids, answer_options, strict=True)
     }
     turn.question_shown_at = _naive_datetime(payload.get("question_shown_at"))
     turn.answered_at = _naive_datetime(payload.get("answered_at"))
@@ -2763,7 +2765,7 @@ async def respond_tutor_turn(
         "learning_misconception_confidence": learning_misconception_confidence,
         "learning_misconception_reason": learning_misconception_reason,
         "turn_index": turn.turn_index,
-        "max_turns": 1,
+        "max_turns": MAX_LEARNING_CONFIRMATION_ATTEMPTS,
         "attempts_used": attempts_used,
         "remaining_attempts": 0,
         "session_ended_by_attempt_limit": attempt_limit_reached,

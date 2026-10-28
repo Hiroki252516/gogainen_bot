@@ -588,10 +588,6 @@ button:disabled {
   border-left-width: 5px;
 }
 
-.corner-primary .actions > .muted {
-  display: none;
-}
-
 .option-answer-correct .option-verdict { color: var(--ok); }
 .option-answer-incorrect .option-verdict { color: var(--danger); }
 
