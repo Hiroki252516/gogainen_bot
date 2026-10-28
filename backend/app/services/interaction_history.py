@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.ai.interaction_history import project_interaction_history
-from app.core.experiment_spec import assert_current_experiment
+from app.core.experiment_spec import assert_current_experiment, can_resume
 from app.core.question_sets import question_set_mode
 from app.models import Attempt, Participant, Question, QuestionOption, Term, TutorSession, TutorTurn
 from app.seed.content_loader import learning_question_spec
@@ -60,6 +60,7 @@ def _learning_record(db: Session, session: TutorSession, turn: TutorTurn, projec
         restored = learning_question_spec(
             term.slug, stage, int(question.get("learning_variant_index") or session.session_index or 1),
             question_set_mode(participant.question_set_mode), content_version=content_version,
+            use_current_assessment_source=can_resume(participant),
         )
         snapshot = [*snapshot, *[row for row in restored["options"] if row["option_id"] not in available]]
         body = question.get("body") or turn.learner_prompt or restored["body"]

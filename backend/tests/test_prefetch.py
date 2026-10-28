@@ -142,7 +142,7 @@ def test_first_learning_turn_prefetches_all_later_targets():
         db.close()
 
 
-def test_wrong_current_turn_keeps_prefetch_and_current_second_turn_uses_m3():
+def test_wrong_current_turn_ends_session_and_keeps_next_term_prefetch():
     pid = _create_participant_with_pretest()
     session, turn = _start_first_turn(pid)
     wait_for_prefetch_tasks()
@@ -151,9 +151,9 @@ def test_wrong_current_turn_keeps_prefetch_and_current_second_turn_uses_m3():
         json={"selected_option_ids": _ids_for_labels(turn["practice_question"], ["A", "D", "G"])},
     )
     assert response.status_code == 200, response.text
+    assert response.json()["session_completed"] and response.json()["learning_misconception_type"] == "M3"
     second = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
-    assert second.status_code == 200, second.text
-    assert second.json()["turn_index"] == 2
+    assert second.status_code == 409
 
     db = SessionLocal()
     try:
@@ -161,18 +161,9 @@ def test_wrong_current_turn_keeps_prefetch_and_current_second_turn_uses_m3():
         memory_process = _term_session(db, pid, "memory_process")
         assert multi_agent.prefetch_state == "ready"
         assert memory_process.prefetch_state == "ready"
-        current_logs = [
-            log for log in db.query(AICallLog).filter_by(purpose="generate_tutoring_turn").all()
-            if log.request_payload.get("participant_id") == pid
-            and (log.request_payload.get("term") or {}).get("slug") == "llm_knowledge"
-        ]
-        assert any(
-            (log.request_payload.get("previous_learning_misconception") or {}).get("misconception_type") == "M3"
-            for log in current_logs
-        )
         current_turn = db.get(TutorTurn, turn["turn_id"])
-        second_turn = db.get(TutorTurn, second.json()["turn_id"])
-        assert second_turn.legacy_previous_teaching_strategy is None
+        assert current_turn.grading_json["learning_misconception_type"] == "M3"
+        assert db.query(TutorTurn).filter_by(tutor_session_id=session["tutor_session_id"]).count() == 1
     finally:
         db.close()
 
@@ -271,11 +262,9 @@ def test_prefetch_failure_falls_back_to_normal_generation(monkeypatch: pytest.Mo
             json={"selected_option_ids": _ids_for_labels(generated.practice_question_json, ["A", "D", "G"])},
         )
         assert follow_up_answer.status_code == 200, follow_up_answer.text
+        assert follow_up_answer.json()["session_completed"]
         follow_up = client.post(f"/api/tutor-sessions/{fallback_session.id}/turns", json={})
-        assert follow_up.status_code == 200, follow_up.text
-        follow_up_turn = db.get(TutorTurn, follow_up.json()["turn_id"])
-        assert follow_up_turn.diagnosis_json["generation_origin"] == "same_session_prefetch"
-        assert follow_up_turn.diagnosis_json["prefetch"]["state"] == "not_applicable"
+        assert follow_up.status_code == 409
     finally:
         db.close()
 

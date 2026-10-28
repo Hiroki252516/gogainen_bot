@@ -15,10 +15,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  backend-tests:
-    name: Backend tests
+  backend-test-shards:
+    name: Backend tests (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     defaults:
       run:
         working-directory: backend
@@ -40,7 +44,23 @@ jobs:
       - name: Run tests
         env:
           AI_BACKEND: mock
-        run: python -m pytest -q
+        run: python -m pytest -q -p ci_shard --ci-shard ${{ matrix.shard }} --ci-shards 3 --durations=20
+
+  backend-tests:
+    name: Backend tests
+    if: always()
+    needs: backend-test-shards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all backend shards
+        env:
+          SHARDS_RESULT: ${{ needs.backend-test-shards.result }}
+        run: |
+          if [ "$SHARDS_RESULT" != "success" ]; then
+            echo "Backend test shards did not all succeed: $SHARDS_RESULT"
+            exit 1
+          fi
+          echo "All backend test shards passed."
 
   frontend-checks:
     name: Frontend tests and build

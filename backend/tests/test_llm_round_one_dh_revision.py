@@ -101,9 +101,9 @@ def test_revised_round_one_scoring_feedback_replay_history_and_prefetch(group, l
     assert turn["learning_stage"] == ("enrichment" if initial == "J" else "conceptual_change")
     assert question["learning_variant_index"] == 1
     assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
-    assert NEW_D in [option["body"] for option in question["options"]]
-    assert NEW_H in [option["body"] for option in question["options"]]
     source = learning_question_spec("llm_knowledge", turn["learning_stage"], 1)
+    assert question["body"] == assessment_question_spec("llm_knowledge", "pretest")["body"]
+    assert {option["body"] for option in question["options"]} == {option["body"] for option in source["options"]}
     payload = {"selected_option_ids": _selected(question, source, labels)}
     headers = {"Idempotency-Key": "llm-round1-dh-answer"}
     result = _ok(client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json=payload, headers=headers))
@@ -119,11 +119,9 @@ def test_revised_round_one_scoring_feedback_replay_history_and_prefetch(group, l
         record = next(row for row in build_interaction_history(db, pid, saved_session.term_id) if row["source_type"] == "learning_turn")
         assert record["question_body"] == question["body"]
         assert {option["body"] for option in record["selected_options"]} == {option["body"] for option in source["options"] if option["label"] in labels}
-    if expected_type is not None:
-        retry = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
-        assert retry["practice_question"] == question
-        with SessionLocal() as db:
-            assert db.get(TutorTurn, retry["turn_id"]).diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
+    assert result["session_completed"] and result["max_turns"] == 1
+    assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
+    assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409
 
 
 @pytest.mark.parametrize("version,spec_version,protocol", [(12, 20, OLD_PROTOCOL), (13, 21, "experiment-plan-2026-10-26-llm-round1-dh-v1"), (14, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])

@@ -31,7 +31,7 @@
 
 Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バックアップから分離する。ローカル実行はIDENTITY_MAPPING_PATH（既定 ./.private-identities/mappings.sqlite3）を使う。研究DBだけをバックアップし、対応表を研究用バックアップへ含めない。対応表の削除はこのアプリ内SQLiteのレコード削除であり、USB・OSバックアップ・ダウンロードファイル・外部AIサービスの保持データの完全消去を保証しない。
 
-**実験開始前の必須確認:** テスト系・学習確認v15ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
+**実験開始前の必須確認:** テスト系・現行学習確認ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
 
 実験仕様版26と現行protocol_idの両方で進行・補修・集計を限定する。既存版25以下を含む旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。旧行を付け替えず、retest_cycles_completedも保存値のままにする。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで検証してから配布する。
 
@@ -45,7 +45,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 2. ルート`.env`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動する
 3. `codex` または管理画面のログイン導線でChatGPT/Codexログインを確認する
 4. `docker compose up --build` を実行する
-5. `standard/learning_content.yml`、`standard/learning_questions_v15.yml`、`easy/learning_content_easy.yml`、`easy/learning_questions_v4_easy.yml`の形式検証がbackend起動時に自動実行されることを確認する。固定テスト問題はseedされ、学習確認問題は参加者に固定された版からターン生成時に組み立てられる
+5. `standard/learning_content.yml`、`easy/learning_content_easy.yml`の形式検証がbackend起動時に自動実行されることを確認する。固定テスト問題はseedされ、現行の学習確認問題は同用語のpretest/retest_v1（確認3はretest_v2）から参加者に固定された版のターンとして組み立てられる。旧学習YAMLは履歴復元用に保持する
 6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する（AI status APIは `/api/admin/ai/status`）
 7. `/admin` の選択肢配置が「ランダム配置」であることを確認する（設定APIは `GET /api/admin/option-order`）。必要なら「ランダム配置」へ切り替える（`PUT /api/admin/option-order`）。
 8. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
@@ -94,7 +94,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 
 現行MVPのテスト・再テスト対象は、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語である。`attempts.test_round` に `test`、`retest_1`、`retest_2` 以降を保存する。`/survey` は仮フォームで、送信時に`participant_surveys`へ保存する。
 
-問題YAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分けて管理する。activeなテストは各問題版でpretest_v1とretest_v1/v2の9固有問。通常版LLM知識は製品サポート・社員の問い合わせ分類・教職員のIT問い合わせ分類の3問で、他2用語も行動選択型である。易しい版は従来の問題を使用する。内部final_testはretest_v1を共用し、その後はretest_v2。全用語を採点済みの全体回次で選び、未回答でも同じ問題を再出題しない。置換前の問題・retest_v3は`archive/learning_content_pre_issue156.yml`、さらに古い問題は`archive/learning_questions_v2_unused.yml`へ保全する。新問題は版付きconstruct_keyで別レコードとなり、旧本文や選択肢を上書きしない。学習確認v15は9問を保持するが3セッション目は新規経路で到達しない。同一セッション内は同じ問題を最大3回答し、誤答時は教材だけを再生成する。問題APIは正答・分類を非公開、結果確認の正誤表示を維持する。全文と根拠は[21](21_assessment_action_questions.md)。
+問題YAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分けて管理する。activeなテストは各問題版でpretest_v1とretest_v1/v2の9固有問。通常版LLM知識は製品サポート・社員の問い合わせ分類・教職員のIT問い合わせ分類の3問で、他2用語も行動選択型である。易しい版は従来の問題を使用する。内部final_testはretest_v1を共用し、その後はretest_v2。全用語を採点済みの全体回次で選び、未回答でも同じ問題を再出題しない。置換前の問題・retest_v3は`archive/learning_content_pre_issue156.yml`、さらに古い問題は`archive/learning_questions_v2_unused.yml`へ保全する。新問題は版付きconstruct_keyで別レコードとなり、旧本文や選択肢を上書きしない。現行学習確認は同用語のpretest_v1/retest_v1を共用し、確認3はretest_v2へ対応する。旧学習YAMLは履歴復元用に保持する。同一セッション内の各用語は1回答とし、誤答後は解説を表示して次へ進む。問題APIは正答・分類を非公開、結果確認の正誤表示を維持する。全文と根拠は[21](21_assessment_action_questions.md)。
 
 ランダム配置は各問題に対して固定され、参加者や群、アプリ再起動で変わらない。「わからない」は最後のJへ固定し、残る9択だけをA〜Iへ並べ替える。正解/M1/M3は問題バンク内でA〜Iへ均等に近く割り当てる。回答判定には内部IDとメタデータを使い、AttemptおよびTutorTurnの問題snapshotで実際に表示したラベル・本文・順序を監査する。2026-10-21の変更前に保存した学習問題は元の並びで再利用し、過去のsnapshotを再配置しない。更新時は回答途中を避け、未回答画面を再取得して新しい配置を確認する。
 
@@ -111,14 +111,10 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 - 確認問題は両群ともshared-diagnosis-route-v1で、unknownはenrichment、M1/M3はconceptual_change。同じ状態・回答・turn_indexなら問題とvariantが一致する。教材のinstruction_routeはcontrolがshared_history_general、proposedがshared_history_diagnosticで、proposedだけに教授契約を要求する。共通履歴の版・件数・SHA-256をAIログとTutorTurnで照合する。統制群が回答から自然に誤りを訂正することは許容し、研究比較は明示的な誤概念対応の追加効果と説明する。
 - Codex監査prompt全文には学習者の回答・履歴が含まれる場合があるため、研究者限定で取り扱い、外部共有や参加者画面への表示を行わない。管理APIには共通パスワード認証を適用するが、取得済みファイルの管理は別途必要
 
-### 学習回答後の先行生成の確認
+### 学習回答後の確認
 
-- 不正解かつ残り挑戦回数がある回答では、解説表示中に次教材生成が進む。画面には内部並行処理を表示しない。
-- 被験者が「次の確認へ」を押したとき、先行生成済みなら待ち時間なく次教材へ進み、生成中なら`次の確認を準備中...`の進捗表示で待つ。
-- 先行生成失敗は回答失敗ではない。次ターン取得が通常の同期生成へフォールバックしたことを、参加者ログの`generate_tutoring_turn`と`AICallLog`で確認する。
-- 次教材へ投影した共通履歴が、回答確定後の履歴と同じであることを確認する。現在回答は回答後解説の履歴にはまだ入らず、次教材では1件だけ入る。時刻も投影するが、AI解説本文は投影しない。
-- 解説生成失敗は回答・学習状態を確定しないため、AI call logの失敗を確認してから同じ回答を再送する。Mockへ切り替えたログを本実験データへ混ぜない。
-- 学習ギブアップまたはプロセス再起動後は先行生成が残らない場合がある。その場合は次ターン取得時の通常生成が正しい復旧経路であり、終了済みセッションへ新教材が保存されていないことを確認する。
+- 各用語の確認問題は1回回答すると終了し、回答後に解説と選択肢の正誤を表示する。同一用語の次ターンは生成しない。
+- 後続用語の教材の先行生成は従来どおり使用する。解説生成に失敗した場合は回答・学習状態を確定せず、ログを確認して同じ回答を再送する。
 
 ## If AI Fails
 

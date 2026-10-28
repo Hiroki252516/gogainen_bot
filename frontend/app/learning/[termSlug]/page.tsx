@@ -9,7 +9,7 @@ import { LearningGlossary, type Glossary } from "@/components/LearningGlossary";
 import { CheckingFlow, useLearningTargetFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, postIdempotent, requireParticipant } from "@/lib/api";
 
-type Option = { option_id: string; label: string; body: string; exclusive?: boolean };
+type Option = { option_id: string; label: string; body: string; exclusive?: boolean; is_correct?: boolean };
 
 type Turn = {
   turn_id: string;
@@ -18,7 +18,7 @@ type Turn = {
   tutor_message: string;
   glossary?: Glossary | null;
   learner_prompt: string;
-  practice_question: { body: string; options?: Option[]; selection_mode?: "multiple"; min_selections?: number; max_selections?: number; learning_variant_index?: number };
+  practice_question: { body: string; options?: Option[]; selection_mode?: "multiple"; min_selections?: number; max_selections?: number; learning_variant_index?: number; answered?: boolean };
   turn_index: number;
   max_turns: number;
   learning_stage?: string;
@@ -28,6 +28,7 @@ type Turn = {
 
 type Feedback = {
   feedback: string;
+  answer_key?: Record<string, boolean>;
   glossary?: Glossary | null;
   next_action: string;
   is_sufficient: boolean;
@@ -48,7 +49,7 @@ type Feedback = {
 
 type QuestionProgress = { current: number; total: number; remainingAttempts: number };
 
-const ATTEMPTS_PER_PROBLEM = 3;
+const ATTEMPTS_PER_PROBLEM = 1;
 
 function readLearningTargetSlugs(): string[] {
   if (typeof window === "undefined") return [];
@@ -280,6 +281,14 @@ export default function LearningPage() {
       );
       const updatedTurn = {
         ...turn,
+        practice_question: {
+          ...turn.practice_question,
+          answered: true,
+          options: (turn.practice_question.options || []).map((option) => ({
+            ...option,
+            is_correct: data.answer_key?.[option.option_id] ?? false,
+          })),
+        },
         learning_stage: data.next_learning_stage || turn.learning_stage,
       };
       // Grading feedback belongs to the current problem.  Keep its position
@@ -369,8 +378,8 @@ export default function LearningPage() {
                 <strong>{displayedProgress} / {progress.total}</strong>
               </div>
               <div className="learning-progress-row">
-                <span>この問題の残り挑戦回数</span>
-                <strong>{progress.remainingAttempts}回</strong>
+                <span>この用語の学習確認</span>
+                <strong>1回</strong>
               </div>
             </div>
           ) : null}
@@ -422,20 +431,22 @@ export default function LearningPage() {
                           ((selectionState.hasUnknown && !isUnknown) ||
                             (!isUnknown && selectionState.reachedLimit) ||
                             (isUnknown && selectionState.normalSelectedCount > 0));
+                        const answerClass = feedback && option.is_correct ? "option-answer-correct" : feedback && isSelected && !option.is_correct ? "option-answer-incorrect" : "";
                         return (
-                          <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
+                          <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""} ${answerClass}`} key={option.option_id}>
                             <input
                               type="checkbox"
                               name="learning-option"
                               value={option.option_id}
                               checked={isSelected}
-                              disabled={submitting || Boolean(feedback) || isDisabled}
+                              disabled={submitting || Boolean(feedback) || Boolean(turn.practice_question.answered) || isDisabled}
                               onChange={() => {
                                 setSelectedOptionIds((currentIds) => nextMultipleSelection(turn.practice_question?.options || [], currentIds, option, requiredSelections));
                               }}
                             />
                             <span>
                               <strong>{option.label}.</strong> {option.body}
+                              {feedback ? <strong className="option-verdict">{option.is_correct ? "正解" : "不正解"}</strong> : null}
                             </span>
                           </label>
                         );
@@ -461,7 +472,7 @@ export default function LearningPage() {
               </section>
             ) : null}
             {submitting ? (feedback ? <ContinueProgress /> : <SubmitProgress />) : null}
-            <div className="actions">
+            <div className="actions corner-primary">
               {!feedback ? (
                 <button
                   onClick={submit}
@@ -480,7 +491,7 @@ export default function LearningPage() {
               )}
             </div>
             {!feedback?.session_completed ? (
-              <div className="give-up-footer">
+              <div className="give-up-footer corner-exit">
                 <GiveUpButton mode="learning" disabled={submitting} />
               </div>
             ) : null}

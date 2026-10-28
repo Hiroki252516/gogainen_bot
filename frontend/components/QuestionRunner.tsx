@@ -291,7 +291,7 @@ export function QuestionRunner({
       ) : null}
       <LearningGlossary glossary={current.glossary} label="テストの用語の補足" />
       {error ? <div className="danger">{error}</div> : null}
-      <div className="actions">
+      <div className="actions corner-primary">
         <button
           type="button"
           onClick={submit}
@@ -299,10 +299,10 @@ export function QuestionRunner({
         >
           {isAnswered ? (index + 1 === questions.length ? "完了" : "次の問題へ") : index + 1 === questions.length ? "完了" : "次へ"}
         </button>
-        <span className="muted">このフェーズでは正誤や正解の解説は表示されません。</span>
       </div>
+      <span className="muted">このフェーズでは正誤や正解の解説は表示されません。</span>
       {allowExperimentGiveUp ? (
-        <div className="give-up-footer">
+        <div className="give-up-footer corner-exit">
           <GiveUpButton mode="experiment" disabled={saving} />
         </div>
       ) : null}

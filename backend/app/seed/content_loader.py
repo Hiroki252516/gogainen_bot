@@ -52,6 +52,16 @@ ASSESSMENT_VARIANT_COUNTS = {"pretest": 1, "retest": 2}
 ASSESSMENT_ROLE_SLOTS = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
 UNKNOWN_OPTION = {"label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"}
 
+# The current learning flow reuses the assessment bank instead of maintaining
+# a second set of confirmation-question wording.  Session 3 is not reachable
+# in the current experiment flow, but mapping it to retest_v2 keeps the
+# historical three-variant API deterministic for isolated/recovery paths.
+CURRENT_LEARNING_ASSESSMENT_SOURCES = {
+    1: ("pretest", 1),
+    2: ("retest", 1),
+    3: ("retest", 2),
+}
+
 # Only these exact texts and locations may be reused in the approved new banks.
 APPROVED_LEARNING_V15_REPEATS = {
     "職員が確認した質問と回答の例を学生の問い合わせのたびにAIへ渡せば、回答を重ねるうちにモデルの重みも更新されると考え、別の追加訓練は行わない。": frozenset({
@@ -490,18 +500,39 @@ def learning_question_spec(
     variant_index: int = 1,
     mode: str = STANDARD,
     *, content_version: int | None = None,
+    use_current_assessment_source: bool | None = None,
 ) -> dict[str, Any]:
     mode = question_set_mode(mode)
     content_term(term_slug, mode)
-    # The semantic learning stage controls the tutoring prompt only. The
-    # question is selected by the learning-session round and is shared by
-    # enrichment and conceptual_change.
-    bank = load_learning_content(mode, content_version)
-    variants = bank["terms"][term_slug]["variants"]
-    index = min(max(variant_index, 1), len(variants)) - 1
-    variant = dict(variants[index])
-    variant["body"] = f"{variant['scenario']}\n\n{variant['task']}"
-    variant["options"] = _learning_options(variant)
+    current_version = LEARNING_CONTENT_VERSIONS[mode]
+    resolved_version = current_version if content_version is None else content_version
+
+    # Version 15/4 is the current participant-facing learning contract.  Its
+    # confirmation questions intentionally come from the same fixed test bank
+    # as pretest/retest so the old learning YAML is no longer used for new
+    # turns.  Historical versions below remain YAML-backed for read-only log
+    # restoration.
+    if resolved_version == current_version and use_current_assessment_source is not False:
+        source_phase, source_index = CURRENT_LEARNING_ASSESSMENT_SOURCES.get(
+            min(max(variant_index, 1), len(CURRENT_LEARNING_ASSESSMENT_SOURCES)),
+            CURRENT_LEARNING_ASSESSMENT_SOURCES[1],
+        )
+        source = assessment_question_spec(term_slug, source_phase, source_index, mode)
+        variant = {
+            "variant_key": f"learning_round_v{min(max(variant_index, 1), len(CURRENT_LEARNING_ASSESSMENT_SOURCES))}",
+            "body": source["body"],
+            "options": [dict(option) for option in source["options"]],
+        }
+    else:
+        # The semantic learning stage controls the tutoring prompt only. The
+        # question is selected by the learning-session round and is shared by
+        # enrichment and conceptual_change.
+        bank = load_learning_content(mode, content_version)
+        variants = bank["terms"][term_slug]["variants"]
+        index = min(max(variant_index, 1), len(variants)) - 1
+        variant = dict(variants[index])
+        variant["body"] = f"{variant['scenario']}\n\n{variant['task']}"
+        variant["options"] = _learning_options(variant)
     variant.pop("choices", None)
     variant.pop("scenario", None)
     variant.pop("task", None)
@@ -514,7 +545,7 @@ def learning_question_spec(
     variant["selection_mode"] = "multiple"
     variant["min_selections"] = 3
     variant["max_selections"] = 3
-    variant["_content_version"] = bank["version"]
+    variant["_content_version"] = resolved_version
     return variant
 
 

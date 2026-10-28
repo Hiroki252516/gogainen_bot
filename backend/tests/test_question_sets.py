@@ -99,8 +99,8 @@ def test_archived_standard_and_learning_files_are_unchanged_and_easy_banks_valid
             for index in (1, 2, 3):
                 spec = learning_question_spec(term, "conceptual_change", index, mode)
                 assert spec["_content_version"] == LEARNING_CONTENT_VERSIONS[mode]
-                assert spec["body"] not in all_bodies
-                all_bodies.add(spec["body"])
+                phase, assessment_index = (("pretest", 1), ("retest", 1), ("retest", 2))[index - 1]
+                assert spec["body"] == assessment_question_spec(term, phase, assessment_index, mode)["body"]
                 order = present_options(spec["options"], mode="randomized", bank="learning", item_index=learning_bank_index(term, "conceptual_change", index))
                 repeated = present_options(spec["options"], mode="randomized", bank="learning", item_index=learning_bank_index(term, "conceptual_change", index))
                 assert [(o["label"], o["body"]) for o in order] == [(o["label"], o["body"]) for o in repeated]
@@ -241,7 +241,12 @@ def test_material_feedback_prefetch_and_teaching_targets_use_fixed_bank(isolated
     answered = client.post(f"/api/tutor-turns/{first['turn_id']}/respond", json={"selected_option_ids": role_ids(first["practice_question"], spec, "M3")}, headers={"Idempotency-Key": "first-learning-answer"})
     assert answered.status_code == 200, answered.text
     prefetch.wait_for_prefetch_tasks()
-    second = client.post(url, json={})
+    assert answered.json()["session_completed"] and answered.json()["max_turns"] == 1
+    assert client.post(url, json={}).status_code == 409
+    correct_pid = create(client, mode, layout, group)
+    submit(client, correct_pid, "pretest", mode, role)
+    correct_session = client.post("/api/tutor-sessions", json={"participant_id": correct_pid, "term_slug": "llm_knowledge"}).json()
+    second = client.post(f"/api/tutor-sessions/{correct_session['tutor_session_id']}/turns", json={})
     assert second.status_code == 200, second.text
     second = second.json()
     assert second["practice_question"]["body"] == spec["body"]
@@ -259,9 +264,10 @@ def test_material_feedback_prefetch_and_teaching_targets_use_fixed_bank(isolated
             term = next(t for t in load_content(mode)["terms"] if t["slug"] == target["term_slug"])
             assert target["observed_claim"] in term["questions"]["pretest"][0]["choices"][target["misconception_type"]]
     with factory() as db:
-        turn = db.get(TutorTurn, second["turn_id"])
+        turn = db.get(TutorTurn, first["turn_id"])
         assert turn.diagnosis_json["question_set_mode"] == mode
-        history = turn.diagnosis_json["instruction_audit"]["actual_ai_input"]["interaction_history"]
+        term = db.query(Term).filter_by(slug="llm_knowledge").one()
+        history = build_interaction_history(db, pid, term.id)
         assert len(history) == 2
         assert history[-1]["is_correct"] is False
         assert history[-1]["question_body"] == spec["body"]

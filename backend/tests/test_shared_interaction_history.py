@@ -176,7 +176,22 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
         session, first = start_turn(pid)
         response = answer(first, following, question_shown_at="2030-01-01T00:00:00", answered_at="2030-01-01T00:00:10", response_time_sec=10)
         assert response["next_learning_stage"] == stage
-        next_turn = client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={})
+        assert response["session_completed"] and response["max_turns"] == 1
+        assert client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}).status_code == 409
+        for slug in ("multi_agent", "memory_process"):
+            other_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": slug}).json()
+            other_turn = client.post(f"/api/tutor-sessions/{other_session['tutor_session_id']}/turns", json={})
+            assert other_turn.status_code == 200, other_turn.text
+            answer(other_turn.json(), "ABC")
+        questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+        for question in questions:
+            labels = following if question["term_slug"] == "llm_knowledge" else "ABC"
+            ids = [option["option_id"] for option in question["options"] if option["label"] in labels]
+            assert client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": ids}).status_code == 200
+        assert client.post(f"/api/participants/{pid}/score-retest").status_code == 200
+        next_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"})
+        assert next_session.status_code == 200, next_session.text
+        next_turn = client.post(f"/api/tutor-sessions/{next_session.json()['tutor_session_id']}/turns", json={})
         assert next_turn.status_code == 200, next_turn.text
         next_turn = next_turn.json()
         assert next_turn["learning_stage"] == stage
@@ -186,11 +201,11 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
             assert len(first_feedback.request_payload["interaction_history"]) == 1
             generation = [log for log in logs if log.purpose == "generate_tutoring_turn" and (log.request_payload.get("term") or {}).get("slug") == "llm_knowledge"][-1]
             history = generation.request_payload["interaction_history"]
-            assert len(history) == 2
+            assert len(history) == 3
             assert history[-1]["answered_at"] == "2030-01-01T00:00:10"
             assert [row["label"] for row in history[-1]["selected_options"]] == list(following)
             assert first_feedback.response_payload["feedback"] not in json.dumps(history, ensure_ascii=False)
-            assert generation.request_payload["interaction_history_audit"]["record_count"] == 2
+            assert generation.request_payload["interaction_history_audit"]["record_count"] == 3
             assert generation.request_payload["experiment_spec_version"] == CURRENT_EXPERIMENT_SPEC_VERSION
             assert generation.request_payload["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
             if group == "B":

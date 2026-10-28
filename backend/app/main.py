@@ -20,7 +20,7 @@ from app.models import Participant, Term, TutorSession, TutorTurn
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
 from app.core.admin_auth import require_admin, login as admin_login, logout as admin_logout
-from app.core.experiment_spec import MAX_POST_PRETEST_TESTS, assert_current_experiment, can_resume
+from app.core.experiment_spec import MAX_LEARNING_CONFIRMATION_ATTEMPTS, MAX_POST_PRETEST_TESTS, assert_current_experiment, can_resume
 from app.core.runtime_config import (
     ALLOWED_MODELS,
     ALLOWED_REASONING_EFFORTS,
@@ -127,8 +127,7 @@ def _public_practice_question(question: object) -> dict | None:
             ]
         return result
 
-    result = public_item(question, _PUBLIC_PRACTICE_QUESTION_FIELDS)
-    return result
+    return public_item(question, _PUBLIC_PRACTICE_QUESTION_FIELDS)
 
 
 def _reasoning_effort_status() -> dict:
@@ -539,7 +538,7 @@ async def api_create_tutor_session(
 ) -> dict:
     def operation() -> dict:
         session = create_tutor_session(db, payload.participant_id, payload.term_slug)
-        return {"tutor_session_id": session.id, "session_index": session.session_index, "max_turns": settings.max_turns_per_term}
+        return {"tutor_session_id": session.id, "session_index": session.session_index, "max_turns": MAX_LEARNING_CONFIRMATION_ATTEMPTS}
 
     return await run_idempotent(
         db,
@@ -581,7 +580,7 @@ async def api_generate_tutor_turn(
             "practice_question": _public_practice_question(turn.practice_question_json),
             "requires_learner_response": True,
             "turn_index": turn.turn_index,
-            "max_turns": settings.max_turns_per_term,
+            "max_turns": MAX_LEARNING_CONFIRMATION_ATTEMPTS,
             "learning_stage": stage_meta.get("learning_stage"),
             "learning_stage_label": stage_meta.get("learning_stage_label"),
             "stage_completed": False,

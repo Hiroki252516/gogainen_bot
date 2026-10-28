@@ -47,7 +47,7 @@ def test_v14_changes_only_the_four_requested_locations_and_keeps_v13():
 @pytest.mark.parametrize("stage", ["enrichment", "conceptual_change"])
 def test_revised_round_one_roles_and_paragraphs(term_slug, stage):
     old = learning_question_spec(term_slug, stage, 1, content_version=13)
-    current = learning_question_spec(term_slug, stage, 1)
+    current = learning_question_spec(term_slug, stage, 1, content_version=15, use_current_assessment_source=False)
     assert current["variant_key"] == "learning_round_v1" and current["scenario_type"] == "application"
     assert current["_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
     assert len(current["options"]) == 10
@@ -142,13 +142,9 @@ def test_round_one_display_scoring_feedback_retry_replay_history_and_prefetch(te
         record = next(row for row in build_interaction_history(db, pid, saved_session.term_id) if row["source_type"] == "learning_turn")
         assert record["question_body"] == question["body"]
         assert {option["body"] for option in record["selected_options"]} == {option["body"] for option in source["options"] if option["label"] in labels}
-    if expected_type is not None:
-        retry = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
-        assert retry["practice_question"] == question
-        with SessionLocal() as db:
-            saved = db.get(TutorTurn, retry["turn_id"])
-            assert saved.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
-            assert saved.diagnosis_json["generation_origin"] == "same_session_prefetch"
+    assert result["session_completed"] and result["max_turns"] == 1
+    assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
+    assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409
 
 
 @pytest.mark.parametrize("version,spec_version,protocol", [(13, 21, OLD_PROTOCOL), (14, 24, "experiment-plan-2026-10-27-multi-memory-retest1-v1"), (15, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
@@ -190,9 +186,9 @@ def test_snapshot_or_saved_bank_restoration_and_old_rows_survive_seed_and_startu
             assert restored["question_body"] == ("保存時の問題" if snapshot else original["body"])
             assert restored["selected_options"] == [{"label": label, "body": "保存時の選択肢" if snapshot else selected["body"]}]
             if not snapshot:
-                assert (selected["body"] == new_text) == (version >= 14)
+                assert (selected["body"] == new_text) == (version == 14)
                 if term_slug == "memory_process":
-                    assert (NEW_MEMORY_PURPOSE in restored["question_body"]) == (version >= 14)
+                    assert (NEW_MEMORY_PURPOSE in restored["question_body"]) == (version == 14)
             assert json.dumps([turn.practice_question_json, turn.diagnosis_json, turn.grading_json], sort_keys=True) == before_json
     finally:
         engine.dispose()

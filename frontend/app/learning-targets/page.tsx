@@ -142,7 +142,7 @@ export default function LearningTargetsPage() {
           <span className="muted">学習対象を確認しています。</span>
         )}
         {isRetestResult && currentStep === "learning_targets" ? (
-          <div className="give-up-footer">
+          <div className="give-up-footer corner-exit">
             <GiveUpButton mode="experiment" />
           </div>
         ) : null}

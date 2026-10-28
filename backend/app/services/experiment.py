@@ -40,6 +40,7 @@ from app.core.experiment_spec import (
     CURRENT_EXPERIMENT_SPEC_VERSION,
     CURRENT_PROTOCOL_ID,
     MAX_POST_PRETEST_TESTS,
+    MAX_LEARNING_CONFIRMATION_ATTEMPTS,
     assert_current_experiment,
     can_resume,
 )
@@ -2625,7 +2626,8 @@ async def respond_tutor_turn(
         .count()
     )
     attempts_used = answered_turn_count + 1
-    attempt_limit_reached = not is_sufficient and attempts_used >= get_settings().max_turns_per_term
+    # A learning session allows one confirmation response per term.
+    attempt_limit_reached = not is_sufficient and attempts_used >= MAX_LEARNING_CONFIRMATION_ATTEMPTS
     session_completed = is_sufficient or attempt_limit_reached
     next_action = "move_next" if session_completed else "continue"
     target_rows_before_completion = learning_targets(db, participant.id) if session_completed else []
@@ -2650,29 +2652,6 @@ async def respond_tutor_turn(
         "material_source": (turn.diagnosis_json or {}).get("material_source"),
         "material_generation_ms": (turn.diagnosis_json or {}).get("material_generation_ms"),
     }
-    if prefetch_handle is not None and not is_sufficient and not attempt_limit_reached:
-        prefetch_plan = _build_tutor_turn_plan(
-            db,
-            session,
-            participant,
-            predicted_answer={
-                "turn": turn,
-                "response": response,
-                "grading_json": grading_json,
-                "next_learning_stage": next_learning_stage,
-                "diagnosed_status": diagnosed_status,
-                "learning_misconception_type": learning_misconception_type,
-                "timing": {
-                    "question_shown_at": _naive_datetime(payload.get("question_shown_at")),
-                    "answered_at": _naive_datetime(payload.get("answered_at")),
-                    "response_time_sec": payload.get("response_time_sec"),
-                },
-            },
-        )
-        prefetch_handle.start(
-            lambda worker_handle: _run_tutor_turn_prefetch(worker_handle, prefetch_plan)
-        )
-
     selected_explanation_options = [
         option for option in selected_options if is_sufficient or not option.get("is_correct")
     ]
@@ -2724,6 +2703,15 @@ async def respond_tutor_turn(
 
     grading_json["feedback_glossary"] = glossary_snapshot(feedback_text)
     turn.learner_response = response
+    displayed_answer_options = (turn.practice_question_json or {}).get("options") or []
+    # Resolve each displayed ID using the same snapshot mapping as grading.
+    # Randomized IDs are participant-facing and differ from the source IDs.
+    answer_key = {
+        option["option_id"]: bool(
+            _selected_learning_options(spec, [option["option_id"]], displayed_answer_options)[0].get("is_correct")
+        )
+        for option in displayed_answer_options
+    }
     turn.question_shown_at = _naive_datetime(payload.get("question_shown_at"))
     turn.answered_at = _naive_datetime(payload.get("answered_at"))
     turn.response_time_sec = payload.get("response_time_sec")
@@ -2767,6 +2755,7 @@ async def respond_tutor_turn(
     _commit(db)
     return {
         "feedback": turn.ai_feedback,
+        "answer_key": answer_key,
         "glossary": public_glossary(grading_json["feedback_glossary"]),
         "next_action": next_action,
         "is_sufficient": is_sufficient,
@@ -2778,9 +2767,9 @@ async def respond_tutor_turn(
         "learning_misconception_confidence": learning_misconception_confidence,
         "learning_misconception_reason": learning_misconception_reason,
         "turn_index": turn.turn_index,
-        "max_turns": get_settings().max_turns_per_term,
+        "max_turns": MAX_LEARNING_CONFIRMATION_ATTEMPTS,
         "attempts_used": attempts_used,
-        "remaining_attempts": 0 if is_sufficient else max(get_settings().max_turns_per_term - attempts_used, 0),
+        "remaining_attempts": 0,
         "session_ended_by_attempt_limit": attempt_limit_reached,
         "next_url": next_url,
     }
