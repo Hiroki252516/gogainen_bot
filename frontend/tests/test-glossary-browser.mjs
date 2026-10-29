@@ -34,10 +34,11 @@ async function verifyQuestion(page, question) {
   assert.equal(question.glossary.version, "learning-glossary-v2");
   for (const entry of question.glossary.entries) assert(!excluded.has(entry.id));
   if (question.glossary.entries.length) {
+    if (page.viewportSize().width < 1100) await page.getByRole("button", { name: "用語の補足", exact: true }).click();
     await notes.waitFor();
     assert.deepEqual(await notes.locator("dt").allTextContents(), question.glossary.entries.map((entry) => entry.term));
     assert.deepEqual(await notes.locator("dd").allTextContents(), question.glossary.entries.map((entry) => entry.definition));
-    assert(await page.evaluate(() => document.querySelector(".learning-glossary").getBoundingClientRect().top >= document.querySelector(".options").getBoundingClientRect().bottom), "glossary overlaps options");
+    if (page.viewportSize().width < 1100) await page.getByRole("button", { name: "閉じる", exact: true }).click();
   } else assert.equal(await notes.count(), 0);
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "horizontal overflow");
   for (const option of question.options) assert.deepEqual(Object.keys(option).sort(), ["body", "exclusive", "label", "option_id"]);

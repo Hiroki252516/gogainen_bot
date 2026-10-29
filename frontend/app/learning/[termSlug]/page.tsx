@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { GiveUpButton } from "@/components/GiveUpButton";
 import { MarkdownText } from "@/components/MarkdownText";
 import { LearningGlossary, type Glossary } from "@/components/LearningGlossary";
+import { GlossarySidebar } from "@/components/GlossarySidebar";
 import { CheckingFlow, useLearningTargetFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, postIdempotent, requireParticipant } from "@/lib/api";
 
@@ -391,11 +392,11 @@ export default function LearningPage() {
             <div className="notice">
               <strong>学習内容：{turn.term_label || termSlug}</strong>
             </div>
-            <div className="learning-layout">
+            <div className={`glossary-layout ${turn.glossary?.entries.length ? "has-glossary" : ""}`}>
+            <div className="learning-layout glossary-main">
               <section className="learning-block material-block" aria-labelledby="material-title">
                 <h2 id="material-title">教材</h2>
                 <MarkdownText>{turn.tutor_message}</MarkdownText>
-                <LearningGlossary glossary={turn.glossary} label="教材の用語の補足" />
               </section>
               <section className="learning-block problem-block" aria-labelledby="problem-title">
                 <h2 id="problem-title">問題</h2>
@@ -455,6 +456,8 @@ export default function LearningPage() {
                   </>
                 ) : null}
               </section>
+            </div>
+            <GlossarySidebar glossary={turn.glossary} label="教材の用語の補足" />
             </div>
             {feedback ? (
               <section

@@ -13,7 +13,8 @@ const required = [
   "components/ExperimentProgress.tsx",
   "components/ParticipantFlowGuard.tsx",
   "components/MarkdownText.tsx",
-  "components/LearningGlossary.tsx"
+  "components/LearningGlossary.tsx",
+  "components/GlossarySidebar.tsx"
 ];
 
 for (const file of required) {
@@ -47,8 +48,12 @@ const testRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", i
 for (const text of ['glossary?: Glossary | null', 'glossary={current.glossary}', 'label="テストの用語の補足"']) {
   if (!testRunner.includes(text)) throw new Error(`test glossary placement missing: ${text}`);
 }
-if (testRunner.indexOf('glossary={current.glossary}') < testRunner.indexOf('current.options.map')) {
-  throw new Error("test glossary must follow the displayed options");
+const sidebar = fs.readFileSync(new URL("../components/GlossarySidebar.tsx", import.meta.url), "utf8");
+for (const text of ["showModal()", "dialogRef.current?.close()", "buttonRef.current.focus()", "glossary-sidebar", "glossary-mobile"]) {
+  if (!sidebar.includes(text)) throw new Error(`glossary sidebar missing: ${text}`);
+}
+if (!styles.includes("@media (min-width: 1100px)") || !styles.includes("position: sticky")) {
+  throw new Error("glossary sidebar responsive layout missing");
 }
 for (const file of ["app/learning-targets/page.tsx"]) {
   if (fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8").includes("LearningGlossary")) {

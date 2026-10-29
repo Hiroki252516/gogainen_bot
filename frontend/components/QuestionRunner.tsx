@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GiveUpButton } from "@/components/GiveUpButton";
-import { LearningGlossary, type Glossary } from "@/components/LearningGlossary";
+import { type Glossary } from "@/components/LearningGlossary";
+import { GlossarySidebar } from "@/components/GlossarySidebar";
 import { ApiError, api, clearPendingIdempotency, postIdempotent, requireParticipant } from "@/lib/api";
 
 type Option = { option_id: string; label: string; body: string; exclusive?: boolean };
@@ -229,7 +230,8 @@ export function QuestionRunner({
   const canSubmit = !saving && (isAnswered || !isMultipleQuestion || selectionState.isComplete);
 
   return (
-    <div className="panel stack">
+    <div className={`panel glossary-layout ${current.glossary?.entries.length ? "has-glossary" : ""}`}>
+      <div className="stack glossary-main">
       <div className="topbar">
         <h1>{displayTitle}</h1>
         <span className="muted question-progress" aria-label={progress}>{progress}</span>
@@ -289,7 +291,6 @@ export function QuestionRunner({
           })}
         </div>
       ) : null}
-      <LearningGlossary glossary={current.glossary} label="テストの用語の補足" />
       {error ? <div className="danger">{error}</div> : null}
       <div className="actions corner-primary">
         <button
@@ -306,6 +307,8 @@ export function QuestionRunner({
           <GiveUpButton mode="experiment" disabled={saving} />
         </div>
       ) : null}
+      </div>
+      <GlossarySidebar key={current.question_id} glossary={current.glossary} label="テストの用語の補足" />
     </div>
   );
 }
