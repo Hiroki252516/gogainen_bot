@@ -16,9 +16,19 @@ import app.services.experiment as experiment_service
 from app.services.prefetch import PrefetchCoordinator, wait_for_prefetch_tasks
 from app.services.tutor_prefetch import TutorPrefetchRegistry
 from app.services.learning_glossary import glossary_snapshot, public_glossary
+from split_api_support import case_roles, select_roles
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(params=["standard", "easy"], autouse=True)
+def prefetch_bank(request):
+    previous = client.get("/api/admin/question-set").json()["mode"]
+    assert client.put("/api/admin/question-set", json={"mode": request.param}).status_code == 200
+    yield
+    wait_for_prefetch_tasks()
+    assert client.put("/api/admin/question-set", json={"mode": previous}).status_code == 200
 
 
 def test_immediately_completed_prefetch_does_not_deadlock(monkeypatch):
@@ -72,6 +82,8 @@ def test_prefetch_wait_propagates_caller_cancellation():
 
 
 def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
+    if question.get("selection_mode") == "grouped_single":
+        return [select_roles(q, [role])[0] for q, role in zip(question["questions"], case_roles("".join(labels)), strict=True)]
     by_label = {option["label"]: option["option_id"] for option in question["options"]}
     return [by_label[label] for label in labels]
 
@@ -85,15 +97,14 @@ def _create_participant_with_pretest() -> str:
     pid = participant.json()["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:
-        spec = assessment_question_spec(question["term_slug"], "pretest")
-        m1_labels = [option["label"] for option in spec["options"] if option["misconception_type"] == "M1"]
+        selected = select_roles(question, ["M1"] * (1 if question["selection_mode"] == "single" else 3))
         response = client.post(
             "/api/attempts",
             json={
                 "participant_id": pid,
                 "question_id": question["question_id"],
                 "phase": "pretest",
-                "selected_option_ids": _ids_for_labels(question, m1_labels),
+                "selected_option_ids": selected,
             },
         )
         assert response.status_code == 200, response.text
@@ -130,7 +141,7 @@ def test_first_learning_turn_prefetches_all_later_targets():
             assert prefetched_session.prefetch_state == "ready"
             prefetched_turn = db.query(TutorTurn).filter_by(tutor_session_id=prefetched_session.id).one()
             assert prefetched_turn.learner_response is None
-            assert prefetched_turn.practice_question_json["variant_key"].endswith("v1")
+            assert prefetched_turn.practice_question_json["variant_key"] in {"learning_round_v1", "split_confirmation"}
             assert prefetched_turn.diagnosis_json["generation_origin"] == "prefetch"
             assert prefetched_turn.diagnosis_json["material_glossary"] == glossary_snapshot(prefetched_turn.tutor_message)
             assert prefetched_turn.diagnosis_json["prefetch"]["state"] == "ready"

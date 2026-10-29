@@ -26,6 +26,8 @@ from app.services.prefetch import wait_for_prefetch_tasks
 
 
 client = TestClient(app)
+# Detailed multi-selection history fixtures exercise the retained easy format.
+pytestmark = pytest.mark.usefixtures("ten_choice_api")
 
 
 def create_trial(group="A", labels="DEF"):
@@ -65,7 +67,7 @@ def test_history_merges_all_rounds_and_sessions_using_snapshots_without_diagnost
         pretest.question_body_snapshot = "保存当時の事前問題"
         pretest.option_order_snapshot = [{"option_id": option_id, "label": label, "body": f"保存当時の選択肢{label}", "misconception_type": "PRIVATE_DIAGNOSIS", "is_correct": False} for option_id, label in zip(pretest.selected_option_ids, "DEF")]
         for index, (phase, round_name, labels) in enumerate((("retest", "retest_1", "J"), ("retest", "retest_2", "ADG"), ("final_test", "retest_3", "ABC")), 1):
-            question = db.query(Question).filter_by(term_id=term.id, phase=phase).first()
+            question = db.query(Question).filter_by(term_id=term.id, phase=phase).filter(Question.construct_key.endswith("scenario-actions-easy-v1")).first()
             options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id, QuestionOption.option_label.in_(list(labels))).order_by(QuestionOption.default_order).all()
             db.add(Attempt(participant_id=pid, term_id=term.id, question_id=question.id, phase=phase, test_round=round_name, selected_option_ids=[row.id for row in options], is_correct=labels == "ABC", answered_at=base + timedelta(days=index), misconception_type="M3", natural_language_diagnosis="PRIVATE_REASON"))
         db.add(Attempt(participant_id=pid, term_id=term.id, question_id=pretest.question_id, phase="retest", is_correct=None))
@@ -137,6 +139,7 @@ def test_control_all_tasks_use_shared_history_but_ignore_nested_diagnostic_metad
         "group_condition": "control", "participant_id": "PRIVATE_ID",
         "term": {"slug": "memory_process", "label": "用語", "description": "共通の説明", "primary_misconception": "PRIVATE_DIAGNOSIS"},
         "component_terms": ["保存"], "rag_context": {"chunks": [{"text": "共通資料"}]},
+        "learning_scope": {"topics": ["保存と検索"], "selected_errors": []},
         "interaction_history": [{"source_type": "test_attempt", "phase": "pretest", "question_body": "履歴の問題", "selected_options": [{"label": "D", "body": "履歴の回答", "is_correct": False, "misconception_type": "PRIVATE_DIAGNOSIS"}], "is_correct": False, "reason": "PRIVATE_REASON", "turn_id": "PRIVATE_ID", "learning_stage": "PRIVATE_STAGE"}],
         "active_misconception_type": "PRIVATE_DIAGNOSIS", "learner_state": {"primary_misconception": "PRIVATE_DIAGNOSIS"},
         "misconception_taxonomy": {"M1": "PRIVATE_TAXONOMY"}, "pretest_targets": [{"corrected_claim": "PRIVATE_CORRECTION"}],
@@ -209,7 +212,7 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
             assert generation.request_payload["experiment_spec_version"] == CURRENT_EXPERIMENT_SPEC_VERSION
             assert generation.request_payload["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
             if group == "B":
-                assert set(generation.request_payload["input_projection"]) == set(COMMON_INPUT_KEYS)
+                assert set(generation.request_payload["input_projection"]) == (set(COMMON_INPUT_KEYS) - {"learning_scope"}) | {"explanation_level"}
         success = answer(next_turn, "ABC")
         assert success["next_action"] == "move_next"
         assert success["is_sufficient"] is True
@@ -254,10 +257,10 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(TutorSession).filter_by(participant_id=old_id).one().prefetch_state == ""
         assert db.query(EvaluationSummary).filter_by(participant_id=old_id).one().completed is False
         assert db.get(Participant, current_id).completion_reason == "completed"
-        assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round == "test"
+        assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 26
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 27
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION

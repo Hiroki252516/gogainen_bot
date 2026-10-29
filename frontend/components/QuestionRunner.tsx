@@ -21,7 +21,7 @@ type Question = {
   glossary?: Glossary | null;
   test_round?: string | null;
   test_round_label?: string | null;
-  selection_mode?: "multiple";
+  selection_mode?: "multiple" | "single";
   min_selections?: number;
   max_selections?: number;
   answer_status?: "unanswered" | "submitted";
@@ -166,7 +166,7 @@ export function QuestionRunner({
       await advanceAfterAnswer();
       return;
     }
-    const isMultiple = true;
+    const isMultiple = current.selection_mode !== "single";
     const minSelections = current.min_selections ?? 3;
     const maxSelections = current.max_selections ?? 3;
     const selectionState = multipleSelectionState(current.options, selectedIds, minSelections);
@@ -174,6 +174,7 @@ export function QuestionRunner({
       setError(`選択肢から正しい説明を${minSelections}つ、または「わからない」のみを選んでください。`);
       return;
     }
+    if (!isMultiple && selectedIds.length !== 1) { setError("選択肢を1つ選んでください。"); return; }
     setSaving(true);
     setError("");
     const id = requireParticipant();
@@ -220,14 +221,14 @@ export function QuestionRunner({
   if (error && !current) return <div className="panel danger">{error}</div>;
   if (!current) return <div className="panel">問題がありません。</div>;
 
-  const isMultipleQuestion = true;
+  const isMultipleQuestion = current.selection_mode !== "single";
   const isAnswered = current.answer_status === "submitted";
   const lockedAnswer = current.submitted_answer;
   const lockedSelectedIds = lockedAnswer?.selected_option_ids || [];
   const displayedSelectedIds = isAnswered && lockedAnswer ? lockedSelectedIds : selectedIds;
   const requiredSelections = current.min_selections ?? 3;
   const selectionState = multipleSelectionState(current.options, selectedIds, requiredSelections);
-  const canSubmit = !saving && (isAnswered || !isMultipleQuestion || selectionState.isComplete);
+  const canSubmit = !saving && (isAnswered || (isMultipleQuestion ? selectionState.isComplete : selectedIds.length === 1));
 
   return (
     <div className={`panel glossary-layout ${current.glossary?.entries.length ? "has-glossary" : ""}`}>
@@ -241,7 +242,7 @@ export function QuestionRunner({
           <span>問{toFullWidthDigits(index + 1)}：</span>
           <strong>{current.term_label}</strong>
         </div>
-        <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{current.body}</p>
+        <p className={preserveQuestionLines || current.selection_mode === "single" ? "preserve-lines" : undefined}>{current.body}</p>
       </div>
       {isAnswered ? (
         <div className="notice answer-locked" role="status">
@@ -259,7 +260,7 @@ export function QuestionRunner({
                 : `選択肢から正しい説明を${requiredSelections}つ、または「わからない」のみを選んでください。`}
           </span>
         </div>
-      ) : null}
+      ) : <div className="selection-status">最も適切なものを1つ選んでください。</div>}
       {current.options.length > 0 ? (
         <div className="options">
           {current.options.map((option) => {
@@ -274,13 +275,13 @@ export function QuestionRunner({
             return (
               <label className={`option ${isDisabled ? "option-disabled" : ""} ${isAnswered && isSelected ? "option-selected-locked" : ""} ${isUnknown ? "option-unknown" : ""}`} key={option.option_id}>
                 <input
-                  type="checkbox"
+                  type={isMultipleQuestion ? "checkbox" : "radio"}
                   name="option"
                   value={option.option_id}
                   checked={isSelected}
                   disabled={isAnswered || isDisabled}
                   onChange={() => {
-                    setSelectedIds((currentIds) => nextMultipleSelection(current.options, currentIds, option, requiredSelections));
+                    setSelectedIds((currentIds) => isMultipleQuestion ? nextMultipleSelection(current.options, currentIds, option, requiredSelections) : [option.option_id]);
                   }}
                 />
                 <span>

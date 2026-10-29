@@ -10,7 +10,7 @@ MATERIAL_MIN_CHARACTERS = 600
 MATERIAL_MAX_CHARACTERS = 800
 
 
-PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v7-easy-level"
+PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v8-split-scope"
 TEACHING_CONTRACT_TYPES = ("M1", "M3", "unknown")
 REFUTATION_MODES = ("explicit", "implicit", "category_comparison", "none")
 
@@ -43,7 +43,7 @@ def target_claim_ids(payload: dict[str, Any], expected_type: str | None = None) 
         str(target["claim_id"])
         for target in targets
         if isinstance(target, dict)
-        and target.get("misconception_type") in {None, expected_type}
+        and (payload.get("learning_scope") or target.get("misconception_type") in {None, expected_type})
         and target.get("claim_id")
     ]
 

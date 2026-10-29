@@ -4,6 +4,7 @@ import hashlib
 import json
 from collections import Counter
 from copy import deepcopy
+from contextlib import contextmanager
 
 import pytest
 from admin_client import AuthenticatedTestClient as TestClient
@@ -59,15 +60,26 @@ def role_ids(question, spec, role):
     return [o["option_id"] for o in question["options"] if o["body"] in bodies]
 
 
+def saved_spec(factory, question):
+    with factory() as db:
+        row = db.get(Question, question["question_id"])
+        return {"body": row.body, "options": [
+            {"body": o.body, "is_correct": o.is_correct, "misconception_type": o.misconception_type}
+            for o in db.query(QuestionOption).filter_by(question_id=row.id)
+        ]}
+
+
 def submit(client, pid, phase, mode, role="M1", index=1):
     path = "final-test" if phase == "final_test" else phase
     response = client.get(f"/api/experiment/{pid}/{path}")
     assert response.status_code == 200, response.text
     questions = response.json()["questions"]
     for q in questions:
-        spec = assessment_question_spec(q["term_slug"], phase, index, mode)
+        with contextmanager(app.dependency_overrides[get_db])() as db:
+            row = db.get(Question, q["question_id"])
+            spec = {"body": row.body, "options": [{"body": o.body, "is_correct": o.is_correct, "misconception_type": o.misconception_type} for o in db.query(QuestionOption).filter_by(question_id=row.id)]}
         assert q["body"] == spec["body"]
-        result = client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "phase": phase, "selected_option_ids": role_ids(q, spec, role)}, headers={"Idempotency-Key": f"{phase}-{index}-{q['term_slug']}"})
+        result = client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "phase": phase, "selected_option_ids": role_ids(q, spec, role)}, headers={"Idempotency-Key": f"{phase}-{index}-{q['question_id']}"})
         assert result.status_code == 200, result.text
     endpoint = "diagnose-pretest" if phase == "pretest" else "score-final-test" if phase == "final_test" else "score-retest"
     scored = client.post(f"/api/participants/{pid}/{endpoint}")
@@ -135,7 +147,7 @@ def test_fixed_mode_scoring_review_and_no_cross_bank_fallback(isolated, mode, la
         participant = db.get(Participant, pid)
         assert participant.question_set_mode == mode
         assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS[mode]
-        foreign = db.query(Question).filter_by(phase="pretest", construct_key=assessment_construct_key("llm_knowledge", "pretest", other)).one()
+        foreign = db.query(Question).filter_by(phase="pretest", construct_key=assessment_construct_key("llm_knowledge", "pretest", other)).order_by(Question.variant_key).first()
         foreign_id = foreign.id
     assert client.post("/api/attempts", json={"participant_id": pid, "question_id": foreign_id, "selected_option_ids": []}).status_code == 409
     for q in questions:
@@ -178,11 +190,12 @@ def test_three_test_cap_with_snapshot_history_and_replay(isolated, mode, initial
     assert result["post_pretest_tests_completed"] == 2
     assert result["next_step"] == "survey"
     assert result["post_pretest_test_limit"] == 2
-    assert len({q["body"] for qs in (baseline, first, second) for q in qs}) == 9
+    count = 6 if mode == "standard" else 3
+    assert len({q["body"] for qs in (baseline, first, second) for q in qs}) == count * 3
     assert client.post(f"/api/participants/{pid}/score-retest").status_code == 409
     with factory() as db:
-        assert db.query(Attempt).filter_by(participant_id=pid).count() == 9
-        assert db.query(Attempt).filter_by(participant_id=pid, is_correct=False).count() >= 6
+        assert db.query(Attempt).filter_by(participant_id=pid).count() == count * 3
+        assert db.query(Attempt).filter_by(participant_id=pid, is_correct=False).count() >= count * 2
         attempt = db.query(Attempt).filter_by(participant_id=pid, question_id=baseline[0]["question_id"]).one()
         attempt.question_body_snapshot = None
         attempt.option_order_snapshot = None
@@ -191,7 +204,9 @@ def test_three_test_cap_with_snapshot_history_and_replay(isolated, mode, initial
         assert history[0]["question_body"] == baseline[0]["body"]
         chosen = set(attempt.selected_option_ids)
         assert history[0]["selected_options"] == [{"label": o["label"], "body": o["body"]} for o in baseline[0]["options"] if o["option_id"] in chosen]
-        assert len(history) == 3 and history[1]["selected_options"] == [{"label": "J", "body": "わからない。"}]
+        assert len(history) == (6 if mode == "standard" else 3)
+        first_retest = next(row for row in history if row["phase"] == phase)
+        assert first_retest["selected_options"] == [{"label": "D" if mode == "standard" else "J", "body": "わからない。"}]
 
 
 @pytest.mark.parametrize("mode", ["standard", "easy"])
@@ -201,16 +216,23 @@ def test_all_modes_use_role_metadata_for_mixed_answers(isolated, mode, layout, r
     client, factory, _ = isolated
     pid = create(client, mode, layout)
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    term_indexes = Counter()
     for q in questions:
-        spec = assessment_question_spec(q["term_slug"], "pretest", mode=mode)
+        spec = saved_spec(factory, q)
+        selected_roles = roles
+        if mode == "standard":
+            pair = ["correct", "correct"] if expected is None else ["M1", "M3"] if expected == "M3" else [expected, expected]
+            selected_roles = [pair[term_indexes[q["term_slug"]]]]
+            term_indexes[q["term_slug"]] += 1
         ids = []
-        for role in roles:
+        for role in selected_roles:
             ids.append(next(oid for oid in role_ids(q, spec, role) if oid not in ids))
         saved = client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "selected_option_ids": ids})
         assert saved.status_code == 200, saved.text
     assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
     with factory() as db:
-        assert {a.misconception_type for a in db.query(Attempt).filter_by(participant_id=pid)} == {expected}
+        assert {a.misconception_type for a in db.query(Attempt).filter_by(participant_id=pid)} == ({"M1", "M3"} if mode == "standard" and expected == "M3" else {expected})
+        assert {state.primary_misconception for state in db.query(LearnerState).filter_by(participant_id=pid)} == {expected}
         assert {a.is_correct for a in db.query(Attempt).filter_by(participant_id=pid)} == {expected is None}
 
 
@@ -235,7 +257,8 @@ def test_material_feedback_prefetch_and_teaching_targets_use_fixed_bank(isolated
     assert first.status_code == 200, first.text
     first = first.json()
     prefetch.wait_for_prefetch_tasks()
-    spec = learning_question_spec("llm_knowledge", first["learning_stage"], 1, mode)
+    with factory() as db:
+        spec = db.get(TutorTurn, first["turn_id"]).practice_question_json["source_spec"] if mode == "standard" else learning_question_spec("llm_knowledge", first["learning_stage"], 1, mode)
     assert first["practice_question"]["body"] == spec["body"]
     client.put("/api/admin/question-set", json={"mode": "standard" if mode == "easy" else "easy"})
     answered = client.post(f"/api/tutor-turns/{first['turn_id']}/respond", json={"selected_option_ids": role_ids(first["practice_question"], spec, "M3")}, headers={"Idempotency-Key": "first-learning-answer"})
@@ -261,14 +284,19 @@ def test_material_feedback_prefetch_and_teaching_targets_use_fixed_bank(isolated
             assert not set(projected) & {"pretest_targets", "diagnostic_evidence", "misconception_taxonomy", "active_misconception_type"}
         if payload.get("pretest_target"):
             target = payload["pretest_target"]
-            term = next(t for t in load_content(mode)["terms"] if t["slug"] == target["term_slug"])
-            assert target["observed_claim"] in term["questions"]["pretest"][0]["choices"][target["misconception_type"]]
+            if mode == "standard":
+                with factory() as db:
+                    observed = {option.body for attempt in db.query(Attempt).filter_by(participant_id=pid, phase="pretest") for option in db.query(QuestionOption).filter(QuestionOption.id.in_(attempt.selected_option_ids))}
+                assert target["observed_claim"] in observed
+            else:
+                term = next(t for t in load_content(mode)["terms"] if t["slug"] == target["term_slug"])
+                assert target["observed_claim"] in term["questions"]["pretest"][0]["choices"][target["misconception_type"]]
     with factory() as db:
         turn = db.get(TutorTurn, first["turn_id"])
         assert turn.diagnosis_json["question_set_mode"] == mode
         term = db.query(Term).filter_by(slug="llm_knowledge").one()
         history = build_interaction_history(db, pid, term.id)
-        assert len(history) == 2
+        assert len(history) == (3 if mode == "standard" else 2)
         assert history[-1]["is_correct"] is False
         assert history[-1]["question_body"] == spec["body"]
         p = db.get(Participant, pid)
@@ -356,28 +384,36 @@ def test_partial_tests_advance_all_terms_and_do_not_count_replays_twice(isolated
     submit(client, pid, "pretest", mode)
     first = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
     q = first[0]
-    spec = assessment_question_spec(q["term_slug"], "retest", mode=mode)
+    spec = saved_spec(factory, q)
     body = {"participant_id": pid, "question_id": q["question_id"], "phase": "retest", "selected_option_ids": role_ids(q, spec, "unknown")}
     for _ in range(2):
         assert client.post("/api/attempts", json=body, headers={"Idempotency-Key": "partial-answer"}).status_code == 200
     score = client.post(f"/api/participants/{pid}/score-retest", headers={"Idempotency-Key": "partial-score"})
+    if mode == "standard":
+        assert score.status_code == 400
+        with factory() as db:
+            assert db.get(Participant, pid).retest_cycles_completed == 0
+            assert all(a.is_correct is None for a in db.query(Attempt).filter_by(participant_id=pid, phase="retest"))
+        for q in first[1:]:
+            assert client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "selected_option_ids": role_ids(q, saved_spec(factory, q), "unknown")}).status_code == 200
+        score = client.post(f"/api/participants/{pid}/score-retest", headers={"Idempotency-Key": "partial-score-complete"})
     assert score.status_code == 200, score.text
-    assert client.post(f"/api/participants/{pid}/score-retest", headers={"Idempotency-Key": "partial-score"}).json() == score.json()
+    assert client.post(f"/api/participants/{pid}/score-retest", headers={"Idempotency-Key": "partial-score-complete" if mode == "standard" else "partial-score"}).json() == score.json()
     second = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
-    assert len(second) == 3
+    assert len(second) == (6 if mode == "standard" else 3)
     assert {q["question_id"] for q in first}.isdisjoint(q["question_id"] for q in second)
-    assert all(q["body"] == assessment_question_spec(q["term_slug"], "retest", 2, mode)["body"] for q in second)
+    assert all(q["body"] == saved_spec(factory, q)["body"] for q in second)
     with factory() as db:
         assert db.get(Participant, pid).retest_cycles_completed == 1
 
 
 def test_inconsistent_mode_is_rejected_and_old_six_review_does_not_substitute_current_bank(isolated):
     client, factory, _ = isolated
-    pid = create(client)
-    questions, _ = submit(client, pid, "pretest", "standard")
+    pid = create(client, "easy")
+    questions, _ = submit(client, pid, "pretest", "easy")
     with factory() as db:
         p = db.get(Participant, pid)
-        p.question_set_mode = "easy"
+        p.question_set_mode = "standard"
         db.commit()
     failure = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"})
     assert failure.status_code == 503 and failure.json()["detail"]["error_code"] == "question_set_unavailable"
@@ -411,7 +447,7 @@ def test_missing_question_term_stops_scoring_without_partial_updates(isolated, m
     path = "final-test" if phase == "final_test" else phase
     questions = client.get(f"/api/experiment/{pid}/{path}").json()["questions"]
     for question in questions:
-        spec = assessment_question_spec(question["term_slug"], phase, mode=mode)
+        spec = saved_spec(factory, question)
         saved = client.post("/api/attempts", json={
             "participant_id": pid, "question_id": question["question_id"], "phase": phase,
             "selected_option_ids": role_ids(question, spec, "M1"),
@@ -420,7 +456,7 @@ def test_missing_question_term_stops_scoring_without_partial_updates(isolated, m
 
     with factory() as db:
         pending = db.query(Attempt).filter_by(participant_id=pid, phase=phase, is_correct=None).all()
-        assert len(pending) == 3
+        assert len(pending) == (6 if mode == "standard" else 3)
         # Corrupt the final pending answer's relation so earlier scoring must also roll back.
         term = db.get(Term, pending[-1].term_id)
         term_data = {attr.key: getattr(term, attr.key) for attr in Term.__mapper__.column_attrs}
@@ -454,5 +490,5 @@ def test_missing_question_term_stops_scoring_without_partial_updates(isolated, m
     assert retried.status_code == 200, retried.text
     assert retried.json()["post_pretest_tests_completed"] == 1
     with factory() as db:
-        assert db.query(Attempt).filter_by(participant_id=pid, phase=phase, is_correct=False).count() == 3
+        assert db.query(Attempt).filter_by(participant_id=pid, phase=phase, is_correct=False).count() == (6 if mode == "standard" else 3)
         assert db.get(Participant, pid).retest_cycles_completed == (1 if phase == "retest" else 0)

@@ -185,7 +185,7 @@ def _validate_teaching_targets(content: dict[str, Any]) -> None:
 
 
 def _validate_content(content: dict[str, Any], mode: str = STANDARD) -> None:
-    if content.get("assessment_bank_version") != ASSESSMENT_BANK_VERSIONS[mode]:
+    if content.get("assessment_bank_version") != ("scenario-actions-v9" if mode == STANDARD else ASSESSMENT_BANK_VERSIONS[mode]):
         raise ValueError("assessment bank version is invalid")
     if tuple(term.get("slug") for term in content.get("terms", [])) != ACTIVE_TERM_SLUGS:
         raise ValueError(f"active terms must be exactly {ACTIVE_TERM_SLUGS}")

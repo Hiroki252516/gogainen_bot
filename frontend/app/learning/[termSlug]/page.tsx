@@ -19,7 +19,7 @@ type Turn = {
   tutor_message: string;
   glossary?: Glossary | null;
   learner_prompt: string;
-  practice_question: { body: string; options?: Option[]; selection_mode?: "multiple"; min_selections?: number; max_selections?: number; learning_variant_index?: number; answered?: boolean };
+  practice_question: { body: string; options?: Option[]; questions?: { question_id: string; body: string; options: Option[] }[]; selection_mode?: "multiple" | "grouped_single"; min_selections?: number; max_selections?: number; learning_variant_index?: number; answered?: boolean };
   turn_index: number;
   max_turns: number;
   learning_stage?: string;
@@ -257,6 +257,9 @@ export default function LearningPage() {
     const isMultiple = turn.practice_question?.selection_mode === "multiple";
     const requiredSelections = turn.practice_question?.min_selections ?? 3;
     const selectionState = multipleSelectionState(options, selectedOptionIds, requiredSelections);
+    if (turn.practice_question.questions?.some((q) => q.options.filter((o) => selectedOptionIds.includes(o.option_id)).length !== 1)) {
+      setError("各設問の選択肢を1つずつ選んでください。"); return;
+    }
     if (isMultiple && !selectionState.isComplete) {
       setError(`選択肢から正しい説明を${requiredSelections}つ、または「わからない」のみを選んでください。`);
       return;
@@ -400,8 +403,21 @@ export default function LearningPage() {
               </section>
               <section className="learning-block problem-block" aria-labelledby="problem-title">
                 <h2 id="problem-title">問題</h2>
-                <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{questionBody}</p>
-                {turn.practice_question?.options?.length ? (
+                {!turn.practice_question.questions ? <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{questionBody}</p> : null}
+                {turn.practice_question.questions ? turn.practice_question.questions.map((question) => (
+                  <div key={question.question_id} className="stack">
+                    <p className="preserve-lines">{question.body}</p>
+                    <div className="selection-status">最も適切なものを1つ選んでください。</div>
+                    <div className="options">
+                      {question.options.map((option) => (
+                        <label className={`option ${feedback ? (feedback.answer_key?.[option.option_id] ? "option-answer-correct" : selectedOptionIds.includes(option.option_id) ? "option-answer-incorrect" : "") : ""}`} key={option.option_id}>
+                          <input type="radio" name={`confirmation-${question.question_id}`} checked={selectedOptionIds.includes(option.option_id)} disabled={submitting || Boolean(feedback)} onChange={() => setSelectedOptionIds((ids) => [...ids.filter((id) => !question.options.some((o) => o.option_id === id)), option.option_id])} />
+                          <span><strong>{option.label}.</strong> {option.body}{feedback ? <strong className="option-verdict">{feedback.answer_key?.[option.option_id] ? "正解" : "不正解"}</strong> : null}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )) : turn.practice_question?.options?.length ? (
                   <>
                     {turn.practice_question.selection_mode === "multiple" ? (() => {
                       const requiredSelections = turn.practice_question.min_selections ?? 3;
@@ -481,6 +497,7 @@ export default function LearningPage() {
                   onClick={submit}
                   disabled={
                     submitting ||
+                    Boolean(turn.practice_question.questions?.some((q) => q.options.filter((o) => selectedOptionIds.includes(o.option_id)).length !== 1)) ||
                     (turn.practice_question?.selection_mode === "multiple" &&
                       !multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, turn.practice_question.min_selections ?? 3).isComplete)
                   }

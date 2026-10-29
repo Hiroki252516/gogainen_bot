@@ -90,6 +90,15 @@ def seed_database(db: Session) -> None:
         term.display_order = index
         term.is_active = True
 
+        if mode == STANDARD:
+            from app.services.split_assessment import split_specs
+            for phase, rounds in (("pretest", ["pretest_v1"]), ("retest", ["retest_v1", "retest_v2"])):
+                for round_key in rounds:
+                    for spec in split_specs(term.slug, round_key):
+                        question = _upsert_question(db, term, phase=phase, question_type="split_single", body=spec["body"], expected_answer="A", construct_key=assessment_construct_key(term.slug, phase, mode), variant_key=spec["variant_key"], options=spec["options"])
+                        active_question_ids.add(question.id)
+            continue
+
         for phase in ("pretest", "retest"):
             variants = item["questions"][phase] if phase == "retest" else [item["questions"]["pretest"]]
             for qd in variants:

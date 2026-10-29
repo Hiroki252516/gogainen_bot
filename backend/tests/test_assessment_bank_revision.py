@@ -63,9 +63,9 @@ def test_replacement_seed_preserves_old_questions_options_and_snapshotless_resul
         before_options = {row.id: (row.question_id, row.option_label, row.body, row.is_correct, row.misconception_type) for row in db.query(QuestionOption)}
         seed_database(db)
         seed_database(db)
-        assert db.query(Question).count() == 39
-        assert db.query(Question).filter_by(is_active=True).count() == 24
-        assert db.query(QuestionOption).count() == 390
+        assert db.query(Question).count() == 45
+        assert db.query(Question).filter_by(is_active=True).count() == 30
+        assert db.query(QuestionOption).count() == 342
         for qid, expected in before_questions.items():
             row = db.get(Question, qid)
             assert not row.is_active
@@ -74,7 +74,7 @@ def test_replacement_seed_preserves_old_questions_options_and_snapshotless_resul
             row = db.get(QuestionOption, oid)
             assert (row.question_id, row.option_label, row.body, row.is_correct, row.misconception_type) == expected
         for bank in ASSESSMENT_BANK_VERSIONS.values():
-            assert db.query(Question).filter(Question.is_active.is_(True), Question.construct_key.endswith(bank)).count() == 12
+            assert db.query(Question).filter(Question.is_active.is_(True), Question.construct_key.endswith(bank)).count() == (18 if bank == "split-actions-v1" else 12)
         logs = experiment.participant_logs(db, old_participant.id)
         assert logs["attempts"][0]["question_body"] == before_questions[question.id][0]
         assert logs["attempts"][0]["selected_option_body"] == "D"

@@ -8,6 +8,7 @@ import yaml
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+from split_api_support import assert_retest_flow
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key
@@ -29,8 +30,8 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-multi-memory-retest1-v1"
 
 def test_v25_exact_banks_and_unchanged_content():
     assert CURRENT_EXPERIMENT_SPEC_VERSION >= 25
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[25] == ASSESSMENT_BANK_VERSIONS
-    assert ASSESSMENT_BANK_VERSIONS == {"standard": "scenario-actions-v9", "easy": "scenario-actions-easy-v1"}
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[25] == {"standard": "scenario-actions-v9", "easy": "scenario-actions-easy-v1"}
+    assert ASSESSMENT_BANK_VERSIONS == {"standard": "split-actions-v1", "easy": "scenario-actions-easy-v1"}
     assert LEARNING_CONTENT_VERSIONS == {"standard": 15, "easy": 4}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[24] == {"standard": "scenario-actions-v8", "easy": "scenario-actions-easy-v1"}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
@@ -135,13 +136,11 @@ def test_old_and_easy_banks_keep_type_and_reuse_restrictions(mode, version):
         content_loader._validate_learning_content(content, load_content(mode), mode, content_version=version)
 
 
-def test_assessment_exception_is_not_available_to_old_or_easy_banks(monkeypatch):
+def test_assessment_exception_is_not_available_to_old_or_easy_banks():
     old = deepcopy(load_content())
     old["assessment_bank_version"] = "scenario-actions-v8"
-    with monkeypatch.context() as patch:
-        patch.setitem(content_loader.ASSESSMENT_BANK_VERSIONS, "standard", "scenario-actions-v8")
-        with pytest.raises(ValueError, match="reused across"):
-            content_loader._validate_content(old)
+    with pytest.raises(ValueError, match="assessment bank version is invalid"):
+        content_loader._validate_content(old)
     easy = deepcopy(load_content("easy"))
     variants = easy["terms"][0]["questions"]["retest"]
     variants[1]["choices"]["M1"][2] = variants[0]["choices"]["M1"][2]
@@ -223,44 +222,7 @@ def _learn(client, pid, slug, expected_index):
 @pytest.mark.parametrize("initial_perfect", [False, True])
 @pytest.mark.parametrize("labels,expected_type", [("ABC", None), ("DEF", "M1"), ("GHI", "M3"), ("ADH", "M3"), ("J", "unknown")])
 def test_natural_round2_routes_grading_replay_review_and_limit(slug, group, layout, initial_perfect, labels, expected_type):
-    client = TestClient(app)
-    _ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
-    created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "ROUND2-SYNTHETIC"}))
-    pid = created["participant_id"]
-    with SessionLocal() as db:
-        participant = db.get(Participant, pid)
-        participant.option_order_mode = layout
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == 15
-        db.commit()
-    _answer_test(client, pid, slug, "pretest", "ABC" if initial_perfect else "DEF")
-    _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
-    if not initial_perfect:
-        _learn(client, pid, slug, 1)
-    first_phase = "final_test" if initial_perfect else "retest"
-    first = _answer_test(client, pid, slug, first_phase, "DEF")
-    score = "score-final-test" if initial_perfect else "score-retest"
-    assert _ok(client.post(f"/api/participants/{pid}/{score}", json={}))["post_pretest_tests_completed"] == 1
-    _learn(client, pid, slug, 1 if initial_perfect else 2)
-    question = _answer_test(client, pid, slug, "retest", labels, 2)
-    expected = EXPECTED["retest"][slug]
-    assert question["body"] == expected["scenario"] + "\n\n" + expected["task"]
-    assert question["question_id"] != first["question_id"]
-    headers = {"Idempotency-Key": "round2-score"}
-    result = _ok(client.post(f"/api/participants/{pid}/score-retest", json={}, headers=headers))
-    assert _ok(client.post(f"/api/participants/{pid}/score-retest", json={}, headers=headers)) == result
-    assert result["post_pretest_tests_completed"] == 2 and result["post_pretest_test_limit"] == 2 and result["next_step"] == "survey"
-    review = _ok(client.get(f"/api/participants/{pid}/learning-targets"))["test_results"]
-    row = next(row for row in review["results"] if row["term_slug"] == slug)
-    assert row["question_body"] == question["body"] and row["is_correct"] == (expected_type is None)
-    with SessionLocal() as db:
-        attempt = db.query(Attempt).filter_by(participant_id=pid, question_id=question["question_id"]).one()
-        assert attempt.is_correct == (expected_type is None) and attempt.misconception_type == expected_type
-        source = assessment_question_spec(slug, "retest", 2)
-        selected = [option for option in question["options"] if option["option_id"] in _selected(question, source, labels)]
-        assert _test_record(db, attempt)["selected_options"] == [{"label": option["label"], "body": option["body"]} for option in selected]
-        assert db.query(Attempt).filter_by(participant_id=pid).count() == 9
-        assert db.get(Participant, pid).retest_cycles_completed == (1 if initial_perfect else 2)
-    assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+    assert_retest_flow(slug, group, layout, "final_test" if initial_perfect else "retest", labels, expected_type, round_two=True)
 
 
 @pytest.mark.parametrize("slug", list(EXPECTED["retest"]))
@@ -321,10 +283,10 @@ def test_old_spec24_v8_records_survive_seed_repair_and_missing_snapshot_restore(
             for oid, fields in options_before.items():
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
-            active = db.query(Question).filter_by(term_id=term.id, phase=phase, variant_key="retest_v2", is_active=True).all()
-            assert len(active) == 2 and all(row.id != question.id for row in active)
-            assert db.query(Question).count() == 36
-            assert db.query(Question).filter_by(is_active=True).count() == 24
+            active = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_(["retest_v2", "retest_v2_q1", "retest_v2_q2"])).all()
+            assert len(active) == 3 and all(row.id != question.id for row in active)
+            assert db.query(Question).count() == 42
+            assert db.query(Question).filter_by(is_active=True).count() == 30
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)
             assert record["question_body"] == ("保存時の問題" if snapshot else question.body)

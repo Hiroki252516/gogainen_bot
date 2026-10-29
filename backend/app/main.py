@@ -94,6 +94,7 @@ _PUBLIC_PRACTICE_QUESTION_FIELDS = {
     "max_selections",
     "variant_key",
     "learning_variant_index",
+    "questions",
 }
 _PRIVATE_TURN_RESPONSE_FIELDS = {
     "initial_misconception_type",
@@ -125,6 +126,8 @@ def _public_practice_question(question: object) -> dict | None:
                 for option in options
                 if isinstance(option, dict)
             ]
+        if isinstance(item.get("questions"), list):
+            result["questions"] = [public_item(group, {"question_id", "body", "options"}) for group in item["questions"]]
         return result
 
     return public_item(question, _PUBLIC_PRACTICE_QUESTION_FIELDS)

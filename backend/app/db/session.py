@@ -94,10 +94,10 @@ def _ensure_lightweight_schema_updates() -> None:
 
 
 def _backfill_attempt_test_rounds(connection) -> None:
-    """Populate round names for attempts created before the test_round column existed."""
+    """Repair the retained easy format, never guess missing split-assessment rounds."""
     rows = connection.execute(
-        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE (test_round IS NULL OR test_round = '') AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = :spec_version AND protocol_id = :protocol_id)"),
-        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION, "protocol_id": CURRENT_PROTOCOL_ID},
+        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE (test_round IS NULL OR test_round = '') AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = :spec_version AND protocol_id = :protocol_id AND question_set_mode = :mode)"),
+        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "mode": "easy"},
     ).mappings().all()
     if not rows:
         return
