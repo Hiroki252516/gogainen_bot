@@ -433,7 +433,7 @@ async def api_diagnose_pretest(
         next_step = "learning_targets" if count else "final_test"
         participant = get_participant(db, participant_id)
         review = pretest_display.enabled(participant.show_pretest_results)
-        return {"status": "completed", "learning_target_count": count, "next_step": next_step, "review_required": review, "next_url": "/learning-targets" if review else pretest_display.next_url(db, participant)}
+        return {"status": "completed", "learning_target_count": count, "learning_target_slugs": [row["term_slug"] for row in learning_targets(db, participant_id)], "next_step": next_step, "review_required": review, "next_url": "/learning-targets" if review else pretest_display.next_url(db, participant)}
 
     return await run_idempotent(
         db,

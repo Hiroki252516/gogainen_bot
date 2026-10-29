@@ -106,3 +106,39 @@ def test_nullable_migration_is_repeatable_and_preserves_existing_rows(tmp_path, 
         assert not current_setting(db)
         assert db.get(Participant, pid).show_pretest_results is None
     engine.dispose()
+
+
+@pytest.mark.parametrize("group", ["A", "B"])
+@pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
+def test_hidden_review_three_terms_progress_to_retest(group, layout):
+    from split_api_support import create_trial, confirm
+    client = AuthenticatedTestClient(app)
+    previous = ok(client.get(ENDPOINT))["enabled"]
+    try:
+        ok(client.put(ENDPOINT, json={"enabled": False}))
+        with create_trial(group, layout) as (client, pid):
+            questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
+            for question in questions:
+                ok(client.post("/api/attempts", json={"participant_id": pid, "phase": "pretest", "question_id": question["question_id"], "selected_option_ids": select_roles(question, ["unknown"])}))
+            diagnosed = ok(client.post(f"/api/participants/{pid}/diagnose-pretest", json={}))
+            slugs = ["llm_knowledge", "multi_agent", "memory_process"]
+            assert diagnosed["learning_target_slugs"] == slugs
+            for index, slug in enumerate(slugs):
+                current = ok(client.get(f"/api/participants/{pid}/current-step"))
+                assert current["next_url"] == f"/learning/{slug}"
+                result = confirm(client, pid, slug, questions, (None, None), None, 1)
+                assert result["next_url"] == (f"/learning/{slugs[index+1]}" if index < 2 else "/retest")
+            assert ok(client.get(f"/api/participants/{pid}/current-step"))["next_url"] == "/retest"
+            with SessionLocal() as db:
+                participant = db.get(Participant, pid)
+                participant.current_step = "learning_targets"
+                db.commit()
+            for endpoint in ("current-step", "learning-targets"):
+                response = client.get(f"/api/participants/{pid}/{endpoint}")
+                assert response.status_code == 503
+                assert response.json()["detail"]["error_code"] == "learning_navigation_unavailable"
+            with SessionLocal() as db:
+                db.get(Participant, pid).current_step = "retest"
+                db.commit()
+    finally:
+        ok(client.put(ENDPOINT, json={"enabled": previous}))

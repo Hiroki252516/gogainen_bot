@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { GiveUpButton } from "@/components/GiveUpButton";
 import { ParticipantFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, participantId } from "@/lib/api";
+import { saveLearningTargets } from "@/lib/learning-targets";
 
 const RESULT_REVIEW_STEPS = ["learning_targets", "final_test", "survey"] as const;
 
@@ -68,8 +69,12 @@ export default function LearningTargetsPage() {
     if (!id) return;
     api<LearningTargetsResponse>(`/api/participants/${id}/learning-targets`)
       .then((data) => {
+        saveLearningTargets(id, data.targets.map((t) => t.term_slug), data.review_required === false);
         if (data.review_required === false) {
-          router.replace(data.next_url || "/start");
+          if (!data.next_url || data.next_url === "/learning-targets" || !(/^\/learning\/[a-z_]+$/.test(data.next_url) || ["/pretest", "/retest", "/final-test", "/survey", "/finish"].includes(data.next_url))) {
+            throw new Error("次の画面を確認できません。管理者に連絡してください。");
+          }
+          router.replace(data.next_url);
           return;
         }
         setCurrentStep(data.current_step);
@@ -79,7 +84,6 @@ export default function LearningTargetsPage() {
         setRetestCycleLimitReached(data.retest_cycle_limit_reached);
         setPostPretestTestLimit(data.post_pretest_test_limit);
         setLoaded(true);
-        localStorage.setItem("learning_targets", JSON.stringify(data.targets.map((t) => t.term_slug)));
       })
       .catch((err) => { setError(err.message); setLoaded(true); });
   }, [router]);
