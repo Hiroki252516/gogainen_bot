@@ -889,6 +889,81 @@ button:disabled {
   gap: 10px;
 }
 
+.survey-choice-question,
+.survey-rating {
+  display: grid;
+  gap: 8px;
+}
+
+.survey-question-label {
+  font-weight: 600;
+}
+
+.survey-choice-options,
+.survey-rating-options {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+}
+
+.survey-choice-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.survey-rating-options {
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.survey-choice-button,
+.survey-rating-button {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.survey-choice-button {
+  padding: 12px 10px;
+}
+
+.survey-rating-button {
+  padding: 10px 0;
+}
+
+.survey-choice-button:hover,
+.survey-rating-button:hover {
+  border-color: var(--primary);
+}
+
+.survey-choice-button.selected,
+.survey-rating-button.selected {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgb(31 111 235 / 18%);
+}
+
+.survey-choice-button:focus-visible,
+.survey-rating-button:focus-visible {
+  outline: 3px solid rgb(31 111 235 / 35%);
+  outline-offset: 2px;
+}
+
+.survey-choice-button:disabled,
+.survey-rating-button:disabled {
+  cursor: not-allowed;
+}
+
 .required-indicator {
   flex: none;
   border-radius: 999px;
