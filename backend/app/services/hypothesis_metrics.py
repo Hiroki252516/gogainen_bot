@@ -11,8 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, assert_current_experiment
 from app.core.question_sets import STANDARD, question_set_mode
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
-from app.models import Question
-from app.services.split_assessment import uses_split
+from app.services.split_assessment import uses_split, split_item_keys
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION
 
 METRICS_VERSION = "six-hypotheses-v3-split"
@@ -43,12 +42,16 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     grouped = defaultdict(list)
     split = uses_split(participant)
     expected_count = 6 if split else 3
-    question_keys = {q.id: (q.term_id, q.variant_key.rsplit("_q", 1)[-1]) for q in db.query(Question).all()} if split else {}
+    attempts = db.query(Attempt).filter(
+        Attempt.participant_id == participant.id,
+        Attempt.term_id.in_(terms),
+        Attempt.phase.in_(("pretest", "retest", "final_test")),
+    ).all()
+    question_keys = split_item_keys(db, attempts) if split else {}
     def item_key(attempt):
-        return question_keys.get(attempt.question_id) if split else attempt.term_id
-    for attempt in db.query(Attempt).filter_by(participant_id=participant.id).all():
-        if attempt.term_id in terms and attempt.phase in {"pretest", "retest", "final_test"}:
-            grouped[_round_number(attempt)].append(attempt)
+        return question_keys[attempt.question_id] if split else attempt.term_id
+    for attempt in attempts:
+        grouped[_round_number(attempt)].append(attempt)
 
     def complete(items):
         return len(terms) == 3 and len(items) == expected_count and len({item_key(a) for a in items}) == expected_count and {a.term_id for a in items} == set(terms) and all(a.is_correct is not None for a in items)

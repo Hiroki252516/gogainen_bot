@@ -3,17 +3,134 @@
 from __future__ import annotations
 
 from collections import Counter
+import re
 from typing import Any
 from pathlib import Path
 from functools import lru_cache
 
 import yaml
+from fastapi import HTTPException
 
 from app.seed.import_split_assessment_draft import validate
 
 
 TERMS = ("llm_knowledge", "multi_agent", "memory_process")
 ROLES = ("correct", "M1", "M3", "unknown")
+
+
+def split_data_error(code: str = "split_question_unavailable") -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={
+            "error_code": code,
+            "message": "設問の保存情報に不整合があります。処理を中止しました。管理者に連絡してください。",
+        },
+    )
+
+
+def parse_split_variant(value: Any) -> tuple[str, int]:
+    match = re.fullmatch(r"(pretest_v1|retest_v[12])_q([12])", value) if isinstance(value, str) else None
+    if match is None:
+        raise split_data_error()
+    return match.group(1), int(match.group(2))
+
+
+def split_questions_for_attempts(db: Any, attempts: list) -> dict:
+    """Load and validate only the referenced questions, including retired rows."""
+    from app.models import Question
+
+    ids = {attempt.question_id for attempt in attempts}
+    if not ids:
+        return {}
+    questions = {q.id: q for q in db.query(Question).filter(Question.id.in_(ids)).all()}
+    for attempt in attempts:
+        question = questions.get(attempt.question_id)
+        if question is None or question.term_id != attempt.term_id:
+            raise split_data_error()
+        round_key, _ = parse_split_variant(question.variant_key)
+        expected_phase = "pretest" if attempt.phase == "pretest" else "retest"
+        if question.phase != expected_phase or not round_key.startswith(f"{expected_phase}_"):
+            raise split_data_error()
+    return questions
+
+
+def split_item_keys(db: Any, attempts: list) -> dict:
+    return {
+        q.id: (q.term_id, parse_split_variant(q.variant_key)[1])
+        for q in split_questions_for_attempts(db, attempts).values()
+    }
+
+
+def require_confirmation_spec(practice: Any) -> dict:
+    """Reject damaged snapshots without rebuilding them from a live bank."""
+    error = split_data_error("split_confirmation_snapshot_unavailable")
+    if not isinstance(practice, dict):
+        raise error
+    index = practice.get("learning_variant_index", 1)
+    if not isinstance(index, int) or isinstance(index, bool) or index not in (1, 2, 3):
+        raise error
+    if "stage_meta" in practice and not isinstance(practice["stage_meta"], dict):
+        raise error
+    spec = practice.get("source_spec")
+    if not isinstance(spec, dict) or spec.get("selection_mode") != "grouped_single":
+        raise error
+    groups, options = spec.get("questions"), spec.get("options")
+    if not isinstance(groups, list) or not 1 <= len(groups) <= 2 or not isinstance(options, list):
+        raise error
+    if not isinstance(spec.get("body"), str) or not spec["body"].strip():
+        raise error
+    group_ids, displayed = set(), []
+    for group in groups:
+        if not isinstance(group, dict):
+            raise error
+        question_id, choices = group.get("question_id"), group.get("options")
+        if not isinstance(question_id, str) or not question_id or question_id in group_ids:
+            raise error
+        if not isinstance(group.get("body"), str) or not group["body"].strip():
+            raise error
+        if not isinstance(choices, list) or len(choices) != 4:
+            raise error
+        if any(not isinstance(choice, dict) for choice in choices):
+            raise error
+        if [choice.get("label") for choice in choices] != list("ABCD"):
+            raise error
+        group_ids.add(question_id)
+        displayed.extend((question_id, choice) for choice in choices)
+    by_id = {}
+    for option in options:
+        if not isinstance(option, dict):
+            raise error
+        option_id = option.get("option_id")
+        if not isinstance(option_id, str) or not option_id or option_id in by_id:
+            raise error
+        if not isinstance(option.get("question_id"), str) or option["question_id"] not in group_ids or not isinstance(option.get("is_correct"), bool):
+            raise error
+        if option.get("label") not in ("A", "B", "C", "D"):
+            raise error
+        kind = option.get("misconception_type")
+        if kind not in (None, "M1", "M3", "unknown") or option["is_correct"] != (kind is None):
+            raise error
+        by_id[option_id] = option
+    displayed_ids = []
+    for question_id, choice in displayed:
+        option_id = choice.get("option_id")
+        if not isinstance(option_id, str) or option_id not in by_id:
+            raise error
+        source = by_id[option_id]
+        if source["question_id"] != question_id or not isinstance(choice.get("body"), str) or not choice["body"].strip() or source.get("body") != choice["body"]:
+            raise error
+        if choice.get("exclusive") is not (source.get("misconception_type") == "unknown"):
+            raise error
+        displayed_ids.append(option_id)
+    if len(displayed_ids) != len(set(displayed_ids)) or set(displayed_ids) != set(by_id):
+        raise error
+    for question_id in group_ids:
+        roles = Counter("correct" if o["is_correct"] else o["misconception_type"] for o in options if o["question_id"] == question_id)
+        if roles != Counter(ROLES):
+            raise error
+    if practice.get("questions") != groups or practice.get("options") != [choice for _, choice in displayed]:
+        raise error
+    return spec
 
 
 def uses_split(participant: Any) -> bool:
@@ -43,23 +160,26 @@ def primary_type(types: list[str | None]) -> str | None:
 
 
 def latest_failed_attempts(db: Any, participant: Any, term_id: str) -> list:
-    from app.models import Attempt, Question
+    from app.models import Attempt
     attempts = db.query(Attempt).filter(Attempt.participant_id == participant.id, Attempt.term_id == term_id, Attempt.is_correct.is_not(None), Attempt.phase.in_(["pretest", "retest", "final_test"])).order_by(Attempt.created_at.desc(), Attempt.id.desc()).all()
     if not attempts:
         return []
     latest = attempts[0]
-    return sorted([a for a in attempts if a.phase == latest.phase and a.test_round == latest.test_round and not a.is_correct], key=lambda a: db.get(Question, a.question_id).variant_key)
+    failed = [a for a in attempts if a.phase == latest.phase and a.test_round == latest.test_round and not a.is_correct]
+    keys = split_item_keys(db, failed)
+    return sorted(failed, key=lambda a: keys[a.question_id][1])
 
 
 def learning_spec(db: Any, participant: Any, term: Any) -> dict:
-    from app.models import Question, QuestionOption
+    from app.models import QuestionOption
     from app.services.experiment import _displayed_options
     failed = latest_failed_attempts(db, participant, term.id)
     if not failed:
         raise ValueError("no failed split questions to confirm")
+    questions = split_questions_for_attempts(db, failed)
     groups, options = [], []
     for attempt in failed:
-        question = db.get(Question, attempt.question_id)
+        question = questions[attempt.question_id]
         displayed = attempt.option_order_snapshot or _displayed_options(db, participant, question)
         source = db.query(QuestionOption).filter_by(question_id=question.id).all()
         for option in source:
@@ -84,14 +204,17 @@ CORRECTION_DRAFTS = {
 
 
 def generation_scope(db: Any, participant: Any, term: Any) -> tuple[dict, list[dict], list[dict]]:
-    from app.models import Question
     from app.services.experiment import _selected_options
     failed = latest_failed_attempts(db, participant, term.id)
     kind = primary_type([a.misconception_type for a in failed])
     topics, history, targets = [], [], []
+    questions = split_questions_for_attempts(db, failed)
     for attempt in failed:
-        question = db.get(Question, attempt.question_id)
-        correction, example = CORRECTION_DRAFTS[(term.slug, int(question.variant_key.rsplit("_q", 1)[1]))]
+        question = questions[attempt.question_id]
+        correction_draft = CORRECTION_DRAFTS.get((term.slug, parse_split_variant(question.variant_key)[1]))
+        if correction_draft is None:
+            raise split_data_error("split_correction_unavailable")
+        correction, example = correction_draft
         topic = question.body.split("\n\n設問", 1)[-1].split("\n\n", 1)[0]
         topics.append(topic)
         if kind == "unknown":

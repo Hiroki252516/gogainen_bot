@@ -52,7 +52,17 @@ from app.core.runtime_config import (
     current_ai_runtime_settings,
 )
 from app.core.question_sets import STANDARD, ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key, question_set_mode, explanation_context
-from app.services.split_assessment import uses_split, primary_type, latest_failed_attempts, learning_spec as split_learning_spec, validate_confirmation, generation_scope
+from app.services.split_assessment import (
+    uses_split,
+    primary_type,
+    learning_spec as split_learning_spec,
+    validate_confirmation,
+    generation_scope,
+    parse_split_variant,
+    split_questions_for_attempts,
+    split_item_keys,
+    require_confirmation_spec,
+)
 from app.services.question_sets import current_question_set_mode
 from app.services.learning_glossary import glossary_snapshot, public_glossary
 from app.db.session import SessionLocal
@@ -1741,11 +1751,12 @@ def latest_test_results(db: Session, participant_id: str) -> dict[str, Any]:
 
 def _split_public_results(db: Session, participant: Participant, attempts: list[Attempt]) -> list[dict[str, Any]]:
     targets = {row["term_slug"] for row in learning_targets(db, participant.id)}
+    questions = split_questions_for_attempts(db, attempts)
     rows = []
     for attempt in attempts:
-        question = db.get(Question, attempt.question_id)
+        question = questions[attempt.question_id]
         term = db.get(Term, attempt.term_id)
-        number = int(question.variant_key.rsplit("_q", 1)[1])
+        number = parse_split_variant(question.variant_key)[1]
         rows.append({"question_id": question.id, "term_slug": term.slug, "term_label": f"{term.label}・設問{number}", "question_number": number,
                      "question_body": attempt.question_body_snapshot or question.body, "selected_options": _public_selected_options(db, attempt),
                      "is_correct": attempt.is_correct, "result_label": "正解" if attempt.is_correct else "不正解", "result_summary": "回答結果", "is_learning_target": term.slug in targets})
@@ -2609,13 +2620,14 @@ async def respond_tutor_turn(
             turn_id=turn.id,
         )
     state = db.query(LearnerState).filter_by(participant_id=session.participant_id, term_id=session.term_id).one()
+    saved_split_spec = require_confirmation_spec(turn.practice_question_json) if uses_split(participant) else None
     response = ""
     term = db.get(Term, session.term_id)
     meta = _practice_meta(turn)
     learning_stage = meta.get("learning_stage") or "conceptual_change"
     variant_index = int((turn.practice_question_json or {}).get("learning_variant_index") or 1)
 
-    spec = (turn.practice_question_json or {}).get("source_spec") if uses_split(participant) else _learning_question_spec(
+    spec = saved_split_spec if uses_split(participant) else _learning_question_spec(
         term.slug,
         learning_stage,
         variant_index,
@@ -2872,7 +2884,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         if phase == "retest":
             previous_query = db.query(Attempt).filter_by(participant_id=participant.id, term_id=attempt.term_id, phase="pretest")
             if uses_split(participant):
-                previous_query = previous_query.join(Question, Question.id == Attempt.question_id).filter(Question.variant_key == f"pretest_v1_q{question.variant_key.rsplit('_q', 1)[1]}")
+                previous_query = previous_query.join(Question, Question.id == Attempt.question_id).filter(Question.variant_key == f"pretest_v1_q{parse_split_variant(question.variant_key)[1]}")
             previous = previous_query.order_by(Attempt.created_at.desc()).first()
             if previous and previous.misconception_type in {"M1", "M3"} and previous.misconception_type == attempt.misconception_type:
                 attempt.recurrence_flag = True
@@ -3222,16 +3234,17 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
     initial_m = [a for a in by_phase["pretest"] if a.misconception_type in {"M1", "M3"}]
     same_rec = [a for a in by_phase["retest"] if a.recurrence_flag]
     metrics = participant_metrics(db, participant)
+    split_keys = split_item_keys(db, [a for a in attempts if a.phase in TEST_PHASES]) if uses_split(participant) else {}
     def m_rate(m: str) -> float | None:
         denom = [a for a in initial_m if a.misconception_type == m]
         if not denom:
             return None
         if uses_split(participant):
-            initial_by_key = {(a.term_id, db.get(Question, a.question_id).variant_key.rsplit("_q", 1)[1]): a for a in denom}
+            initial_by_key = {split_keys[a.question_id] for a in denom}
             paired = [a for a in attempts if _attempt_test_round(a) == "retest_1" and a.is_correct is not None]
             if len(paired) != 6:
                 return None
-            return sum(a.misconception_type == m for a in paired if (a.term_id, db.get(Question, a.question_id).variant_key.rsplit("_q", 1)[1]) in initial_by_key) / len(denom)
+            return sum(a.misconception_type == m for a in paired if split_keys[a.question_id] in initial_by_key) / len(denom)
         rec_terms = {a.term_id for a in by_phase["retest"] if a.recurrence_flag and a.misconception_type == m}
         return len(rec_terms) / len(denom)
 
