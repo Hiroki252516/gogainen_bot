@@ -24,6 +24,17 @@ class MockAIBackend:
         description = term.get("description") or f"{label}の基本的な定義と役割を確認します。"
         group = payload.get("group_condition", "proposed")
         mandatory_type = expected_mandatory_type(payload)
+        raw_targets = payload.get("pretest_targets")
+        targets = raw_targets or []
+        if mandatory_type in {"M1", "M3"} and payload.get("learning_scope"):
+            if raw_targets is not None and not isinstance(raw_targets, list):
+                raise ValueError("pretest_targets must be a list")
+            for index, item in enumerate(targets):
+                if not isinstance(item, dict):
+                    raise ValueError(f"pretest_targets[{index}] must be an object")
+                for field in ("claim_id", "observed_claim"):
+                    if not isinstance(item.get(field), str) or not item[field].strip():
+                        raise ValueError(f"pretest_targets[{index}].{field} must be nonempty text")
         mandatory_elements = None
         teaching_contract = None
         if mandatory_type:
@@ -39,7 +50,7 @@ class MockAIBackend:
                     target = next(
                         (
                             item
-                            for item in payload.get("pretest_targets") or []
+                            for item in targets
                             if isinstance(item, dict) and item.get("misconception_type") in {None, mandatory_type}
                         ),
                         None,
@@ -80,13 +91,13 @@ class MockAIBackend:
             if mandatory_type in {"M1", "M3"}:
                 teaching_contract["addressed_claim_ids"] = [
                     item["claim_id"]
-                    for item in payload.get("pretest_targets") or []
+                    for item in targets
                     if isinstance(item, dict)
                     and (payload.get("learning_scope") or item.get("misconception_type") in {None, mandatory_type})
                     and item.get("claim_id")
                 ] or teaching_contract["addressed_claim_ids"]
                 if payload.get("learning_scope"):
-                    for item in payload.get("pretest_targets") or []:
+                    for item in targets:
                         if item.get("claim_id") != (target or {}).get("claim_id"):
                             message += f"\n- もう一つの選択された説明『{item['observed_claim']}』も、同じ正しい仕組みと照らして見直します。"
             if mandatory_type == "unknown":

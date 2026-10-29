@@ -164,10 +164,20 @@ def latest_failed_attempts(db: Any, participant: Any, term_id: str) -> list:
     attempts = db.query(Attempt).filter(Attempt.participant_id == participant.id, Attempt.term_id == term_id, Attempt.is_correct.is_not(None), Attempt.phase.in_(["pretest", "retest", "final_test"])).order_by(Attempt.created_at.desc(), Attempt.id.desc()).all()
     if not attempts:
         return []
+    questions = split_questions_for_attempts(db, attempts)
+    variants = {qid: parse_split_variant(question.variant_key) for qid, question in questions.items()}
+    round_names = {"pretest_v1": "test", "retest_v1": "retest_1", "retest_v2": "retest_2"}
+    rounds = {}
+    for attempt in attempts:
+        variant, _ = variants[attempt.question_id]
+        expected_round = round_names[variant]
+        # Per-question attempt_index is 1 in both retests, so it cannot repair a missing round.
+        if attempt.test_round != expected_round or (attempt.phase == "final_test" and variant != "retest_v1"):
+            raise split_data_error("split_test_round_unavailable")
+        rounds[attempt.id] = expected_round
     latest = attempts[0]
-    failed = [a for a in attempts if a.phase == latest.phase and a.test_round == latest.test_round and not a.is_correct]
-    keys = split_item_keys(db, failed)
-    return sorted(failed, key=lambda a: keys[a.question_id][1])
+    failed = [a for a in attempts if a.phase == latest.phase and rounds[a.id] == rounds[latest.id] and not a.is_correct]
+    return sorted(failed, key=lambda a: variants[a.question_id][1])
 
 
 def learning_spec(db: Any, participant: Any, term: Any) -> dict:

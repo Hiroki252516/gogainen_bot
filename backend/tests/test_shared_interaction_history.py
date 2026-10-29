@@ -257,7 +257,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(TutorSession).filter_by(participant_id=old_id).one().prefetch_state == ""
         assert db.query(EvaluationSummary).filter_by(participant_id=old_id).one().completed is False
         assert db.get(Participant, current_id).completion_reason == "completed"
-        assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round == "test"
+        assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
     assert CURRENT_EXPERIMENT_SPEC_VERSION == 27
