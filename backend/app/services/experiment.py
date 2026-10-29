@@ -2165,6 +2165,22 @@ def _discard_prefetch_for_interactive_generation(
     }
 
 
+def _latest_open_tutor_turn(db: Session, session_id: str) -> TutorTurn | None:
+    return (
+        db.query(TutorTurn)
+        .filter_by(tutor_session_id=session_id, learner_response=None)
+        .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
+        .first()
+    )
+
+
+def _reuse_open_tutor_turn(db: Session, session: TutorSession, turn: TutorTurn) -> TutorTurn:
+    generation_origin = (turn.diagnosis_json or {}).get("generation_origin")
+    if _prefetch_state(session) == "ready" or generation_origin == "prefetch":
+        _mark_prefetch_consumed(db, session, turn)
+    return turn
+
+
 async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     session = db.get(TutorSession, session_id)
     if not session:
@@ -2177,16 +2193,9 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if session.ended_at is not None:
         raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
 
-    latest_open_turn = (
-        db.query(TutorTurn)
-        .filter_by(tutor_session_id=session.id, learner_response=None)
-        .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
-        .first()
-    )
+    latest_open_turn = _latest_open_tutor_turn(db, session.id)
     if latest_open_turn:
-        if _prefetch_state(session) == "ready":
-            _mark_prefetch_consumed(db, session, latest_open_turn)
-        return latest_open_turn
+        return _reuse_open_tutor_turn(db, session, latest_open_turn)
 
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
     prefetch_audit = None
@@ -2216,6 +2225,13 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "discarded": state == "discarded",
             "reason": session.prefetch_error_code or "prefetch_unavailable",
         }
+
+    # A prefetch worker may have committed its first turn after the initial
+    # lookup but before the interactive path discarded its pending state.
+    # Reuse that committed turn instead of counting it and generating v2.
+    latest_open_turn = _latest_open_tutor_turn(db, session.id)
+    if latest_open_turn:
+        return _reuse_open_tutor_turn(db, session, latest_open_turn)
 
     context = _tutoring_generation_context(
         db,
@@ -2513,10 +2529,32 @@ async def generate_prefetched_tutor_turn(db: Session, session_id: str) -> bool:
             db.commit()
             return False
 
+        ready_at = now()
+        claimed_ready = (
+            db.query(TutorSession)
+            .filter_by(id=session_id, prefetch_state="generating")
+            .update(
+                {
+                    TutorSession.prefetch_state: "ready",
+                    TutorSession.prefetch_ready_at: ready_at,
+                },
+                synchronize_session=False,
+            )
+        )
+        if claimed_ready != 1:
+            _update_prefetch_ai_logs(
+                db,
+                session_id,
+                disposition="discarded",
+                error_code="interactive_generation_won_race",
+            )
+            db.commit()
+            return False
+
         ready_audit = {
             **generation_audit,
             "state": "ready",
-            "ready_at": now().isoformat(),
+            "ready_at": ready_at.isoformat(),
         }
         context["prefetch_audit"] = ready_audit
         turn = _tutor_turn_from_generation(
@@ -2526,8 +2564,6 @@ async def generate_prefetched_tutor_turn(db: Session, session_id: str) -> bool:
             material_generation_ms=generation_ms,
         )
         db.add(turn)
-        final_session.prefetch_state = "ready"
-        final_session.prefetch_ready_at = now()
         _update_prefetch_ai_logs(db, session_id, disposition="ready")
         db.commit()
         return True

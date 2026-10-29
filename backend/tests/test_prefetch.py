@@ -317,6 +317,97 @@ def test_reaching_next_term_during_prefetch_discards_worker_result(monkeypatch: 
         db.close()
 
 
+def test_interactive_generation_reuses_prefetch_committed_during_fallback(monkeypatch: pytest.MonkeyPatch):
+    pid = _create_participant_with_pretest()
+    source = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
+    target = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
+    target_session_id = target["tutor_session_id"]
+    with SessionLocal() as db:
+        session = db.get(TutorSession, target_session_id)
+        session.prefetch_state = "generating"
+        session.prefetch_source_session_id = source["tutor_session_id"]
+        db.commit()
+
+    original_discard = experiment_service._discard_prefetch_for_interactive_generation
+
+    def publish_prefetch_before_discard(db, session, *, reason):
+        # The worker wins after the interactive path's initial open-turn query,
+        # but before its pending-state transition is committed.
+        session.prefetch_state = "ready"
+        session.prefetch_ready_at = session.started_at
+        db.add(
+            TutorTurn(
+                tutor_session_id=session.id,
+                turn_index=1,
+                teaching_strategy="general_explanation",
+                tutor_message="先行生成された初回教材です。",
+                learner_prompt="確認問題",
+                practice_question_json={
+                    "body": "確認問題",
+                    "options": [],
+                    "stage_meta": {"learning_stage": "enrichment"},
+                },
+                diagnosis_json={
+                    "generation_origin": "prefetch",
+                    "material_glossary": [],
+                    "prefetch": {"state": "ready", "session_id": session.id},
+                },
+            )
+        )
+        db.commit()
+        db.refresh(session)
+        return original_discard(db, session, reason=reason)
+
+    async def unexpected_generation(*_args, **_kwargs):
+        raise AssertionError("interactive generation must reuse the committed prefetch")
+
+    monkeypatch.setattr(experiment_service, "_discard_prefetch_for_interactive_generation", publish_prefetch_before_discard)
+    monkeypatch.setattr(experiment_service, "_generate_validated_tutoring_turn", unexpected_generation)
+
+    response = client.post(f"/api/tutor-sessions/{target_session_id}/turns", json={})
+    assert response.status_code == 200, response.text
+    assert response.json()["turn_index"] == 1
+
+    with SessionLocal() as db:
+        session = db.get(TutorSession, target_session_id)
+        turns = db.query(TutorTurn).filter_by(tutor_session_id=target_session_id).all()
+        assert len(turns) == 1
+        assert response.json()["turn_id"] == turns[0].id
+        assert session.prefetch_state == "consumed"
+
+
+def test_prefetch_cannot_publish_after_interactive_path_discards_claim(monkeypatch: pytest.MonkeyPatch):
+    pid = _create_participant_with_pretest()
+    source = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
+    target = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).json()
+    target_session_id = target["tutor_session_id"]
+    with SessionLocal() as db:
+        session = db.get(TutorSession, target_session_id)
+        session.prefetch_state = "pending"
+        session.prefetch_source_session_id = source["tutor_session_id"]
+        db.commit()
+
+    original_eligibility = experiment_service._prefetch_session_is_eligible
+
+    def discard_after_worker_check(db, session):
+        eligible = original_eligibility(db, session)
+        session.prefetch_state = "discarded"
+        session.prefetch_discarded_at = session.started_at
+        db.commit()
+        db.refresh(session)
+        return eligible
+
+    monkeypatch.setattr(experiment_service, "_prefetch_session_is_eligible", discard_after_worker_check)
+    with SessionLocal() as db:
+        published = asyncio.run(experiment_service.generate_prefetched_tutor_turn(db, target_session_id))
+        assert published is False
+
+    with SessionLocal() as db:
+        session = db.get(TutorSession, target_session_id)
+        assert session.prefetch_state == "discarded"
+        assert db.query(TutorTurn).filter_by(tutor_session_id=target_session_id).count() == 0
+
+
 def test_give_up_discards_unused_prefetched_sessions():
     pid = _create_participant_with_pretest()
     _, _ = _start_first_turn(pid)
