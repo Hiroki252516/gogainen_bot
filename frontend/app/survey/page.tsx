@@ -29,6 +29,7 @@ const MATERIAL = [
   ["amount_appropriateness", "教材の量は適切だった"],
 ] as const;
 const AGREEMENT_ANCHORS = "1：全くそう思わない ／ 10：非常にそう思う";
+const RATING_VALUES = Array.from({ length: 10 }, (_, index) => String(index + 1));
 type Context = { survey_version: string; has_viewed_material: boolean; material_ratings_required: boolean };
 
 export default function SurveyPage() {
@@ -51,6 +52,15 @@ export default function SurveyPage() {
     event.preventDefault();
     if (!context || submitting) return;
     if (!comment.trim()) { setError("自由記述も必須です。特記事項がない場合は「特になし」と回答してください。"); return; }
+    const requiredKeys = [
+      ...EXPERIENCES.map(([key]) => key),
+      ...GENERAL.map(([key]) => key),
+      ...(context.material_ratings_required ? MATERIAL.map(([key]) => key) : []),
+    ];
+    if (requiredKeys.some((key) => !values[key])) {
+      setError("未選択の項目があります。各項目を選択してください。");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -73,16 +83,12 @@ export default function SurveyPage() {
         <p>表示される項目はすべて必須です。各質問について回答してください。</p>
         {!context ? <p>回答項目を確認しています。</p> : <>
           <h2>AIの利用経験</h2>
-          {EXPERIENCES.map(([key, label]) => <label key={key}>{label}
-            <select required value={values[key] || ""} disabled={submitting} onChange={(event) => update(key, event.target.value)}>
-              <option value="">選択してください</option><option value="yes">ある</option><option value="no">ない</option>
-            </select>
-          </label>)}
+          {EXPERIENCES.map(([key, label]) => <ChoiceButtons key={key} label={label} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
           <h2>AIとシステムについて</h2>
-          {GENERAL.map(([key, label, anchors]) => <RatingSelect key={key} label={label} anchors={anchors || AGREEMENT_ANCHORS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
+          {GENERAL.map(([key, label, anchors]) => <RatingButtons key={key} label={label} anchors={anchors || AGREEMENT_ANCHORS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
           <h2>教材について</h2>
           {context.material_ratings_required
-            ? MATERIAL.map(([key, label]) => <RatingSelect key={key} label={label} anchors={AGREEMENT_ANCHORS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)
+            ? MATERIAL.map(([key, label]) => <RatingButtons key={key} label={label} anchors={AGREEMENT_ANCHORS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)
             : <p>教材の表示記録がないため、教材評価6項目は対象外です。</p>}
           <label>自由記述（必須）
             <textarea required value={comment} disabled={submitting} onChange={(event) => setComment(event.target.value)} rows={5} />
@@ -97,11 +103,35 @@ export default function SurveyPage() {
   </ParticipantFlowGuard>;
 }
 
-function RatingSelect({ label, anchors, value, disabled, onChange }: { label: string; anchors: string; value: string; disabled: boolean; onChange: (value: string) => void }) {
-  return <label>{label}<span className="muted">{anchors}</span>
-    <select required value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
-      <option value="">選択してください</option>
-      {Array.from({ length: 10 }, (_, index) => index + 1).map((number) => <option key={number} value={number}>{number}</option>)}
-    </select>
-  </label>;
+function ChoiceButtons({ label, value, disabled, onChange }: { label: string; value: string; disabled: boolean; onChange: (value: string) => void }) {
+  return <div className="survey-choice-question">
+    <span className="survey-question-label">{label}</span>
+    <div className="survey-choice-options" role="group" aria-label={label}>
+      {[['no', 'なし'], ['yes', 'ある']].map(([optionValue, optionLabel]) => <button
+        key={optionValue}
+        type="button"
+        className={`survey-choice-button${value === optionValue ? " selected" : ""}`}
+        aria-pressed={value === optionValue}
+        disabled={disabled}
+        onClick={() => onChange(optionValue)}
+      >{optionLabel}</button>)}
+    </div>
+  </div>;
+}
+
+function RatingButtons({ label, anchors, value, disabled, onChange }: { label: string; anchors: string; value: string; disabled: boolean; onChange: (value: string) => void }) {
+  return <div className="survey-rating">
+    <div className="survey-rating-label"><span>{label}</span><span className="required-indicator">必須</span></div>
+    <span className="muted">{anchors}</span>
+    <div className="survey-rating-options" role="group" aria-label={label}>
+      {RATING_VALUES.map((rating) => <button
+        key={rating}
+        type="button"
+        className={`survey-rating-button${value === rating ? " selected" : ""}`}
+        aria-pressed={value === rating}
+        disabled={disabled}
+        onClick={() => onChange(rating)}
+      >{rating}</button>)}
+    </div>
+  </div>;
 }
