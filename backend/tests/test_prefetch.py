@@ -179,7 +179,7 @@ def test_wrong_current_turn_ends_session_and_keeps_next_term_prefetch():
         db.close()
 
 
-def test_next_term_reuses_prefetched_turn_without_new_material_generation():
+def test_next_term_reuses_prefetched_turn_without_new_material_generation(monkeypatch: pytest.MonkeyPatch):
     pid = _create_participant_with_pretest()
     _, turn = _start_first_turn(pid)
     wait_for_prefetch_tasks()
@@ -220,9 +220,42 @@ def test_next_term_reuses_prefetched_turn_without_new_material_generation():
         session = db.get(TutorSession, next_session.json()["tutor_session_id"])
         assert after == before
         assert session.prefetch_state == "consumed"
-        assert db.get(TutorTurn, prefetched_turn_id).diagnosis_json["prefetch"]["reused"] is True
+        saved_turn = db.get(TutorTurn, prefetched_turn_id)
+        assert saved_turn.diagnosis_json["prefetch"]["reused"] is True
+        consumed_at = session.prefetch_consumed_at
+        turn_consumed_at = saved_turn.diagnosis_json["prefetch"]["consumed_at"]
+        audit_payloads = [
+            dict(log.response_payload or {})
+            for log in db.query(AICallLog).filter(
+                AICallLog.purpose == "generate_tutoring_turn",
+                AICallLog.request_payload["participant_id"].as_string() == pid,
+                AICallLog.request_payload["term"]["slug"].as_string() == "multi_agent",
+            ).all()
+        ]
     finally:
         db.close()
+
+    def unexpected_reconsume_timestamp():
+        raise AssertionError("an already consumed prefetched turn must not be marked consumed again")
+
+    monkeypatch.setattr(experiment_service, "now", unexpected_reconsume_timestamp)
+    repeated_turn = client.post(f"/api/tutor-sessions/{next_session.json()['tutor_session_id']}/turns", json={})
+    assert repeated_turn.status_code == 200, repeated_turn.text
+    assert repeated_turn.json()["turn_id"] == prefetched_turn_id
+
+    with SessionLocal() as db:
+        session = db.get(TutorSession, next_session.json()["tutor_session_id"])
+        saved_turn = db.get(TutorTurn, prefetched_turn_id)
+        assert session.prefetch_consumed_at == consumed_at
+        assert saved_turn.diagnosis_json["prefetch"]["consumed_at"] == turn_consumed_at
+        assert [
+            dict(log.response_payload or {})
+            for log in db.query(AICallLog).filter(
+                AICallLog.purpose == "generate_tutoring_turn",
+                AICallLog.request_payload["participant_id"].as_string() == pid,
+                AICallLog.request_payload["term"]["slug"].as_string() == "multi_agent",
+            ).all()
+        ] == audit_payloads
 
 
 def test_prefetch_failure_falls_back_to_normal_generation(monkeypatch: pytest.MonkeyPatch):

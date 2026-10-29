@@ -2175,8 +2175,9 @@ def _latest_open_tutor_turn(db: Session, session_id: str) -> TutorTurn | None:
 
 
 def _reuse_open_tutor_turn(db: Session, session: TutorSession, turn: TutorTurn) -> TutorTurn:
+    state = _prefetch_state(session)
     generation_origin = (turn.diagnosis_json or {}).get("generation_origin")
-    if _prefetch_state(session) == "ready" or generation_origin == "prefetch":
+    if state != "consumed" and (state == "ready" or generation_origin == "prefetch"):
         _mark_prefetch_consumed(db, session, turn)
     return turn
 
