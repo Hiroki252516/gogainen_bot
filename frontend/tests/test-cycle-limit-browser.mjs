@@ -112,10 +112,10 @@ try {
       }
       await page.getByRole("link", { name: "アンケートへ進む", exact: true }).click();
       await page.getByRole("heading", { name: "実験後アンケート", exact: true }).waitFor();
-      const selects = page.locator("form select");
-      await selects.first().waitFor();
-      assert.equal(await selects.count(), 14);
-      for (let index = 0; index < 14; index++) await selects.nth(index).selectOption(index < 4 ? "no" : "8");
+      const optionGroups = page.locator("form .survey-choice-options, form .survey-rating-options");
+      await optionGroups.first().waitFor();
+      assert.equal(await optionGroups.count(), 14);
+      for (let index = 0; index < 14; index++) await optionGroups.nth(index).getByRole("button", { name: index < 4 ? "なし" : "8", exact: true }).click();
       await page.getByRole("textbox", { name: "自由記述（必須）", exact: false }).fill("隔離DBでの上限確認用の合成回答です。");
       await page.getByRole("button", { name: "回答を保存して終了", exact: true }).click();
       await page.getByRole("heading", { name: "実験は終了です", exact: true }).waitFor();

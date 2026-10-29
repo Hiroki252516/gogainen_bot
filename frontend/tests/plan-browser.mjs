@@ -47,14 +47,14 @@ try {
     await answerTest(page, false);
     await page.getByRole("link", { name: "アンケートへ進む", exact: true }).click();
     await page.getByRole("heading", { name: "実験後アンケート", exact: true }).waitFor();
-    const selects = page.locator("form select");
-    await selects.first().waitFor();
-    const count = await selects.count();
+    const optionGroups = page.locator("form .survey-choice-options, form .survey-rating-options");
+    await optionGroups.first().waitFor();
+    const count = await optionGroups.count();
     assert.equal(count, viewed ? 14 : 8);
     for (let index = 0; index < count; index++) {
-      const select = selects.nth(index);
-      assert.notEqual(await select.getAttribute("required"), null);
-      await select.selectOption(index < 4 ? "no" : "8");
+      const group = optionGroups.nth(index);
+      assert.notEqual(await group.getAttribute("aria-label"), null);
+      await group.getByRole("button", { name: index < 4 ? "なし" : "8", exact: true }).click();
     }
     const comment = page.getByRole("textbox", { name: "自由記述（必須）", exact: false });
     assert.notEqual(await comment.getAttribute("required"), null);
