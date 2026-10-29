@@ -23,6 +23,7 @@ class Participant(Base):
     __tablename__ = "participants"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    show_pretest_results: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     display_code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     assignment_method: Mapped[str] = mapped_column(String(32), default="manual", nullable=False)
@@ -47,6 +48,7 @@ class RuntimeSetting(Base):
     __tablename__ = "runtime_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    show_pretest_results: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     option_order_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="debug_fixed")
     question_set_mode: Mapped[str | None] = mapped_column(String(32), nullable=True, default="standard")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

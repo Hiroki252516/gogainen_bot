@@ -1,5 +1,10 @@
 # 現行API
 
+## 事前結果表示設定（issue-204）
+
+GET/PUT `/api/admin/pretest-result-display`は管理認証下で厳密なbooleanのenabledとapplies_to=new_participants_onlyを扱う。設定はDB保存し、新規参加者のshow_pretest_resultsへ固定する。NULLは従来の表示ありと解釈し既存行を補完しない。
+診断・学習対象APIはreview_requiredとnext_urlを返す。非表示では事前結果配列を空にし、学習または追加テストへ進む。再テストと内部final_testの結果は表示する。現在位置APIも非表示時の学習再開先へ誘導する。仕様版27・protocol・採点は変更しない。
+
 ## 教材・解説・テストの用語注釈（仕様版26）
 
 教材・回答後解説に加え、GET /api/experiment/{id}/pretest、/retest、/final-testの各questions項目へ`glossary: {version, entries: [{id, term, definition}]}`を返す。テストは用語見出し・問題文・全選択肢から抽出し、選択・正誤・診断を使わない。未回答GETはDBへ保存せず、回答時に同じ不変辞書からAttempt.glossary_snapshotへ保存する。回答済みの再取得・再送は保存値を使い、欠落は後付けしない。該当語なしは空配列、snapshot欠落時はnull。指紋・出典・正答・分類情報は公開しない。新規ルート・管理設定は追加せず、nullable JSON列を1つ追加する。AI入力・共通履歴には含めない。[保存仕様](24_learning_glossary.md)。

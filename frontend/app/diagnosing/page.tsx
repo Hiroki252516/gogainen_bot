@@ -17,14 +17,14 @@ export default function DiagnosingPage() {
   useEffect(() => {
     if (!flowReady) return;
     const participantId = requireParticipant();
-    postIdempotent<{ learning_target_count: number; next_url?: string }>(
+    postIdempotent<{ learning_target_count: number; next_url?: string; review_required?: boolean }>(
       `/api/participants/${participantId}/diagnose-pretest`,
       {},
       `diagnose_pretest:${participantId}`,
     )
       .then((data) => {
         setMessage(`${data.learning_target_count}件の重点確認項目を作成しました。`);
-        setTimeout(() => router.replace("/learning-targets"), 500);
+        setTimeout(() => router.replace(data.review_required === false ? (data.next_url || "/learning-targets") : "/learning-targets"), 500);
       })
       .catch((err) => setMessage(err.message));
   }, [flowReady, router]);

@@ -151,6 +151,9 @@ export default function AdminPage() {
   const [questionSet, setQuestionSet] = useState<QuestionSetSetting | null>(null);
   const [questionSetSaving, setQuestionSetSaving] = useState(false);
   const [questionSetError, setQuestionSetError] = useState("");
+  const [pretestDisplay, setPretestDisplay] = useState<{ enabled: boolean } | null>(null);
+  const [pretestDisplaySaving, setPretestDisplaySaving] = useState(false);
+  const [pretestDisplayError, setPretestDisplayError] = useState("");
   const [summaryMode, setSummaryMode] = useState<QuestionSetMode>("standard");
   const [summaryError, setSummaryError] = useState("");
   const [summaryRefresh, setSummaryRefresh] = useState(0);
@@ -173,6 +176,7 @@ export default function AdminPage() {
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants)).catch((err) => setLogError(err.message));
     api("/api/admin/logs/overview").then(setOverview).catch((err) => setLogError(err.message));
     api<QuestionSetSetting>("/api/admin/question-set").then(setQuestionSet).catch((err) => setQuestionSetError(err.message));
+    api<{ enabled: boolean }>("/api/admin/pretest-result-display").then(setPretestDisplay).catch((err) => setPretestDisplayError(err.message));
     api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setAiStatusError(err instanceof Error ? err.message : String(err)));
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
@@ -327,6 +331,19 @@ export default function AdminPage() {
       setQuestionSetError(err instanceof Error ? err.message : String(err));
     } finally {
       setQuestionSetSaving(false);
+    }
+  }
+
+  async function updatePretestDisplay(enabled: boolean) {
+    if (!pretestDisplay || pretestDisplaySaving) return;
+    setPretestDisplaySaving(true);
+    setPretestDisplayError("");
+    try {
+      setPretestDisplay(await api<{ enabled: boolean }>("/api/admin/pretest-result-display", { method: "PUT", body: JSON.stringify({ enabled }) }));
+    } catch (err) {
+      setPretestDisplayError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPretestDisplaySaving(false);
     }
   }
 
@@ -498,6 +515,17 @@ export default function AdminPage() {
               ) : null}
             </div>
             <div className="notice question-set-setting">
+              <label className="pretest-display-toggle">
+                <input type="checkbox" role="switch" checked={pretestDisplay?.enabled ?? false}
+                  disabled={!pretestDisplay || pretestDisplaySaving}
+                  onChange={(event) => updatePretestDisplay(event.target.checked)} />
+                事前テストの結果表示
+              </label>
+              <p className="muted">新規参加者のみ</p>
+              {pretestDisplaySaving ? <p role="status">保存中...</p> : null}
+              {pretestDisplayError ? <p className="danger" role="alert">{pretestDisplayError}</p> : null}
+            </div>
+            <div className="notice question-set-setting">
               <strong>新規参加者に適用する問題版</strong>
               <p>{questionSet ? questionSetLabel(questionSet.mode) : "設定を確認中"}</p>
               <div className="reasoning-effort-buttons option-order-buttons" role="group" aria-label="新規参加者に適用する問題版">
@@ -665,6 +693,7 @@ export default function AdminPage() {
                 </p>
                 <p>学習後の再テスト: {participantLog.participant.retest_cycles_completed ?? "-"}回</p>
                 <p>事前テスト後のテスト: {participantLog.participant.post_pretest_tests_completed ?? "-"} / {participantLog.participant.post_pretest_test_limit ?? "-"}回（学習前の追加テストを含む）</p>
+                <p>事前テストの結果表示: {participantLog.participant.show_pretest_results === false ? "非表示" : "表示"}</p>
                 <p>
                   終了理由: {participantLog.participant.completion_reason === "give_up"
                     ? "実験ギブアップ"
