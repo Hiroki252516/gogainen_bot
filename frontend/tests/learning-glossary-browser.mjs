@@ -35,6 +35,8 @@ async function participant(request, mode, group) {
 }
 
 async function verifyNotes(page, label, expected) {
+  const mobile = page.viewportSize().width < 1100 && label === "教材の用語の補足";
+  if (mobile && expected.entries.length) await page.getByRole("button", { name: "用語の補足", exact: true }).click();
   const notes = page.getByRole("complementary", { name: label, exact: true });
   if (!expected.entries.length) {
     assert.equal(await notes.count(), 0);
@@ -45,6 +47,7 @@ async function verifyNotes(page, label, expected) {
   assert.deepEqual(await notes.locator("dd").allTextContents(), expected.entries.map((entry) => entry.definition));
   assert.equal(await page.locator(".problem-block .learning-glossary").count(), 0);
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "horizontal overflow");
+  if (mobile) await page.getByRole("button", { name: "閉じる", exact: true }).click();
 }
 
 try {
@@ -61,7 +64,6 @@ try {
     const materialResponse = page.waitForResponse((response) => /\/api\/tutor-sessions\/[^/]+\/turns$/.test(response.url()));
     await page.goto(new URL("/learning/llm_knowledge", base).href);
     const material = await (await materialResponse).json();
-    await page.getByRole("complementary", { name: "教材の用語の補足", exact: true }).waitFor();
     await verifyNotes(page, "教材の用語の補足", material.glossary);
     for (const label of correct ? "ABC" : "DEF") {
       await page.getByRole("checkbox", { name: new RegExp(`^${label}\\.`) }).check();
@@ -72,7 +74,7 @@ try {
     await page.getByText(correct ? "正解です。" : "不正解です。", { exact: true }).waitFor();
     await verifyNotes(page, "回答後解説の用語の補足", feedback.glossary);
     await page.screenshot({ path: `${process.env.GLOSSARY_SCREENSHOT_DIR}/${width}-${mode}-${group}-${correct ? "correct" : "wrong"}.png`, fullPage: true });
-    assert(await page.getByRole("button", { name: correct ? "次へ" : "次の確認へ", exact: true }).isEnabled());
+    assert(await page.getByRole("button", { name: feedback.session_completed ? "次へ" : "次の確認へ", exact: true }).isEnabled());
     console.log(`ok ${width}px ${mode} ${group} ${correct ? "correct" : "wrong"}`);
     await context.close();
   }
