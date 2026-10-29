@@ -138,6 +138,9 @@ def isolated_api(tmp_path):
 
 
 def _create(client: TestClient, assignment_code: str) -> str:
+    # Ten-choice positioning remains supported by the easy bank. Four-choice
+    # positioning and API replay are covered by test_split_option_order/flow.
+    assert client.put("/api/admin/question-set", json={"mode": "easy"}).status_code == 200
     response = client.post(
         "/api/participants",
         json={"assignment_code": assignment_code, "consent_checked": True, "student_number": "TEST-OPTION-ORDER"},
@@ -157,7 +160,7 @@ def test_admin_mode_is_persisted_and_snapshotted_for_new_participants(isolated_a
     debug_questions = client.get(f"/api/experiment/{debug_participant}/pretest").json()["questions"]
     for question in debug_questions:
         assert [option["label"] for option in question["options"]] == list("ABCDEFGHIJ")
-        _assert_debug_roles(question["options"], assessment_question_spec(question["term_slug"], "pretest")["options"])
+        _assert_debug_roles(question["options"], assessment_question_spec(question["term_slug"], "pretest", mode="easy")["options"])
 
     randomized_setting = client.put("/api/admin/option-order", json={"mode": RANDOMIZED})
     assert randomized_setting.status_code == 200
@@ -200,7 +203,7 @@ def test_randomized_labels_do_not_change_assessment_scoring_or_unknown_exclusivi
     questions = client.get(f"/api/experiment/{participant_id}/pretest").json()["questions"]
 
     for index, question in enumerate(questions):
-        spec = assessment_question_spec(question["term_slug"], "pretest")
+        spec = assessment_question_spec(question["term_slug"], "pretest", mode="easy")
         if index == 0:
             selected_bodies = {option["body"] for option in spec["options"] if option["misconception_type"] == "unknown"}
         else:
@@ -248,7 +251,7 @@ def test_both_post_tests_grade_internal_roles_and_preserve_displayed_results(iso
     for cycle in (1, 2):
         questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
         for index, question in enumerate(questions):
-            spec = assessment_question_spec(question["term_slug"], "retest", cycle)
+            spec = assessment_question_spec(question["term_slug"], "retest", cycle, mode="easy")
             if index == 0:
                 selected_bodies = {spec["options"][i]["body"] for i in (0, 3, 6)}
             else:
@@ -281,7 +284,7 @@ def test_randomized_learning_response_uses_internal_role_and_preserves_displayed
     questions = client.get(f"/api/experiment/{participant_id}/pretest").json()["questions"]
 
     for question in questions:
-        spec = assessment_question_spec(question["term_slug"], "pretest")
+        spec = assessment_question_spec(question["term_slug"], "pretest", mode="easy")
         m1_bodies = {option["body"] for option in spec["options"] if option["misconception_type"] == "M1"}
         selected_ids = [option["option_id"] for option in question["options"] if option["body"] in m1_bodies]
         response = client.post(
@@ -350,7 +353,7 @@ def test_randomized_learning_response_uses_internal_role_and_preserves_displayed
     assert response.json()["learning_misconception_type"] == "unknown"
     expected_by_body = {
         option["body"]: option["is_correct"]
-        for option in assessment_question_spec("llm_knowledge", "pretest")["options"]
+        for option in assessment_question_spec("llm_knowledge", "pretest", mode="easy")["options"]
     }
     assert response.json()["answer_key"] == {
         option["option_id"]: expected_by_body[option["body"]] for option in options

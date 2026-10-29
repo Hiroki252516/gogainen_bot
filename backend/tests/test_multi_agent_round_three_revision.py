@@ -6,6 +6,7 @@ import pytest
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+from split_api_support import assert_learning_flow, create_trial, answer_test, confirm
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
 from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD
@@ -149,79 +150,18 @@ def _answer_phase(client, pid, phase, role, variant_index=1):
 @pytest.mark.parametrize("initial", ["unknown", "M1"])
 @pytest.mark.parametrize("labels,expected_type", [("ABC", None), ("DEF", "M1"), ("ADH", "M3"), ("J", "unknown")])
 def test_synthetic_round_three_grading_feedback_replay_and_prefetch(group, layout, initial, labels, expected_type):
-    client = TestClient(app)
-    _ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
-    created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "ROUND3-SYNTHETIC"}))
-    pid = created["participant_id"]
-    with SessionLocal() as db:
-        participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == LEARNING_CONTENT_VERSIONS[STANDARD]
-        participant.option_order_mode = layout
-        db.commit()
-    _answer_phase(client, pid, "pretest", initial)
-    _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
-    session = _ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}))
-    sid = session["tutor_session_id"]
-    # The normal two-cycle flow never reaches V3; only this isolated fixture does.
-    with SessionLocal() as db:
-        db.get(TutorSession, sid).session_index = 3
-        db.commit()
-    current = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
-    question = current["practice_question"]
-    assert current["learning_stage"] == ("enrichment" if initial == "unknown" else "conceptual_change")
-    assert question["variant_key"] == "learning_round_v3" and question["learning_variant_index"] == 3
-    assert question["body"] == assessment_question_spec("multi_agent", "retest", 2)["body"]
-    assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
-    assert question["options"][-1]["exclusive"] and question["options"][-1]["label"] == "J"
-    assert _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))["practice_question"] == question
-    invalid = client.post(f"/api/tutor-turns/{current['turn_id']}/respond", json={"selected_option_ids": [question["options"][0]["option_id"], question["options"][-1]["option_id"]]})
-    assert invalid.status_code == 400
-    source = learning_question_spec("multi_agent", current["learning_stage"], 3)
-    selected_bodies = {option["body"] for option in source["options"] if option["label"] in labels}
-    payload = {"selected_option_ids": [option["option_id"] for option in question["options"] if option["body"] in selected_bodies]}
-    headers = {"Idempotency-Key": "round-three-answer"}
-    result = _ok(client.post(f"/api/tutor-turns/{current['turn_id']}/respond", json=payload, headers=headers))
-    assert result["is_sufficient"] == (expected_type is None)
-    if expected_type is not None:
-        assert result["learning_misconception_type"] == expected_type
-    assert result["feedback"]
-    assert _ok(client.post(f"/api/tutor-turns/{current['turn_id']}/respond", json=payload, headers=headers)) == result
-    wait_for_prefetch_tasks()
-    with SessionLocal() as db:
-        saved_session = db.get(TutorSession, sid)
-        assert saved_session.session_index == 3
-        saved = db.get(TutorTurn, current["turn_id"])
-        assert saved.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]
-        assert saved.practice_question_json["options"] == question["options"]
-        history = build_interaction_history(db, pid, saved_session.term_id)
-        record = next(row for row in history if row["source_type"] == "learning_turn" and row["session_index"] == 3)
-        assert record["question_body"] == question["body"]
-        assert {option["body"] for option in record["selected_options"]} == selected_bodies
-    assert result["session_completed"] and result["max_turns"] == 1
-    assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
-    assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409
+    assert_learning_flow("multi_agent", group, layout, initial, labels, expected_type, index=3)
 
 
 @pytest.mark.parametrize("group", ["A", "B"])
 def test_normal_route_still_finishes_after_two_cycles_without_round_three(group):
-    client = TestClient(app)
-    _ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
-    created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "ROUND3-LIMIT"}))
-    pid = created["participant_id"]
-    _answer_phase(client, pid, "pretest", "unknown")
-    _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
-    for index in (1, 2):
-        session = _ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}))
-        turn = _ok(client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}))
-        assert turn["practice_question"]["learning_variant_index"] == index
-        source = learning_question_spec("multi_agent", turn["learning_stage"], index)
-        correct = {option["body"] for option in source["options"] if option["is_correct"]}
-        _ok(client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json={"selected_option_ids": [option["option_id"] for option in turn["practice_question"]["options"] if option["body"] in correct]}))
-        wait_for_prefetch_tasks()
-        _answer_phase(client, pid, "retest", "unknown", variant_index=index)
-        scored = _ok(client.post(f"/api/participants/{pid}/score-retest"))
-        assert scored["post_pretest_tests_completed"] == index and scored["post_pretest_test_limit"] == 2
-        assert scored["next_step"] == ("learning_targets" if index == 1 else "survey")
-    assert client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).status_code == 409
-    with SessionLocal() as db:
-        assert all(session.session_index <= 2 for session in db.query(TutorSession).filter_by(participant_id=pid))
+    with create_trial(group, "debug_fixed") as (client, pid):
+        questions, _ = answer_test(client, pid, "pretest", "multi_agent", ("unknown", "unknown"))
+        for index in (1, 2):
+            confirm(client, pid, "multi_agent", questions, (None, None), None, index)
+            questions, scored = answer_test(client, pid, "retest", "multi_agent", ("unknown", "unknown"))
+            assert scored["post_pretest_tests_completed"] == index
+            assert scored["next_step"] == ("learning_targets" if index == 1 else "survey")
+        assert client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}).status_code == 409
+        with SessionLocal() as db:
+            assert all(session.session_index <= 2 for session in db.query(TutorSession).filter_by(participant_id=pid))

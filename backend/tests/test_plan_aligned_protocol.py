@@ -20,6 +20,7 @@ from app.models import Attempt, AuditEvent, Base, EvaluationSummary, Participant
 from app.seed.seed_questions import seed_database
 from app.services import experiment
 from app.services.hypothesis_metrics import current_metrics, group_metrics, participant_metrics, write_metrics_csv
+from app.services.hypothesis_metrics import METRICS_VERSION
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION, SurveyPayload, record_material_view, survey_context, validate_survey_for_participant
 
 client = TestClient(app)
@@ -48,11 +49,14 @@ def test_round(db, p, number, types, *, phase=None, repeat=1):
     phase = phase or ("pretest" if number == 0 else "retest")
     terms = db.query(Term).filter(Term.slug.in_(["llm_knowledge", "multi_agent", "memory_process"])).order_by(Term.display_order).all()
     for term, kind in zip(terms, types):
-        question = db.query(Question).filter_by(term_id=term.id, phase=phase).first()
-        db.add(Attempt(participant_id=p.id, term_id=term.id, question_id=question.id, phase=phase,
-                       test_round="test" if number == 0 else f"retest_{number}", attempt_index=repeat,
-                       is_correct=None if kind == "unscored" else kind == "correct", misconception_type=kind if kind in {"M1", "M3", "unknown"} else None,
-                       created_at=AT + timedelta(hours=number), updated_at=AT + timedelta(hours=number)))
+        source_phase = "pretest" if phase == "pretest" else "retest"
+        prefix = "pretest_v1" if number == 0 else f"retest_v{min(number, 2)}"
+        for item in (1, 2):
+            question = db.query(Question).filter_by(term_id=term.id, phase=source_phase, variant_key=f"{prefix}_q{item}").one()
+            db.add(Attempt(participant_id=p.id, term_id=term.id, question_id=question.id, phase=phase,
+                           test_round="test" if number == 0 else f"retest_{number}", attempt_index=repeat,
+                           is_correct=None if kind == "unscored" else kind == "correct", misconception_type=kind if kind in {"M1", "M3", "unknown"} else None,
+                           created_at=AT + timedelta(hours=number), updated_at=AT + timedelta(hours=number)))
     db.flush()
 
 
@@ -103,7 +107,7 @@ def test_six_metrics_use_first_round_and_nested_term_means(study):
     assert row["h3"]["term_means"] == {"llm_knowledge": 2, "memory_process": 0}
     assert row["h3"]["value"] == 1
     assert row["h4"]["value"] == 0.5
-    assert row["h4"]["denominator"] == 2
+    assert row["h4"]["denominator"] == 4
     assert row["h5"]["value"] == 7
     assert row["h6"]["attained"] is True
     assert row["rounds"][1]["gain_pt"] == 100
@@ -262,7 +266,7 @@ def test_evaluation_cache_refreshes_only_current_protocol_on_metrics_version_cha
         refreshed = experiment._ensure_evaluation_summary(study, p)
         assert (refreshed.id != cached.id) is (protocol == CURRENT_PROTOCOL_ID)
         if protocol == CURRENT_PROTOCOL_ID:
-            assert refreshed.hypothesis_metrics_json["metrics_version"] == "six-hypotheses-v2"
+            assert refreshed.hypothesis_metrics_json["metrics_version"] == METRICS_VERSION
 
 
 def test_rounds_remain_distinct_after_variant_five_is_reused(study):

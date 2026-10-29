@@ -64,9 +64,10 @@ class MockAIBackend:
                 or "構成要素と役割の関係を確認します。"
             )
             contrast = (target or {}).get("contrast_example") or mandatory_elements.get("counterexample") or mandatory_elements.get("contrast_example")
-            message += f"\n- 仕組み: {mechanism}"
+            if mechanism not in message:
+                message += f"\n- 仕組み: {mechanism}"
             if mandatory_type in {"M1", "M3"}:
-                if mandatory_type == "M3" and (target or {}).get("corrected_claim"):
+                if mandatory_type == "M3" and (target or {}).get("corrected_claim") and target["corrected_claim"] not in message:
                     message += f"\n- 正しい説明: {(target or {})['corrected_claim']}"
             teaching_contract = mock_teaching_contract(
                 mandatory_type,

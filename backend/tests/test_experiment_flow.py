@@ -70,6 +70,9 @@ from app import main as main_module
 
 
 client = TestClient(app, backend_options={"use_uvloop": True}) if uvloop else TestClient(app)
+# Three-question/multiple-selection regression cases cover the unchanged easy
+# bank. Standard single-selection flows are exercised in test_split_flow.
+pytestmark = pytest.mark.usefixtures("ten_choice_api")
 QUESTION_SHOWN_AT = "2026-06-22T06:00:00"
 ANSWERED_AT = "2026-06-22T06:00:05"
 
@@ -100,7 +103,7 @@ def _phase_labels_for_roles(pid: str, phase: str, question: dict, roles: list[st
         variant_index = int(suffix) if phase == "retest" else 1
     finally:
         db.close()
-    spec = assessment_question_spec(question["term_slug"], phase, variant_index)
+    spec = assessment_question_spec(question["term_slug"], phase, variant_index, mode="easy")
     labels = []
     for role in roles:
         labels.append(next(
@@ -127,8 +130,7 @@ def _ids_for_learning_role(question: dict, term_slug: str, learning_stage: str, 
     spec = learning_question_spec(
         term_slug,
         learning_stage,
-        question.get("learning_variant_index", 1),
-    )
+        question.get("learning_variant_index", 1), mode="easy")
     if role == "correct":
         labels = [option["label"] for option in spec["options"] if option["is_correct"]]
     else:
@@ -140,8 +142,7 @@ def _ids_for_learning_role_mix(question: dict, term_slug: str, learning_stage: s
     spec = learning_question_spec(
         term_slug,
         learning_stage,
-        question.get("learning_variant_index", 1),
-    )
+        question.get("learning_variant_index", 1), mode="easy")
     labels = []
     for role in ("correct", "M1", "M3"):
         labels.append(next(
@@ -1025,7 +1026,7 @@ def test_learning_v2_scores_presented_roles_and_keeps_m3_priority():
     try:
         participant = db.get(Participant, correct_pid)
         assert participant is not None
-        assert participant.learning_content_version == CURRENT_LEARNING_CONTENT_VERSION
+        assert participant.learning_content_version == 4
         participant.learning_content_version = None
         db.commit()
     finally:
@@ -1033,7 +1034,7 @@ def test_learning_v2_scores_presented_roles_and_keeps_m3_priority():
     invalid = client.post(f"/api/tutor-turns/{correct_turn['turn_id']}/respond", json={"selected_option_ids": correct_ids})
     assert invalid.status_code == 503
     with SessionLocal() as db:
-        db.get(Participant, correct_pid).learning_content_version = CURRENT_LEARNING_CONTENT_VERSION
+        db.get(Participant, correct_pid).learning_content_version = 4
         db.commit()
     correct_result = client.post(
         f"/api/tutor-turns/{correct_turn['turn_id']}/respond",
@@ -1044,7 +1045,7 @@ def test_learning_v2_scores_presented_roles_and_keeps_m3_priority():
     saved_correct_turn = _latest_turn(correct_turn["turn_id"])
     assert saved_correct_turn is not None
     assert saved_correct_turn.grading_json["selected_option_ids"] == correct_ids
-    assert saved_correct_turn.diagnosis_json["learning_content_version"] == CURRENT_LEARNING_CONTENT_VERSION
+    assert saved_correct_turn.diagnosis_json["learning_content_version"] == 4
 
     duplicate_pid = _create_participant_with_pretest(labels=["J"])
     duplicate_session = client.post(
@@ -1594,6 +1595,7 @@ def test_control_sequence_uses_the_shared_diagnosis_route_but_excludes_diagnosis
                 "component_terms",
                 "rag_context",
                 "interaction_history",
+                "explanation_level",
             }
             assert "participant_id" not in audit["actual_ai_input"]
             assert "group_condition" not in audit["actual_ai_input"]
@@ -1675,7 +1677,7 @@ def test_retest_non_mastery_routes_to_first_failed_learning_session_and_blocks_f
 
     db = SessionLocal()
     try:
-        final_question = db.query(Question).filter_by(phase="final_test", construct_key=assessment_construct_key("llm_knowledge", "final_test")).one()
+        final_question = db.query(Question).filter_by(phase="final_test", construct_key=assessment_construct_key("llm_knowledge", "final_test", mode="easy")).one()
     finally:
         db.close()
     blocked_attempt = client.post(
@@ -1906,7 +1908,7 @@ def test_test_submission_rejects_previous_and_future_variant_ids():
     first = client.get(f"/api/experiment/{pid}/retest").json()["questions"][0]
     with SessionLocal() as db:
         term = db.query(Term).filter_by(slug=first["term_slug"]).one()
-        future = db.query(Question).filter_by(term_id=term.id, phase="retest", variant_key="retest_v2", is_active=True, construct_key=assessment_construct_key(term.slug, "retest")).one()
+        future = db.query(Question).filter_by(term_id=term.id, phase="retest", variant_key="retest_v2", is_active=True, construct_key=assessment_construct_key(term.slug, "retest", mode="easy")).one()
         future_id = future.id
         option_ids = [row.id for row in db.query(QuestionOption).filter_by(question_id=future.id, is_correct=True)]
     assert client.post("/api/attempts", json={
@@ -2228,7 +2230,7 @@ def test_retest_mastery_skips_final_test_and_uses_retest_score():
         final_question = (
             db.query(Question)
             .join(Term, Question.term_id == Term.id)
-            .filter(Question.phase == "final_test", Question.is_active.is_(True), Term.slug == ACTIVE_TERM_SLUGS[0], Question.construct_key == assessment_construct_key(ACTIVE_TERM_SLUGS[0], "final_test"))
+            .filter(Question.phase == "final_test", Question.is_active.is_(True), Term.slug == ACTIVE_TERM_SLUGS[0], Question.construct_key == assessment_construct_key(ACTIVE_TERM_SLUGS[0], "final_test", mode="easy"))
             .one()
         )
         correct_option_ids = [
@@ -2538,8 +2540,8 @@ def test_proposed_payload_contains_taxonomy_and_control_payload_does_not():
             "llm_knowledge:pretest:F",
         }
         e_target = next(target for target in proposed_log.request_payload["pretest_targets"] if target["option_label"] == "E")
-        assert e_target["corrected_claim"] == load_content()["teaching_targets"]["llm_knowledge"]["E"]["corrected_claim"]
-        assert "回答例を毎回入力へ加える" in e_target["corrected_claim"]
+        assert e_target["corrected_claim"] == load_content("easy")["teaching_targets"]["llm_knowledge"]["E"]["corrected_claim"]
+        assert "回答例を質問に添えること" in e_target["corrected_claim"]
         assert "session_misconception_history" in proposed_log.request_payload
         assert "misconception_taxonomy" not in control_log.request_payload
         assert control_log.request_payload["taxonomy_version"] == TAXONOMY_VERSION
@@ -2670,7 +2672,7 @@ def test_admin_logs_and_csv_show_multiple_selection_labels():
     assert len(logs["attempts"]) == 3
     assert all(row["misconception_type"] == "M1" for row in logs["attempts"])
     m1_labels_by_term = {
-        term_slug: [option["label"] for option in assessment_question_spec(term_slug, "pretest")["options"] if option["misconception_type"] == "M1"]
+        term_slug: [option["label"] for option in assessment_question_spec(term_slug, "pretest", mode="easy")["options"] if option["misconception_type"] == "M1"]
         for term_slug in ACTIVE_TERM_SLUGS
     }
     assert all(
@@ -2744,7 +2746,7 @@ def test_group_misconception_transition_summary_uses_term_pretest_denominator():
     finally:
         db.close()
 
-    api_groups = client.get("/api/admin/evaluation-summary").json()["groups"]
+    api_groups = client.get("/api/admin/evaluation-summary?question_set_mode=easy").json()["groups"]
     assert all("misconception_transition_summary" in group for group in api_groups)
     assert all(len(group["misconception_transition_summary"]["terms"]) == 3 for group in api_groups)
 
@@ -2758,7 +2760,7 @@ def test_admin_summary_auto_calculates_participant_without_manual_recalculate():
     finally:
         db.close()
 
-    response = client.get("/api/admin/evaluation-summary")
+    response = client.get("/api/admin/evaluation-summary?question_set_mode=easy")
     assert response.status_code == 200, response.text
     proposed_group = next(group for group in response.json()["groups"] if group["group_condition"] == "proposed")
     llm_summary = next(
@@ -2975,17 +2977,17 @@ def test_latest_taxonomy_and_strategy_cover_current_types():
 def test_rag_is_limited_by_topic_and_excludes_langgraph():
     llm_context = retrieve_rag_context(
         "LLM 事前学習 RAG プロンプトエンジニアリング",
-        allowed_sections=content_term("llm_knowledge")["rag_sections"],
+        allowed_sections=content_term("llm_knowledge", mode="easy")["rag_sections"],
         topic_slug="llm_knowledge",
     )
     multi_context = retrieve_rag_context(
         "マルチエージェント 役割分担",
-        allowed_sections=content_term("multi_agent")["rag_sections"],
+        allowed_sections=content_term("multi_agent", mode="easy")["rag_sections"],
         topic_slug="multi_agent",
     )
     memory_context = retrieve_rag_context(
         "記憶プロセス 保存 検索 更新",
-        allowed_sections=content_term("memory_process")["rag_sections"],
+        allowed_sections=content_term("memory_process", mode="easy")["rag_sections"],
         topic_slug="memory_process",
     )
     assert llm_context["topic_slug"] == "llm_knowledge"

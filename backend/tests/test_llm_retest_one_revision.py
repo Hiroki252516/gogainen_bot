@@ -7,6 +7,7 @@ import yaml
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+from split_api_support import assert_retest_flow
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key
@@ -130,56 +131,7 @@ def _learn(client, pid):
 @pytest.mark.parametrize("phase", ["retest", "final_test"])
 @pytest.mark.parametrize("labels,expected_type", [("ABC", None), ("ABD", "M1"), ("DEF", "M1"), ("ABG", "M3"), ("ADH", "M3"), ("ADI", "M3"), ("GHI", "M3"), ("J", "unknown")])
 def test_natural_shared_v1_grading_replay_review_history_and_two_posttest_limit(group, layout, phase, labels, expected_type):
-    client = TestClient(app)
-    _ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
-    created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "LLM-RETEST1-SYNTHETIC"}))
-    pid = created["participant_id"]
-    with SessionLocal() as db:
-        participant = db.get(Participant, pid)
-        participant.option_order_mode = layout
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.protocol_id == CURRENT_PROTOCOL_ID
-        assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS["standard"]
-        db.commit()
-    _answer_test(client, pid, "pretest", "ABC" if phase == "final_test" else "DEF")
-    _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
-    if phase == "retest":
-        _learn(client, pid)
-    question = _answer_test(client, pid, phase, labels)
-    assert question["body"] == SCENARIO + "\n\n" + TASK
-    assert set(CHANGED_CHOICES.values()).issubset({option["body"] for option in question["options"]})
-    with SessionLocal() as db:
-        attempt = db.query(Attempt).filter_by(participant_id=pid, question_id=question["question_id"]).one()
-        assert attempt.is_correct is None and attempt.misconception_type is None
-        assert attempt.question_body_snapshot == question["body"]
-    score_route = "score-final-test" if phase == "final_test" else "score-retest"
-    headers = {"Idempotency-Key": "llm-retest1-score"}
-    result = _ok(client.post(f"/api/participants/{pid}/{score_route}", json={}, headers=headers))
-    assert _ok(client.post(f"/api/participants/{pid}/{score_route}", json={}, headers=headers)) == result
-    assert result["post_pretest_tests_completed"] == 1 and result["post_pretest_test_limit"] == 2
-    assert result["next_step"] == ("survey" if expected_type is None else "learning_targets")
-    review = _ok(client.get(f"/api/participants/{pid}/learning-targets"))["test_results"]
-    assert next(row for row in review["results"] if row["term_slug"] == "llm_knowledge")["question_body"] == question["body"]
-    with SessionLocal() as db:
-        attempt = db.query(Attempt).filter_by(participant_id=pid, question_id=question["question_id"]).one()
-        assert attempt.is_correct == (expected_type is None) and attempt.misconception_type == expected_type
-        source = assessment_question_spec("llm_knowledge", phase)
-        selected = [option for option in question["options"] if option["option_id"] in _selected(question, source, labels)]
-        assert _test_record(db, attempt)["selected_options"] == [{"label": option["label"], "body": option["body"]} for option in selected]
-        term = db.query(Term).filter_by(slug="llm_knowledge").one()
-        record = next(row for row in build_interaction_history(db, pid, term.id) if row["phase"] == phase and row["source_type"] == "test_attempt")
-        assert record["question_body"] == question["body"]
-        assert db.get(Participant, pid).retest_cycles_completed == (1 if phase == "retest" else 0)
-    if expected_type is not None:
-        _learn(client, pid)
-        second = _answer_test(client, pid, "retest", "GHI", 2)
-        assert second["question_id"] != question["question_id"]
-        ended = _ok(client.post(f"/api/participants/{pid}/score-retest", json={}))
-        assert ended["post_pretest_tests_completed"] == 2 and ended["next_step"] == "survey"
-        with SessionLocal() as db:
-            assert db.query(Attempt).filter_by(participant_id=pid).count() == 9
-            latest = db.query(Attempt).filter_by(participant_id=pid, question_id=second["question_id"]).one()
-            assert not latest.is_correct and latest.misconception_type == "M3"
-    assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+    assert_retest_flow("llm_knowledge", group, layout, phase, labels, expected_type)
 
 
 @pytest.mark.parametrize("phase", ["retest", "final_test"])
@@ -238,10 +190,10 @@ def test_old_spec22_v6_records_survive_seed_repair_and_missing_snapshot_restore(
             for oid, fields in options_before.items():
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
-            active = db.query(Question).filter_by(term_id=term.id, phase=phase, variant_key="retest_v1", is_active=True).all()
-            assert len(active) == 2 and all(row.id != question.id for row in active)
-            assert db.query(Question).count() == 36
-            assert db.query(Question).filter_by(is_active=True).count() == 24
+            active = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_(["retest_v1", "retest_v1_q1", "retest_v1_q2"])).all()
+            assert len(active) == 3 and all(row.id != question.id for row in active)
+            assert db.query(Question).count() == 42
+            assert db.query(Question).filter_by(is_active=True).count() == 30
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)
             assert record["question_body"] == ("保存時の問題" if snapshot else question.body)

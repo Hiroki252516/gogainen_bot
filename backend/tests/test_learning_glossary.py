@@ -10,6 +10,7 @@ from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PR
 from app.db.session import SessionLocal
 from app.main import app
 from app.models import AICallLog, Participant, TutorTurn
+from split_api_support import select_roles
 from app.services import experiment
 from app.services.learning_glossary import (
     GLOSSARY_PATH, GLOSSARY_VERSION, glossary_snapshot, load_learning_glossary,
@@ -119,7 +120,7 @@ def start_learning(mode, group):
     assert all(question["glossary"]["version"] == GLOSSARY_VERSION for question in questions)
     for question in questions:
         labels = "DEF" if question["term_slug"] == "llm_knowledge" else "ABC"
-        selected = [option["option_id"] for option in question["options"] if option["label"] in labels]
+        selected = select_roles(question, ["M1" if labels == "DEF" else None] * (1 if mode == "standard" else 3))
         saved = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": selected})
         assert saved.status_code == 200, saved.text
     assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
@@ -141,8 +142,8 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 26
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-test-glossary-v2"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 27
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-29-split-tests-v1"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material
         assert 600 <= len(stored.tutor_message) <= 800
@@ -158,7 +159,11 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
             assert replay.json() == turn
 
     respond_url = f"/api/tutor-turns/{turn['turn_id']}/respond"
-    body = {"selected_option_ids": [option["option_id"] for option in turn["practice_question"]["options"] if option["label"] in labels]}
+    if mode == "standard":
+        selected = [select_roles(q, [None if labels == "ABC" else "M1"])[0] for q in turn["practice_question"]["questions"]]
+    else:
+        selected = [option["option_id"] for option in turn["practice_question"]["options"] if option["label"] in labels]
+    body = {"selected_option_ids": selected}
     response = client.post(respond_url, json=body, headers={"Idempotency-Key": "glossary-feedback"})
     assert response.status_code == 200, response.text
     feedback = response.json()

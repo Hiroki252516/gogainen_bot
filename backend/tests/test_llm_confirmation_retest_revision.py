@@ -5,6 +5,7 @@ import pytest
 import yaml
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy.orm import Session
+from split_api_support import assert_learning_flow, assert_retest_flow
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS
@@ -194,90 +195,11 @@ def _answer_test(client, pid, phase, labels, index=1):
 @pytest.mark.parametrize("initial", ["J", "DEF", "GHI"])
 @pytest.mark.parametrize("labels,expected_type", [("ABC", None), ("DEF", "M1"), ("GHI", "M3"), ("ADH", "M3"), ("J", "unknown")])
 def test_natural_two_learning_rounds_feedback_history_and_retests(group, layout, initial, labels, expected_type):
-    client = TestClient(app)
-    _ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
-    created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "LLM-FOUR-QUESTION-SYNTHETIC"}))
-    pid = created["participant_id"]
-    with SessionLocal() as db:
-        participant = db.get(Participant, pid)
-        participant.option_order_mode = layout
-        assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS["standard"] and participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
-        db.commit()
-    _answer_test(client, pid, "pretest", initial)
-    _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
-    for index in (1, 2):
-        session = _ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}))
-        sid = session["tutor_session_id"]
-        turn = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
-        question = turn["practice_question"]
-        expected = assessment_question_spec("llm_knowledge", "pretest" if index == 1 else "retest", 1)
-        assert question["variant_key"] == f"learning_round_v{index}" and question["learning_variant_index"] == index
-        assert question["body"] == expected["body"]
-        assert turn["learning_stage"] == ("enrichment" if initial == "J" else "conceptual_change")
-        assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
-        assert question["options"][-1]["label"] == "J" and question["options"][-1]["exclusive"]
-        invalid = client.post(f"/api/tutor-turns/{turn['turn_id']}/respond",
-                              json={"selected_option_ids": [question["options"][0]["option_id"], question["options"][-1]["option_id"]]})
-        assert invalid.status_code == 400
-        source = learning_question_spec("llm_knowledge", turn["learning_stage"], index)
-        payload = {"selected_option_ids": _selected(question, source, labels)}
-        headers = {"Idempotency-Key": f"llm-four-question-answer-{index}"}
-        result = _ok(client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json=payload, headers=headers))
-        assert result["is_sufficient"] == (expected_type is None) and result["feedback"]
-        if expected_type is not None:
-            assert result["learning_misconception_type"] == expected_type
-        assert _ok(client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json=payload, headers=headers)) == result
-        wait_for_prefetch_tasks()
-        with SessionLocal() as db:
-            saved_session = db.get(TutorSession, sid)
-            saved_turn = db.get(TutorTurn, turn["turn_id"])
-            assert saved_session.session_index == index and saved_turn.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS["standard"]
-            record = next(row for row in build_interaction_history(db, pid, saved_session.term_id)
-                          if row["source_type"] == "learning_turn" and row["session_index"] == index)
-            assert record["question_body"] == question["body"]
-            assert {option["body"] for option in record["selected_options"]} == {
-                option["body"] for option in source["options"] if option["label"] in labels}
-        assert result["session_completed"] and result["max_turns"] == 1
-        assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
-        assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409
-        _answer_test(client, pid, "retest", initial if index == 1 else labels, index)
-        score_headers = {"Idempotency-Key": f"llm-four-question-score-{index}"}
-        scored = _ok(client.post(f"/api/participants/{pid}/score-retest", json={}, headers=score_headers))
-        assert _ok(client.post(f"/api/participants/{pid}/score-retest", json={}, headers=score_headers)) == scored
-        assert scored["post_pretest_tests_completed"] == index and scored["post_pretest_test_limit"] == 2
-        assert scored["next_step"] == ("learning_targets" if index == 1 else "survey")
-        review = _ok(client.get(f"/api/participants/{pid}/learning-targets"))["test_results"]
-        row = next(row for row in review["results"] if row["term_slug"] == "llm_knowledge")
-        expected = assessment_question_spec("llm_knowledge", "retest", index)
-        assert row["question_body"] == expected["body"]
-        assert row["is_correct"] == (index == 2 and expected_type is None)
+    assert_learning_flow("llm_knowledge", group, layout, initial, labels, expected_type, index=2)
 
 
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("final_labels", ["ABC", "GHI"])
 def test_pretest_perfect_uses_revised_shared_final_test(group, layout, final_labels):
-    client = TestClient(app)
-    _ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
-    created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "LLM-FINAL-SYNTHETIC"}))
-    pid = created["participant_id"]
-    with SessionLocal() as db:
-        db.get(Participant, pid).option_order_mode = layout
-        db.commit()
-    _answer_test(client, pid, "pretest", "ABC")
-    _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
-    _answer_test(client, pid, "final_test", final_labels)
-    scored = _ok(client.post(f"/api/participants/{pid}/score-final-test", json={}))
-    assert scored["post_pretest_tests_completed"] == 1
-    assert scored["next_step"] == ("survey" if final_labels == "ABC" else "learning_targets")
-    if final_labels != "ABC":
-        session = _ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}))
-        turn = _ok(client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}))
-        source = learning_question_spec("llm_knowledge", turn["learning_stage"], 1)
-        assert turn["practice_question"]["body"] == source["body"]
-        _ok(client.post(f"/api/tutor-turns/{turn['turn_id']}/respond",
-                        json={"selected_option_ids": _selected(turn["practice_question"], source, "ABC")}))
-        wait_for_prefetch_tasks()
-        _answer_test(client, pid, "retest", "GHI", 2)
-        ended = _ok(client.post(f"/api/participants/{pid}/score-retest", json={}))
-        assert ended["post_pretest_tests_completed"] == 2 and ended["next_step"] == "survey"
+    assert_retest_flow("llm_knowledge", group, layout, "final_test", final_labels, None if final_labels == "ABC" else "M3")

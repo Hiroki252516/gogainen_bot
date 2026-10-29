@@ -90,8 +90,8 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     pid = registration.json()["participant_id"]
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 26
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-27-test-glossary-v2"
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 27
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-29-split-tests-v1"
         participant.current_step = phase
         participant.retest_cycles_completed = completed
         db.commit()
@@ -99,7 +99,7 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     response = client.get(path)
     assert response.status_code == 200, response.text
     questions = response.json()["questions"]
-    assert len(questions) == 3
+    assert len(questions) == (6 if mode == "standard" else 3)
     assert client.get(path).json() == response.json()
     for question in questions:
         expected = experiment._test_glossary(question["term_label"], question["body"], question["options"])
@@ -170,6 +170,8 @@ def test_v25_saved_annotations_and_result_bank_are_preserved(monkeypatch):
                          ai_feedback="保存済み解説", diagnosis_json={"material_glossary": old}, grading_json={"feedback_glossary": old})
         db.add(turn)
         db.commit()
+        from historical_bank_support import seed_scenario_bank
+        seed_scenario_bank(db)
         question = experiment._test_result_question(db, participant, term, "retest_2", "retest")
         assert question.construct_key.endswith("scenario-actions-v9") and question.variant_key == "retest_v2"
 
@@ -206,7 +208,7 @@ def test_nullable_migration_and_repeated_seed_preserve_v25_records(tmp_path, mon
         database.init_db()
         with Session(isolated) as db:
             seed_database(db)
-            assert db.query(Question).filter_by(is_active=True).count() == 24
+            assert db.query(Question).filter_by(is_active=True).count() == 30
     assert next(column for column in inspect(isolated).get_columns("attempts") if column["name"] == "glossary_snapshot")["nullable"]
     with isolated.connect() as connection:
         after = dict(connection.execute(text("SELECT * FROM attempts")).mappings().one())

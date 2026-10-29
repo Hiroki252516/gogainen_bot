@@ -5,6 +5,7 @@ from app.db.session import SessionLocal
 from app.models import QuestionOption, TutorTurn, Participant, Attempt
 from app.seed.seed_questions import seed_database
 from app.services.hypothesis_metrics import participant_metrics
+from split_api_support import create_trial, answer_test, select_roles
 
 
 def ok(response):
@@ -119,3 +120,39 @@ def test_easy_keeps_three_ten_choice_questions_and_old_records_are_read_only():
         seed_database(db)
         assert before == [(a.id, a.question_body_snapshot, a.option_order_snapshot) for a in db.query(Attempt).filter_by(participant_id=pid).all()]
     assert client.post(f"/api/participants/{pid}/score-final-test", json={}).status_code == 409
+
+
+@pytest.mark.parametrize("group", ["A", "B"])
+@pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
+@pytest.mark.parametrize("slug", ["llm_knowledge", "multi_agent", "memory_process"])
+@pytest.mark.parametrize("role", ["M3", "unknown"])
+def test_initial_perfect_confirms_only_failed_final_item(group, layout, slug, role):
+    with create_trial(group, layout) as (client, pid):
+        answer_test(client, pid, "pretest", slug, (None, None))
+        questions, scored = answer_test(client, pid, "final_test", slug, (None, role))
+        assert scored["post_pretest_tests_completed"] == 1
+        target = [q for q in questions if q["term_slug"] == slug][1]
+        session = ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": slug}))
+        turn = ok(client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}))
+        practice = turn["practice_question"]
+        assert practice["learning_variant_index"] == 1
+        assert practice["questions"] == [{"question_id": target["question_id"], "body": target["body"], "options": target["options"]}]
+        assert "source_spec" not in practice
+        with SessionLocal() as db:
+            saved = db.get(TutorTurn, turn["turn_id"])
+            actual = saved.diagnosis_json["instruction_audit"]["actual_ai_input"]
+            assert len(actual["learning_scope"]["topics"]) == 1
+            assert len(actual["learning_scope"]["selected_errors"]) == (0 if role == "unknown" else 1)
+            assert len(saved.practice_question_json["source_spec"]["options"]) == 4
+        url = f"/api/tutor-turns/{turn['turn_id']}/respond"
+        assert client.post(url, json={"selected_option_ids": [o["option_id"] for o in target["options"][:2]]}).status_code == 400
+        payload = {"selected_option_ids": select_roles(target, [None])}
+        headers = {"Idempotency-Key": "one-failed-final-item"}
+        result = ok(client.post(url, json=payload, headers=headers))
+        assert result["is_sufficient"] and result["session_completed"]
+        assert ok(client.post(url, json=payload, headers=headers)) == result
+        with SessionLocal() as db:
+            grades = db.get(TutorTurn, turn["turn_id"]).grading_json["question_results"]
+            assert len(grades) == 1 and grades[0]["question_id"] == target["question_id"]
+        _, last = answer_test(client, pid, "retest", slug, (None, None))
+        assert last["post_pretest_tests_completed"] == 2 and last["next_step"] == "survey"

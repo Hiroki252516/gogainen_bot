@@ -6,6 +6,7 @@ import pytest
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+from split_api_support import assert_learning_flow
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
 from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD
@@ -147,57 +148,4 @@ def _answer_phase(client, pid, phase, role):
 @pytest.mark.parametrize("initial", ["unknown", "M1"])
 @pytest.mark.parametrize("labels,expected_type", [("ABC", None), ("DEF", "M1"), ("ADH", "M3"), ("J", "unknown")])
 def test_natural_round_two_route_grading_feedback_replay_and_prefetch(group, layout, initial, labels, expected_type):
-    client = TestClient(app)
-    _ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
-    created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "ROUND2-SYNTHETIC"}))
-    pid = created["participant_id"]
-    with SessionLocal() as db:
-        participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == LEARNING_CONTENT_VERSIONS[STANDARD]
-        participant.option_order_mode = layout
-        db.commit()
-    _answer_phase(client, pid, "pretest", initial)
-    _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
-    session1 = _ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}))
-    first = _ok(client.post(f"/api/tutor-sessions/{session1['tutor_session_id']}/turns", json={}))
-    assert first["practice_question"]["variant_key"] == "learning_round_v1"
-    first_spec = learning_question_spec("multi_agent", first["learning_stage"], 1)
-    correct = {option["body"] for option in first_spec["options"] if option["is_correct"]}
-    _ok(client.post(f"/api/tutor-turns/{first['turn_id']}/respond", json={"selected_option_ids": [option["option_id"] for option in first["practice_question"]["options"] if option["body"] in correct]}))
-    wait_for_prefetch_tasks()
-    _answer_phase(client, pid, "retest", initial)
-    scored = _ok(client.post(f"/api/participants/{pid}/score-retest"))
-    assert scored["post_pretest_tests_completed"] == 1 and scored["next_step"] == "learning_targets"
-    session2 = _ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"}))
-    sid = session2["tutor_session_id"]
-    current = _ok(client.post(f"/api/tutor-sessions/{sid}/turns", json={}))
-    question = current["practice_question"]
-    assert current["learning_stage"] == ("enrichment" if initial == "unknown" else "conceptual_change")
-    assert question["variant_key"] == "learning_round_v2" and question["learning_variant_index"] == 2
-    assert question["body"] == assessment_question_spec("multi_agent", "retest", 1)["body"]
-    assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
-    assert question["options"][-1]["exclusive"] and question["options"][-1]["label"] == "J"
-    invalid = client.post(f"/api/tutor-turns/{current['turn_id']}/respond", json={"selected_option_ids": [question["options"][0]["option_id"], question["options"][-1]["option_id"]]})
-    assert invalid.status_code == 400
-    source = learning_question_spec("multi_agent", current["learning_stage"], 2)
-    selected_bodies = {option["body"] for option in source["options"] if option["label"] in labels}
-    payload = {"selected_option_ids": [option["option_id"] for option in question["options"] if option["body"] in selected_bodies]}
-    headers = {"Idempotency-Key": "round-two-answer"}
-    result = _ok(client.post(f"/api/tutor-turns/{current['turn_id']}/respond", json=payload, headers=headers))
-    assert result["is_sufficient"] == (expected_type is None)
-    if expected_type is not None:
-        assert result["learning_misconception_type"] == expected_type
-    assert result["feedback"]
-    assert _ok(client.post(f"/api/tutor-turns/{current['turn_id']}/respond", json=payload, headers=headers)) == result
-    wait_for_prefetch_tasks()
-    with SessionLocal() as db:
-        saved_session = db.get(TutorSession, sid)
-        assert saved_session.session_index == 2
-        assert db.get(TutorTurn, current["turn_id"]).diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]
-        history = build_interaction_history(db, pid, saved_session.term_id)
-        record = next(row for row in history if row["source_type"] == "learning_turn" and row["session_index"] == 2)
-        assert record["question_body"] == question["body"]
-        assert {option["body"] for option in record["selected_options"]} == selected_bodies
-    assert result["session_completed"] and result["max_turns"] == 1
-    assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
-    assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409
+    assert_learning_flow("multi_agent", group, layout, initial, labels, expected_type, index=2)

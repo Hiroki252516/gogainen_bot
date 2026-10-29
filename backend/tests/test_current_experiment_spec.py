@@ -24,6 +24,7 @@ from app.services import experiment
 from app.services.idempotency import request_fingerprint
 from app.models import IdempotencyRecord
 from app.services.prefetch import wait_for_prefetch_tasks
+from split_api_support import case_roles, select_roles
 
 
 client = TestClient(app)
@@ -36,7 +37,7 @@ def create_trial(group="A", labels="DEF"):
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:
         options = {option["label"]: option["option_id"] for option in question["options"]}
-        saved = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": [options[label] for label in labels]})
+        saved = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": select_roles(question, [case_roles(labels)[0]])})
         assert saved.status_code == 200, saved.text
     scored = client.post(f"/api/participants/{pid}/diagnose-pretest")
     assert scored.status_code == 200, scored.text
@@ -108,6 +109,8 @@ def trial_snapshot(db, pid):
         (4, 24, "experiment-plan-2026-10-27-multi-memory-retest1-v1"),
         (15, 25, "experiment-plan-2026-10-27-round2-revision-v1"),
         (4, 25, "experiment-plan-2026-10-27-round2-revision-v1"),
+        (15, 26, "experiment-plan-2026-10-27-test-glossary-v2"),
+        (4, 26, "experiment-plan-2026-10-27-test-glossary-v2"),
     ],
 )
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):
@@ -205,8 +208,8 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
     Base.metadata.create_all(isolated)
     with Session(isolated) as db:
         seed_database(db)
-        assert db.query(Question).count() == 24
-        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 6, "retest": 12, "final_test": 6}
+        assert db.query(Question).count() == 30
+        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 9, "retest": 18, "final_test": 3}
         participant = Participant(display_code="OLD", group_condition="proposed", current_step="finish", completion_reason=None)
         db.add(participant)
         db.flush()
@@ -224,13 +227,13 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
         pid = participant.id
         seed_database(db)
         seed_database(db)
-        assert db.query(Question).count() == 27
-        assert db.query(Question).filter_by(is_active=True).count() == 24
+        assert db.query(Question).count() == 33
+        assert db.query(Question).filter_by(is_active=True).count() == 30
         assert not old_question.is_active and not transfer.is_active
         db.refresh(retired_variant)
         assert not retired_variant.is_active
         assert db.get(QuestionOption, extra_option.id) is not None
-        assert len(experiment._displayed_options(db, participant, current_question)) == 10
+        assert len(experiment._displayed_options(db, participant, current_question)) == 4
         assert trial_snapshot(db, pid) == before
     with isolated.begin() as connection:
         connection.execute(text("ALTER TABLE participants DROP COLUMN experiment_spec_version"))

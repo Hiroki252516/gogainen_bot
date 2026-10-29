@@ -2854,6 +2854,13 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
     if not attempts:
         raise HTTPException(status_code=400, detail=f"{phase} attempts not found")
     if uses_split(participant):
+        questions = split_questions_for_attempts(db, attempts)
+        term_ids = {question.term_id for question in questions.values()}
+        if db.query(Term.id).filter(Term.id.in_(term_ids)).count() != len(term_ids):
+            raise HTTPException(status_code=503, detail={
+                "error_code": "question_term_unavailable",
+                "message": "問題に対応する用語データが見つかりません。管理者に連絡してください。",
+            })
         expected_ids = {q["question_id"] for q in question_payloads(db, participant.id, phase)}
         if len(expected_ids) != 6 or {a.question_id for a in attempts} != expected_ids or len(attempts) != 6:
             raise HTTPException(status_code=400, detail="6設問すべてに回答してください。")

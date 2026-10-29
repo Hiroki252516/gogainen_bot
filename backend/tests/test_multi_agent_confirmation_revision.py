@@ -6,6 +6,7 @@ import pytest
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+from split_api_support import assert_learning_flow
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD
@@ -110,62 +111,4 @@ def test_multi_agent_history_restores_saved_version_without_rewriting_records(tm
 @pytest.mark.parametrize("initial", ["unknown", "M1"])
 @pytest.mark.parametrize("labels,expected_type", [("ABC", None), ("J", "unknown"), ("DEF", "M1"), ("ADH", "M3"), ("ADI", "M3")])
 def test_current_multi_agent_display_grading_feedback_replay_and_prefetch(group, layout, initial, labels, expected_type):
-    client = TestClient(app)
-    created = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "MULTI-CONFIRMATION"})
-    assert created.status_code == 200, created.text
-    pid = created.json()["participant_id"]
-    with SessionLocal() as db:
-        participant = db.get(Participant, pid)
-        assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS[STANDARD]
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
-        participant.option_order_mode = layout
-        db.commit()
-    questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
-    for question in questions:
-        canonical = assessment_question_spec(question["term_slug"], "pretest")
-        selected_bodies = {option["body"] for option in canonical["options"] if option["misconception_type"] == initial}
-        response = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": [option["option_id"] for option in question["options"] if option["body"] in selected_bodies]})
-        assert response.status_code == 200, response.text
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
-    session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "multi_agent"})
-    assert session.status_code == 200, session.text
-    sid = session.json()["tutor_session_id"]
-    generated = client.post(f"/api/tutor-sessions/{sid}/turns", json={})
-    assert generated.status_code == 200, generated.text
-    turn = generated.json()
-    question = turn["practice_question"]
-    assert question["body"] == assessment_question_spec("multi_agent", "pretest")["body"]
-    assert turn["learning_stage"] == ("enrichment" if initial == "unknown" else "conceptual_change")
-    assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
-    assert question["options"][-1]["label"] == "J" and question["options"][-1]["exclusive"] is True
-    unknown = question["options"][-1]["option_id"]
-    invalid = client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json={"selected_option_ids": [question["options"][0]["option_id"], unknown]})
-    assert invalid.status_code == 400
-    canonical = learning_question_spec("multi_agent", turn["learning_stage"])
-    selected_bodies = {option["body"] for option in canonical["options"] if option["label"] in labels}
-    payload = {"selected_option_ids": [option["option_id"] for option in question["options"] if option["body"] in selected_bodies]}
-    headers = {"Idempotency-Key": "multi-confirmation-response"}
-    response = client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json=payload, headers=headers)
-    assert response.status_code == 200, response.text
-    result = response.json()
-    assert result["is_sufficient"] == (expected_type is None)
-    if expected_type is not None:
-        assert result["learning_misconception_type"] == expected_type
-    assert result["feedback"]
-    replay = client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json=payload, headers=headers)
-    assert replay.status_code == 200, replay.text
-    assert replay.json() == result
-    wait_for_prefetch_tasks()
-    with SessionLocal() as db:
-        saved = db.get(TutorTurn, turn["turn_id"])
-        assert saved.diagnosis_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[STANDARD]
-        assert saved.practice_question_json["options"] == question["options"]
-        session = db.get(TutorSession, sid)
-        history = build_interaction_history(db, pid, session.term_id)
-        record = next(row for row in history if row["source_type"] == "learning_turn")
-        assert record["question_body"] == question["body"]
-        assert {row["body"] for row in record["selected_options"]} == selected_bodies
-        assert record["is_correct"] == (expected_type is None)
-    assert result["session_completed"] and result["max_turns"] == 1
-    assert result["session_ended_by_attempt_limit"] == (expected_type is not None)
-    assert client.post(f"/api/tutor-sessions/{sid}/turns", json={}).status_code == 409
+    assert_learning_flow("multi_agent", group, layout, initial, labels, expected_type)

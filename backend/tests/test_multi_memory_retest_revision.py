@@ -7,6 +7,7 @@ import yaml
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+from split_api_support import assert_retest_flow
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key
@@ -226,30 +227,7 @@ def _learn(client, pid, slug):
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("labels", ["ABC", "DEF", "GHI", "ADH", "J"])
 def test_natural_two_rounds_scoring_replay_review_and_history(slug, group, layout, labels):
-    client = TestClient(app)
-    pid = _create(client, group, layout)
-    initial = "J" if labels == "J" else "GHI" if labels in {"GHI", "ADH"} else "DEF"
-    _answer_test(client, pid, slug, "pretest", initial)
-    _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
-    for index in (1, 2):
-        _learn(client, pid, slug)
-        chosen = initial if index == 1 and labels == "ABC" else labels
-        question = _answer_test(client, pid, slug, "retest", chosen, index)
-        headers = {"Idempotency-Key": f"multi-memory-score-{index}"}
-        scored = _ok(client.post(f"/api/participants/{pid}/score-retest", json={}, headers=headers))
-        assert _ok(client.post(f"/api/participants/{pid}/score-retest", json={}, headers=headers)) == scored
-        _assert_grades(pid, slug, "retest", chosen, index)
-        assert scored["post_pretest_tests_completed"] == index and scored["post_pretest_test_limit"] == 2
-        assert scored["next_step"] == ("learning_targets" if index == 1 else "survey")
-        review = _ok(client.get(f"/api/participants/{pid}/learning-targets"))["test_results"]
-        row = next(row for row in review["results"] if row["term_slug"] == slug)
-        assert row["question_body"] == question["body"] and row["is_correct"] == (chosen == "ABC")
-        with SessionLocal() as db:
-            term = db.query(Term).filter_by(slug=slug).one()
-            record = next(row for row in build_interaction_history(db, pid, term.id)
-                          if row["source_type"] == "test_attempt" and row["test_round"] == f"retest_{index}")
-            assert record["question_body"] == question["body"]
-    assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+    assert_retest_flow(slug, group, layout, "retest", labels, None if labels == "ABC" else ("unknown" if labels == "J" else ("M1" if labels == "DEF" else "M3")), round_two=True)
 
 
 @pytest.mark.parametrize("slug", list(EXPECTED))
@@ -258,23 +236,7 @@ def test_natural_two_rounds_scoring_replay_review_and_history(slug, group, layou
 @pytest.mark.parametrize("phase", ["retest", "final_test"])
 @pytest.mark.parametrize("perfect", [False, True])
 def test_first_posttest_shared_v1_and_early_mastery(slug, group, layout, phase, perfect):
-    client = TestClient(app)
-    pid = _create(client, group, layout)
-    _answer_test(client, pid, slug, "pretest", "ABC" if phase == "final_test" else "DEF")
-    _ok(client.post(f"/api/participants/{pid}/diagnose-pretest"))
-    if phase == "retest":
-        _learn(client, pid, slug)
-    _answer_test(client, pid, slug, phase, "ABC" if perfect else "GHI")
-    score = "score-final-test" if phase == "final_test" else "score-retest"
-    result = _ok(client.post(f"/api/participants/{pid}/{score}", json={}))
-    _assert_grades(pid, slug, phase, "ABC" if perfect else "GHI", 1)
-    assert result["post_pretest_tests_completed"] == 1
-    assert result["next_step"] == ("survey" if perfect else "learning_targets")
-    if not perfect:
-        _learn(client, pid, slug)
-        _answer_test(client, pid, slug, "retest", "GHI", 2)
-        final = _ok(client.post(f"/api/participants/{pid}/score-retest", json={}))
-        assert final["next_step"] == "survey" and final["post_pretest_tests_completed"] == 2
+    assert_retest_flow(slug, group, layout, phase, "ABC" if perfect else "GHI", None if perfect else "M3", stop_after_first=True)
 
 
 @pytest.mark.parametrize("slug", list(EXPECTED))
@@ -328,8 +290,8 @@ def test_spec19_history_seed_and_repair_preserve_v5(tmp_path, monkeypatch, slug,
             for oid, fields in options_before.items():
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
-            current = db.query(Question).filter_by(term_id=term.id, phase="retest", variant_key=f"retest_v{index}", is_active=True).all()
-            assert len(current) == 2  # Standard and easy banks remain active together.
+            current = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_([f"retest_v{index}", f"retest_v{index}_q1", f"retest_v{index}_q2"])).all()
+            assert len(current) == 3  # Two standard items and one easy question.
             assert all(row.id != question.id for row in current)
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)

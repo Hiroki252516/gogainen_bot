@@ -1,6 +1,8 @@
 import asyncio
 import json
 import socket
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pytest
 import websockets
@@ -9,11 +11,11 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend
 
 
 @pytest.mark.parametrize("transport", ["websocket", "unix"])
-def test_status_initializes_transport_before_reading_account(transport, tmp_path):
+def test_status_initializes_transport_before_reading_account(transport):
     if transport == "unix" and not hasattr(socket, "AF_UNIX"):
         pytest.skip("Unix sockets are unavailable")
 
-    async def check():
+    async def check(socket_dir):
         received = []
 
         async def serve(ws):
@@ -31,7 +33,7 @@ def test_status_initializes_transport_before_reading_account(transport, tmp_path
             }))
 
         if transport == "unix":
-            path = str(tmp_path / "app.sock")
+            path = str(Path(socket_dir) / "app.sock")
             listener = websockets.unix_serve(serve, path=path)
             url = f"unix://{path}"
         else:
@@ -50,7 +52,9 @@ def test_status_initializes_transport_before_reading_account(transport, tmp_path
         assert status["logged_in"] is True
         assert received == ["initialize", "initialized", "account/read"]
 
-    asyncio.run(check())
+    # macOS AF_UNIX paths cannot fit pytest's full temporary directory name.
+    with TemporaryDirectory(prefix="transport-", dir="/tmp" if Path("/tmp").is_dir() else None) as socket_dir:
+        asyncio.run(check(socket_dir))
 
 
 def test_unix_connection_failure_is_reported_without_mock(tmp_path):
