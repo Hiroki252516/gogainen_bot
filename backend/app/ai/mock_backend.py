@@ -81,9 +81,13 @@ class MockAIBackend:
                     item["claim_id"]
                     for item in payload.get("pretest_targets") or []
                     if isinstance(item, dict)
-                    and item.get("misconception_type") in {None, mandatory_type}
+                    and (payload.get("learning_scope") or item.get("misconception_type") in {None, mandatory_type})
                     and item.get("claim_id")
                 ] or teaching_contract["addressed_claim_ids"]
+                if payload.get("learning_scope"):
+                    for item in payload.get("pretest_targets") or []:
+                        if item.get("claim_id") != (target or {}).get("claim_id"):
+                            message += f"\n- もう一つの選択された説明『{item['observed_claim']}』も、同じ正しい仕組みと照らして見直します。"
             if mandatory_type == "unknown":
                 message += "\n- 定義から構成要素と役割へつなげて、新しい例に適用します。"
         else:

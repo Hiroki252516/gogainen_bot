@@ -14,6 +14,7 @@ const toFullWidthDigits = (value: number) =>
 
 type Target = { term_slug: string; term_label: string; summary_for_learner: string; current_stage_for_display: string };
 type PretestResult = {
+  question_id?: string;
   term_slug: string;
   term_label: string;
   is_correct: boolean | null;
@@ -22,6 +23,7 @@ type PretestResult = {
   is_learning_target: boolean;
 };
 type TestResult = {
+  question_id?: string;
   term_slug: string;
   term_label: string;
   question_body: string | null;
@@ -82,7 +84,7 @@ export default function LearningTargetsPage() {
           {testResults.results.length ? testResults.results.map((result, i) => (
             <div
               className={`notice pretest-result ${result.is_correct === true ? "pretest-result-correct" : result.is_correct === false ? "pretest-result-incorrect" : "pretest-result-pending"}`}
-              key={result.term_slug}
+              key={result.question_id || result.term_slug}
             >
               <div className="term-row-head">
                 <span className="question-heading">
@@ -110,7 +112,7 @@ export default function LearningTargetsPage() {
               </p>
             </div>
           )) : pretestResults.map((result, i) => (
-            <div className={`notice pretest-result ${result.is_correct === true ? "pretest-result-correct" : "pretest-result-incorrect"}`} key={result.term_slug}>
+            <div className={`notice pretest-result ${result.is_correct === true ? "pretest-result-correct" : "pretest-result-incorrect"}`} key={result.question_id || result.term_slug}>
               <div className="term-row-head">
                 <span className="question-heading">
                   問{toFullWidthDigits(i + 1)}：<strong>{result.term_label}</strong>

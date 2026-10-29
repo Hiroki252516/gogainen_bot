@@ -145,7 +145,7 @@ for (const expectedText of ["can_resume", "LegacyTrialNotice", "新しい実験�
 }
 if (fs.existsSync(new URL("../app/l0-check/page.tsx", import.meta.url))) throw new Error("retired L0 page must not exist");
 for (const source of [learningPage, fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8")]) {
-  for (const retired of ["scaffolding_level", "selected_item_option_ids", "free_text_answer", "reason_text", "item_results", 'type="radio"']) {
+  for (const retired of ["scaffolding_level", "selected_item_option_ids", "free_text_answer", "reason_text", "item_results"]) {
     if (source.includes(retired)) throw new Error(`current answer UI must not include ${retired}`);
   }
   if (!source.includes("option.exclusive")) throw new Error("option selection must use the exclusive marker, not a fixed label");
@@ -288,7 +288,7 @@ for (const expectedText of ["test_round_label", "setDisplayTitle"]) {
     throw new Error(`question runner missing test round display behavior: ${expectedText}`);
   }
 }
-for (const expectedText of ["${index + 1} / ${questions.length}", "question-heading", "問{toFullWidthDigits(index + 1)}：", "<strong>{current.term_label}</strong>", '<p className={preserveQuestionLines ? "preserve-lines" : undefined}>{current.body}</p>', "className=\"muted question-progress\""]) {
+for (const expectedText of ["${index + 1} / ${questions.length}", "question-heading", "問{toFullWidthDigits(index + 1)}：", "<strong>{current.term_label}</strong>", '<p className={preserveQuestionLines || current.selection_mode === "single" ? "preserve-lines" : undefined}>{current.body}</p>', "className=\"muted question-progress\""]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`QuestionRunner missing question progress display: ${expectedText}`);
   }
@@ -373,7 +373,7 @@ if (!questionRunner.includes("responseTimeSec") || !questionRunner.includes("que
 if (!questionRunner.includes("questionShownAt") || !questionRunner.includes("question_shown_at: questionShownAt") || !questionRunner.includes("answered_at: answeredAt")) {
   throw new Error("QuestionRunner must send question timing timestamps");
 }
-for (const expectedText of ["selection_mode", "selectedIds", "selected_option_ids", "type=\"checkbox\"", "min_selections", "max_selections", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "disabled={isAnswered || isDisabled}", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
+for (const expectedText of ["selection_mode", "selectedIds", "selected_option_ids", 'type={isMultipleQuestion ? "checkbox" : "radio"}', "min_selections", "max_selections", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "disabled={isAnswered || isDisabled}", "option-disabled", "option-unknown", "nextMultipleSelection"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`QuestionRunner missing multiple-selection behavior: ${expectedText}`);
   }

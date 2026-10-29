@@ -42,6 +42,11 @@ def save_option_order_mode(db: Any, mode: str) -> str:
 
 
 def assessment_bank_index(term_slug: str, phase: str, variant_key: str) -> int:
+    if "_q" in variant_key:
+        round_key, number = variant_key.rsplit("_q", 1)
+        if number not in {"1", "2"}:
+            raise ValueError("reserved split question")
+        return assessment_bank_index(term_slug, phase, round_key) * 2 + int(number) - 1
     if not isinstance(variant_key, str) or not variant_key:
         raise ValueError(f"invalid assessment variant key: {variant_key}")
     term_index = ACTIVE_TERM_SLUGS.index(term_slug)
@@ -123,6 +128,23 @@ def _label_permutation(bank: str, block_index: int) -> list[str]:
 
 
 def _display_label_by_source(options: list[Any], bank: str, item_index: int) -> dict[str, str]:
+    if len(options) == 4:
+        by_role = {option_role(option): option for option in options}
+        if set(by_role) != {"correct", "M1", "M3", "unknown"}:
+            raise ValueError("randomized four-option order requires one option per role")
+        labels = sorted(
+            "ABC",
+            key=lambda label: hashlib.sha256(
+                f"{OPTION_ORDER_VERSION}:{bank}:four:{item_index // 3}:{label}".encode()
+            ).digest(),
+        )
+        return {
+            **{
+                _source_label(by_role[role]): labels[(item_index + offset) % 3]
+                for offset, role in enumerate(("correct", "M1", "M3"))
+            },
+            _source_label(by_role["unknown"]): "D",
+        }
     if len(options) != 10:
         raise ValueError("randomized option order requires exactly ten options")
 

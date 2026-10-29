@@ -582,7 +582,7 @@ export default function AdminPage() {
                 aria-pressed={summaryMode === mode} onClick={() => setSummaryMode(mode)}>{label}</button>
             ))}
           </div>
-          <p className="muted">集計対象: {questionSetLabel(summaryMode)}。新規参加者向け設定とは独立しています。生ログと被験者一覧は両版を表示します。</p>
+          <p className="muted">集計対象: {questionSetLabel(summaryMode)}。{summaryMode === "standard" ? "1回6設問・単一選択で集計します。" : "1回3問・複数選択で集計します。"}新規参加者向け設定とは独立しています。生ログと被験者一覧は両版を表示します。</p>
           {summaryError ? <p className="danger" role="alert">{summaryError}</p> : null}
           <p className="muted">{activeGroup}群の進捗、回答履歴、評価サマリーを確認します。</p>
           <div className="grid">

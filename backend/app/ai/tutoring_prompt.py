@@ -152,6 +152,8 @@ def build_tutoring_prompt(
             rules.append("前回生成で本文構造または生成契約の検証に失敗した。次の検証エラーを修正する: "
                          + json.dumps(retry_errors, ensure_ascii=False))
 
+    if payload.get("learning_scope"):
+        rules.append("learning_scopeのtopicsだけを今回の学習対象とする。selected_errorsがある場合はその全てを扱い、正解済みの設問へ学習を広げない。selected_errorsが空の場合は誤概念を推測せずtopicsの意味や仕組みを基礎から説明する。確認問題はシステムが別途表示するため生成しない。")
     if group == "control":
         rules.append("通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。")
         rules.append("general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。")

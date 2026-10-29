@@ -9,7 +9,7 @@ from app.ai.mandatory_elements import expected_mandatory_type
 
 INTERACTION_HISTORY_VERSION = "interaction-history-v1"
 SHARED_QUESTION_ROUTE_VERSION = "shared-diagnosis-route-v1"
-COMMON_INPUT_KEYS = ("term", "component_terms", "rag_context", "interaction_history")
+COMMON_INPUT_KEYS = ("term", "component_terms", "rag_context", "interaction_history", "learning_scope")
 HISTORY_RECORD_KEYS = (
     "source_type", "phase", "test_round", "session_index", "turn_index",
     "question_body", "is_correct", "question_shown_at", "answered_at", "response_time_sec",
@@ -60,6 +60,12 @@ def project_interaction_history(value: Any) -> list[dict[str, Any]]:
 
 def project_model_payload(payload: dict[str, Any], *, proposed: bool, feedback: bool = False) -> dict[str, Any]:
     result = {key: payload[key] for key in COMMON_INPUT_KEYS if key in payload}
+    if "learning_scope" in result:
+        scope = result["learning_scope"] if isinstance(result["learning_scope"], dict) else {}
+        topics = scope.get("topics")
+        errors = scope.get("selected_errors")
+        result["learning_scope"] = {"topics": [text for text in topics if isinstance(text, str)] if isinstance(topics, list) else [],
+                                    "selected_errors": [{key: row[key] for key in ("label", "body") if isinstance(row.get(key), str)} for row in errors if isinstance(row, dict)] if isinstance(errors, list) else []}
     if payload.get("explanation_level") == "beginner":
         result["explanation_level"] = "beginner"
     result["interaction_history"] = project_interaction_history(payload.get("interaction_history"))

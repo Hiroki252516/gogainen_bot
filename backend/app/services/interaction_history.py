@@ -52,6 +52,14 @@ def _learning_record(db: Session, session: TutorSession, turn: TutorTurn, projec
     snapshot = [row for row in question.get("options") or [] if isinstance(row, dict) and row.get("body") and row.get("label")]
     selected_ids = grading.get("selected_option_ids") or []
     available = {row.get("option_id") for row in snapshot if isinstance(row, dict)}
+    if question.get("source_spec") and (not question.get("body") or not set(selected_ids).issubset(available)):
+        restored = question["source_spec"]
+        saved_groups = restored.get("questions") or []
+        snapshot = [row for group in saved_groups for row in group.get("options", [])]
+        question = {**question, "body": restored["body"]}
+        available = {row.get("option_id") for row in snapshot}
+        if not set(selected_ids).issubset(available):
+            raise ValueError("split confirmation snapshot is incomplete")
     if not question.get("body") or not set(selected_ids).issubset(available):
         term = db.get(Term, session.term_id)
         stage = grading.get("learning_stage") or (question.get("stage_meta") or {}).get("learning_stage") or "conceptual_change"

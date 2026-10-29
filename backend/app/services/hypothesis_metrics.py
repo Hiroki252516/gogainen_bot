@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, assert_current_experiment
 from app.core.question_sets import STANDARD, question_set_mode
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
+from app.models import Question
+from app.services.split_assessment import uses_split
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION
 
-METRICS_VERSION = "six-hypotheses-v2"
+METRICS_VERSION = "six-hypotheses-v3-split"
 TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
 
 
@@ -39,26 +41,31 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     assert_current_experiment(participant)
     terms = {t.id: t.slug for t in db.query(Term).filter(Term.slug.in_(TERM_SLUGS)).all()}
     grouped = defaultdict(list)
+    split = uses_split(participant)
+    expected_count = 6 if split else 3
+    question_keys = {q.id: (q.term_id, q.variant_key.rsplit("_q", 1)[-1]) for q in db.query(Question).all()} if split else {}
+    def item_key(attempt):
+        return question_keys.get(attempt.question_id) if split else attempt.term_id
     for attempt in db.query(Attempt).filter_by(participant_id=participant.id).all():
         if attempt.term_id in terms and attempt.phase in {"pretest", "retest", "final_test"}:
             grouped[_round_number(attempt)].append(attempt)
 
     def complete(items):
-        return len(terms) == 3 and len(items) == 3 and {a.term_id for a in items} == set(terms) and all(a.is_correct is not None for a in items)
+        return len(terms) == 3 and len(items) == expected_count and len({item_key(a) for a in items}) == expected_count and {a.term_id for a in items} == set(terms) and all(a.is_correct is not None for a in items)
 
     baseline = grouped.get(0, [])
     initial = grouped.get(1, [])
     pre_complete = complete(baseline)
     paired_complete = pre_complete and complete(initial)
-    pre_score = sum(a.is_correct is True for a in baseline) / 3 if pre_complete else None
-    initial_error_terms = {a.term_id: a.misconception_type for a in baseline if a.misconception_type in {"M1", "M3"}}
+    pre_score = sum(a.is_correct is True for a in baseline) / expected_count if pre_complete else None
+    initial_error_terms = {item_key(a): a.misconception_type for a in baseline if a.misconception_type in {"M1", "M3"}}
 
     def recurrence(items):
         if pre_complete and not initial_error_terms:
             return {"status": "not_applicable_no_initial_m1_m3", "value": None, "numerator": 0, "denominator": 0}
         if not (pre_complete and complete(items)):
             return {"status": "missing_paired_tests", "value": None, "numerator": None, "denominator": len(initial_error_terms)}
-        numerator = sum(a.misconception_type == initial_error_terms.get(a.term_id) for a in items if a.term_id in initial_error_terms)
+        numerator = sum(a.misconception_type == initial_error_terms.get(item_key(a)) for a in items if item_key(a) in initial_error_terms)
         denominator = len(initial_error_terms)
         return {"status": "observed" if denominator else "not_applicable_no_initial_m1_m3",
                 "value": numerator / denominator if denominator else None,
@@ -70,7 +77,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     for number in sorted(n for n in grouped if n is not None and n > 0):
         items = grouped[number]
         done = complete(items)
-        score = sum(a.is_correct is True for a in items) / 3 if done else None
+        score = sum(a.is_correct is True for a in items) / expected_count if done else None
         rounds.append({"round": number, "phase": items[0].phase, "complete": done,
                        "score_rate": score, "gain_pt": (score - pre_score) * 100 if done and pre_complete else None,
                        "recurrence": recurrence(items)})
@@ -121,6 +128,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         "metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
         "participant_id": participant.id, "display_code": participant.display_code,
         "question_set_mode": question_set_mode(participant.question_set_mode),
+        "scoring_unit": "subquestion" if split else "term", "questions_per_test": expected_count,
         "group_condition": participant.group_condition, "completion_reason": participant.completion_reason,
         "route": "initial_perfect_final_test" if pre_score == 1 else "learning_retest" if pre_complete else "pretest_incomplete",
         "has_viewed_material": bool(displayed), "rounds": rounds,
