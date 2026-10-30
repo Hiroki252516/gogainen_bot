@@ -22,7 +22,8 @@ function parseQuestionBody(body: string): ParsedQuestionBody | null {
   };
 }
 
-export function prepareGroupedQuestionDisplay(questions: QuestionBody[]): GroupedQuestionDisplay {
+export function prepareGroupedQuestionDisplay(questions: QuestionBody[] | null | undefined): GroupedQuestionDisplay | null {
+  if (!questions) return null;
   const questionBodies = questions.map((question) => question.body);
   if (questions.length !== 2) return { sharedScenario: null, questionBodies };
 

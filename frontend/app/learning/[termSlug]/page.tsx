@@ -20,7 +20,7 @@ type Turn = {
   tutor_message: string;
   glossary?: Glossary | null;
   learner_prompt: string;
-  practice_question: { body: string; options?: Option[]; questions?: { question_id: string; body: string; options: Option[] }[]; selection_mode?: "multiple" | "grouped_single"; min_selections?: number; max_selections?: number; learning_variant_index?: number; answered?: boolean };
+  practice_question?: { body: string; options?: Option[]; questions?: { question_id: string; body: string; options: Option[] }[]; selection_mode?: "multiple" | "grouped_single"; min_selections?: number; max_selections?: number; learning_variant_index?: number; answered?: boolean } | null;
   turn_index: number;
   max_turns: number;
   learning_stage?: string;
@@ -254,11 +254,16 @@ export default function LearningPage() {
 
   async function submit() {
     if (!turn || actionInFlightRef.current) return;
-    const options = turn.practice_question?.options || [];
-    const isMultiple = turn.practice_question?.selection_mode === "multiple";
-    const requiredSelections = turn.practice_question?.min_selections ?? 3;
+    const practiceQuestion = turn.practice_question;
+    if (!practiceQuestion || (!practiceQuestion.questions?.length && !practiceQuestion.options?.length)) {
+      setError("確認問題を表示できません。画面を再読み込みしてください。");
+      return;
+    }
+    const options = practiceQuestion.options || [];
+    const isMultiple = practiceQuestion.selection_mode === "multiple";
+    const requiredSelections = practiceQuestion.min_selections ?? 3;
     const selectionState = multipleSelectionState(options, selectedOptionIds, requiredSelections);
-    if (turn.practice_question.questions?.some((q) => q.options.filter((o) => selectedOptionIds.includes(o.option_id)).length !== 1)) {
+    if (practiceQuestion.questions?.some((q) => q.options.filter((o) => selectedOptionIds.includes(o.option_id)).length !== 1)) {
       setError("各設問の選択肢を1つずつ選んでください。"); return;
     }
     if (isMultiple && !selectionState.isComplete) {
@@ -287,9 +292,9 @@ export default function LearningPage() {
       const updatedTurn = {
         ...turn,
         practice_question: {
-          ...turn.practice_question,
+          ...practiceQuestion,
           answered: true,
-          options: (turn.practice_question.options || []).map((option) => ({
+          options: (practiceQuestion.options || []).map((option) => ({
             ...option,
             is_correct: data.answer_key?.[option.option_id] ?? false,
           })),
@@ -343,10 +348,12 @@ export default function LearningPage() {
 
   const progress = questionProgress || (turn ? progressForNewQuestion(termSlug, turn) : null);
   const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;
-  const questionBody = turn?.practice_question?.body || turn?.learner_prompt || "";
-  const groupedQuestionDisplay = turn?.practice_question.questions
-    ? prepareGroupedQuestionDisplay(turn.practice_question.questions)
-    : null;
+  const practiceQuestion = turn?.practice_question ?? null;
+  const confirmationQuestions = practiceQuestion?.questions;
+  const practiceOptions = practiceQuestion?.options ?? [];
+  const hasAnswerableQuestion = Boolean(confirmationQuestions?.length || practiceOptions.length);
+  const questionBody = practiceQuestion?.body || turn?.learner_prompt || "";
+  const groupedQuestionDisplay = prepareGroupedQuestionDisplay(confirmationQuestions);
   const preserveQuestionLines = (termSlug === "multi_agent"
     && [2, 3].includes(turn?.practice_question?.learning_variant_index ?? 0)
     && questionBody.includes("\n\n案1：")
@@ -407,9 +414,9 @@ export default function LearningPage() {
               </section>
               <section className="learning-block problem-block" aria-labelledby="problem-title">
                 <h2 id="problem-title">問題</h2>
-                {!turn.practice_question.questions ? <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{questionBody}</p> : null}
+                {!confirmationQuestions?.length ? <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{questionBody}</p> : null}
                 {groupedQuestionDisplay?.sharedScenario ? <p className="preserve-lines">{groupedQuestionDisplay.sharedScenario}</p> : null}
-                {turn.practice_question.questions ? turn.practice_question.questions.map((question, index) => (
+                {confirmationQuestions?.length ? confirmationQuestions.map((question, index) => (
                   <div key={question.question_id} className="stack">
                     <p className="preserve-lines">{groupedQuestionDisplay?.questionBodies[index] ?? question.body}</p>
                     <div className="selection-status">最も適切なものを1つ選んでください。</div>
@@ -422,11 +429,11 @@ export default function LearningPage() {
                       ))}
                     </div>
                   </div>
-                )) : turn.practice_question?.options?.length ? (
+                )) : practiceOptions.length ? (
                   <>
-                    {turn.practice_question.selection_mode === "multiple" ? (() => {
-                      const requiredSelections = turn.practice_question.min_selections ?? 3;
-                      const selectionState = multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, requiredSelections);
+                    {practiceQuestion?.selection_mode === "multiple" ? (() => {
+                      const requiredSelections = practiceQuestion.min_selections ?? 3;
+                      const selectionState = multipleSelectionState(practiceOptions, selectedOptionIds, requiredSelections);
                       return (
                         <div className={`selection-status ${selectionState.isComplete ? "ok" : ""}`}>
                           <strong>{selectionState.hasUnknown ? "わからないを選択中" : `${selectionState.normalSelectedCount}/${requiredSelections} 選択済み`}</strong>
@@ -441,10 +448,10 @@ export default function LearningPage() {
                       );
                     })() : null}
                     <div className="options">
-                      {turn.practice_question.options.map((option) => {
-                        const isMultiple = turn.practice_question?.selection_mode === "multiple";
-                        const requiredSelections = turn.practice_question?.min_selections ?? 3;
-                        const selectionState = multipleSelectionState(turn.practice_question?.options || [], selectedOptionIds, requiredSelections);
+                      {practiceOptions.map((option) => {
+                        const isMultiple = practiceQuestion?.selection_mode === "multiple";
+                        const requiredSelections = practiceQuestion?.min_selections ?? 3;
+                        const selectionState = multipleSelectionState(practiceOptions, selectedOptionIds, requiredSelections);
                         const isSelected = selectedOptionIds.includes(option.option_id);
                         const isUnknown = Boolean(option.exclusive);
                         const isDisabled =
@@ -461,9 +468,9 @@ export default function LearningPage() {
                               name="learning-option"
                               value={option.option_id}
                               checked={isSelected}
-                              disabled={submitting || Boolean(feedback) || Boolean(turn.practice_question.answered) || isDisabled}
+                              disabled={submitting || Boolean(feedback) || Boolean(practiceQuestion?.answered) || isDisabled}
                               onChange={() => {
-                                setSelectedOptionIds((currentIds) => nextMultipleSelection(turn.practice_question?.options || [], currentIds, option, requiredSelections));
+                                setSelectedOptionIds((currentIds) => nextMultipleSelection(practiceOptions, currentIds, option, requiredSelections));
                               }}
                             />
                             <span>
@@ -475,7 +482,7 @@ export default function LearningPage() {
                       })}
                     </div>
                   </>
-                ) : null}
+                ) : <div className="danger" role="alert">確認問題を表示できません。画面を再読み込みしてください。</div>}
               </section>
             </div>
             <GlossarySidebar glossary={turn.glossary} label="教材の用語の補足" />
@@ -502,9 +509,10 @@ export default function LearningPage() {
                   onClick={submit}
                   disabled={
                     submitting ||
-                    Boolean(turn.practice_question.questions?.some((q) => q.options.filter((o) => selectedOptionIds.includes(o.option_id)).length !== 1)) ||
-                    (turn.practice_question?.selection_mode === "multiple" &&
-                      !multipleSelectionState(turn.practice_question.options || [], selectedOptionIds, turn.practice_question.min_selections ?? 3).isComplete)
+                    !hasAnswerableQuestion ||
+                    Boolean(confirmationQuestions?.some((q) => q.options.filter((o) => selectedOptionIds.includes(o.option_id)).length !== 1)) ||
+                    (practiceQuestion?.selection_mode === "multiple" &&
+                      !multipleSelectionState(practiceOptions, selectedOptionIds, practiceQuestion.min_selections ?? 3).isComplete)
                   }
                 >
                   {submitting ? "分析中..." : "回答を確認"}

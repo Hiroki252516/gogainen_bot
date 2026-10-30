@@ -43,4 +43,6 @@ for (const invalidBodies of [
 }
 
 assert.deepEqual(normalize(prepare([])), { sharedScenario: null, questionBodies: [] });
+assert.equal(prepare(null), null, "a missing practice question must not throw during grouped display preparation");
+assert.equal(prepare(undefined), null, "an omitted practice question must not throw during grouped display preparation");
 console.log("grouped confirmation display preserves source data and only deduplicates matching scenarios");
