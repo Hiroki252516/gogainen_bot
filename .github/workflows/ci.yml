@@ -16,13 +16,13 @@ concurrency:
 
 jobs:
   backend-test-shards:
-    name: Backend tests (${{ matrix.shard }}/3)
+    name: Backend tests (${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5]
     defaults:
       run:
         working-directory: backend
@@ -44,7 +44,7 @@ jobs:
       - name: Run tests
         env:
           AI_BACKEND: mock
-        run: python -m pytest -q -p ci_shard --ci-shard ${{ matrix.shard }} --ci-shards 3 --durations=20
+        run: python -m pytest -q -p ci_shard --ci-shard ${{ matrix.shard }} --ci-shards 5 --durations=20
 
   backend-tests:
     name: Backend tests
