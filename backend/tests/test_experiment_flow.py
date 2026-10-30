@@ -17,6 +17,7 @@ except ImportError:
 from app.ai.backend import strategy_for
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.ai.mock_backend import MockAIBackend
+from app.ai.tutoring_prompt import build_tutoring_prompt
 from app.ai.misconception_taxonomy import MISCONCEPTION_TAXONOMY, TAXONOMY_VERSION
 from app.ai.teaching_contract import (
     MATERIAL_MAX_CHARACTERS,
@@ -2894,6 +2895,42 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     assert "generate_correct_answer_summary" in text
     assert "explain_selected_distractor" in text
     assert "正答の選択肢本文、正答位置、正答そのものを直接示さない" in text
+
+
+def test_integrated_material_prompt_uses_only_the_supplied_glossary_reference():
+    reference = {
+        "version": "learning-glossary-v2",
+        "entries": [{"id": "weights", "term": "重み", "definition": "学習で調整される内部数値です。"}],
+    }
+    payload = {
+        "term": {"slug": "llm_knowledge", "label": "LLMに知識を与える方法", "description": "知識の与え方。"},
+        "component_terms": [],
+        "rag_context": {"chunks": []},
+        "interaction_history": [],
+        "glossary_reference": reference,
+    }
+    prompt = build_tutoring_prompt(
+        payload,
+        group="control",
+        expected_type=None,
+        term_label=payload["term"]["label"],
+        teaching_strategies=["general_explanation"],
+    )
+    assert "教材本文で実際に使う登録語だけを選び、初出時に意味を短く説明する" in prompt
+    assert "教材に使わない辞書語を列挙したり、用語一覧を追加したりしない" in prompt
+    assert "教材本文は" in prompt and "600〜800文字" in prompt
+    assert "学習で調整される内部数値です。" in prompt
+
+    legacy_payload = {key: value for key, value in payload.items() if key != "glossary_reference"}
+    legacy_prompt = build_tutoring_prompt(
+        legacy_payload,
+        group="control",
+        expected_type=None,
+        term_label=payload["term"]["label"],
+        teaching_strategies=["general_explanation"],
+    )
+    assert "glossary_reference" not in legacy_prompt
+    assert "初出時に意味を短く説明する" not in legacy_prompt
 
 
 def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatch):

@@ -99,6 +99,14 @@ def build_tutoring_prompt(
         "小見出しの文言・数・順序・セクションのまとめ方は、教材内容に適したものを自分で決める。固定テンプレートや必須要素ごとの専用見出しは要求しない。",
         "被験者ID、群名、内部識別子、M1/M3/unknownなどの内部ラベルを学習者向け本文に書かない。",
     ]
+    if payload.get("glossary_reference"):
+        rules.extend(
+            [
+                "glossary_reference は両群共通の用語辞書である。教材本文で実際に使う登録語だけを選び、初出時に意味を短く説明する。",
+                "教材に使わない辞書語を列挙したり、用語一覧を追加したりしない。説明は本文の流れに自然に含め、本文600〜800文字の条件を維持する。",
+                "辞書の定義を正確に保ち、定義にない性質を付け加えない。",
+            ]
+        )
 
     # ``retry_context`` is server-side generation metadata.  It may contribute
     # a length-adjustment instruction, but it must never become model input.

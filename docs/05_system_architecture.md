@@ -4,7 +4,7 @@
 
 採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。新6仮説はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧記録保護は仕様版とprotocol_idで限定する。
 
-仕様版28では、通常版のテスト取得APIが未確認の設問ペア表示データを返し、確認APIが第2設問のAttemptへ確認時刻を保存する。答え合わせ画面は同じテスト画面内に表示し、AIサービスを呼ばない。受入検証は未実施。[詳細](40_question_pair_answer_review.md)。
+仕様版28で追加した通常版の設問ペア答え合わせは仕様版29でも維持する。テスト取得APIが未確認の設問ペア表示データを返し、確認APIが第2設問のAttemptへ確認時刻を保存する。答え合わせ画面は同じテスト画面内に表示し、AIサービスを呼ばない。[詳細](40_question_pair_answer_review.md)。現行版29の教材用語解説モードは[41](41_learning_glossary_material_mode.md)。
 
 ## 現行MVPの実装
 

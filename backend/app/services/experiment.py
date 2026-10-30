@@ -65,7 +65,9 @@ from app.services.split_assessment import (
     require_confirmation_spec,
 )
 from app.services.question_sets import current_question_set_mode, require_aggregate_question_set_mode
-from app.services.learning_glossary import glossary_snapshot, public_glossary
+from app.services.learning_glossary import glossary_reference, glossary_snapshot, public_glossary
+from app.services.learning_material_glossary_mode import normalize_mode as normalize_learning_material_glossary_mode
+from app.services.learning_material_glossary_mode import INTEGRATED_MATERIAL
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import (
@@ -735,10 +737,12 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
     mode = current_question_set_mode(db)
     from app.services.pretest_display import current_setting
     from app.services.question_review_display import current_setting as current_question_review_setting
+    from app.services.learning_material_glossary_mode import current_setting as current_material_glossary_setting
     participant = Participant(
         display_code=next_display_code(db),
         show_pretest_results=current_setting(db),
         show_question_reviews=current_question_review_setting(db) if mode == STANDARD else None,
+        learning_material_glossary_mode=current_material_glossary_setting(db),
         group_condition=group_condition,
         assignment_method="admin_code",
         consent_checked=consent_checked,
@@ -2215,6 +2219,8 @@ def _tutoring_generation_context(
         ),
         "interaction_history": build_interaction_history(db, participant.id, term.id, projected_answer=predicted_answer),
     }
+    if normalize_learning_material_glossary_mode(participant.learning_material_glossary_mode) == INTEGRATED_MATERIAL:
+        common_payload["glossary_reference"] = glossary_reference()
     if participant.group_condition == "proposed":
         selected_pretest_options = _selected_options(db, pretest_attempt) if pretest_attempt else []
         pretest_targets = _pretest_teaching_targets(term.slug, selected_pretest_options, mode)
@@ -3789,7 +3795,7 @@ def admin_summary(db: Session, mode: str = STANDARD) -> dict[str, Any]:
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_question_reviews", "question_set_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
+    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_question_reviews", "learning_material_glossary_mode", "question_set_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "test_page_timing_json", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "question_review_acknowledged_at", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "legacy_scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "legacy_l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),
@@ -3838,6 +3844,7 @@ def _attempt_log_row(
     return {
         "attempt_id": attempt.id,
         "question_set_mode": question_set_mode(participant.question_set_mode) if participant else None,
+        "learning_material_glossary_mode": participant.learning_material_glossary_mode if participant else None,
         "test_page_mode": participant.test_page_mode if participant else None,
         "test_timing_unit": "term_page" if participant and effective_test_page_mode(participant) == "per_term" else "per_question",
         **({"legacy_fields": legacy_fields(attempt)} if participant and not can_resume(participant) else {}),
@@ -4173,6 +4180,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
         "participant": {
             "show_pretest_results": participant.show_pretest_results is not False,
             "show_question_reviews": participant.show_question_reviews,
+            "learning_material_glossary_mode": participant.learning_material_glossary_mode,
             "participant_id": participant.id,
             "display_code": participant.display_code,
             "experiment_spec_version": participant.experiment_spec_version,
