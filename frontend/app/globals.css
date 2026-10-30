@@ -650,16 +650,23 @@ button:disabled {
   box-shadow: 0 4px 18px rgb(15 23 42 / 14%);
 }
 
-.corner-exit {
-  position: fixed;
+.sticky-exit {
+  position: sticky;
   top: max(12px, env(safe-area-inset-top));
-  right: max(12px, env(safe-area-inset-right));
   z-index: 31;
+  justify-self: end;
+  align-self: start;
+  width: fit-content;
+  max-width: 100%;
   margin: 0;
   padding: 6px;
   border-radius: 10px;
   background: white;
   box-shadow: 0 4px 18px rgb(15 23 42 / 14%);
+}
+
+.learning-layout > .sticky-exit {
+  grid-column: 1 / -1;
 }
 
 .option-answer-correct {
@@ -1320,10 +1327,6 @@ button:disabled {
   }
   .corner-primary button {
     max-width: calc(100vw - 40px);
-  }
-  .corner-exit .danger-button {
-    max-width: min(42vw, 220px);
-    white-space: normal;
   }
   .experiment-progress-heading {
     align-items: flex-start;

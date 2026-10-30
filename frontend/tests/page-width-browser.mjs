@@ -44,12 +44,47 @@ async function verify(page, view, width) {
     if (width <= 760) assert(second.top >= first.bottom, `learning ${width}: stacked blocks overlap`);
     else assert(second.left >= first.right, `learning ${width}: columns overlap`);
   }
+  const expectsGiveUp = ["learning", "retest", "retest2", "final-test", "retest-results"].includes(view);
+  const exit = page.locator(".sticky-exit");
+  assert.equal(await exit.count(), expectsGiveUp ? 1 : 0, `${view} ${width}: give-up visibility`);
+  if (expectsGiveUp) {
+    const button = exit.getByRole("button");
+    assert(await button.isVisible(), `${view} ${width}: give-up visible`);
+    assert.equal(await exit.evaluate((el) => getComputedStyle(el).position), "sticky");
+    await page.getByRole("link", { name: "管理画面", exact: true }).click({ trial: true });
+    const initialOverlap = await page.evaluate(() => {
+      const exitRect = document.querySelector(".sticky-exit").getBoundingClientRect();
+      const adminRect = document.querySelector('a[href="/admin"]').getBoundingClientRect();
+      return exitRect.left < adminRect.right && adminRect.left < exitRect.right && exitRect.top < adminRect.bottom && adminRect.top < exitRect.bottom;
+    });
+    assert(!initialOverlap, `${view} ${width}: give-up overlaps admin link`);
+    const initial = await exit.boundingBox();
+    await page.evaluate(() => window.scrollTo(0, Math.min(350, document.documentElement.scrollHeight - innerHeight)));
+    const scrolled = await exit.boundingBox();
+    assert(initial && scrolled && scrolled.y >= 11 && scrolled.y <= initial.y + 1, `${view} ${width}: give-up does not stick below the viewport top`);
+    const collision = await page.evaluate(() => {
+      const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect();
+      const exitRect = rect(".sticky-exit");
+      const parentRect = document.querySelector(".sticky-exit").parentElement.getBoundingClientRect();
+      const sidebarRect = rect(".glossary-sidebar");
+      const primaryRect = rect(".corner-primary button");
+      const intersects = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      return {
+        outsideContent: exitRect.left < parentRect.left || exitRect.right > parentRect.right,
+        sidebar: intersects(exitRect, sidebarRect),
+        primary: intersects(exitRect, primaryRect),
+      };
+    });
+    assert(!collision.outsideContent && !collision.sidebar && !collision.primary, `${view} ${width}: overlapping controls ${JSON.stringify(collision)}`);
+    await button.focus();
+    assert(await button.evaluate((el) => document.activeElement === el), `${view} ${width}: keyboard focus`);
+  }
   await page.screenshot({ path: `${process.env.WIDTH_SCREENSHOT_DIR}/${view}-${width}.png`, fullPage: true });
   console.log(`ok ${view} ${width}px`);
 }
 
 try {
-  for (const width of [1920, 1440, 768, 760, 390, 320]) {
+  for (const width of [1920, 1440, 1100, 1099, 768, 760, 390, 320]) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const page = await context.newPage();
     page.setDefaultTimeout(30000);
@@ -80,12 +115,86 @@ try {
     await page.goto(new URL("/retest", base).href);
     await page.locator(".options").waitFor();
     await verify(page, "retest", width);
+    const retestQuestions = (await api(page.request, `/api/experiment/${pid}/retest`)).questions;
+    for (const question of retestQuestions) {
+      await api(page.request, "/api/attempts", "POST", {
+        participant_id: pid,
+        question_id: question.question_id,
+        selected_option_ids: question.options.filter((option) => option.exclusive).map((option) => option.option_id),
+      });
+    }
+    await api(page.request, `/api/participants/${pid}/score-retest`, "POST", {});
+    await page.goto(new URL("/learning-targets", base).href);
+    await page.getByRole("heading", { name: "再テスト1の確認結果", exact: true }).waitFor();
+    await verify(page, "retest-results", width);
+
+    if (width === 390) {
+      const giveUp = page.locator(".sticky-exit button");
+      page.once("dialog", (dialog) => dialog.dismiss());
+      await giveUp.click();
+      assert(await giveUp.isEnabled(), "cancelled give-up should remain enabled");
+
+      let requestStarted;
+      const started = new Promise((resolve) => { requestStarted = resolve; });
+      await page.route("**/api/participants/*/give-up", async (route) => {
+        requestStarted();
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "終了処理に失敗しました。時間をおいてから再度お試しください。".repeat(4) }) });
+      });
+      page.once("dialog", (dialog) => dialog.accept());
+      await giveUp.click();
+      await started;
+      assert(await giveUp.isDisabled(), "give-up should be disabled while saving");
+      await page.getByRole("alert").waitFor();
+      await page.waitForFunction(() => {
+        const button = document.querySelector(".sticky-exit button");
+        return button && !button.disabled;
+      });
+      assert(await giveUp.isEnabled(), "failed give-up should allow retry");
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "long give-up error caused horizontal overflow");
+      await page.unroute("**/api/participants/*/give-up");
+      await page.route("**/api/participants/*/give-up", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ next_url: "/finish" }) }));
+      page.once("dialog", (dialog) => dialog.accept());
+      await giveUp.click();
+      await page.waitForURL(/\/finish$/);
+    }
+    await page.goto(new URL("/learning-targets", base).href);
+    await page.getByRole("heading", { name: "再テスト1の確認結果", exact: true }).waitFor();
+    await api(page.request, `/api/participants/${pid}/give-up-learning`, "POST", {});
+    await page.goto(new URL("/retest", base).href);
+    await page.locator(".options").waitFor();
+    await verify(page, "retest2", width);
     await page.goto(new URL("/admin", base).href);
     await page.getByLabel("パスワード", { exact: true }).fill(process.env.ADMIN_PASSWORD);
     await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
     await page.locator(".admin-lock-bar").waitFor();
     await page.locator(".shell").waitFor();
     await verify(page, "admin", width);
+    await context.close();
+  }
+  for (const width of [1440, 390]) {
+    const context = await browser.newContext({ viewport: { width, height: 1000 } });
+    const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+    await api(page.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
+    await api(page.request, "/api/admin/question-set", "PUT", { mode: "standard" });
+    await api(page.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
+    const record = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, student_number: `WIDTH-FINAL-SYNTHETIC-${width}` });
+    const questions = (await api(page.request, `/api/experiment/${record.participant_id}/pretest`)).questions;
+    for (const question of questions) {
+      const correctOption = question.options.find((option) => option.label === "A");
+      assert(correctOption, "debug-fixed pretest should expose its first correct choice at A");
+      await api(page.request, "/api/attempts", "POST", { participant_id: record.participant_id, question_id: question.question_id, selected_option_ids: [correctOption.option_id] });
+    }
+    const diagnosed = await api(page.request, `/api/participants/${record.participant_id}/diagnose-pretest`, "POST", {});
+    assert.equal(diagnosed.next_step, "final_test");
+    await page.addInitScript((p) => { localStorage.setItem("participant_id", p.participant_id); localStorage.setItem("display_code", p.display_code); }, record);
+    await page.goto(new URL(diagnosed.next_url, base).href);
+    if (diagnosed.next_url === "/learning-targets") {
+      await page.getByRole("link", { name: "次のテストへ", exact: true }).click();
+    }
+    await page.locator(".options").waitFor();
+    await verify(page, "final-test", width);
     await context.close();
   }
 } finally {

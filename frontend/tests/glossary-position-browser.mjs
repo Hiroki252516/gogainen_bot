@@ -17,6 +17,16 @@ async function api(request, path, method = "GET", data) {
 
 async function check(page, label, width) {
   const button = page.getByRole("button", { name: "用語の補足", exact: true });
+  const exit = page.locator(".sticky-exit button");
+  const exitExpected = label !== "pretest";
+  assert.equal(await exit.count(), exitExpected ? 1 : 0, `${label}: give-up visibility`);
+  const exitInitial = exitExpected ? await exit.boundingBox() : null;
+  if (exitExpected) {
+    assert(await exit.isVisible(), `${label}: give-up button visible`);
+    assert.equal(await page.locator(".sticky-exit").evaluate((el) => getComputedStyle(el).position), "sticky");
+    const admin = await page.getByRole("link", { name: "管理画面", exact: true }).boundingBox();
+    assert(exitInitial && admin && !(exitInitial.x < admin.x + admin.width && admin.x < exitInitial.x + exitInitial.width && exitInitial.y < admin.y + admin.height && admin.y < exitInitial.y + exitInitial.height), `${label}: give-up overlaps admin link`);
+  }
   const desktop = width >= 1100;
   assert.equal(await button.isVisible(), !desktop);
   if (desktop) {
@@ -30,7 +40,7 @@ async function check(page, label, width) {
     assert(scrolled.y >= 87 && scrolled.y <= initial.y, "sidebar does not follow scroll");
     const overlap = await page.evaluate(() => {
       const a = document.querySelector(".glossary-sidebar").getBoundingClientRect();
-      return [...document.querySelectorAll(".corner-primary button, .corner-exit button")].some((node) => {
+      return [...document.querySelectorAll(".corner-primary button, .sticky-exit button")].some((node) => {
         const b = node.getBoundingClientRect();
         return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
       });
@@ -49,12 +59,32 @@ async function check(page, label, width) {
     assert(await button.evaluate((el) => document.activeElement === el), "focus not restored");
     const overlap = await page.evaluate(() => {
       const a = document.querySelector(".glossary-open").getBoundingClientRect();
-      return [...document.querySelectorAll(".corner-primary button, .corner-exit button")].some((node) => {
+      return [...document.querySelectorAll(".corner-primary button, .sticky-exit button")].some((node) => {
         const b = node.getBoundingClientRect();
         return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
       });
     });
     assert(!overlap, "glossary button overlaps an action");
+  }
+  if (exitExpected) {
+    await page.evaluate(() => window.scrollTo(0, Math.min(350, document.documentElement.scrollHeight - innerHeight)));
+    const afterScroll = await exit.boundingBox();
+    assert(exitInitial && afterScroll && afterScroll.y >= 11 && afterScroll.y <= exitInitial.y + 1, `${label}: give-up row must follow the viewport without covering the header`);
+    const overlap = await page.evaluate(() => {
+      const exitRect = document.querySelector(".sticky-exit").getBoundingClientRect();
+      const mainRect = document.querySelector(".glossary-main, .panel.stack").getBoundingClientRect();
+      const sidebar = document.querySelector(".glossary-sidebar")?.getBoundingClientRect();
+      const primary = document.querySelector(".corner-primary button")?.getBoundingClientRect();
+      const intersects = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      return {
+        outsideMain: exitRect.left < mainRect.left || exitRect.right > mainRect.right,
+        sidebar: intersects(exitRect, sidebar),
+        primary: intersects(exitRect, primary),
+      };
+    });
+    assert(!overlap.outsideMain && !overlap.sidebar && !overlap.primary, `${label}: give-up row overlaps adjacent content: ${JSON.stringify(overlap)}`);
+    await exit.focus();
+    assert(await exit.evaluate((el) => document.activeElement === el), `${label}: give-up remains keyboard focusable`);
   }
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "horizontal overflow");
 }
@@ -79,7 +109,9 @@ try {
     await page.goto(new URL("/learning/llm_knowledge", base).href);
     await page.locator(".learning-layout").waitFor();
     await check(page, "learning", width);
-    for (const label of "DEF") await page.getByRole("checkbox", { name: new RegExp(`^${label}\\.`) }).check();
+    const confirmationGroups = page.locator(".problem-block .options");
+    assert.equal(await confirmationGroups.count(), 2);
+    for (const group of await confirmationGroups.all()) await group.getByRole("radio", { name: /^D\./ }).check();
     await page.getByRole("button", { name: "回答を確認", exact: true }).click();
     await page.getByText("不正解です。", { exact: true }).waitFor();
     const feedback = page.locator(".feedback-card .learning-glossary");
