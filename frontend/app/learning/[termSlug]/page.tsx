@@ -408,6 +408,11 @@ export default function LearningPage() {
             </div>
             <div className={`glossary-layout ${turn.glossary?.entries.length ? "has-glossary" : ""}`}>
             <div className="learning-layout glossary-main">
+              {!feedback?.session_completed ? (
+                <div className="give-up-footer sticky-exit">
+                  <GiveUpButton mode="learning" disabled={submitting} />
+                </div>
+              ) : null}
               <section className="learning-block material-block" aria-labelledby="material-title">
                 <h2 id="material-title">教材</h2>
                 <MarkdownText>{turn.tutor_message}</MarkdownText>
@@ -523,11 +528,6 @@ export default function LearningPage() {
                 </button>
               )}
             </div>
-            {!feedback?.session_completed ? (
-              <div className="give-up-footer corner-exit">
-                <GiveUpButton mode="learning" disabled={submitting} />
-              </div>
-            ) : null}
           </>
         ) : error ? null : <SessionLoadProgress />}
       </section>

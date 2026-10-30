@@ -267,6 +267,11 @@ export function QuestionRunner({
   return (
     <div className={`panel glossary-layout ${current.glossary?.entries.length ? "has-glossary" : ""}`}>
       <div className="stack glossary-main">
+      {allowExperimentGiveUp ? (
+        <div className="give-up-footer sticky-exit">
+          <GiveUpButton mode="experiment" disabled={saving} />
+        </div>
+      ) : null}
       <div className="topbar">
         <h1>{displayTitle}</h1>
         <span className="muted question-progress" aria-label={progress}>{progress}</span>
@@ -337,11 +342,6 @@ export function QuestionRunner({
         </button>
       </div>
       <span className="muted">このフェーズでは正誤や正解の解説は表示されません。</span>
-      {allowExperimentGiveUp ? (
-        <div className="give-up-footer corner-exit">
-          <GiveUpButton mode="experiment" disabled={saving} />
-        </div>
-      ) : null}
       </div>
       <GlossarySidebar key={current.question_id} glossary={current.glossary} label="テストの用語の補足" />
     </div>
