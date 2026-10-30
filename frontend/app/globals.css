@@ -693,14 +693,16 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
-.option-answer-correct {
+.option.option-answer-correct {
   border-color: var(--ok);
   background: #f0fdf6;
+  opacity: 1;
 }
 
-.option-answer-incorrect {
+.option.option-answer-incorrect {
   border-color: var(--danger);
   background: #fff5f5;
+  opacity: 1;
 }
 
 .option:has(.option-verdict) {
