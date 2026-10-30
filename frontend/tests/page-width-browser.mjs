@@ -18,6 +18,12 @@ async function api(request, path, method = "GET", data) {
   return response.json();
 }
 
+async function acknowledgeQuestionReviews(request, participantId, phase, questions) {
+  for (const termSlug of new Set(questions.map((question) => question.term_slug))) {
+    await api(request, `/api/participants/${participantId}/question-review-acknowledgements`, "POST", { phase, term_slug: termSlug });
+  }
+}
+
 async function verify(page, view, width) {
   const dimensions = await page.evaluate(() => {
     const shell = document.querySelector(".shell").getBoundingClientRect();
@@ -45,27 +51,34 @@ async function verify(page, view, width) {
     else assert(second.left >= first.right, `learning ${width}: columns overlap`);
   }
   const expectsGiveUp = ["learning", "retest", "retest2", "final-test", "retest-results"].includes(view);
-  const exit = page.locator(".sticky-exit");
+  const exit = page.locator(".app-header-give-up");
   assert.equal(await exit.count(), expectsGiveUp ? 1 : 0, `${view} ${width}: give-up visibility`);
   if (expectsGiveUp) {
     const button = exit.getByRole("button");
     assert(await button.isVisible(), `${view} ${width}: give-up visible`);
-    assert.equal(await exit.evaluate((el) => getComputedStyle(el).position), "sticky");
-    await page.getByRole("link", { name: "管理画面", exact: true }).click({ trial: true });
+    assert.equal(await exit.evaluate((el) => getComputedStyle(el).position), "static");
     const initialOverlap = await page.evaluate(() => {
-      const exitRect = document.querySelector(".sticky-exit").getBoundingClientRect();
+      const actions = document.querySelector(".app-header-actions");
+      const giveUp = document.querySelector(".app-header-give-up");
       const adminRect = document.querySelector('a[href="/admin"]').getBoundingClientRect();
-      return exitRect.left < adminRect.right && adminRect.left < exitRect.right && exitRect.top < adminRect.bottom && adminRect.top < exitRect.bottom;
+      const exitRect = giveUp.getBoundingClientRect();
+      return {
+        overlap: exitRect.left < adminRect.right && adminRect.left < exitRect.right && exitRect.top < adminRect.bottom && adminRect.top < exitRect.bottom,
+        order: actions.children[0] === giveUp && actions.children[1]?.tagName === "A",
+        adjacent: exitRect.right <= adminRect.left,
+      };
     });
-    assert(!initialOverlap, `${view} ${width}: give-up overlaps admin link`);
+    assert(initialOverlap.order && initialOverlap.adjacent && !initialOverlap.overlap, `${view} ${width}: give-up must be immediately left of the admin link`);
     const initial = await exit.boundingBox();
     await page.evaluate(() => window.scrollTo(0, Math.min(350, document.documentElement.scrollHeight - innerHeight)));
     const scrolled = await exit.boundingBox();
-    assert(initial && scrolled && scrolled.y >= 11 && scrolled.y <= initial.y + 1, `${view} ${width}: give-up does not stick below the viewport top`);
+    const scrollY = await page.evaluate(() => window.scrollY);
+    assert(initial && scrolled && Math.abs(scrolled.y - (initial.y - scrollY)) <= 2, `${view} ${width}: give-up should move with the document`);
+    if (scrollY > initial.y + 8) assert(scrolled.y + scrolled.height < 0, `${view} ${width}: give-up should scroll out of view`);
     const collision = await page.evaluate(() => {
       const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect();
-      const exitRect = rect(".sticky-exit");
-      const parentRect = document.querySelector(".sticky-exit").parentElement.getBoundingClientRect();
+      const exitRect = rect(".app-header-give-up");
+      const parentRect = document.querySelector(".app-header-actions").getBoundingClientRect();
       const sidebarRect = rect(".glossary-sidebar");
       const primaryRect = rect(".corner-primary button");
       const intersects = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
@@ -76,6 +89,7 @@ async function verify(page, view, width) {
       };
     });
     assert(!collision.outsideContent && !collision.sidebar && !collision.primary, `${view} ${width}: overlapping controls ${JSON.stringify(collision)}`);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await button.focus();
     assert(await button.evaluate((el) => document.activeElement === el), `${view} ${width}: keyboard focus`);
   }
@@ -92,18 +106,20 @@ try {
     assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
     await api(page.request, "/api/admin/question-set", "PUT", { mode: "standard" });
     await api(page.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
-    const participant = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, student_number: "WIDTH-TEST-SYNTHETIC" });
+    const participant = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, student_number: `WIDTH-TEST-SYNTHETIC-${width}` });
     const pid = participant.participant_id;
     await page.addInitScript((p) => {
       localStorage.setItem("participant_id", p.participant_id);
       localStorage.setItem("display_code", p.display_code);
     }, participant);
     await page.goto(new URL("/pretest", base).href);
-    await page.locator(".options").waitFor();
+    await page.locator(".options").first().waitFor();
     await verify(page, "pretest", width);
-    for (const question of (await api(page.request, `/api/experiment/${pid}/pretest`)).questions) {
+    const pretestQuestions = (await api(page.request, `/api/experiment/${pid}/pretest`)).questions;
+    for (const question of pretestQuestions) {
       await api(page.request, "/api/attempts", "POST", { participant_id: pid, question_id: question.question_id, selected_option_ids: question.options.filter((option) => option.exclusive).map((option) => option.option_id) });
     }
+    await acknowledgeQuestionReviews(page.request, pid, "pretest", pretestQuestions);
     await api(page.request, `/api/participants/${pid}/diagnose-pretest`, "POST", {});
     await page.goto(new URL("/learning-targets", base).href);
     await page.getByRole("heading", { name: /確認結果$/ }).waitFor();
@@ -113,7 +129,7 @@ try {
     await verify(page, "learning", width);
     await api(page.request, `/api/participants/${pid}/give-up-learning`, "POST", {});
     await page.goto(new URL("/retest", base).href);
-    await page.locator(".options").waitFor();
+    await page.locator(".options").first().waitFor();
     await verify(page, "retest", width);
     const retestQuestions = (await api(page.request, `/api/experiment/${pid}/retest`)).questions;
     for (const question of retestQuestions) {
@@ -123,13 +139,14 @@ try {
         selected_option_ids: question.options.filter((option) => option.exclusive).map((option) => option.option_id),
       });
     }
+    await acknowledgeQuestionReviews(page.request, pid, "retest", retestQuestions);
     await api(page.request, `/api/participants/${pid}/score-retest`, "POST", {});
     await page.goto(new URL("/learning-targets", base).href);
     await page.getByRole("heading", { name: "再テスト1の確認結果", exact: true }).waitFor();
     await verify(page, "retest-results", width);
 
     if (width === 390) {
-      const giveUp = page.locator(".sticky-exit button");
+      const giveUp = page.locator(".app-header-give-up button");
       page.once("dialog", (dialog) => dialog.dismiss());
       await giveUp.click();
       assert(await giveUp.isEnabled(), "cancelled give-up should remain enabled");
@@ -147,7 +164,7 @@ try {
       assert(await giveUp.isDisabled(), "give-up should be disabled while saving");
       await page.getByRole("alert").waitFor();
       await page.waitForFunction(() => {
-        const button = document.querySelector(".sticky-exit button");
+        const button = document.querySelector(".app-header-give-up button");
         return button && !button.disabled;
       });
       assert(await giveUp.isEnabled(), "failed give-up should allow retry");
@@ -162,7 +179,7 @@ try {
     await page.getByRole("heading", { name: "再テスト1の確認結果", exact: true }).waitFor();
     await api(page.request, `/api/participants/${pid}/give-up-learning`, "POST", {});
     await page.goto(new URL("/retest", base).href);
-    await page.locator(".options").waitFor();
+    await page.locator(".options").first().waitFor();
     await verify(page, "retest2", width);
     await page.goto(new URL("/admin", base).href);
     await page.getByLabel("パスワード", { exact: true }).fill(process.env.ADMIN_PASSWORD);
@@ -186,6 +203,7 @@ try {
       assert(correctOption, "debug-fixed pretest should expose its first correct choice at A");
       await api(page.request, "/api/attempts", "POST", { participant_id: record.participant_id, question_id: question.question_id, selected_option_ids: [correctOption.option_id] });
     }
+    await acknowledgeQuestionReviews(page.request, record.participant_id, "pretest", questions);
     const diagnosed = await api(page.request, `/api/participants/${record.participant_id}/diagnose-pretest`, "POST", {});
     assert.equal(diagnosed.next_step, "final_test");
     await page.addInitScript((p) => { localStorage.setItem("participant_id", p.participant_id); localStorage.setItem("display_code", p.display_code); }, record);
@@ -193,7 +211,7 @@ try {
     if (diagnosed.next_url === "/learning-targets") {
       await page.getByRole("link", { name: "次のテストへ", exact: true }).click();
     }
-    await page.locator(".options").waitFor();
+    await page.locator(".options").first().waitFor();
     await verify(page, "final-test", width);
     await context.close();
   }

@@ -52,6 +52,29 @@ a {
   margin-bottom: 18px;
 }
 
+.app-topbar {
+  align-items: flex-start;
+}
+
+.app-header-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.app-header-actions > a {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.app-header-give-up {
+  min-width: 0;
+  max-width: min(420px, calc(100vw - 128px));
+}
+
 .brand {
   font-size: 20px;
   font-weight: 700;
@@ -297,8 +320,7 @@ p {
   overflow-wrap: anywhere;
 }
 
-.term-page-primary,
-.term-page-exit {
+.term-page-primary {
   justify-content: flex-end;
   margin-top: 16px;
 }
@@ -656,12 +678,6 @@ button:disabled {
   align-items: center;
 }
 
-.give-up-footer {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 18px;
-}
-
 .corner-primary {
   position: fixed;
   right: max(16px, env(safe-area-inset-right));
@@ -682,25 +698,6 @@ button:disabled {
   text-align: center;
   white-space: normal;
   overflow-wrap: anywhere;
-}
-
-.sticky-exit {
-  position: sticky;
-  top: max(12px, env(safe-area-inset-top));
-  z-index: 31;
-  justify-self: end;
-  align-self: start;
-  width: fit-content;
-  max-width: 100%;
-  margin: 0;
-  padding: 6px;
-  border-radius: 10px;
-  background: white;
-  box-shadow: 0 4px 18px rgb(15 23 42 / 14%);
-}
-
-.learning-layout > .sticky-exit {
-  grid-column: 1 / -1;
 }
 
 .option.option-answer-correct {
@@ -737,11 +734,14 @@ button:disabled {
   flex-direction: column;
   gap: 8px;
   align-items: flex-end;
+  width: 100%;
   max-width: 100%;
 }
 
 .give-up-control .danger-button {
   max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   text-align: center;
 }
 
@@ -1362,6 +1362,32 @@ button:disabled {
 }
 
 @media (max-width: 760px) {
+  .app-topbar {
+    flex-wrap: wrap;
+  }
+
+  .app-topbar > div:first-child {
+    flex: 1 0 100%;
+  }
+
+  .app-header-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .app-header-give-up {
+    flex: 1 1 0;
+    max-width: none;
+  }
+
+  .app-header-give-up .give-up-control {
+    align-items: stretch;
+  }
+
+  .app-header-give-up .give-up-control .danger {
+    text-align: left;
+  }
+
   .corner-primary {
     right: max(8px, env(safe-area-inset-right));
     bottom: max(8px, env(safe-area-inset-bottom));

@@ -390,7 +390,10 @@ export default function LearningPage() {
       && questionBody.includes("\n\nこれらの目的を実現する開発担当者の対応として、"));
 
   return (
-    <AppShell step="学習セッション">
+    <AppShell
+      step="学習セッション"
+      headerAction={turn && !feedback?.session_completed ? <GiveUpButton mode="learning" disabled={submitting} /> : null}
+    >
       <section className="panel stack" aria-busy={submitting || (!turn && !error)}>
         <div className="topbar learning-topbar">
           <h1>学習セッション</h1>
@@ -412,11 +415,6 @@ export default function LearningPage() {
             </div>
             <div className={`glossary-layout ${turn.glossary?.entries.length ? "has-glossary" : ""}`}>
             <div className="learning-layout glossary-main">
-              {!feedback?.session_completed ? (
-                <div className="give-up-footer sticky-exit">
-                  <GiveUpButton mode="learning" disabled={submitting} />
-                </div>
-              ) : null}
               <section className="learning-block material-block" aria-labelledby="material-title">
                 <h2 id="material-title">教材</h2>
                 <MarkdownText>{turn.tutor_message}</MarkdownText>

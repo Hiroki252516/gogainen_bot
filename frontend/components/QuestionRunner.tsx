@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GiveUpButton } from "@/components/GiveUpButton";
 import { type Glossary } from "@/components/LearningGlossary";
 import { GlossarySidebar } from "@/components/GlossarySidebar";
 import { prepareGroupedQuestionDisplay } from "@/lib/learning-question-display";
@@ -41,6 +40,7 @@ type PendingQuestionReview = {
     is_correct: boolean;
   }>;
 };
+type GiveUpActionState = { visible: boolean; disabled: boolean };
 type TestQuestionsResponse = {
   questions: Question[];
   pending_question_review?: PendingQuestionReview | null;
@@ -82,13 +82,11 @@ function QuestionReviewPanel({
   review,
   saving,
   error,
-  allowExperimentGiveUp,
   onContinue,
 }: {
   review: PendingQuestionReview;
   saving: boolean;
   error: string;
-  allowExperimentGiveUp: boolean;
   onContinue: () => void;
 }) {
   return (
@@ -110,11 +108,6 @@ function QuestionReviewPanel({
           {saving ? "保存中..." : "続行"}
         </button>
       </div>
-      {allowExperimentGiveUp ? (
-        <div className="give-up-footer corner-exit">
-          <GiveUpButton mode="experiment" disabled={saving} />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -127,6 +120,7 @@ export function QuestionRunner({
   nextPath,
   onDisplayTitle,
   allowExperimentGiveUp = false,
+  onGiveUpStateChange,
 }: {
   phase: string;
   title: string;
@@ -135,6 +129,7 @@ export function QuestionRunner({
   nextPath: string;
   onDisplayTitle?: (displayTitle: string) => void;
   allowExperimentGiveUp?: boolean;
+  onGiveUpStateChange?: (state: GiveUpActionState) => void;
 }) {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -152,6 +147,14 @@ export function QuestionRunner({
   const [questionShownAt, setQuestionShownAt] = useState(() => new Date().toISOString());
   const completionStarted = useRef(false);
   const current = questions[index];
+  useEffect(() => {
+    if (testPageMode === "per_term") return;
+    onGiveUpStateChange?.({
+      visible: allowExperimentGiveUp && !loading && Boolean(current || pendingQuestionReview),
+      disabled: saving,
+    });
+  }, [allowExperimentGiveUp, current?.question_id, loading, onGiveUpStateChange, pendingQuestionReview, saving, testPageMode]);
+
   const preserveQuestionLines = (current?.term_slug === "llm_knowledge"
     && ((current.body.startsWith("企業が、社員からの「パスワードを忘れた」")
         && current.body.includes("\n\nこれらの目的を実現するための開発担当者の対応として、"))
@@ -378,6 +381,7 @@ export function QuestionRunner({
         scorePath={scorePath}
         nextPath={nextPath}
         allowExperimentGiveUp={allowExperimentGiveUp}
+        onGiveUpStateChange={onGiveUpStateChange}
       />
     );
   }
@@ -387,7 +391,6 @@ export function QuestionRunner({
         review={pendingQuestionReview}
         saving={saving}
         error={error}
-        allowExperimentGiveUp={allowExperimentGiveUp}
         onContinue={continueFromQuestionReview}
       />
     );
@@ -407,11 +410,6 @@ export function QuestionRunner({
   return (
     <div className={`panel glossary-layout ${current.glossary?.entries.length ? "has-glossary" : ""}`}>
       <div className="stack glossary-main">
-      {allowExperimentGiveUp ? (
-        <div className="give-up-footer sticky-exit">
-          <GiveUpButton mode="experiment" disabled={saving} />
-        </div>
-      ) : null}
       <div className="topbar">
         <h1>{displayTitle}</h1>
         <span className="muted question-progress" aria-label={progress}>{progress}</span>
@@ -547,6 +545,7 @@ function TermPageQuestionRunner({
   scorePath,
   nextPath,
   allowExperimentGiveUp,
+  onGiveUpStateChange,
 }: {
   questions: Question[];
   initialPendingQuestionReview: PendingQuestionReview | null;
@@ -556,6 +555,7 @@ function TermPageQuestionRunner({
   scorePath?: (participantId: string) => string;
   nextPath: string;
   allowExperimentGiveUp: boolean;
+  onGiveUpStateChange?: (state: GiveUpActionState) => void;
 }) {
   const router = useRouter();
   const [participantId, setParticipantId] = useState("");
@@ -593,6 +593,13 @@ function TermPageQuestionRunner({
   const canAnswerAll = Boolean(page?.questions.every((question) =>
     question.answer_status === "submitted" || (selectedByQuestion[question.question_id] || []).length === 1,
   ));
+
+  useEffect(() => {
+    onGiveUpStateChange?.({
+      visible: allowExperimentGiveUp && Boolean(page),
+      disabled: saving,
+    });
+  }, [allowExperimentGiveUp, onGiveUpStateChange, page?.key, saving]);
 
   useEffect(() => {
     if (!page || !participantId) return;
@@ -865,9 +872,6 @@ function TermPageQuestionRunner({
           )}
         </div>
         {!pendingQuestionReview ? <span className="muted">このフェーズでは正誤や正解の解説は表示されません。</span> : null}
-        {allowExperimentGiveUp ? (
-          <div className="give-up-footer term-page-exit"><GiveUpButton mode="experiment" disabled={saving} /></div>
-        ) : null}
       </div>
       <GlossarySidebar key={page.key} glossary={glossary} label="テストの用語の補足" />
     </div>
