@@ -193,10 +193,18 @@ for (const expectedText of ["学習内容：", "教材フィードバック", "�
 if (learningPage.indexOf("className=\"learning-layout\"") > learningPage.indexOf("{feedback ? (")) {
   throw new Error("learning page must keep the question layout above feedback");
 }
-for (const expectedText of ["disabled={submitting || Boolean(feedback) || Boolean(turn.practice_question.answered) || isDisabled}", "submitting ? (feedback ? <ContinueProgress /> : <SubmitProgress />)", "!feedback ? ("]) {
+for (const expectedText of ["disabled={submitting || Boolean(feedback) || Boolean(practiceQuestion?.answered) || isDisabled}", "submitting ? (feedback ? <ContinueProgress /> : <SubmitProgress />)", "!feedback ? ("]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing inline feedback behavior: ${expectedText}`);
   }
+}
+for (const expectedText of ["practice_question?:", "prepareGroupedQuestionDisplay(confirmationQuestions)", "!hasAnswerableQuestion", "確認問題を表示できません。画面を再読み込みしてください。"]) {
+  if (!learningPage.includes(expectedText)) {
+    throw new Error(`learning page missing null-safe question handling: ${expectedText}`);
+  }
+}
+if (/turn\.practice_question\.(?!\?)/.test(learningPage)) {
+  throw new Error("learning page must not dereference an optional practice question directly");
 }
 for (const expectedText of ["SubmitProgress", "分析中です", "秒経過", "回答を記録しています", "選択内容を確認しています", "解説を生成しています", "次の教材を準備しています", "analysis-progress", "spinner"]) {
   if (!learningPage.includes(expectedText)) {
