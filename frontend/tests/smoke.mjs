@@ -224,13 +224,13 @@ for (const expectedText of ["SubmitProgress", "分析中です", "秒経過", "�
     throw new Error(`learning page missing submit progress behavior: ${expectedText}`);
   }
 }
-for (const expectedText of ["GiveUpButton", 'mode="learning"', "give-up-footer"]) {
+for (const expectedText of ["GiveUpButton", 'mode="learning"', "headerAction="]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing learning give-up behavior: ${expectedText}`);
   }
 }
-if (!learningPage.includes('className="give-up-footer sticky-exit"')) {
-  throw new Error("learning give-up control must use the dedicated sticky row");
+if (learningPage.includes("sticky-exit") || learningPage.includes("give-up-footer")) {
+  throw new Error("learning give-up control must not remain in the body");
 }
 for (const expectedText of ["SessionLoadProgress", "ContinueProgress", "学習セッションを準備しています", "教材を生成しています", "確認問題を準備しています", "学習画面を表示しています", "aria-busy={submitting", "学習セッション読み込みの進行状況", "次の確認読み込みの進行状況"]) {
   if (!learningPage.includes(expectedText)) {
@@ -305,13 +305,13 @@ for (const text of ['current?.term_slug === "multi_agent"', 'current?.term_slug 
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow the backend transition after scoring");
 }
-for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', "result.next_url || nextPath", 'phase === "retest" || phase === "final_test"', 'router.replace(reviewRequired ? "/learning-targets"', "allowExperimentGiveUp", 'mode="experiment"', "give-up-footer"]) {
+for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', "result.next_url || nextPath", 'phase === "retest" || phase === "final_test"', 'router.replace(reviewRequired ? "/learning-targets"', "allowExperimentGiveUp", "onGiveUpStateChange", "visible: allowExperimentGiveUp", "pendingQuestionReview"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`question runner missing retest transition support: ${expectedText}`);
   }
 }
-if (!questionRunner.includes('className="give-up-footer sticky-exit"')) {
-  throw new Error("test give-up control must use the dedicated sticky row");
+if (questionRunner.includes("sticky-exit") || questionRunner.includes("give-up-footer")) {
+  throw new Error("test give-up control must be rendered by the app header");
 }
 for (const expectedText of ["test_round_label", "setDisplayTitle"]) {
   if (!questionRunner.includes(expectedText)) {
@@ -374,10 +374,12 @@ for (const expectedText of ["post_pretest_tests_completed", "post_pretest_test_l
   if (!groupAdminPage.includes(expectedText)) throw new Error(`admin page missing post-pretest test count: ${expectedText}`);
 }
 const globalStyles = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
-for (const expectedText of [".sticky-exit {", "position: sticky;", "top: max(12px, env(safe-area-inset-top));", ".learning-layout > .sticky-exit {\n  grid-column: 1 / -1;"]) {
-  if (!globalStyles.includes(expectedText)) throw new Error(`missing dedicated sticky give-up layout: ${expectedText}`);
+for (const expectedText of [".app-topbar {", ".app-header-actions {", ".app-header-give-up {", "@media (max-width: 760px)", ".app-header-give-up .give-up-control"]) {
+  if (!globalStyles.includes(expectedText)) throw new Error(`missing header give-up layout: ${expectedText}`);
 }
-if (globalStyles.includes(".corner-exit")) throw new Error("legacy fixed top-right give-up layout must be removed");
+for (const oldClass of [".corner-exit", ".sticky-exit", ".give-up-footer", ".term-page-exit"]) {
+  if (globalStyles.includes(oldClass)) throw new Error(`legacy give-up layout must be removed: ${oldClass}`);
+}
 for (const expectedText of [".pretest-result-correct .result-verdict {\n  color: var(--ok);", ".pretest-result-incorrect .result-verdict {\n  color: var(--danger);", ".question-heading {\n  font-family: inherit;\n  font-size: 1rem;", ".question-heading strong {\n  font: inherit;\n  font-weight: 700;"]) {
   if (!globalStyles.includes(expectedText)) {
     throw new Error(`test result page missing correct/incorrect color styling: ${expectedText}`);
@@ -388,13 +390,13 @@ for (const forbiddenText of ["misconception_type", "M1", "M2", "M3", "M4", "taxo
     throw new Error(`learning targets page must not expose internal diagnosis text: ${forbiddenText}`);
   }
 }
-for (const expectedText of ["current_step", 'RESULT_REVIEW_STEPS = ["learning_targets", "final_test", "survey"]', 'currentStep === "learning_targets"', 'currentStep === "final_test"', 'currentStep === "survey"', "次のテストへ", "アンケートへ進む", "学習対象を確認しています。", "GiveUpButton", 'startsWith("retest_")', "give-up-footer"]) {
+for (const expectedText of ["current_step", 'RESULT_REVIEW_STEPS = ["learning_targets", "final_test", "survey"]', 'currentStep === "learning_targets"', 'currentStep === "final_test"', 'currentStep === "survey"', "次のテストへ", "アンケートへ進む", "学習対象を確認しています。", "GiveUpButton", 'startsWith("retest_")', "headerAction="]) {
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing guarded final-test transition: ${expectedText}`);
   }
 }
-if (!learningTargetsPage.includes('className="give-up-footer sticky-exit"')) {
-  throw new Error("retest result give-up control must use the dedicated sticky row");
+if (learningTargetsPage.includes("sticky-exit") || learningTargetsPage.includes("give-up-footer")) {
+  throw new Error("retest result give-up control must be rendered by the app header");
 }
 
 const markdownText = fs.readFileSync(new URL("../components/MarkdownText.tsx", import.meta.url), "utf8");

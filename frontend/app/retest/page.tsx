@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { GiveUpButton } from "@/components/GiveUpButton";
 import { ParticipantFlowGuard } from "@/components/ParticipantFlowGuard";
 import { QuestionRunner } from "@/components/QuestionRunner";
 
@@ -11,10 +12,14 @@ const RETEST_STEPS = ["retest"] as const;
 
 export default function RetestPage() {
   const [roundTitle, setRoundTitle] = useState("再テスト1");
+  const [giveUpState, setGiveUpState] = useState({ visible: false, disabled: false });
 
   return (
     <ParticipantFlowGuard allowedSteps={RETEST_STEPS}>
-      <AppShell step={roundTitle}>
+      <AppShell
+        step={roundTitle}
+        headerAction={giveUpState.visible ? <GiveUpButton mode="experiment" disabled={giveUpState.disabled} /> : null}
+      >
         <QuestionRunner
           phase="retest"
           title="再テスト1"
@@ -23,6 +28,7 @@ export default function RetestPage() {
           nextPath="/learning-targets"
           onDisplayTitle={setRoundTitle}
           allowExperimentGiveUp
+          onGiveUpStateChange={setGiveUpState}
         />
       </AppShell>
     </ParticipantFlowGuard>

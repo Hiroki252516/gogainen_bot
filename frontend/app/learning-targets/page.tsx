@@ -90,14 +90,12 @@ export default function LearningTargetsPage() {
 
   return (
     <ParticipantFlowGuard allowedSteps={RESULT_REVIEW_STEPS}>
-      <AppShell step="学習対象">
+      <AppShell
+        step="学習対象"
+        headerAction={loaded && isRetestResult && currentStep === "learning_targets" ? <GiveUpButton mode="experiment" /> : null}
+      >
         {!loaded ? <section className="panel" role="status">読み込み中...</section> : (
         <section className="panel stack">
-        {isRetestResult && currentStep === "learning_targets" ? (
-          <div className="give-up-footer sticky-exit">
-            <GiveUpButton mode="experiment" />
-          </div>
-        ) : null}
         <h1>{testResults.test_round_label ? `${testResults.test_round_label}の確認結果` : "今回の確認結果"}</h1>
         {error ? <div className="danger">{error}</div> : null}
         <div className="stack">
