@@ -1110,19 +1110,36 @@ def pending_question_review(
         .order_by(Attempt.created_at.asc(), Attempt.id.asc())
         .all()
     }
-    grouped: dict[str, dict[int, dict[str, Any]]] = {}
+    question_ids = {row["question_id"] for row in question_rows}
+    questions_by_id = {
+        question.id: question
+        for question in db.query(Question).filter(Question.id.in_(question_ids)).all()
+    }
+    acknowledged_term_slugs: set[str] = set()
     for row in question_rows:
-        question = db.get(Question, row["question_id"])
+        question = questions_by_id.get(row["question_id"])
         if question is None:
             continue
-        match = re.search(r"_q([12])$", question.variant_key)
+        match = re.search(r"_q([12])$", question.variant_key or "")
+        if match is None or match.group(1) != "2":
+            continue
+        attempt = attempts_by_question.get(question.id)
+        if attempt is not None and attempt.question_review_acknowledged_at is not None:
+            acknowledged_term_slugs.add(row["term_slug"])
+
+    grouped: dict[str, dict[int, dict[str, Any]]] = {}
+    for row in question_rows:
+        if row["term_slug"] in acknowledged_term_slugs:
+            continue
+        question = questions_by_id.get(row["question_id"])
+        if question is None:
+            continue
+        match = re.search(r"_q([12])$", question.variant_key or "")
         if match is None:
             continue
         number = int(match.group(1))
         attempt = attempts_by_question.get(question.id)
         if attempt is None or not attempt.selected_option_ids:
-            continue
-        if number == 2 and attempt.question_review_acknowledged_at is not None:
             continue
         selected_id = str(attempt.selected_option_ids[0])
         snapshot_options = attempt.option_order_snapshot or []
@@ -1155,7 +1172,6 @@ def pending_question_review(
                 "results": [pair[1], pair[2]],
             }
     return None
-
 
 def acknowledge_question_review(
     db: Session,
@@ -1204,7 +1220,7 @@ def acknowledge_question_review(
     pair_attempts: dict[int, Attempt] = {}
     for row in term_rows:
         question = db.get(Question, row["question_id"])
-        match = re.search(r"_q([12])$", question.variant_key if question else "")
+        match = re.search(r"_q([12])$", (question.variant_key or "") if question else "")
         if match is None:
             continue
         pair_attempts[int(match.group(1))] = (
