@@ -29,6 +29,16 @@ const styles = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "
 for (const text of ["--shell-max-width: 1440px", ".shell {", ".admin-lock-bar {", "min(var(--shell-max-width), calc(100vw - 32px))", "width: min(420px, calc(100vw - 32px))", "@media (max-width: 760px)"]) {
   if (!styles.includes(text)) throw new Error(`responsive page width missing: ${text}`);
 }
+for (const text of [
+  ".corner-primary button {",
+  "min-height: 56px;",
+  "padding: 14px 22px;",
+  "font-size: 18px;",
+  "white-space: normal;",
+  "overflow-wrap: anywhere;",
+]) {
+  if (!styles.includes(text)) throw new Error(`primary navigation button sizing missing: ${text}`);
+}
 if ((styles.match(/min\(var\(--shell-max-width\), calc\(100vw - 32px\)\)/g) || []).length !== 2) {
   throw new Error("page shell and admin lock bar must use the same responsive width");
 }
