@@ -6,7 +6,7 @@ import { GiveUpButton } from "@/components/GiveUpButton";
 import { type Glossary } from "@/components/LearningGlossary";
 import { GlossarySidebar } from "@/components/GlossarySidebar";
 import { prepareGroupedQuestionDisplay } from "@/lib/learning-question-display";
-import { combineTestGlossaries, groupTestQuestionsByTerm, initialTestTermPageIndex } from "@/lib/test-term-pages";
+import { combineTestGlossaries, groupTestQuestionsByTerm, initialTestTermPageIndex, normalizeTestRound, sameTestRound } from "@/lib/test-term-pages";
 import { optionAnswerClass } from "@/lib/option-answer-display";
 import { ApiError, api, clearPendingIdempotency, getPendingIdempotentBody, postIdempotent, requireParticipant } from "@/lib/api";
 
@@ -502,7 +502,7 @@ function newPageTiming() {
 }
 
 function pageSubmissionScope(participantId: string, phase: string, page: { term_slug: string; test_round: string | null }) {
-  return `test-page:${participantId}:${phase}:${page.term_slug}:${page.test_round || ""}`;
+  return `test-page:${participantId}:${phase}:${page.term_slug}:${normalizeTestRound(page.test_round)}`;
 }
 
 function isPageSubmissionFor(
@@ -517,7 +517,7 @@ function isPageSubmissionFor(
   return candidate.participant_id === participantId
     && candidate.phase === phase
     && candidate.term_slug === page.term_slug
-    && candidate.test_round === page.test_round
+    && sameTestRound(candidate.test_round, page.test_round)
     && typeof candidate.page_id === "string"
     && typeof candidate.question_shown_at === "string"
     && typeof candidate.answered_at === "string"
@@ -677,7 +677,7 @@ function TermPageQuestionRunner({
         participant_id: participantId,
         phase,
         term_slug: page.term_slug,
-        test_round: page.test_round || "",
+        test_round: normalizeTestRound(page.test_round),
         page_id: timing.pageId,
         answers,
         question_shown_at: timing.shownAt,
