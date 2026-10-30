@@ -38,6 +38,9 @@ for (const text of ["用語の補足", "!glossary?.entries.length", "<dl>", "<dt
   if (!glossary.includes(text)) throw new Error(`learning glossary missing: ${text}`);
 }
 const glossaryPage = fs.readFileSync(new URL("../app/learning/[termSlug]/page.tsx", import.meta.url), "utf8");
+if ((glossaryPage.match(/optionAnswerClass\(Boolean\(feedback\)/g) || []).length !== 2) {
+  throw new Error("both learning question formats must use the shared answer color state");
+}
 for (const text of ['const preserveQuestionLines = (termSlug === "multi_agent"', '[2, 3].includes(turn?.practice_question?.learning_variant_index ?? 0)', 'questionBody.includes("\\n\\n案1：")', 'questionBody.includes("\\n\\n案2：")', 'termSlug === "memory_process"', 'learning_variant_index === 1', 'questionBody.startsWith("大学が、授業内容について質問できる学習支援AI")', 'questionBody.includes("\\n\\n開発担当者は、")', 'learning_variant_index === 2', 'questionBody.startsWith("料理の献立を提案するAIを開発している。")', 'questionBody.includes("\\n\\nこのAIが過去の会話を記憶として利用する場合、")', 'className={preserveQuestionLines ? "preserve-lines" : undefined}']) {
   if (!glossaryPage.includes(text)) throw new Error(`learning question line breaks must stay scoped: ${text}`);
 }
@@ -216,6 +219,9 @@ for (const expectedText of ["GiveUpButton", 'mode="learning"', "give-up-footer"]
     throw new Error(`learning page missing learning give-up behavior: ${expectedText}`);
   }
 }
+if (!learningPage.includes('className="give-up-footer sticky-exit"')) {
+  throw new Error("learning give-up control must use the dedicated sticky row");
+}
 for (const expectedText of ["SessionLoadProgress", "ContinueProgress", "学習セッションを準備しています", "教材を生成しています", "確認問題を準備しています", "学習画面を表示しています", "aria-busy={submitting", "学習セッション読み込みの進行状況", "次の確認読み込みの進行状況"]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing initial loading progress behavior: ${expectedText}`);
@@ -291,6 +297,9 @@ for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("lear
     throw new Error(`question runner missing retest transition support: ${expectedText}`);
   }
 }
+if (!questionRunner.includes('className="give-up-footer sticky-exit"')) {
+  throw new Error("test give-up control must use the dedicated sticky row");
+}
 for (const expectedText of ["test_round_label", "setDisplayTitle"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`question runner missing test round display behavior: ${expectedText}`);
@@ -352,6 +361,10 @@ for (const expectedText of ["post_pretest_tests_completed", "post_pretest_test_l
   if (!groupAdminPage.includes(expectedText)) throw new Error(`admin page missing post-pretest test count: ${expectedText}`);
 }
 const globalStyles = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+for (const expectedText of [".sticky-exit {", "position: sticky;", "top: max(12px, env(safe-area-inset-top));", ".learning-layout > .sticky-exit {\n  grid-column: 1 / -1;"]) {
+  if (!globalStyles.includes(expectedText)) throw new Error(`missing dedicated sticky give-up layout: ${expectedText}`);
+}
+if (globalStyles.includes(".corner-exit")) throw new Error("legacy fixed top-right give-up layout must be removed");
 for (const expectedText of [".pretest-result-correct .result-verdict {\n  color: var(--ok);", ".pretest-result-incorrect .result-verdict {\n  color: var(--danger);", ".question-heading {\n  font-family: inherit;\n  font-size: 1rem;", ".question-heading strong {\n  font: inherit;\n  font-weight: 700;"]) {
   if (!globalStyles.includes(expectedText)) {
     throw new Error(`test result page missing correct/incorrect color styling: ${expectedText}`);
@@ -366,6 +379,9 @@ for (const expectedText of ["current_step", 'RESULT_REVIEW_STEPS = ["learning_ta
   if (!learningTargetsPage.includes(expectedText)) {
     throw new Error(`learning targets page missing guarded final-test transition: ${expectedText}`);
   }
+}
+if (!learningTargetsPage.includes('className="give-up-footer sticky-exit"')) {
+  throw new Error("retest result give-up control must use the dedicated sticky row");
 }
 
 const markdownText = fs.readFileSync(new URL("../components/MarkdownText.tsx", import.meta.url), "utf8");

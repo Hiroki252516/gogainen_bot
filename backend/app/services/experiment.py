@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
+import math
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -746,6 +747,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         current_step="pretest",
         learning_content_version=LEARNING_CONTENT_VERSIONS[mode],
         question_set_mode=mode,
+        test_page_mode="per_term" if mode == STANDARD else "per_question",
         experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
         protocol_id=CURRENT_PROTOCOL_ID,
         option_order_mode=current_option_order_mode(db),
@@ -1237,6 +1239,9 @@ def acknowledge_question_review(
         "next_question_id": next_question,
         "phase_complete": next_review is None and next_question is None,
     }
+def effective_test_page_mode(participant: Participant) -> str:
+    """Treat nullable historical display modes as the original per-question UI."""
+    return "per_term" if participant.test_page_mode == "per_term" and uses_split(participant) else "per_question"
 
 
 def _variant_body_for_round(db: Session, participant_id: str, question: Question, phase: str) -> str:
@@ -1361,12 +1366,121 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         question_body_snapshot=body,
         option_order_snapshot=public_options,
         glossary_snapshot=_test_glossary(term.label, body, public_options),
+        test_page_timing_json=payload.get("test_page_timing_json"),
         idempotency_key=normalized_idempotency_key,
     )
     db.add(attempt)
     _commit(db)
     db.refresh(attempt)
     return attempt
+
+
+def submit_test_term_page(db: Session, payload: dict[str, Any]) -> list[Attempt]:
+    """Persist the two answers atomically, respecting an outer idempotent transaction."""
+    previous_defer_commits = db.info.get("defer_commits", False)
+    db.info["defer_commits"] = True
+    try:
+        attempts = _submit_test_term_page_in_transaction(db, payload)
+        if not previous_defer_commits:
+            db.commit()
+        return attempts
+    except Exception:
+        if not previous_defer_commits:
+            db.rollback()
+        raise
+    finally:
+        if previous_defer_commits:
+            db.info["defer_commits"] = previous_defer_commits
+        else:
+            db.info.pop("defer_commits", None)
+
+
+def _submit_test_term_page_in_transaction(db: Session, payload: dict[str, Any]) -> list[Attempt]:
+    participant = (
+        db.query(Participant)
+        .filter_by(id=payload["participant_id"])
+        .with_for_update()
+        .one_or_none()
+    )
+    if participant is None:
+        raise HTTPException(status_code=404, detail="participant not found")
+    if effective_test_page_mode(participant) != "per_term":
+        raise HTTPException(status_code=409, detail="この参加者は用語ページ形式のテスト対象ではありません。")
+    phase = payload["phase"]
+    _assert_participant_active(participant)
+    _assert_phase_available(participant, phase)
+
+    questions_by_id = {question["question_id"]: question for question in question_payloads(db, participant.id, phase)}
+    answers = payload.get("answers") or []
+    if len(answers) != 2:
+        raise HTTPException(status_code=400, detail="1ページにつき2設問への回答が必要です。")
+    answer_ids = [str(answer.get("question_id") or "") for answer in answers]
+    if len(set(answer_ids)) != 2 or any(question_id not in questions_by_id for question_id in answer_ids):
+        raise HTTPException(status_code=409, detail="この2設問は今回の用語ページと一致しません。")
+    selected_questions = [questions_by_id[question_id] for question_id in answer_ids]
+    if any(question["term_slug"] != payload["term_slug"] for question in selected_questions):
+        raise HTTPException(status_code=409, detail="同じ用語の2設問を指定してください。")
+    if any(question["test_round"] != payload["test_round"] for question in selected_questions):
+        raise HTTPException(status_code=409, detail="この用語ページのテスト回次が一致しません。")
+    variants = {
+        db.get(Question, question_id).variant_key
+        for question_id in answer_ids
+    }
+    expected_variant = _expected_test_variant(db, participant, phase)
+    if variants != {f"{expected_variant}_q1", f"{expected_variant}_q2"}:
+        raise HTTPException(status_code=409, detail="今回の用語ページには設問1・2が必要です。")
+    if not math.isfinite(float(payload["elapsed_time_sec"])) or payload["elapsed_time_sec"] <= 0:
+        raise HTTPException(status_code=400, detail="ページ回答時間は0秒より大きい必要があります。")
+
+    page_timing = {
+        "page_id": str(payload["page_id"]),
+        "measurement_version": "term_page_v1",
+        "elapsed_time_sec": float(payload["elapsed_time_sec"]),
+    }
+    attempts: list[Attempt] = []
+    for answer in answers:
+        question_id = str(answer["question_id"])
+        selected_option_ids = [str(option_id) for option_id in (answer.get("selected_option_ids") or []) if option_id]
+        if len(selected_option_ids) != 1 or len(set(selected_option_ids)) != 1:
+            raise HTTPException(status_code=400, detail="各設問で選択肢を1つ選んでください。")
+
+        existing = (
+            db.query(Attempt)
+            .filter_by(participant_id=participant.id, question_id=question_id, phase=phase, is_correct=None)
+            .order_by(Attempt.created_at.asc(), Attempt.id.asc())
+            .first()
+        )
+        if existing:
+            existing_ids = [str(option_id) for option_id in (existing.selected_option_ids or []) if option_id]
+            if existing_ids != selected_option_ids:
+                raise idempotency_error(
+                    "answer_already_submitted",
+                    "この問題はすでに別の回答で保存されています。保存済み回答を維持します。",
+                    attempt_id=existing.id,
+                )
+            attempts.append(existing)
+            continue
+
+        attempt = submit_attempt(
+            db,
+            {
+                "participant_id": participant.id,
+                "question_id": question_id,
+                "phase": phase,
+                "selected_option_ids": selected_option_ids,
+                "response_time_sec": None,
+                "question_shown_at": payload["question_shown_at"],
+                "answered_at": payload["answered_at"],
+                "test_page_timing_json": page_timing,
+            },
+        )
+        attempts.append(attempt)
+    if len(attempts) != 2:
+        raise HTTPException(status_code=500, detail="用語ページの回答保存を完了できませんでした。")
+    for attempt in attempts:
+        attempt.response_time_sec = None
+        attempt.test_page_timing_json = page_timing
+    return attempts
 
 
 def _tutoring_output_metrics(result: dict[str, Any]) -> dict[str, int]:
@@ -3394,7 +3508,22 @@ def _learning_burden(db: Session, participant_id: str, attempts: list[Attempt]) 
         (_round_number(_attempt_test_round(attempt)) or 0 for attempt in attempts if attempt.phase in {"retest", "final_test"}),
         default=0,
     )
-    test_time = sum(attempt.response_time_sec or 0 for attempt in attempts if attempt.phase in TEST_PHASES)
+    legacy_test_time = 0.0
+    term_page_times: dict[str, float] = {}
+    for attempt in attempts:
+        if attempt.phase not in TEST_PHASES:
+            continue
+        timing = attempt.test_page_timing_json
+        if (
+            isinstance(timing, dict)
+            and timing.get("measurement_version") == "term_page_v1"
+            and timing.get("page_id")
+            and isinstance(timing.get("elapsed_time_sec"), (int, float))
+        ):
+            term_page_times.setdefault(str(timing["page_id"]), float(timing["elapsed_time_sec"]))
+        else:
+            legacy_test_time += attempt.response_time_sec or 0
+    test_time = legacy_test_time + sum(term_page_times.values())
     learning_time = sum(turn.response_time_sec or 0 for turn in turns)
     retained_count = sum(1 for attempt in attempts if attempt.phase in {"pretest", "retest"} and attempt.is_correct is False)
     return {
@@ -3643,8 +3772,8 @@ def admin_summary(db: Session, mode: str = STANDARD) -> dict[str, Any]:
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_question_reviews", "current_step", "started_at", "completed_at", "completion_reason"]),
-    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "question_review_acknowledged_at", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
+    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_question_reviews", "question_set_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
+    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "test_page_timing_json", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "question_review_acknowledged_at", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "legacy_scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "legacy_l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),
     "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "legacy_scaffolding_level", "teaching_strategy", "legacy_strategy_changed", "tutor_message", "diagnosis_json", "practice_question_json", "learner_response", "ai_feedback", "legacy_next_scaffolding_level", "legacy_forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
@@ -3692,6 +3821,8 @@ def _attempt_log_row(
     return {
         "attempt_id": attempt.id,
         "question_set_mode": question_set_mode(participant.question_set_mode) if participant else None,
+        "test_page_mode": participant.test_page_mode if participant else None,
+        "test_timing_unit": "term_page" if participant and effective_test_page_mode(participant) == "per_term" else "per_question",
         **({"legacy_fields": legacy_fields(attempt)} if participant and not can_resume(participant) else {}),
         "participant_id": attempt.participant_id,
         "display_code": participant.display_code if participant else None,
@@ -3708,6 +3839,8 @@ def _attempt_log_row(
         "option_order_snapshot": attempt.option_order_snapshot,
         "test_glossary": attempt.glossary_snapshot,
         "response_time_sec": attempt.response_time_sec,
+        "response_time_unit": "term_page" if attempt.test_page_timing_json else "per_question",
+        "test_page_timing_json": attempt.test_page_timing_json,
         "question_shown_at": _iso(attempt.question_shown_at),
         "answered_at": _iso(attempt.answered_at),
         "question_review_acknowledged_at": _iso(attempt.question_review_acknowledged_at),
@@ -3878,6 +4011,9 @@ def admin_logs_overview(db: Session, mode: str = STANDARD) -> dict[str, Any]:
                 "display_code": row.display_code,
                 "experiment_spec_version": row.experiment_spec_version,
                 "question_set_mode": question_set_mode(row.question_set_mode),
+                "test_page_mode": row.test_page_mode,
+                "effective_test_page_mode": effective_test_page_mode(row),
+                "test_timing_unit": "term_page" if effective_test_page_mode(row) == "per_term" else "per_question",
                 "protocol_id": row.protocol_id,
                 "can_resume": can_resume(row),
                 "group_condition": row.group_condition,
@@ -4024,6 +4160,9 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "display_code": participant.display_code,
             "experiment_spec_version": participant.experiment_spec_version,
             "question_set_mode": question_set_mode(participant.question_set_mode),
+            "test_page_mode": participant.test_page_mode,
+            "effective_test_page_mode": effective_test_page_mode(participant),
+            "test_timing_unit": "term_page" if effective_test_page_mode(participant) == "per_term" else "per_question",
             "learning_content_version": participant.learning_content_version,
             "protocol_id": participant.protocol_id,
             "can_resume": can_resume(participant),
@@ -4187,7 +4326,7 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
     rows.append({**base, "record_type": "participant", "phase": "registration", "event_time": participant.get("created_at"), "summary": "participant protocol and completion metadata", "value_json": _csv_value(participant)})
     for answer in logs["answer_history"]:
         if answer["source_type"] == "test_attempt":
-            summary = f"{answer['term_label']} {answer['phase']} correct={answer['is_correct']} m={answer['misconception_type']}"
+            summary = f"{answer['term_label']} {answer['phase']} correct={answer['is_correct']} m={answer['misconception_type']} time_unit={answer.get('response_time_unit')}"
         else:
             summary = f"{answer['term_label']} learning turn {answer['turn_index']} stage={answer['learning_stage']} component={answer['component_term']} sufficient={answer['is_sufficient']} strategy={answer['teaching_strategy']}"
         rows.append({**base, "record_type": "answer", "source_type": answer["source_type"], "phase": answer["phase"], "test_round": answer.get("test_round"), "term_slug": answer["term_slug"], "event_time": _answer_event_time(answer), "question_shown_at": answer.get("question_shown_at"), "answered_at": answer.get("answered_at"), "response_time_sec": answer.get("response_time_sec"), "question_body": answer.get("question_body"), "selected_option_body": answer.get("selected_option_body"), "question_body_snapshot": answer.get("question_body_snapshot"), "option_order_snapshot": _csv_value(answer.get("option_order_snapshot")), "summary": summary, "value_json": _csv_value(answer)})

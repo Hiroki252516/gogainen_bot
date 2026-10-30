@@ -91,6 +91,19 @@ function pendingStorageKey(scope: string): string {
   return `idempotency_pending:${scope}`;
 }
 
+export function getPendingIdempotentBody<T>(scope: string): T | null {
+  if (typeof window === "undefined") return null;
+  const storedText = window.sessionStorage.getItem(pendingStorageKey(scope));
+  if (!storedText) return null;
+  try {
+    const pending = JSON.parse(storedText) as Partial<PendingIdempotentRequest>;
+    if (!pending.key || typeof pending.body !== "string") return null;
+    return JSON.parse(pending.body) as T;
+  } catch {
+    return null;
+  }
+}
+
 export function clearPendingIdempotency(scope: string): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(pendingStorageKey(scope));

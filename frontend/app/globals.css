@@ -283,6 +283,26 @@ p {
   min-width: 0;
 }
 
+.term-page-question {
+  min-width: 0;
+}
+
+.term-page-question + .term-page-question {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.term-page-question-body {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.term-page-primary,
+.term-page-exit {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .glossary-sidebar {
   display: none;
 }
@@ -317,6 +337,10 @@ p {
 @media (max-width: 1099px) {
   .glossary-layout.has-glossary {
     padding-bottom: 64px;
+  }
+
+  .term-page-runner.glossary-layout.has-glossary {
+    padding-bottom: 112px;
   }
 }
 
@@ -650,11 +674,14 @@ button:disabled {
   box-shadow: 0 4px 18px rgb(15 23 42 / 14%);
 }
 
-.corner-exit {
-  position: fixed;
+.sticky-exit {
+  position: sticky;
   top: max(12px, env(safe-area-inset-top));
-  right: max(12px, env(safe-area-inset-right));
   z-index: 31;
+  justify-self: end;
+  align-self: start;
+  width: fit-content;
+  max-width: 100%;
   margin: 0;
   padding: 6px;
   border-radius: 10px;
@@ -662,14 +689,20 @@ button:disabled {
   box-shadow: 0 4px 18px rgb(15 23 42 / 14%);
 }
 
-.option-answer-correct {
-  border-color: var(--ok);
-  background: #f0fdf6;
+.learning-layout > .sticky-exit {
+  grid-column: 1 / -1;
 }
 
-.option-answer-incorrect {
+.option.option-answer-correct {
+  border-color: var(--ok);
+  background: #f0fdf6;
+  opacity: 1;
+}
+
+.option.option-answer-incorrect {
   border-color: var(--danger);
   background: #fff5f5;
+  opacity: 1;
 }
 
 .option:has(.option-verdict) {
@@ -682,6 +715,11 @@ button:disabled {
 .option-verdict {
   display: inline-block;
   margin-left: 8px;
+}
+
+.term-page-runner .option .option-verdict {
+  display: block;
+  margin: 0 0 6px;
 }
 
 .give-up-control {
@@ -1320,10 +1358,6 @@ button:disabled {
   }
   .corner-primary button {
     max-width: calc(100vw - 40px);
-  }
-  .corner-exit .danger-button {
-    max-width: min(42vw, 220px);
-    white-space: normal;
   }
   .experiment-progress-heading {
     align-items: flex-start;

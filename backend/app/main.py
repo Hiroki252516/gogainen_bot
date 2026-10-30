@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from typing import Literal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -61,10 +61,12 @@ from app.services.experiment import (
     pending_question_review,
     post_pretest_test_progress,
     question_payloads,
+    effective_test_page_mode,
     recalculate_evaluation,
     respond_tutor_turn,
     score_phase,
     submit_attempt,
+    submit_test_term_page,
     submit_survey,
 )
 from app.services.idempotency import normalize_idempotency_key, registration_key_was_deleted, run_idempotent
@@ -255,6 +257,25 @@ class AttemptPayload(BaseModel):
     answered_at: datetime | None = None
 
 
+class TermPageAnswerPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question_id: str
+    selected_option_ids: list[str]
+
+
+class TermPageAttemptPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    participant_id: str
+    phase: Literal["pretest", "retest", "final_test"]
+    term_slug: str
+    test_round: str
+    page_id: UUID
+    answers: list[TermPageAnswerPayload] = Field(min_length=2, max_length=2)
+    question_shown_at: datetime
+    answered_at: datetime
+    elapsed_time_sec: float = Field(gt=0)
+
+
 class TutorSessionCreate(BaseModel):
     participant_id: str
     term_slug: str
@@ -390,22 +411,40 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
 
 @app.get("/api/experiment/{participant_id}/pretest")
 def get_pretest(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    participant = get_participant(db, participant_id)
     questions = question_payloads(db, participant_id, "pretest")
-    return {"phase": "pretest", "questions": questions, "pending_question_review": pending_question_review(db, participant_id, "pretest", questions)}
+    return {
+        "phase": "pretest",
+        "test_page_mode": effective_test_page_mode(participant),
+        "questions": questions,
+        "pending_question_review": pending_question_review(db, participant_id, "pretest", questions),
+    }
 
 
 @app.get("/api/experiment/{participant_id}/retest")
 def get_retest(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    participant = get_participant(db, participant_id)
     questions = question_payloads(db, participant_id, "retest")
-    return {"phase": "retest", "questions": questions, "pending_question_review": pending_question_review(db, participant_id, "retest", questions)}
+    return {
+        "phase": "retest",
+        "test_page_mode": effective_test_page_mode(participant),
+        "questions": questions,
+        "pending_question_review": pending_question_review(db, participant_id, "retest", questions),
+    }
 
 
 
 
 @app.get("/api/experiment/{participant_id}/final-test")
 def get_final_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    participant = get_participant(db, participant_id)
     questions = question_payloads(db, participant_id, "final_test")
-    return {"phase": "final_test", "questions": questions, "pending_question_review": pending_question_review(db, participant_id, "final_test", questions)}
+    return {
+        "phase": "final_test",
+        "test_page_mode": effective_test_page_mode(participant),
+        "questions": questions,
+        "pending_question_review": pending_question_review(db, participant_id, "final_test", questions),
+    }
 
 
 class QuestionReviewAcknowledgementPayload(BaseModel):
@@ -437,6 +476,30 @@ async def api_submit_attempt(
         db,
         scope=f"attempt:{payload.participant_id}:{payload.question_id}:{payload.phase or 'auto'}",
         key=idempotency_key,
+        participant_id=payload.participant_id,
+        request_data=payload.model_dump(mode="json"),
+        operation=operation,
+    )
+
+
+@app.post("/api/attempts/term-page")
+async def api_submit_term_page_attempt(
+    payload: TermPageAttemptPayload,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    normalized_key = normalize_idempotency_key(idempotency_key)
+    if normalized_key is None:
+        raise HTTPException(status_code=400, detail="ページ回答の保存にはIdempotency-Keyが必要です。")
+
+    def operation() -> dict:
+        attempts = submit_test_term_page(db, payload.model_dump())
+        return {"saved": True, "saved_question_count": len(attempts), "page_id": str(payload.page_id)}
+
+    return await run_idempotent(
+        db,
+        scope=f"test-page:{payload.participant_id}:{payload.phase}:{payload.term_slug}:{payload.test_round}",
+        key=normalized_key,
         participant_id=payload.participant_id,
         request_data=payload.model_dump(mode="json"),
         operation=operation,

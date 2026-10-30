@@ -10,6 +10,7 @@ import { GlossarySidebar } from "@/components/GlossarySidebar";
 import { CheckingFlow, useLearningTargetFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, postIdempotent, requireParticipant } from "@/lib/api";
 import { prepareGroupedQuestionDisplay } from "@/lib/learning-question-display";
+import { optionAnswerClass } from "@/lib/option-answer-display";
 
 type Option = { option_id: string; label: string; body: string; exclusive?: boolean; is_correct?: boolean };
 
@@ -298,6 +299,13 @@ export default function LearningPage() {
             ...option,
             is_correct: data.answer_key?.[option.option_id] ?? false,
           })),
+          questions: practiceQuestion.questions?.map((question) => ({
+            ...question,
+            options: question.options.map((option) => ({
+              ...option,
+              is_correct: data.answer_key?.[option.option_id] ?? false,
+            })),
+          })),
         },
         learning_stage: data.next_learning_stage || turn.learning_stage,
       };
@@ -408,6 +416,11 @@ export default function LearningPage() {
             </div>
             <div className={`glossary-layout ${turn.glossary?.entries.length ? "has-glossary" : ""}`}>
             <div className="learning-layout glossary-main">
+              {!feedback?.session_completed ? (
+                <div className="give-up-footer sticky-exit">
+                  <GiveUpButton mode="learning" disabled={submitting} />
+                </div>
+              ) : null}
               <section className="learning-block material-block" aria-labelledby="material-title">
                 <h2 id="material-title">教材</h2>
                 <MarkdownText>{turn.tutor_message}</MarkdownText>
@@ -421,12 +434,17 @@ export default function LearningPage() {
                     <p className="preserve-lines">{groupedQuestionDisplay?.questionBodies[index] ?? question.body}</p>
                     <div className="selection-status">最も適切なものを1つ選んでください。</div>
                     <div className="options">
-                      {question.options.map((option) => (
-                        <label className={`option ${feedback ? (feedback.answer_key?.[option.option_id] ? "option-answer-correct" : selectedOptionIds.includes(option.option_id) ? "option-answer-incorrect" : "") : ""}`} key={option.option_id}>
-                          <input type="radio" name={`confirmation-${question.question_id}`} checked={selectedOptionIds.includes(option.option_id)} disabled={submitting || Boolean(feedback)} onChange={() => setSelectedOptionIds((ids) => [...ids.filter((id) => !question.options.some((o) => o.option_id === id)), option.option_id])} />
-                          <span><strong>{option.label}.</strong> {option.body}{feedback ? <strong className="option-verdict">{feedback.answer_key?.[option.option_id] ? "正解" : "不正解"}</strong> : null}</span>
-                        </label>
-                      ))}
+                      {question.options.map((option) => {
+                        const isCorrect = feedback
+                          ? (feedback.answer_key?.[option.option_id] ?? option.is_correct ?? false)
+                          : undefined;
+                        return (
+                          <label className={`option ${optionAnswerClass(Boolean(feedback), isCorrect)}`} key={option.option_id}>
+                            <input type="radio" name={`confirmation-${question.question_id}`} checked={selectedOptionIds.includes(option.option_id)} disabled={submitting || Boolean(feedback)} onChange={() => setSelectedOptionIds((ids) => [...ids.filter((id) => !question.options.some((o) => o.option_id === id)), option.option_id])} />
+                            <span><strong>{option.label}.</strong> {option.body}{feedback ? <strong className="option-verdict">{isCorrect ? "正解" : "不正解"}</strong> : null}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )) : practiceOptions.length ? (
@@ -460,7 +478,10 @@ export default function LearningPage() {
                           ((selectionState.hasUnknown && !isUnknown) ||
                             (!isUnknown && selectionState.reachedLimit) ||
                             (isUnknown && selectionState.normalSelectedCount > 0));
-                        const answerClass = feedback && option.is_correct ? "option-answer-correct" : feedback && isSelected && !option.is_correct ? "option-answer-incorrect" : "";
+                        const isCorrect = feedback
+                          ? (feedback.answer_key?.[option.option_id] ?? option.is_correct ?? false)
+                          : undefined;
+                        const answerClass = optionAnswerClass(Boolean(feedback), isCorrect);
                         return (
                           <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""} ${answerClass}`} key={option.option_id}>
                             <input
@@ -475,7 +496,7 @@ export default function LearningPage() {
                             />
                             <span>
                               <strong>{option.label}.</strong> {option.body}
-                              {feedback ? <strong className="option-verdict">{option.is_correct ? "正解" : "不正解"}</strong> : null}
+                              {feedback ? <strong className="option-verdict">{isCorrect ? "正解" : "不正解"}</strong> : null}
                             </span>
                           </label>
                         );
@@ -523,11 +544,6 @@ export default function LearningPage() {
                 </button>
               )}
             </div>
-            {!feedback?.session_completed ? (
-              <div className="give-up-footer corner-exit">
-                <GiveUpButton mode="learning" disabled={submitting} />
-              </div>
-            ) : null}
           </>
         ) : error ? null : <SessionLoadProgress />}
       </section>
