@@ -41,6 +41,7 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 | 再開判定 | GET `/api/participants/{id}/current-step` |
 | 出題 | GET `/api/experiment/{id}/pretest`, `/retest`, `/final-test` |
 | 回答保存 | POST `/api/attempts` |
+| 通常版の用語ページ回答保存（issue-208） | POST `/api/attempts/term-page` |
 | 事前固定採点 | POST `/api/participants/{id}/diagnose-pretest` |
 | 結果・学習対象 | GET `/api/participants/{id}/learning-targets` |
 | 学習開始 | POST `/api/tutor-sessions` |
@@ -81,6 +82,10 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 `progress` は `{stage_id, label, percent}` または `null`。旧試用・未対応状態では `progress: null` とする。未知・整合しない状態も推測値を返さずnullとし、取得は回答・採点・状態を変更しない。
 
 回答は `selected_option_ids` と時刻情報（response_time_sec、question_shown_at、answered_at）。テストはparticipant_id/question_id/phaseも指定する。廃止入力項目は422。
+
+事前・再テスト・内部final_testの取得APIは`test_page_mode`を返す。新規通常版は`per_term`、易しい版と既存NULL参加者は`per_question`。通常版の用語ページ形式は、新規参加者に限り同一用語の設問1・2を一括保存する。`POST /api/attempts/term-page`はparticipant_id、phase、term_slug、test_round、page_id、各設問のquestion_idと選択肢1件、共通表示/回答時刻、正のelapsed_time_secを受け、`Idempotency-Key`を必須とする。現在の2問であること、同じ用語・回次であることを検証し、同一トランザクションで確定する。既存回答は変更せず、異なる回答との競合は409。応答に正答・正誤・分類情報を含めない。既存の`POST /api/attempts`は維持する。
+
+用語ページ時間は`Attempt.test_page_timing_json`（nullable JSON）へpage_id、`measurement_version=term_page_v1`、elapsed_time_secを記録し、新形式の設問別`response_time_sec`はNULLとする。2問には同じpage_id・時間を保存し、合計時間ではpage_idを一度だけ数える。従来記録は設問ごとのresponse_time_secで計算する。統合ログCSVの列は増やさず、JSON値・summary・表示単位フィールドで区別する。詳細は[設問分割仕様](39_split_assessment.md#テスト画面と時間計測issue-208)。
 
 NULL・版1〜25・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。新規版26＋現行protocol_idのみcan_resume=true。
 

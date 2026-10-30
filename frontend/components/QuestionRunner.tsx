@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { GiveUpButton } from "@/components/GiveUpButton";
 import { type Glossary } from "@/components/LearningGlossary";
 import { GlossarySidebar } from "@/components/GlossarySidebar";
-import { ApiError, api, clearPendingIdempotency, postIdempotent, requireParticipant } from "@/lib/api";
+import { prepareGroupedQuestionDisplay } from "@/lib/learning-question-display";
+import { combineTestGlossaries, groupTestQuestionsByTerm, initialTestTermPageIndex } from "@/lib/test-term-pages";
+import { ApiError, api, clearPendingIdempotency, getPendingIdempotentBody, postIdempotent, requireParticipant } from "@/lib/api";
 
 type Option = { option_id: string; label: string; body: string; exclusive?: boolean };
 type SubmittedAnswer = {
@@ -28,6 +30,18 @@ type Question = {
   submitted_answer?: SubmittedAnswer | null;
 };
 type ScoreResult = { next_url?: string; learning_target_slugs?: string[] };
+type TestPageAnswer = { question_id: string; selected_option_ids: string[] };
+type TestPageSubmission = {
+  participant_id: string;
+  phase: string;
+  term_slug: string;
+  test_round: string;
+  page_id: string;
+  answers: TestPageAnswer[];
+  question_shown_at: string;
+  answered_at: string;
+  elapsed_time_sec: number;
+};
 
 function multipleSelectionState(options: Option[], selectedIds: string[], requiredSelections = 3) {
   const selectedOptions = options.filter((option) => selectedIds.includes(option.option_id));
@@ -68,6 +82,7 @@ export function QuestionRunner({
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
+  const [testPageMode, setTestPageMode] = useState<"per_question" | "per_term">("per_question");
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -100,9 +115,15 @@ export function QuestionRunner({
 
   useEffect(() => {
     const id = requireParticipant();
-    api<{ questions: Question[] }>(sourcePath(id))
+    api<{ questions: Question[]; test_page_mode?: "per_question" | "per_term" }>(sourcePath(id))
       .then((data) => {
         setQuestions(data.questions);
+        const nextPageMode = data.test_page_mode === "per_term" ? "per_term" : "per_question";
+        setTestPageMode(nextPageMode);
+        if (nextPageMode === "per_term") {
+          const pages = groupTestQuestionsByTerm(data.questions);
+          if (pages) setIndex(initialTestTermPageIndex(pages));
+        }
         const nextTitle = data.questions[0]?.test_round_label || title;
         setDisplayTitle(nextTitle);
         onDisplayTitle?.(nextTitle);
@@ -220,6 +241,19 @@ export function QuestionRunner({
   if (loading) return <div className="panel">読み込み中...</div>;
   if (error && !current) return <div className="panel danger">{error}</div>;
   if (!current) return <div className="panel">問題がありません。</div>;
+  if (testPageMode === "per_term") {
+    return (
+      <TermPageQuestionRunner
+        questions={questions}
+        phase={phase}
+        title={displayTitle}
+        sourcePath={sourcePath}
+        scorePath={scorePath}
+        nextPath={nextPath}
+        allowExperimentGiveUp={allowExperimentGiveUp}
+      />
+    );
+  }
 
   const isMultipleQuestion = current.selection_mode !== "single";
   const isAnswered = current.answer_status === "submitted";
@@ -310,6 +344,313 @@ export function QuestionRunner({
       ) : null}
       </div>
       <GlossarySidebar key={current.question_id} glossary={current.glossary} label="テストの用語の補足" />
+    </div>
+  );
+}
+
+function newPageId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    return (character === "x" ? random : (random & 0x3) | 0x8).toString(16);
+  });
+}
+
+function newPageTiming() {
+  const startedAt = Date.now();
+  return { pageId: newPageId(), startedAt, shownAt: new Date(startedAt).toISOString() };
+}
+
+function pageSubmissionScope(participantId: string, phase: string, page: { term_slug: string; test_round: string | null }) {
+  return `test-page:${participantId}:${phase}:${page.term_slug}:${page.test_round || ""}`;
+}
+
+function isPageSubmissionFor(
+  value: unknown,
+  participantId: string,
+  phase: string,
+  page: { term_slug: string; test_round: string | null; questions: Question[] },
+): value is TestPageSubmission {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<TestPageSubmission>;
+  const expectedIds = new Set(page.questions.map((question) => question.question_id));
+  return candidate.participant_id === participantId
+    && candidate.phase === phase
+    && candidate.term_slug === page.term_slug
+    && candidate.test_round === page.test_round
+    && typeof candidate.page_id === "string"
+    && typeof candidate.question_shown_at === "string"
+    && typeof candidate.answered_at === "string"
+    && typeof candidate.elapsed_time_sec === "number"
+    && Number.isFinite(candidate.elapsed_time_sec)
+    && candidate.elapsed_time_sec > 0
+    && Array.isArray(candidate.answers)
+    && candidate.answers.length === 2
+    && candidate.answers.every((answer) => Boolean(
+      answer
+      && typeof answer === "object"
+      && expectedIds.has(answer.question_id)
+      && Array.isArray(answer.selected_option_ids)
+      && answer.selected_option_ids.length === 1
+      && typeof answer.selected_option_ids[0] === "string"
+      && answer.selected_option_ids[0].length > 0
+    ))
+    && new Set(candidate.answers.map((answer) => answer.question_id)).size === 2;
+}
+
+function TermPageQuestionRunner({
+  questions,
+  phase,
+  title,
+  sourcePath,
+  scorePath,
+  nextPath,
+  allowExperimentGiveUp,
+}: {
+  questions: Question[];
+  phase: string;
+  title: string;
+  sourcePath: (participantId: string) => string;
+  scorePath?: (participantId: string) => string;
+  nextPath: string;
+  allowExperimentGiveUp: boolean;
+}) {
+  const router = useRouter();
+  const [participantId, setParticipantId] = useState("");
+
+  useEffect(() => {
+    try {
+      setParticipantId(requireParticipant());
+    } catch {
+      setParticipantId("");
+    }
+  }, []);
+  const [currentQuestions, setCurrentQuestions] = useState(questions);
+  const pages = useMemo(() => groupTestQuestionsByTerm(currentQuestions), [currentQuestions]);
+  const [pageIndex, setPageIndex] = useState(() => pages ? initialTestTermPageIndex(pages) : 0);
+  const [selectedByQuestion, setSelectedByQuestion] = useState<Record<string, string[]>>(() => Object.fromEntries(
+    questions.map((question) => [question.question_id, question.submitted_answer?.selected_option_ids || []]),
+  ));
+  const [timing, setTiming] = useState(newPageTiming);
+  const [frozenPage, setFrozenPage] = useState<{ scope: string; body: TestPageSubmission } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const page = pages?.[pageIndex];
+  const glossary = useMemo(() => page ? combineTestGlossaries(page.questions) : null, [page]);
+  const pageScope = page && participantId ? pageSubmissionScope(participantId, phase, page) : "";
+  const pageIsFrozen = frozenPage?.scope === pageScope;
+  const pageAlreadySaved = Boolean(page?.questions.every((question) => question.answer_status === "submitted"));
+  const canAnswerAll = Boolean(page?.questions.every((question) =>
+    question.answer_status === "submitted" || (selectedByQuestion[question.question_id] || []).length === 1,
+  ));
+
+  useEffect(() => {
+    if (!page || !participantId) return;
+    const scope = pageSubmissionScope(participantId, phase, page);
+    setTiming(newPageTiming());
+    setError("");
+    const pending = getPendingIdempotentBody<TestPageSubmission>(scope);
+    if (isPageSubmissionFor(pending, participantId, phase, page)) {
+      setFrozenPage({ scope, body: pending });
+      setSelectedByQuestion((previous) => ({
+        ...previous,
+        ...Object.fromEntries(pending.answers.map((answer) => [answer.question_id, answer.selected_option_ids])),
+      }));
+    } else {
+      clearPendingIdempotency(scope);
+      setFrozenPage(null);
+      setSelectedByQuestion((previous) => ({
+        ...previous,
+        ...Object.fromEntries(page.questions.map((question) => [
+          question.question_id,
+          question.submitted_answer?.selected_option_ids || previous[question.question_id] || [],
+        ])),
+      }));
+    }
+  }, [page?.key, phase, participantId]);
+
+  async function advance() {
+    if (!pages || !page) return;
+    if (pageIndex + 1 < pages.length) {
+      setPageIndex((previous) => previous + 1);
+      setError("");
+      setSaving(false);
+      return;
+    }
+    if (!scorePath) {
+      router.replace(nextPath);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const participantId = requireParticipant();
+      const result = await postIdempotent<ScoreResult>(scorePath(participantId), {}, `score:${participantId}:${phase}`);
+      if (Array.isArray(result.learning_target_slugs)) {
+        localStorage.setItem("learning_targets", JSON.stringify(result.learning_target_slugs));
+      }
+      const reviewRequired = phase === "retest" || phase === "final_test";
+      router.replace(reviewRequired ? "/learning-targets" : (result.next_url || nextPath));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setSaving(false);
+    }
+  }
+
+  async function submitPage() {
+    if (!page || !pages || saving) return;
+    if (pageAlreadySaved) {
+      await advance();
+      return;
+    }
+    if (!participantId) {
+      setError("参加者情報を確認できません。開始画面から再開してください。");
+      return;
+    }
+    const scope = pageSubmissionScope(participantId, phase, page);
+    let body = frozenPage?.scope === scope ? frozenPage.body : null;
+    if (!body) {
+      const answers = page.questions.map((question) => ({
+        question_id: question.question_id,
+        selected_option_ids: selectedByQuestion[question.question_id] || [],
+      }));
+      if (answers.some((answer) => answer.selected_option_ids.length !== 1)) {
+        setError("各設問で選択肢を1つ選んでください。");
+        return;
+      }
+      const answeredAt = new Date().toISOString();
+      body = {
+        participant_id: participantId,
+        phase,
+        term_slug: page.term_slug,
+        test_round: page.test_round || "",
+        page_id: timing.pageId,
+        answers,
+        question_shown_at: timing.shownAt,
+        answered_at: answeredAt,
+        elapsed_time_sec: Math.max(0.001, (Date.now() - timing.startedAt) / 1000),
+      };
+      setFrozenPage({ scope, body });
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await postIdempotent("/api/attempts/term-page", body, scope);
+      setFrozenPage(null);
+      setCurrentQuestions((previous) => previous.map((question) => {
+        const answer = body?.answers.find((item) => item.question_id === question.question_id);
+        return answer ? {
+          ...question,
+          answer_status: "submitted",
+          submitted_answer: { selected_option_ids: answer.selected_option_ids },
+        } : question;
+      }));
+      if (pageIndex + 1 < pages.length) {
+        setPageIndex((previous) => previous + 1);
+        setSaving(false);
+      } else {
+        await advance();
+      }
+    } catch (err) {
+      if (err instanceof ApiError && (err.code === "answer_already_submitted" || err.code === "idempotency_key_conflict")) {
+        try {
+          const latest = await api<{ questions: Question[] }>(sourcePath(participantId));
+          setCurrentQuestions(latest.questions);
+          setSelectedByQuestion((previous) => ({
+            ...previous,
+            ...Object.fromEntries(latest.questions.map((question) => [
+              question.question_id,
+              question.submitted_answer?.selected_option_ids || previous[question.question_id] || [],
+            ])),
+          }));
+          clearPendingIdempotency(scope);
+          setFrozenPage(null);
+          setError("保存済みの回答と競合しました。保存された回答を確認してください。");
+        } catch {
+          setError(err.message);
+        }
+      } else {
+        if (err instanceof ApiError && err.status >= 400 && err.status < 500 && err.code !== "idempotency_in_progress") {
+          setFrozenPage(null);
+        }
+        setError(err instanceof Error ? err.message : String(err));
+      }
+      setSaving(false);
+    }
+  }
+
+  if (!pages) return <div className="panel danger">テスト問題を用語ごとにまとめられません。管理者に連絡してください。</div>;
+  if (!page) return <div className="panel">問題がありません。</div>;
+
+  const display = prepareGroupedQuestionDisplay(page.questions);
+  const questionBodies = display?.questionBodies || page.questions.map((question) => question.body);
+  const isLastPage = pageIndex + 1 === pages.length;
+
+  return (
+    <div className={`panel glossary-layout term-page-runner ${glossary?.entries.length ? "has-glossary" : ""}`}>
+      <div className="stack glossary-main">
+        <div className="topbar">
+          <h1>{title}</h1>
+          <span className="muted question-progress" aria-label={`${pageIndex + 1} / ${pages.length}`}>{pageIndex + 1} / {pages.length}</span>
+        </div>
+        <div className="notice">
+          <div className="question-heading">
+            <span>問{toFullWidthDigits(pageIndex + 1)}：</span>
+            <strong>{page.term_label}</strong>
+          </div>
+          {display?.sharedScenario ? <p className="preserve-lines">{display.sharedScenario}</p> : null}
+        </div>
+        <div className="stack term-page-questions">
+          {page.questions.map((question, questionIndex) => {
+            const isAnswered = question.answer_status === "submitted";
+            const selectedIds = isAnswered
+              ? question.submitted_answer?.selected_option_ids || []
+              : selectedByQuestion[question.question_id] || [];
+            return (
+              <section className="stack term-page-question" key={question.question_id} aria-label={`設問${questionIndex + 1}`}>
+                <p className="preserve-lines term-page-question-body">{questionBodies[questionIndex]}</p>
+                {isAnswered ? (
+                  <div className="notice answer-locked" role="status">
+                    <strong>回答済み・変更不可</strong>
+                    <p>この設問の回答は保存済みです。</p>
+                  </div>
+                ) : <div className="selection-status">最も適切なものを1つ選んでください。</div>}
+                {question.options.length ? (
+                  <div className="options">
+                    {question.options.map((option) => {
+                      const selected = selectedIds.includes(option.option_id);
+                      return (
+                        <label className={`option ${isAnswered && selected ? "option-selected-locked" : ""} ${option.exclusive ? "option-unknown" : ""}`} key={option.option_id}>
+                          <input
+                            type="radio"
+                            name={`option-${question.question_id}`}
+                            value={option.option_id}
+                            checked={selected}
+                            disabled={isAnswered || saving || pageIsFrozen}
+                            onChange={() => setSelectedByQuestion((previous) => ({ ...previous, [question.question_id]: [option.option_id] }))}
+                          />
+                          <span><strong>{option.label}.</strong> {option.body}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
+        </div>
+        {error ? <div className="danger" role="alert">{error}</div> : null}
+        <div className="actions term-page-primary">
+          <button type="button" onClick={submitPage} disabled={saving || (!pageAlreadySaved && !pageIsFrozen && !canAnswerAll)}>
+            {saving ? "保存中..." : pageIsFrozen ? "同じ回答を再送" : pageAlreadySaved ? (isLastPage ? "完了" : "次へ") : isLastPage ? "完了" : "次へ"}
+          </button>
+        </div>
+        <span className="muted">このフェーズでは正誤や正解の解説は表示されません。</span>
+        {allowExperimentGiveUp ? (
+          <div className="give-up-footer term-page-exit"><GiveUpButton mode="experiment" disabled={saving} /></div>
+        ) : null}
+      </div>
+      <GlossarySidebar key={page.key} glossary={glossary} label="テストの用語の補足" />
     </div>
   );
 }

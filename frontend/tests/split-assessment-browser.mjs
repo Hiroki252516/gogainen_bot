@@ -17,7 +17,86 @@ async function api(request, path, method = "GET", data) {
   return response.json();
 }
 
+async function answerTermPages(page, participant, phase, m1ChoiceIds, width, assignmentCode, optionOrder) {
+  const questions = (await api(page.request, `/api/experiment/${participant.participant_id}/${phase.replaceAll("_", "-")}`));
+  assert.equal(questions.test_page_mode, "per_term");
+  assert.equal(questions.questions.length, 6);
+  await page.goto(new URL(`/${phase.replaceAll("_", "-")}`, base).href);
+  for (let pageIndex = 0; pageIndex < 3; pageIndex++) {
+    const pair = questions.questions.slice(pageIndex * 2, pageIndex * 2 + 2);
+    const groups = page.locator(".term-page-question");
+    await page.getByText(`${pageIndex + 1} / 3`, { exact: true }).waitFor();
+    await groups.first().waitFor();
+    assert.equal(await groups.count(), 2);
+    assert.equal(await page.getByRole("radio").count(), 8);
+    assert.equal(await page.locator(".notice .question-heading").count(), 1);
+    const scenario = pair[0].body.split("\n\n設問1：")[0];
+    assert.equal(pair[1].body.split("\n\n設問2：")[0], scenario);
+    assert.equal((await page.locator(".notice").first().innerText()).includes(scenario), true);
+    const glossaryEntries = [];
+    const seenGlossary = new Set();
+    for (const question of pair) for (const entry of question.glossary?.entries || []) {
+      const key = JSON.stringify([entry.id, entry.term, entry.definition]);
+      if (!seenGlossary.has(key)) { seenGlossary.add(key); glossaryEntries.push(entry); }
+    }
+    if (glossaryEntries.length) {
+      if (width < 1100) await page.getByRole("button", { name: "用語の補足", exact: true }).click();
+      const glossary = page.locator(width < 1100 ? ".glossary-dialog" : ".glossary-sidebar");
+      await glossary.waitFor();
+      assert.deepEqual(await glossary.locator("dt").allTextContents(), glossaryEntries.map((entry) => entry.term));
+      if (width < 1100) await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    }
+
+    for (let questionIndex = 0; questionIndex < pair.length; questionIndex++) {
+      const question = pair[questionIndex];
+      const optionId = phase === "pretest"
+        ? m1ChoiceIds.get(question.question_id)
+        : question.options.find((option) => option.exclusive)?.option_id;
+      assert(optionId, `missing target option for ${question.question_id}`);
+      const group = groups.nth(questionIndex);
+      await group.locator(`input[value="${optionId}"]`).check();
+      if (questionIndex === 0) assert.equal(await groups.nth(1).locator('input[type="radio"]:checked').count(), 0);
+    }
+    if (width < 1100) {
+      const endNote = page.locator(".term-page-runner .glossary-main > span.muted").last();
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await page.waitForTimeout(50);
+      const noteBox = await endNote.boundingBox();
+      const glossaryButtonBox = await page.getByRole("button", { name: "用語の補足", exact: true }).boundingBox();
+      assert(noteBox && glossaryButtonBox, "mobile footer and glossary control should be visible");
+      const overlaps = noteBox.x < glossaryButtonBox.x + glossaryButtonBox.width
+        && noteBox.x + noteBox.width > glossaryButtonBox.x
+        && noteBox.y < glossaryButtonBox.y + glossaryButtonBox.height
+        && noteBox.y + noteBox.height > glossaryButtonBox.y;
+      assert.equal(overlaps, false, "glossary toggle must not cover the end note");
+    }
+    if (phase === "pretest" && pageIndex === 0) {
+      await page.screenshot({ path: `${directory}/pretest-${assignmentCode}-${optionOrder}-${width}.png`, fullPage: true });
+    }
+    await page.getByRole("button", { name: pageIndex === 2 ? "完了" : "次へ", exact: true }).click();
+    if (pageIndex < 2) await page.getByText(`${pageIndex + 2} / 3`, { exact: true }).waitFor();
+    if (pageIndex === 0) {
+      await page.reload();
+      await page.getByText("2 / 3", { exact: true }).waitFor();
+      assert.equal(await page.locator(".term-page-question").count(), 2, "reload resumes on the first incomplete term page");
+    }
+  }
+  await page.waitForURL(/\/learning-targets$/);
+}
+
 try {
+  const baseline = await browser.newContext();
+  await api(baseline.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
+  await api(baseline.request, "/api/admin/question-set", "PUT", { mode: "standard" });
+  await api(baseline.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
+  const reference = await api(baseline.request, "/api/registrations", "POST", {
+    assignment_code: "A", consent_checked: true, student_number: `SPLIT-MODE-REFERENCE-${Date.now()}`,
+  });
+  const referenceQuestions = (await api(baseline.request, `/api/experiment/${reference.participant_id}/pretest`)).questions;
+  const m1ChoiceIds = new Map(referenceQuestions.map((question) => [question.question_id, question.options.find((option) => option.label === "B")?.option_id]));
+  await api(baseline.request, `/api/admin/participants/${reference.participant_id}`, "DELETE");
+  await baseline.close();
+
   for (const width of [1440, 390]) {
     for (const assignment_code of ["A", "B"]) {
       for (const optionOrder of ["debug_fixed", "randomized"]) {
@@ -34,15 +113,7 @@ try {
           student_number: `SPLIT-BROWSER-${assignment_code}-${optionOrder}-${width}`,
         });
         await page.addInitScript((p) => { localStorage.setItem("participant_id", p.participant_id); localStorage.setItem("display_code", p.display_code); }, participant);
-        await page.goto(new URL("/pretest", base).href);
-        for (let i = 0; i < 6; i++) {
-          await page.getByRole("radio", { name: /^D\./ }).check();
-          assert.equal(await page.getByRole("radio").count(), 4);
-          if (i === 0) await page.screenshot({ path: `${directory}/pretest-${assignment_code}-${optionOrder}-${width}.png`, fullPage: true });
-          await page.getByRole("button", { name: i === 5 ? "完了" : "次へ", exact: true }).click();
-          if (i < 5) await page.getByText(`${i + 2} / 6`, { exact: true }).waitFor();
-        }
-        await page.waitForURL(/\/learning-targets$/);
+        await answerTermPages(page, participant, "pretest", m1ChoiceIds, width, assignment_code, optionOrder);
         for (const slug of ["llm_knowledge", "multi_agent", "memory_process"]) {
           await page.goto(new URL(`/learning/${slug}`, base).href);
           const groups = page.locator(".problem-block .options");
@@ -65,9 +136,10 @@ try {
           await page.getByRole("button", { name: "次へ", exact: true }).click();
         }
         await page.waitForURL(/\/retest$/);
-        assert.equal((await api(page.request, `/api/experiment/${participant.participant_id}/retest`)).questions.length, 6);
+        await answerTermPages(page, participant, "retest", m1ChoiceIds, width, assignment_code, optionOrder);
+        assert.equal((await api(page.request, `/api/participants/${participant.participant_id}/learning-targets`)).test_results.results.length, 6);
         await context.close();
-        console.log(`ok ${width}px, group ${assignment_code}, ${optionOrder}, grouped lessons and retest`);
+        console.log(`ok ${width}px, group ${assignment_code}, ${optionOrder}, grouped pretest and retest`);
       }
     }
   }

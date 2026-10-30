@@ -29,26 +29,76 @@ async function create(request, mode, layout, group) {
 
 async function verifyQuestion(page, question) {
   await page.locator(".question-heading strong").filter({ hasText: question.term_label }).waitFor();
-  assert.deepEqual(await page.locator('.options input[type="checkbox"]').evaluateAll((inputs) => inputs.map((input) => input.value)), question.options.map((option) => option.option_id));
-  const notes = page.getByRole("complementary", { name: "テストの用語の補足", exact: true });
-  assert.equal(question.glossary.version, "learning-glossary-v2");
-  for (const entry of question.glossary.entries) assert(!excluded.has(entry.id));
-  if (question.glossary.entries.length) {
-    if (page.viewportSize().width < 1100) await page.getByRole("button", { name: "用語の補足", exact: true }).click();
-    await notes.waitFor();
-    assert.deepEqual(await notes.locator("dt").allTextContents(), question.glossary.entries.map((entry) => entry.term));
-    assert.deepEqual(await notes.locator("dd").allTextContents(), question.glossary.entries.map((entry) => entry.definition));
-    if (page.viewportSize().width < 1100) await page.getByRole("button", { name: "閉じる", exact: true }).click();
-  } else assert.equal(await notes.count(), 0);
+  assert.deepEqual(await page.locator(".options input").evaluateAll((inputs) => inputs.map((input) => input.value)), question.options.map((option) => option.option_id));
+  await verifyGlossary(page, question.glossary);
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "horizontal overflow");
   for (const option of question.options) assert.deepEqual(Object.keys(option).sort(), ["body", "exclusive", "label", "option_id"]);
   views++;
 }
 
+async function verifyGlossary(page, glossary) {
+  const notes = page.getByRole("complementary", { name: "テストの用語の補足", exact: true });
+  assert.equal(glossary.version, "learning-glossary-v2");
+  for (const entry of glossary.entries) assert(!excluded.has(entry.id));
+  if (glossary.entries.length) {
+    if (page.viewportSize().width < 1100) await page.getByRole("button", { name: "用語の補足", exact: true }).click();
+    await notes.waitFor();
+    assert.deepEqual(await notes.locator("dt").allTextContents(), glossary.entries.map((entry) => entry.term));
+    assert.deepEqual(await notes.locator("dd").allTextContents(), glossary.entries.map((entry) => entry.definition));
+    if (page.viewportSize().width < 1100) await page.getByRole("button", { name: "閉じる", exact: true }).click();
+  } else assert.equal(await notes.count(), 0);
+}
+
 async function runTest(page, pid, phase, perfect, capture) {
   const endpoint = `/api/experiment/${pid}/${phase.replaceAll("_", "-")}`;
-  const questions = (await api(page.request, endpoint)).questions;
+  const payload = await api(page.request, endpoint);
+  const questions = payload.questions;
   await page.goto(new URL(`/${phase.replaceAll("_", "-")}`, base).href);
+  if (payload.test_page_mode === "per_term") {
+    for (let pageIndex = 0; pageIndex < 3; pageIndex++) {
+      const pair = questions.slice(pageIndex * 2, pageIndex * 2 + 2);
+      const groups = page.locator(".term-page-question");
+      await groups.first().waitFor();
+      assert.equal(await groups.count(), 2);
+      assert.equal(await page.getByRole("radio").count(), 8);
+      for (let questionIndex = 0; questionIndex < pair.length; questionIndex++) {
+        const question = pair[questionIndex];
+        const bodies = perfect
+          ? correctPretests.get(question.question_id)
+          : question.options.filter((option) => option.exclusive).map((option) => option.option_id);
+        assert.equal(bodies.length, 1);
+        const selectedQuestion = await api(page.request, endpoint);
+        assert.equal(selectedQuestion.questions[pageIndex * 2 + questionIndex].answer_status, "unanswered");
+      }
+      const expectedGlossary = [];
+      const seen = new Set();
+      for (const question of pair) for (const entry of question.glossary?.entries || []) {
+        const key = JSON.stringify([entry.id, entry.term, entry.definition]);
+        if (!seen.has(key)) { seen.add(key); expectedGlossary.push(entry); }
+      }
+      await verifyGlossary(page, { version: pair.find((question) => question.glossary?.entries.length)?.glossary.version || "learning-glossary-v2", entries: expectedGlossary });
+      for (let questionIndex = 0; questionIndex < pair.length; questionIndex++) {
+        const question = pair[questionIndex];
+        const selected = perfect
+          ? correctPretests.get(question.question_id)
+          : question.options.filter((option) => option.exclusive).map((option) => option.option_id);
+        for (const optionId of selected) await groups.nth(questionIndex).locator(`input[value="${optionId}"]`).check();
+        if (questionIndex === 0) assert.equal(await groups.nth(1).locator('input[type="radio"]:checked').count(), 0);
+      }
+      if (capture && pageIndex === 0) await page.screenshot({ path: `${process.env.GLOSSARY_SCREENSHOT_DIR}/test-${page.viewportSize().width}-${phase}.png`, fullPage: true });
+      const saved = page.waitForResponse((response) => response.url().endsWith("/api/attempts/term-page") && response.request().method() === "POST");
+      await page.getByRole("button", { name: pageIndex === 2 ? "完了" : "次へ", exact: true }).click();
+      assert((await saved).ok());
+      for (const question of pair) {
+        const stored = (await api(page.request, endpoint)).questions.find((item) => item.question_id === question.question_id);
+        assert.equal(stored.answer_status, "submitted");
+        assert.deepEqual(stored.glossary, question.glossary);
+      }
+    }
+    await page.waitForURL(/\/learning-targets$/);
+    assert.equal(await page.locator(".learning-glossary").count(), 0);
+    return;
+  }
   for (let index = 0; index < questions.length; index++) {
     const question = questions[index];
     await verifyQuestion(page, question);
@@ -81,7 +131,10 @@ try {
   assert.equal((await api(baseline.request, "/api/admin/ai/status")).ai_backend, "mock");
   for (const mode of ["standard", "easy"]) {
     const record = await create(baseline.request, mode, "debug_fixed", "B");
-    for (const question of (await api(baseline.request, `/api/experiment/${record.participant_id}/pretest`)).questions) correctPretests.set(question.question_id, question.options.filter((option) => "ABC".includes(option.label)).map((option) => option.option_id));
+    const correctLabels = mode === "standard" ? new Set(["A"]) : new Set(["A", "B", "C"]);
+    for (const question of (await api(baseline.request, `/api/experiment/${record.participant_id}/pretest`)).questions) {
+      correctPretests.set(question.question_id, question.options.filter((option) => correctLabels.has(option.label)).map((option) => option.option_id));
+    }
   }
   await baseline.close();
   for (const width of [1440, 390]) for (const mode of ["standard", "easy"]) for (const layout of ["debug_fixed", "randomized"]) for (const group of ["A", "B"]) for (const perfect of [false, true]) {
@@ -102,7 +155,7 @@ try {
     await runTest(page, pid, "retest", false, capture);
     assert.equal((await api(page.request, `/api/participants/${pid}/current-step`)).step, "survey");
     const logs = await api(page.request, `/api/admin/participants/${pid}/logs`);
-    assert.equal(logs.attempts.length, 9);
+    assert.equal(logs.attempts.length, mode === "standard" ? 18 : 9);
     assert(logs.attempts.every((attempt) => attempt.test_glossary.version === "learning-glossary-v2"));
     console.log(`ok ${width}px ${mode} ${layout} ${group} ${perfect ? "initial-perfect" : "normal"}`);
     await context.close();
