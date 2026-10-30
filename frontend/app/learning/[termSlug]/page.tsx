@@ -10,6 +10,7 @@ import { GlossarySidebar } from "@/components/GlossarySidebar";
 import { CheckingFlow, useLearningTargetFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, postIdempotent, requireParticipant } from "@/lib/api";
 import { prepareGroupedQuestionDisplay } from "@/lib/learning-question-display";
+import { optionAnswerClass } from "@/lib/option-answer-display";
 
 type Option = { option_id: string; label: string; body: string; exclusive?: boolean; is_correct?: boolean };
 
@@ -427,7 +428,7 @@ export default function LearningPage() {
                     <div className="selection-status">最も適切なものを1つ選んでください。</div>
                     <div className="options">
                       {question.options.map((option) => (
-                        <label className={`option ${feedback ? (feedback.answer_key?.[option.option_id] ? "option-answer-correct" : selectedOptionIds.includes(option.option_id) ? "option-answer-incorrect" : "") : ""}`} key={option.option_id}>
+                        <label className={`option ${optionAnswerClass(Boolean(feedback), feedback?.answer_key?.[option.option_id])}`} key={option.option_id}>
                           <input type="radio" name={`confirmation-${question.question_id}`} checked={selectedOptionIds.includes(option.option_id)} disabled={submitting || Boolean(feedback)} onChange={() => setSelectedOptionIds((ids) => [...ids.filter((id) => !question.options.some((o) => o.option_id === id)), option.option_id])} />
                           <span><strong>{option.label}.</strong> {option.body}{feedback ? <strong className="option-verdict">{feedback.answer_key?.[option.option_id] ? "正解" : "不正解"}</strong> : null}</span>
                         </label>
@@ -465,7 +466,7 @@ export default function LearningPage() {
                           ((selectionState.hasUnknown && !isUnknown) ||
                             (!isUnknown && selectionState.reachedLimit) ||
                             (isUnknown && selectionState.normalSelectedCount > 0));
-                        const answerClass = feedback && option.is_correct ? "option-answer-correct" : feedback && isSelected && !option.is_correct ? "option-answer-incorrect" : "";
+                        const answerClass = optionAnswerClass(Boolean(feedback), option.is_correct);
                         return (
                           <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""} ${answerClass}`} key={option.option_id}>
                             <input

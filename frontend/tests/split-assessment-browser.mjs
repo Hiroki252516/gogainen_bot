@@ -54,14 +54,32 @@ try {
           assert.match(displayedBodies[1], /^設問1：/);
           assert.match(displayedBodies[2], /^設問2：/);
           for (const group of await groups.all()) assert.equal(await group.getByRole("radio").count(), 4);
+          assert.equal(await page.locator(".problem-block .option-answer-correct, .problem-block .option-answer-incorrect").count(), 0, "answer correctness must stay hidden before submission");
 
           await groups.nth(0).getByRole("radio", { name: /^D\./ }).check();
           assert.equal(await groups.nth(1).locator('input[type="radio"]:checked').count(), 0, "question selections must be independent");
           await groups.nth(1).getByRole("radio", { name: /^D\./ }).check();
           assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
           await page.screenshot({ path: `${directory}/${slug}-${assignment_code}-${optionOrder}-${width}.png`, fullPage: true });
+          const feedbackResponse = page.waitForResponse((response) => /\/api\/tutor-turns\/[^/]+\/respond$/.test(response.url()));
           await page.getByRole("button", { name: "回答を確認", exact: true }).click();
+          await feedbackResponse;
           await page.getByText("不正解です。", { exact: true }).waitFor();
+          for (const group of await groups.all()) {
+            const options = await group.locator("label.option").evaluateAll((labels) => labels.map((label) => ({
+              correct: label.classList.contains("option-answer-correct"),
+              incorrect: label.classList.contains("option-answer-incorrect"),
+              checked: label.querySelector("input")?.checked,
+              verdict: label.querySelector(".option-verdict")?.textContent,
+            })));
+            assert.equal(options.filter((option) => option.correct).length, 1);
+            assert.equal(options.filter((option) => option.incorrect).length, 3);
+            assert.equal(options.filter((option) => option.incorrect && !option.checked).length, 2, "unselected incorrect choices must also be red");
+            for (const option of options) {
+              assert.equal(option.verdict, option.correct ? "正解" : "不正解");
+              assert.equal(option.incorrect, !option.correct);
+            }
+          }
           await page.getByRole("button", { name: "次へ", exact: true }).click();
         }
         await page.waitForURL(/\/retest$/);
