@@ -18,7 +18,7 @@ from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VE
 from app.db import session as database
 from app.db.session import get_db
 from app.main import app
-from app.models import Attempt, Base, LearnerState, Participant, Question, QuestionOption, RecurrenceEvent, RuntimeSetting, Term, TermAssignment, TutorSession, TutorTurn
+from app.models import Attempt, Base, EvaluationSummary, LearnerState, Participant, Question, QuestionOption, RecurrenceEvent, RuntimeSetting, Term, TermAssignment, TutorSession, TutorTurn
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, SCENARIO_ACTIONS_V1_CONTENT_PATH, LEARNING_V3_CONTENT_PATH, assessment_question_spec, learning_question_spec, load_content, load_learning_easy_content, _validate_assessment_variant
 from app.seed.seed_questions import seed_database
 from app.services import experiment, prefetch
@@ -134,15 +134,14 @@ def test_archived_standard_and_learning_files_are_unchanged_and_easy_banks_valid
         _validate_assessment_variant("llm_knowledge", "pretest", invalid, "easy")
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("group", ["A", "B"])
 def test_fixed_mode_scoring_review_and_no_cross_bank_fallback(isolated, mode, layout, group):
     client, factory, _ = isolated
     pid = create(client, mode, layout, group)
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
-    other = "standard" if mode == "easy" else "easy"
-    client.put("/api/admin/question-set", json={"mode": other})
+    other = "easy"
     client.put("/api/admin/option-order", json={"mode": "randomized" if layout == "debug_fixed" else "debug_fixed"})
     assert questions == client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     with factory() as db:
@@ -178,7 +177,7 @@ def test_fixed_mode_scoring_review_and_no_cross_bank_fallback(isolated, mode, la
     assert client.get(f"/api/experiment/{pid}/pretest").status_code == 503
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("initial_perfect", [False, True])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 def test_three_test_cap_with_snapshot_history_and_replay(isolated, mode, initial_perfect, layout):
@@ -211,7 +210,7 @@ def test_three_test_cap_with_snapshot_history_and_replay(isolated, mode, initial
         assert first_retest["selected_options"] == [{"label": "D" if mode == "standard" else "J", "body": "わからない。"}]
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("roles,expected", [(["correct", "correct", "correct"], None), (["correct", "M1", "M1"], "M1"), (["correct", "M1", "M3"], "M3"), (["unknown"], "unknown")])
 def test_all_modes_use_role_metadata_for_mixed_answers(isolated, mode, layout, roles, expected):
@@ -239,7 +238,7 @@ def test_all_modes_use_role_metadata_for_mixed_answers(isolated, mode, layout, r
         assert {a.is_correct for a in db.query(Attempt).filter_by(participant_id=pid)} == {expected is None}
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("role", ["M1", "M3", "unknown"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
@@ -263,7 +262,7 @@ def test_material_feedback_prefetch_and_teaching_targets_use_fixed_bank(isolated
     with factory() as db:
         spec = db.get(TutorTurn, first["turn_id"]).practice_question_json["source_spec"] if mode == "standard" else learning_question_spec("llm_knowledge", first["learning_stage"], 1, mode)
     assert first["practice_question"]["body"] == spec["body"]
-    client.put("/api/admin/question-set", json={"mode": "standard" if mode == "easy" else "easy"})
+    assert client.put("/api/admin/question-set", json={"mode": "easy"}).status_code == 422
     answered = client.post(f"/api/tutor-turns/{first['turn_id']}/respond", json={"selected_option_ids": role_ids(first["practice_question"], spec, "M3")}, headers={"Idempotency-Key": "first-learning-answer"})
     assert answered.status_code == 200, answered.text
     prefetch.wait_for_prefetch_tasks()
@@ -328,30 +327,119 @@ def test_provider_prompt_beginner_instruction_is_shared_but_diagnostics_are_not(
 def test_settings_and_aggregate_mode_are_independent_and_csv_denominators_match(isolated):
     client, factory, _ = isolated
     assert client.get("/api/admin/question-set").json()["mode"] == "standard"
+
+
+def test_registration_ignores_stale_easy_setting_and_easy_participants_are_read_only(isolated):
+    client, factory, _ = isolated
+    with factory() as db:
+        setting = db.get(RuntimeSetting, 1)
+        if setting is None:
+            setting = RuntimeSetting(id=1)
+            db.add(setting)
+        setting.question_set_mode = "easy"
+        db.commit()
+
+    response = client.post("/api/participants", json={
+        "assignment_code": "A", "consent_checked": True, "student_number": "STANDARD-AFTER-RETIREMENT",
+    })
+    assert response.status_code == 200, response.text
+    new_id = response.json()["participant_id"]
+    with factory() as db:
+        new_participant = db.get(Participant, new_id)
+        assert new_participant.question_set_mode == "standard"
+        assert new_participant.learning_content_version == LEARNING_CONTENT_VERSIONS["standard"]
+        assert db.get(RuntimeSetting, 1).question_set_mode == "easy"
+    assert client.get("/api/admin/question-set").json()["mode"] == "standard"
+    assert client.put("/api/admin/question-set", json={"mode": "easy"}).status_code == 422
+
+    easy_id = create(client, "standard")
+    questions, _ = submit(client, easy_id, "pretest", "standard", "M1")
+    with factory() as db:
+        participant = db.get(Participant, easy_id)
+        participant.question_set_mode = "easy"
+        saved_attempts = db.query(Attempt).filter_by(participant_id=easy_id).all()
+        evaluation = EvaluationSummary(
+            participant_id=easy_id,
+            group_condition=participant.group_condition,
+            pretest_score=0.25,
+            hypothesis_metrics_json={"retained": True},
+        )
+        db.add(evaluation)
+        db.commit()
+        evaluation_id = evaluation.id
+        attempts_before = [(row.id, row.selected_option_ids, row.question_body_snapshot, row.option_order_snapshot, row.is_correct) for row in saved_attempts]
+
+    current = client.get(f"/api/participants/{easy_id}/current-step")
+    assert current.status_code == 200 and current.json()["can_resume"] is False
+    assert current.json()["next_url"] == "/start"
+    for path in (
+        f"/api/experiment/{easy_id}/pretest",
+        f"/api/experiment/{easy_id}/retest",
+        f"/api/experiment/{easy_id}/final-test",
+        f"/api/participants/{easy_id}/learning-targets",
+        f"/api/participants/{easy_id}/survey",
+    ):
+        assert client.get(path).status_code == 409, path
+    assert client.post("/api/attempts", json={
+        "participant_id": easy_id,
+        "question_id": questions[0]["question_id"],
+        "phase": "pretest",
+        "selected_option_ids": [],
+    }, headers={"Idempotency-Key": "retired-easy-answer"}).status_code == 409
+    assert client.post(f"/api/participants/{easy_id}/evaluation-summary/recalculate").status_code == 409
+
+    log = client.get(f"/api/admin/participants/{easy_id}/logs")
+    assert log.status_code == 200, log.text
+    assert log.json()["participant"]["question_set_mode"] == "easy"
+    assert log.json()["participant"]["can_resume"] is False
+    assert client.get(f"/api/admin/participants/{easy_id}/logs.csv").status_code == 200
+    assert client.get("/api/admin/logs/overview.csv").status_code == 200
+    overview = client.get("/api/admin/logs/overview").json()
+    assert any(row["participant_id"] == easy_id and row["question_set_mode"] == "easy" for row in overview["participants"])
+    assert sum(row["participant_count"] for row in overview["groups"]) == 1
+
+    with factory() as db:
+        attempts_after = [(row.id, row.selected_option_ids, row.question_body_snapshot, row.option_order_snapshot, row.is_correct) for row in db.query(Attempt).filter_by(participant_id=easy_id).all()]
+        stored_summary = db.get(EvaluationSummary, evaluation_id)
+        assert attempts_after == attempts_before
+        assert stored_summary.pretest_score == 0.25
+        assert stored_summary.hypothesis_metrics_json == {"retained": True}
+        assert db.query(EvaluationSummary).filter_by(participant_id=easy_id).count() == 1
     assert client.get("/api/admin/question-set").headers["cache-control"] == "no-store"
     assert client.put("/api/admin/question-set", json={"mode": "invalid"}).status_code == 422
     assert client.put("/api/admin/question-set", json={"mode": "easy", "extra": 1}).status_code == 422
-    ids = {mode: [create(client, mode, group=g) for g in ("A", "B")] for mode in ("standard", "easy")}
-    for mode, pids in ids.items():
-        for pid in pids:
-            submit(client, pid, "pretest", mode)
-            submit(client, pid, "retest", mode, "correct")
-        summary = client.get(f"/api/admin/evaluation-summary?question_set_mode={mode}")
-        assert summary.status_code == 200, summary.text
-        assert summary.json()["question_set_mode"] == mode
-        assert [r["participant_count"] for r in summary.json()["groups"]] == [1, 1]
-        for name in ("hypothesis_metrics", "hypothesis_group_summary"):
-            exported = client.get(f"/api/admin/export/{name}.csv?question_set_mode={mode}")
-            assert exported.status_code == 200, exported.text
-            records = list(csv.DictReader(exported.text.splitlines()))
-            assert records and all(json.loads(r["details_json"])["question_set_mode"] == mode for r in records)
-            if name == "hypothesis_metrics":
-                assert {r["participant_id"] for r in records} == set(pids)
+    first_easy_id = easy_id
+    standard_ids = [create(client, "standard", group=g) for g in ("A", "B")]
+    easy_id = create(client, "standard", group="A")
+    with factory() as db:
+        db.get(Participant, easy_id).question_set_mode = "easy"
+        db.commit()
+    for pid in standard_ids:
+        submit(client, pid, "pretest", "standard")
+        submit(client, pid, "retest", "standard", "correct")
+    summary = client.get("/api/admin/evaluation-summary?question_set_mode=standard")
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["question_set_mode"] == "standard"
+    assert sorted(r["participant_count"] for r in summary.json()["groups"]) == [1, 2]
+    for name in ("hypothesis_metrics", "hypothesis_group_summary"):
+        exported = client.get(f"/api/admin/export/{name}.csv?question_set_mode=standard")
+        assert exported.status_code == 200, exported.text
+        records = list(csv.DictReader(exported.text.splitlines()))
+        assert records and all(json.loads(r["details_json"])["question_set_mode"] == "standard" for r in records)
+        if name == "hypothesis_metrics":
+            assert {r["participant_id"] for r in records} == {*standard_ids, new_id}
     assert client.get("/api/admin/evaluation-summary?question_set_mode=bad").status_code == 422
-    overview = client.get("/api/admin/logs/overview?question_set_mode=easy").json()
-    assert {p["participant_id"] for p in overview["participants"]} == {pid for pids in ids.values() for pid in pids}
-    assert {p["question_set_mode"] for p in overview["participants"]} == {"standard", "easy"}
-    assert client.get("/api/admin/question-set").json()["mode"] == "easy"
+    assert client.get("/api/admin/evaluation-summary?question_set_mode=easy").status_code == 422
+    assert client.get("/api/admin/logs/overview?question_set_mode=easy").status_code == 422
+    for name in ("hypothesis_metrics", "hypothesis_group_summary"):
+        assert client.get(f"/api/admin/export/{name}.csv?question_set_mode=easy").status_code == 422
+    overview = client.get("/api/admin/logs/overview").json()
+    assert {p["participant_id"] for p in overview["participants"]} == {*standard_ids, easy_id, first_easy_id, new_id}
+    modes_by_id = {p["participant_id"]: p["question_set_mode"] for p in overview["participants"]}
+    assert modes_by_id[first_easy_id] == modes_by_id[easy_id] == "easy"
+    assert all(modes_by_id[pid] == "standard" for pid in (*standard_ids, new_id))
+    assert sorted(row["participant_count"] for row in overview["groups"]) == [1, 2]
+    assert client.get("/api/admin/question-set").json()["mode"] == "standard"
 
 
 def test_migration_adds_nullable_modes_without_backfilling_or_mutating_old_trials(isolated, monkeypatch):
@@ -373,13 +461,13 @@ def test_migration_adds_nullable_modes_without_backfilling_or_mutating_old_trial
     response = client.post(f"/api/participants/{pid}/diagnose-pretest")
     assert response.status_code == 409 and response.json()["detail"]["error_code"] == "legacy_experiment_read_only"
     assert client.get("/api/admin/question-set").json()["mode"] == "standard"
-    fresh = create(client, "easy")
+    fresh = create(client, "standard")
     with factory() as db:
         assert db.get(Participant, pid).question_set_mode is None
-        assert db.get(Participant, fresh).question_set_mode == "easy"
+        assert db.get(Participant, fresh).question_set_mode == "standard"
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 def test_partial_tests_advance_all_terms_and_do_not_count_replays_twice(isolated, mode):
     client, factory, _ = isolated
     pid = create(client, mode)
@@ -413,35 +501,29 @@ def test_partial_tests_advance_all_terms_and_do_not_count_replays_twice(isolated
 
 def test_inconsistent_mode_is_rejected_and_old_six_review_does_not_substitute_current_bank(isolated):
     client, factory, _ = isolated
-    pid = create(client, "easy")
-    questions, _ = submit(client, pid, "pretest", "easy")
+    pid = create(client, "standard")
+    submit(client, pid, "pretest", "standard")
     with factory() as db:
         p = db.get(Participant, pid)
-        p.question_set_mode = "standard"
+        p.learning_content_version = LEARNING_CONTENT_VERSIONS["easy"]
         db.commit()
     failure = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"})
     assert failure.status_code == 503 and failure.json()["detail"]["error_code"] == "question_set_unavailable"
+    old_id = create(client, "standard")
     with factory() as db:
-        p = db.get(Participant, pid)
-        p.question_set_mode = None
-        p.experiment_spec_version = 6
-        p.protocol_id = "experiment-plan-2026-10-24-two-posttests-v1"
-        attempts = db.query(Attempt).filter_by(participant_id=pid).all()
-        for a in attempts:
-            a.option_order_snapshot = None
-            a.question_body_snapshot = None
-        db.delete(attempts[-1])
+        old = db.get(Participant, old_id)
+        old.question_set_mode = "easy"
+        old.experiment_spec_version = 7
+        old.protocol_id = "experiment-plan-2026-10-24-easy-version-v1"
         db.commit()
-        before = [(a.id, a.is_correct) for a in db.query(Attempt).filter_by(participant_id=pid)]
-    review = client.get(f"/api/participants/{pid}/learning-targets").json()["test_results"]
-    assert [q["question_body"] for q in review["results"][:2]] == [q["body"] for q in questions[:2]]
-    # This isolated database has no retired v1 bank: do not substitute its v2 replacement.
-    assert review["results"][2]["question_body"] is None
-    with factory() as db:
-        assert before == [(a.id, a.is_correct) for a in db.query(Attempt).filter_by(participant_id=pid)]
+        term = db.query(Term).filter_by(slug="llm_knowledge").one()
+        restored = experiment._test_result_question(db, old, term, "retest_2", "retest")
+        assert restored.variant_key == "retest_v2"
+        assert restored.construct_key.endswith("scenario-actions-easy-v1")
+    assert client.get(f"/api/participants/{old_id}/current-step").json()["can_resume"] is False
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("phase", ["retest", "final_test"])
 @pytest.mark.parametrize("use_idempotency", [False, True])
 def test_missing_question_term_stops_scoring_without_partial_updates(isolated, mode, phase, use_idempotency):

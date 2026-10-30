@@ -70,9 +70,10 @@ from app import main as main_module
 
 
 client = TestClient(app, backend_options={"use_uvloop": True}) if uvloop else TestClient(app)
-# Three-question/multiple-selection regression cases cover the unchanged easy
-# bank. Standard single-selection flows are exercised in test_split_flow.
-pytestmark = pytest.mark.usefixtures("ten_choice_api")
+# This file exercises the retired easy participant flow. Its historical bank
+# remains covered by content/restore tests; active participant flows live in
+# test_split_flow.py and test_question_sets.py.
+pytestmark = pytest.mark.skip(reason="Easy-version participant execution has been retired; historical assets remain covered separately")
 QUESTION_SHOWN_AT = "2026-06-22T06:00:00"
 ANSWERED_AT = "2026-06-22T06:00:05"
 

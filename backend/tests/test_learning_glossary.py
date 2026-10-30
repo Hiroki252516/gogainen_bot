@@ -132,7 +132,7 @@ def start_learning(mode, group):
     return pid, url, response.json()
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("labels", ["ABC", "DEF"])
 def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, restore_settings, monkeypatch):
@@ -194,10 +194,15 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
 
 
 def test_old_v7_question_lookup_uses_its_own_bank_without_snapshot(restore_settings):
-    pid, _, _ = start_learning("easy", "B")
+    participant = client.post("/api/participants", json={
+        "assignment_code": "B", "consent_checked": True, "student_number": "OLD-EASY-LOOKUP",
+    })
+    assert participant.status_code == 200, participant.text
+    pid = participant.json()["participant_id"]
     from app.models import Term
     with SessionLocal() as db:
         p = db.get(Participant, pid)
+        p.question_set_mode = "easy"
         p.experiment_spec_version = 7
         p.protocol_id = "experiment-plan-2026-10-24-easy-version-v1"
         db.commit()

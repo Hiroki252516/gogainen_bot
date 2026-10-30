@@ -79,7 +79,7 @@ from app.services.identity_mapping_cleanup import (
     recover_pending_identity_mapping_cleanups,
 )
 from app.services.option_order import current_option_order_mode, save_option_order_mode
-from app.services.question_sets import current_question_set_mode, save_question_set_mode
+from app.services.question_sets import current_question_set_mode, require_aggregate_question_set_mode, save_question_set_mode
 from app.services.learning_glossary import load_learning_glossary, public_glossary
 from app.core.question_sets import QuestionSetMode, STANDARD, question_set_mode as effective_question_set_mode
 from app.services import identity_mapping
@@ -532,6 +532,7 @@ async def api_diagnose_pretest(
 @app.get("/api/participants/{participant_id}/learning-targets")
 def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> dict:
     participant = get_participant(db, participant_id)
+    assert_current_experiment(participant)
     targets = learning_targets(db, participant_id)
     progress = post_pretest_test_progress(db, participant)
     return {
@@ -590,7 +591,9 @@ async def api_give_up_experiment(
 
 @app.get("/api/participants/{participant_id}/survey")
 def api_survey_context(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return survey_context(db, get_participant(db, participant_id))
+    participant = get_participant(db, participant_id)
+    assert_current_experiment(participant)
+    return survey_context(db, participant)
 
 
 @app.post("/api/tutor-turns/{turn_id}/material-view")
@@ -782,7 +785,7 @@ def api_recalculate(participant_id: str, db: Session = Depends(get_db)) -> dict:
 
 @app.get("/api/admin/evaluation-summary")
 def api_admin_summary(db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD) -> dict:
-    return admin_summary(db, question_set_mode)
+    return admin_summary(db, require_aggregate_question_set_mode(question_set_mode))
 
 
 class QuestionSetPayload(BaseModel):
@@ -940,7 +943,7 @@ def api_delete_identity_mapping(participant_id: str):
 
 @app.get("/api/admin/logs/overview")
 def api_admin_logs_overview(db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD) -> dict:
-    return admin_logs_overview(db, question_set_mode)
+    return admin_logs_overview(db, require_aggregate_question_set_mode(question_set_mode))
 
 
 @app.get("/api/admin/logs/overview.csv")
@@ -974,6 +977,8 @@ def api_admin_participant_logs_excel_csv(participant_id: str, db: Session = Depe
 
 @app.get("/api/admin/export/{name}.csv")
 def api_export_csv(name: str, db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD):
+    if name in {"hypothesis_metrics", "hypothesis_group_summary"}:
+        question_set_mode = require_aggregate_question_set_mode(question_set_mode)
     path = export_csv(db, name, question_set_mode)
     return FileResponse(path, media_type="text/csv", filename=path.name)
 

@@ -13,6 +13,7 @@ from app.core.question_sets import STANDARD, question_set_mode
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
 from app.services.split_assessment import uses_split, split_item_keys
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION
+from app.services.question_sets import require_aggregate_question_set_mode
 
 METRICS_VERSION = "six-hypotheses-v3-split"
 TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
@@ -151,7 +152,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
 
 
 def current_metrics(db: Session, mode: str = STANDARD) -> list[dict]:
-    mode = question_set_mode(mode)
+    mode = require_aggregate_question_set_mode(mode)
     participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
                                                   protocol_id=CURRENT_PROTOCOL_ID, consent_checked=True).order_by(Participant.created_at, Participant.id).all()
     return [participant_metrics(db, p) for p in participants if question_set_mode(p.question_set_mode) == mode]
@@ -192,7 +193,7 @@ def _group(rows):
 
 
 def group_metrics(rows: list[dict], mode: str = STANDARD) -> dict:
-    mode = question_set_mode(mode)
+    mode = require_aggregate_question_set_mode(mode)
     rows = [row for row in rows if row.get("question_set_mode", STANDARD) == mode]
     groups = [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group])} for group in ("control", "proposed")]
     differences = {key: groups[1][key]["mean"] - groups[0][key]["mean"] if all(g[key]["mean"] is not None for g in groups) else None for key in ("h1", "h2", "h3", "h4", "h5", "h6")}
@@ -208,7 +209,7 @@ def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool, mode: str 
     fields = ["metrics_version", "protocol_id", "group_condition", "participant_id", "display_code", "route", "metric", "value", "n", "mean", "median", "numerator", "denominator", "missing_count", "not_applicable_count", "status", "details_json"]
     import json
     records = []
-    mode = question_set_mode(mode)
+    mode = require_aggregate_question_set_mode(mode)
     rows = [row for row in rows if row.get("question_set_mode", STANDARD) == mode]
     source = group_metrics(rows, mode)
     if grouped:

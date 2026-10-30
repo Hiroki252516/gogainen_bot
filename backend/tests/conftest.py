@@ -26,20 +26,3 @@ try:
     seed_database(db)
 finally:
     db.close()
-
-
-@pytest.fixture
-def ten_choice_api():
-    """The supported easy bank still exercises the three-item API contract."""
-    from admin_client import AuthenticatedTestClient
-    from app.main import app
-    from app.services.prefetch import wait_for_prefetch_tasks
-
-    client = AuthenticatedTestClient(app)
-    previous = {name: client.get(f"/api/admin/{name}").json()["mode"] for name in ("question-set", "option-order")}
-    assert client.put("/api/admin/question-set", json={"mode": "easy"}).status_code == 200
-    assert client.put("/api/admin/option-order", json={"mode": "debug_fixed"}).status_code == 200
-    yield
-    wait_for_prefetch_tasks()
-    for name, mode in previous.items():
-        assert client.put(f"/api/admin/{name}", json={"mode": mode}).status_code == 200

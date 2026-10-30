@@ -64,7 +64,7 @@ from app.services.split_assessment import (
     split_item_keys,
     require_confirmation_spec,
 )
-from app.services.question_sets import current_question_set_mode
+from app.services.question_sets import current_question_set_mode, require_aggregate_question_set_mode
 from app.services.learning_glossary import glossary_snapshot, public_glossary
 from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
@@ -3750,7 +3750,7 @@ def _group_misconception_transition_summary(
 
 
 def admin_summary(db: Session, mode: str = STANDARD) -> dict[str, Any]:
-    mode = question_set_mode(mode)
+    mode = require_aggregate_question_set_mode(mode)
     participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID, consent_checked=True).all()
     participants = [p for p in participants if question_set_mode(p.question_set_mode) == mode]
     terms = _term_map(db)
@@ -4408,7 +4408,7 @@ def export_overview_logs_excel_csv(db: Session) -> Path:
 
 def export_csv(db: Session, name: str, mode: str = STANDARD) -> Path:
     if name in {"hypothesis_metrics", "hypothesis_group_summary"}:
-        mode = question_set_mode(mode)
+        mode = require_aggregate_question_set_mode(mode)
         path = Path(get_settings().export_dir) / f"{name}_{mode}.csv"
         return write_metrics_csv(path, current_metrics(db, mode), grouped=name == "hypothesis_group_summary", mode=mode)
     if name not in EXPORTS:

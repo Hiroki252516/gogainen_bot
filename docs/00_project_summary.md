@@ -2,6 +2,8 @@
 
 ## 仕様版28の現行コード
 
+2026-10-30から易しい版の新規実行を停止した。新規登録は通常版固定、既存易しい版参加者は閲覧専用で、易しい版の群集計・仮説CSVも停止する。参加者・回答・snapshot・評価・易しい版YAMLと問題IDは復元用に保持し、個別ログ・生ログ出力は維持する。詳細は[22](22_question_set_modes.md)と[14](14_testing_acceptance.md)。
+
 通常版のPRETEST・RETEST・内部final_testで、設問1・2の両方を保存した後に同じテスト画面内で選択内容と正誤を示し、続行で次の用語へ進む。設定・API・保存・受入条件は[40](40_question_pair_answer_review.md)を参照する。受入条件の自動検証は未実施。
 
 現在のコードは仕様版28 / experiment-plan-2026-10-30-question-review-v1。仕様版27の採用時記録[39](39_split_assessment.md)は保持する。受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
@@ -27,7 +29,7 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 現行コードは新規参加者に仕様版28とexperiment-plan-2026-10-30-question-review-v1を保存する。版27以下、旧protocol_id、NULL・未対応版は閲覧専用で保全する。既存行へ版・protocol・答え合わせ設定・確認時刻を補完しない。
 
-通常版テストはsplit-actions-v1により、3用語×2設問の6設問・4択単一選択となる。設問3はデータだけ保持し、activeな問題・表示・採点には使わない。易しい版は従来形式。テスト上限・採点・回次・問題内容は[39](39_split_assessment.md)を参照する。答え合わせは通常版のPRETEST・RETEST・内部final_testに適用し、採点は6設問完了後に行う。学習確認と評価式は変更しない。
+通常版テストはsplit-actions-v1により、3用語×2設問の6設問・4択単一選択となる。設問3はデータだけ保持し、activeな問題・表示・採点には使わない。易しい版の従来形式は履歴資産として保持するが、現在の参加者フローでは利用しない。テスト上限・採点・回次・問題内容は[39](39_split_assessment.md)を参照する。答え合わせは通常版のPRETEST・RETEST・内部final_testに適用し、採点は6設問完了後に行う。学習確認と評価式は変更しない。
 
 material-viewの初回表示時刻から実績を数え、未利用の先行生成を学習回数・教材表示者へ算入しない。新アンケート・指標は版付きJSONへ保存し、旧5段階値や既存評価列を変換しない。
 
@@ -37,6 +39,6 @@ A〜C正解等の配置はデバッグ用であり収集に使わない。管理
 
 検証結果は[14](14_testing_acceptance.md)、切替・運用は[18](18_implementation_blueprint.md)・[19](19_experiment_operation_runbook.md)。過去の資料・検証・生AIログは書き換えない。
 
-## 問題版の切替
+## 易しい版の履歴保全
 
-現行コードでは通常版と易しい版を並行保持し、問題版を登録時に固定する。仕様版28の答え合わせ設定は通常版の新規参加者に限り登録時に固定し、易しい版には適用しない。各問題版内で両群を比較・集計し、版をまたぐ成績を同等と扱わない。[運用と契約](22_question_set_modes.md)・[問題全文](23_easy_question_bank.md)を参照する。
+問題版設定のAPI形状と保存済みquestion_set_modeは後方互換のため維持するが、管理画面は切替を表示せず、GETは通常版を返す。新規登録も保存済みRuntimeSettingがeasyでも通常版に固定する。易しい版の参加者APIによる再開・回答は拒否し、表示のcurrent-stepは閲覧専用を返す。evaluation-summary・logs/overviewの群集計、6仮説CSVはeasy指定を422で拒否する。参加者一覧・個別ログ・参加者別CSV・全件生ログには既存記録を表示する。question_set_mode列、YAML、問題ID、snapshot、DB記録、旧版用の復元対応は変更・削除しない。[停止後の運用と契約](22_question_set_modes.md)・[履歴用問題全文](23_easy_question_bank.md)を参照する。

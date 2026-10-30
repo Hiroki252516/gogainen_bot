@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.core.question_sets import LEARNING_CONTENT_VERSIONS, question_set_mode
+from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD, question_set_mode
 
 
 CURRENT_EXPERIMENT_SPEC_VERSION = 28
@@ -14,10 +14,15 @@ MAX_LEARNING_CONFIRMATION_ATTEMPTS = 1
 
 
 def can_resume(participant: Any) -> bool:
-    return (
-        participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
-        and getattr(participant, "protocol_id", None) == CURRENT_PROTOCOL_ID
-    )
+    if (
+        participant.experiment_spec_version != CURRENT_EXPERIMENT_SPEC_VERSION
+        or getattr(participant, "protocol_id", None) != CURRENT_PROTOCOL_ID
+    ):
+        return False
+    try:
+        return question_set_mode(getattr(participant, "question_set_mode", None)) == STANDARD
+    except ValueError:
+        return False
 
 
 def assert_current_experiment(participant: Any) -> None:

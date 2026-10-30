@@ -22,13 +22,10 @@ from split_api_support import acknowledge_all_question_reviews, case_roles, sele
 client = TestClient(app)
 
 
-@pytest.fixture(params=["standard", "easy"], autouse=True)
-def prefetch_bank(request):
-    previous = client.get("/api/admin/question-set").json()["mode"]
-    assert client.put("/api/admin/question-set", json={"mode": request.param}).status_code == 200
+@pytest.fixture(autouse=True)
+def prefetch_bank():
     yield
     wait_for_prefetch_tasks()
-    assert client.put("/api/admin/question-set", json={"mode": previous}).status_code == 200
 
 
 def test_immediately_completed_prefetch_does_not_deadlock(monkeypatch):
