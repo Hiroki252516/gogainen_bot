@@ -93,6 +93,11 @@ export default function LearningTargetsPage() {
       <AppShell step="学習対象">
         {!loaded ? <section className="panel" role="status">読み込み中...</section> : (
         <section className="panel stack">
+        {isRetestResult && currentStep === "learning_targets" ? (
+          <div className="give-up-footer sticky-exit">
+            <GiveUpButton mode="experiment" />
+          </div>
+        ) : null}
         <h1>{testResults.test_round_label ? `${testResults.test_round_label}の確認結果` : "今回の確認結果"}</h1>
         {error ? <div className="danger">{error}</div> : null}
         <div className="stack">
@@ -158,11 +163,6 @@ export default function LearningTargetsPage() {
         ) : (
           <span className="muted">学習対象を確認しています。</span>
         )}
-        {isRetestResult && currentStep === "learning_targets" ? (
-          <div className="give-up-footer corner-exit">
-            <GiveUpButton mode="experiment" />
-          </div>
-        ) : null}
         </section>
         )}
       </AppShell>
