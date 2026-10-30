@@ -17,6 +17,7 @@ from datetime import datetime
 
 from app.models import Participant, Term, TutorSession, TutorTurn
 from app.services import pretest_display
+from app.services import question_review_display
 from pydantic import StrictBool
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
@@ -40,6 +41,7 @@ from app.services.experiment import (
     create_participant,
     delete_participant,
     create_tutor_session,
+    acknowledge_question_review,
     experiment_progress,
     export_overview_logs_excel_csv,
     export_overview_logs_csv,
@@ -56,6 +58,7 @@ from app.services.experiment import (
     participant_logs,
     participant_give_up_counts,
     pretest_results,
+    pending_question_review,
     post_pretest_test_progress,
     question_payloads,
     recalculate_evaluation,
@@ -387,19 +390,37 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
 
 @app.get("/api/experiment/{participant_id}/pretest")
 def get_pretest(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return {"phase": "pretest", "questions": question_payloads(db, participant_id, "pretest")}
+    questions = question_payloads(db, participant_id, "pretest")
+    return {"phase": "pretest", "questions": questions, "pending_question_review": pending_question_review(db, participant_id, "pretest", questions)}
 
 
 @app.get("/api/experiment/{participant_id}/retest")
 def get_retest(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return {"phase": "retest", "questions": question_payloads(db, participant_id, "retest")}
+    questions = question_payloads(db, participant_id, "retest")
+    return {"phase": "retest", "questions": questions, "pending_question_review": pending_question_review(db, participant_id, "retest", questions)}
 
 
 
 
 @app.get("/api/experiment/{participant_id}/final-test")
 def get_final_test(participant_id: str, db: Session = Depends(get_db)) -> dict:
-    return {"phase": "final_test", "questions": question_payloads(db, participant_id, "final_test")}
+    questions = question_payloads(db, participant_id, "final_test")
+    return {"phase": "final_test", "questions": questions, "pending_question_review": pending_question_review(db, participant_id, "final_test", questions)}
+
+
+class QuestionReviewAcknowledgementPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    phase: Literal["pretest", "retest", "final_test"]
+    term_slug: str
+
+
+@app.post("/api/participants/{participant_id}/question-review-acknowledgements")
+def api_acknowledge_question_review(
+    participant_id: str,
+    payload: QuestionReviewAcknowledgementPayload,
+    db: Session = Depends(get_db),
+) -> dict:
+    return acknowledge_question_review(db, participant_id, payload.phase, payload.term_slug)
 
 
 @app.post("/api/attempts")
@@ -716,6 +737,11 @@ class PretestDisplayPayload(BaseModel):
     enabled: StrictBool
 
 
+class QuestionReviewDisplayPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: StrictBool
+
+
 @app.get("/api/admin/pretest-result-display")
 def api_pretest_display(db: Session = Depends(get_db)):
     return JSONResponse({"enabled": pretest_display.current_setting(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
@@ -724,6 +750,16 @@ def api_pretest_display(db: Session = Depends(get_db)):
 @app.put("/api/admin/pretest-result-display")
 def api_save_pretest_display(payload: PretestDisplayPayload, db: Session = Depends(get_db)):
     return {"enabled": pretest_display.save_setting(db, payload.enabled), "applies_to": "new_participants_only"}
+
+
+@app.get("/api/admin/question-review-display")
+def api_question_review_display(db: Session = Depends(get_db)):
+    return JSONResponse({"enabled": question_review_display.current_setting(db), "applies_to": "new_standard_participants_only"}, headers={"Cache-Control": "no-store"})
+
+
+@app.put("/api/admin/question-review-display")
+def api_save_question_review_display(payload: QuestionReviewDisplayPayload, db: Session = Depends(get_db)):
+    return {"enabled": question_review_display.save_setting(db, payload.enabled), "applies_to": "new_standard_participants_only"}
 
 
 @app.put("/api/admin/question-set")
@@ -753,6 +789,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
             {
                 "participant_id": row.id,
                 "show_pretest_results": pretest_display.enabled(row.show_pretest_results),
+                "show_question_reviews": row.show_question_reviews,
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,
                 "option_order_mode": row.option_order_mode or "debug_fixed",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GiveUpButton } from "@/components/GiveUpButton";
 import { type Glossary } from "@/components/LearningGlossary";
@@ -28,6 +28,17 @@ type Question = {
   submitted_answer?: SubmittedAnswer | null;
 };
 type ScoreResult = { next_url?: string; learning_target_slugs?: string[] };
+type PendingQuestionReview = {
+  phase: string;
+  term_slug: string;
+  term_label: string;
+  results: Array<{
+    question_number: 1 | 2;
+    selected_option: { label: string; body: string };
+    is_correct: boolean;
+  }>;
+};
+type TestQuestionsResponse = { questions: Question[]; pending_question_review?: PendingQuestionReview | null };
 
 function multipleSelectionState(options: Option[], selectedIds: string[], requiredSelections = 3) {
   const selectedOptions = options.filter((option) => selectedIds.includes(option.option_id));
@@ -68,6 +79,7 @@ export function QuestionRunner({
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
+  const [pendingQuestionReview, setPendingQuestionReview] = useState<PendingQuestionReview | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -77,6 +89,7 @@ export function QuestionRunner({
   const [displayTitle, setDisplayTitle] = useState(title);
   const [questionStartedAt, setQuestionStartedAt] = useState(() => Date.now());
   const [questionShownAt, setQuestionShownAt] = useState(() => new Date().toISOString());
+  const completionStarted = useRef(false);
   const current = questions[index];
   const preserveQuestionLines = (current?.term_slug === "llm_knowledge"
     && ((current.body.startsWith("企業が、社員からの「パスワードを忘れた」")
@@ -98,18 +111,65 @@ export function QuestionRunner({
         || current.body.startsWith("企業が、利用者からの問い合わせに対応するAIサービスを開発している。"))
       && current.body.includes("\n\nこの目的を実現するための情報の保存・利用方法として、"));
 
+  const completePhase = useCallback(async () => {
+    if (completionStarted.current) return;
+    completionStarted.current = true;
+    if (!scorePath) {
+      router.replace(nextPath);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const id = requireParticipant();
+      const result = await postIdempotent<ScoreResult>(
+        scorePath(id),
+        {},
+        `score:${id}:${phase}`,
+      );
+      if (Array.isArray(result.learning_target_slugs)) {
+        localStorage.setItem("learning_targets", JSON.stringify(result.learning_target_slugs));
+      }
+      const reviewRequired = phase === "retest" || phase === "final_test";
+      router.replace(reviewRequired ? "/learning-targets" : (result.next_url || nextPath));
+    } catch (err) {
+      completionStarted.current = false;
+      setError(err instanceof Error ? err.message : String(err));
+      setSaving(false);
+    }
+  }, [nextPath, phase, router, scorePath]);
+
+  const reviewQuestionIndex = useCallback((review: PendingQuestionReview, rows: Question[]) => {
+    const matching = rows.reduce((lastIndex, question, questionIndex) => (
+      question.term_slug === review.term_slug ? questionIndex : lastIndex
+    ), -1);
+    return matching;
+  }, []);
+
   useEffect(() => {
     const id = requireParticipant();
-    api<{ questions: Question[] }>(sourcePath(id))
+    api<TestQuestionsResponse>(sourcePath(id))
       .then((data) => {
         setQuestions(data.questions);
+        if (data.pending_question_review) {
+          setPendingQuestionReview(data.pending_question_review);
+          setIndex(reviewQuestionIndex(data.pending_question_review, data.questions));
+        } else {
+          const firstUnanswered = data.questions.findIndex((question) => question.answer_status !== "submitted");
+          if (firstUnanswered >= 0) {
+            setIndex(firstUnanswered);
+          } else if (data.questions.length) {
+            setIndex(data.questions.length - 1);
+            void completePhase();
+          }
+        }
         const nextTitle = data.questions[0]?.test_round_label || title;
         setDisplayTitle(nextTitle);
         onDisplayTitle?.(nextTitle);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [onDisplayTitle, sourcePath, title]);
+  }, [completePhase, onDisplayTitle, reviewQuestionIndex, sourcePath, title]);
 
   const progress = useMemo(
     () => (questions.length ? `${index + 1} / ${questions.length}` : ""),
@@ -133,31 +193,7 @@ export function QuestionRunner({
       setSaving(false);
       return;
     }
-    if (!scorePath) {
-      router.replace(nextPath);
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-    try {
-      const id = requireParticipant();
-      const result = await postIdempotent<ScoreResult>(
-        scorePath(id),
-        {},
-        `score:${id}:${phase}`,
-      );
-      if (Array.isArray(result.learning_target_slugs)) {
-        localStorage.setItem("learning_targets", JSON.stringify(result.learning_target_slugs));
-      }
-      // Test results are reviewed before moving to the next phase. The review
-      // page reads the participant's current step to render the right action.
-      const reviewRequired = phase === "retest" || phase === "final_test";
-      router.replace(reviewRequired ? "/learning-targets" : (result.next_url || nextPath));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setSaving(false);
-    }
+    await completePhase();
   }
 
   async function submit() {
@@ -192,14 +228,29 @@ export function QuestionRunner({
     const attemptScope = `attempt:${id}:${phase}:${current.question_id}:${current.test_round || ""}`;
     try {
       await postIdempotent("/api/attempts", attemptBody, attemptScope);
-      await advanceAfterAnswer();
+      const latest = await api<TestQuestionsResponse>(sourcePath(id));
+      setQuestions(latest.questions);
+      if (latest.pending_question_review) {
+        setPendingQuestionReview(latest.pending_question_review);
+        setIndex(reviewQuestionIndex(latest.pending_question_review, latest.questions));
+        setSaving(false);
+      } else {
+        setPendingQuestionReview(null);
+        await advanceAfterAnswer();
+      }
     } catch (err) {
       if (err instanceof ApiError && (err.code === "answer_already_submitted" || err.code === "idempotency_key_conflict")) {
         clearPendingIdempotency(attemptScope);
         let refreshed = false;
+        let hasPendingReview = false;
         try {
-          const latest = await api<{ questions: Question[] }>(sourcePath(id));
+          const latest = await api<TestQuestionsResponse>(sourcePath(id));
           setQuestions(latest.questions);
+          if (latest.pending_question_review) {
+            hasPendingReview = true;
+            setPendingQuestionReview(latest.pending_question_review);
+            setIndex(reviewQuestionIndex(latest.pending_question_review, latest.questions));
+          }
           refreshed = true;
         } catch {
           // Keep the locked state even if the follow-up read also fails.
@@ -209,7 +260,7 @@ export function QuestionRunner({
             questionIndex === index ? { ...question, answer_status: "submitted" } : question
           )));
         }
-        setError("この問題はすでに回答済みです。回答は変更できません。次の問題へ進んでください。");
+        setError(hasPendingReview ? "" : "この問題はすでに回答済みです。回答は変更できません。次の問題へ進んでください。");
       } else {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -217,7 +268,69 @@ export function QuestionRunner({
     }
   }
 
+  async function continueFromQuestionReview() {
+    if (!pendingQuestionReview || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const id = requireParticipant();
+      await api(`/api/participants/${id}/question-review-acknowledgements`, {
+        method: "POST",
+        body: JSON.stringify({ phase, term_slug: pendingQuestionReview.term_slug }),
+      });
+      const latest = await api<TestQuestionsResponse>(sourcePath(id));
+      setQuestions(latest.questions);
+      if (latest.pending_question_review) {
+        setPendingQuestionReview(latest.pending_question_review);
+        setIndex(reviewQuestionIndex(latest.pending_question_review, latest.questions));
+        setSaving(false);
+        return;
+      }
+      setPendingQuestionReview(null);
+      const firstUnanswered = latest.questions.findIndex((question) => question.answer_status !== "submitted");
+      if (firstUnanswered >= 0) {
+        setIndex(firstUnanswered);
+        setSaving(false);
+        return;
+      }
+      setIndex(Math.max(0, latest.questions.length - 1));
+      await completePhase();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setSaving(false);
+    }
+  }
+
   if (loading) return <div className="panel">読み込み中...</div>;
+  if (pendingQuestionReview) {
+    return (
+      <div className="panel stack">
+        <div className="topbar">
+          <h1>{displayTitle}</h1>
+        </div>
+        <div className="notice stack" role="status">
+          <h2>{pendingQuestionReview.term_label}の答え合わせ</h2>
+          {pendingQuestionReview.results.map((result) => (
+            <div className="notice" key={result.question_number}>
+              <strong>設問{toFullWidthDigits(result.question_number)}：{result.is_correct ? "正解" : "不正解"}</strong>
+              <p>あなたの選択：{result.selected_option.label}. {result.selected_option.body}</p>
+            </div>
+          ))}
+        </div>
+        {error ? <div className="danger" role="alert">{error}</div> : null}
+        <div className="actions corner-primary">
+          <button type="button" onClick={continueFromQuestionReview} disabled={saving}>
+            {saving ? "保存中..." : "続行"}
+          </button>
+        </div>
+        {allowExperimentGiveUp ? (
+          <div className="give-up-footer corner-exit">
+            <GiveUpButton mode="experiment" disabled={saving} />
+          </div>
+        ) : null}
+      </div>
+    );
+  }
   if (error && !current) return <div className="panel danger">{error}</div>;
   if (!current) return <div className="panel">問題がありません。</div>;
 
@@ -302,7 +415,7 @@ export function QuestionRunner({
           {isAnswered ? (index + 1 === questions.length ? "完了" : "次の問題へ") : index + 1 === questions.length ? "完了" : "次へ"}
         </button>
       </div>
-      <span className="muted">このフェーズでは正誤や正解の解説は表示されません。</span>
+      <span className="muted">回答中は正誤を表示しません。</span>
       {allowExperimentGiveUp ? (
         <div className="give-up-footer corner-exit">
           <GiveUpButton mode="experiment" disabled={saving} />

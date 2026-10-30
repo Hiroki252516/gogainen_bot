@@ -16,6 +16,7 @@ type Participant = {
   can_resume: boolean;
   experiment_spec_version: number | null;
   question_set_mode: "standard" | "easy";
+  show_question_reviews: boolean | null;
   retest_cycles_completed: number | null;
   post_pretest_tests_completed: number | null;
   post_pretest_test_limit: number | null;
@@ -134,7 +135,9 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   usability_rating: "操作のしやすさ",
   helpfulness_rating: "役立ち度",
   perceived_hint_amount: "ヒント・説明の量",
-  free_comment: "自由記述"
+  free_comment: "自由記述",
+  show_question_reviews: "設問ごとの答え合わせ",
+  question_review_acknowledged_at: "答え合わせ確認時刻"
 };
 
 export default function AdminPage() {
@@ -154,6 +157,9 @@ export default function AdminPage() {
   const [pretestDisplay, setPretestDisplay] = useState<{ enabled: boolean } | null>(null);
   const [pretestDisplaySaving, setPretestDisplaySaving] = useState(false);
   const [pretestDisplayError, setPretestDisplayError] = useState("");
+  const [questionReviewDisplay, setQuestionReviewDisplay] = useState<{ enabled: boolean } | null>(null);
+  const [questionReviewDisplaySaving, setQuestionReviewDisplaySaving] = useState(false);
+  const [questionReviewDisplayError, setQuestionReviewDisplayError] = useState("");
   const [summaryMode, setSummaryMode] = useState<QuestionSetMode>("standard");
   const [summaryError, setSummaryError] = useState("");
   const [summaryRefresh, setSummaryRefresh] = useState(0);
@@ -177,6 +183,7 @@ export default function AdminPage() {
     api("/api/admin/logs/overview").then(setOverview).catch((err) => setLogError(err.message));
     api<QuestionSetSetting>("/api/admin/question-set").then(setQuestionSet).catch((err) => setQuestionSetError(err.message));
     api<{ enabled: boolean }>("/api/admin/pretest-result-display").then(setPretestDisplay).catch((err) => setPretestDisplayError(err.message));
+    api<{ enabled: boolean }>("/api/admin/question-review-display").then(setQuestionReviewDisplay).catch((err) => setQuestionReviewDisplayError(err.message));
     api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setAiStatusError(err instanceof Error ? err.message : String(err)));
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
@@ -344,6 +351,19 @@ export default function AdminPage() {
       setPretestDisplayError(err instanceof Error ? err.message : String(err));
     } finally {
       setPretestDisplaySaving(false);
+    }
+  }
+
+  async function updateQuestionReviewDisplay(enabled: boolean) {
+    if (!questionReviewDisplay || questionReviewDisplaySaving) return;
+    setQuestionReviewDisplaySaving(true);
+    setQuestionReviewDisplayError("");
+    try {
+      setQuestionReviewDisplay(await api<{ enabled: boolean }>("/api/admin/question-review-display", { method: "PUT", body: JSON.stringify({ enabled }) }));
+    } catch (err) {
+      setQuestionReviewDisplayError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setQuestionReviewDisplaySaving(false);
     }
   }
 
@@ -526,6 +546,17 @@ export default function AdminPage() {
               {pretestDisplayError ? <p className="danger" role="alert">{pretestDisplayError}</p> : null}
             </div>
             <div className="notice question-set-setting">
+              <label className="pretest-display-toggle">
+                <input type="checkbox" role="switch" checked={questionReviewDisplay?.enabled ?? false}
+                  disabled={!questionReviewDisplay || questionReviewDisplaySaving}
+                  onChange={(event) => updateQuestionReviewDisplay(event.target.checked)} />
+                設問ごとの答え合わせ
+              </label>
+              <p className="muted">通常版の新規参加者のみ（初期値ON）</p>
+              {questionReviewDisplaySaving ? <p role="status">保存中...</p> : null}
+              {questionReviewDisplayError ? <p className="danger" role="alert">{questionReviewDisplayError}</p> : null}
+            </div>
+            <div className="notice question-set-setting">
               <strong>新規参加者に適用する問題版</strong>
               <p>{questionSet ? questionSetLabel(questionSet.mode) : "設定を確認中"}</p>
               <div className="reasoning-effort-buttons option-order-buttons" role="group" aria-label="新規参加者に適用する問題版">
@@ -625,7 +656,7 @@ export default function AdminPage() {
           </div>
           <p className="muted">以下の従来保存値・推移は参考情報です。6仮説の確定指標は専用の集計欄を参照してください。</p>
           <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
-          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["question_set_mode", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["question_set_mode", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "created_at"]} />
           <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["question_set_mode", "display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
         <HypothesisMetrics data={summary?.hypotheses} />
@@ -637,6 +668,7 @@ export default function AdminPage() {
                 <th>ID</th>
                 <th>条件</th>
                 <th>問題版</th>
+                <th>設問ごとの答え合わせ</th>
                 <th>進捗</th>
                 <th>完了</th>
                 <th>事前テスト後の回数</th>
@@ -651,6 +683,7 @@ export default function AdminPage() {
                   <td>{p.display_code}</td>
                   <td>{p.group_condition}</td>
                   <td>{questionSetLabel(p.question_set_mode)}</td>
+                  <td>{p.show_question_reviews === null ? "対象外" : p.show_question_reviews ? "ON" : "OFF"}</td>
                   <td>{p.can_resume ? p.current_step : `旧試用（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
                   <td>
@@ -694,6 +727,7 @@ export default function AdminPage() {
                 <p>学習後の再テスト: {participantLog.participant.retest_cycles_completed ?? "-"}回</p>
                 <p>事前テスト後のテスト: {participantLog.participant.post_pretest_tests_completed ?? "-"} / {participantLog.participant.post_pretest_test_limit ?? "-"}回（学習前の追加テストを含む）</p>
                 <p>事前テストの結果表示: {participantLog.participant.show_pretest_results === false ? "非表示" : "表示"}</p>
+                <p>設問ごとの答え合わせ: {participantLog.participant.show_question_reviews === null ? "対象外" : participantLog.participant.show_question_reviews ? "表示" : "非表示"}</p>
                 <p>
                   終了理由: {participantLog.participant.completion_reason === "give_up"
                     ? "実験ギブアップ"
@@ -732,7 +766,7 @@ export default function AdminPage() {
                 </details>
               ) : null}
               <LogList title="アンケート回答" rows={participantLog.surveys} fields={["phase", "survey_version", "responses", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]} />
-              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["question_set_mode", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["question_set_mode", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
             </>

@@ -1,9 +1,17 @@
 # 現行API
 
+## 仕様版28のペア答え合わせAPI
+
+GET/PUT /api/admin/question-review-display は管理認証下で、{ enabled: true/false, applies_to: "new_standard_participants_only" }を扱う。enabledは厳密なbooleanとする。既定値はtrueとし、参加者登録時に通常版だけへ固定する。
+
+既存のpretest/retest/final-test取得APIは、設定ON・仕様版28・通常版において、同じ用語の設問1・2がともに保存済みで未確認の場合だけpending_question_reviewを返す。結果にはphase、term_slug、term_label、各設問番号、選択済み選択肢のlabel/body、is_correctだけを含め、正答キー・未選択肢・解説・診断情報を含めない。単一設問だけの回答では返さない。
+
+POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slugを受け取り、確認時刻を設問2のAttemptへ保存する。確認済みの再送は冪等とし、不完全なペアや現在表示中ではないペアは拒否する。採点APIは未確認ペアがある状態での進行を拒否する。詳細と受入条件は[40](40_question_pair_answer_review.md)。
+
 ## 事前結果表示設定（issue-204）
 
 GET/PUT `/api/admin/pretest-result-display`は管理認証下で厳密なbooleanのenabledとapplies_to=new_participants_onlyを扱う。設定はDB保存し、新規参加者のshow_pretest_resultsへ固定する。NULLは従来の表示ありと解釈し既存行を補完しない。
-診断・学習対象APIはreview_requiredとnext_urlを返す。非表示では事前結果配列を空にし、学習または追加テストへ進む。再テストと内部final_testの結果は表示する。現在位置APIも非表示時の学習再開先へ誘導する。仕様版27・protocol・採点は変更しない。
+診断・学習対象APIはreview_requiredとnext_urlを返す。非表示では事前結果配列を空にし、学習または追加テストへ進む。再テストと内部final_testの結果は表示する。現在位置APIも非表示時の学習再開先へ誘導する。従来のprotocol・採点は維持し、仕様版28では設問ペア表示の設定と確認状態を追加する。
 
 診断応答にはlearning_target_slugsも含め、結果画面を通らない経路でも学習進捗用の一覧を保存できるようにする。非表示でlearning_targets状態なのに学習対象が空の場合は503（learning_navigation_unavailable）とし、同じ画面のURLを返したり、GETで進行状態を修復したりしない。
 
@@ -25,7 +33,7 @@ GET/PUT `/api/admin/pretest-result-display`は管理認証下で厳密なboolean
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。実験仕様版26と新protocol_idの両方で進行可否を判定する。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版28とexperiment-plan-2026-10-30-question-review-v1の両方で進行可否を判定する。
 
 SurveyPayloadはservices/research_protocol.pyで定義する。experiences（chat/coding_assistance/cli/apiの厳密boolean）、general_ratings（ai_usage_frequency/self_rated_ai_knowledge/system_usability/system_clarity）、material_ratings（clarity/readability/japanese_clarity/difficulty_appropriateness/learning_usefulness/amount_appropriateness）、必須free_commentを受け付ける。評定は厳密な整数1〜10。material_ratingsは未表示者のみnull、表示者は6項目必須。余分なキー・旧フォーム・空白のみのコメントを拒否する。
 

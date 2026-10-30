@@ -2,6 +2,8 @@
 
 実験計画書と承認された実装計画に沿うM1/M3/unknown。現行taxonomy版はm1-m3-unknown-v3、実装は[misconception_taxonomy.py](../backend/app/ai/misconception_taxonomy.py)。
 
+仕様版28の設問ペア答え合わせは正誤と本人の選択内容だけを表示し、内部分類・群・方略を参加者へ公開しない。taxonomy、採点・分類ロジックは変更しない。[答え合わせ仕様](40_question_pair_answer_review.md)。
+
 | 分類 | 選択記録としての意味 | 方略 | 目標の教授内容 |
 | --- | --- | --- | --- |
 | M1 | 概念の働き・仕組みに関する個別の主張の誤り | belief_revision | 誤った主張と正しい説明、反例、誤りの理由・仕組み。明示的反駁を標準とする |
