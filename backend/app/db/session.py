@@ -30,6 +30,7 @@ def _ensure_lightweight_schema_updates() -> None:
         "participants": [
             ("show_pretest_results", "BOOLEAN"),
             ("question_set_mode", "VARCHAR(32)"),
+            ("test_page_mode", "VARCHAR(32)"),
             ("completion_reason", "TEXT"),
             ("learning_content_version", "INTEGER"),
             ("experiment_spec_version", "INTEGER"),
@@ -51,6 +52,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("question_body_snapshot", "TEXT"),
             ("option_order_snapshot", json_type),
             ("glossary_snapshot", json_type),
+            ("test_page_timing_json", json_type),
             ("selected_option_ids", json_type),
         ],
         "tutor_turns": [

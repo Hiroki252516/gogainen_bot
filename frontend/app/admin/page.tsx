@@ -87,6 +87,11 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   display_code: "被験者",
   legacy_read_only: "試用区分",
   question_set_mode: "問題版",
+  test_page_mode: "テスト表示方式（登録値）",
+  effective_test_page_mode: "テスト表示方式",
+  test_timing_unit: "テスト時間の単位",
+  response_time_unit: "回答時間の単位",
+  test_page_timing_json: "用語ページ計測",
   source_type: "記録種別",
   test_round: "周回",
   term_slug: "用語",
@@ -625,7 +630,7 @@ export default function AdminPage() {
           </div>
           <p className="muted">以下の従来保存値・推移は参考情報です。6仮説の確定指標は専用の集計欄を参照してください。</p>
           <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
-          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["question_set_mode", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["question_set_mode", "test_page_mode", "test_timing_unit", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "response_time_unit", "test_page_timing_json", "created_at"]} />
           <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["question_set_mode", "display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
         <HypothesisMetrics data={summary?.hypotheses} />
@@ -688,6 +693,8 @@ export default function AdminPage() {
               <div className="notice">
                 <strong>{participantLog.participant.display_code}</strong>
                 <p>問題版: {questionSetLabel(participantLog.participant.question_set_mode)}</p>
+                <p>テスト表示方式: {participantLog.participant.effective_test_page_mode === "per_term" ? "用語ごと（2設問／ページ）" : "設問ごと"}</p>
+                <p>テスト時間の計測単位: {participantLog.participant.test_timing_unit === "term_page" ? "用語ページ" : "設問"}</p>
                 <p>
                   {participantLog.participant.group_condition} / {participantLog.participant.current_step}
                 </p>
@@ -732,7 +739,7 @@ export default function AdminPage() {
                 </details>
               ) : null}
               <LogList title="アンケート回答" rows={participantLog.surveys} fields={["phase", "survey_version", "responses", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]} />
-              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["question_set_mode", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
+              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["question_set_mode", "test_page_mode", "test_timing_unit", "response_time_unit", "test_page_timing_json", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
             </>
@@ -1079,6 +1086,8 @@ function SessionLog({ sessions }: { sessions: any[] }) {
 function formatCell(field: string, value: any) {
   if (value === null || value === undefined) return "-";
   if (field === "question_set_mode") return questionSetLabel(value);
+  if (field === "test_page_mode" || field === "effective_test_page_mode") return value === "per_term" ? "用語ごと（2設問／ページ）" : "設問ごと";
+  if (field === "test_timing_unit" || field === "response_time_unit") return value === "term_page" ? "用語ページ" : value === "per_question" ? "設問" : String(value);
   if (typeof value === "boolean") {
     if (field === "legacy_read_only") return value ? "旧試用（閲覧専用）" : "現行";
     if (field === "is_correct") return value ? "正解" : "不正解";

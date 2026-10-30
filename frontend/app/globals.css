@@ -283,6 +283,26 @@ p {
   min-width: 0;
 }
 
+.term-page-question {
+  min-width: 0;
+}
+
+.term-page-question + .term-page-question {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.term-page-question-body {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.term-page-primary,
+.term-page-exit {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .glossary-sidebar {
   display: none;
 }
@@ -317,6 +337,10 @@ p {
 @media (max-width: 1099px) {
   .glossary-layout.has-glossary {
     padding-bottom: 64px;
+  }
+
+  .term-page-runner.glossary-layout.has-glossary {
+    padding-bottom: 112px;
   }
 }
 
