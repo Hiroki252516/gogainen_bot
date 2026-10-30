@@ -1,12 +1,18 @@
 # 現行API
 
+## 教材用語解説モード（仕様版29）
+
+認証済み管理API `GET/PUT /api/admin/learning-material-glossary-mode` で`mode` (`annotation_only` / `integrated_material`)を取得・保存し、`applies_to=new_participants_only`を返す。未設定は`annotation_only`。参加者登録時にsnapshotし、参加者一覧、個別ログ、participants CSVへ記録する。
+
+教材生成応答は`show_material_glossary`を返す。`false`は教材内解説モードであることを示し、Frontendは教材用GlossarySidebarのみ隠す。既存の`glossary` snapshotは返却・保存を継続し、回答後解説の注釈APIは変更しない。教材内解説モードの教材生成入力には両群共通の任意項目`glossary_reference`を含める。辞書は共通回答履歴ではなく、診断情報とも独立する。
+
 ## 易しい版の停止（2026-10-30）
 
 新規登録は通常版に固定する。GET `/api/admin/question-set`はmode=standardを返し、PUTでeasyを指定した場合は422、standardは受理する。`/api/participants/{id}/current-step`は既存easy参加者に`can_resume=false`と閲覧専用の遷移先を返し、出題・学習対象・survey・回答・採点など参加者向け再開/操作APIは409で拒否する。既存参加者のログ、参加者別CSV、全件の生ログは引き続き取得可能。
 
 GET `/api/admin/evaluation-summary`、`/api/admin/logs/overview`と、6仮説の`hypothesis_metrics`・`hypothesis_group_summary` CSVで`question_set_mode=easy`を指定した要求は422とする。標準の管理一覧と全件ログCSVは既存easy参加者の情報も保持して表示する。API構造、DB、保存記録は変更しない。
 
-## 仕様版28のペア答え合わせAPI
+## 仕様版28のペア答え合わせAPI（現行版29で維持）
 
 GET/PUT /api/admin/question-review-display は管理認証下で、{ enabled: true/false, applies_to: "new_standard_participants_only" }を扱う。enabledは厳密なbooleanとする。既定値はtrueとし、参加者登録時に通常版だけへ固定する。
 
@@ -39,7 +45,7 @@ GET/PUT `/api/admin/pretest-result-display`は管理認証下で厳密なboolean
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版28とexperiment-plan-2026-10-30-question-review-v1の両方で進行可否を判定する。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版29と`experiment-plan-2026-10-30-learning-glossary-material-v1`の両方で進行可否を判定する。仕様版28の設問ペア答え合わせとprotocol設定は版29でも維持する。
 
 SurveyPayloadはservices/research_protocol.pyで定義する。experiences（chat/coding_assistance/cli/apiの厳密boolean）、general_ratings（ai_usage_frequency/self_rated_ai_knowledge/system_usability/system_clarity）、material_ratings（clarity/readability/japanese_clarity/difficulty_appropriateness/learning_usefulness/amount_appropriateness）、必須free_commentを受け付ける。評定は厳密な整数1〜10。material_ratingsは未表示者のみnull、表示者は6項目必須。余分なキー・旧フォーム・空白のみのコメントを拒否する。
 

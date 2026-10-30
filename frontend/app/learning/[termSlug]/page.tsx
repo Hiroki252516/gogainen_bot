@@ -20,6 +20,7 @@ type Turn = {
   term_label?: string;
   tutor_message: string;
   glossary?: Glossary | null;
+  show_material_glossary?: boolean;
   learner_prompt: string;
   practice_question?: { body: string; options?: Option[]; questions?: { question_id: string; body: string; options: Option[] }[]; selection_mode?: "multiple" | "grouped_single"; min_selections?: number; max_selections?: number; learning_variant_index?: number; answered?: boolean } | null;
   turn_index: number;
@@ -413,7 +414,7 @@ export default function LearningPage() {
             <div className="notice">
               <strong>学習内容：{turn.term_label || termSlug}</strong>
             </div>
-            <div className={`glossary-layout ${turn.glossary?.entries.length ? "has-glossary" : ""}`}>
+            <div className={`glossary-layout ${turn.show_material_glossary !== false && turn.glossary?.entries.length ? "has-glossary" : ""}`}>
             <div className="learning-layout glossary-main">
               <section className="learning-block material-block" aria-labelledby="material-title">
                 <h2 id="material-title">教材</h2>
@@ -500,7 +501,7 @@ export default function LearningPage() {
                 ) : <div className="danger" role="alert">確認問題を表示できません。画面を再読み込みしてください。</div>}
               </section>
             </div>
-            <GlossarySidebar glossary={turn.glossary} label="教材の用語の補足" />
+            {turn.show_material_glossary !== false ? <GlossarySidebar glossary={turn.glossary} label="教材の用語の補足" /> : null}
             </div>
             {feedback ? (
               <section

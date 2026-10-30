@@ -17,6 +17,7 @@ type Participant = {
   experiment_spec_version: number | null;
   question_set_mode: "standard" | "easy";
   show_question_reviews: boolean | null;
+  learning_material_glossary_mode: "annotation_only" | "integrated_material" | null;
   retest_cycles_completed: number | null;
   post_pretest_tests_completed: number | null;
   post_pretest_test_limit: number | null;
@@ -32,7 +33,14 @@ const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"]]
 type AiModel = (typeof AI_MODELS)[number][0];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
+type LearningMaterialGlossaryMode = "annotation_only" | "integrated_material";
+type LearningMaterialGlossarySetting = { mode: LearningMaterialGlossaryMode; applies_to: "new_participants_only" };
 const questionSetLabel = (mode: string | null | undefined) => mode === "easy" ? "易しい版" : "通常版";
+const materialGlossaryModeLabel = (mode: string | null | undefined) => mode === "annotation_only"
+  ? "注釈欄のみ"
+  : mode === "integrated_material"
+    ? "教材内解説"
+    : "未記録（旧仕様）";
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
   study_settings_warning?: string | null;
@@ -139,6 +147,7 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   perceived_hint_amount: "ヒント・説明の量",
   free_comment: "自由記述",
   show_question_reviews: "設問ごとの答え合わせ",
+  learning_material_glossary_mode: "教材の用語解説モード",
   question_review_acknowledged_at: "答え合わせ確認時刻"
 };
 
@@ -159,6 +168,9 @@ export default function AdminPage() {
   const [questionReviewDisplay, setQuestionReviewDisplay] = useState<{ enabled: boolean } | null>(null);
   const [questionReviewDisplaySaving, setQuestionReviewDisplaySaving] = useState(false);
   const [questionReviewDisplayError, setQuestionReviewDisplayError] = useState("");
+  const [materialGlossaryMode, setMaterialGlossaryMode] = useState<LearningMaterialGlossarySetting | null>(null);
+  const [materialGlossaryModeSaving, setMaterialGlossaryModeSaving] = useState(false);
+  const [materialGlossaryModeError, setMaterialGlossaryModeError] = useState("");
   const [summaryError, setSummaryError] = useState("");
   const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [login, setLogin] = useState<any>(null);
@@ -181,6 +193,7 @@ export default function AdminPage() {
     api("/api/admin/logs/overview").then(setOverview).catch((err) => setLogError(err.message));
     api<{ enabled: boolean }>("/api/admin/pretest-result-display").then(setPretestDisplay).catch((err) => setPretestDisplayError(err.message));
     api<{ enabled: boolean }>("/api/admin/question-review-display").then(setQuestionReviewDisplay).catch((err) => setQuestionReviewDisplayError(err.message));
+    api<LearningMaterialGlossarySetting>("/api/admin/learning-material-glossary-mode").then(setMaterialGlossaryMode).catch((err) => setMaterialGlossaryModeError(err.message));
     api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setAiStatusError(err instanceof Error ? err.message : String(err)));
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
@@ -347,6 +360,22 @@ export default function AdminPage() {
       setQuestionReviewDisplayError(err instanceof Error ? err.message : String(err));
     } finally {
       setQuestionReviewDisplaySaving(false);
+    }
+  }
+
+  async function updateMaterialGlossaryMode(mode: LearningMaterialGlossaryMode) {
+    if (!materialGlossaryMode || materialGlossaryModeSaving || materialGlossaryMode.mode === mode) return;
+    setMaterialGlossaryModeSaving(true);
+    setMaterialGlossaryModeError("");
+    try {
+      setMaterialGlossaryMode(await api<LearningMaterialGlossarySetting>("/api/admin/learning-material-glossary-mode", {
+        method: "PUT",
+        body: JSON.stringify({ mode })
+      }));
+    } catch (err) {
+      setMaterialGlossaryModeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMaterialGlossaryModeSaving(false);
     }
   }
 
@@ -541,6 +570,29 @@ export default function AdminPage() {
               {questionReviewDisplayError ? <p className="danger" role="alert">{questionReviewDisplayError}</p> : null}
             </div>
             <div className="notice question-set-setting">
+              <strong>教材の用語解説モード</strong>
+              <div className="reasoning-effort-buttons" role="group" aria-label="教材の用語解説モード">
+                {([
+                  ["annotation_only", "注釈欄のみ"],
+                  ["integrated_material", "教材内解説"]
+                ] as [LearningMaterialGlossaryMode, string][]).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={materialGlossaryMode?.mode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
+                    aria-pressed={materialGlossaryMode?.mode === mode}
+                    disabled={!materialGlossaryMode || materialGlossaryModeSaving}
+                    onClick={() => updateMaterialGlossaryMode(mode)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="muted">新規参加者のみ。初期値は「注釈欄のみ」です。教材内解説では、教材に登場する登録語を本文中で説明し、教材右側の注釈欄は表示しません。</p>
+              {materialGlossaryModeSaving ? <p role="status">保存中...</p> : null}
+              {materialGlossaryModeError ? <p className="danger" role="alert">{materialGlossaryModeError}</p> : null}
+            </div>
+            <div className="notice question-set-setting">
               <strong>新規参加者に適用する問題版</strong>
               <p>通常版</p>
               <p className="muted">今後の新規参加者には通常版を適用します。易しい版の参加者は閲覧専用で、群集計には含まれません。</p>
@@ -642,6 +694,7 @@ export default function AdminPage() {
                 <th>条件</th>
                 <th>問題版</th>
                 <th>設問ごとの答え合わせ</th>
+                <th>教材の用語解説</th>
                 <th>進捗</th>
                 <th>完了</th>
                 <th>事前テスト後の回数</th>
@@ -657,6 +710,7 @@ export default function AdminPage() {
                   <td>{p.group_condition}</td>
                   <td>{questionSetLabel(p.question_set_mode)}</td>
                   <td>{p.show_question_reviews === null ? "対象外" : p.show_question_reviews ? "ON" : "OFF"}</td>
+                  <td>{materialGlossaryModeLabel(p.learning_material_glossary_mode)}</td>
                   <td>{p.can_resume ? p.current_step : `${p.question_set_mode === "easy" ? "易しい版停止" : "旧仕様"}（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
                   <td>
@@ -703,6 +757,7 @@ export default function AdminPage() {
                 <p>事前テスト後のテスト: {participantLog.participant.post_pretest_tests_completed ?? "-"} / {participantLog.participant.post_pretest_test_limit ?? "-"}回（学習前の追加テストを含む）</p>
                 <p>事前テストの結果表示: {participantLog.participant.show_pretest_results === false ? "非表示" : "表示"}</p>
                 <p>設問ごとの答え合わせ: {participantLog.participant.show_question_reviews === null ? "対象外" : participantLog.participant.show_question_reviews ? "表示" : "非表示"}</p>
+                <p>教材の用語解説モード: {materialGlossaryModeLabel(participantLog.participant.learning_material_glossary_mode)}</p>
                 <p>
                   終了理由: {participantLog.participant.completion_reason === "give_up"
                     ? "実験ギブアップ"
@@ -1086,6 +1141,7 @@ function SessionLog({ sessions }: { sessions: any[] }) {
 }
 
 function formatCell(field: string, value: any) {
+  if (field === "learning_material_glossary_mode") return materialGlossaryModeLabel(value);
   if (value === null || value === undefined) return "-";
   if (field === "question_set_mode") return questionSetLabel(value);
   if (field === "test_page_mode" || field === "effective_test_page_mode") return value === "per_term" ? "用語ごと（2設問／ページ）" : "設問ごと";

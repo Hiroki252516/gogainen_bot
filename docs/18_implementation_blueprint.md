@@ -1,6 +1,6 @@
 # 現行プロトコルの実装境界
 
-> 現行状態（2026-10-30）: 実験仕様版28・protocolを維持したまま易しい版の新規実行を停止。新規登録は通常版固定、既存easy participantは閲覧専用、easy群集計と仮説CSVは停止。本文中のeasy版切替・参加者再開・集計の手順は停止前の実装設計履歴であり、現行運用ではない。既存YAML・問題ID・snapshot・参加者データは削除・書換えせず履歴復元用に保持する。詳細は[22](22_question_set_modes.md)。
+> この文書の版26に関する記述は当時の実装設計記録であり、現行状態ではない。2026-10-30時点の現行コードは仕様版29 / `experiment-plan-2026-10-30-learning-glossary-material-v1`。仕様版28以下は閲覧専用で、新規参加者の教材用語解説モードを登録時に固定する。易しい版は停止済みで、保存済み記録・YAML・snapshotを履歴復元用に保持する。現行運用は[02](02_experiment_flow.md)、[22](22_question_set_modes.md)、[41](41_learning_glossary_material_mode.md)を参照。
 
 用語注釈はbackendの共通辞書処理へ分離し、教材生成・回答後解説の確定時と、テスト回答時に保存する。LLM・採点・診断の責務へ追加せず、frontendは保存された公開項目だけを表示する。新規登録は版26、旧版25以下は閲覧専用。[24](24_learning_glossary.md)。
 

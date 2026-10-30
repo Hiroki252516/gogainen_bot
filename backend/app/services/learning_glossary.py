@@ -139,3 +139,15 @@ def public_glossary(snapshot: Any) -> dict[str, Any] | None:
             for entry in snapshot["entries"]
         ],
     }
+
+
+def glossary_reference() -> dict[str, Any]:
+    """Return the shared dictionary definitions for an explicitly enabled prompt mode."""
+    glossary = load_learning_glossary()
+    return {
+        "version": glossary.version,
+        "entries": [
+            {"id": entry.id, "term": entry.term, "definition": entry.definition}
+            for entry in glossary.entries
+        ],
+    }

@@ -2,7 +2,11 @@
 
 ## 易しい版停止後のデータ保全（2026-10-30）
 
-仕様版28・protocol・DBスキーマは変更しない。RuntimeSetting.question_set_modeに旧値easyが残っていても新規参加者へは適用せず、Participantの既存easy値も書き換えない。既存easy参加者・Attempt・TutorSession/TutorTurn・snapshot・EvaluationSummary・Question/QuestionOptionとYAMLは保持し、再開・回答・評価再計算・群集計の対象から除外する。管理者は個別ログ・参加者別CSV・全件生ログで閲覧できる。列の削除・NULL補完・データ移行は行わない。
+易しい版停止時点では仕様版28・protocol・DBスキーマを変更しなかった。その後の版29で教材の用語解説モードだけを追加する。RuntimeSetting.question_set_modeの旧値easy、Participantの既存easy値は書き換えない。既存easy参加者・Attempt・TutorSession/TutorTurn・snapshot・EvaluationSummary・Question/QuestionOptionとYAMLは保持し、再開・回答・評価再計算・群集計の対象から除外する。管理者は個別ログ・参加者別CSV・全件生ログで閲覧できる。
+
+## 教材用語解説モードの保存（仕様版29）
+
+`RuntimeSetting.learning_material_glossary_mode`と`Participant.learning_material_glossary_mode`をnullable VARCHAR(32)で保存する。RuntimeSetting未設定またはNULLは実行時に`annotation_only`と解釈する。新規登録時に設定値をParticipantへsnapshotし、登録後の管理設定変更は既存参加者へ遡及しない。既存ParticipantはNULLのままとし、仕様版28以下は閲覧専用で再開できない。Participants CSV、参加者一覧・個別ログに登録時の生値を含め、旧NULLは「未記録（旧仕様）」として扱う。
 
 ## 仕様版28の答え合わせ保存
 
@@ -20,7 +24,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 ## 現行の保存契約
 
-モデルの正本は backend/app/models/__init__.py。現行コードは実験仕様版28を使用する。参加者の option_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルに新しい設定列を追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
+モデルの正本は backend/app/models/__init__.py。現行コードは実験仕様版29 / experiment-plan-2026-10-30-learning-glossary-material-v1を使用する。参加者の option_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルに設定列を追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 学籍番号はSQLAlchemyの研究DBへ追加しない。IDENTITY_MAPPING_PATHが指す別SQLiteへ、学籍番号・参加者ID・表示コード・作成日時・再送処理用キーを保存する。研究用エクスポート・AI入力・AIログ・冪等性のrequest_hash/response_jsonには学籍番号を含めない。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、登録は対応表を先行保存してから研究DBを確定し、通常の失敗では補償削除する。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
@@ -29,12 +33,12 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規参加者だけ仕様版28とexperiment-plan-2026-10-30-question-review-v1を保存し、retest_cycles_completedを0で初期化する。既存版27以下を含む異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版29とexperiment-plan-2026-10-30-learning-glossary-material-v1を保存し、retest_cycles_completedを0で初期化する。既存版28以下を含む異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 
-- Participant: 群、同意、進捗、開始・完了時刻、終了理由、実験仕様版、開始時に確定した選択肢配置モード、学習後retestの採点済み回数。
-- RuntimeSetting: ID=1の単一行に、今後作成する参加者へ適用する選択肢配置モードを保存する。未設定時の既定値は `debug_fixed`。
+- Participant: 群、同意、進捗、開始・完了時刻、終了理由、実験仕様版、開始時に確定した選択肢配置・教材用語解説モード、学習後retestの採点済み回数。
+- RuntimeSetting: ID=1の単一行に、今後作成する参加者へ適用する選択肢配置・教材用語解説モードを保存する。未設定時の配置既定値は `debug_fixed`、用語解説モードは `annotation_only`。
 - Attempt: 問題ID、複数選択ID、フェーズ・周回、正誤・M1/M3/unknown、問題/選択肢snapshot、時刻。選択肢snapshotには参加者に表示したラベル・本文・順序を保存する。
 - LearnerState: 現在状態、主分類、方略、正答記録数、再発数、最終回答ID。
 - TutorSession / TutorTurn: 教材・固定問題snapshot、回答・解説、採点JSON、生成契約・版・検証・先行生成監査。学習確認問題snapshotにも表示時の選択肢ラベル・本文・順序を保存する。

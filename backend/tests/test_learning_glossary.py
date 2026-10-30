@@ -1,6 +1,7 @@
 from copy import deepcopy
 import csv
 import json
+from uuid import uuid4
 
 import pytest
 import yaml
@@ -105,18 +106,22 @@ def test_invalid_dictionary_stops_startup_before_database_writes(monkeypatch):
 
 @pytest.fixture
 def restore_settings():
-    settings = {name: client.get(f"/api/admin/{name}").json()["mode"] for name in ("question-set", "option-order")}
+    settings = {name: client.get(f"/api/admin/{name}").json()["mode"] for name in ("question-set", "option-order", "learning-material-glossary-mode")}
     yield
     for name, mode in settings.items():
         client.put(f"/api/admin/{name}", json={"mode": mode})
 
 
-def start_learning(mode, group):
+def start_learning(mode, group, student_number=None):
     client.put("/api/admin/question-set", json={"mode": mode})
     client.put("/api/admin/option-order", json={"mode": "debug_fixed"})
-    participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "GLOSSARY-TEST"}).json()
-    pid = participant["participant_id"]
-    questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    student_number = student_number or f"GLOSSARY-TEST-{uuid4().hex}"
+    participant_response = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": student_number})
+    assert participant_response.status_code == 200, participant_response.text
+    pid = participant_response.json()["participant_id"]
+    questions_response = client.get(f"/api/experiment/{pid}/pretest")
+    assert questions_response.status_code == 200, questions_response.text
+    questions = questions_response.json()["questions"]
     assert all(question["glossary"]["version"] == GLOSSARY_VERSION for question in questions)
     for question in questions:
         labels = "DEF" if question["term_slug"] == "llm_knowledge" else "ABC"
@@ -143,11 +148,13 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 28
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-30-question-review-v1"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 29
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-30-learning-glossary-material-v1"
+        assert p.learning_material_glossary_mode == "annotation_only"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material
         assert 600 <= len(stored.tutor_message) <= 800
+    assert turn["show_material_glossary"] is True
 
     def no_recompute(_text):
         pytest.fail("saved glossary snapshots must not be recomputed")
@@ -182,6 +189,7 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
         calls = db.query(AICallLog).filter(AICallLog.request_payload["participant_id"].as_string() == pid).all()
         for call in calls:
             assert "glossary" not in json.dumps(call.request_payload["input_projection"], ensure_ascii=False)
+            assert "glossary_reference" not in call.request_payload["input_projection"]
     logs = client.get(f"/api/admin/participants/{pid}/logs").json()
     row = next(row for session in logs["tutor_sessions"] for row in session["turns"] if row["tutor_turn_id"] == turn["turn_id"])
     assert row["material_glossary"] == expected_material
@@ -191,6 +199,44 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
     assert reader.fieldnames == experiment.LOG_CSV_COLUMNS
     answer = next(row for row in reader if row["record_type"] == "answer" and json.loads(row["value_json"]).get("source_id") == turn["turn_id"])
     assert json.loads(answer["value_json"])["material_glossary"] == expected_material
+
+
+def test_integrated_material_mode_is_common_to_both_groups_and_snapshotted(restore_settings):
+    client.put("/api/admin/learning-material-glossary-mode", json={"mode": "integrated_material"})
+    projections = {}
+    participant_ids = []
+    for group in ("A", "B"):
+        pid, _url, turn = start_learning("standard", group, student_number=f"GLOSSARY-MODE-{group}")
+        participant_ids.append(pid)
+        assert turn["show_material_glossary"] is False
+        assert turn["glossary"]["entries"]
+        with SessionLocal() as db:
+            participant = db.get(Participant, pid)
+            assert participant.learning_material_glossary_mode == "integrated_material"
+            call = (
+                db.query(AICallLog)
+                .filter(AICallLog.request_payload["participant_id"].as_string() == pid)
+                .filter_by(purpose="generate_tutoring_turn")
+                .one()
+            )
+            projection = call.request_payload["input_projection"]
+            assert projection["glossary_reference"]["version"] == GLOSSARY_VERSION
+            assert len(projection["glossary_reference"]["entries"]) == 16
+            if group == "A":
+                assert "diagnostic_evidence" in projection
+                assert "misconception_taxonomy" in projection
+            else:
+                assert "diagnostic_evidence" not in projection
+                assert "misconception_taxonomy" not in projection
+            projections[group] = projection
+
+    common_keys = ("term", "component_terms", "rag_context", "interaction_history", "glossary_reference")
+    assert {key: projections["A"][key] for key in common_keys} == {key: projections["B"][key] for key in common_keys}
+    for pid in participant_ids:
+        logs = client.get(f"/api/admin/participants/{pid}/logs").json()
+        assert logs["participant"]["learning_material_glossary_mode"] == "integrated_material"
+    csv_response = client.get("/api/admin/export/participants.csv")
+    assert "learning_material_glossary_mode" in csv_response.text.splitlines()[0]
 
 
 def test_old_v7_question_lookup_uses_its_own_bank_without_snapshot(restore_settings):

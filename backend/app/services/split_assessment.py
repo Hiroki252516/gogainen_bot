@@ -134,8 +134,7 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 
 def uses_split(participant: Any) -> bool:
-    # Version 27 is retained as a read-only split-assessment archive.
-    return participant.question_set_mode in {None, "standard"} and participant.experiment_spec_version in {27, 28}
+    return participant.question_set_mode in {None, "standard"} and participant.experiment_spec_version in {27, 28, 29}
 
 
 @lru_cache

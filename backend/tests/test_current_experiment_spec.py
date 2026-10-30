@@ -184,7 +184,9 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
     assert saved_attempt["question_body"] == "記録当時の問題文"
     assert saved_attempt["selected_option_body"] == "記録当時の選択肢本文"
     summary = client.get("/api/admin/evaluation-summary").json()
-    overview = client.get("/api/admin/logs/overview").json()
+    overview_response = client.get("/api/admin/logs/overview")
+    assert overview_response.status_code == 200, overview_response.text
+    overview = overview_response.json()
     old_summary = next(row for row in overview["evaluation_summaries"] if row["participant_id"] == pid)
     assert old_summary["legacy_read_only"] is True
     assert old_summary["pretest_score"] == 0.125
@@ -240,12 +242,15 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
         connection.execute(text("ALTER TABLE participants DROP COLUMN experiment_spec_version"))
         connection.execute(text("ALTER TABLE participants DROP COLUMN option_order_mode"))
         connection.execute(text("ALTER TABLE participants DROP COLUMN retest_cycles_completed"))
+        connection.execute(text("ALTER TABLE participants DROP COLUMN learning_material_glossary_mode"))
+        connection.execute(text("ALTER TABLE runtime_settings DROP COLUMN learning_material_glossary_mode"))
     database.init_db()
     database.init_db()
     with Session(isolated) as db:
         assert db.get(Participant, pid).experiment_spec_version is None
         assert db.get(Participant, pid).option_order_mode is None
         assert db.get(Participant, pid).retest_cycles_completed is None
+        assert db.get(Participant, pid).learning_material_glossary_mode is None
         assert trial_snapshot(db, pid) == before
     isolated.dispose()
 

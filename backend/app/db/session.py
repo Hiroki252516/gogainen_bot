@@ -30,6 +30,7 @@ def _ensure_lightweight_schema_updates() -> None:
         "participants": [
             ("show_pretest_results", "BOOLEAN"),
             ("show_question_reviews", "BOOLEAN"),
+            ("learning_material_glossary_mode", "VARCHAR(32)"),
             ("question_set_mode", "VARCHAR(32)"),
             ("test_page_mode", "VARCHAR(32)"),
             ("completion_reason", "TEXT"),
@@ -45,7 +46,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("survey_version", "VARCHAR(80)"),
             ("responses_json", json_type),
         ],
-        "runtime_settings": [("question_set_mode", "VARCHAR(32)"), ("show_pretest_results", "BOOLEAN"), ("show_question_reviews", "BOOLEAN")],
+        "runtime_settings": [("question_set_mode", "VARCHAR(32)"), ("show_pretest_results", "BOOLEAN"), ("show_question_reviews", "BOOLEAN"), ("learning_material_glossary_mode", "VARCHAR(32)")],
         "attempts": [
             ("test_round", "TEXT"),
             ("question_shown_at", datetime_type),

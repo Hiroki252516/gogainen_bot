@@ -71,11 +71,17 @@ def test_history_merges_all_rounds_and_sessions_using_snapshots_without_diagnost
         pretest.answered_at = base
         pretest.question_body_snapshot = "保存当時の事前問題"
         pretest.option_order_snapshot = [{"option_id": option_id, "label": label, "body": f"保存当時の選択肢{label}", "misconception_type": "PRIVATE_DIAGNOSIS", "is_correct": False} for option_id, label in zip(pretest.selected_option_ids, "DEF")]
-        for index, (phase, round_name, labels) in enumerate((("retest", "retest_1", "J"), ("retest", "retest_2", "ADG"), ("final_test", "retest_3", "ABC")), 1):
-            question = db.query(Question).filter_by(term_id=term.id, phase=phase).filter(Question.construct_key.endswith("scenario-actions-easy-v1")).first()
-            options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id, QuestionOption.option_label.in_(list(labels))).order_by(QuestionOption.default_order).all()
-            db.add(Attempt(participant_id=pid, term_id=term.id, question_id=question.id, phase=phase, test_round=round_name, selected_option_ids=[row.id for row in options], is_correct=labels == "ABC", answered_at=base + timedelta(days=index), misconception_type="M3", natural_language_diagnosis="PRIVATE_REASON"))
-        db.add(Attempt(participant_id=pid, term_id=term.id, question_id=pretest.question_id, phase="retest", is_correct=None))
+        rounds = (
+            ("retest", "retest_1", "retest_v1_q1", ["D"], False),
+            ("retest", "retest_2", "retest_v2_q1", ["A", "B", "C"], False),
+            ("final_test", "retest_3", "retest_v1_q1", ["A"], True),
+        )
+        for index, (phase, round_name, variant_key, labels, is_correct) in enumerate(rounds, 1):
+            question = db.query(Question).filter_by(term_id=term.id, variant_key=variant_key).one()
+            options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id, QuestionOption.option_label.in_(labels)).order_by(QuestionOption.default_order).all()
+            db.add(Attempt(participant_id=pid, term_id=term.id, question_id=question.id, phase=phase, test_round=round_name, selected_option_ids=[row.id for row in options], is_correct=is_correct, answered_at=base + timedelta(days=index), misconception_type="M3", natural_language_diagnosis="PRIVATE_REASON"))
+        ungraded_question = db.query(Question).filter_by(term_id=term.id, variant_key="retest_v1_q2").one()
+        db.add(Attempt(participant_id=pid, term_id=term.id, question_id=ungraded_question.id, phase="retest", test_round="retest_1", is_correct=None))
         db.add(Attempt(participant_id=pid, term_id=term.id, question_id=pretest.question_id, phase="l0_check", is_correct=True))
         spec = learning_question_spec(term.slug, "conceptual_change", 1)
         for index in (1, 2):
@@ -90,8 +96,8 @@ def test_history_merges_all_rounds_and_sessions_using_snapshots_without_diagnost
         assert [row["phase"] for row in history] == ["pretest", "retest", "retest", "final_test", "learning", "learning"]
         assert history[0]["question_body"] == "保存当時の事前問題"
         assert history[0]["selected_options"][0] == {"label": "D", "body": "保存当時の選択肢D"}
-        assert history[1]["selected_options"] == [{"label": "J", "body": "わからない。"}]
-        assert [row["label"] for row in history[2]["selected_options"]] == list("ADG")
+        assert history[1]["selected_options"] == [{"label": "D", "body": "わからない。"}]
+        assert [row["label"] for row in history[2]["selected_options"]] == list("ABC")
         assert history[3]["is_correct"] is True
         assert [row["session_index"] for row in history[-2:]] == [1, 2]
         encoded = json.dumps(history, ensure_ascii=False)
@@ -269,7 +275,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 28
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 29
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION

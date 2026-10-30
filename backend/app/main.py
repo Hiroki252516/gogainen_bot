@@ -18,6 +18,7 @@ from datetime import datetime
 from app.models import Participant, Term, TutorSession, TutorTurn
 from app.services import pretest_display
 from app.services import question_review_display
+from app.services import learning_material_glossary_mode
 from pydantic import StrictBool
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
@@ -657,6 +658,7 @@ async def api_generate_tutor_turn(
         turn = await generate_tutor_turn(db, session_id)
         current_session = db.get(TutorSession, session_id)
         term = db.get(Term, current_session.term_id) if current_session else None
+        current_participant = get_participant(db, current_session.participant_id) if current_session else None
         stage_meta = (turn.practice_question_json or {}).get("stage_meta") or {}
         return {
             "turn_id": turn.id,
@@ -664,6 +666,9 @@ async def api_generate_tutor_turn(
             "term_label": term.label if term else None,
             "tutor_message": turn.tutor_message,
             "glossary": public_glossary((turn.diagnosis_json or {}).get("material_glossary")),
+            "show_material_glossary": learning_material_glossary_mode.normalize_mode(
+                current_participant.learning_material_glossary_mode if current_participant else None
+            ) != learning_material_glossary_mode.INTEGRATED_MATERIAL,
             "learner_prompt": turn.learner_prompt,
             "practice_question": _public_practice_question(turn.practice_question_json),
             "requires_learner_response": True,
@@ -808,6 +813,11 @@ class QuestionReviewDisplayPayload(BaseModel):
     enabled: StrictBool
 
 
+class LearningMaterialGlossaryModePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["annotation_only", "integrated_material"]
+
+
 @app.get("/api/admin/pretest-result-display")
 def api_pretest_display(db: Session = Depends(get_db)):
     return JSONResponse({"enabled": pretest_display.current_setting(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
@@ -826,6 +836,16 @@ def api_question_review_display(db: Session = Depends(get_db)):
 @app.put("/api/admin/question-review-display")
 def api_save_question_review_display(payload: QuestionReviewDisplayPayload, db: Session = Depends(get_db)):
     return {"enabled": question_review_display.save_setting(db, payload.enabled), "applies_to": "new_standard_participants_only"}
+
+
+@app.get("/api/admin/learning-material-glossary-mode")
+def api_learning_material_glossary_mode(db: Session = Depends(get_db)):
+    return JSONResponse({"mode": learning_material_glossary_mode.current_setting(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
+
+
+@app.put("/api/admin/learning-material-glossary-mode")
+def api_save_learning_material_glossary_mode(payload: LearningMaterialGlossaryModePayload, db: Session = Depends(get_db)):
+    return {"mode": learning_material_glossary_mode.save_setting(db, payload.mode), "applies_to": "new_participants_only"}
 
 
 @app.put("/api/admin/question-set")
@@ -856,6 +876,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "participant_id": row.id,
                 "show_pretest_results": pretest_display.enabled(row.show_pretest_results),
                 "show_question_reviews": row.show_question_reviews,
+                "learning_material_glossary_mode": row.learning_material_glossary_mode,
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,
                 "option_order_mode": row.option_order_mode or "debug_fixed",
