@@ -1173,7 +1173,6 @@ def pending_question_review(
             }
     return None
 
-
 def acknowledge_question_review(
     db: Session,
     participant_id: str,
