@@ -1110,19 +1110,36 @@ def pending_question_review(
         .order_by(Attempt.created_at.asc(), Attempt.id.asc())
         .all()
     }
-    grouped: dict[str, dict[int, dict[str, Any]]] = {}
+    question_ids = {row["question_id"] for row in question_rows}
+    questions_by_id = {
+        question.id: question
+        for question in db.query(Question).filter(Question.id.in_(question_ids)).all()
+    }
+    acknowledged_term_slugs: set[str] = set()
     for row in question_rows:
-        question = db.get(Question, row["question_id"])
+        question = questions_by_id.get(row["question_id"])
         if question is None:
             continue
-        match = re.search(r"_q([12])$", question.variant_key)
+        match = re.search(r"_q([12])$", question.variant_key or "")
+        if match is None or match.group(1) != "2":
+            continue
+        attempt = attempts_by_question.get(question.id)
+        if attempt is not None and attempt.question_review_acknowledged_at is not None:
+            acknowledged_term_slugs.add(row["term_slug"])
+
+    grouped: dict[str, dict[int, dict[str, Any]]] = {}
+    for row in question_rows:
+        if row["term_slug"] in acknowledged_term_slugs:
+            continue
+        question = questions_by_id.get(row["question_id"])
+        if question is None:
+            continue
+        match = re.search(r"_q([12])$", question.variant_key or "")
         if match is None:
             continue
         number = int(match.group(1))
         attempt = attempts_by_question.get(question.id)
         if attempt is None or not attempt.selected_option_ids:
-            continue
-        if number == 2 and attempt.question_review_acknowledged_at is not None:
             continue
         selected_id = str(attempt.selected_option_ids[0])
         snapshot_options = attempt.option_order_snapshot or []
@@ -1204,7 +1221,7 @@ def acknowledge_question_review(
     pair_attempts: dict[int, Attempt] = {}
     for row in term_rows:
         question = db.get(Question, row["question_id"])
-        match = re.search(r"_q([12])$", question.variant_key if question else "")
+        match = re.search(r"_q([12])$", (question.variant_key or "") if question else "")
         if match is None:
             continue
         pair_attempts[int(match.group(1))] = (
@@ -3154,8 +3171,6 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
     if phase not in {"retest", "final_test"}:
         raise HTTPException(status_code=400, detail="unsupported score phase")
     _assert_phase_available(participant, phase)
-    if pending_question_review(db, participant.id, phase) is not None:
-        raise HTTPException(status_code=409, detail="用語ごとの答え合わせを確認してから進んでください。")
     expected_variant = _expected_test_variant(db, participant, phase)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase, is_correct=None).all()
     if not attempts:
@@ -3168,6 +3183,9 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
                 "error_code": "question_term_unavailable",
                 "message": "問題に対応する用語データが見つかりません。管理者に連絡してください。",
             })
+    if pending_question_review(db, participant.id, phase) is not None:
+        raise HTTPException(status_code=409, detail="用語ごとの答え合わせを確認してから進んでください。")
+    if uses_split(participant):
         expected_ids = {q["question_id"] for q in question_payloads(db, participant.id, phase)}
         if len(expected_ids) != 6 or {a.question_id for a in attempts} != expected_ids or len(attempts) != 6:
             raise HTTPException(status_code=400, detail="6設問すべてに回答してください。")
