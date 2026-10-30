@@ -732,8 +732,10 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
     if group_condition is None:
         raise HTTPException(status_code=400, detail="管理者から伝えられた参加コード（AまたはB）が必要です。")
     mode = current_question_set_mode(db)
+    from app.services.pretest_display import current_setting
     participant = Participant(
         display_code=next_display_code(db),
+        show_pretest_results=current_setting(db),
         group_condition=group_condition,
         assignment_method="admin_code",
         consent_checked=consent_checked,
@@ -2163,6 +2165,23 @@ def _discard_prefetch_for_interactive_generation(
     }
 
 
+def _latest_open_tutor_turn(db: Session, session_id: str) -> TutorTurn | None:
+    return (
+        db.query(TutorTurn)
+        .filter_by(tutor_session_id=session_id, learner_response=None)
+        .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
+        .first()
+    )
+
+
+def _reuse_open_tutor_turn(db: Session, session: TutorSession, turn: TutorTurn) -> TutorTurn:
+    state = _prefetch_state(session)
+    generation_origin = (turn.diagnosis_json or {}).get("generation_origin")
+    if state != "consumed" and (state == "ready" or generation_origin == "prefetch"):
+        _mark_prefetch_consumed(db, session, turn)
+    return turn
+
+
 async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     session = db.get(TutorSession, session_id)
     if not session:
@@ -2175,16 +2194,9 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
     if session.ended_at is not None:
         raise HTTPException(status_code=409, detail="学習セッションは終了しています。")
 
-    latest_open_turn = (
-        db.query(TutorTurn)
-        .filter_by(tutor_session_id=session.id, learner_response=None)
-        .order_by(TutorTurn.turn_index.desc(), TutorTurn.created_at.desc())
-        .first()
-    )
+    latest_open_turn = _latest_open_tutor_turn(db, session.id)
     if latest_open_turn:
-        if _prefetch_state(session) == "ready":
-            _mark_prefetch_consumed(db, session, latest_open_turn)
-        return latest_open_turn
+        return _reuse_open_tutor_turn(db, session, latest_open_turn)
 
     turn_count = db.query(func.count(TutorTurn.id)).filter_by(tutor_session_id=session.id).scalar() or 0
     prefetch_audit = None
@@ -2214,6 +2226,13 @@ async def generate_tutor_turn(db: Session, session_id: str) -> TutorTurn:
             "discarded": state == "discarded",
             "reason": session.prefetch_error_code or "prefetch_unavailable",
         }
+
+    # A prefetch worker may have committed its first turn after the initial
+    # lookup but before the interactive path discarded its pending state.
+    # Reuse that committed turn instead of counting it and generating v2.
+    latest_open_turn = _latest_open_tutor_turn(db, session.id)
+    if latest_open_turn:
+        return _reuse_open_tutor_turn(db, session, latest_open_turn)
 
     context = _tutoring_generation_context(
         db,
@@ -2511,10 +2530,32 @@ async def generate_prefetched_tutor_turn(db: Session, session_id: str) -> bool:
             db.commit()
             return False
 
+        ready_at = now()
+        claimed_ready = (
+            db.query(TutorSession)
+            .filter_by(id=session_id, prefetch_state="generating")
+            .update(
+                {
+                    TutorSession.prefetch_state: "ready",
+                    TutorSession.prefetch_ready_at: ready_at,
+                },
+                synchronize_session=False,
+            )
+        )
+        if claimed_ready != 1:
+            _update_prefetch_ai_logs(
+                db,
+                session_id,
+                disposition="discarded",
+                error_code="interactive_generation_won_race",
+            )
+            db.commit()
+            return False
+
         ready_audit = {
             **generation_audit,
             "state": "ready",
-            "ready_at": now().isoformat(),
+            "ready_at": ready_at.isoformat(),
         }
         context["prefetch_audit"] = ready_audit
         turn = _tutor_turn_from_generation(
@@ -2524,8 +2565,6 @@ async def generate_prefetched_tutor_turn(db: Session, session_id: str) -> bool:
             material_generation_ms=generation_ms,
         )
         db.add(turn)
-        final_session.prefetch_state = "ready"
-        final_session.prefetch_ready_at = now()
         _update_prefetch_ai_logs(db, session_id, disposition="ready")
         db.commit()
         return True
@@ -3450,7 +3489,7 @@ def admin_summary(db: Session, mode: str = STANDARD) -> dict[str, Any]:
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "current_step", "started_at", "completed_at", "completion_reason"]),
+    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "current_step", "started_at", "completed_at", "completion_reason"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "legacy_scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "legacy_l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),
@@ -3824,6 +3863,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     turn_rows = [turn for session in tutor_sessions for turn in session["turns"]]
     return {
         "participant": {
+            "show_pretest_results": participant.show_pretest_results is not False,
             "participant_id": participant.id,
             "display_code": participant.display_code,
             "experiment_spec_version": participant.experiment_spec_version,

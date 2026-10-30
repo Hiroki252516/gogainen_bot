@@ -28,6 +28,7 @@ def _ensure_lightweight_schema_updates() -> None:
     datetime_type = "DATETIME" if dialect_name == "sqlite" else "TIMESTAMP"
     additions = {
         "participants": [
+            ("show_pretest_results", "BOOLEAN"),
             ("question_set_mode", "VARCHAR(32)"),
             ("completion_reason", "TEXT"),
             ("learning_content_version", "INTEGER"),
@@ -42,7 +43,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("survey_version", "VARCHAR(80)"),
             ("responses_json", json_type),
         ],
-        "runtime_settings": [("question_set_mode", "VARCHAR(32)")],
+        "runtime_settings": [("question_set_mode", "VARCHAR(32)"), ("show_pretest_results", "BOOLEAN")],
         "attempts": [
             ("test_round", "TEXT"),
             ("question_shown_at", datetime_type),

@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { GiveUpButton } from "@/components/GiveUpButton";
 import { ParticipantFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, participantId } from "@/lib/api";
+import { saveLearningTargets } from "@/lib/learning-targets";
 
 const RESULT_REVIEW_STEPS = ["learning_targets", "final_test", "survey"] as const;
 
@@ -38,6 +40,8 @@ type TestResults = {
   results: TestResult[];
 };
 type LearningTargetsResponse = {
+  review_required?: boolean;
+  next_url?: string;
   current_step: string;
   targets: Target[];
   pretest_results: PretestResult[];
@@ -49,6 +53,8 @@ type LearningTargetsResponse = {
 };
 
 export default function LearningTargetsPage() {
+  const router = useRouter();
+  const [loaded, setLoaded] = useState(false);
   const [currentStep, setCurrentStep] = useState("");
   const [targets, setTargets] = useState<Target[]>([]);
   const [pretestResults, setPretestResults] = useState<PretestResult[]>([]);
@@ -63,20 +69,29 @@ export default function LearningTargetsPage() {
     if (!id) return;
     api<LearningTargetsResponse>(`/api/participants/${id}/learning-targets`)
       .then((data) => {
+        saveLearningTargets(id, data.targets.map((t) => t.term_slug), data.review_required === false);
+        if (data.review_required === false) {
+          if (!data.next_url || data.next_url === "/learning-targets" || !(/^\/learning\/[a-z_]+$/.test(data.next_url) || ["/pretest", "/retest", "/final-test", "/survey", "/finish"].includes(data.next_url))) {
+            throw new Error("次の画面を確認できません。管理者に連絡してください。");
+          }
+          router.replace(data.next_url);
+          return;
+        }
         setCurrentStep(data.current_step);
         setTargets(data.targets);
         setPretestResults(data.pretest_results);
         setTestResults(data.test_results || { test_round: null, test_round_label: null, results: [] });
         setRetestCycleLimitReached(data.retest_cycle_limit_reached);
         setPostPretestTestLimit(data.post_pretest_test_limit);
-        localStorage.setItem("learning_targets", JSON.stringify(data.targets.map((t) => t.term_slug)));
+        setLoaded(true);
       })
-      .catch((err) => setError(err.message));
-  }, []);
+      .catch((err) => { setError(err.message); setLoaded(true); });
+  }, [router]);
 
   return (
     <ParticipantFlowGuard allowedSteps={RESULT_REVIEW_STEPS}>
       <AppShell step="学習対象">
+        {!loaded ? <section className="panel" role="status">読み込み中...</section> : (
         <section className="panel stack">
         <h1>{testResults.test_round_label ? `${testResults.test_round_label}の確認結果` : "今回の確認結果"}</h1>
         {error ? <div className="danger">{error}</div> : null}
@@ -149,6 +164,7 @@ export default function LearningTargetsPage() {
           </div>
         ) : null}
         </section>
+        )}
       </AppShell>
     </ParticipantFlowGuard>
   );

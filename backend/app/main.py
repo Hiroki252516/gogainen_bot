@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.models import Participant, Term, TutorSession, TutorTurn
+from app.services import pretest_display
+from pydantic import StrictBool
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
@@ -375,17 +377,9 @@ def current_step(participant_id: str, db: Session = Depends(get_db)) -> dict:
     participant = get_participant(db, participant_id)
     if not can_resume(participant):
         return {"step": "legacy_read_only", "next_url": "/start", "can_resume": False, "progress": None}
-    mapping = {
-        "pretest": "/pretest",
-        "learning_targets": "/learning-targets",
-        "retest": "/retest",
-        "final_test": "/final-test",
-        "survey": "/survey",
-        "finish": "/finish",
-    }
     return {
         "step": participant.current_step,
-        "next_url": mapping.get(participant.current_step, "/start"),
+        "next_url": pretest_display.next_url(db, participant),
         "can_resume": True,
         "progress": experiment_progress(db, participant),
     }
@@ -437,7 +431,9 @@ async def api_diagnose_pretest(
     async def operation() -> dict:
         count = await diagnose_pretest(db, participant_id)
         next_step = "learning_targets" if count else "final_test"
-        return {"status": "completed", "learning_target_count": count, "next_step": next_step, "next_url": "/learning-targets" if count else "/final-test"}
+        participant = get_participant(db, participant_id)
+        review = pretest_display.enabled(participant.show_pretest_results)
+        return {"status": "completed", "learning_target_count": count, "learning_target_slugs": [row["term_slug"] for row in learning_targets(db, participant_id)], "next_step": next_step, "review_required": review, "next_url": "/learning-targets" if review else pretest_display.next_url(db, participant)}
 
     return await run_idempotent(
         db,
@@ -457,8 +453,10 @@ def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> 
     return {
         "current_step": participant.current_step,
         "targets": targets,
-        "pretest_results": pretest_results(db, participant_id),
-        "test_results": latest_test_results(db, participant_id),
+        "review_required": not pretest_display.skip_review(db, participant),
+        "next_url": pretest_display.next_url(db, participant),
+        "pretest_results": pretest_results(db, participant_id) if pretest_display.enabled(participant.show_pretest_results) else [],
+        "test_results": latest_test_results(db, participant_id) if not pretest_display.skip_review(db, participant) else {"test_round": "test", "test_round_label": "テスト", "results": []},
         "retest_cycles_completed": participant.retest_cycles_completed,
         **progress,
         "retest_cycle_limit_reached": (
@@ -713,6 +711,21 @@ def api_admin_question_set(db: Session = Depends(get_db)):
     return JSONResponse({"mode": current_question_set_mode(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
 
 
+class PretestDisplayPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: StrictBool
+
+
+@app.get("/api/admin/pretest-result-display")
+def api_pretest_display(db: Session = Depends(get_db)):
+    return JSONResponse({"enabled": pretest_display.current_setting(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
+
+
+@app.put("/api/admin/pretest-result-display")
+def api_save_pretest_display(payload: PretestDisplayPayload, db: Session = Depends(get_db)):
+    return {"enabled": pretest_display.save_setting(db, payload.enabled), "applies_to": "new_participants_only"}
+
+
 @app.put("/api/admin/question-set")
 def api_set_admin_question_set(payload: QuestionSetPayload, db: Session = Depends(get_db)):
     return {"mode": save_question_set_mode(db, payload.mode), "applies_to": "new_participants_only"}
@@ -739,6 +752,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
         "participants": [
             {
                 "participant_id": row.id,
+                "show_pretest_results": pretest_display.enabled(row.show_pretest_results),
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,
                 "option_order_mode": row.option_order_mode or "debug_fixed",

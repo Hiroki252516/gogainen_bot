@@ -365,6 +365,19 @@ textarea {
   background: #fff;
 }
 
+.pretest-display-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pretest-display-toggle input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+}
+
 textarea {
   min-height: 120px;
   resize: vertical;
