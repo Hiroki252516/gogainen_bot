@@ -3154,8 +3154,6 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
     if phase not in {"retest", "final_test"}:
         raise HTTPException(status_code=400, detail="unsupported score phase")
     _assert_phase_available(participant, phase)
-    if pending_question_review(db, participant.id, phase) is not None:
-        raise HTTPException(status_code=409, detail="用語ごとの答え合わせを確認してから進んでください。")
     expected_variant = _expected_test_variant(db, participant, phase)
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase, is_correct=None).all()
     if not attempts:
@@ -3168,6 +3166,9 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
                 "error_code": "question_term_unavailable",
                 "message": "問題に対応する用語データが見つかりません。管理者に連絡してください。",
             })
+    if pending_question_review(db, participant.id, phase) is not None:
+        raise HTTPException(status_code=409, detail="用語ごとの答え合わせを確認してから進んでください。")
+    if uses_split(participant):
         expected_ids = {q["question_id"] for q in question_payloads(db, participant.id, phase)}
         if len(expected_ids) != 6 or {a.question_id for a in attempts} != expected_ids or len(attempts) != 6:
             raise HTTPException(status_code=400, detail="6設問すべてに回答してください。")
