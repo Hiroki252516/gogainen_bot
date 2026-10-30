@@ -400,10 +400,6 @@ export default function LearningPage() {
                 <span>学習セッションの進捗</span>
                 <strong>{displayedProgress} / {progress.total}</strong>
               </div>
-              <div className="learning-progress-row">
-                <span>この用語の学習確認</span>
-                <strong>1回</strong>
-              </div>
             </div>
           ) : null}
         </div>

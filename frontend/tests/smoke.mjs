@@ -29,6 +29,16 @@ const styles = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "
 for (const text of ["--shell-max-width: 1440px", ".shell {", ".admin-lock-bar {", "min(var(--shell-max-width), calc(100vw - 32px))", "width: min(420px, calc(100vw - 32px))", "@media (max-width: 760px)"]) {
   if (!styles.includes(text)) throw new Error(`responsive page width missing: ${text}`);
 }
+for (const text of [
+  ".corner-primary button {",
+  "min-height: 56px;",
+  "padding: 14px 22px;",
+  "font-size: 18px;",
+  "white-space: normal;",
+  "overflow-wrap: anywhere;",
+]) {
+  if (!styles.includes(text)) throw new Error(`primary navigation button sizing missing: ${text}`);
+}
 if ((styles.match(/min\(var\(--shell-max-width\), calc\(100vw - 32px\)\)/g) || []).length !== 2) {
   throw new Error("page shell and admin lock bar must use the same responsive width");
 }
@@ -248,10 +258,13 @@ if (learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") |
 if (!learningPage.includes("turnShownAt") || !learningPage.includes("question_shown_at: turnShownAt") || !learningPage.includes("answered_at: answeredAt")) {
   throw new Error("learning page must send turn timing timestamps");
 }
-for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type=\"checkbox\"", "learning-progress-summary", "学習セッションの進捗", "この用語の学習確認", "1回", "ATTEMPTS_PER_PROBLEM = 1", "progressForNewQuestion(termSlug", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection", "answer_key", "isCorrect ? \"正解\" : \"不正解\""]) {
+for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type=\"checkbox\"", "learning-progress-summary", "学習セッションの進捗", "ATTEMPTS_PER_PROBLEM = 1", "progressForNewQuestion(termSlug", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection", "answer_key", "isCorrect ? \"正解\" : \"不正解\""]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing multiple-selection/progress behavior: ${expectedText}`);
   }
+}
+if (learningPage.includes("この用語の学習確認") || learningPage.includes("<strong>1回</strong>")) {
+  throw new Error("learning page must not show the fixed learning-confirmation count");
 }
 const responseHandlerStart = learningPage.indexOf("const updatedTurn =");
 const responseHandlerEnd = learningPage.indexOf("async function continueLearning");
