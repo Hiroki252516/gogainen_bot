@@ -22,6 +22,7 @@ from app.models import Attempt, Base, LearnerState, Participant, Question, Quest
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, SCENARIO_ACTIONS_V1_CONTENT_PATH, LEARNING_V3_CONTENT_PATH, assessment_question_spec, learning_question_spec, load_content, load_learning_easy_content, _validate_assessment_variant
 from app.seed.seed_questions import seed_database
 from app.services import experiment, prefetch
+from split_api_support import acknowledge_all_question_reviews
 from app.services.interaction_history import build_interaction_history
 from app.services.option_order import assessment_bank_index, learning_bank_index, present_options, option_role
 
@@ -81,6 +82,7 @@ def submit(client, pid, phase, mode, role="M1", index=1):
         assert q["body"] == spec["body"]
         result = client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "phase": phase, "selected_option_ids": role_ids(q, spec, role)}, headers={"Idempotency-Key": f"{phase}-{index}-{q['question_id']}"})
         assert result.status_code == 200, result.text
+    acknowledge_all_question_reviews(client, pid, phase)
     endpoint = "diagnose-pretest" if phase == "pretest" else "score-final-test" if phase == "final_test" else "score-retest"
     scored = client.post(f"/api/participants/{pid}/{endpoint}")
     assert scored.status_code == 200, scored.text
@@ -229,6 +231,7 @@ def test_all_modes_use_role_metadata_for_mixed_answers(isolated, mode, layout, r
             ids.append(next(oid for oid in role_ids(q, spec, role) if oid not in ids))
         saved = client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "selected_option_ids": ids})
         assert saved.status_code == 200, saved.text
+    acknowledge_all_question_reviews(client, pid, "pretest")
     assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
     with factory() as db:
         assert {a.misconception_type for a in db.query(Attempt).filter_by(participant_id=pid)} == ({"M1", "M3"} if mode == "standard" and expected == "M3" else {expected})
@@ -396,6 +399,7 @@ def test_partial_tests_advance_all_terms_and_do_not_count_replays_twice(isolated
             assert all(a.is_correct is None for a in db.query(Attempt).filter_by(participant_id=pid, phase="retest"))
         for q in first[1:]:
             assert client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "selected_option_ids": role_ids(q, saved_spec(factory, q), "unknown")}).status_code == 200
+        acknowledge_all_question_reviews(client, pid, "retest")
         score = client.post(f"/api/participants/{pid}/score-retest", headers={"Idempotency-Key": "partial-score-complete"})
     assert score.status_code == 200, score.text
     assert client.post(f"/api/participants/{pid}/score-retest", headers={"Idempotency-Key": "partial-score-complete" if mode == "standard" else "partial-score"}).json() == score.json()
@@ -453,6 +457,7 @@ def test_missing_question_term_stops_scoring_without_partial_updates(isolated, m
             "selected_option_ids": role_ids(question, spec, "M1"),
         })
         assert saved.status_code == 200, saved.text
+    acknowledge_all_question_reviews(client, pid, phase)
 
     with factory() as db:
         pending = db.query(Attempt).filter_by(participant_id=pid, phase=phase, is_correct=None).all()

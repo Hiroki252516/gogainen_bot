@@ -22,6 +22,7 @@ from app.seed.content_loader import learning_question_spec
 from app.seed.seed_questions import seed_database
 from app.services import experiment
 from app.services.interaction_history import build_interaction_history
+from split_api_support import acknowledge_all_question_reviews
 from app.services.prefetch import wait_for_prefetch_tasks
 
 
@@ -38,6 +39,7 @@ def create_trial(group="A", labels="DEF"):
         ids = [option["option_id"] for option in question["options"] if option["label"] in labels]
         response = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": ids})
         assert response.status_code == 200, response.text
+    acknowledge_all_question_reviews(client, pid, "pretest")
     assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
     return pid
 
@@ -191,6 +193,7 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
             labels = following if question["term_slug"] == "llm_knowledge" else "ABC"
             ids = [option["option_id"] for option in question["options"] if option["label"] in labels]
             assert client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": ids}).status_code == 200
+        acknowledge_all_question_reviews(client, pid, "retest")
         assert client.post(f"/api/participants/{pid}/score-retest").status_code == 200
         next_session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"})
         assert next_session.status_code == 200, next_session.text
@@ -260,7 +263,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 27
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 28
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION

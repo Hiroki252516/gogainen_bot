@@ -10,7 +10,7 @@ from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PR
 from app.db.session import SessionLocal
 from app.main import app
 from app.models import AICallLog, Participant, TutorTurn
-from split_api_support import select_roles
+from split_api_support import acknowledge_all_question_reviews, select_roles
 from app.services import experiment
 from app.services.learning_glossary import (
     GLOSSARY_PATH, GLOSSARY_VERSION, glossary_snapshot, load_learning_glossary,
@@ -123,6 +123,7 @@ def start_learning(mode, group):
         selected = select_roles(question, ["M1" if labels == "DEF" else None] * (1 if mode == "standard" else 3))
         saved = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": selected})
         assert saved.status_code == 200, saved.text
+    acknowledge_all_question_reviews(client, pid, "pretest")
     assert client.post(f"/api/participants/{pid}/diagnose-pretest").status_code == 200
     session = client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).json()
     url = f"/api/tutor-sessions/{session['tutor_session_id']}/turns"
@@ -142,7 +143,7 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 27
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 28
         assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-30-question-review-v1"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material
