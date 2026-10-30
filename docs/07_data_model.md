@@ -1,5 +1,9 @@
 # 現行データと履歴互換
 
+## 仕様版28の答え合わせ保存
+
+RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnullableで保存する。Attempt.question_review_acknowledged_atもnullableで、各用語の設問2のAttemptに答え合わせ確認時刻を保存する。新規通常版参加者は登録時のON/OFF値を保存し、易しい版は対象外のNULLとする。旧行は補完しない。参加者ログとparticipants CSVにshow_question_reviewsを含め、統合ログCSVの固定ヘッダーは維持し、確認時刻は既存のvalue_json形式で記録する。実装契約は[40](40_question_pair_answer_review.md)。
+
 ## 用語注釈snapshot（仕様版26）
 
 テスト用にAttempt.glossary_snapshotへnullable JSON列を追加し、旧行はNULLで保持する。教材・解説は従来どおりTutorTurn.diagnosis_json.material_glossaryとgrading_json.feedback_glossaryにversion、dictionary_sha256、entries（id/term/definition、表示順）を保存する。教材・解説は先行生成を含め新規生成時に作り、再取得・再送で再計算しない。テストは出題GETで不変辞書から導出し、回答時に保存する。未回答画面取得はDBへ書き込まない。回答済みの再取得・再送は保存値を使う。管理ログとCSVのvalue_jsonに同じsnapshotを出す。旧記録の補完・再解析は行わず、表示に供した内容の記録を読了証明とはしない。[24](24_learning_glossary.md)。
@@ -12,7 +16,7 @@
 
 ## 現行の保存契約
 
-モデルの正本は `backend/app/models/__init__.py`。実験仕様版26を使用する。参加者の `option_order_mode` nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルを追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
+モデルの正本は backend/app/models/__init__.py。現行コードは実験仕様版28を使用する。参加者の option_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルに新しい設定列を追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 学籍番号はSQLAlchemyの研究DBへ追加しない。IDENTITY_MAPPING_PATHが指す別SQLiteへ、学籍番号・参加者ID・表示コード・作成日時・再送処理用キーを保存する。研究用エクスポート・AI入力・AIログ・冪等性のrequest_hash/response_jsonには学籍番号を含めない。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、登録は対応表を先行保存してから研究DBを確定し、通常の失敗では補償削除する。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
@@ -21,7 +25,7 @@
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-新規参加者だけ仕様版26とexperiment-plan-2026-10-27-test-glossary-v2を保存し、retest_cycles_completedを0で初期化する。既存版25以下を含む異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版28とexperiment-plan-2026-10-30-question-review-v1を保存し、retest_cycles_completedを0で初期化する。既存版27以下を含む異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 

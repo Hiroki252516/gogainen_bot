@@ -299,6 +299,13 @@ export default function LearningPage() {
             ...option,
             is_correct: data.answer_key?.[option.option_id] ?? false,
           })),
+          questions: practiceQuestion.questions?.map((question) => ({
+            ...question,
+            options: question.options.map((option) => ({
+              ...option,
+              is_correct: data.answer_key?.[option.option_id] ?? false,
+            })),
+          })),
         },
         learning_stage: data.next_learning_stage || turn.learning_stage,
       };
@@ -423,12 +430,17 @@ export default function LearningPage() {
                     <p className="preserve-lines">{groupedQuestionDisplay?.questionBodies[index] ?? question.body}</p>
                     <div className="selection-status">最も適切なものを1つ選んでください。</div>
                     <div className="options">
-                      {question.options.map((option) => (
-                        <label className={`option ${optionAnswerClass(Boolean(feedback), feedback?.answer_key?.[option.option_id])}`} key={option.option_id}>
-                          <input type="radio" name={`confirmation-${question.question_id}`} checked={selectedOptionIds.includes(option.option_id)} disabled={submitting || Boolean(feedback)} onChange={() => setSelectedOptionIds((ids) => [...ids.filter((id) => !question.options.some((o) => o.option_id === id)), option.option_id])} />
-                          <span><strong>{option.label}.</strong> {option.body}{feedback ? <strong className="option-verdict">{feedback.answer_key?.[option.option_id] ? "正解" : "不正解"}</strong> : null}</span>
-                        </label>
-                      ))}
+                      {question.options.map((option) => {
+                        const isCorrect = feedback
+                          ? (feedback.answer_key?.[option.option_id] ?? option.is_correct ?? false)
+                          : undefined;
+                        return (
+                          <label className={`option ${optionAnswerClass(Boolean(feedback), isCorrect)}`} key={option.option_id}>
+                            <input type="radio" name={`confirmation-${question.question_id}`} checked={selectedOptionIds.includes(option.option_id)} disabled={submitting || Boolean(feedback)} onChange={() => setSelectedOptionIds((ids) => [...ids.filter((id) => !question.options.some((o) => o.option_id === id)), option.option_id])} />
+                            <span><strong>{option.label}.</strong> {option.body}{feedback ? <strong className="option-verdict">{isCorrect ? "正解" : "不正解"}</strong> : null}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )) : practiceOptions.length ? (
@@ -462,7 +474,10 @@ export default function LearningPage() {
                           ((selectionState.hasUnknown && !isUnknown) ||
                             (!isUnknown && selectionState.reachedLimit) ||
                             (isUnknown && selectionState.normalSelectedCount > 0));
-                        const answerClass = optionAnswerClass(Boolean(feedback), option.is_correct);
+                        const isCorrect = feedback
+                          ? (feedback.answer_key?.[option.option_id] ?? option.is_correct ?? false)
+                          : undefined;
+                        const answerClass = optionAnswerClass(Boolean(feedback), isCorrect);
                         return (
                           <label className={`option ${isDisabled ? "option-disabled" : ""} ${isUnknown ? "option-unknown" : ""} ${answerClass}`} key={option.option_id}>
                             <input
@@ -477,7 +492,7 @@ export default function LearningPage() {
                             />
                             <span>
                               <strong>{option.label}.</strong> {option.body}
-                              {feedback ? <strong className="option-verdict">{option.is_correct ? "正解" : "不正解"}</strong> : null}
+                              {feedback ? <strong className="option-verdict">{isCorrect ? "正解" : "不正解"}</strong> : null}
                             </span>
                           </label>
                         );

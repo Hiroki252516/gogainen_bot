@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app import main as main_module
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.ai.mock_backend import MockAIBackend
 from app.ai.teaching_contract import validate_teaching_contract, validate_tutoring_material_length
 from app.models import Attempt, Base, LearnerState, Participant, Question, Term, TutorSession, TutorTurn
@@ -148,7 +149,7 @@ def test_startup_does_not_guess_or_rewrite_split_rounds(history_db, monkeypatch,
 def test_easy_round_backfill_is_preserved(history_db, monkeypatch, phase, variant, expected):
     db = history_db
     participant = Participant(display_code="EASY-ROUND", group_condition="control", question_set_mode="easy",
-                              experiment_spec_version=27, protocol_id="experiment-plan-2026-10-29-split-tests-v1")
+                              experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID)
     question = db.query(Question).filter_by(phase=phase, variant_key=variant).filter(Question.construct_key.endswith("scenario-actions-easy-v1")).first()
     db.add(participant)
     db.flush()

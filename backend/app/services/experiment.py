@@ -734,9 +734,11 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         raise HTTPException(status_code=400, detail="管理者から伝えられた参加コード（AまたはB）が必要です。")
     mode = current_question_set_mode(db)
     from app.services.pretest_display import current_setting
+    from app.services.question_review_display import current_setting as current_question_review_setting
     participant = Participant(
         display_code=next_display_code(db),
         show_pretest_results=current_setting(db),
+        show_question_reviews=current_question_review_setting(db) if mode == STANDARD else None,
         group_condition=group_condition,
         assignment_method="admin_code",
         consent_checked=consent_checked,
@@ -1091,6 +1093,168 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
     return out
 
 
+def pending_question_review(
+    db: Session,
+    participant_id: str,
+    phase: str,
+    questions: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    participant = get_participant(db, participant_id)
+    if not uses_split(participant) or participant.show_question_reviews is not True:
+        return None
+    question_rows = questions if questions is not None else question_payloads(db, participant_id, phase)
+    attempts_by_question = {
+        attempt.question_id: attempt
+        for attempt in db.query(Attempt)
+        .filter(Attempt.participant_id == participant.id, Attempt.phase == phase)
+        .order_by(Attempt.created_at.asc(), Attempt.id.asc())
+        .all()
+    }
+    question_ids = {row["question_id"] for row in question_rows}
+    questions_by_id = {
+        question.id: question
+        for question in db.query(Question).filter(Question.id.in_(question_ids)).all()
+    }
+    acknowledged_term_slugs: set[str] = set()
+    for row in question_rows:
+        question = questions_by_id.get(row["question_id"])
+        if question is None:
+            continue
+        match = re.search(r"_q([12])$", question.variant_key or "")
+        if match is None or match.group(1) != "2":
+            continue
+        attempt = attempts_by_question.get(question.id)
+        if attempt is not None and attempt.question_review_acknowledged_at is not None:
+            acknowledged_term_slugs.add(row["term_slug"])
+
+    grouped: dict[str, dict[int, dict[str, Any]]] = {}
+    for row in question_rows:
+        if row["term_slug"] in acknowledged_term_slugs:
+            continue
+        question = questions_by_id.get(row["question_id"])
+        if question is None:
+            continue
+        match = re.search(r"_q([12])$", question.variant_key or "")
+        if match is None:
+            continue
+        number = int(match.group(1))
+        attempt = attempts_by_question.get(question.id)
+        if attempt is None or not attempt.selected_option_ids:
+            continue
+        selected_id = str(attempt.selected_option_ids[0])
+        snapshot_options = attempt.option_order_snapshot or []
+        selected_option = next(
+            (option for option in snapshot_options if str(option.get("option_id")) == selected_id),
+            None,
+        )
+        if selected_option is None:
+            raise HTTPException(
+                status_code=503,
+                detail={"error_code": "question_review_snapshot_unavailable", "message": "回答表示の保存情報が見つかりません。管理者に連絡してください。"},
+            )
+        selected_options = _selected_options(db, attempt)
+        grouped.setdefault(row["term_slug"], {})[number] = {
+            "question_number": number,
+            "selected_option": {
+                "label": selected_option["label"],
+                "body": selected_option["body"],
+            },
+            "is_correct": len(selected_options) == 1 and selected_options[0].is_correct,
+        }
+    for row in question_rows:
+        term_slug = row["term_slug"]
+        pair = grouped.get(term_slug, {})
+        if set(pair) == {1, 2}:
+            return {
+                "phase": phase,
+                "term_slug": term_slug,
+                "term_label": row["term_label"],
+                "results": [pair[1], pair[2]],
+            }
+    return None
+
+def acknowledge_question_review(
+    db: Session,
+    participant_id: str,
+    phase: str,
+    term_slug: str,
+) -> dict[str, Any]:
+    participant = get_participant(db, participant_id, for_update=True)
+    if phase not in TEST_PHASES:
+        raise HTTPException(status_code=400, detail="unsupported test phase")
+    if not uses_split(participant) or participant.show_question_reviews is not True:
+        raise HTTPException(status_code=409, detail="この参加者は設問ごとの答え合わせ対象ではありません。")
+
+    # A retry after the phase transition remains idempotent. While the phase is
+    # active, the current question bank identifies the exact round to acknowledge.
+    try:
+        question_rows = question_payloads(db, participant.id, phase)
+    except HTTPException:
+        acknowledged = (
+            db.query(Attempt)
+            .join(Term, Attempt.term_id == Term.id)
+            .join(Question, Attempt.question_id == Question.id)
+            .filter(
+                Attempt.participant_id == participant.id,
+                Attempt.phase == phase,
+                Term.slug == term_slug,
+                Question.variant_key.like("%_q2"),
+                Attempt.question_review_acknowledged_at.is_not(None),
+            )
+            .order_by(Attempt.created_at.desc(), Attempt.id.desc())
+            .first()
+        )
+        if acknowledged is not None:
+            return {
+                "acknowledged": True,
+                "phase": phase,
+                "term_slug": term_slug,
+                "current_step": participant.current_step,
+                "pending_question_review": None,
+                "next_question_id": None,
+                "phase_complete": True,
+            }
+        raise
+
+    term_rows = [row for row in question_rows if row["term_slug"] == term_slug]
+    pair_attempts: dict[int, Attempt] = {}
+    for row in term_rows:
+        question = db.get(Question, row["question_id"])
+        match = re.search(r"_q([12])$", (question.variant_key or "") if question else "")
+        if match is None:
+            continue
+        pair_attempts[int(match.group(1))] = (
+            db.query(Attempt)
+            .filter_by(participant_id=participant.id, phase=phase, question_id=row["question_id"])
+            .order_by(Attempt.created_at.desc(), Attempt.id.desc())
+            .first()
+        )
+    if set(pair_attempts) != {1, 2} or any(pair_attempts[number] is None for number in (1, 2)):
+        raise HTTPException(status_code=409, detail="設問1・2の回答がそろっていないため、答え合わせを確認できません。")
+
+    second_attempt = pair_attempts[2]
+    if second_attempt.question_review_acknowledged_at is None:
+        if any(not attempt.selected_option_ids for attempt in pair_attempts.values()):
+            raise HTTPException(status_code=409, detail="設問1・2の回答がそろっていないため、答え合わせを確認できません。")
+        current_review = pending_question_review(db, participant.id, phase, question_rows)
+        if current_review is None or current_review["term_slug"] != term_slug:
+            raise HTTPException(status_code=409, detail="現在の答え合わせではありません。画面を再読み込みしてください。")
+        second_attempt.question_review_acknowledged_at = now()
+        _commit(db)
+    next_review = pending_question_review(db, participant.id, phase, question_rows)
+    next_question = next(
+        (row["question_id"] for row in question_rows if row.get("answer_status") != "submitted"),
+        None,
+    )
+    return {
+        "acknowledged": True,
+        "phase": phase,
+        "term_slug": term_slug,
+        "current_step": participant.current_step,
+        "pending_question_review": next_review,
+        "next_question_id": next_question,
+        "phase_complete": next_review is None and next_question is None,
+    }
 def effective_test_page_mode(participant: Participant) -> str:
     """Treat nullable historical display modes as the original per-question UI."""
     return "per_term" if participant.test_page_mode == "per_term" and uses_split(participant) else "per_question"
@@ -1548,6 +1712,8 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
     active_term_ids = {term.id for term in _active_test_terms(db)}
     if len(attempts) != len(active_term_ids) * (2 if uses_split(participant) else 1) or {attempt.term_id for attempt in attempts} != active_term_ids:
         raise HTTPException(status_code=400, detail="pretest attempts are incomplete")
+    if pending_question_review(db, participant.id, "pretest") is not None:
+        raise HTTPException(status_code=409, detail="用語ごとの答え合わせを確認してから進んでください。")
     if any(attempt.is_correct is not None for attempt in attempts):
         raise HTTPException(status_code=409, detail="pretest has already been diagnosed")
 
@@ -3016,6 +3182,9 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
                 "error_code": "question_term_unavailable",
                 "message": "問題に対応する用語データが見つかりません。管理者に連絡してください。",
             })
+    if pending_question_review(db, participant.id, phase) is not None:
+        raise HTTPException(status_code=409, detail="用語ごとの答え合わせを確認してから進んでください。")
+    if uses_split(participant):
         expected_ids = {q["question_id"] for q in question_payloads(db, participant.id, phase)}
         if len(expected_ids) != 6 or {a.question_id for a in attempts} != expected_ids or len(attempts) != 6:
             raise HTTPException(status_code=400, detail="6設問すべてに回答してください。")
@@ -3620,8 +3789,8 @@ def admin_summary(db: Session, mode: str = STANDARD) -> dict[str, Any]:
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "question_set_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
-    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "test_page_timing_json", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
+    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_question_reviews", "question_set_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
+    "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "test_page_timing_json", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "question_review_acknowledged_at", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "legacy_scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "legacy_l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),
     "tutor_turns": (TutorTurn, ["id", "tutor_session_id", "turn_index", "legacy_scaffolding_level", "teaching_strategy", "legacy_strategy_changed", "tutor_message", "diagnosis_json", "practice_question_json", "learner_response", "ai_feedback", "legacy_next_scaffolding_level", "legacy_forbidden_help_given", "question_shown_at", "answered_at", "response_time_sec", "created_at"]),
@@ -3691,6 +3860,7 @@ def _attempt_log_row(
         "test_page_timing_json": attempt.test_page_timing_json,
         "question_shown_at": _iso(attempt.question_shown_at),
         "answered_at": _iso(attempt.answered_at),
+        "question_review_acknowledged_at": _iso(attempt.question_review_acknowledged_at),
         "is_correct": attempt.is_correct,
         "score": attempt.score,
         "diagnosed_status": attempt.diagnosed_status,
@@ -4002,6 +4172,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     return {
         "participant": {
             "show_pretest_results": participant.show_pretest_results is not False,
+            "show_question_reviews": participant.show_question_reviews,
             "participant_id": participant.id,
             "display_code": participant.display_code,
             "experiment_spec_version": participant.experiment_spec_version,

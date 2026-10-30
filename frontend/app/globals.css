@@ -727,6 +727,11 @@ button:disabled {
   margin-left: 8px;
 }
 
+.term-page-runner .option .option-verdict {
+  display: block;
+  margin: 0 0 6px;
+}
+
 .give-up-control {
   display: flex;
   flex-direction: column;

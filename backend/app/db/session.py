@@ -29,6 +29,7 @@ def _ensure_lightweight_schema_updates() -> None:
     additions = {
         "participants": [
             ("show_pretest_results", "BOOLEAN"),
+            ("show_question_reviews", "BOOLEAN"),
             ("question_set_mode", "VARCHAR(32)"),
             ("test_page_mode", "VARCHAR(32)"),
             ("completion_reason", "TEXT"),
@@ -44,7 +45,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("survey_version", "VARCHAR(80)"),
             ("responses_json", json_type),
         ],
-        "runtime_settings": [("question_set_mode", "VARCHAR(32)"), ("show_pretest_results", "BOOLEAN")],
+        "runtime_settings": [("question_set_mode", "VARCHAR(32)"), ("show_pretest_results", "BOOLEAN"), ("show_question_reviews", "BOOLEAN")],
         "attempts": [
             ("test_round", "TEXT"),
             ("question_shown_at", datetime_type),
@@ -52,6 +53,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("question_body_snapshot", "TEXT"),
             ("option_order_snapshot", json_type),
             ("glossary_snapshot", json_type),
+            ("question_review_acknowledged_at", datetime_type),
             ("test_page_timing_json", json_type),
             ("selected_option_ids", json_type),
         ],

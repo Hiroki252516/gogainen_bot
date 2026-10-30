@@ -4,6 +4,8 @@
 
 採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。新6仮説はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧記録保護は仕様版とprotocol_idで限定する。
 
+仕様版28では、通常版のテスト取得APIが未確認の設問ペア表示データを返し、確認APIが第2設問のAttemptへ確認時刻を保存する。答え合わせ画面は同じテスト画面内に表示し、AIサービスを呼ばない。受入検証は未実施。[詳細](40_question_pair_answer_review.md)。
+
 ## 現行MVPの実装
 
 現行コードは、FastAPIの単一backendサービスとNext.js frontendを中心に構成される。実験フロー、問題seed、学習セッション、評価再計算は主に `backend/app/services/experiment.py` に実装され、AI呼び出しは `AIBackend` 経由で `CodexAppServerBackend` または明示指定時の `MockAIBackend` が処理する。Docker Composeではbackend、frontend、PostgreSQLを起動し、ローカルの直接起動ではSQLiteを使用できる。

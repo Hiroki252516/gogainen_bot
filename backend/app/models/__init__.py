@@ -24,6 +24,7 @@ class Participant(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     show_pretest_results: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    show_question_reviews: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     display_code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     assignment_method: Mapped[str] = mapped_column(String(32), default="manual", nullable=False)
@@ -50,6 +51,7 @@ class RuntimeSetting(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     show_pretest_results: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    show_question_reviews: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     option_order_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="debug_fixed")
     question_set_mode: Mapped[str | None] = mapped_column(String(32), nullable=True, default="standard")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
@@ -185,6 +187,7 @@ class Attempt(Base):
     question_body_snapshot: Mapped[str | None] = mapped_column(Text)
     option_order_snapshot: Mapped[list | None] = mapped_column(JSON)
     glossary_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    question_review_acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     test_page_timing_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_correct: Mapped[bool | None] = mapped_column(Boolean)
     score: Mapped[float | None] = mapped_column(Float)

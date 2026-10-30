@@ -258,7 +258,7 @@ if (learningPage.includes("className=\"preserve-lines\">{turn.tutor_message}") |
 if (!learningPage.includes("turnShownAt") || !learningPage.includes("question_shown_at: turnShownAt") || !learningPage.includes("answered_at: answeredAt")) {
   throw new Error("learning page must send turn timing timestamps");
 }
-for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type=\"checkbox\"", "learning-progress-summary", "学習セッションの進捗", "ATTEMPTS_PER_PROBLEM = 1", "progressForNewQuestion(termSlug", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection", "answer_key", "option.is_correct ? \"正解\" : \"不正解\""]) {
+for (const expectedText of ["selectedOptionIds", "selected_option_ids", "type=\"checkbox\"", "learning-progress-summary", "学習セッションの進捗", "ATTEMPTS_PER_PROBLEM = 1", "progressForNewQuestion(termSlug", "/${requiredSelections} 選択済み", "上限に達しました", "わからないを選択中", "option-disabled", "option-unknown", "nextMultipleSelection", "answer_key", "isCorrect ? \"正解\" : \"不正解\""]) {
   if (!learningPage.includes(expectedText)) {
     throw new Error(`learning page missing multiple-selection/progress behavior: ${expectedText}`);
   }

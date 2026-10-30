@@ -24,7 +24,7 @@ from app.services import experiment
 from app.services.idempotency import request_fingerprint
 from app.models import IdempotencyRecord
 from app.services.prefetch import wait_for_prefetch_tasks
-from split_api_support import case_roles, select_roles
+from split_api_support import acknowledge_all_question_reviews, case_roles, select_roles
 
 
 client = TestClient(app)
@@ -39,6 +39,7 @@ def create_trial(group="A", labels="DEF"):
         options = {option["label"]: option["option_id"] for option in question["options"]}
         saved = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": select_roles(question, [case_roles(labels)[0]])})
         assert saved.status_code == 200, saved.text
+    acknowledge_all_question_reviews(client, pid, "pretest")
     scored = client.post(f"/api/participants/{pid}/diagnose-pretest")
     assert scored.status_code == 200, scored.text
     return pid, questions

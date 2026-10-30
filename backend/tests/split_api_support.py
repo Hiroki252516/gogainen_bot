@@ -20,6 +20,20 @@ def ok(response):
     return response.json()
 
 
+def acknowledge_all_question_reviews(client, pid, phase):
+    """Complete the in-page reviews before exercising phase scoring or learning."""
+    path = f"/api/experiment/{pid}/{phase.replace('_', '-')}"
+    for _ in range(3):
+        pending = ok(client.get(path)).get("pending_question_review")
+        if pending is None:
+            return
+        ok(client.post(
+            f"/api/participants/{pid}/question-review-acknowledgements",
+            json={"phase": phase, "term_slug": pending["term_slug"]},
+        ))
+    assert ok(client.get(path)).get("pending_question_review") is None, "all three term reviews must be acknowledged"
+
+
 def case_roles(labels):
     # Old revision case names describe outcomes, not new four-choice labels.
     if labels == "ABC":
@@ -88,6 +102,7 @@ def answer_test(client, pid, phase, slug, roles):
         headers = {"Idempotency-Key": f"{phase}-{question['question_id']}"}
         response = ok(client.post("/api/attempts", json=payload, headers=headers))
         assert ok(client.post("/api/attempts", json=payload, headers=headers)) == response
+    acknowledge_all_question_reviews(client, pid, phase)
     endpoint = "diagnose-pretest" if phase == "pretest" else f"score-{phase.replace('_', '-')}"
     scored = ok(client.post(f"/api/participants/{pid}/{endpoint}", json={}))
     return questions, scored
