@@ -38,6 +38,9 @@ for (const text of ["用語の補足", "!glossary?.entries.length", "<dl>", "<dt
   if (!glossary.includes(text)) throw new Error(`learning glossary missing: ${text}`);
 }
 const glossaryPage = fs.readFileSync(new URL("../app/learning/[termSlug]/page.tsx", import.meta.url), "utf8");
+if ((glossaryPage.match(/optionAnswerClass\(Boolean\(feedback\)/g) || []).length !== 2) {
+  throw new Error("both learning question formats must use the shared answer color state");
+}
 for (const text of ['const preserveQuestionLines = (termSlug === "multi_agent"', '[2, 3].includes(turn?.practice_question?.learning_variant_index ?? 0)', 'questionBody.includes("\\n\\n案1：")', 'questionBody.includes("\\n\\n案2：")', 'termSlug === "memory_process"', 'learning_variant_index === 1', 'questionBody.startsWith("大学が、授業内容について質問できる学習支援AI")', 'questionBody.includes("\\n\\n開発担当者は、")', 'learning_variant_index === 2', 'questionBody.startsWith("料理の献立を提案するAIを開発している。")', 'questionBody.includes("\\n\\nこのAIが過去の会話を記憶として利用する場合、")', 'className={preserveQuestionLines ? "preserve-lines" : undefined}']) {
   if (!glossaryPage.includes(text)) throw new Error(`learning question line breaks must stay scoped: ${text}`);
 }
