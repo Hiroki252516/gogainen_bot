@@ -9,6 +9,7 @@ import { LearningGlossary, type Glossary } from "@/components/LearningGlossary";
 import { GlossarySidebar } from "@/components/GlossarySidebar";
 import { CheckingFlow, useLearningTargetFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, postIdempotent, requireParticipant } from "@/lib/api";
+import { prepareGroupedQuestionDisplay } from "@/lib/learning-question-display";
 
 type Option = { option_id: string; label: string; body: string; exclusive?: boolean; is_correct?: boolean };
 
@@ -343,6 +344,9 @@ export default function LearningPage() {
   const progress = questionProgress || (turn ? progressForNewQuestion(termSlug, turn) : null);
   const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;
   const questionBody = turn?.practice_question?.body || turn?.learner_prompt || "";
+  const groupedQuestionDisplay = turn?.practice_question.questions
+    ? prepareGroupedQuestionDisplay(turn.practice_question.questions)
+    : null;
   const preserveQuestionLines = (termSlug === "multi_agent"
     && [2, 3].includes(turn?.practice_question?.learning_variant_index ?? 0)
     && questionBody.includes("\n\n案1：")
@@ -404,9 +408,10 @@ export default function LearningPage() {
               <section className="learning-block problem-block" aria-labelledby="problem-title">
                 <h2 id="problem-title">問題</h2>
                 {!turn.practice_question.questions ? <p className={preserveQuestionLines ? "preserve-lines" : undefined}>{questionBody}</p> : null}
-                {turn.practice_question.questions ? turn.practice_question.questions.map((question) => (
+                {groupedQuestionDisplay?.sharedScenario ? <p className="preserve-lines">{groupedQuestionDisplay.sharedScenario}</p> : null}
+                {turn.practice_question.questions ? turn.practice_question.questions.map((question, index) => (
                   <div key={question.question_id} className="stack">
-                    <p className="preserve-lines">{question.body}</p>
+                    <p className="preserve-lines">{groupedQuestionDisplay?.questionBodies[index] ?? question.body}</p>
                     <div className="selection-status">最も適切なものを1つ選んでください。</div>
                     <div className="options">
                       {question.options.map((option) => (
