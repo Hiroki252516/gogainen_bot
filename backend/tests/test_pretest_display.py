@@ -5,7 +5,7 @@ from admin_client import AuthenticatedTestClient
 from app.main import app
 from app.db.session import SessionLocal
 from app.models import Participant
-from split_api_support import ok, select_roles
+from split_api_support import acknowledge_all_question_reviews, ok, select_roles
 
 ENDPOINT = "/api/admin/pretest-result-display"
 
@@ -33,6 +33,7 @@ def test_display_snapshot_and_navigation(enabled, perfect, mode, group, layout):
             if index == 0 and not perfect:
                 roles = ["unknown"]
             ok(client.post("/api/attempts", json={"participant_id": pid, "phase": "pretest", "question_id": question["question_id"], "selected_option_ids": select_roles(question, roles)}))
+        acknowledge_all_question_reviews(client, pid, "pretest")
         url = f"/api/participants/{pid}/diagnose-pretest"
         response = ok(client.post(url, json={}, headers={"Idempotency-Key": "display-score"}))
         assert ok(client.post(url, json={}, headers={"Idempotency-Key": "display-score"})) == response
@@ -53,6 +54,7 @@ def test_display_snapshot_and_navigation(enabled, perfect, mode, group, layout):
             for question in final_questions:
                 roles = [None] if mode == "standard" else [None, None, None]
                 ok(client.post("/api/attempts", json={"participant_id": pid, "phase": "final_test", "question_id": question["question_id"], "selected_option_ids": select_roles(question, roles)}))
+            acknowledge_all_question_reviews(client, pid, "final_test")
             ok(client.post(f"/api/participants/{pid}/score-final-test", json={}))
             reviewed = ok(client.get(f"/api/participants/{pid}/learning-targets"))
             assert reviewed["review_required"] is True
@@ -120,6 +122,7 @@ def test_hidden_review_three_terms_progress_to_retest(group, layout):
             questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
             for question in questions:
                 ok(client.post("/api/attempts", json={"participant_id": pid, "phase": "pretest", "question_id": question["question_id"], "selected_option_ids": select_roles(question, ["unknown"])}))
+            acknowledge_all_question_reviews(client, pid, "pretest")
             diagnosed = ok(client.post(f"/api/participants/{pid}/diagnose-pretest", json={}))
             slugs = ["llm_knowledge", "multi_agent", "memory_process"]
             assert diagnosed["learning_target_slugs"] == slugs

@@ -5,7 +5,7 @@ from app.db.session import SessionLocal
 from app.models import QuestionOption, TutorTurn, Participant, Attempt
 from app.seed.seed_questions import seed_database
 from app.services.hypothesis_metrics import participant_metrics
-from split_api_support import create_trial, answer_test, select_roles
+from split_api_support import acknowledge_all_question_reviews, create_trial, answer_test, select_roles
 
 
 def ok(response):
@@ -37,6 +37,7 @@ def test_split_flow(group, layout, first_role, target_slug):
             option = db.query(QuestionOption).filter_by(question_id=q["question_id"], misconception_type=role).first()
             option_id = option.id
         ok(client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "selected_option_ids": [option_id]}))
+    acknowledge_all_question_reviews(client, pid, "pretest")
     ok(client.post(f"/api/participants/{pid}/diagnose-pretest", json={}))
     session = ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": target_slug}))
     turn = ok(client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}))
@@ -63,6 +64,7 @@ def test_split_flow(group, layout, first_role, target_slug):
     assert len(retest) == 6
     for q in retest:
         ok(client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "selected_option_ids": [q["options"][-1]["option_id"]]}))
+    acknowledge_all_question_reviews(client, pid, "retest")
     ok(client.post(f"/api/participants/{pid}/score-retest", json={}))
     reviewed = ok(client.get(f"/api/participants/{pid}/learning-targets"))
     assert len(reviewed["test_results"]["results"]) == 6
@@ -84,6 +86,7 @@ def test_split_maximum_rounds_and_mastery(pretest_perfect):
                 option = db.query(QuestionOption).filter_by(question_id=q["question_id"], is_correct=True).one() if correct else None
                 selected = option.id if option else q["options"][-1]["option_id"]
             ok(client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "phase": phase.replace("-", "_"), "selected_option_ids": [selected]}))
+        acknowledge_all_question_reviews(client, pid, phase.replace("-", "_"))
     answer("pretest", pretest_perfect)
     ok(client.post(f"/api/participants/{pid}/diagnose-pretest", json={}))
     if not pretest_perfect:

@@ -16,7 +16,7 @@ import app.services.experiment as experiment_service
 from app.services.prefetch import PrefetchCoordinator, wait_for_prefetch_tasks
 from app.services.tutor_prefetch import TutorPrefetchRegistry
 from app.services.learning_glossary import glossary_snapshot, public_glossary
-from split_api_support import case_roles, select_roles
+from split_api_support import acknowledge_all_question_reviews, case_roles, select_roles
 
 
 client = TestClient(app)
@@ -108,6 +108,7 @@ def _create_participant_with_pretest() -> str:
             },
         )
         assert response.status_code == 200, response.text
+    acknowledge_all_question_reviews(client, pid, "pretest")
     diagnosis = client.post(f"/api/participants/{pid}/diagnose-pretest")
     assert diagnosis.status_code == 200, diagnosis.text
     return pid

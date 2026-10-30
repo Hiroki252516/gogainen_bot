@@ -18,6 +18,7 @@ from app.services.split_assessment import (
     parse_split_variant,
     split_item_keys,
 )
+from split_api_support import acknowledge_all_question_reviews
 
 
 def ok(response):
@@ -39,6 +40,7 @@ def learning_turn(monkeypatch):
             option = db.query(QuestionOption).filter_by(question_id=question["question_id"], misconception_type="M1" if index == 0 else None).first()
             option_id = option.id
         ok(client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": [option_id]}))
+    acknowledge_all_question_reviews(client, pid, "pretest")
     ok(client.post(f"/api/participants/{pid}/diagnose-pretest", json={}))
     session = ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}))
     turn = ok(client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}))
