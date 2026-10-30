@@ -674,6 +674,16 @@ button:disabled {
   box-shadow: 0 4px 18px rgb(15 23 42 / 14%);
 }
 
+.corner-primary button {
+  min-height: 56px;
+  padding: 14px 22px;
+  font-size: 18px;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .sticky-exit {
   position: sticky;
   top: max(12px, env(safe-area-inset-top));
