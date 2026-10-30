@@ -18,6 +18,14 @@ export type TestTermPage<T extends TestQuestionForPage> = {
   questions: [T, T];
 };
 
+export function normalizeTestRound(value: string | null | undefined): string {
+  return value ?? "";
+}
+
+export function sameTestRound(left: string | null | undefined, right: string | null | undefined): boolean {
+  return normalizeTestRound(left) === normalizeTestRound(right);
+}
+
 export function groupTestQuestionsByTerm<T extends TestQuestionForPage>(
   questions: T[] | null | undefined,
 ): TestTermPage<T>[] | null {

@@ -7,8 +7,14 @@ const source = fs.readFileSync(new URL("../lib/test-term-pages.ts", import.meta.
 const javascript = ts.transpile(source, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
 const exports = {};
 vm.runInNewContext(javascript, { exports });
-const { groupTestQuestionsByTerm, combineTestGlossaries, initialTestTermPageIndex } = exports;
+const { groupTestQuestionsByTerm, combineTestGlossaries, initialTestTermPageIndex, normalizeTestRound, sameTestRound } = exports;
 const normalize = (value) => JSON.parse(JSON.stringify(value));
+
+const pendingRound = JSON.parse(JSON.stringify({ test_round: normalizeTestRound(null) })).test_round;
+assert.equal(pendingRound, "", "page submissions serialize a missing test round as an empty string");
+assert.equal(sameTestRound(pendingRound, null), true, "a pending submission must match its null-round page after reload");
+assert.equal(sameTestRound(null, ""), true, "null and empty test rounds share the same normalized identity");
+assert.equal(sameTestRound("retest_1", null), false, "a pending submission for another test round must not be restored");
 
 const questions = ["llm_knowledge", "multi_agent", "memory_process"].flatMap((term_slug, term_index) => [1, 2].map((number) => ({
   question_id: `${term_slug}-${number}`,
