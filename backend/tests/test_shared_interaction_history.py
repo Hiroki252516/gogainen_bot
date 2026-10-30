@@ -22,21 +22,20 @@ from app.seed.content_loader import learning_question_spec
 from app.seed.seed_questions import seed_database
 from app.services import experiment
 from app.services.interaction_history import build_interaction_history
-from split_api_support import acknowledge_all_question_reviews
+from split_api_support import acknowledge_all_question_reviews, select_roles
 from app.services.prefetch import wait_for_prefetch_tasks
 
 
 client = TestClient(app)
-# Detailed multi-selection history fixtures exercise the retained easy format.
-pytestmark = pytest.mark.usefixtures("ten_choice_api")
 
 
 def create_trial(group="A", labels="DEF"):
     participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    role = {"ABC": None, "DEF": "M1", "GHI": "M3", "J": "unknown"}[labels]
     for question in questions:
-        ids = [option["option_id"] for option in question["options"] if option["label"] in labels]
+        ids = select_roles(question, [role])
         response = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": ids})
         assert response.status_code == 200, response.text
     acknowledge_all_question_reviews(client, pid, "pretest")
@@ -52,7 +51,8 @@ def start_turn(pid):
 
 
 def answer(turn, labels, **timing):
-    ids = [option["option_id"] for option in turn["practice_question"]["options"] if option["label"] in labels]
+    role = {"ABC": None, "DEF": "M1", "GHI": "M3", "J": "unknown"}[labels]
+    ids = [select_roles(question, [role])[0] for question in turn["practice_question"]["questions"]]
     result = client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json={"selected_option_ids": ids, **timing})
     assert result.status_code == 200, result.text
     return result.json()
@@ -64,7 +64,10 @@ def test_history_merges_all_rounds_and_sessions_using_snapshots_without_diagnost
     base = datetime(2026, 10, 1)
     with SessionLocal() as db:
         term = db.query(Term).filter_by(slug="llm_knowledge").one()
-        pretest = db.query(Attempt).filter_by(participant_id=pid, term_id=term.id, phase="pretest").one()
+        pretest_attempts = db.query(Attempt).filter_by(participant_id=pid, term_id=term.id, phase="pretest").order_by(Attempt.id).all()
+        assert len(pretest_attempts) == 2
+        pretest, duplicate_item = pretest_attempts
+        db.delete(duplicate_item)
         pretest.answered_at = base
         pretest.question_body_snapshot = "保存当時の事前問題"
         pretest.option_order_snapshot = [{"option_id": option_id, "label": label, "body": f"保存当時の選択肢{label}", "misconception_type": "PRIVATE_DIAGNOSIS", "is_correct": False} for option_id, label in zip(pretest.selected_option_ids, "DEF")]
@@ -189,9 +192,13 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
             assert other_turn.status_code == 200, other_turn.text
             answer(other_turn.json(), "ABC")
         questions = client.get(f"/api/experiment/{pid}/retest").json()["questions"]
+        indexes = {}
+        following_roles = {"ABC": (None, None), "J": ("unknown", "unknown"), "DEF": ("M1", "M1"), "GHI": ("M3", "M3")}[following]
         for question in questions:
-            labels = following if question["term_slug"] == "llm_knowledge" else "ABC"
-            ids = [option["option_id"] for option in question["options"] if option["label"] in labels]
+            index = indexes.get(question["term_slug"], 0)
+            indexes[question["term_slug"]] = index + 1
+            role = following_roles[index] if question["term_slug"] == "llm_knowledge" else None
+            ids = select_roles(question, [role])
             assert client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": ids}).status_code == 200
         acknowledge_all_question_reviews(client, pid, "retest")
         assert client.post(f"/api/participants/{pid}/score-retest").status_code == 200
@@ -204,18 +211,17 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
         with SessionLocal() as db:
             logs = [log for log in db.query(AICallLog).order_by(AICallLog.created_at) if log.request_payload.get("participant_id") == pid]
             first_feedback = next(log for log in logs if log.purpose == "explain_selected_distractor")
-            assert len(first_feedback.request_payload["interaction_history"]) == 1
+            assert len(first_feedback.request_payload["interaction_history"]) == (0 if initial == "J" else 2)
             generation = [log for log in logs if log.purpose == "generate_tutoring_turn" and (log.request_payload.get("term") or {}).get("slug") == "llm_knowledge"][-1]
             history = generation.request_payload["interaction_history"]
-            assert len(history) == 3
-            assert history[-1]["answered_at"] == "2030-01-01T00:00:10"
-            assert [row["label"] for row in history[-1]["selected_options"]] == list(following)
+            assert len(history) == (0 if following == "J" else 2)
+            assert all(row["phase"] == "retest" and len(row["selected_options"]) == 1 for row in history)
             assert first_feedback.response_payload["feedback"] not in json.dumps(history, ensure_ascii=False)
-            assert generation.request_payload["interaction_history_audit"]["record_count"] == 3
+            assert generation.request_payload["interaction_history_audit"]["record_count"] == len(history)
             assert generation.request_payload["experiment_spec_version"] == CURRENT_EXPERIMENT_SPEC_VERSION
             assert generation.request_payload["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
             if group == "B":
-                assert set(generation.request_payload["input_projection"]) == (set(COMMON_INPUT_KEYS) - {"learning_scope"}) | {"explanation_level"}
+                assert set(generation.request_payload["input_projection"]) == set(COMMON_INPUT_KEYS)
         success = answer(next_turn, "ABC")
         assert success["next_action"] == "move_next"
         assert success["is_sufficient"] is True
@@ -287,9 +293,11 @@ def test_missing_snapshot_option_body_is_restored_from_the_question_bank():
     pid = create_trial()
     with SessionLocal() as db:
         term = db.query(Term).filter_by(slug="llm_knowledge").one()
-        attempt = db.query(Attempt).filter_by(participant_id=pid, term_id=term.id).one()
-        attempt.option_order_snapshot = [{"option_id": option_id, "label": "D", "body": ""} for option_id in attempt.selected_option_ids]
+        attempt = db.query(Attempt).filter_by(participant_id=pid, term_id=term.id, phase="pretest").order_by(Attempt.id).first()
+        selected = db.query(QuestionOption).filter(QuestionOption.id.in_(attempt.selected_option_ids)).all()
+        expected_labels = [option.option_label for option in selected]
+        attempt.option_order_snapshot = [{"option_id": option.id, "label": option.option_label, "body": ""} for option in selected]
         db.commit()
         history = build_interaction_history(db, pid, term.id)
-        assert [option["label"] for option in history[0]["selected_options"]] == list("DEF")
+        assert [option["label"] for option in history[0]["selected_options"]] == expected_labels
         assert all(option["body"] for option in history[0]["selected_options"])

@@ -80,7 +80,7 @@ try {
   await page.getByRole("button", { name: "管理画面をロック", exact: true }).waitFor();
   // Session loss returns to the prompt without displaying stale admin records.
   await page.request.post(new URL("/api/admin/auth/logout", base).href);
-  await page.getByRole("group", { name: "集計する問題版", exact: true }).getByRole("button", { name: "易しい版", exact: true }).click();
+  assert.equal(await page.getByRole("group", { name: "集計する問題版", exact: true }).count(), 0);
   await popup.waitFor();
   await page.getByLabel("パスワード", { exact: true }).fill("abc");
   await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();

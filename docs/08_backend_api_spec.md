@@ -1,5 +1,11 @@
 # 現行API
 
+## 易しい版の停止（2026-10-30）
+
+新規登録は通常版に固定する。GET `/api/admin/question-set`はmode=standardを返し、PUTでeasyを指定した場合は422、standardは受理する。`/api/participants/{id}/current-step`は既存easy参加者に`can_resume=false`と閲覧専用の遷移先を返し、出題・学習対象・survey・回答・採点など参加者向け再開/操作APIは409で拒否する。既存参加者のログ、参加者別CSV、全件の生ログは引き続き取得可能。
+
+GET `/api/admin/evaluation-summary`、`/api/admin/logs/overview`と、6仮説の`hypothesis_metrics`・`hypothesis_group_summary` CSVで`question_set_mode=easy`を指定した要求は422とする。標準の管理一覧と全件ログCSVは既存easy参加者の情報も保持して表示する。API構造、DB、保存記録は変更しない。
+
 ## 仕様版28のペア答え合わせAPI
 
 GET/PUT /api/admin/question-review-display は管理認証下で、{ enabled: true/false, applies_to: "new_standard_participants_only" }を扱う。enabledは厳密なbooleanとする。既定値はtrueとし、参加者登録時に通常版だけへ固定する。
@@ -109,4 +115,4 @@ NULL・版1〜25・未対応版・旧protocol_idは、本文検証・冪等再�
 
 AIモデル・推論レベル設定はDBへ保存しないbackendプロセス内の一時設定であり、両群・進行中参加者にも次のAI呼び出しから適用する。状態/更新応答は有効値と選択肢を返す。モデル選択はcodex_app_serverでのみ適用でき、Mockでは409で拒否する。実際に使ったモデル・推論レベルと標準条件への一致はAI監査JSONに残る。環境変数の明示値は既定値より優先し、backend再起動後に管理上書きは消える。
 
-GET/PUT /api/admin/question-setはmode=standard|easyを扱い、新規参加者だけに適用する。問題版と配置は別設定。evaluation-summary、logs/overview、仮説2種CSVのquery question_set_mode（既定standard）で集計版を選ぶ。生ログは全版保持。参加者向け問題APIへ正答・分類情報は追加しない。他版の問題IDは409、不足する自版問題は503。API一覧と保存契約は[22](22_question_set_modes.md)。
+旧設定API `/api/admin/question-set` のGETはstandardを返し、easyへのPUTは停止応答422とする。新規Participantは登録時にstandardを保存し、RuntimeSettingに旧easyが残っていても参照しない。配置設定とは独立である。集計API/仮説CSVはstandardのみで、easy queryは422。参加者一覧・個別ログ・参加者CSV・全件の生ログCSVは全版を保持する。旧easy参加者はcurrent-stepで閲覧専用となり、参加者向け再開・回答APIは拒否される。他版の問題IDは409、不足する当時の問題は503。YAML・snapshot・DB記録は削除・変更しない。[22](22_question_set_modes.md)。

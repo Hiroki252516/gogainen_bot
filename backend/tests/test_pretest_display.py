@@ -12,7 +12,7 @@ ENDPOINT = "/api/admin/pretest-result-display"
 
 @pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("perfect", [False, True])
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("group,layout", [("A", "debug_fixed"), ("B", "randomized")])
 def test_display_snapshot_and_navigation(enabled, perfect, mode, group, layout):
     client = AuthenticatedTestClient(app)
@@ -21,7 +21,6 @@ def test_display_snapshot_and_navigation(enabled, perfect, mode, group, layout):
     pid = None
     try:
         ok(client.put(ENDPOINT, json={"enabled": enabled}))
-        ok(client.put("/api/admin/question-set", json={"mode": mode}))
         ok(client.put("/api/admin/option-order", json={"mode": layout}))
         pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "DISPLAY-SYNTHETIC"}))["participant_id"]
         ok(client.put(ENDPOINT, json={"enabled": not enabled}))
@@ -29,7 +28,7 @@ def test_display_snapshot_and_navigation(enabled, perfect, mode, group, layout):
             assert db.get(Participant, pid).show_pretest_results is enabled
         questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
         for index, question in enumerate(questions):
-            roles = [None] if mode == "standard" else [None, None, None]
+            roles = [None]
             if index == 0 and not perfect:
                 roles = ["unknown"]
             ok(client.post("/api/attempts", json={"participant_id": pid, "phase": "pretest", "question_id": question["question_id"], "selected_option_ids": select_roles(question, roles)}))
@@ -52,7 +51,7 @@ def test_display_snapshot_and_navigation(enabled, perfect, mode, group, layout):
         if perfect:
             final_questions = ok(client.get(f"/api/experiment/{pid}/final-test"))["questions"]
             for question in final_questions:
-                roles = [None] if mode == "standard" else [None, None, None]
+                roles = [None]
                 ok(client.post("/api/attempts", json={"participant_id": pid, "phase": "final_test", "question_id": question["question_id"], "selected_option_ids": select_roles(question, roles)}))
             acknowledge_all_question_reviews(client, pid, "final_test")
             ok(client.post(f"/api/participants/{pid}/score-final-test", json={}))
@@ -64,8 +63,7 @@ def test_display_snapshot_and_navigation(enabled, perfect, mode, group, layout):
         if pid:
             ok(client.delete(f"/api/admin/participants/{pid}"))
         ok(client.put(ENDPOINT, json={"enabled": previous}))
-        for name, value in settings.items():
-            ok(client.put(f"/api/admin/{name}", json={"mode": value}))
+        ok(client.put("/api/admin/option-order", json={"mode": settings["option-order"]}))
 
 
 def test_admin_auth_strict_boolean_and_no_cache():

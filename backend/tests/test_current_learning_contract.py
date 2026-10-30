@@ -4,7 +4,7 @@ from app.core.question_sets import LEARNING_CONTENT_VERSIONS
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, assessment_question_spec, learning_question_spec
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("term_slug", ACTIVE_TERM_SLUGS)
 @pytest.mark.parametrize("stage", ["enrichment", "conceptual_change"])
 @pytest.mark.parametrize("index,phase,assessment_index", [(1, "pretest", 1), (2, "retest", 1), (3, "retest", 2)])

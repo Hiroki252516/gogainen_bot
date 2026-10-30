@@ -141,6 +141,7 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
     previous_order = ok(client.get("/api/admin/option-order"))["mode"]
     participant_ids: list[str] = []
     legacy_id: str | None = None
+    easy_id: str | None = None
     try:
         ok(client.put(SETTING_ENDPOINT, json={"enabled": True}))
         ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
@@ -150,13 +151,21 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
         standard_off = _register(client, "STANDARD-OFF")
         participant_ids.append(standard_off)
 
-        ok(client.put("/api/admin/question-set", json={"mode": "easy"}))
-        easy = _register(client, "EASY")
-        participant_ids.append(easy)
+        assert client.put("/api/admin/question-set", json={"mode": "easy"}).status_code == 422
         with SessionLocal() as db:
             assert db.get(Participant, standard_on).show_question_reviews is True
             assert db.get(Participant, standard_off).show_question_reviews is False
-            assert db.get(Participant, easy).show_question_reviews is None
+
+            easy = Participant(
+                display_code=f"QR-EASY-{uuid4().hex[:8]}",
+                group_condition="control",
+                current_step="pretest",
+                question_set_mode="easy",
+                learning_content_version=4,
+                experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
+                protocol_id=CURRENT_PROTOCOL_ID,
+                show_question_reviews=None,
+            )
 
             legacy = Participant(
                 display_code=f"QR-OLD-{uuid4().hex[:8]}",
@@ -167,15 +176,17 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
                 protocol_id="experiment-plan-2026-10-29-split-tests-v1",
                 show_question_reviews=None,
             )
-            db.add(legacy)
+            db.add_all([easy, legacy])
             db.commit()
             legacy_id = legacy.id
+            easy_id = easy.id
 
         from app.db import session as database
 
         database.init_db()
         with SessionLocal() as db:
             assert db.get(Participant, legacy_id).show_question_reviews is None
+            assert db.get(Participant, easy_id).show_question_reviews is None
             assert db.get(Participant, standard_on).show_question_reviews is True
             assert db.get(Participant, standard_off).show_question_reviews is False
     finally:
@@ -186,6 +197,12 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
                 legacy = db.get(Participant, legacy_id)
                 if legacy is not None:
                     db.delete(legacy)
+                    db.commit()
+        if easy_id:
+            with SessionLocal() as db:
+                easy = db.get(Participant, easy_id)
+                if easy is not None:
+                    db.delete(easy)
                     db.commit()
         ok(client.put(SETTING_ENDPOINT, json={"enabled": previous_review}))
         ok(client.put("/api/admin/question-set", json={"mode": previous_mode}))

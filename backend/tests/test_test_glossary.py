@@ -78,7 +78,7 @@ def restore_settings():
         client.put(f"/api/admin/{key}", json={"mode": mode})
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("phase,completed", [("pretest", 0), ("retest", 0), ("retest", 1), ("final_test", 0)])

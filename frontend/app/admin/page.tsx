@@ -32,9 +32,6 @@ const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"]]
 type AiModel = (typeof AI_MODELS)[number][0];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
-type QuestionSetMode = "standard" | "easy";
-type QuestionSetSetting = { mode: QuestionSetMode; applies_to: "new_participants_only" };
-const QUESTION_SET_CHOICES = [["standard", "通常版"], ["easy", "易しい版"]] as const;
 const questionSetLabel = (mode: string | null | undefined) => mode === "easy" ? "易しい版" : "通常版";
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
@@ -86,7 +83,7 @@ const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
 const MISCONCEPTION_TRANSITION_TYPES = Object.keys(MISCONCEPTION_TRANSITION_LABELS);
 const LOG_FIELD_LABELS: Record<string, string> = {
   display_code: "被験者",
-  legacy_read_only: "試用区分",
+  legacy_read_only: "閲覧専用",
   question_set_mode: "問題版",
   test_page_mode: "テスト表示方式（登録値）",
   effective_test_page_mode: "テスト表示方式",
@@ -156,16 +153,12 @@ export default function AdminPage() {
   const [optionOrder, setOptionOrder] = useState<OptionOrderSetting | null>(null);
   const [optionOrderSaving, setOptionOrderSaving] = useState(false);
   const [optionOrderError, setOptionOrderError] = useState("");
-  const [questionSet, setQuestionSet] = useState<QuestionSetSetting | null>(null);
-  const [questionSetSaving, setQuestionSetSaving] = useState(false);
-  const [questionSetError, setQuestionSetError] = useState("");
   const [pretestDisplay, setPretestDisplay] = useState<{ enabled: boolean } | null>(null);
   const [pretestDisplaySaving, setPretestDisplaySaving] = useState(false);
   const [pretestDisplayError, setPretestDisplayError] = useState("");
   const [questionReviewDisplay, setQuestionReviewDisplay] = useState<{ enabled: boolean } | null>(null);
   const [questionReviewDisplaySaving, setQuestionReviewDisplaySaving] = useState(false);
   const [questionReviewDisplayError, setQuestionReviewDisplayError] = useState("");
-  const [summaryMode, setSummaryMode] = useState<QuestionSetMode>("standard");
   const [summaryError, setSummaryError] = useState("");
   const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [login, setLogin] = useState<any>(null);
@@ -186,7 +179,6 @@ export default function AdminPage() {
     if (activeParticipantId) rememberAdminResumeParticipant(activeParticipantId);
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants)).catch((err) => setLogError(err.message));
     api("/api/admin/logs/overview").then(setOverview).catch((err) => setLogError(err.message));
-    api<QuestionSetSetting>("/api/admin/question-set").then(setQuestionSet).catch((err) => setQuestionSetError(err.message));
     api<{ enabled: boolean }>("/api/admin/pretest-result-display").then(setPretestDisplay).catch((err) => setPretestDisplayError(err.message));
     api<{ enabled: boolean }>("/api/admin/question-review-display").then(setQuestionReviewDisplay).catch((err) => setQuestionReviewDisplayError(err.message));
     api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setAiStatusError(err instanceof Error ? err.message : String(err)));
@@ -199,11 +191,11 @@ export default function AdminPage() {
     let active = true;
     setSummary(null);
     setSummaryError("");
-    api(`/api/admin/evaluation-summary?question_set_mode=${summaryMode}`)
+    api("/api/admin/evaluation-summary?question_set_mode=standard")
       .then((data) => { if (active) setSummary(data); })
       .catch((err) => { if (active) setSummaryError(err.message); });
     return () => { active = false; };
-  }, [summaryMode, summaryRefresh]);
+  }, [summaryRefresh]);
 
   useEffect(() => {
     setParticipantLog(null);
@@ -332,20 +324,6 @@ export default function AdminPage() {
     }
   }
 
-  async function updateQuestionSet(mode: QuestionSetMode) {
-    if (questionSetSaving || !questionSet || questionSet.mode === mode) return;
-    setQuestionSetSaving(true);
-    setQuestionSetError("");
-    try {
-      const updated = await api<QuestionSetSetting>("/api/admin/question-set", { method: "PUT", body: JSON.stringify({ mode }) });
-      setQuestionSet(updated);
-    } catch (err) {
-      setQuestionSetError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setQuestionSetSaving(false);
-    }
-  }
-
   async function updatePretestDisplay(enabled: boolean) {
     if (!pretestDisplay || pretestDisplaySaving) return;
     setPretestDisplaySaving(true);
@@ -427,11 +405,12 @@ export default function AdminPage() {
   }
 
   const activeParticipants = participants.filter((participant) => participant.group_condition === activeGroup);
-  const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume && participant.question_set_mode === summaryMode).length;
-  const legacyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume).length;
+  const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume && participant.question_set_mode === "standard").length;
+  const readOnlyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume).length;
+  const retiredEasyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume && participant.question_set_mode === "easy").length;
   const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup);
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
-  const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only && row.question_set_mode === summaryMode);
+  const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only && row.question_set_mode === "standard");
 
   return (
     <AppShell step="管理画面">
@@ -563,16 +542,8 @@ export default function AdminPage() {
             </div>
             <div className="notice question-set-setting">
               <strong>新規参加者に適用する問題版</strong>
-              <p>{questionSet ? questionSetLabel(questionSet.mode) : "設定を確認中"}</p>
-              <div className="reasoning-effort-buttons option-order-buttons" role="group" aria-label="新規参加者に適用する問題版">
-                {QUESTION_SET_CHOICES.map(([mode, label]) => (
-                  <button key={mode} type="button" className={questionSet?.mode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
-                    aria-pressed={questionSet?.mode === mode} disabled={!questionSet || questionSetSaving} onClick={() => updateQuestionSet(mode)}>{label}</button>
-                ))}
-              </div>
-              <p className="muted">新規参加者から適用します。開始済みの参加者の問題版は変わりません。</p>
-              {questionSetSaving ? <p className="muted">保存中...</p> : null}
-              {questionSetError ? <p className="danger" role="alert">{questionSetError}</p> : null}
+              <p>通常版</p>
+              <p className="muted">今後の新規参加者には通常版を適用します。易しい版の参加者は閲覧専用で、群集計には含まれません。</p>
             </div>
             <div className="notice">
               <strong>選択肢の配置</strong>
@@ -604,7 +575,7 @@ export default function AdminPage() {
             </div>
             {activeGroupSummary ? (
               <div className="notice">
-                <strong>{activeGroupSummary.group_condition} / {questionSetLabel(summaryMode)}</strong>
+                <strong>{activeGroupSummary.group_condition} / 通常版</strong>
                 <p>参加者: {activeGroupSummary.participant_count}</p>
                 <p>確認テスト正答率: {formatRate(activeGroupSummary.attainment_correct_rate)}</p>
                 <p>事前比改善: {formatPoints(activeGroupSummary.avg_score_delta_from_pretest_pt)}</p>
@@ -639,14 +610,7 @@ export default function AdminPage() {
         </section>
         <section className="panel stack">
           <h2>全体ログ</h2>
-          <strong>集計する問題版</strong>
-          <div role="group" aria-label="集計する問題版" className="reasoning-effort-buttons option-order-buttons">
-            {QUESTION_SET_CHOICES.map(([mode, label]) => (
-              <button key={mode} type="button" className={summaryMode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
-                aria-pressed={summaryMode === mode} onClick={() => setSummaryMode(mode)}>{label}</button>
-            ))}
-          </div>
-          <p className="muted">集計対象: {questionSetLabel(summaryMode)}。{summaryMode === "standard" ? "1回6設問・単一選択で集計します。" : "1回3問・複数選択で集計します。"}新規参加者向け設定とは独立しています。生ログと被験者一覧は両版を表示します。</p>
+          <p><strong>集計対象: 通常版</strong>。1回6設問・単一選択で集計します。生ログと被験者一覧は、閲覧専用の易しい版参加者を含めて表示します。</p>
           {summaryError ? <p className="danger" role="alert">{summaryError}</p> : null}
           <p className="muted">{activeGroup}群の進捗、回答履歴、評価サマリーを確認します。</p>
           <div className="grid">
@@ -655,8 +619,12 @@ export default function AdminPage() {
               <p>{currentParticipantCount}</p>
             </div>
             <div className="notice">
-              <strong>旧試用数（閲覧専用）</strong>
-              <p>{legacyParticipantCount}</p>
+              <strong>閲覧専用参加者数</strong>
+              <p>{readOnlyParticipantCount}</p>
+            </div>
+            <div className="notice">
+              <strong>停止した易しい版</strong>
+              <p>{retiredEasyParticipantCount}</p>
             </div>
           </div>
           <p className="muted">以下の従来保存値・推移は参考情報です。6仮説の確定指標は専用の集計欄を参照してください。</p>
@@ -689,7 +657,7 @@ export default function AdminPage() {
                   <td>{p.group_condition}</td>
                   <td>{questionSetLabel(p.question_set_mode)}</td>
                   <td>{p.show_question_reviews === null ? "対象外" : p.show_question_reviews ? "ON" : "OFF"}</td>
-                  <td>{p.can_resume ? p.current_step : `旧試用（閲覧専用）: ${p.current_step}`}</td>
+                  <td>{p.can_resume ? p.current_step : `${p.question_set_mode === "easy" ? "易しい版停止" : "旧仕様"}（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
                   <td>
                     <div>{p.post_pretest_tests_completed ?? "-"} / {p.post_pretest_test_limit ?? "-"}</div>
@@ -745,7 +713,7 @@ export default function AdminPage() {
                 <p>
                   学習ギブアップ: {participantLog.participant.give_up_learning_count ?? 0}回 / 実験ギブアップ: {participantLog.participant.give_up_experiment_count ?? 0}回
                 </p>
-                {!participantLog.participant.can_resume ? <p>旧試用・閲覧専用（現行の群集計から除外）</p> : null}
+                {!participantLog.participant.can_resume ? <p>{participantLog.participant.question_set_mode === "easy" ? "易しい版の実行を停止しています。保存済み記録は閲覧専用で、群集計から除外されます。" : "旧仕様の保存記録は閲覧専用です。"}</p> : null}
                 <button className="secondary" disabled={recalculating || !participantLog.participant.can_resume} onClick={() => recalculateParticipantSummary(participantLog.participant.participant_id)}>
                   {recalculating ? "評価サマリー再計算中..." : "評価サマリーを再計算"}
                 </button>
@@ -1123,7 +1091,7 @@ function formatCell(field: string, value: any) {
   if (field === "test_page_mode" || field === "effective_test_page_mode") return value === "per_term" ? "用語ごと（2設問／ページ）" : "設問ごと";
   if (field === "test_timing_unit" || field === "response_time_unit") return value === "term_page" ? "用語ページ" : value === "per_question" ? "設問" : String(value);
   if (typeof value === "boolean") {
-    if (field === "legacy_read_only") return value ? "旧試用（閲覧専用）" : "現行";
+    if (field === "legacy_read_only") return value ? "閲覧専用" : "現行";
     if (field === "is_correct") return value ? "正解" : "不正解";
     if (field === "completed") return value ? "完了" : "未完了";
     return value ? "あり" : "なし";

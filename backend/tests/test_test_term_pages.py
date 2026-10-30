@@ -37,14 +37,13 @@ def _page_payload(participant_id, page_questions, *, selected_ids=None, page_id=
 
 @pytest.mark.parametrize(("mode", "expected_page_mode", "expected_count"), [
     ("standard", "per_term", 6),
-    ("easy", "per_question", 3),
 ])
 def test_registration_freezes_test_page_mode_for_new_participants(mode, expected_page_mode, expected_count):
     client = AuthenticatedTestClient(app)
     previous_mode = ok(client.get("/api/admin/question-set"))["mode"]
     participant_id = None
     try:
-        ok(client.put("/api/admin/question-set", json={"mode": mode}))
+        assert mode == "standard"
         participant_id = ok(client.post("/api/registrations", json={
             "assignment_code": "A",
             "consent_checked": True,

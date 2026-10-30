@@ -1,5 +1,9 @@
 # 現行データと履歴互換
 
+## 易しい版停止後のデータ保全（2026-10-30）
+
+仕様版28・protocol・DBスキーマは変更しない。RuntimeSetting.question_set_modeに旧値easyが残っていても新規参加者へは適用せず、Participantの既存easy値も書き換えない。既存easy参加者・Attempt・TutorSession/TutorTurn・snapshot・EvaluationSummary・Question/QuestionOptionとYAMLは保持し、再開・回答・評価再計算・群集計の対象から除外する。管理者は個別ログ・参加者別CSV・全件生ログで閲覧できる。列の削除・NULL補完・データ移行は行わない。
+
 ## 仕様版28の答え合わせ保存
 
 RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnullableで保存する。Attempt.question_review_acknowledged_atもnullableで、各用語の設問2のAttemptに答え合わせ確認時刻を保存する。新規通常版参加者は登録時のON/OFF値を保存し、易しい版は対象外のNULLとする。旧行は補完しない。参加者ログとparticipants CSVにshow_question_reviewsを含め、統合ログCSVの固定ヘッダーは維持し、確認時刻は既存のvalue_json形式で記録する。実装契約は[40](40_question_pair_answer_review.md)。
@@ -59,4 +63,4 @@ interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み
 
 ## 問題版の追加保存
 
-RuntimeSettingとParticipantにnullableなquestion_set_modeを追加する。既存行はNULLのまま通常版と読み、新規だけstandard/easyを保存する。現行の学習版はstandard=15、easy=4（初回導入時はstandard=3）。両テストバンクを別construct_key・別IDで同時保持し、設定変更・seedで通常版や過去回答を上書きしない。教材・回答ログJSONにも版を併記する。詳細は[22](22_question_set_modes.md)。
+RuntimeSettingとParticipantにはnullableなquestion_set_mode列が存在する。新規参加者は常にstandardを保存する。旧easy値とNULLは既存行のまま維持する。通常版の現行学習版は15、易しい版4とそのテストバンクは履歴復元用に保持し、設定変更・seedで過去回答を上書きしない。教材・回答ログJSONにも版を併記する。詳細は[22](22_question_set_modes.md)。

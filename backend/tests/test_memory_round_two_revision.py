@@ -153,7 +153,7 @@ def test_natural_memory_round_two_grading_feedback_replay_and_prefetch(group, la
     assert_learning_flow("memory_process", group, layout, initial, labels, expected_type, index=2)
 
 
-@pytest.mark.parametrize("mode", ["standard", "easy"])
+@pytest.mark.parametrize("mode", ["standard"])
 def test_current_spec_resolves_without_historical_mapping(mode):
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     client = TestClient(app)

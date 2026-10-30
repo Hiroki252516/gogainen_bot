@@ -1,5 +1,9 @@
 # 研究計画と仕様・実装の対応
 
+## 易しい版の現行状態（2026-10-30）
+
+新規参加者は通常版固定。既存easy参加者は閲覧専用、easy群集計・仮説CSVは停止し、個別ログ・参加者CSV・生ログは維持する。Easy YAML、問題ID、保存snapshot、既存データは履歴復元用に保持する。過去の易しい版要件を現在の実行条件と混同しない。
+
 用語注釈はservices/learning_glossary、固定YAML、LearningGlossary表示コンポーネントで処理し、教材・解説はTutorTurnの既存JSON、テストはnullableなAttempt.glossary_snapshotへ保存し、統合CSVのvalue_jsonにもsnapshotを保持する。AI契約版はv7を維持し、実験仕様版26・共通固定辞書v2として区別する。[24](24_learning_glossary.md)。
 
 出典・採用判断は[20](20_experiment_plan_alignment.md)、式と欠測定義は[12](12_evaluation_metrics.md)を正本とする。
@@ -23,6 +27,6 @@
 
 計算の正本はbackend/app/services/hypothesis_metrics.py。新指標はEvaluationSummary.hypothesis_metrics_jsonに分離し、統合CSVヘッダと旧値を維持する。専用CSVはhypothesis_metricsとhypothesis_group_summary。
 
-## 易しい版の対応
+## 易しい版の履歴資産
 
-管理切替→main.py/question_setsサービス/admin画面、固定版→Participantとexperimentサービス、別バンク→content_loader/seed_questions、平易化→interaction_history/tutoring_prompt、版別集計→hypothesis_metricsとHypothesisMetrics、個別分類根拠→[23](23_easy_question_bank.md)。保存・受入条件は[22](22_question_set_modes.md)を参照する。
+既存実装・保存先の参照対応は、Participant.question_set_mode、experiment/question_setsサービス、content_loader/seed_questionsの履歴バンク、interaction_history/tutoring_prompt、旧集計コードに残る版フィルタである。現行adminには切替UIがなく、新規登録はstandard固定、easy参加者は再開不可、easy群集計・仮説CSVは422。YAML・ID・snapshot・個別分類根拠[23](23_easy_question_bank.md)は履歴資産として保持する。現行保存・受入条件は[22](22_question_set_modes.md)を参照する。
