@@ -148,12 +148,20 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 29
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-30-learning-glossary-material-v1"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 30
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-31-learning-glossary-material-length-v1"
         assert p.learning_material_glossary_mode == "annotation_only"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material
         assert 600 <= len(stored.tutor_message) <= 800
+        length_validation = stored.diagnosis_json["material_length_validation"]
+        assert length_validation["target_character_count"] == 700
+        assert length_validation["min_character_count"] == 600
+        assert length_validation["max_character_count"] == 800
+        assert length_validation["valid"] is True
+        metrics = stored.diagnosis_json["tutoring_output_metrics"]
+        assert metrics["target_character_count"] == 700
+        assert metrics["max_character_count"] == 800
     assert turn["show_material_glossary"] is True
 
     def no_recompute(_text):
@@ -219,6 +227,18 @@ def test_integrated_material_mode_is_common_to_both_groups_and_snapshotted(resto
                 .filter_by(purpose="generate_tutoring_turn")
                 .one()
             )
+            stored_turn = db.get(TutorTurn, turn["turn_id"])
+            assert 600 <= len(stored_turn.tutor_message) <= 1200
+            length_validation = stored_turn.diagnosis_json["material_length_validation"]
+            assert length_validation["target_character_count"] == 1000
+            assert length_validation["min_character_count"] == 600
+            assert length_validation["max_character_count"] == 1200
+            assert length_validation["valid"] is True
+            metrics = stored_turn.diagnosis_json["tutoring_output_metrics"]
+            assert metrics["target_character_count"] == 1000
+            assert metrics["max_character_count"] == 1200
+            assert call.response_payload["output_metrics"]["target_character_count"] == 1000
+            assert call.response_payload["output_metrics"]["max_character_count"] == 1200
             projection = call.request_payload["input_projection"]
             assert projection["glossary_reference"]["version"] == GLOSSARY_VERSION
             assert len(projection["glossary_reference"]["entries"]) == 16

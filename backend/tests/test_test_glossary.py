@@ -90,8 +90,8 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     pid = registration.json()["participant_id"]
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 29
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-30-learning-glossary-material-v1"
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 30
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-31-learning-glossary-material-length-v1"
         participant.current_step = phase
         participant.retest_cycles_completed = completed
         db.commit()
