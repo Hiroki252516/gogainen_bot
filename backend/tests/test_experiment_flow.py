@@ -2878,6 +2878,7 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
     prompt_sources = (
         app_root / "ai" / "codex_app_server_backend.py",
         app_root / "ai" / "tutoring_prompt.py",
+        app_root / "ai" / "prompts" / "learning_material.yml",
     )
     text = "\n".join(source.read_text(encoding="utf-8") for source in prompt_sources)
     assert "misconception_taxonomy" in text

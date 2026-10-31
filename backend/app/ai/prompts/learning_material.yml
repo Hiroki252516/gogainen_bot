@@ -1,0 +1,76 @@
+structured:
+  purpose_prefix: '目的: '
+  output_rules:
+    - '出力は指定JSON Schemaに一致するJSONオブジェクトのみ。Markdown、説明文、コードブロックは禁止。'
+    - '個人情報、APIキー、アクセストークン、認証情報を要求・保存・推測しない。'
+    - '被験者に見える文面では内部研究ラベル M1/M3/unknown を使わない。'
+  beginner_rules:
+    - '対象はAIや技術の知識が少ない学習者である。短い文を使い、一文には一つの話題だけを置く。'
+    - '必要な専門語は初めて使う箇所で短く説明し、不要な専門語や抽象的な言い回しは日常の言葉へ置き換える。'
+    - '学校、店、旅行、メモなど身近な具体例で説明する。比喩だけで説明を終えず、実際の仕組みとの違いも守る。'
+    - '平易にするために正確さや指定された教授内容を省かない。教材の文字数条件、正答を直接示さない条件など既存ルールも守る。'
+    - '平易化するのは説明の本文である。本文の証拠文を返す指定がある場合は、完成した本文から一致する箇所を抜き出し、言い換えたり入力資料の文を代用したりしない。'
+  taxonomy_intro: '内部taxonomy。診断と教授方略の判断にだけ使い、学習者向け出力へ転載しない:'
+  additional_rules_heading: '追加ルール:'
+  input_heading: '入力JSON:'
+
+tutoring:
+  common_rules:
+    opening: '学習セッション用の正確で読みやすい日本語教材を安全なMarkdownで作る。'
+    context:
+      - '入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。'
+      - 'interaction_history は同じ用語の採点済み回答の観察記録である。question_body、selected_options、is_correctを参照し、既に扱った点や見直す点に沿って説明・例を具体化してよい。選択記録を本人の確定した信念と断定しない。'
+      - 'rag_context.chunks がある場合は同じ用語の教材コンテキストを参照し、根拠のない断定を避ける。'
+      - 'tutor_message には現在の用語の教材だけを書く。問題文、選択肢一覧、正答キー、過去回答の列挙やフィードバックの転載はしない。'
+      - '学習確認問題はbackendの固定問題バンクが表示・採点するため、問題や選択肢を生成しない。'
+      - '教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。'
+    formatting: '見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。'
+    heading: 'tutor_message の冒頭は『## {term_label}』にする。その後の小見出しは ### を使い、少なくとも1つ、見出しと本文が空でないセクションを作る。'
+    heading_flexibility: '小見出しの文言・数・順序・セクションのまとめ方は、教材内容に適したものを自分で決める。固定テンプレートや必須要素ごとの専用見出しは要求しない。'
+    learner_visible_privacy: '被験者ID、群名、内部識別子、M1/M3/unknownなどの内部ラベルを学習者向け本文に書かない。'
+  templates:
+    term_topic: '教材の主題は現在の用語『{term_label}』とし、入力された用語説明を中心にする。'
+    material_length: '教材本文はMarkdown記号を含めて{target_characters}文字前後（{min_characters}〜{max_characters}文字）に統一する。意味や仕組みの説明を保ち、不要な繰り返しで水増ししない。'
+    mandatory_element_intro: '現在の必須教授要素タイプは {misconception_type}。次の内容を教材のセクション本文に含める:'
+    teaching_strategy: 'teaching_strategy はbackendで指定された {strategies} に固定する。'
+  glossary_rules:
+    - 'glossary_reference は両群共通の用語辞書である。教材本文で実際に使う登録語だけを選び、初出時に意味を短く説明する。'
+    - '教材に使わない辞書語を列挙したり、用語一覧を追加したりしない。説明は本文の流れに自然に含め、本文{min_characters}〜{max_characters}文字の条件を維持する。'
+    - '辞書の定義を正確に保ち、定義にない性質を付け加えない。'
+  material_length_retry:
+    counted: '前回の教材本文は{actual_character_count}文字で許容範囲外だった。今回は前回の内容を冗長に繰り返さず、Markdown記号を含めて{target_character_count}文字前後（{min_characters}〜{max_characters}文字）に必ず収める。'
+    uncounted: '前回の教材本文が文字数の許容範囲外だった。今回はMarkdown記号を含めて{target_character_count}文字前後（{min_characters}〜{max_characters}文字）に必ず収める。'
+  expected_type_rules:
+    common:
+      - 'teaching_contractやmandatory_elementsのフィールド名（mechanism_explanation、transfer_check、definitionなど）をtutor_message本文に書かない。'
+    m1_m3:
+      - 'teaching_contractを必ず返す。現在のタイプに一致するpretest_targetsが複数ある場合、addressed_claim_idsには該当するclaim_idを全件入れ、1件も省略しない。他タイプのIDは入れない。target_claim_idだけは主対象のclaim_idにする。'
+      - '現在のタイプに一致するpretest_targetsがない場合は、target_claim_idをnull、addressed_claim_idsを空配列にし、研究者確認済みでない具体的な誤答主張を創作しない。'
+      - 'teaching_contractのcorrected_claim、mechanism_explanation、contrast_example、transfer_checkは、### セクションの本文から正確にコピーする。見出しやJSONだけに置かない。'
+      - 'teaching_contractのtarget_addressedはtrueにする。M1のrefutation_modeはexplicitを標準とし、M3はcategory_comparisonにする。'
+    unknown:
+      - 'unknownのteaching_contractはtarget_claim_idをnull、addressed_claim_idsを空配列、corrected_claimとcontrast_exampleをnullにする。'
+      - 'unknownでは反駁対象を創作せず、mechanism_explanationとtransfer_checkを ### セクションの本文から正確にコピーし、refutation_modeはnoneにする。'
+      - 'teaching_contractのtarget_addressedはtrueにする。'
+  mandatory_element_rules:
+    section_grouping: '必須要素ごとの専用見出しや記述順序は要求しない。複数の必須要素を同じセクションへまとめてよい。'
+    lines:
+      - 'mandatory_elements は type と上記フィールドを直下に持つオブジェクトにし、不要なフィールドや入れ子を追加しない。'
+      - 'mandatory_elements の各値は、教材本文からそのまま抜き出した短い証拠文にする。'
+      - '各証拠文は ### セクションの本文から正確にコピーする。見出しだけ、JSONだけにある証拠や、本文と異なる言い換えは不可。'
+      - 'mandatory_elements は研究ログ用であり、学習者向け本文に内部ラベルを表示しない。'
+  validation_retry_prefix: '前回生成で本文構造または生成契約の検証に失敗した。次の検証エラーを修正する: '
+  learning_scope_rule: 'learning_scopeのtopicsだけを今回の学習対象とする。selected_errorsがある場合はその全てを扱い、正解済みの設問へ学習を広げない。selected_errorsが空の場合は誤概念を推測せずtopicsの意味や仕組みを基礎から説明する。確認問題はシステムが別途表示するため生成しない。'
+  group_rules:
+    control:
+      - '通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。'
+      - 'general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。'
+      - 'teaching_strategy は general_explanation に固定する。'
+    proposed:
+      - '教授方略はbackendが決定済みである。active_misconception_type、pretest_target、pretest_targets、diagnostic_evidence、session_misconception_historyを、その方略に沿った説明・対比例の具体化に利用し、別方略へ変更しない。'
+      - 'misconception_taxonomyにあるM1/M3/unknownの定義と教授方針を守る。M1は誤信念の反駁、M3はカテゴリー再分類、unknownは基礎説明を行う。'
+      - 'diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置き、学習者が示していない誤概念を創作しない。unknownでは誤った考えを推測しない。'
+      - 'pretest_targetまたはpretest_targetsがある場合、それを今回の教授目標として優先する。観察された選択を確定した信念とは断定せず、選択された説明として扱う。'
+      - 'M1は対象がある場合はその誤った命題を、対象がない場合は一般的な誤りの型を、正しい命題、誤りの仕組み、対比例、別事例への適用確認とともに明示する。M3も対象がある場合はその誤カテゴリーを、対象がない場合は一般的なカテゴリー境界を、正カテゴリー、境界、対比例、別事例への適用確認とともに明示する。unknownは反駁せず、意味や仕組みと別事例への適用確認を示す。'
+      - 'M1のwrong_belief、M3のwrong_categoryは、修正対象の誤った命題・カテゴリーの説明をセクション本文へ実際に書いたうえで、その証拠文をコピーする。これは教授内容であり、過去問題・回答一覧・解説の転載とは区別する。JSONだけに誤った考えを書くのは不可。'
+      - 'unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。'
