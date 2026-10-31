@@ -106,6 +106,15 @@
 - Python 3.12の既存全1,859件と追加18件が通過した。両問題版・両群・配置・満点/未達、設定の非遡及、再送、結果非公開、追加テスト結果表示、認証・厳密boolean、繰り返し列追加・再起動時の旧行保全を確認した。既存の非推奨警告のみ。Frontendテスト・コピー上の本番build、git diff --checkも通過した。
 - 別ポート3124/8124の隔離Mock・合成データで1440px/390pxの管理トグルと、事前回答後および直接URLから結果画面を飛ばす動作を確認した。研究DB・3000番環境・実AI・コミット・pushは使用していない。
 
+## 2026-10-31 結果表示設定の再テスト適用（issue-233）
+
+- 管理設定は事前テスト・再テスト1/2・内部final_testへ適用する。新規参加者の`show_pretest_results`と`show_retest_results`は登録時に同値で固定し、既存参加者の再テスト用NULLは表示ありとして保持する。
+- 採点応答の`review_required`、冪等再送、結果画面直接取得・再開時の遷移、非表示時の結果配列非公開を両群・両配置・再テスト1/2・final_testで確認する。採点・保存済み正誤は変更しない。
+- `backend/.venv/bin/pytest -q tests/test_pretest_display.py`: 23 passed。Backend全体: 1,714 passed、107 skipped。Frontend `npm test`と`npm run build`も通過した。
+- 隔離テストで両群・両配置の再テスト1/2、final_testについて表示ON/OFF、登録時設定の固定、既存NULLの表示維持、結果配列の非公開、現在位置と冪等再送を確認した。DB列追加の再実行とNULL保持も確認した。
+- ブラウザでの手動画面確認は未実施。smokeテストとAPI/画面遷移テストで確認し、研究DB・localhost:3000・実AI・コミット・pushは使用していない。
+- `frontend/next-env.d.ts`はproduction buildが生成した参照先変更を戻し、CRLFのsmokeテストを考慮して`git -c core.whitespace=cr-at-eol diff --check`で差分の空白を検査する。
+
 ## 2026-10-29 PR #203の回次・Mock入力検証
 
 - 通常版の学習対象抽出で、採点済み回答のtest_roundを参照先の設問版と照合する。欠落・空値・不一致は503（split_test_round_unavailable）で停止する。問題ごとのattempt_indexから回次を推測せず、再テスト1・2の誤答を混在させない。起動時の回次補修も易しい版だけに限定し、通常版の欠落値は書き換えない。[保存・学習範囲の扱い](39_split_assessment.md)。

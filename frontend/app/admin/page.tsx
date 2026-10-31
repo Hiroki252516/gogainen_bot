@@ -17,6 +17,8 @@ type Participant = {
   experiment_spec_version: number | null;
   question_set_mode: "standard" | "easy";
   show_question_reviews: boolean | null;
+  show_pretest_results: boolean;
+  show_retest_results: boolean;
   learning_material_glossary_mode: "annotation_only" | "integrated_material" | null;
   retest_cycles_completed: number | null;
   post_pretest_tests_completed: number | null;
@@ -552,9 +554,9 @@ export default function AdminPage() {
                 <input type="checkbox" role="switch" checked={pretestDisplay?.enabled ?? false}
                   disabled={!pretestDisplay || pretestDisplaySaving}
                   onChange={(event) => updatePretestDisplay(event.target.checked)} />
-                事前テストの結果表示
+                テスト結果の表示
               </label>
-              <p className="muted">新規参加者のみ</p>
+              <p className="muted">事前テスト・再テスト1/2・内部final_testに適用。新規参加者のみ</p>
               {pretestDisplaySaving ? <p role="status">保存中...</p> : null}
               {pretestDisplayError ? <p className="danger" role="alert">{pretestDisplayError}</p> : null}
             </div>
@@ -756,6 +758,7 @@ export default function AdminPage() {
                 <p>学習後の再テスト: {participantLog.participant.retest_cycles_completed ?? "-"}回</p>
                 <p>事前テスト後のテスト: {participantLog.participant.post_pretest_tests_completed ?? "-"} / {participantLog.participant.post_pretest_test_limit ?? "-"}回（学習前の追加テストを含む）</p>
                 <p>事前テストの結果表示: {participantLog.participant.show_pretest_results === false ? "非表示" : "表示"}</p>
+                <p>再テスト（内部final_testを含む）の結果表示: {participantLog.participant.show_retest_results === false ? "非表示" : "表示"}</p>
                 <p>設問ごとの答え合わせ: {participantLog.participant.show_question_reviews === null ? "対象外" : participantLog.participant.show_question_reviews ? "表示" : "非表示"}</p>
                 <p>教材の用語解説モード: {materialGlossaryModeLabel(participantLog.participant.learning_material_glossary_mode)}</p>
                 <p>

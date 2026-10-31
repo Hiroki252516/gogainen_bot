@@ -309,7 +309,7 @@ for (const text of ['current?.term_slug === "multi_agent"', 'current?.term_slug 
 if (!questionRunner.includes("result.next_url || nextPath")) {
   throw new Error("QuestionRunner must follow the backend transition after scoring");
 }
-for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', "result.next_url || nextPath", 'phase === "retest" || phase === "final_test"', 'router.replace(reviewRequired ? "/learning-targets"', "allowExperimentGiveUp", "onGiveUpStateChange", "visible: allowExperimentGiveUp", "pendingQuestionReview"]) {
+for (const expectedText of ["learning_target_slugs", 'localStorage.setItem("learning_targets"', "result.next_url || nextPath", "result.review_required ?? (phase === \"retest\" || phase === \"final_test\")", 'router.replace(reviewRequired ? "/learning-targets"', "allowExperimentGiveUp", "onGiveUpStateChange", "visible: allowExperimentGiveUp", "pendingQuestionReview"]) {
   if (!questionRunner.includes(expectedText)) {
     throw new Error(`question runner missing retest transition support: ${expectedText}`);
   }
@@ -363,7 +363,7 @@ for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step
 }
 
 const learningTargetsPage = fs.readFileSync(new URL("../app/learning-targets/page.tsx", import.meta.url), "utf8");
-for (const text of ['role="switch"', '事前テストの結果表示', '/api/admin/pretest-result-display', 'pretestDisplaySaving']) {
+for (const text of ['role="switch"', 'テスト結果の表示', '再テスト1/2・内部final_test', '/api/admin/pretest-result-display', 'pretestDisplaySaving']) {
   if (!groupAdminPage.includes(text)) throw new Error(`pretest display setting missing: ${text}`);
 }
 for (const text of ['data.review_required === false', 'router.replace(data.next_url', '!loaded']) {

@@ -12,6 +12,10 @@
 
 RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnullableで保存する。Attempt.question_review_acknowledged_atもnullableで、各用語の設問2のAttemptに答え合わせ確認時刻を保存する。新規通常版参加者は登録時のON/OFF値を保存し、易しい版は対象外のNULLとする。旧行は補完しない。参加者ログとparticipants CSVにshow_question_reviewsを含め、統合ログCSVの固定ヘッダーは維持し、確認時刻は既存のvalue_json形式で記録する。実装契約は[40](40_question_pair_answer_review.md)。
 
+## テスト結果表示snapshot（issue-233）
+
+`Participant.show_pretest_results`と`Participant.show_retest_results`はnullable Boolean。既存のRuntimeSetting設定と管理APIを共有し、新規参加者登録時に同じ値を別々のsnapshotへ保存する。既存参加者の値は補完・更新しない。事前snapshotのNULLと再テストsnapshotのNULLはそれぞれ表示ありとして扱う。participant logs・participants CSVに両方の設定値を出す。
+
 ## 用語注釈snapshot（仕様版26）
 
 テスト用にAttempt.glossary_snapshotへnullable JSON列を追加し、旧行はNULLで保持する。教材・解説は従来どおりTutorTurn.diagnosis_json.material_glossaryとgrading_json.feedback_glossaryにversion、dictionary_sha256、entries（id/term/definition、表示順）を保存する。教材・解説は先行生成を含め新規生成時に作り、再取得・再送で再計算しない。テストは出題GETで不変辞書から導出し、回答時に保存する。未回答画面取得はDBへ書き込まない。回答済みの再取得・再送は保存値を使う。管理ログとCSVのvalue_jsonに同じsnapshotを出す。旧記録の補完・再解析は行わず、表示に供した内容の記録を読了証明とはしない。[24](24_learning_glossary.md)。

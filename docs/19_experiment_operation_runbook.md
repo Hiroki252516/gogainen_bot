@@ -4,15 +4,15 @@
 
 新規参加者は通常版のみで登録する。管理画面に問題版・集計版切替はなく、easyの旧設定値も新規登録へ適用しない。既存easy参加者は閲覧専用で再開・回答できず、群集計・仮説CSVから除外する。個別ログ、参加者別CSV、全件の生ログは参照可能。易しい版YAML、問題ID、snapshot、既存参加者と評価記録は履歴復元用に保持し、書換え・削除しない。[詳細](22_question_set_modes.md)。
 
-## 事前結果表示設定
+## テスト結果表示設定
 
-収集開始前に管理画面の「事前テストの結果表示」を確認する。変更は新規登録にのみ適用し、開始済み参加者の条件は固定する。未設定・旧参加者のNULLは表示あり。参加者ログとparticipants CSVにshow_pretest_resultsを保持する（旧NULLは未記録として残る）。研究条件として記録し、異なる表示条件の成績を無条件に同等とは扱わない。既存の集計式は変更しない。
+収集開始前に管理画面の「テスト結果の表示」を確認する。PRETEST、RETEST 1/2、内部final_testの全体結果確認が対象で、初期値は表示あり。変更は新規登録時にのみ適用し、開始済み参加者には遡及しない。participant logsとparticipants CSVの`show_pretest_results`・`show_retest_results`で各snapshotを確認する。既存参加者の再テスト用NULLは表示ありとして扱い、生値はNULLのまま保持する。異なる表示条件の成績を無条件に同等とは扱わず、既存の集計式は変更しない。
 
 ## 設問ごとの答え合わせ設定（仕様版28）
 
 募集・収集開始前に管理画面の「設問ごとの答え合わせ」を確認し、意図したON/OFFに設定してから参加者を登録する。初期値はONで、変更は新規参加者だけに固定される。開始済み参加者へ遡及適用しない。旧行のNULLをON/OFFへ補完しない。受入検証状況は[14](14_testing_acceptance.md)を参照する。
 
-「事前テストの結果表示」は独立した設定として残る。PRETESTではペア答え合わせの後に全体結果画面を表示するかを従来の設定で決める。ON/OFF条件が混在した場合は参加者ログとparticipants CSVのshow_question_reviewsおよびshow_pretest_resultsを照合し、条件別に把握する。表示条件の異なる成績を条件差を考慮せず同等とは扱わない。RETEST/final_testの全体結果画面は従来どおり維持する。設定API・データ項目と再読み込み時の確認方法は[40](40_question_pair_answer_review.md)を参照する。
+「設問ごとの答え合わせ」は独立した設定として残る。ペア答え合わせ後の全体結果画面は「テスト結果の表示」で制御する。ON/OFF条件が混在した場合はparticipant logsとparticipants CSVの`show_question_reviews`、`show_pretest_results`、`show_retest_results`を照合し、条件別に把握する。結果表示の差を考慮せず成績を同等扱いしない。再読み込み時のペア確認と保存契約は[40](40_question_pair_answer_review.md)を参照する。
 
 ## 用語注釈の配布確認（仕様版26）
 
