@@ -1,6 +1,6 @@
 # 用語ごとの設問答え合わせ（仕様版28）
 
-> 状態: 仕様版28で導入し、現行仕様版30でも維持。現在の実験識別子は仕様版30 / `experiment-plan-2026-10-31-learning-glossary-material-length-v1`。仕様版27の採用時記録 [39](39_split_assessment.md) は当時の根拠として保持する。受入検証状況は[14](14_testing_acceptance.md)を参照。
+> 状態: 仕様版28で導入し、現行仕様版31でも維持。現在の実験識別子は仕様版31 / `experiment-plan-2026-10-31-glossary-definition-paraphrase-v1`。仕様版27の採用時記録 [39](39_split_assessment.md) は当時の根拠として保持する。受入検証状況は[14](14_testing_acceptance.md)を参照。
 
 > 2026-10-30追記: 易しい版の実行を停止した。新規参加者は通常版固定、既存easy参加者は閲覧専用。以下の適用範囲にある易しい版は当時の仕様記録であり、現在の参加者フローには含めない。詳細は[22](22_question_set_modes.md)。
 

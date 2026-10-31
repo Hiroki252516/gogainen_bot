@@ -49,7 +49,7 @@ def _prompt_payload(*, integrated_material: bool) -> dict:
     }
     if integrated_material:
         payload["glossary_reference"] = {
-            "version": "learning-glossary-v2",
+            "version": "learning-glossary-v3",
             "entries": [{"id": "weights", "term": "重み", "definition": "学習で調整される内部数値です。"}],
         }
     return payload
@@ -75,6 +75,8 @@ def test_prompt_uses_mode_specific_target_range_and_retry_instruction():
     integrated_prompt = _prompt(payload)
     assert "1000文字前後（600〜1200文字）" in integrated_prompt
     assert "本文600〜1200文字の条件を維持する" in integrated_prompt
+    assert "定義文をそのまま転載するためではなく、意味を確認する参考情報として使う" in integrated_prompt
+    assert "辞書の定義文をそのまま引用・転記せず、自分の言葉で言い換える" in integrated_prompt
 
     retry_prompt = _prompt(
         payload,
@@ -107,7 +109,7 @@ def test_mock_generation_uses_mode_specific_target(integrated_material, target, 
     }
     if integrated_material:
         payload["glossary_reference"] = {
-            "version": "learning-glossary-v2",
+            "version": "learning-glossary-v3",
             "entries": [{"id": "weights", "term": "重み", "definition": "学習で調整される内部数値です。"}],
         }
 
@@ -126,7 +128,7 @@ def test_integrated_material_retry_uses_1200_character_contract(monkeypatch):
             "description": "情報を保存して検索し、現在の処理へ渡す仕組みです。",
         },
         "fixed_practice_question": {"body": "適切な説明を選びなさい。"},
-        "glossary_reference": {"version": "learning-glossary-v2", "entries": []},
+        "glossary_reference": {"version": "learning-glossary-v3", "entries": []},
     }
     calls = []
 
@@ -183,7 +185,7 @@ def test_ai_call_persists_mode_specific_material_metrics(monkeypatch, integrated
     monkeypatch.setattr(experiment_service, "get_ai_backend", lambda **_kwargs: FakeBackend())
     payload = {"term": {"label": "検証用語"}}
     if integrated_material:
-        payload["glossary_reference"] = {"version": "learning-glossary-v2", "entries": []}
+        payload["glossary_reference"] = {"version": "learning-glossary-v3", "entries": []}
 
     db = SessionLocal()
     log = None

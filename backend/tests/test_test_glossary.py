@@ -27,12 +27,27 @@ REMOVED_IDS = {"ai", "pretraining", "fine_tuning", "prompt_engineering", "rag", 
 
 
 def test_current_dictionary_only_removes_requested_entries_and_preserves_old_source():
-    old_path = GLOSSARY_PATH.with_name("learning_glossary_v1.yml")
-    old = yaml.safe_load(old_path.read_text(encoding="utf-8"))
+    v1_path = GLOSSARY_PATH.with_name("learning_glossary_v1.yml")
+    v2_path = GLOSSARY_PATH.with_name("learning_glossary_v2.yml")
+    old = yaml.safe_load(v1_path.read_text(encoding="utf-8"))
+    v2 = yaml.safe_load(v2_path.read_text(encoding="utf-8"))
     current = yaml.safe_load(GLOSSARY_PATH.read_text(encoding="utf-8"))
     assert old["version"] == "learning-glossary-v1" and len(old["entries"]) == 25
-    assert current["version"] == GLOSSARY_VERSION == "learning-glossary-v2"
-    assert current["entries"] == [entry for entry in old["entries"] if entry["id"] not in REMOVED_IDS]
+    assert v2["version"] == "learning-glossary-v2"
+    assert v2["entries"] == [entry for entry in old["entries"] if entry["id"] not in REMOVED_IDS]
+    assert current["version"] == GLOSSARY_VERSION == "learning-glossary-v3"
+    expected_v3 = deepcopy(v2)
+    expected_v3["version"] = "learning-glossary-v3"
+    updates = {
+        "weights": "AIが文章を作るための計算に使う数値です。学習によってこの数値が調整されると、AIが選ぶ言葉や回答の仕方が変わることがある",
+        "additional_training": "既に学習したAIに、新しい学習用データを使ってさらに学習させ、回答の仕方などを目的に合わせて調整すること",
+        "agent": "与えられた目的に向けて、状況を見ながら次の行動を判断して進めるAI",
+        "model": "AI本体を指す",
+    }
+    for entry in expected_v3["entries"]:
+        if entry["id"] in updates:
+            entry["definition"] = updates[entry["id"]]
+    assert current == expected_v3
     for entry in old["entries"]:
         if entry["id"] in REMOVED_IDS:
             for alias in entry["aliases"]:
@@ -90,8 +105,8 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     pid = registration.json()["participant_id"]
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 30
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-31-learning-glossary-material-length-v1"
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 31
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-31-glossary-definition-paraphrase-v1"
         participant.current_step = phase
         participant.retest_cycles_completed = completed
         db.commit()
