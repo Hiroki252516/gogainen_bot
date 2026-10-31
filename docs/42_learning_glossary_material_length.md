@@ -2,7 +2,7 @@
 
 ## 適用条件
 
-仕様版30 / `experiment-plan-2026-10-31-learning-glossary-material-length-v1`では、教材生成の文字数契約を参加者に登録された`learning_material_glossary_mode`で分ける。文字数はMarkdown記号を含む`tutor_message`本文の文字数であり、見出し・用語解説も本文に含める。
+仕様版30 / `experiment-plan-2026-10-31-learning-glossary-material-length-v1`で導入した文字数契約は、仕様版31でも維持する。教材生成の文字数契約を参加者に登録された`learning_material_glossary_mode`で分ける。文字数はMarkdown記号を含む`tutor_message`本文の文字数であり、見出し・用語解説も本文に含める。
 
 | 教材モード | 目標 | 許容範囲 |
 | --- | ---: | ---: |
@@ -15,4 +15,4 @@
 
 生成prompt、教材生成後の文字数検証、範囲外の再生成指示、AI呼び出しの出力指標・TutorTurnの検証記録は、同一のモード別契約を使う。範囲外は同じAI backendで初回を含む最大3試行まで再生成し、なお不合格の場合に教材を確定しない。実測文字数、目標・上下限、試行ごとの検証結果を既存の監査JSONへ記録する。DB列と公開APIの構造は追加しない。
 
-この条件は仕様版30の新規参加者に適用する。仕様版29以下の参加者は従来の版管理に従い閲覧専用で、保存済み教材、snapshot、監査記録を更新・再生成しない。文字数検査は長さの機械的な適合だけを示し、説明の正確さ、初心者の理解、学習効果を証明するものではない。現行コードの受入検証は[14](14_testing_acceptance.md)、AI生成契約は[10](10_ai_prompt_contracts.md)を参照。
+版30当時の適用対象は版30の新規参加者、現行仕様版31では版31の新規参加者である。仕様版30以下の参加者は閲覧専用で、保存済み教材、snapshot、監査記録を更新・再生成しない。文字数検査は長さの機械的な適合だけを示し、説明の正確さ、初心者の理解、学習効果を証明するものではない。現行コードの受入検証は[14](14_testing_acceptance.md)、AI生成契約は[10](10_ai_prompt_contracts.md)、仕様版31の定義言い換えは[43](43_glossary_definition_paraphrase.md)を参照。
