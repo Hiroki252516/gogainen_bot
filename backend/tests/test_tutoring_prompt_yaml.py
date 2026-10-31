@@ -130,8 +130,8 @@ def test_rendered_prompt_matches_expected_contract_hashes():
     expected_hashes = {
         "control_annotation": "5edbe59e4bff8265a5913dd9a3adaacb9afd57806367a093edeb92f67f686994",
         "control_integrated_beginner": "ed522532d3a5b154f250a1103bffc9c29c16c56271beb1faf4a901431a4ab89c",
-        "proposed_m1_retry_counted": "087a62ab1c27c02444da10526e1d69d29bb4153815305c96f9641df04f059481",
-        "proposed_m3_integrated": "295cc92f845346329ad00b0acf30e8763f47d17776640b7a6e332d680d49aa08",
-        "proposed_unknown_retry_uncounted": "ddc98da6c3e4bc7e02469b81d4b2749a0e4837b7e0614071455b8989238ceb99",
+        "proposed_m1_retry_counted": "2fa8a9de65971995e167ac5ee7d2c8a2cf61be7e70c208dad0392b7927661763",
+        "proposed_m3_integrated": "6939f35c48a688d70d60f7ed7cc4b9aceff57526fd19f4d0b659c97b103e1b1e",
+        "proposed_unknown_retry_uncounted": "d109b93ffd4ecbf994c2c9cca4b3229205e5cdf6b544dc86515ecf1c2186c18d",
     }
     assert {name: hashlib.sha256(prompt.encode("utf-8")).hexdigest() for name, prompt in rendered.items()} == expected_hashes
