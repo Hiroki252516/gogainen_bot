@@ -30,6 +30,31 @@ async function answerTermPages(page, participant, phase, m1ChoiceIds, width, ass
     assert.equal(await groups.count(), 2);
     assert.equal(await page.getByRole("radio").count(), 8);
     assert.equal(await page.locator(".notice .question-heading").count(), 1);
+    const primaryAction = page.locator(".term-page-runner .corner-primary");
+    assert.equal(await primaryAction.count(), 1);
+    const primaryStyle = await primaryAction.evaluate((element) => ({
+      position: getComputedStyle(element).position,
+      background: getComputedStyle(element).backgroundColor,
+      buttonFontSize: getComputedStyle(element.querySelector("button")).fontSize,
+      buttonMinHeight: getComputedStyle(element.querySelector("button")).minHeight,
+    }));
+    assert.deepEqual(primaryStyle, {
+      position: "fixed",
+      background: "rgb(255, 255, 255)",
+      buttonFontSize: "18px",
+      buttonMinHeight: "56px",
+    });
+    const actionBeforeScroll = await primaryAction.boundingBox();
+    assert(actionBeforeScroll);
+    assert(actionBeforeScroll.x >= 0 && actionBeforeScroll.x + actionBeforeScroll.width <= width);
+    assert(actionBeforeScroll.y >= 0 && actionBeforeScroll.y + actionBeforeScroll.height <= 1000);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(50);
+    const actionAfterScroll = await primaryAction.boundingBox();
+    assert(actionAfterScroll);
+    assert(Math.abs(actionAfterScroll.x - actionBeforeScroll.x) < 1, "fixed action should retain its horizontal position while scrolling");
+    assert(Math.abs(actionAfterScroll.y - actionBeforeScroll.y) < 1, "fixed action should retain its vertical position while scrolling");
+    await page.evaluate(() => window.scrollTo(0, 0));
     const scenario = pair[0].body.split("\n\n設問1：")[0];
     assert.equal(pair[1].body.split("\n\n設問2：")[0], scenario);
     assert.equal((await page.locator(".notice").first().innerText()).includes(scenario), true);

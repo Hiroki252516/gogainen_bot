@@ -61,6 +61,10 @@ const testRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", i
 for (const text of ['glossary?: Glossary | null', 'glossary={current.glossary}', 'label="テストの用語の補足"']) {
   if (!testRunner.includes(text)) throw new Error(`test glossary placement missing: ${text}`);
 }
+const termPageRunner = testRunner.slice(testRunner.indexOf("function TermPageQuestionRunner"));
+if (!termPageRunner.includes('<div className="actions corner-primary">') || termPageRunner.includes("term-page-primary")) {
+  throw new Error("term-page test navigation must use the shared fixed primary action style");
+}
 const sidebar = fs.readFileSync(new URL("../components/GlossarySidebar.tsx", import.meta.url), "utf8");
 for (const text of ["showModal()", "dialogRef.current?.close()", "buttonRef.current.focus()", "glossary-sidebar", "glossary-mobile"]) {
   if (!sidebar.includes(text)) throw new Error(`glossary sidebar missing: ${text}`);

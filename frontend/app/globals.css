@@ -320,11 +320,6 @@ p {
   overflow-wrap: anywhere;
 }
 
-.term-page-primary {
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-
 .glossary-sidebar {
   display: none;
 }
