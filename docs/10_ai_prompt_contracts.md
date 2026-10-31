@@ -51,12 +51,12 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 | 場所 | 現行原文 |
 | --- | --- |
-| backend/app/ai/tutoring_prompt.py | 教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。 |
-| backend/app/ai/tutoring_prompt.py | 通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。 |
-| backend/app/ai/tutoring_prompt.py | general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。 |
+| backend/app/ai/prompts/learning_material.yml | 教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。 |
+| backend/app/ai/prompts/learning_material.yml | 通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。 |
+| backend/app/ai/prompts/learning_material.yml | general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。 |
 | backend/app/services/experiment.py | 誤概念を推測せず、対象用語の意味や仕組みと、別事例への適用確認を教材本文に含める。 |
 
-原文全体は[tutoring_prompt.py](../backend/app/ai/tutoring_prompt.py)のcompose_structured_prompt/build_tutoring_prompt、unknownの必須項目は[mandatory_elements.py](../backend/app/ai/mandatory_elements.py)を参照する。生成文の意味的な正しさまで機械検査したとは扱わない。
+教材生成と構造化promptの固定指示文は[learning_material.yml](../backend/app/ai/prompts/learning_material.yml)にまとめる。モジュール起動時にYAMLを検証して読み込み、`compose_structured_prompt`と`build_tutoring_prompt`が群・診断タイプ・教材モードなどの適用条件と動的な値の埋め込みを行う。入力投影、出力Schema、生成後の検証は引き続きPython側が担当する。YAMLの文言変更は生成条件の変更として扱う。unknownの必須項目は[mandatory_elements.py](../backend/app/ai/mandatory_elements.py)を参照する。生成文の意味的な正しさまで機械検査したとは扱わない。
 
 ## 教材契約と履歴（版26の基準契約・版29で維持）
 

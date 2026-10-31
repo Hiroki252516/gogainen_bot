@@ -2,10 +2,109 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from pathlib import Path
+from string import Formatter
 from typing import Any
+
+import yaml
 
 from app.ai.mandatory_elements import mandatory_element_requirements
 from app.ai.teaching_contract import material_length_contract
+
+
+PROMPT_TEXT_PATH = Path(__file__).parent / "prompts" / "learning_material.yml"
+
+
+def _required_mapping(value: Any, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"Prompt text section {name!r} must be a mapping")
+    return value
+
+
+def _required_text(value: Any, name: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"Prompt text {name!r} must be a non-empty string")
+    return value
+
+
+def _required_text_list(value: Any, name: str, *, expected_length: int | None = None) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
+        raise ValueError(f"Prompt text {name!r} must be a list of non-empty strings")
+    if expected_length is not None and len(value) != expected_length:
+        raise ValueError(f"Prompt text {name!r} must contain {expected_length} items")
+    return value
+
+
+def _validate_prompt_text(raw: Any) -> dict[str, Any]:
+    root = _required_mapping(raw, "root")
+    structured = _required_mapping(root.get("structured"), "structured")
+    for key in ("purpose_prefix", "taxonomy_intro", "additional_rules_heading", "input_heading"):
+        _required_text(structured.get(key), f"structured.{key}")
+    _required_text_list(structured.get("output_rules"), "structured.output_rules", expected_length=3)
+    _required_text_list(structured.get("beginner_rules"), "structured.beginner_rules", expected_length=5)
+
+    tutoring = _required_mapping(root.get("tutoring"), "tutoring")
+    common = _required_mapping(tutoring.get("common_rules"), "tutoring.common_rules")
+    _required_text(common.get("opening"), "tutoring.common_rules.opening")
+    _required_text_list(common.get("context"), "tutoring.common_rules.context", expected_length=6)
+    for key in ("formatting", "heading", "heading_flexibility", "learner_visible_privacy"):
+        _required_text(common.get(key), f"tutoring.common_rules.{key}")
+    if {field for _, field, _, _ in Formatter().parse(common["heading"]) if field} != {"term_label"}:
+        raise ValueError("Prompt text template tutoring.common_rules.heading has invalid fields")
+    glossary_rules = _required_text_list(tutoring.get("glossary_rules"), "tutoring.glossary_rules", expected_length=3)
+    glossary_fields = {field for _, field, _, _ in Formatter().parse(glossary_rules[1]) if field}
+    if glossary_fields != {"min_characters", "max_characters"}:
+        raise ValueError("Prompt text template tutoring.glossary_rules[1] has invalid fields")
+    _required_text(tutoring.get("validation_retry_prefix"), "tutoring.validation_retry_prefix")
+    _required_text(tutoring.get("learning_scope_rule"), "tutoring.learning_scope_rule")
+    group_rules = _required_mapping(tutoring.get("group_rules"), "tutoring.group_rules")
+    _required_text_list(group_rules.get("control"), "tutoring.group_rules.control", expected_length=3)
+    _required_text_list(group_rules.get("proposed"), "tutoring.group_rules.proposed", expected_length=7)
+
+    templates = _required_mapping(tutoring.get("templates"), "tutoring.templates")
+    template_fields = {
+        "term_topic": {"term_label"},
+        "material_length": {"target_characters", "min_characters", "max_characters"},
+        "mandatory_element_intro": {"misconception_type"},
+        "teaching_strategy": {"strategies"},
+    }
+    for key, expected_fields in template_fields.items():
+        template = _required_text(templates.get(key), f"tutoring.templates.{key}")
+        fields = {field for _, field, _, _ in Formatter().parse(template) if field}
+        if fields != expected_fields:
+            raise ValueError(f"Prompt text template tutoring.templates.{key!s} has invalid fields")
+
+    retry = _required_mapping(tutoring.get("material_length_retry"), "tutoring.material_length_retry")
+    retry_fields = {
+        "counted": {"actual_character_count", "target_character_count", "min_characters", "max_characters"},
+        "uncounted": {"target_character_count", "min_characters", "max_characters"},
+    }
+    for key, expected_fields in retry_fields.items():
+        template = _required_text(retry.get(key), f"tutoring.material_length_retry.{key}")
+        if {field for _, field, _, _ in Formatter().parse(template) if field} != expected_fields:
+            raise ValueError(f"Prompt text template tutoring.material_length_retry.{key} has invalid fields")
+    expected = _required_mapping(tutoring.get("expected_type_rules"), "tutoring.expected_type_rules")
+    _required_text_list(expected.get("common"), "tutoring.expected_type_rules.common", expected_length=1)
+    _required_text_list(expected.get("m1_m3"), "tutoring.expected_type_rules.m1_m3", expected_length=4)
+    _required_text_list(expected.get("unknown"), "tutoring.expected_type_rules.unknown", expected_length=3)
+    mandatory = _required_mapping(tutoring.get("mandatory_element_rules"), "tutoring.mandatory_element_rules")
+    _required_text(mandatory.get("section_grouping"), "tutoring.mandatory_element_rules.section_grouping")
+    _required_text_list(mandatory.get("lines"), "tutoring.mandatory_element_rules.lines", expected_length=4)
+    return root
+
+
+def _load_prompt_text() -> dict[str, Any]:
+    try:
+        raw = yaml.safe_load(PROMPT_TEXT_PATH.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise RuntimeError(f"Unable to load tutoring prompt text from {PROMPT_TEXT_PATH}") from exc
+    try:
+        return _validate_prompt_text(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"Invalid tutoring prompt text in {PROMPT_TEXT_PATH}: {exc}") from exc
+
+
+PROMPT_TEXT = _load_prompt_text()
 
 
 def mandatory_element_prompt(misconception_type: str | None) -> str:
@@ -13,18 +112,16 @@ def mandatory_element_prompt(misconception_type: str | None) -> str:
     requirements = mandatory_element_requirements(misconception_type)
     if not requirements:
         return ""
+    rules = PROMPT_TEXT["tutoring"]
     lines = [
-        f"現在の必須教授要素タイプは {misconception_type}。次の内容を教材のセクション本文に含める:",
+        rules["templates"]["mandatory_element_intro"].format(misconception_type=misconception_type),
     ]
     lines.extend(
         f"- {field}: {description}"
         for field, description in requirements.items()
     )
-    lines.append("必須要素ごとの専用見出しや記述順序は要求しない。複数の必須要素を同じセクションへまとめてよい。")
-    lines.append("mandatory_elements は type と上記フィールドを直下に持つオブジェクトにし、不要なフィールドや入れ子を追加しない。")
-    lines.append("mandatory_elements の各値は、教材本文からそのまま抜き出した短い証拠文にする。")
-    lines.append("各証拠文は ### セクションの本文から正確にコピーする。見出しだけ、JSONだけにある証拠や、本文と異なる言い換えは不可。")
-    lines.append("mandatory_elements は研究ログ用であり、学習者向け本文に内部ラベルを表示しない。")
+    lines.append(rules["mandatory_element_rules"]["section_grouping"])
+    lines.extend(rules["mandatory_element_rules"]["lines"])
     return "\n".join(lines)
 
 
@@ -34,34 +131,27 @@ def compose_structured_prompt(
     rules: Sequence[str],
 ) -> str:
     """Compose the common text envelope used for structured app-server calls."""
+    structured_text = PROMPT_TEXT["structured"]
     if payload.get("explanation_level") == "beginner":
-        rules = [*rules,
-            "対象はAIや技術の知識が少ない学習者である。短い文を使い、一文には一つの話題だけを置く。",
-            "必要な専門語は初めて使う箇所で短く説明し、不要な専門語や抽象的な言い回しは日常の言葉へ置き換える。",
-            "学校、店、旅行、メモなど身近な具体例で説明する。比喩だけで説明を終えず、実際の仕組みとの違いも守る。",
-            "平易にするために正確さや指定された教授内容を省かない。教材の文字数条件、正答を直接示さない条件など既存ルールも守る。",
-            "平易化するのは説明の本文である。本文の証拠文を返す指定がある場合は、完成した本文から一致する箇所を抜き出し、言い換えたり入力資料の文を代用したりしない。",
-        ]
+        rules = [*rules, *structured_text["beginner_rules"]]
     prompt_parts = [
-        f"目的: {purpose}",
+        f"{structured_text['purpose_prefix']}{purpose}",
         "",
-        "出力は指定JSON Schemaに一致するJSONオブジェクトのみ。Markdown、説明文、コードブロックは禁止。",
-        "個人情報、APIキー、アクセストークン、認証情報を要求・保存・推測しない。",
-        "被験者に見える文面では内部研究ラベル M1/M3/unknown を使わない。",
+        *structured_text["output_rules"],
         "",
-        "追加ルール:",
+        structured_text["additional_rules_heading"],
         *[f"- {rule}" for rule in rules],
     ]
     if payload.get("misconception_taxonomy"):
         prompt_parts.extend(
             [
                 "",
-                "内部taxonomy。診断と教授方略の判断にだけ使い、学習者向け出力へ転載しない:",
+                structured_text["taxonomy_intro"],
                 json.dumps(payload["misconception_taxonomy"], ensure_ascii=False, indent=2),
             ]
         )
     prompt_payload = remove_routing_metadata(payload)
-    prompt_parts.extend(["", "入力JSON:", json.dumps(prompt_payload, ensure_ascii=False, indent=2)])
+    prompt_parts.extend(["", structured_text["input_heading"], json.dumps(prompt_payload, ensure_ascii=False, indent=2)])
     return "\n".join(prompt_parts)
 
 
@@ -86,29 +176,30 @@ def build_tutoring_prompt(
     target_characters = length_contract["target_character_count"]
     min_characters = length_contract["min_character_count"]
     max_characters = length_contract["max_character_count"]
+    prompt_text = PROMPT_TEXT["tutoring"]
+    templates = prompt_text["templates"]
+    common = prompt_text["common_rules"]
     rules = [
-        "学習セッション用の正確で読みやすい日本語教材を安全なMarkdownで作る。",
-        f"教材の主題は現在の用語『{term_label}』とし、入力された用語説明を中心にする。",
-        "入力JSONの term.description を教材の中心内容として使う。別用語の例題や固定例を主題にしない。",
-        "interaction_history は同じ用語の採点済み回答の観察記録である。question_body、selected_options、is_correctを参照し、既に扱った点や見直す点に沿って説明・例を具体化してよい。選択記録を本人の確定した信念と断定しない。",
-        "rag_context.chunks がある場合は同じ用語の教材コンテキストを参照し、根拠のない断定を避ける。",
-        "tutor_message には現在の用語の教材だけを書く。問題文、選択肢一覧、正答キー、過去回答の列挙やフィードバックの転載はしない。",
-        "学習確認問題はbackendの固定問題バンクが表示・採点するため、問題や選択肢を生成しない。",
-        "教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。",
-        f"教材本文はMarkdown記号を含めて{target_characters}文字前後（{min_characters}〜{max_characters}文字）に統一する。意味や仕組みの説明を保ち、不要な繰り返しで水増ししない。",
-        "見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
-        f"tutor_message の冒頭は『## {term_label}』にする。その後の小見出しは ### を使い、少なくとも1つ、見出しと本文が空でないセクションを作る。",
-        "小見出しの文言・数・順序・セクションのまとめ方は、教材内容に適したものを自分で決める。固定テンプレートや必須要素ごとの専用見出しは要求しない。",
-        "被験者ID、群名、内部識別子、M1/M3/unknownなどの内部ラベルを学習者向け本文に書かない。",
+        common["opening"],
+        templates["term_topic"].format(term_label=term_label),
+        *common["context"],
+        templates["material_length"].format(
+            target_characters=target_characters,
+            min_characters=min_characters,
+            max_characters=max_characters,
+        ),
+        common["formatting"],
+        common["heading"].format(term_label=term_label),
+        common["heading_flexibility"],
+        common["learner_visible_privacy"],
     ]
     if payload.get("glossary_reference"):
-        rules.extend(
-            [
-                "glossary_reference は両群共通の用語辞書であり、定義文をそのまま転載するためではなく、意味を確認する参考情報として使う。教材本文で実際に使う登録語だけを選び、初出時に教材の文脈に合わせて自然な言葉で短く説明する。",
-                f"教材に使わない辞書語を列挙したり、用語一覧を追加したりしない。説明は本文の流れに自然に含め、本文{min_characters}〜{max_characters}文字の条件を維持する。",
-                "辞書の定義文をそのまま引用・転記せず、自分の言葉で言い換える。用語の中心的な意味は変えず、定義にない性質や断定を付け加えない。",
-            ]
+        glossary_rules = [*prompt_text["glossary_rules"]]
+        glossary_rules[1] = glossary_rules[1].format(
+            min_characters=min_characters,
+            max_characters=max_characters,
         )
+        rules.extend(glossary_rules)
 
     # ``retry_context`` is server-side generation metadata.  It may contribute
     # a length-adjustment instruction, but it must never become model input.
@@ -118,36 +209,29 @@ def build_tutoring_prompt(
         actual_character_count = material_length_retry.get("actual_character_count")
         if isinstance(actual_character_count, int) and not isinstance(actual_character_count, bool):
             rules.append(
-                f"前回の教材本文は{actual_character_count}文字で許容範囲外だった。今回は前回の内容を冗長に繰り返さず、Markdown記号を含めて{target_characters}文字前後（{min_characters}〜{max_characters}文字）に必ず収める。"
+                prompt_text["material_length_retry"]["counted"].format(
+                    actual_character_count=actual_character_count,
+                    target_character_count=target_characters,
+                    min_characters=min_characters,
+                    max_characters=max_characters,
+                )
             )
         else:
             rules.append(
-                f"前回の教材本文が文字数の許容範囲外だった。今回はMarkdown記号を含めて{target_characters}文字前後（{min_characters}〜{max_characters}文字）に必ず収める。"
+                prompt_text["material_length_retry"]["uncounted"].format(
+                    target_character_count=target_characters,
+                    min_characters=min_characters,
+                    max_characters=max_characters,
+                )
             )
 
     if expected_type:
-        rules.extend(
-            [
-                "teaching_contractやmandatory_elementsのフィールド名（mechanism_explanation、transfer_check、definitionなど）をtutor_message本文に書かない。",
-            ]
-        )
+        expected_rules = prompt_text["expected_type_rules"]
+        rules.extend(expected_rules["common"])
         if expected_type in {"M1", "M3"}:
-            rules.extend(
-                [
-                    "teaching_contractを必ず返す。現在のタイプに一致するpretest_targetsが複数ある場合、addressed_claim_idsには該当するclaim_idを全件入れ、1件も省略しない。他タイプのIDは入れない。target_claim_idだけは主対象のclaim_idにする。",
-                    "現在のタイプに一致するpretest_targetsがない場合は、target_claim_idをnull、addressed_claim_idsを空配列にし、研究者確認済みでない具体的な誤答主張を創作しない。",
-                    "teaching_contractのcorrected_claim、mechanism_explanation、contrast_example、transfer_checkは、### セクションの本文から正確にコピーする。見出しやJSONだけに置かない。",
-                    "teaching_contractのtarget_addressedはtrueにする。M1のrefutation_modeはexplicitを標準とし、M3はcategory_comparisonにする。",
-                ]
-            )
+            rules.extend(expected_rules["m1_m3"])
         else:
-            rules.extend(
-                [
-                    "unknownのteaching_contractはtarget_claim_idをnull、addressed_claim_idsを空配列、corrected_claimとcontrast_exampleをnullにする。",
-                    "unknownでは反駁対象を創作せず、mechanism_explanationとtransfer_checkを ### セクションの本文から正確にコピーし、refutation_modeはnoneにする。",
-                    "teaching_contractのtarget_addressedはtrueにする。",
-                ]
-            )
+            rules.extend(expected_rules["unknown"])
 
     if expected_type:
         rules.append(mandatory_element_prompt(expected_type))
@@ -159,24 +243,15 @@ def build_tutoring_prompt(
                 error.startswith("tutor_message:") or error == "teaching_strategy.mismatch"
             )]
         if retry_errors:
-            rules.append("前回生成で本文構造または生成契約の検証に失敗した。次の検証エラーを修正する: "
-                         + json.dumps(retry_errors, ensure_ascii=False))
+            rules.append(prompt_text["validation_retry_prefix"] + json.dumps(retry_errors, ensure_ascii=False))
 
     if payload.get("learning_scope"):
-        rules.append("learning_scopeのtopicsだけを今回の学習対象とする。selected_errorsがある場合はその全てを扱い、正解済みの設問へ学習を広げない。selected_errorsが空の場合は誤概念を推測せずtopicsの意味や仕組みを基礎から説明する。確認問題はシステムが別途表示するため生成しない。")
+        rules.append(prompt_text["learning_scope_rule"])
     if group == "control":
-        rules.append("通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。")
-        rules.append("general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。")
-        rules.append("teaching_strategy は general_explanation に固定する。")
+        rules.extend(prompt_text["group_rules"]["control"])
     else:
-        rules.append("教授方略はbackendが決定済みである。active_misconception_type、pretest_target、pretest_targets、diagnostic_evidence、session_misconception_historyを、その方略に沿った説明・対比例の具体化に利用し、別方略へ変更しない。")
-        rules.append("misconception_taxonomyにあるM1/M3/unknownの定義と教授方針を守る。M1は誤信念の反駁、M3はカテゴリー再分類、unknownは基礎説明を行う。")
-        rules.append("diagnostic_evidence.selected_options がある場合、M1の誤った考えまたはM3の誤カテゴリーは選択肢本文に根拠を置き、学習者が示していない誤概念を創作しない。unknownでは誤った考えを推測しない。")
-        rules.append("pretest_targetまたはpretest_targetsがある場合、それを今回の教授目標として優先する。観察された選択を確定した信念とは断定せず、選択された説明として扱う。")
-        rules.append("M1は対象がある場合はその誤った命題を、対象がない場合は一般的な誤りの型を、正しい命題、誤りの仕組み、対比例、別事例への適用確認とともに明示する。M3も対象がある場合はその誤カテゴリーを、対象がない場合は一般的なカテゴリー境界を、正カテゴリー、境界、対比例、別事例への適用確認とともに明示する。unknownは反駁せず、意味や仕組みと別事例への適用確認を示す。")
-        rules.append("M1のwrong_belief、M3のwrong_categoryは、修正対象の誤った命題・カテゴリーの説明をセクション本文へ実際に書いたうえで、その証拠文をコピーする。これは教授内容であり、過去問題・回答一覧・解説の転載とは区別する。JSONだけに誤った考えを書くのは不可。")
-        rules.append("unknownはenrichment、M1/M3はconceptual_changeとして教材を提示し、固定3選択問題はbackendが表示する。")
-    rules.append(f"teaching_strategy はbackendで指定された {', '.join(teaching_strategies)} に固定する。")
+        rules.extend(prompt_text["group_rules"]["proposed"])
+    rules.append(templates["teaching_strategy"].format(strategies=", ".join(teaching_strategies)))
 
     return compose_structured_prompt("tutoring_turn", payload, rules)
 
