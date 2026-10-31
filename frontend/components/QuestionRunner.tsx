@@ -860,7 +860,7 @@ function TermPageQuestionRunner({
           })}
         </div>
         {error ? <div className="danger" role="alert">{error}</div> : null}
-        <div className="actions term-page-primary">
+        <div className="actions corner-primary">
           {pendingQuestionReview?.term_slug === page.term_slug ? (
             <button type="button" onClick={continueFromQuestionReview} disabled={saving}>
               {saving ? "保存中..." : isLastPage ? "テストを完了" : "次の用語へ"}
