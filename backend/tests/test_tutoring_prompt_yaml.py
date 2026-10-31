@@ -43,7 +43,7 @@ def test_prompt_yaml_is_valid_and_rejects_missing_required_sections():
         _validate_prompt_text(invalid)
 
 
-def test_rendered_prompt_matches_pre_yaml_output_hashes():
+def test_rendered_prompt_matches_expected_contract_hashes():
     rendered = {}
 
     payload = _base_payload()
@@ -129,9 +129,9 @@ def test_rendered_prompt_matches_pre_yaml_output_hashes():
 
     expected_hashes = {
         "control_annotation": "5edbe59e4bff8265a5913dd9a3adaacb9afd57806367a093edeb92f67f686994",
-        "control_integrated_beginner": "a00d06354c16458fae4d35ba51433128065cf6b5dd89a67a8903b2898a298c5d",
+        "control_integrated_beginner": "ed522532d3a5b154f250a1103bffc9c29c16c56271beb1faf4a901431a4ab89c",
         "proposed_m1_retry_counted": "087a62ab1c27c02444da10526e1d69d29bb4153815305c96f9641df04f059481",
-        "proposed_m3_integrated": "5addc0b11af3ba50f99d864c52e0d545f84626d02a1f9840da7621eebf339b73",
+        "proposed_m3_integrated": "295cc92f845346329ad00b0acf30e8763f47d17776640b7a6e332d680d49aa08",
         "proposed_unknown_retry_uncounted": "ddc98da6c3e4bc7e02469b81d4b2749a0e4837b7e0614071455b8989238ceb99",
     }
     assert {name: hashlib.sha256(prompt.encode("utf-8")).hexdigest() for name, prompt in rendered.items()} == expected_hashes

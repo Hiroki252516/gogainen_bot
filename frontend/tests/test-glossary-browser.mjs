@@ -38,7 +38,7 @@ async function verifyQuestion(page, question) {
 
 async function verifyGlossary(page, glossary) {
   const notes = page.getByRole("complementary", { name: "テストの用語の補足", exact: true });
-  assert.equal(glossary.version, "learning-glossary-v2");
+  assert.equal(glossary.version, "learning-glossary-v3");
   for (const entry of glossary.entries) assert(!excluded.has(entry.id));
   if (glossary.entries.length) {
     if (page.viewportSize().width < 1100) await page.getByRole("button", { name: "用語の補足", exact: true }).click();
@@ -76,7 +76,7 @@ async function runTest(page, pid, phase, perfect, capture) {
         const key = JSON.stringify([entry.id, entry.term, entry.definition]);
         if (!seen.has(key)) { seen.add(key); expectedGlossary.push(entry); }
       }
-      await verifyGlossary(page, { version: pair.find((question) => question.glossary?.entries.length)?.glossary.version || "learning-glossary-v2", entries: expectedGlossary });
+      await verifyGlossary(page, { version: pair.find((question) => question.glossary?.entries.length)?.glossary.version || "learning-glossary-v3", entries: expectedGlossary });
       for (let questionIndex = 0; questionIndex < pair.length; questionIndex++) {
         const question = pair[questionIndex];
         const selected = perfect
@@ -156,7 +156,7 @@ try {
     assert.equal((await api(page.request, `/api/participants/${pid}/current-step`)).step, "survey");
     const logs = await api(page.request, `/api/admin/participants/${pid}/logs`);
     assert.equal(logs.attempts.length, mode === "standard" ? 18 : 9);
-    assert(logs.attempts.every((attempt) => attempt.test_glossary.version === "learning-glossary-v2"));
+    assert(logs.attempts.every((attempt) => attempt.test_glossary.version === "learning-glossary-v3"));
     console.log(`ok ${width}px ${mode} ${layout} ${group} ${perfect ? "initial-perfect" : "normal"}`);
     await context.close();
   }

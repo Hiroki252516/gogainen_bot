@@ -13,8 +13,8 @@ import yaml
 from markdown_it import MarkdownIt
 
 
-GLOSSARY_PATH = Path(__file__).resolve().parents[1] / "seed/content/learning_glossary_v2.yml"
-GLOSSARY_VERSION = "learning-glossary-v2"
+GLOSSARY_PATH = Path(__file__).resolve().parents[1] / "seed/content/learning_glossary_v3.yml"
+GLOSSARY_VERSION = "learning-glossary-v3"
 
 
 def _normalized(text: str) -> str:

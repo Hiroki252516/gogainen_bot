@@ -1,12 +1,16 @@
 # 教材・回答後解説・テストの用語注釈
 
-## 現行の教材文字数条件（仕様版30）
+## 現行条件（仕様版31）
 
-教材内解説モードの目標を1000文字、許容範囲を600〜1200文字とする。注釈欄のみモードは目標700文字・許容600〜800文字を維持する。教材本文に含める文字数、生成検証、再生成指示、監査記録は参加者の登録済みモードに従う。辞書・抽出・snapshotの仕様は変更しない。仕様版29以下の既存教材と記録は更新しない。詳細は[42](42_learning_glossary_material_length.md)。
+現行辞書は[learning_glossary_v3.yml](../backend/app/seed/content/learning_glossary_v3.yml)で、仕様版31 / `experiment-plan-2026-10-31-glossary-definition-paraphrase-v1`の新規参加者から使う。指定4語の定義を更新し、別表記・出典・他の項目・抽出規則はv2から維持する。保存済みの辞書snapshot・教材・テスト・回答後解説は記録時の内容を維持する。
+
+教材内解説モードの目標は1000文字、許容範囲は600〜1200文字とする。注釈欄のみモードは目標700文字・許容600〜800文字を維持する。教材本文に含める文字数、生成検証、再生成指示、監査記録は参加者の登録済みモードに従う。詳細は[42](42_learning_glossary_material_length.md)。
+
+辞書の定義文は教材生成時に逐語転載せず、意味を確認する参照情報として渡す。教材では本文の文脈に合う自然な言葉で言い換え、中心的な意味を保ち、定義にない性質を付け加えず、実際に使う登録語だけを説明する。意味の正確さや学習効果を機械検査で実証したとは扱わない。詳しくは[仕様版31の変更](43_glossary_definition_paraphrase.md)。仕様版30以下の参加者は閲覧専用で、既存教材と記録は更新しない。
 
 ## 教材内解説モード（仕様版29の採用時記録）
 
-仕様版29導入時は管理画面で「注釈欄のみ／教材内解説」を選び、新規参加者へ登録時に固定した。既定の「注釈欄のみ」は本書で定義する表示を保ち、辞書をAI入力へ含めない。「教材内解説」では辞書版`learning-glossary-v2`の16語を両群共通の`glossary_reference`として教材生成へ渡す。教材本文に実際に現れる登録語だけを初出時に説明するよう指示し、無関係な語の列挙は指示しない。当時の文字数範囲は版30で更新されている。現行条件は冒頭と[42](42_learning_glossary_material_length.md)を参照する。
+仕様版29導入時は管理画面で「注釈欄のみ／教材内解説」を選び、新規参加者へ登録時に固定した。既定の「注釈欄のみ」は本書で定義する表示を保ち、辞書をAI入力へ含めない。仕様版30までは「教材内解説」で辞書版`learning-glossary-v2`の16語を両群共通の`glossary_reference`として渡し、本文に実際に現れる登録語だけを説明するよう指示していた。この段落は当時の実装履歴である。現行v3の言い換え要件は冒頭と[43](43_glossary_definition_paraphrase.md)を参照する。
 
 教材内解説モードでは、重複を避けるため教材右側の用語注釈欄を表示しない。一方、`material_glossary` snapshotの生成・保存は続け、管理ログ・CSVで監査できる。回答後解説とテストの注釈、辞書内容・抽出・保存規則は両モード共通で変更しない。仕様版28以下の教材・snapshotは補完・再生成せず閲覧専用にする。[管理・生成・表示条件](41_learning_glossary_material_mode.md)。
 
@@ -26,9 +30,9 @@ feature/issue-132で導入した固定辞書を、fix/issue-188-tyusyakuのユ�
 
 ## 保存・再現・版
 
-実験仕様版26、protocolは `experiment-plan-2026-10-27-test-glossary-v2`、辞書版は `learning-glossary-v2`。新規登録だけ適用し、版25以下・NULL・旧protocolは閲覧専用とする。旧教材・注釈・回答・評価を補完・再計算しない。旧仕様版25のテスト結果復元にはscenario-actions-v9を指定し、問題バンク自体は変更しない。
+実験仕様版26、protocolは `experiment-plan-2026-10-27-test-glossary-v2`、当時の辞書版は `learning-glossary-v2`。この節は導入時の履歴であり、現行版境界は仕様版31で30以下を閲覧専用とする。旧教材・注釈・回答・評価を補完・再計算しない。旧仕様版25のテスト結果復元にはscenario-actions-v9を指定し、問題バンク自体は変更しない。
 
-現行辞書の正本は [learning_glossary_v2.yml](../backend/app/seed/content/learning_glossary_v2.yml)。旧25語の[learning_glossary_v1.yml](../backend/app/seed/content/learning_glossary_v1.yml)は履歴用に無変更で保持する。起動時に版・非空項目・出典・ID・正規化した別表記の一意性と、除外語の型・競合を検査する。指紋にはexcluded_aliasesも含める。収集中に同じ版の説明・除外語を変更しない。
+`learning_glossary_v2.yml`は版26の履歴辞書として無変更で保持し、旧25語の[learning_glossary_v1.yml](../backend/app/seed/content/learning_glossary_v1.yml)も履歴用に保持する。現行正本は冒頭に記したv3である。起動時に版・非空項目・出典・ID・正規化した別表記の一意性と、除外語の型・競合を検査する。指紋にはexcluded_aliasesも含める。同じ辞書版の説明・除外語は変更せず、定義更新時は新しい辞書版を追加する。
 
 backendが生成成功後に表示用snapshotを作る。教材分は `TutorTurn.diagnosis_json.material_glossary`、回答後解説分は `TutorTurn.grading_json.feedback_glossary` に、version、dictionary_sha256、entries（id/term/definition）を保存する。指紋は辞書全体をキー順に正規化したJSONのSHA-256。出現順・当時の説明文を保持し、先行生成の消費・再取得・冪等再送で辞書を引き直さない。AI出力本文は変更しない。
 
@@ -36,7 +40,7 @@ backendが生成成功後に表示用snapshotを作る。教材分は `TutorTurn
 
 教材・解説と各テスト問題の既存APIへ `glossary: {version, entries: [{id, term, definition}]}` を返す。出典・辞書指紋・正答・分類情報は公開しない。仕様版26時点では新規ルート・管理切替を追加しなかった。仕様版29では教材生成モードの管理APIを追加するが、テスト注釈のAPI・snapshotは変更しない。テスト用にnullableなAttempt.glossary_snapshot（SQLiteはJSON、PostgreSQLはJSONB）を追加し、旧行はNULLのまま保持する。
 
-テストの未回答GETはDBへ書き込まず、不変のv2辞書と固定問題から導出する。回答時に同じ本文・全表示選択肢から辞書版・指紋・表示順・説明文を保存し、回答済みの再取得・冪等再送で再計算しない。未回答の再読み込み・backend再起動でも同じ辞書・問題なら同じ一覧となる。これは読了・表示の証明ではなく、未回答の注釈閲覧イベントも追加しない。
+テストの未回答GETはDBへ書き込まず、不変の現行辞書v3と固定問題から導出する。回答時に同じ本文・全表示選択肢から辞書版・指紋・表示順・説明文を保存し、回答済みの再取得・冪等再送で再計算しない。未回答の再読み込み・backend再起動でも同じ辞書・問題なら同じ一覧となる。これは読了・表示の証明ではなく、未回答の注釈閲覧イベントも追加しない。
 
 管理ログはtest_glossary、教材/解説は従来のmaterial_glossary/feedback_glossaryを出し、統合CSVのvalue_jsonにも保存値を含める。CSV固定ヘッダは維持する。欠落時は後付けしない。既定モードでは注釈をLLM入力・共通回答履歴へ追加しない。教材内解説モードでのみ、明示的な任意入力`glossary_reference`を教材生成へ渡す。共通回答履歴には追加しない。
 
@@ -50,7 +54,7 @@ backendが生成成功後に表示用snapshotを作る。教材分は `TutorTurn
 
 ### 重み (`weights`)
 
-AIの内部の計算で、ある情報をどれくらい結果に反映するかに関わる数値。学習の過程で調整されます。
+AIが文章を作るための計算に使う数値です。学習によってこの数値が調整されると、AIが選ぶ言葉や回答の仕方が変わることがある
 
 - 別表記: `重み`、`ウェイト`
 - 確認元: [Google Machine Learning Glossary](https://developers.google.com/machine-learning/glossary/fundamentals#weight)
@@ -64,7 +68,7 @@ AIの動作を決める内部の数値の総称です。学習で調整される
 
 ### モデル (`model`)
 
-入力された情報を計算で処理し、予測や文章などの結果を出す仕組み。ここでは、学習済みのAIの仕組みを指します。
+AI本体を指す
 
 - 別表記: `モデル`
 - 確認元: [Google Machine Learning Glossary](https://developers.google.com/machine-learning/glossary/fundamentals#model)
@@ -78,7 +82,7 @@ AIの動作を決める内部の数値の総称です。学習で調整される
 
 ### 追加学習 (`additional_training`)
 
-すでに学習したAIに対し、さらにデータを使って内部の数値を調整する処理です。
+既に学習したAIに、新しい学習用データを使ってさらに学習させ、回答の仕方などを目的に合わせて調整すること
 
 - 別表記: `追加学習`、`追加訓練`、`追加トレーニング`
 - 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（34-36）、[Google Machine Learning Glossary](https://developers.google.com/machine-learning/glossary/fundamentals#training)
@@ -113,7 +117,7 @@ AIが今回の回答を作るときに参照する情報。質問、指示、会
 
 ### エージェント (`agent`)
 
-与えられた目的に向けて、状況を見ながら次の行動を判断して進める担当のような仕組みです。
+与えられた目的に向けて、状況を見ながら次の行動を判断して進めるAI
 
 - 別表記: `エージェント`
 - 確認元: [rag_agent_knowledge_base/sources/source_01.txt](../rag_agent_knowledge_base/sources/source_01.txt)（71-80）

@@ -30,6 +30,13 @@ def test_dictionary_and_snapshot_are_versioned_and_do_not_expose_sources():
     glossary = load_learning_glossary()
     assert len(glossary.entries) == 16
     assert glossary.version == GLOSSARY_VERSION
+    definitions = {entry.id: entry.definition for entry in glossary.entries}
+    assert definitions == {
+        "weights": "AIが文章を作るための計算に使う数値です。学習によってこの数値が調整されると、AIが選ぶ言葉や回答の仕方が変わることがある",
+        "additional_training": "既に学習したAIに、新しい学習用データを使ってさらに学習させ、回答の仕方などを目的に合わせて調整すること",
+        "agent": "与えられた目的に向けて、状況を見ながら次の行動を判断して進めるAI",
+        "model": "AI本体を指す",
+    } | {entry.id: entry.definition for entry in glossary.entries if entry.id not in {"weights", "additional_training", "agent", "model"}}
     snapshot = glossary_snapshot("## 重み\n\n**モデル**のパラメータと重みを確認する。")
     assert [entry["id"] for entry in snapshot["entries"]] == ["weights", "model", "parameters"]
     assert len(snapshot["dictionary_sha256"]) == 64
@@ -39,6 +46,27 @@ def test_dictionary_and_snapshot_are_versioned_and_do_not_expose_sources():
     assert public_glossary(None) is None
     public["entries"][0]["definition"] = "changed"
     assert snapshot["entries"][0]["definition"] != "changed"
+
+
+def test_existing_v2_snapshot_keeps_its_saved_definition():
+    saved = {
+        "version": "learning-glossary-v2",
+        "dictionary_sha256": "historical-v2-fingerprint",
+        "entries": [{
+            "id": "weights",
+            "term": "重み",
+            "definition": "AIの内部の計算で、ある情報をどれくらい結果に反映するかに関わる数値。学習の過程で調整されます。",
+        }],
+    }
+
+    assert public_glossary(saved) == {
+        "version": "learning-glossary-v2",
+        "entries": [{
+            "id": "weights",
+            "term": "重み",
+            "definition": "AIの内部の計算で、ある情報をどれくらい結果に反映するかに関わる数値。学習の過程で調整されます。",
+        }],
+    }
 
 
 @pytest.mark.parametrize("message,expected", [
@@ -148,8 +176,8 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 30
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-31-learning-glossary-material-length-v1"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 31
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-10-31-glossary-definition-paraphrase-v1"
         assert p.learning_material_glossary_mode == "annotation_only"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material

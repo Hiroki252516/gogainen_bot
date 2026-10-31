@@ -55,9 +55,9 @@ tutoring:
     teaching_strategy: 'teaching_strategy はbackendで指定された {strategies} に固定する。'
   # payloadにglossary_referenceがある場合（教材内解説モード）だけ、以下のルールを順番に追加します。
   glossary_rules:
-    - 'glossary_reference は両群共通の用語辞書である。教材本文で実際に使う登録語だけを選び、初出時に意味を短く説明する。'
+    - 'glossary_reference は両群共通の用語辞書であり、定義文をそのまま転載するためではなく、意味を確認する参考情報として使う。教材本文で実際に使う登録語だけを選び、初出時に教材の文脈に合わせて自然な言葉で短く説明する。'
     - '教材に使わない辞書語を列挙したり、用語一覧を追加したりしない。説明は本文の流れに自然に含め、本文{min_characters}〜{max_characters}文字の条件を維持する。'
-    - '辞書の定義を正確に保ち、定義にない性質を付け加えない。'
+    - '辞書の定義文をそのまま引用・転記せず、自分の言葉で言い換える。用語の中心的な意味は変えず、定義にない性質や断定を付け加えない。'
   # 文字数検証の再試行時だけ使います。actual_character_countが整数ならcounted、それ以外ならuncountedです。
   # 再試行の実測値はサーバー側metadataからPythonが渡します。
   material_length_retry:
