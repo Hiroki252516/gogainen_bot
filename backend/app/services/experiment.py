@@ -736,11 +736,13 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         raise HTTPException(status_code=400, detail="管理者から伝えられた参加コード（AまたはB）が必要です。")
     mode = current_question_set_mode(db)
     from app.services.pretest_display import current_setting
+    show_test_results = current_setting(db)
     from app.services.question_review_display import current_setting as current_question_review_setting
     from app.services.learning_material_glossary_mode import current_setting as current_material_glossary_setting
     participant = Participant(
         display_code=next_display_code(db),
-        show_pretest_results=current_setting(db),
+        show_pretest_results=show_test_results,
+        show_retest_results=show_test_results,
         show_question_reviews=current_question_review_setting(db) if mode == STANDARD else None,
         learning_material_glossary_mode=current_material_glossary_setting(db),
         group_condition=group_condition,
@@ -3795,7 +3797,7 @@ def admin_summary(db: Session, mode: str = STANDARD) -> dict[str, Any]:
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_question_reviews", "learning_material_glossary_mode", "question_set_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
+    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_retest_results", "show_question_reviews", "learning_material_glossary_mode", "question_set_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "test_page_timing_json", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "question_review_acknowledged_at", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "legacy_scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "legacy_l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),
@@ -4179,6 +4181,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     return {
         "participant": {
             "show_pretest_results": participant.show_pretest_results is not False,
+            "show_retest_results": participant.show_retest_results is not False,
             "show_question_reviews": participant.show_question_reviews,
             "learning_material_glossary_mode": participant.learning_material_glossary_mode,
             "participant_id": participant.id,

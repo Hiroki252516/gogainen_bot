@@ -29,7 +29,7 @@ type Question = {
   answer_status?: "unanswered" | "submitted";
   submitted_answer?: SubmittedAnswer | null;
 };
-type ScoreResult = { next_url?: string; learning_target_slugs?: string[] };
+type ScoreResult = { next_url?: string; learning_target_slugs?: string[]; review_required?: boolean };
 type PendingQuestionReview = {
   phase: string;
   term_slug: string;
@@ -194,7 +194,7 @@ export function QuestionRunner({
       if (Array.isArray(result.learning_target_slugs)) {
         localStorage.setItem("learning_targets", JSON.stringify(result.learning_target_slugs));
       }
-      const reviewRequired = phase === "retest" || phase === "final_test";
+      const reviewRequired = result.review_required ?? (phase === "retest" || phase === "final_test");
       router.replace(reviewRequired ? "/learning-targets" : (result.next_url || nextPath));
     } catch (err) {
       completionStarted.current = false;
@@ -650,7 +650,7 @@ function TermPageQuestionRunner({
       if (Array.isArray(result.learning_target_slugs)) {
         localStorage.setItem("learning_targets", JSON.stringify(result.learning_target_slugs));
       }
-      const reviewRequired = phase === "retest" || phase === "final_test";
+      const reviewRequired = result.review_required ?? (phase === "retest" || phase === "final_test");
       router.replace(reviewRequired ? "/learning-targets" : (result.next_url || nextPath));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

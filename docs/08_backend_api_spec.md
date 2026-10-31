@@ -20,10 +20,11 @@ GET/PUT /api/admin/question-review-display は管理認証下で、{ enabled: tr
 
 POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slugを受け取り、確認時刻を設問2のAttemptへ保存する。確認済みの再送は冪等とし、不完全なペアや現在表示中ではないペアは拒否する。採点APIは未確認ペアがある状態での進行を拒否する。詳細と受入条件は[40](40_question_pair_answer_review.md)。
 
-## 事前結果表示設定（issue-204）
+## テスト結果表示設定（issue-204・issue-233）
 
-GET/PUT `/api/admin/pretest-result-display`は管理認証下で厳密なbooleanのenabledとapplies_to=new_participants_onlyを扱う。設定はDB保存し、新規参加者のshow_pretest_resultsへ固定する。NULLは従来の表示ありと解釈し既存行を補完しない。
-診断・学習対象APIはreview_requiredとnext_urlを返す。非表示では事前結果配列を空にし、学習または追加テストへ進む。再テストと内部final_testの結果は表示する。現在位置APIも非表示時の学習再開先へ誘導する。従来のprotocol・採点は維持し、仕様版28では設問ペア表示の設定と確認状態を追加する。
+管理画面の表示名は「テスト結果の表示」。互換性のためGET/PUT `/api/admin/pretest-result-display`のURL・厳密なbooleanの`enabled`・`applies_to=new_participants_only`は維持する。RuntimeSettingの設定値を新規参加者の`show_pretest_results`と`show_retest_results`へ登録時snapshotする。既存行には補完せず、NULLは表示ありと解釈する。既存参加者の事前結果設定は不変で、既存参加者の`show_retest_results=NULL`も表示ありとなる。
+
+設定はPRETEST、RETEST 1/2、内部`final_test`の全体結果確認に適用する。採点APIは`review_required`と遷移先`next_url`を返し、表示ONなら結果確認画面、OFFなら学習・次テスト・アンケートへ進む。採点結果と正誤判定は維持する。学習対象APIは表示OFF時に現在のテスト結果配列を空にし、現在位置API・直接URL・再開でも同じ遷移を適用する。古い冪等応答に`review_required`がない場合、FrontendはRETEST/final_testでは従来どおり結果確認へ進む。
 
 診断応答にはlearning_target_slugsも含め、結果画面を通らない経路でも学習進捗用の一覧を保存できるようにする。非表示でlearning_targets状態なのに学習対象が空の場合は503（learning_navigation_unavailable）とし、同じ画面のURLを返したり、GETで進行状態を修復したりしない。
 

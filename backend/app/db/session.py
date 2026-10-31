@@ -29,6 +29,7 @@ def _ensure_lightweight_schema_updates() -> None:
     additions = {
         "participants": [
             ("show_pretest_results", "BOOLEAN"),
+            ("show_retest_results", "BOOLEAN"),
             ("show_question_reviews", "BOOLEAN"),
             ("learning_material_glossary_mode", "VARCHAR(32)"),
             ("question_set_mode", "VARCHAR(32)"),

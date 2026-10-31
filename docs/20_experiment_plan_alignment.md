@@ -1,5 +1,9 @@
 # 実験計画書との対応と実装判断
 
+## 2026-10-31 結果表示設定の再テスト適用（issue-233）
+
+管理画面の「テスト結果の表示」をPRETESTに加え、RETEST 1/2と内部`final_test`にも適用する。管理APIの既存URL・RuntimeSetting値を維持し、新規参加者へ`show_pretest_results`と`show_retest_results`を登録時snapshotする。旧Participantは補完せず、`show_retest_results=NULL`は結果表示ありとして扱う。表示OFF時は採点・保存を維持し、結果画面と参加者向けの当該結果配列だけを省略して、保存済みの次工程へ遷移する。仕様版29・protocol、問題、採点、評価式、回数上限は変更しない。異なる表示条件は研究条件として記録し、成績の無条件な同等性を仮定しない。受入検証は[14](14_testing_acceptance.md)、API・画面契約は[08](08_backend_api_spec.md)・[09](09_frontend_ux_flow.md)を参照。
+
 ## 仕様版29：教材の用語解説モード
 
 現行コードは仕様版29 / `experiment-plan-2026-10-30-learning-glossary-material-v1`。管理設定の初期値は「注釈欄のみ」で、新規参加者だけ登録時に固定する。「教材内解説」では現行のlearning-glossary-v2辞書を両群共通の任意入力として教材生成へ渡し、本文中で実際に使う登録語を初出時に説明する指示を加える。600〜800文字条件と生成契約v7は維持する。教材の右側注釈欄はこのモードだけ隠すが、material glossary snapshot、回答後解説・テストの注釈は維持する。RuntimeSetting/Participantにnullable列を追加し旧行はNULLのまま、参加者ログ・CSVに記録する。仕様版28以下は既存方針どおり閲覧専用とし、教材・snapshotを変更しない。[設定・保存・プロンプト契約](41_learning_glossary_material_mode.md)。

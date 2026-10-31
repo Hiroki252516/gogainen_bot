@@ -24,6 +24,7 @@ class Participant(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     show_pretest_results: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    show_retest_results: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     show_question_reviews: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     learning_material_glossary_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     display_code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)

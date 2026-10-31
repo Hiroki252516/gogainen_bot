@@ -536,13 +536,14 @@ def api_learning_targets(participant_id: str, db: Session = Depends(get_db)) -> 
     assert_current_experiment(participant)
     targets = learning_targets(db, participant_id)
     progress = post_pretest_test_progress(db, participant)
+    review_skipped = pretest_display.skip_review(db, participant)
     return {
         "current_step": participant.current_step,
         "targets": targets,
-        "review_required": not pretest_display.skip_review(db, participant),
+        "review_required": not review_skipped,
         "next_url": pretest_display.next_url(db, participant),
-        "pretest_results": pretest_results(db, participant_id) if pretest_display.enabled(participant.show_pretest_results) else [],
-        "test_results": latest_test_results(db, participant_id) if not pretest_display.skip_review(db, participant) else {"test_round": "test", "test_round_label": "テスト", "results": []},
+        "pretest_results": pretest_results(db, participant_id) if not review_skipped and pretest_display.enabled(participant.show_pretest_results) else [],
+        "test_results": latest_test_results(db, participant_id) if not review_skipped else {"test_round": "test", "test_round_label": "テスト", "results": []},
         "retest_cycles_completed": participant.retest_cycles_completed,
         **progress,
         "retest_cycle_limit_reached": (
@@ -754,13 +755,21 @@ async def api_score_retest(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
+    async def operation() -> dict:
+        result = await score_phase(db, participant_id, "retest")
+        participant = get_participant(db, participant_id)
+        result["review_required"] = not pretest_display.skip_review(db, participant)
+        if result["review_required"]:
+            result["next_url"] = "/learning-targets"
+        return result
+
     return await run_idempotent(
         db,
         scope=f"score:{participant_id}:retest",
         key=idempotency_key,
         participant_id=participant_id,
         request_data={"participant_id": participant_id, "phase": "retest"},
-        operation=lambda: score_phase(db, participant_id, "retest"),
+        operation=operation,
     )
 
 
@@ -772,13 +781,21 @@ async def api_score_final_test(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
+    async def operation() -> dict:
+        result = await score_phase(db, participant_id, "final_test")
+        participant = get_participant(db, participant_id)
+        result["review_required"] = not pretest_display.skip_review(db, participant)
+        if result["review_required"]:
+            result["next_url"] = "/learning-targets"
+        return result
+
     return await run_idempotent(
         db,
         scope=f"score:{participant_id}:final_test",
         key=idempotency_key,
         participant_id=participant_id,
         request_data={"participant_id": participant_id, "phase": "final_test"},
-        operation=lambda: score_phase(db, participant_id, "final_test"),
+        operation=operation,
     )
 
 
@@ -875,6 +892,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
             {
                 "participant_id": row.id,
                 "show_pretest_results": pretest_display.enabled(row.show_pretest_results),
+                "show_retest_results": pretest_display.enabled(row.show_retest_results),
                 "show_question_reviews": row.show_question_reviews,
                 "learning_material_glossary_mode": row.learning_material_glossary_mode,
                 "display_code": row.display_code,
