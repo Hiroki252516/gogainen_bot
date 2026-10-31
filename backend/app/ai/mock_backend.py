@@ -9,7 +9,7 @@ from app.ai.mandatory_elements import (
     mock_mandatory_elements,
 )
 from app.ai.teaching_contract import (
-    MATERIAL_TARGET_CHARACTERS,
+    material_length_contract,
     mock_teaching_contract,
 )
 
@@ -113,7 +113,13 @@ class MockAIBackend:
                 "- 似た仕組みとの違いは、用語名ではなく役割と処理範囲から判断します。"
             )
         result = {
-            "tutor_message": _pad_tutoring_material(message + _history_note(payload), beginner=payload.get("explanation_level") == "beginner"),
+            "tutor_message": _pad_tutoring_material(
+                message + _history_note(payload),
+                beginner=payload.get("explanation_level") == "beginner",
+                target_characters=material_length_contract(
+                    integrated_material="glossary_reference" in payload,
+                )["target_character_count"],
+            ),
             "teaching_strategy": strategy_for(mandatory_type, None, group),
         }
         if mandatory_elements:
@@ -183,7 +189,12 @@ def _history_note(payload: dict[str, Any], *, feedback: bool = False) -> str:
     return "\n- 以前の回答で見直す必要があった点は、定義と処理の違いを対応させて確認します。"
 
 
-def _pad_tutoring_material(message: str, *, beginner: bool = False) -> str:
+def _pad_tutoring_material(
+    message: str,
+    *,
+    beginner: bool = False,
+    target_characters: int = 700,
+) -> str:
     """Keep deterministic mock material inside the production contract range."""
     additions = (
         "定義だけでなく、構成要素がどの役割を担い、情報がどの順で処理されるかを確認します。",
@@ -197,7 +208,7 @@ def _pad_tutoring_material(message: str, *, beginner: bool = False) -> str:
             "説明を読んだら、自分の言葉で短く言い直してみましょう。別の場面でも同じ考え方が使えるかを考えると整理できます。",
         )
     index = 0
-    while len(message) < MATERIAL_TARGET_CHARACTERS:
+    while len(message) < target_characters:
         message += f"\n\n{additions[index % len(additions)]}"
         index += 1
     return message

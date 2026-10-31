@@ -5,11 +5,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from app.ai.mandatory_elements import mandatory_element_requirements
-from app.ai.teaching_contract import (
-    MATERIAL_MAX_CHARACTERS,
-    MATERIAL_MIN_CHARACTERS,
-    MATERIAL_TARGET_CHARACTERS,
-)
+from app.ai.teaching_contract import material_length_contract
 
 
 def mandatory_element_prompt(misconception_type: str | None) -> str:
@@ -84,6 +80,12 @@ def build_tutoring_prompt(
     owns only the textual instruction order; output schemas and local
     validation remain separate contracts.
     """
+    length_contract = material_length_contract(
+        integrated_material="glossary_reference" in payload,
+    )
+    target_characters = length_contract["target_character_count"]
+    min_characters = length_contract["min_character_count"]
+    max_characters = length_contract["max_character_count"]
     rules = [
         "学習セッション用の正確で読みやすい日本語教材を安全なMarkdownで作る。",
         f"教材の主題は現在の用語『{term_label}』とし、入力された用語説明を中心にする。",
@@ -93,7 +95,7 @@ def build_tutoring_prompt(
         "tutor_message には現在の用語の教材だけを書く。問題文、選択肢一覧、正答キー、過去回答の列挙やフィードバックの転載はしない。",
         "学習確認問題はbackendの固定問題バンクが表示・採点するため、問題や選択肢を生成しない。",
         "教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。",
-        f"教材本文はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に統一する。意味や仕組みの説明を保ち、不要な繰り返しで水増ししない。",
+        f"教材本文はMarkdown記号を含めて{target_characters}文字前後（{min_characters}〜{max_characters}文字）に統一する。意味や仕組みの説明を保ち、不要な繰り返しで水増ししない。",
         "見出し、箇条書き、太字、短い段落を使う。表、HTML、コードブロック、画像、長大な連続段落は使わない。",
         f"tutor_message の冒頭は『## {term_label}』にする。その後の小見出しは ### を使い、少なくとも1つ、見出しと本文が空でないセクションを作る。",
         "小見出しの文言・数・順序・セクションのまとめ方は、教材内容に適したものを自分で決める。固定テンプレートや必須要素ごとの専用見出しは要求しない。",
@@ -103,7 +105,7 @@ def build_tutoring_prompt(
         rules.extend(
             [
                 "glossary_reference は両群共通の用語辞書である。教材本文で実際に使う登録語だけを選び、初出時に意味を短く説明する。",
-                "教材に使わない辞書語を列挙したり、用語一覧を追加したりしない。説明は本文の流れに自然に含め、本文600〜800文字の条件を維持する。",
+                f"教材に使わない辞書語を列挙したり、用語一覧を追加したりしない。説明は本文の流れに自然に含め、本文{min_characters}〜{max_characters}文字の条件を維持する。",
                 "辞書の定義を正確に保ち、定義にない性質を付け加えない。",
             ]
         )
@@ -116,11 +118,11 @@ def build_tutoring_prompt(
         actual_character_count = material_length_retry.get("actual_character_count")
         if isinstance(actual_character_count, int) and not isinstance(actual_character_count, bool):
             rules.append(
-                f"前回の教材本文は{actual_character_count}文字で許容範囲外だった。今回は前回の内容を冗長に繰り返さず、Markdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に必ず収める。"
+                f"前回の教材本文は{actual_character_count}文字で許容範囲外だった。今回は前回の内容を冗長に繰り返さず、Markdown記号を含めて{target_characters}文字前後（{min_characters}〜{max_characters}文字）に必ず収める。"
             )
         else:
             rules.append(
-                f"前回の教材本文が文字数の許容範囲外だった。今回はMarkdown記号を含めて{MATERIAL_TARGET_CHARACTERS}文字前後（{MATERIAL_MIN_CHARACTERS}〜{MATERIAL_MAX_CHARACTERS}文字）に必ず収める。"
+                f"前回の教材本文が文字数の許容範囲外だった。今回はMarkdown記号を含めて{target_characters}文字前後（{min_characters}〜{max_characters}文字）に必ず収める。"
             )
 
     if expected_type:

@@ -134,7 +134,7 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 
 def uses_split(participant: Any) -> bool:
-    return participant.question_set_mode in {None, "standard"} and participant.experiment_spec_version in {27, 28, 29}
+    return participant.question_set_mode in {None, "standard"} and participant.experiment_spec_version in {27, 28, 29, 30}
 
 
 @lru_cache

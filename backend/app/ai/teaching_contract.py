@@ -8,9 +8,11 @@ from app.ai.material_structure import evidence_sections, validate_material_struc
 MATERIAL_TARGET_CHARACTERS = 700
 MATERIAL_MIN_CHARACTERS = 600
 MATERIAL_MAX_CHARACTERS = 800
+INTEGRATED_MATERIAL_TARGET_CHARACTERS = 1000
+INTEGRATED_MATERIAL_MAX_CHARACTERS = 1200
 
 
-PROMPT_CONTRACT_VERSION = "tutoring-teaching-contract-v8-split-scope"
+PROMPT_CONTRACT_VERSION = "tutoring-prompt-contract-v9-mode-specific-length"
 TEACHING_CONTRACT_TYPES = ("M1", "M3", "unknown")
 REFUTATION_MODES = ("explicit", "implicit", "category_comparison", "none")
 
@@ -167,25 +169,36 @@ def validate_tutoring_material_safety(
     return {"valid": not missing, "missing": missing}
 
 
-def validate_tutoring_material_length(result: dict[str, Any]) -> dict[str, Any]:
-    """Keep both tutoring conditions within the common material-size target."""
+def material_length_contract(*, integrated_material: bool = False) -> dict[str, int]:
+    return {
+        "target_character_count": INTEGRATED_MATERIAL_TARGET_CHARACTERS if integrated_material else MATERIAL_TARGET_CHARACTERS,
+        "min_character_count": MATERIAL_MIN_CHARACTERS,
+        "max_character_count": INTEGRATED_MATERIAL_MAX_CHARACTERS if integrated_material else MATERIAL_MAX_CHARACTERS,
+    }
+
+
+def validate_tutoring_material_length(
+    result: dict[str, Any],
+    *,
+    integrated_material: bool = False,
+) -> dict[str, Any]:
+    """Validate the mode-specific size contract for generated material."""
     material = str(result.get("tutor_message") or "")
     character_count = len(material)
+    length_contract = material_length_contract(integrated_material=integrated_material)
     missing: list[str] = []
-    if character_count < MATERIAL_MIN_CHARACTERS:
+    if character_count < length_contract["min_character_count"]:
         missing.append(
-            f"tutor_message:character_count_below_minimum:{character_count}<{MATERIAL_MIN_CHARACTERS}"
+            f"tutor_message:character_count_below_minimum:{character_count}<{length_contract['min_character_count']}"
         )
-    elif character_count > MATERIAL_MAX_CHARACTERS:
+    elif character_count > length_contract["max_character_count"]:
         missing.append(
-            f"tutor_message:character_count_above_maximum:{character_count}>{MATERIAL_MAX_CHARACTERS}"
+            f"tutor_message:character_count_above_maximum:{character_count}>{length_contract['max_character_count']}"
         )
     return {
         "valid": not missing,
         "character_count": character_count,
-        "target_character_count": MATERIAL_TARGET_CHARACTERS,
-        "min_character_count": MATERIAL_MIN_CHARACTERS,
-        "max_character_count": MATERIAL_MAX_CHARACTERS,
+        **length_contract,
         "missing": missing,
     }
 

@@ -2918,7 +2918,7 @@ def test_integrated_material_prompt_uses_only_the_supplied_glossary_reference():
     )
     assert "教材本文で実際に使う登録語だけを選び、初出時に意味を短く説明する" in prompt
     assert "教材に使わない辞書語を列挙したり、用語一覧を追加したりしない" in prompt
-    assert "教材本文は" in prompt and "600〜800文字" in prompt
+    assert "教材本文は" in prompt and "1000文字前後（600〜1200文字）" in prompt
     assert "学習で調整される内部数値です。" in prompt
 
     legacy_payload = {key: value for key, value in payload.items() if key != "glossary_reference"}
@@ -2931,6 +2931,7 @@ def test_integrated_material_prompt_uses_only_the_supplied_glossary_reference():
     )
     assert "glossary_reference" not in legacy_prompt
     assert "初出時に意味を短く説明する" not in legacy_prompt
+    assert "700文字前後（600〜800文字）" in legacy_prompt
 
 
 def test_tutoring_prompt_keeps_previous_context_but_excludes_feedback(monkeypatch):
@@ -3291,6 +3292,10 @@ def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch
             "label": "記憶プロセス",
             "description": "情報を保存し、検索して現在の処理へ渡し、必要に応じて更新する仕組みです。",
         },
+        "glossary_reference": {
+            "version": "learning-glossary-v2",
+            "entries": [{"id": "weights", "term": "重み", "definition": "学習で調整される内部数値です。"}],
+        },
         "rag_context": {
             "source": "test-rag",
             "topic_slug": "memory_process",
@@ -3381,9 +3386,9 @@ def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch
         assert log.response_payload["output_metrics"]["character_count"] == len(
             normalized_response["tutor_message"]
         )
-        assert log.response_payload["output_metrics"]["target_character_count"] == MATERIAL_TARGET_CHARACTERS
-        assert log.response_payload["output_metrics"]["min_character_count"] == MATERIAL_MIN_CHARACTERS
-        assert log.response_payload["output_metrics"]["max_character_count"] == MATERIAL_MAX_CHARACTERS
+        assert log.response_payload["output_metrics"]["target_character_count"] == 1000
+        assert log.response_payload["output_metrics"]["min_character_count"] == 600
+        assert log.response_payload["output_metrics"]["max_character_count"] == 1200
         assert log.response_payload["output_metrics"]["character_count_in_target_range"] == 1
 
         participant_logs = client.get(f"/api/admin/participants/{pid}/logs")
