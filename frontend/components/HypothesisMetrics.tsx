@@ -39,7 +39,9 @@ export function HypothesisMetrics({ data }: { data: any }) {
     <p className="muted">仮説2は満点到達者のみの条件付き集計です。仮説2の未観測は満点までの総回数が未確定の人数であり、表示済みセッションの記録欠落を意味しません。仮説3は用語内平均→参加者内平均、仮説4は参加者ごとの率の平均です。</p>
     <div className="actions">
       <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_metrics.csv?question_set_mode=standard`}>6仮説・参加者別CSV</a>
+      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_metrics.xlsx?question_set_mode=standard`}>6仮説・参加者別Excel (.xlsx)</a>
       <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.csv?question_set_mode=standard`}>6仮説・群別CSV</a>
+      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.xlsx?question_set_mode=standard`}>6仮説・群別Excel (.xlsx)</a>
     </div>
     <h3>群間差（proposed − control）</h3>
     <ul>{Object.entries(LABELS).map(([key, label]) => {

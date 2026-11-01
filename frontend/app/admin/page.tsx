@@ -647,6 +647,9 @@ export default function AdminPage() {
             <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview_excel.csv`}>
               全体ログ Excel互換CSV
             </a>
+            <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview.xlsx`}>
+              全体ログ Excel (.xlsx)
+            </a>
             <a className="button secondary" href={`${API_BASE}/api/admin/logs/overview.csv`}>
               全体ログCSV UTF-8
             </a>
@@ -654,6 +657,9 @@ export default function AdminPage() {
               <>
                 <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs_excel.csv`}>
                   被験者ログ Excel互換CSV
+                </a>
+                <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs.xlsx`}>
+                  被験者ログ Excel (.xlsx)
                 </a>
                 <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs.csv`}>
                   被験者ログCSV UTF-8

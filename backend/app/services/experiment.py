@@ -44,7 +44,16 @@ from app.core.experiment_spec import (
     can_resume,
 )
 from app.services.research_protocol import SURVEY_VERSION, validate_survey_for_participant
-from app.services.hypothesis_metrics import METRICS_VERSION, participant_metrics, current_metrics, group_metrics, write_metrics_csv
+from app.services.hypothesis_metrics import (
+    METRICS_CSV_COLUMNS,
+    METRICS_VERSION,
+    current_metrics,
+    group_metrics,
+    metrics_export_rows,
+    participant_metrics,
+    write_metrics_csv,
+)
+from app.services.excel_export import write_xlsx
 from app.core.runtime_config import (
     STUDY_MODEL,
     STUDY_REASONING_EFFORT,
@@ -4411,6 +4420,18 @@ def export_participant_logs_excel_csv(db: Session, participant_id: str) -> Path:
     return _write_log_csv(path, rows, encoding="utf-8-sig")
 
 
+def export_participant_logs_xlsx(db: Session, participant_id: str) -> Path:
+    logs = participant_logs(db, participant_id)
+    participant = logs["participant"]
+    path = Path(get_settings().export_dir) / f"{participant['display_code']}_logs.xlsx"
+    return write_xlsx(
+        path,
+        columns=LOG_CSV_COLUMNS,
+        rows=_log_csv_rows_from_participant_logs(logs),
+        sheet_title="被験者ログ",
+    )
+
+
 def export_overview_logs_csv(db: Session) -> Path:
     path = Path(get_settings().export_dir) / "overview.csv"
     rows: list[dict[str, Any]] = []
@@ -4425,6 +4446,28 @@ def export_overview_logs_excel_csv(db: Session) -> Path:
     for participant in db.query(Participant).order_by(Participant.created_at).all():
         rows.extend(_log_csv_rows_from_participant_logs(participant_logs(db, participant.id)))
     return _write_log_csv(path, rows, encoding="utf-8-sig")
+
+
+def export_overview_logs_xlsx(db: Session) -> Path:
+    path = Path(get_settings().export_dir) / "overview.xlsx"
+    rows: list[dict[str, Any]] = []
+    for participant in db.query(Participant).order_by(Participant.created_at).all():
+        rows.extend(_log_csv_rows_from_participant_logs(participant_logs(db, participant.id)))
+    return write_xlsx(path, columns=LOG_CSV_COLUMNS, rows=rows, sheet_title="全体ログ")
+
+
+def export_hypothesis_metrics_xlsx(db: Session, name: str, mode: str = STANDARD) -> Path:
+    if name not in {"hypothesis_metrics", "hypothesis_group_summary"}:
+        raise HTTPException(status_code=404, detail="unknown export")
+    mode = require_aggregate_question_set_mode(mode)
+    rows = metrics_export_rows(
+        current_metrics(db, mode),
+        grouped=name == "hypothesis_group_summary",
+        mode=mode,
+    )
+    path = Path(get_settings().export_dir) / f"{name}_{mode}.xlsx"
+    sheet_title = "参加者別" if name == "hypothesis_metrics" else "群別"
+    return write_xlsx(path, columns=METRICS_CSV_COLUMNS, rows=rows, sheet_title=sheet_title)
 
 
 def export_csv(db: Session, name: str, mode: str = STANDARD) -> Path:
