@@ -57,11 +57,13 @@ EvaluationSummary.hypothesis_metrics_jsonに参加者指標と分子・分母・
 
 指標版が異なるキャッシュは、現行プロトコルで事前テスト採点済みの参加者に限って評価サマリーを新規作成する。過去のサマリーを上書きせず、旧プロトコルの閲覧・出力では再計算しない。
 
-管理画面の「6仮説の記述集計」と次の専用CSVを同じ計算関数から生成する。
+管理画面の「6仮説の記述集計」と次の専用CSV・Excelブックを同じ計算関数から生成する。各Excelブックは対応するCSVと同じ列・行を持つ1シート構成で、数値列はExcelの数値として、文章・JSON列は文字列として保存する。
 
 - /api/admin/export/hypothesis_metrics.csv：参加者別の長形式。
 - /api/admin/export/hypothesis_group_summary.csv：群別、群間差、回次・経路等の詳細。
-- 統合ログCSV：固定ヘッダを維持し、新情報はvalue_jsonへ格納。旧値は変換しない。
+- 上記CSVに対応する`.xlsx`：`hypothesis_metrics.xlsx`と`hypothesis_group_summary.xlsx`。
+- 統合ログCSV・Excel：全体ログと被験者ログを別ファイルで出力する。CSV固定ヘッダを維持し、新情報はvalue_jsonへ格納。旧値は変換しない。
+- 既存のExcel互換CSVはUTF-8 BOM付きCSVであり、`.xlsx`ブックとは別形式。
 
 仮説2の到達者だけの平均は条件付き集計である。未達者の値はnullとし、群のmissing_count/censored_countに人数を計上する。ここで未観測なのは満点までの総回数であり、表示済みセッションの記録欠落を意味しない。未達人数と観測回数・終了状況を併記し、この平均だけで学習効率が改善したと断定しない。
 

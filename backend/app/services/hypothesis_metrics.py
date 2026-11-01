@@ -17,6 +17,11 @@ from app.services.question_sets import require_aggregate_question_set_mode
 
 METRICS_VERSION = "six-hypotheses-v3-split"
 TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
+METRICS_CSV_COLUMNS = [
+    "metrics_version", "protocol_id", "group_condition", "participant_id", "display_code", "route",
+    "metric", "value", "n", "mean", "median", "numerator", "denominator", "missing_count",
+    "not_applicable_count", "status", "details_json",
+]
 
 
 def _stats(values, total=None):
@@ -204,10 +209,10 @@ def group_metrics(rows: list[dict], mode: str = STANDARD) -> dict:
             "routes": routes, "descriptive_only": True}
 
 
-def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool, mode: str = STANDARD) -> Path:
-    """Long-form, spreadsheet-safe numeric exports with denominators and status."""
-    fields = ["metrics_version", "protocol_id", "group_condition", "participant_id", "display_code", "route", "metric", "value", "n", "mean", "median", "numerator", "denominator", "missing_count", "not_applicable_count", "status", "details_json"]
+def metrics_export_rows(rows: list[dict], *, grouped: bool, mode: str = STANDARD) -> list[dict]:
+    """Return the canonical long-form records used by CSV and Excel exports."""
     import json
+
     records = []
     mode = require_aggregate_question_set_mode(mode)
     rows = [row for row in rows if row.get("question_set_mode", STANDARD) == mode]
@@ -216,7 +221,7 @@ def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool, mode: str 
         for group in source["groups"]:
             for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
                 stats = group[key]
-                records.append({"group_condition": group["group_condition"], "metric": key, **{k: v for k, v in stats.items() if k in fields}, "details_json": json.dumps(stats, ensure_ascii=False)})
+                records.append({"group_condition": group["group_condition"], "metric": key, **{k: v for k, v in stats.items() if k in METRICS_CSV_COLUMNS}, "details_json": json.dumps(stats, ensure_ascii=False)})
             for item, stats in group["h5"]["items"].items():
                 records.append({"group_condition": group["group_condition"], "metric": f"h5.{item}", **stats})
         for key, value in source["differences_proposed_minus_control"].items():
@@ -228,15 +233,24 @@ def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool, mode: str 
             base = {k: row[k] for k in ("group_condition", "participant_id", "display_code", "route")}
             for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
                 metric = row[key]
-                records.append({**base, "metric": key, **{k: v for k, v in metric.items() if k in fields}, "details_json": json.dumps(metric, ensure_ascii=False)})
+                records.append({**base, "metric": key, **{k: v for k, v in metric.items() if k in METRICS_CSV_COLUMNS}, "details_json": json.dumps(metric, ensure_ascii=False)})
             for item, value in (row["h5"]["items"] or {}).items():
                 records.append({**base, "metric": f"h5.{item}", "value": value, "status": "observed"})
+
+    output = []
+    for record in records:
+        details = json.loads(record.get("details_json") or "{}")
+        record["details_json"] = json.dumps({**details, "question_set_mode": mode}, ensure_ascii=False)
+        output.append({"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, **record})
+    return output
+
+
+def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool, mode: str = STANDARD) -> Path:
+    """Write long-form numeric exports with denominators and status."""
+    records = metrics_export_rows(rows, grouped=grouped, mode=mode)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8-sig") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer = csv.DictWriter(stream, fieldnames=METRICS_CSV_COLUMNS)
         writer.writeheader()
-        for record in records:
-            details = json.loads(record.get("details_json") or "{}")
-            record["details_json"] = json.dumps({**details, "question_set_mode": mode}, ensure_ascii=False)
-            writer.writerow({"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, **record})
+        writer.writerows(records)
     return path

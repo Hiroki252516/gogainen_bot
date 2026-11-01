@@ -469,7 +469,7 @@ for (const expectedText of ["type ApiRequestInit", "AbortController", "timeoutMs
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
 const hypothesisMetrics = fs.readFileSync(new URL("../components/HypothesisMetrics.tsx", import.meta.url), "utf8");
-for (const expectedText of ["6仮説の記述集計", "hypothesis_metrics.csv", "hypothesis_group_summary.csv", "observed_nonattainer_sessions", "pooled_denominator", "material_item_differences"]) {
+for (const expectedText of ["6仮説の記述集計", "hypothesis_metrics.csv", "hypothesis_metrics.xlsx", "hypothesis_group_summary.csv", "hypothesis_group_summary.xlsx", "6仮説・参加者別Excel (.xlsx)", "6仮説・群別Excel (.xlsx)", "observed_nonattainer_sessions", "pooled_denominator", "material_item_differences"]) {
   if (!hypothesisMetrics.includes(expectedText)) throw new Error(`hypothesis display/export contract is missing: ${expectedText}`);
 }
 for (const expectedText of ["欠測・未観測", "censoring_breakdown", "censoring_reason", "途中中断", "継続中", "完了・満点未達", "終了状況不明", "表示済みセッションの記録欠落を意味しません"]) {
@@ -495,7 +495,7 @@ const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.u
 if (!adminPage.includes("clearParticipantSession") || !adminPage.includes("participantId()")) {
   throw new Error("admin page must clear a deleted participant's browser session");
 }
-for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "ギブアップ回数", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/logs.csv", "/logs_excel.csv"]) {
+for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "全体ログ Excel (.xlsx)", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "被験者ログ Excel (.xlsx)", "ギブアップ回数", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/api/admin/logs/overview.xlsx", "/logs.csv", "/logs_excel.csv", "/logs.xlsx"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }
