@@ -4,11 +4,11 @@
 
 計画書の手順は、事前テスト、必要な用語の学習、再テスト、未達用語の再学習、満点または中断後のアンケートという流れ。6仮説の測定上の回数・対象経路は[01](01_research_requirements.md)と[12](12_evaluation_metrics.md)に定め、画面表示の変更で評価式は変更しない。
 
-現行コードは仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`。通常版はsplit-actions-v3の3用語×2設問、計6設問・4択単一選択であり、PRETESTの指定選択肢本文をv2から改訂した。RETEST1/2・内部final_testはv2と同じ問題文・選択肢で、各用語の設問1・2を保存後に同じ画面で答え合わせを表示する。誤答PRETEST設問の学習確認は保存済みsnapshotを利用する。教材用語解説モードは新規参加者に登録時固定する。仕様版30の文字数契約と仕様版31の辞書v3・教材内言い換えを維持する。[仕様版27の採用記録](39_split_assessment.md)、[仕様版28](40_question_pair_answer_review.md)、[仕様版29](41_learning_glossary_material_mode.md)、[仕様版30の文字数条件](42_learning_glossary_material_length.md)、[仕様版31](43_glossary_definition_paraphrase.md)、[仕様版32](44_pretest_content_revision.md)、[仕様版33](45_pretest_memory_distractors.md)。
+現行コードは仕様版34 / `experiment-plan-2026-11-01-split-choice-wording-v1`。通常版はsplit-actions-v4の3用語×2設問、計6設問・4択単一選択であり、PRETEST・RETEST1/2の全選択肢本文を整形した。設問構造・役割・正誤分類・ラベル順・採点は維持し、設問3は保存データに残すが出題・採点しない。内部final_testはRETEST1を使い、各用語の設問1・2を保存後に同じ画面で答え合わせを表示する。誤答PRETEST設問の学習確認は保存済みsnapshotを利用する。教材用語解説モードは新規参加者に登録時固定する。仕様版30の文字数契約と仕様版31の辞書v3・教材内言い換えを維持する。[仕様版27の採用記録](39_split_assessment.md)、[仕様版28](40_question_pair_answer_review.md)、[仕様版29](41_learning_glossary_material_mode.md)、[仕様版30の文字数条件](42_learning_glossary_material_length.md)、[仕様版31](43_glossary_definition_paraphrase.md)、[仕様版32](44_pretest_content_revision.md)、[仕様版33](45_pretest_memory_distractors.md)、[仕様版34](46_split_assessment_choice_wording.md)。
 
 2026-10-30から新規登録は通常版固定。既存易しい版参加者は閲覧専用で、参加者向け画面・APIから再開・回答できない。易しい版の群集計・仮説CSVも停止するが、個別ログと全件生ログは参照できる。既存データと復元用バンクは保持する。詳細は[停止後の契約](22_question_set_modes.md)。
 
-## 現行フロー（仕様版33）
+## 現行フロー（仕様版34）
 
 1. start → consentで参加コードA/Bを受け取り、新しい参加者を作成する。
 2. pretestで通常版の6設問に回答し、全設問の完了後に固定採点する。事前テストの全体結果表示は管理設定に従う。
@@ -24,4 +24,4 @@ surveyは経験4有無・一般4/教材6の1〜10段階・必須自由記述。�
 
 学習ギブアップはretestへ進む。retest/final_testの実験ギブアップはsurveyへ進む。採点・ギブアップ・再送・先行生成は仕様版の確認後に実行する。学習確認の出題規則は両群共通で、unknownはenrichment、M1/M3はconceptual_change。同じ状態・回答・ターンなら同じ問題とvariantを使う。
 
-仕様版32以下、旧protocol_id、NULL・未対応版の記録は既存方針どおり閲覧専用で保全する。新規開始は同意を取り直して新しいIDを作成する。現行コードは新規参加者へ版33を保存する。教材本文の文字数は注釈欄のみが目標700・600〜800文字、教材内解説が目標1000・600〜1200文字であり、登録済みモードで選択する。教材内解説モードだけ辞書v3を意味参照として生成入力に含め、本文では逐語転載せず言い換える。仕様版32以下の保存済み教材は変更しない。[文字数契約](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)、[PRETEST履歴](44_pretest_content_revision.md)、[現行差分](45_pretest_memory_distractors.md)。通常版ペア確認、設定独立性、再読み込みと確認記録は[40](40_question_pair_answer_review.md)に記録する。
+仕様版33以下、旧protocol_id、NULL・未対応版の記録は既存方針どおり閲覧専用で保全する。新規開始は同意を取り直して新しいIDを作成する。現行コードは新規参加者へ版34を保存する。教材本文の文字数は注釈欄のみが目標700・600〜800文字、教材内解説が目標1000・600〜1200文字であり、登録済みモードで選択する。教材内解説モードだけ辞書v3を意味参照として生成入力に含め、本文では逐語転載せず言い換える。旧仕様版の保存済み教材は変更しない。[文字数契約](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)、[PRETEST履歴](44_pretest_content_revision.md)、[版33差分](45_pretest_memory_distractors.md)、[現行差分](46_split_assessment_choice_wording.md)。通常版ペア確認、設定独立性、再読み込みと確認記録は[40](40_question_pair_answer_review.md)に記録する。

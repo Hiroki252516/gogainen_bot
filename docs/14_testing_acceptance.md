@@ -1,5 +1,18 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-01 通常版テスト選択肢の文構造整形（仕様版34・fix/issue-247）
+
+- 新規参加者を仕様版34 / `experiment-plan-2026-11-01-split-choice-wording-v1`・`split-actions-v4`で開始し、仕様版33以下は閲覧専用として旧問題・回答・snapshotを保全する。
+- 比較表のPRETEST・RETEST1/2、3用語×設問1〜3の正解/M1/M3選択肢、計81本文が期待値fixtureと一致し、「わからない」・問題場面・設問・選択肢構造・役割・ラベル・順序・正誤分類は維持する。設問3はデータのみ保持し出題・採点しない。
+- 仕様版27〜31はv1、32はv2、33はv3、34はv4で結果を復元する。内部final_testはRETEST1を使い、誤答PRETEST設問の学習確認では回答時snapshotを再利用する。再seed後も旧問題・回答・snapshotを変更しない。
+- 関連Backendテスト、Frontendテスト・build、`git diff --check`を実施する。隔離DBのみを使用し、研究DB・localhost:3000・実AIは使わない。自動検査は文面の教育的妥当性・難易度同等性・学習効果を実証しない。
+
+実施結果:
+
+- 仕様版34の現行値、v1〜v4の版対応、期待値fixtureとv4 YAMLの全81本文・構造差分、設問3の非出題、仕様版32/33/34の隔離SQLite復元・snapshot保全を含む関連Backendテスト11ファイルが480 passed。失敗なし。既存DeprecationWarning 2件。
+- Frontend `npm test`の全7スクリプトが成功し、`npm run build`はTypeScriptを含め成功。表示コードの変更がないためブラウザ確認は未実施。
+- `git diff --check`通過。研究DB・localhost:3000・実AIは未使用。コミット・pushはしていない。文章の妥当性・難易度同等性・学習効果は自動検査で実証していない。
+
 ## 2026-11-01 通常版PRETEST選択肢文面改訂（仕様版33・fix/pretest）
 
 - 新規参加者を仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`で開始し、仕様版32以下は閲覧専用として既存問題・回答・snapshotを保全する。

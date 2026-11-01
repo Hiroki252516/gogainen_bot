@@ -1,5 +1,7 @@
 # 用語辞書v3と教材内の言い換え（仕様版31）
 
+現行の参加者進行境界は仕様版34 / `experiment-plan-2026-11-01-split-choice-wording-v1`であり、仕様版33以下は閲覧専用。以下の仕様版31適用条件は当時の記録である。現行条件は[実験フロー](02_experiment_flow.md)と[仕様版34の差分](46_split_assessment_choice_wording.md)を参照。
+
 ## 適用
 
 仕様版31 / `experiment-plan-2026-10-31-glossary-definition-paraphrase-v1`から、新規参加者へ辞書v3を適用する。仕様版30以下、旧protocol、NULL・未対応版は閲覧専用とし、既存の参加者、回答、教材、評価、辞書snapshotを変更・再生成しない。DB構造、辞書の返却形式、抽出規則、採点、群別教授方針は変更しない。

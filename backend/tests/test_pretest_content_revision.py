@@ -39,6 +39,7 @@ MEMORY_FULL_CONVERSATION_DISTRACTOR = "利用者が「辛い料理は避けた�
 MEMORY_NO_UPDATE_DISTRACTOR = "利用者が「辛い料理は避けたい」という希望を「少し辛い料理も食べたい」に変更した場合、新しい希望をAIに伝えて献立を作らせれば、以前に保存した希望の記録も新しい内容に書き換わると考え、記録を更新する処理は設けない。"
 MEMORY_UPDATE_CORRECT = "利用者が以前の「辛い料理は避けたい」を「少し辛い料理も食べたい」に変更したら、利用者別の記録に残る古い希望を確認し、新しい希望が現在の条件となるように更新する。次回の相談では、更新した記録を参照して新しい希望に沿う献立を提案させる。"
 MEMORY_SHARED_INSTRUCTION_DISTRACTOR = "利用者が「辛い料理は避けたい」から「少し辛い料理も食べたい」に希望を変更した際、AIがすべての利用者に共通して使う指示文を「少し辛い料理も提案する」に変更し、この設定を、利用者ごとの希望を記憶する仕組みとして利用する。"
+V4_EXPECTED = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v4_expected.yml").read_text(encoding="utf-8"))
 
 
 def test_v2_changes_only_the_requested_pretest_content_and_preserves_v1():
@@ -71,7 +72,7 @@ def test_v2_changes_only_the_requested_pretest_content_and_preserves_v1():
         assert specs[0]["body"].split("\n\n設問", 1)[0] == specs[1]["body"].split("\n\n設問", 1)[0]
 
 
-def test_v3_changes_only_approved_pretest_choices_and_preserves_v1_v2():
+def test_v3_is_preserved_as_the_spec_33_bank():
     v1 = split_bank("split-actions-v1")
     v2 = split_bank("split-actions-v2")
     revised = split_bank("split-actions-v3")
@@ -101,17 +102,45 @@ def test_v3_changes_only_approved_pretest_choices_and_preserves_v1_v2():
     assert revised["pretest_v1"]["memory_process"]["questions"][1]["choices"]["M3"]["label"] == "C"
 
 
-def test_spec_33_seeds_v3_and_restores_spec_32_from_v2_without_changing_snapshots(tmp_path):
+def test_v4_matches_all_comparison_text_and_preserves_question_structure():
+    v1 = split_bank("split-actions-v1")
+    v2 = split_bank("split-actions-v2")
+    v3 = split_bank("split-actions-v3")
+    revised = split_bank("split-actions-v4")
+    expected = deepcopy(v3)
+    assert sum(len(questions) * 3 for terms in V4_EXPECTED.values() for questions in terms.values()) == 81
+
+    for round_key, terms in V4_EXPECTED.items():
+        for term_slug, questions in terms.items():
+            for number, choices in questions.items():
+                question = next(q for q in expected[round_key][term_slug]["questions"] if q["number"] == number)
+                for role, body in choices.items():
+                    question["choices"][role]["body"] = body
+
+    assert revised == expected
+    v4_path = Path(__file__).parents[1] / "app/seed/content/standard/split_assessment_v4.yml"
+    assert yaml.safe_load(v4_path.read_text(encoding="utf-8"))["status"] == "active_standard_split_v4"
+    assert split_bank("split-actions-v1") == v1
+    assert split_bank("split-actions-v2") == v2
+    assert split_bank("split-actions-v3") == v3
+    for round_key in ("pretest_v1", "retest_v1", "retest_v2"):
+        for term_slug in ("llm_knowledge", "multi_agent", "memory_process"):
+            specs = split_specs(term_slug, round_key, bank_version="split-actions-v4")
+            assert [spec["question_number"] for spec in specs] == [1, 2]
+
+
+def test_spec_34_seeds_v4_and_restores_spec_33_from_v3_without_changing_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 33
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-01-pretest-content-revision-v2"
-            assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v3"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 34
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-01-split-choice-wording-v1"
+            assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v4"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[33][STANDARD] == "split-actions-v3"
 
             term = db.query(Term).filter_by(slug="memory_process").one()
             active = db.query(Question).filter_by(
@@ -121,9 +150,9 @@ def test_spec_33_seeds_v3_and_restores_spec_32_from_v2_without_changing_snapshot
                 variant_key="pretest_v1_q1",
             ).one()
             assert active.is_active
-            assert "split-actions-v3" in active.construct_key
+            assert "split-actions-v4" in active.construct_key
             active_m1 = db.query(QuestionOption).filter_by(question_id=active.id, option_label="B").one()
-            assert active_m1.body == MEMORY_FULL_CONVERSATION_DISTRACTOR
+            assert active_m1.body == V4_EXPECTED["pretest_v1"]["memory_process"][1]["M1"]
 
             v2_spec = split_specs(term.slug, "pretest_v1", bank_version="split-actions-v2")[0]
             v2_question = _upsert_question(
@@ -141,6 +170,22 @@ def test_spec_33_seeds_v3_and_restores_spec_32_from_v2_without_changing_snapshot
             v2_options = db.query(QuestionOption).filter_by(question_id=v2_question.id).order_by(QuestionOption.option_label).all()
             v2_snapshot = (v2_question.body, [(o.option_label, o.body) for o in v2_options])
 
+            v3_spec = split_specs(term.slug, "pretest_v1", bank_version="split-actions-v3")[0]
+            v3_question = _upsert_question(
+                db,
+                term,
+                phase="pretest",
+                question_type="split_single",
+                body=v3_spec["body"],
+                expected_answer="A",
+                construct_key=assessment_construct_key(term.slug, "pretest", STANDARD, bank_version="split-actions-v3"),
+                variant_key=v3_spec["variant_key"],
+                options=v3_spec["options"],
+            )
+            v3_question.is_active = False
+            v3_options = db.query(QuestionOption).filter_by(question_id=v3_question.id).order_by(QuestionOption.option_label).all()
+            v3_snapshot = (v3_question.body, [(o.option_label, o.body) for o in v3_options])
+
             spec32_participant = Participant(
                 display_code="PRETEST-V32",
                 group_condition="control",
@@ -155,11 +200,20 @@ def test_spec_33_seeds_v3_and_restores_spec_32_from_v2_without_changing_snapshot
                 group_condition="control",
                 current_step="learning",
                 experiment_spec_version=33,
+                protocol_id="experiment-plan-2026-11-01-pretest-content-revision-v2",
+                question_set_mode=STANDARD,
+                learning_content_version=15,
+            )
+            spec34_participant = Participant(
+                display_code="PRETEST-V34",
+                group_condition="control",
+                current_step="learning",
+                experiment_spec_version=34,
                 protocol_id=CURRENT_PROTOCOL_ID,
                 question_set_mode=STANDARD,
                 learning_content_version=15,
             )
-            db.add_all([spec32_participant, spec33_participant])
+            db.add_all([spec32_participant, spec33_participant, spec34_participant])
             db.flush()
             v2_selected = next(option for option in v2_options if option.option_label == "B")
             v2_attempt = Attempt(
@@ -174,57 +228,85 @@ def test_spec_33_seeds_v3_and_restores_spec_32_from_v2_without_changing_snapshot
                 question_body_snapshot=v2_question.body,
                 option_order_snapshot=_displayed_options(db, spec32_participant, v2_question),
             )
-            v3_options = db.query(QuestionOption).filter_by(question_id=active.id).order_by(QuestionOption.option_label).all()
             v3_selected = next(option for option in v3_options if option.option_label == "B")
             v3_attempt = Attempt(
                 participant_id=spec33_participant.id,
                 term_id=term.id,
-                question_id=active.id,
+                question_id=v3_question.id,
                 phase="pretest",
                 test_round="test",
                 selected_option_ids=[v3_selected.id],
                 is_correct=False,
                 misconception_type="M1",
-                question_body_snapshot=active.body,
-                option_order_snapshot=_displayed_options(db, spec33_participant, active),
+                question_body_snapshot=v3_question.body,
+                option_order_snapshot=_displayed_options(db, spec33_participant, v3_question),
             )
-            db.add_all([v2_attempt, v3_attempt])
+            v3_attempt_options = deepcopy(v3_attempt.option_order_snapshot)
+            v4_options = db.query(QuestionOption).filter_by(question_id=active.id).order_by(QuestionOption.option_label).all()
+            v4_selected = next(option for option in v4_options if option.option_label == "B")
+            v4_attempt = Attempt(
+                participant_id=spec34_participant.id,
+                term_id=term.id,
+                question_id=active.id,
+                phase="pretest",
+                test_round="test",
+                selected_option_ids=[v4_selected.id],
+                is_correct=False,
+                misconception_type="M1",
+                question_body_snapshot=active.body,
+                option_order_snapshot=_displayed_options(db, spec34_participant, active),
+            )
+            db.add_all([v2_attempt, v3_attempt, v4_attempt])
             db.commit()
 
-            assert can_resume(spec33_participant)
+            assert not can_resume(spec33_participant)
+            assert can_resume(spec34_participant)
             assert not can_resume(spec32_participant)
             assert assessment_construct_key(
                 term.slug, "pretest", STANDARD,
                 bank_version=HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD],
             ) == v2_question.construct_key
+            assert assessment_construct_key(
+                term.slug, "pretest", STANDARD,
+                bank_version=HISTORICAL_ASSESSMENT_BANK_VERSIONS[33][STANDARD],
+            ) == v3_question.construct_key
             assert assessment_construct_key(term.slug, "pretest", STANDARD) == active.construct_key
             assert latest_test_results(db, spec32_participant.id)["results"][0]["question_body"] == v2_snapshot[0]
-            assert latest_test_results(db, spec33_participant.id)["results"][0]["question_body"] == v3_attempt.question_body_snapshot
+            assert latest_test_results(db, spec33_participant.id)["results"][0]["question_body"] == v3_snapshot[0]
+            assert latest_test_results(db, spec34_participant.id)["results"][0]["question_body"] == v4_attempt.question_body_snapshot
 
-            saved_body = v3_attempt.question_body_snapshot
-            saved_options = deepcopy(v3_attempt.option_order_snapshot)
+            saved_body = v4_attempt.question_body_snapshot
+            saved_options = deepcopy(v4_attempt.option_order_snapshot)
             active.body = "live bank changed after the response"
             active_m1.body = "live option changed after the response"
             db.flush()
-            confirmation = split_learning_spec(db, spec33_participant, term)
+            confirmation = split_learning_spec(db, spec34_participant, term)
             assert confirmation["questions"][0]["body"] == saved_body
             assert confirmation["questions"][0]["options"] == saved_options
 
             seed_database(db)
             db.refresh(v2_question)
+            db.refresh(v3_question)
             db.refresh(v2_attempt)
             db.refresh(v3_attempt)
+            db.refresh(v4_attempt)
             db.refresh(active)
             db.refresh(active_m1)
             assert not v2_question.is_active
+            assert not v3_question.is_active
             restored_options = db.query(QuestionOption).filter_by(question_id=v2_question.id).order_by(QuestionOption.option_label).all()
             assert (v2_question.body, [(o.option_label, o.body) for o in restored_options]) == v2_snapshot
+            restored_v3_options = db.query(QuestionOption).filter_by(question_id=v3_question.id).order_by(QuestionOption.option_label).all()
+            assert (v3_question.body, [(o.option_label, o.body) for o in restored_v3_options]) == v3_snapshot
             assert v2_attempt.question_body_snapshot == v2_snapshot[0]
-            assert v3_attempt.question_body_snapshot == saved_body
-            assert v3_attempt.option_order_snapshot == saved_options
+            assert v3_attempt.question_body_snapshot == v3_snapshot[0]
+            assert v3_attempt.option_order_snapshot == v3_attempt_options
+            assert v4_attempt.question_body_snapshot == saved_body
+            assert v4_attempt.option_order_snapshot == saved_options
             assert active.is_active and active.body == saved_body
-            assert active_m1.body == MEMORY_FULL_CONVERSATION_DISTRACTOR
+            assert active_m1.body == V4_EXPECTED["pretest_v1"]["memory_process"][1]["M1"]
             assert latest_test_results(db, spec32_participant.id)["results"][0]["question_body"] == v2_snapshot[0]
-            assert split_learning_spec(db, spec33_participant, term)["questions"][0]["body"] == saved_body
+            assert latest_test_results(db, spec33_participant.id)["results"][0]["question_body"] == v3_snapshot[0]
+            assert split_learning_spec(db, spec34_participant, term)["questions"][0]["body"] == saved_body
     finally:
         engine.dispose()

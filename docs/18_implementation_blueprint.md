@@ -1,6 +1,6 @@
 # 現行プロトコルの実装境界
 
-> この文書の版26に関する記述は当時の実装設計記録であり、現行状態ではない。2026-11-01時点の現行コードは仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`。仕様版32以下は閲覧専用で、新規参加者の教材用語解説モードを登録時に固定する。通常版PRETESTはv3の指定選択肢、RETEST1/2は仕様版32 v2の文面を使い、v1/v2バンクで過去記録を復元する。教材は注釈欄のみで600〜800文字、教材内解説で600〜1200文字。教材内解説では辞書v3の定義を参照情報として扱い、本文では逐語転載せず言い換える。易しい版は停止済みで、保存済み記録・YAML・snapshotを履歴復元用に保持する。現行運用は[02](02_experiment_flow.md)、[22](22_question_set_modes.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、[44](44_pretest_content_revision.md)、[45](45_pretest_memory_distractors.md)を参照。
+> この文書の版26に関する記述は当時の実装設計記録であり、現行状態ではない。2026-11-01時点の現行コードは仕様版34 / `experiment-plan-2026-11-01-split-choice-wording-v1`。仕様版33以下は閲覧専用で、新規参加者の教材用語解説モードを登録時に固定する。通常版PRETEST・RETEST1/2はv4の全選択肢本文を使い、過去記録は版27〜31のv1、版32のv2、版33のv3で復元する。教材は注釈欄のみで600〜800文字、教材内解説で600〜1200文字。教材内解説では辞書v3の定義を参照情報として扱い、本文では逐語転載せず言い換える。易しい版は停止済みで、保存済み記録・YAML・snapshotを履歴復元用に保持する。現行運用は[02](02_experiment_flow.md)、[22](22_question_set_modes.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、[44](44_pretest_content_revision.md)、[45](45_pretest_memory_distractors.md)、[46](46_split_assessment_choice_wording.md)を参照。
 
 用語注釈はbackendの共通辞書処理へ分離し、教材生成・回答後解説の確定時と、テスト回答時に保存する。LLM・採点・診断の責務へ追加せず、frontendは保存された公開項目だけを表示する。新規登録は版26、旧版25以下は閲覧専用。[24](24_learning_glossary.md)。
 
