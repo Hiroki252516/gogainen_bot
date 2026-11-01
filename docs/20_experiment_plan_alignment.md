@@ -1,8 +1,14 @@
 # 実験計画書との対応と実装判断
 
-## 仕様版32：PRETEST問題文の改訂（fix/pretest）
+## 仕様版33：通常版PRETEST選択肢文面の改訂（fix/pretest）
 
-新規参加者だけに実験仕様版32 / `experiment-plan-2026-11-01-pretest-content-revision-v1`を適用し、仕様版31以下を閲覧専用とする。通常版の問題バンクを`split-actions-v1`から`split-actions-v2`へ分け、PRETESTのLLM知識・マルチエージェント・記憶プロセスの場面文と指定選択肢だけを更新する。選択肢の役割・正誤・順序、3用語×2設問の6問、4択単一選択、採点は変えない。
+新規参加者だけに実験仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`を適用し、仕様版32以下は閲覧専用とする。現行通常版を仕様版32の`split-actions-v2`から`split-actions-v3`へ進め、LLM PRETESTの設問1・2正解A、マルチエージェント設問1正解A、記憶プロセス設問1 M3（C）と設問2正解Aを更新する。マルチエージェント設問2正解Aは指定文面のまま維持する。前回改訂の記憶プロセス設問1 M1（B）と設問2 M1（B）・M3（C）もv3に含める。問題場面、設問形式、正解・誤答分類、ラベル・順序、採点は維持する。
+
+RETEST1/2・内部`final_test`はv2と同一とし、誤答PRETEST設問の学習確認では回答時のsnapshotを再利用する。バンク履歴は仕様版27〜31を`split-actions-v1`、仕様版32をv2、仕様版33をv3に固定する。seedは別construct keyを使い、旧問題・回答・snapshotを上書きしない。DB構造・公開APIは変更しない。受入条件・検証結果は[14](14_testing_acceptance.md)、問題差分は[45](45_pretest_memory_distractors.md)を参照。
+
+## 仕様版32：PRETEST問題文の改訂（fix/pretest・履歴）
+
+仕様版32当時の新規参加者に`experiment-plan-2026-11-01-pretest-content-revision-v1`を適用し、当時の仕様版31以下を閲覧専用とした。通常版の問題バンクを`split-actions-v1`から`split-actions-v2`へ分け、PRETESTのLLM知識・マルチエージェント・記憶プロセスの場面文と指定選択肢を更新した。選択肢の役割・正誤・順序、3用語×2設問の6問、4択単一選択、採点は変更していない。
 
 RETEST1/2および内部`final_test`で用いる問題文・選択肢は旧バンクと同一に保つ。誤答したPRETEST設問を学習確認で再提示する場合は、PRETEST時に保存した問題・選択肢snapshotをそのまま再利用する。新しい問題文や選択肢を別に生成・再取得しない。旧`split-actions-v1`のYAMLとDB行を履歴復元用に保持し、旧参加者の回答・snapshotは書き換えない。DB構造・公開API・採点・教材生成条件は変更しない。受入条件・検証状況は[14](14_testing_acceptance.md)、改訂の詳細は[44](44_pretest_content_revision.md)を参照。
 
@@ -32,11 +38,11 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 
 > 現行変更: 学習確認は各用語・各セッション1回答とする。以下の過去の版や判断に記載された3回答・同一用語の再回答用先行生成は当時の記録である。
 
-> 2026-10-30の運用変更（易しい版停止時点）: 当時の実験仕様版28・protocolは維持し、易しい版の実行を停止した。新規参加者は通常版固定、既存easy参加者は閲覧専用、easy群集計・仮説CSVは停止。既存easyデータ・問題YAML・ID・snapshotは履歴復元用に保持する。以下の停止前の易しい版採用・運用記録は履歴であり、現行実行条件ではない。現在の現行版は仕様版32である。詳細は[22](22_question_set_modes.md)、検証は[14](14_testing_acceptance.md)。
+> 2026-10-30の運用変更（易しい版停止時点）: 当時の実験仕様版28・protocolは維持し、易しい版の実行を停止した。新規参加者は通常版固定、既存easy参加者は閲覧専用、easy群集計・仮説CSVは停止。既存easyデータ・問題YAML・ID・snapshotは履歴復元用に保持する。以下の停止前の易しい版採用・運用記録は履歴であり、現行実行条件ではない。現在の現行版は仕様版33である。詳細は[22](22_question_set_modes.md)、検証は[14](14_testing_acceptance.md)。
 
-## 仕様版28の採用仕様（仕様版32でも維持）
+## 仕様版28の採用仕様（仕様版33でも維持）
 
-設問ペア答え合わせは仕様版28 / experiment-plan-2026-10-30-question-review-v1で導入し、仕様版32でも維持する。現行コードの実験仕様版は32 / `experiment-plan-2026-11-01-pretest-content-revision-v1`。仕様版27の採用時根拠[39](39_split_assessment.md)は変更せず保管する。
+設問ペア答え合わせは仕様版28 / experiment-plan-2026-10-30-question-review-v1で導入し、仕様版33でも維持する。現行コードの実験仕様版は33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`。仕様版27の採用時根拠[39](39_split_assessment.md)は変更せず保管する。
 
 通常版PRETEST・RETEST・内部final_testで、用語内の設問1・2を両方保存した後、同じテスト画面に本人の選択内容と正誤を表示する。ページ/URL遷移はせず、続行で次の用語へ進む。新設定は初期値ONの「設問ごとの答え合わせ」で、通常版新規参加者だけに登録時snapshotとして固定し、易しい版は対象外。既存のPRETEST全体結果スイッチは独立して残す。採点・学習遷移・テスト上限・評価式は変更しない。API・データ・受入条件は[40](40_question_pair_answer_review.md)。
 
