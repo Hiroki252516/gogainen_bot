@@ -74,7 +74,7 @@ def test_replacement_seed_preserves_old_questions_options_and_snapshotless_resul
             row = db.get(QuestionOption, oid)
             assert (row.question_id, row.option_label, row.body, row.is_correct, row.misconception_type) == expected
         for bank in ASSESSMENT_BANK_VERSIONS.values():
-            assert db.query(Question).filter(Question.is_active.is_(True), Question.construct_key.endswith(bank)).count() == (18 if bank == "split-actions-v1" else 12)
+            assert db.query(Question).filter(Question.is_active.is_(True), Question.construct_key.endswith(bank)).count() == (18 if bank.startswith("split-actions-") else 12)
         logs = experiment.participant_logs(db, old_participant.id)
         assert logs["attempts"][0]["question_body"] == before_questions[question.id][0]
         assert logs["attempts"][0]["selected_option_body"] == "D"

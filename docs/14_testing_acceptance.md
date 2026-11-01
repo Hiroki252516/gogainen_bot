@@ -1,5 +1,18 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-01 通常版PRETEST文面改訂（仕様版32・fix/pretest）
+
+- 新規参加者を仕様版32 / `experiment-plan-2026-11-01-pretest-content-revision-v1`で開始し、仕様版31以下は閲覧専用として旧問題・回答・snapshotを保全する。
+- `split-actions-v2`が`split-actions-v1`を基に指定されたPRETEST文面だけを更新し、正誤・選択肢分類・表示順・6設問の採点を維持することを検証する。RETEST1/2の問題・選択肢は旧バンクと一致させる。
+- 誤答したPRETEST設問の学習確認には回答時の保存snapshotが使われ、旧参加者の結果は旧バンクで復元されることを隔離DBで確認する。再seed後も旧データとsnapshotが変わらないことを確認する。
+- 関連Backendテスト、Frontendテスト・build、`git diff --check`を実施する。研究DB、localhost:3000、実AIは使用しない。自動検査は文章の妥当性や難易度同等性、学習効果を証明するものではない。
+
+実施結果:
+
+- Backend全1,729件が通過、107件skip、失敗・errorは0件。PRETEST改訂を含む重点テスト88件も通過した。新旧YAMLを比較し、指定箇所以外の問題内容、選択肢分類・順序・正答、RETEST1/2の一致を確認した。隔離SQLiteで仕様版32のv2 seedと仕様版31のv1復元を確認し、既存回答・問題snapshotの保全を検証した。
+- Frontendの`npm test`は全項目合格。`npm run build`もTypeScript検査を含め成功した。画面実装は変更していないため、参加者画面のブラウザ確認は行っていない。
+- `git diff --check`通過。検証に研究DB・localhost:3000・実AI・既存参加者環境は使用せず、コミット・pushも行っていない。文章の妥当性、分類の研究的妥当性、難易度同等性、学習効果は自動検査で実証していない。
+
 ## 2026-10-31 辞書定義更新と言い換え指示（仕様版31・issue-230）
 
 - 新規参加者を仕様版31 / `experiment-plan-2026-10-31-glossary-definition-paraphrase-v1`で登録し、仕様版30以下は既存記録・教材・snapshotを保全して閲覧専用とする。DB列とAPI返却形式は変更しない。

@@ -5,7 +5,7 @@ QuestionSetMode = Literal["standard", "easy"]
 STANDARD = "standard"
 EASY = "easy"
 QUESTION_SET_MODES = (STANDARD, EASY)
-ASSESSMENT_BANK_VERSIONS = {STANDARD: "split-actions-v1", EASY: "scenario-actions-easy-v1"}
+ASSESSMENT_BANK_VERSIONS = {STANDARD: "split-actions-v2", EASY: "scenario-actions-easy-v1"}
 # The current spec uses the map above; this map only restores historical results.
 HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     6: {STANDARD: "scenario-actions-v1"},
@@ -29,6 +29,11 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     24: {STANDARD: "scenario-actions-v8", EASY: "scenario-actions-easy-v1"},
     25: {STANDARD: "scenario-actions-v9", EASY: "scenario-actions-easy-v1"},
     26: {STANDARD: "scenario-actions-v9", EASY: "scenario-actions-easy-v1"},
+    27: {STANDARD: "split-actions-v1", EASY: "scenario-actions-easy-v1"},
+    28: {STANDARD: "split-actions-v1", EASY: "scenario-actions-easy-v1"},
+    29: {STANDARD: "split-actions-v1", EASY: "scenario-actions-easy-v1"},
+    30: {STANDARD: "split-actions-v1", EASY: "scenario-actions-easy-v1"},
+    31: {STANDARD: "split-actions-v1", EASY: "scenario-actions-easy-v1"},
 }
 LEARNING_CONTENT_VERSIONS = {STANDARD: 15, EASY: 4}
 
@@ -45,7 +50,8 @@ def assessment_construct_key(
     term_slug: str, phase: str, mode: str | None = STANDARD, *, bank_version: str | None = None,
 ) -> str:
     bank = bank_version or ASSESSMENT_BANK_VERSIONS[question_set_mode(mode)]
-    return f"{term_slug}_{'final_test_' if phase == 'final_test' and bank != 'split-actions-v1' else ''}{bank}"
+    is_split_bank = bank.startswith("split-actions-")
+    return f"{term_slug}_{'final_test_' if phase == 'final_test' and not is_split_bank else ''}{bank}"
 
 
 def explanation_context(mode: str | None) -> dict[str, str]:

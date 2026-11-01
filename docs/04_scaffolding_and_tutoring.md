@@ -1,6 +1,6 @@
 # 教材の教授方針と生成検査
 
-仕様版28で追加した設問ペア答え合わせは、AI生成や回答後解説ではなく、保存済みテスト回答の正誤・本人の選択を表示する独立したUI機能として仕様版31でも維持する。教材、回答後解説、教授方針は変更しない。教材内解説では辞書v3を意味の参照情報として渡し、定義文を本文へ逐語転載しないよう指示する。[答え合わせ仕様](40_question_pair_answer_review.md)。仕様版29の教材用語解説モードは[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件は[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換えは[43](43_glossary_definition_paraphrase.md)を参照。
+仕様版28で追加した設問ペア答え合わせは、AI生成や回答後解説ではなく、保存済みテスト回答の正誤・本人の選択を表示する独立したUI機能として仕様版32でも維持する。教材、回答後解説、教授方針は変更しない。教材内解説では辞書v3を意味の参照情報として渡し、定義文を本文へ逐語転載しないよう指示する。[答え合わせ仕様](40_question_pair_answer_review.md)。仕様版29の教材用語解説モードは[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件は[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、PRETEST改訂は[44](44_pretest_content_revision.md)を参照。
 
 ## 本文とは別枠の注釈
 

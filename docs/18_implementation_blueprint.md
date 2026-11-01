@@ -1,6 +1,6 @@
 # 現行プロトコルの実装境界
 
-> この文書の版26に関する記述は当時の実装設計記録であり、現行状態ではない。2026-10-31時点の現行コードは仕様版31 / `experiment-plan-2026-10-31-glossary-definition-paraphrase-v1`。仕様版30以下は閲覧専用で、新規参加者の教材用語解説モードを登録時に固定する。教材は注釈欄のみで600〜800文字、教材内解説で600〜1200文字。教材内解説では辞書v3の定義を参照情報として扱い、本文では逐語転載せず言い換える。易しい版は停止済みで、保存済み記録・YAML・snapshotを履歴復元用に保持する。現行運用は[02](02_experiment_flow.md)、[22](22_question_set_modes.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)を参照。
+> この文書の版26に関する記述は当時の実装設計記録であり、現行状態ではない。2026-11-01時点の現行コードは仕様版32 / `experiment-plan-2026-11-01-pretest-content-revision-v1`。仕様版31以下は閲覧専用で、新規参加者の教材用語解説モードを登録時に固定する。通常版PRETESTは新バンクの改訂文面、RETEST1/2は従来文面を使い、旧バンクで過去記録を復元する。教材は注釈欄のみで600〜800文字、教材内解説で600〜1200文字。教材内解説では辞書v3の定義を参照情報として扱い、本文では逐語転載せず言い換える。易しい版は停止済みで、保存済み記録・YAML・snapshotを履歴復元用に保持する。現行運用は[02](02_experiment_flow.md)、[22](22_question_set_modes.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、[44](44_pretest_content_revision.md)を参照。
 
 用語注釈はbackendの共通辞書処理へ分離し、教材生成・回答後解説の確定時と、テスト回答時に保存する。LLM・採点・診断の責務へ追加せず、frontendは保存された公開項目だけを表示する。新規登録は版26、旧版25以下は閲覧専用。[24](24_learning_glossary.md)。
 

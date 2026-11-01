@@ -11,6 +11,7 @@ from functools import lru_cache
 import yaml
 from fastapi import HTTPException
 
+from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, STANDARD
 from app.seed.import_split_assessment_draft import validate
 
 
@@ -134,19 +135,26 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 
 def uses_split(participant: Any) -> bool:
-    return participant.question_set_mode in {None, "standard"} and participant.experiment_spec_version in {27, 28, 29, 30, 31}
+    return participant.question_set_mode in {None, "standard"} and participant.experiment_spec_version in {27, 28, 29, 30, 31, 32}
 
 
 @lru_cache
-def split_bank() -> dict:
-    path = Path(__file__).parents[1] / "seed/content/standard/split_assessment_v1.yml"
+def split_bank(bank_version: str = "split-actions-v2") -> dict:
+    bank_paths = {
+        "split-actions-v1": "split_assessment_v1.yml",
+        "split-actions-v2": "split_assessment_v2.yml",
+    }
+    filename = bank_paths.get(bank_version)
+    if filename is None:
+        raise ValueError(f"unsupported split assessment bank: {bank_version}")
+    path = Path(__file__).parents[1] / "seed/content/standard" / filename
     rounds = yaml.safe_load(path.read_text(encoding="utf-8"))["rounds"]
     validate(rounds)
     return rounds
 
 
-def split_specs(term_slug: str, round_key: str) -> list[dict]:
-    section = split_bank()[round_key][term_slug]
+def split_specs(term_slug: str, round_key: str, bank_version: str | None = None) -> list[dict]:
+    section = split_bank(bank_version or ASSESSMENT_BANK_VERSIONS[STANDARD])[round_key][term_slug]
     return [
         {"variant_key": f"{round_key}_q{q['number']}", "question_number": q["number"],
          "body": f"{section['scenario']}\n\n設問{q['number']}：{q['title']}\n\n{q['task']}",
