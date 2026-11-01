@@ -4,7 +4,7 @@
 
 計画書の手順は、事前テスト、必要な用語の学習、再テスト、未達用語の再学習、満点または中断後のアンケートという流れ。6仮説の測定上の回数・対象経路は[01](01_research_requirements.md)と[12](12_evaluation_metrics.md)に定め、画面表示の変更で評価式は変更しない。
 
-現行コードは仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`。通常版はsplit-actions-v3の3用語×2設問、計6設問・4択単一選択であり、記憶プロセスPRETESTの指定3選択肢をv2から改訂した。RETEST1/2・内部final_testはv2と同じ問題文・選択肢で、各用語の設問1・2を保存後に同じ画面で答え合わせを表示する。誤答PRETEST設問の学習確認は保存済みsnapshotを利用する。教材用語解説モードは新規参加者に登録時固定する。仕様版30の文字数契約と仕様版31の辞書v3・教材内言い換えを維持する。[仕様版27の採用記録](39_split_assessment.md)、[仕様版28](40_question_pair_answer_review.md)、[仕様版29](41_learning_glossary_material_mode.md)、[仕様版30の文字数条件](42_learning_glossary_material_length.md)、[仕様版31](43_glossary_definition_paraphrase.md)、[仕様版32](44_pretest_content_revision.md)、[仕様版33](45_pretest_memory_distractors.md)。
+現行コードは仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`。通常版はsplit-actions-v3の3用語×2設問、計6設問・4択単一選択であり、PRETESTの指定選択肢本文をv2から改訂した。RETEST1/2・内部final_testはv2と同じ問題文・選択肢で、各用語の設問1・2を保存後に同じ画面で答え合わせを表示する。誤答PRETEST設問の学習確認は保存済みsnapshotを利用する。教材用語解説モードは新規参加者に登録時固定する。仕様版30の文字数契約と仕様版31の辞書v3・教材内言い換えを維持する。[仕様版27の採用記録](39_split_assessment.md)、[仕様版28](40_question_pair_answer_review.md)、[仕様版29](41_learning_glossary_material_mode.md)、[仕様版30の文字数条件](42_learning_glossary_material_length.md)、[仕様版31](43_glossary_definition_paraphrase.md)、[仕様版32](44_pretest_content_revision.md)、[仕様版33](45_pretest_memory_distractors.md)。
 
 2026-10-30から新規登録は通常版固定。既存易しい版参加者は閲覧専用で、参加者向け画面・APIから再開・回答できない。易しい版の群集計・仮説CSVも停止するが、個別ログと全件生ログは参照できる。既存データと復元用バンクは保持する。詳細は[停止後の契約](22_question_set_modes.md)。
 

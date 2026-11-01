@@ -116,7 +116,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 - ブラウザの戻るボタンやマウスのサイドボタンで同意書、診断、再テスト結果、完了済み学習画面へ戻った場合は、画面が現在の正規フェーズへ自動的に戻るまで操作しない。これは現在位置を確認するGETであり、回答や実験状態を変更しない。409が表示されても実験終了ではないため、画面を閉じずに現在の正規画面で続行する。
 - 回答済み問題へ戻った場合は、保存済みの選択肢が選択済みで表示され、入力は変更できない。「次の問題へ」で続行する。
 
-現行通常版（仕様版33）のPRETEST・RETESTは、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語を各2設問・4択単一選択で出題し、各用語の2問回答後にペア答え合わせを表示する。PRETESTの記憶プロセスで指定3選択肢を更新し、RETEST1/2・内部final_testは仕様版32のv2と同一文面とする。設問3はデータとして保持するが通常出題しない。誤答PRETEST設問の学習確認は回答時の保存snapshotの本文・選択肢を再利用する。仕様版27〜31の結果は`split-actions-v1`、仕様版32はv2で復元し、版32以下は閲覧専用とする。易しい版の従来形式は履歴復元用で、新規フローでは使用しない。[問題・保存・採点](39_split_assessment.md)、[答え合わせ](40_question_pair_answer_review.md)、[版32の改訂履歴](44_pretest_content_revision.md)、[版33の差分](45_pretest_memory_distractors.md)。/surveyは仮フォームで、送信時にparticipant_surveysへ保存する。
+現行通常版（仕様版33）のPRETEST・RETESTは、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語を各2設問・4択単一選択で出題し、各用語の2問回答後にペア答え合わせを表示する。PRETESTの指定選択肢本文を更新し、RETEST1/2・内部final_testは仕様版32のv2と同一文面とする。設問3はデータとして保持するが通常出題しない。誤答PRETEST設問の学習確認は回答時の保存snapshotの本文・選択肢を再利用する。仕様版27〜31の結果は`split-actions-v1`、仕様版32はv2で復元し、版32以下は閲覧専用とする。易しい版の従来形式は履歴復元用で、新規フローでは使用しない。[問題・保存・採点](39_split_assessment.md)、[答え合わせ](40_question_pair_answer_review.md)、[版32の改訂履歴](44_pretest_content_revision.md)、[版33の差分](45_pretest_memory_distractors.md)。/surveyは仮フォームで、送信時にparticipant_surveysへ保存する。
 
 通常版のactiveな問題variantはpretest_v1とretest_v1/v2。内部final_testはretest_v1を共用し、その後はretest_v2へ進む。回次は全用語共通とし、未回答から推測しない。問題・採点の保全条件は[39](39_split_assessment.md)を参照する。答え合わせは各用語の設問1・2が保存された後、同じテスト画面内で行い、続行時の確認時刻を記録する。受入検証は未実施。問題内容、個別フィードバックの非公開情報、画面遷移の検証条件は[40](40_question_pair_answer_review.md)。
 

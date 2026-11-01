@@ -2,7 +2,7 @@
 
 ## 仕様版33の現行コード
 
-現行コードは仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`。通常版PRETESTは`split-actions-v3`へ切り替え、仕様版32のv2から記憶プロセスの指定3選択肢だけを更新する。RETEST1/2・内部final_testの問題文、6設問の採点と設問ペア答え合わせは維持し、誤答PRETEST設問の学習確認には保存済みsnapshotを使う。仕様版27〜31の`split-actions-v1`と仕様版32のv2、既存参加者記録を履歴復元用に保全し、仕様版32以下は閲覧専用。仕様版28の設問ペア答え合わせ[40](40_question_pair_answer_review.md)、仕様版29のモード[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換え[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST改訂[44](44_pretest_content_revision.md)、仕様版33の差分[45](45_pretest_memory_distractors.md)を参照する。受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
+現行コードは仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`。通常版PRETESTは`split-actions-v3`へ切り替え、仕様版32のv2から指定されたLLM・マルチエージェント・記憶プロセスの選択肢本文を更新する。RETEST1/2・内部final_testの問題文、6設問の採点と設問ペア答え合わせは維持し、誤答PRETEST設問の学習確認には保存済みsnapshotを使う。仕様版27〜31の`split-actions-v1`と仕様版32のv2、既存参加者記録を履歴復元用に保全し、仕様版32以下は閲覧専用。仕様版28の設問ペア答え合わせ[40](40_question_pair_answer_review.md)、仕様版29のモード[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換え[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST改訂[44](44_pretest_content_revision.md)、仕様版33の差分[45](45_pretest_memory_distractors.md)を参照する。受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
 
 ## 仕様版28の採用・易しい版停止時の記録
 
@@ -35,7 +35,7 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 現行コードは新規参加者に仕様版33と`experiment-plan-2026-11-01-pretest-content-revision-v2`を保存する。仕様版32以下、旧protocol_id、NULL・未対応版は閲覧専用で保全する。既存行へ版・protocol・答え合わせ設定・確認時刻・教材解説モードを補完しない。
 
-通常版テストは現行split-actions-v3により、3用語×2設問の6設問・4択単一選択となる。PRETESTの記憶プロセスで指定3選択肢を更新し、RETEST1/2・内部final_testは仕様版32のv2と同じ文面を使う。設問3はデータだけ保持し、activeな問題・表示・採点には使わない。易しい版の従来形式は履歴資産として保持するが、現在の参加者フローでは利用しない。テスト上限・採点・回次は[39](39_split_assessment.md)、仕様版32のPRETEST本文は[44](44_pretest_content_revision.md)、現行差分と版復元は[45](45_pretest_memory_distractors.md)を参照する。答え合わせは通常版のPRETEST・RETEST・内部final_testに適用し、採点は6設問完了後に行う。学習確認には誤答PRETESTの保存済みsnapshotを使う。
+通常版テストは現行split-actions-v3により、3用語×2設問の6設問・4択単一選択となる。仕様版33ではPRETESTの指定選択肢本文を更新し、RETEST1/2・内部final_testは仕様版32のv2と同じ文面を使う。設問3はデータだけ保持し、activeな問題・表示・採点には使わない。易しい版の従来形式は履歴資産として保持するが、現在の参加者フローでは利用しない。テスト上限・採点・回次は[39](39_split_assessment.md)、仕様版32のPRETEST本文は[44](44_pretest_content_revision.md)、現行差分と版復元は[45](45_pretest_memory_distractors.md)を参照する。答え合わせは通常版のPRETEST・RETEST・内部final_testに適用し、採点は6設問完了後に行う。学習確認には誤答PRETESTの保存済みsnapshotを使う。
 
 material-viewの初回表示時刻から実績を数え、未利用の先行生成を学習回数・教材表示者へ算入しない。新アンケート・指標は版付きJSONへ保存し、旧5段階値や既存評価列を変換しない。
 

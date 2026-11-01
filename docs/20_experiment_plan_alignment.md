@@ -1,8 +1,8 @@
 # 実験計画書との対応と実装判断
 
-## 仕様版33：記憶プロセスPRETESTの選択肢改訂（fix/pretest）
+## 仕様版33：通常版PRETEST選択肢文面の改訂（fix/pretest）
 
-新規参加者だけに実験仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`を適用し、仕様版32以下は閲覧専用とする。現行通常版を仕様版32の`split-actions-v2`から`split-actions-v3`へ進め、記憶プロセスPRETESTの設問1・M1（B）、設問2・M1（B）とM3（C）の本文のみを指定どおり差し替える。問題場面、設問形式、正解・誤答分類、ラベル・順序、採点は維持する。
+新規参加者だけに実験仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`を適用し、仕様版32以下は閲覧専用とする。現行通常版を仕様版32の`split-actions-v2`から`split-actions-v3`へ進め、LLM PRETESTの設問1・2正解A、マルチエージェント設問1正解A、記憶プロセス設問1 M3（C）と設問2正解Aを更新する。マルチエージェント設問2正解Aは指定文面のまま維持する。前回改訂の記憶プロセス設問1 M1（B）と設問2 M1（B）・M3（C）もv3に含める。問題場面、設問形式、正解・誤答分類、ラベル・順序、採点は維持する。
 
 RETEST1/2・内部`final_test`はv2と同一とし、誤答PRETEST設問の学習確認では回答時のsnapshotを再利用する。バンク履歴は仕様版27〜31を`split-actions-v1`、仕様版32をv2、仕様版33をv3に固定する。seedは別construct keyを使い、旧問題・回答・snapshotを上書きしない。DB構造・公開APIは変更しない。受入条件・検証結果は[14](14_testing_acceptance.md)、問題差分は[45](45_pretest_memory_distractors.md)を参照。
 

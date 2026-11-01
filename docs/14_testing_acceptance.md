@@ -1,13 +1,15 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-01 記憶プロセスPRETEST選択肢改訂（仕様版33・fix/pretest）
+## 2026-11-01 通常版PRETEST選択肢文面改訂（仕様版33・fix/pretest）
 
 - 新規参加者を仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`で開始し、仕様版32以下は閲覧専用として既存問題・回答・snapshotを保全する。
-- `split-actions-v3`はv2から記憶プロセスのPRETEST設問1・M1（B）、設問2・M1（B）・M3（C）の3本文だけを変更する。正誤分類、ラベル、順序、場面、問題形式、RETEST1/2・内部final_testは維持する。
+- `split-actions-v3`は、前回改訂の記憶プロセスPRETEST設問1 M1（B）・設問2 M1（B）とM3（C）に加え、LLM設問1・2正解A、マルチエージェント設問1正解A、記憶プロセス設問1 M3（C）・設問2正解Aの本文を更新する。マルチエージェント設問2正解Aは指定文面のまま維持する。statusを`active_standard_split_v3`とし、正誤分類、ラベル、順序、場面、問題形式、RETEST1/2・内部final_testは維持する。
 - 仕様版27〜31はv1、32はv2で結果を復元し、33はv3を使う。誤答PRETEST設問の学習確認は回答時snapshotを使う。DB構造・API・採点は変更しない。
 - Backend全テスト、Frontendテスト/build、隔離DBで版・seed・回答snapshot・再seed保全を検証し、`git diff --check`を実施する。研究DB、localhost:3000、実AIは使わない。機械検査は選択肢の妥当性や学習効果を実証しない。
 
-実施結果: Backend全テスト 1730 passed / 107 skipped（警告2件）。`test_pretest_content_revision.py`を含むDBテストでv1/v2保全、仕様版32のv2復元、仕様版33のv3 seed、回答snapshotの再利用・再seed後の保全を確認した。Frontendテストは全7スクリプト成功、`npm run build`成功、`git diff --check`成功。参加者画面の表示コードは変更していないため、ブラウザ確認は対象外。研究DB・localhost:3000・実AIは未使用。
+初回の実施結果: Backend全テスト 1730 passed / 107 skipped（警告2件）。この全件実行はレビュー指摘反映前の状態で実施した。今回のレビュー対応後は、下記の再検証結果を追記する。参加者画面の表示コードは変更していないため、ブラウザ確認は対象外。研究DB・localhost:3000・実AIは未使用。
+
+レビュー対応後の再検証: PRETESTバンク差分・status・v1/v2保全・仕様版32/33のseed・snapshot復元を含む関連Backendテスト9ファイルで205 passed。Frontendは変更していないため再実行していない。`git diff --check`成功。
 
 ## 2026-11-01 通常版PRETEST文面改訂（仕様版32・fix/pretest）
 

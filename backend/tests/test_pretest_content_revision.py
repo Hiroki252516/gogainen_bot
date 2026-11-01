@@ -1,25 +1,30 @@
 from copy import deepcopy
+from pathlib import Path
 
+import yaml
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, can_resume
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, STANDARD, assessment_construct_key
 from app.models import Attempt, Base, Participant, Question, QuestionOption, Term
 from app.seed.seed_questions import _upsert_question, seed_database
 from app.services.experiment import _displayed_options, latest_test_results
 from app.services.split_assessment import learning_spec as split_learning_spec, split_bank, split_specs
-from app.core.experiment_spec import can_resume
 
 
 LLM_FINE_TUNING_DISTRACTOR = "改訂後の取扱説明書の内容をもとにAIを追加訓練し、そのAIが学習した内容から回答する方法を、利用者から質問があるたびに説明書の該当箇所を検索して参照する方法と同じ仕組みとして扱う。"
+LLM_MANUAL_RETRIEVAL_CORRECT = "利用者から製品の操作方法を質問されたら、対象製品の最新の取扱説明書から関連する操作手順や注意点を検索する。見つけた箇所を質問文と一緒にシステムがAIへ渡し、説明書に基づいた回答を作成させる仕組みを実装する。"
 LLM_GENERALIZATION_DISTRACTOR = "担当者が確認した質問と回答の事例を使ってAIを追加訓練し、訓練に使った質問に「結論・操作手順・注意点」の順で答えられれば、初めて受ける質問にも同じ形式で答えられると判断し、未使用の質問での評価は行わない。"
 LLM_PROMPT_DATABASE_DISTRACTOR = "取扱説明書の本文をあらかじめAIへのプロンプトに含め、その中から質問に合う情報を選んで回答させる方法を、外部の文書データベースから必要な情報を検索して取り出す方法と同じ仕組みとして扱う。"
+LLM_PROMPT_FORMAT_CORRECT = "製品について質問を受けたとき、回答を「結論・操作手順・注意点」の順に示すよう、AIへの指示文（プロンプト）に項目と順序を明記する。その指示文を利用者の質問と一緒に毎回AIへ渡し、指定した構成で案内を作成させる。"
 MULTI_AGENT_SCENARIO = """大学が、学生からの本の貸出に関する質問に回答するAIシステムを開発している。
 
 例えば、学生が「統計学の入門書を借りたい。借りられる本はありますか？」と質問した場合、図書館にどのような本があるかだけでなく、その本が現在貸出中かどうかや、館外への貸出が認められているかも確認する必要がある。
 
 開発担当者は、図書館にある本や貸出状況を調べる担当と、本の種類や図書館の貸出規則を確認する担当に仕事を分け、それぞれが調べた情報をもとに学生へ適切な案内を行うAIシステムを作りたいと考えている。"""
+MULTI_AGENT_SPLIT_ROLES_CORRECT = "図書館にある本を調べるAIと、貸出条件を確認するAIを別々のエージェントとして設ける。蔵書担当には本の有無や貸出状況の調査を任せ、貸出条件担当には本の種類や貸出規則を確認させるなど、それぞれに異なる仕事を設定する。"
+MULTI_AGENT_LOAN_CANDIDATES_CORRECT = "蔵書担当の調査結果を利用条件の確認担当へ渡し、貸出可能な候補を絞り込ませる。"
 MULTI_AGENT_DUPLICATE_WORK_DISTRACTOR = "蔵書担当のAIが「その本があるか」を調べ、貸出条件担当のAIが「館外へ貸し出せるか」を調べると、調査内容が異なるため案内を作れないと考え、両方のAIに本の有無と貸出条件を同じように調べさせる。"
 MULTI_AGENT_SINGLE_AI_DISTRACTOR = "図書館の案内AIに「本が図書館にあるかを調べる役」と「本を借りられるかを確認する役」の2つの役割を指示し、1つのAIが両方の仕事を行う構成を、2つのAIエージェントが役割分担する仕組みと同じものとして扱う。"
 MULTI_AGENT_TOOL_DISTRACTOR = "蔵書担当のAIが、本の一覧や貸出状況を返す検索ツールを使い、そのツールも貸出に関する情報を調べているので、利用条件を確認する別のAIエージェントとして数える。"
@@ -29,8 +34,10 @@ MEMORY_SCENARIO = """利用者の食事に関する相談に応じて、献立�
 
 開発担当者は、この利用者が別の日に新しく相談した際にも、以前に伝えた希望やその後の変更、提案への感想を踏まえて献立を提案できるAIシステムを作りたいと考えている。"""
 MEMORY_STALE_PREFERENCE_DISTRACTOR = "利用者が「辛い料理は避けたい」から「少し辛い料理も食べたい」に希望を変更した場合、新しい希望を別の記録として追加し、以前の希望もそのまま残す。次回の相談では、保存した記録を検索すれば、どちらが現在の希望なのかを確認しなくても、AIが新しい希望を使うと考える。"
+MEMORY_FINE_TUNING_DISTRACTOR = "利用者が「辛い料理は避けたい」と伝えたとき、その希望に合った献立を回答する質問と回答の例を使ってAIを追加訓練する。この追加訓練を、利用者ごとの希望を保存し、次の相談で取り出す記憶機能と同じ仕組みとして扱う。"
 MEMORY_FULL_CONVERSATION_DISTRACTOR = "利用者が「辛い料理は避けたい」と伝えた会話を利用者ごとに全文保存し、次の相談ではAIが保存された会話から必要な希望を自動的に見つけて使えると考え、過去の記録を検索してAIに渡す仕組みは設けない。"
 MEMORY_NO_UPDATE_DISTRACTOR = "利用者が「辛い料理は避けたい」という希望を「少し辛い料理も食べたい」に変更した場合、新しい希望をAIに伝えて献立を作らせれば、以前に保存した希望の記録も新しい内容に書き換わると考え、記録を更新する処理は設けない。"
+MEMORY_UPDATE_CORRECT = "利用者が以前の「辛い料理は避けたい」を「少し辛い料理も食べたい」に変更したら、利用者別の記録に残る古い希望を確認し、新しい希望が現在の条件となるように更新する。次回の相談では、更新した記録を参照して新しい希望に沿う献立を提案させる。"
 MEMORY_SHARED_INSTRUCTION_DISTRACTOR = "利用者が「辛い料理は避けたい」から「少し辛い料理も食べたい」に希望を変更した際、AIがすべての利用者に共通して使う指示文を「少し辛い料理も提案する」に変更し、この設定を、利用者ごとの希望を記憶する仕組みとして利用する。"
 
 
@@ -64,17 +71,27 @@ def test_v2_changes_only_the_requested_pretest_content_and_preserves_v1():
         assert specs[0]["body"].split("\n\n設問", 1)[0] == specs[1]["body"].split("\n\n設問", 1)[0]
 
 
-def test_v3_changes_only_the_requested_memory_distractors_and_preserves_v1_v2():
+def test_v3_changes_only_approved_pretest_choices_and_preserves_v1_v2():
     v1 = split_bank("split-actions-v1")
     v2 = split_bank("split-actions-v2")
     revised = split_bank("split-actions-v3")
     expected = deepcopy(v2)
+    llm = expected["pretest_v1"]["llm_knowledge"]["questions"]
+    llm[0]["choices"]["correct"]["body"] = LLM_MANUAL_RETRIEVAL_CORRECT
+    llm[1]["choices"]["correct"]["body"] = LLM_PROMPT_FORMAT_CORRECT
+    multi_agent = expected["pretest_v1"]["multi_agent"]["questions"]
+    multi_agent[0]["choices"]["correct"]["body"] = MULTI_AGENT_SPLIT_ROLES_CORRECT
+    assert multi_agent[1]["choices"]["correct"]["body"] == MULTI_AGENT_LOAN_CANDIDATES_CORRECT
     memory = expected["pretest_v1"]["memory_process"]["questions"]
     memory[0]["choices"]["M1"]["body"] = MEMORY_FULL_CONVERSATION_DISTRACTOR
+    memory[0]["choices"]["M3"]["body"] = MEMORY_FINE_TUNING_DISTRACTOR
+    memory[1]["choices"]["correct"]["body"] = MEMORY_UPDATE_CORRECT
     memory[1]["choices"]["M1"]["body"] = MEMORY_NO_UPDATE_DISTRACTOR
     memory[1]["choices"]["M3"]["body"] = MEMORY_SHARED_INSTRUCTION_DISTRACTOR
 
     assert revised == expected
+    v3_path = Path(__file__).parents[1] / "app/seed/content/standard/split_assessment_v3.yml"
+    assert yaml.safe_load(v3_path.read_text(encoding="utf-8"))["status"] == "active_standard_split_v3"
     assert split_bank("split-actions-v1") == v1
     assert split_bank("split-actions-v2") == v2
     assert revised["retest_v1"] == v2["retest_v1"]
