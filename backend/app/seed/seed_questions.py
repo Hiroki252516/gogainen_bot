@@ -4,7 +4,7 @@ from app.db.session import SessionLocal, init_db
 from app.models import Question, QuestionOption, Term
 from app.seed.data import SEED_TERMS
 from app.seed.content_loader import seed_terms
-from app.core.question_sets import STANDARD, EASY, assessment_construct_key
+from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, STANDARD, EASY, assessment_construct_key
 
 
 def _sync_options(db: Session, question: Question, options: list[tuple[str, str, bool, str | None]]) -> None:
@@ -94,7 +94,7 @@ def seed_database(db: Session) -> None:
             from app.services.split_assessment import split_specs
             for phase, rounds in (("pretest", ["pretest_v1"]), ("retest", ["retest_v1", "retest_v2"])):
                 for round_key in rounds:
-                    for spec in split_specs(term.slug, round_key):
+                    for spec in split_specs(term.slug, round_key, bank_version=ASSESSMENT_BANK_VERSIONS[mode]):
                         question = _upsert_question(db, term, phase=phase, question_type="split_single", body=spec["body"], expected_answer="A", construct_key=assessment_construct_key(term.slug, phase, mode), variant_key=spec["variant_key"], options=spec["options"])
                         active_question_ids.add(question.id)
             continue

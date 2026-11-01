@@ -1,8 +1,8 @@
 # 実験の概要と現行仕様
 
-## 仕様版31の現行コード
+## 仕様版32の現行コード
 
-現行コードは仕様版31 / `experiment-plan-2026-10-31-glossary-definition-paraphrase-v1`。仕様版28の設問ペア答え合わせ、仕様版29の教材用語解説モード、仕様版30の文字数契約を維持する。注釈欄のみの教材は目標700・600〜800文字、教材内解説は目標1000・600〜1200文字とする。教材内解説では辞書v3を意味の参照情報として使い、本文では文脈に合わせて自然に言い換える。仕様版30以下は閲覧専用。仕様版27の採用記録[39](39_split_assessment.md)、仕様版28の答え合わせ[40](40_question_pair_answer_review.md)、仕様版29のモード[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換え[43](43_glossary_definition_paraphrase.md)を参照する。受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
+現行コードは仕様版32 / `experiment-plan-2026-11-01-pretest-content-revision-v1`。通常版PRETESTは`split-actions-v2`へ切り替え、指定された設問文・選択肢だけを更新する。RETEST1/2の問題文、6設問の採点と設問ペア答え合わせは維持し、誤答PRETEST設問の学習確認には保存済みsnapshotを使う。旧`split-actions-v1`と版31以下の参加者記録は履歴復元用に保全し、仕様版31以下は閲覧専用。仕様版28の設問ペア答え合わせ[40](40_question_pair_answer_review.md)、仕様版29のモード[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換え[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST改訂[44](44_pretest_content_revision.md)を参照する。受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
 
 ## 仕様版28の採用・易しい版停止時の記録
 
@@ -10,13 +10,13 @@
 
 通常版のPRETEST・RETEST・内部final_testで、設問1・2の両方を保存した後に同じテスト画面内で選択内容と正誤を示し、続行で次の用語へ進む。設定・API・保存・受入条件は[40](40_question_pair_answer_review.md)を参照する。
 
-この節は仕様版28導入・易しい版停止時点の記録である。当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。この機能は現行仕様版31でも維持する。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
+この節は仕様版28導入・易しい版停止時点の記録である。当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。この機能は現行仕様版32でも維持する。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
 
-## 仕様版26で採用した共通の用語注釈辞書（現行版31でも維持）
+## 仕様版26で採用した共通の用語注釈辞書（現行版32でも維持）
 
-以下は採用時点の記録を含む。現在の保存版・readonly境界は冒頭の仕様版31の記述を正とする。
+以下は採用時点の記録を含む。現在の保存版・readonly境界は冒頭の仕様版32の記述を正とする。
 
-仕様版26で共通固定辞書learning-glossary-v2の16語を導入した。v2は履歴用に無変更で保持し、現在はv3をテスト・回答後解説・教材注釈と教材内解説モードに使う。仕様版31の教材内解説では辞書を意味参照として渡し、本文では定義を逐語転載せず自然に言い換える。教材snapshotや回答後・テストの保存済みsnapshotは更新しない。AI、事前学習、ファインチューニング、プロンプトエンジニアリング、RAG、データベース、マルチエージェント、タスク、記憶プロセスの9語を注釈から除外する。長い除外語の一部からプロンプト・エージェントを抽出せず、独立して登場した場合は補足する。仕様版26の当時は新規だけprotocol_id=`experiment-plan-2026-10-27-test-glossary-v2`を保存し、版25以下を閲覧専用としていた。詳細は[24](24_learning_glossary.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、版25で採用した問題本文・分類理由は[38](38_round_two_revision.md)。
+仕様版26で共通固定辞書learning-glossary-v2の16語を導入した。v2は履歴用に無変更で保持し、現在はv3をテスト・回答後解説・教材注釈と教材内解説モードに使う。仕様版31で導入した教材内解説では辞書を意味参照として渡し、本文では定義を逐語転載せず自然に言い換える。教材snapshotや回答後・テストの保存済みsnapshotは更新しない。AI、事前学習、ファインチューニング、プロンプトエンジニアリング、RAG、データベース、マルチエージェント、タスク、記憶プロセスの9語を注釈から除外する。長い除外語の一部からプロンプト・エージェントを抽出せず、独立して登場した場合は補足する。仕様版26の当時は新規だけprotocol_id=`experiment-plan-2026-10-27-test-glossary-v2`を保存し、版25以下を閲覧専用としていた。詳細は[24](24_learning_glossary.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、版25で採用した問題本文・分類理由は[38](38_round_two_revision.md)。
 
 Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み実装計画を根拠とする。出典・確定判断・残課題は[20](20_experiment_plan_alignment.md)、指標は[12](12_evaluation_metrics.md)。
 
@@ -33,9 +33,9 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 ## 版・保存・フロー
 
-現行コードは新規参加者に仕様版31と`experiment-plan-2026-10-31-glossary-definition-paraphrase-v1`を保存する。仕様版30以下、旧protocol_id、NULL・未対応版は閲覧専用で保全する。既存行へ版・protocol・答え合わせ設定・確認時刻・教材解説モードを補完しない。
+現行コードは新規参加者に仕様版32と`experiment-plan-2026-11-01-pretest-content-revision-v1`を保存する。仕様版31以下、旧protocol_id、NULL・未対応版は閲覧専用で保全する。既存行へ版・protocol・答え合わせ設定・確認時刻・教材解説モードを補完しない。
 
-通常版テストはsplit-actions-v1により、3用語×2設問の6設問・4択単一選択となる。設問3はデータだけ保持し、activeな問題・表示・採点には使わない。易しい版の従来形式は履歴資産として保持するが、現在の参加者フローでは利用しない。テスト上限・採点・回次・問題内容は[39](39_split_assessment.md)を参照する。答え合わせは通常版のPRETEST・RETEST・内部final_testに適用し、採点は6設問完了後に行う。学習確認と評価式は変更しない。
+通常版テストは現行split-actions-v2により、3用語×2設問の6設問・4択単一選択となる。PRETESTは指定内容を改訂し、RETEST1/2はsplit-actions-v1と同じ文面を使う。設問3はデータだけ保持し、activeな問題・表示・採点には使わない。易しい版の従来形式は履歴資産として保持するが、現在の参加者フローでは利用しない。テスト上限・採点・回次は[39](39_split_assessment.md)、版32のPRETEST本文・旧版復元は[44](44_pretest_content_revision.md)を参照する。答え合わせは通常版のPRETEST・RETEST・内部final_testに適用し、採点は6設問完了後に行う。学習確認には誤答PRETESTの保存済みsnapshotを使う。
 
 material-viewの初回表示時刻から実績を数え、未利用の先行生成を学習回数・教材表示者へ算入しない。新アンケート・指標は版付きJSONへ保存し、旧5段階値や既存評価列を変換しない。
 
