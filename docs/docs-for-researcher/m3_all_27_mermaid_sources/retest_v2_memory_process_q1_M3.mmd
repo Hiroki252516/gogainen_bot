@@ -1,0 +1,16 @@
+flowchart TB
+  Root["「電話で連絡してほしい」という希望を次回に生かす方法"]
+  Root --> L0["モデル自体を追加訓練する"]
+  Root --> R0["本人の連絡方法を個別に記録する"]
+  L0 --> L1["追加訓練（重みを調整）"]
+  L1 --> L2["連絡方法の好みを学習データにして調整"]
+  R0 --> R1["利用者別の長期記憶"]
+  R1 --> R2["電話希望を利用者別に保存・検索・更新"]
+  L1 -. "M3：追加訓練を個別記憶と同一視" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4

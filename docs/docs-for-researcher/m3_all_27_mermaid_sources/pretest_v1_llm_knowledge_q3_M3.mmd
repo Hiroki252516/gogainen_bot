@@ -1,0 +1,16 @@
+flowchart TB
+  Root["質問・回答の事例をAIに活用する方法"]
+  Root --> L0["回答時に事例を参照する"]
+  Root --> R0["学習工程でモデルを調整する"]
+  L0 --> L1["RAGによる事例検索"]
+  L1 --> L2["事例を検索対象に登録し、関連する回答例を取得"]
+  R0 --> R1["追加訓練（ファインチューニング）"]
+  R1 --> R2["事例を学習データとして使いモデルの重みを更新"]
+  L1 -. "M3：RAGへの登録を訓練完了と同一視" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4
