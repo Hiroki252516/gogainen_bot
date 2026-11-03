@@ -1,0 +1,16 @@
+flowchart TB
+  Root["取扱説明書をAIの回答に利用する方法"]
+  Root --> L0["入力済みの文書を参照する"]
+  Root --> R0["外部の保存先から文書を取得する"]
+  L0 --> L1["プロンプト内の資料参照"]
+  L1 --> L2["説明書本文をあらかじめ入力に含め、AIが内容を選ぶ"]
+  R0 --> R1["外部文書の検索・取得（RAGの検索段階）"]
+  R1 --> R2["質問に応じてデータベースから関連箇所を取得する"]
+  L1 -. "M3：入力中の資料参照を外部検索と同一視" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4

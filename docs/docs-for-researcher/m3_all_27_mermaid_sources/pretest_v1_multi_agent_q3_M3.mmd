@@ -1,0 +1,16 @@
+flowchart TB
+  Root["貸出可否に応じた案内の設計"]
+  Root --> L0["1つの処理の中で条件を切り替える"]
+  Root --> R0["複数の判断担当で処理する"]
+  L0 --> L1["条件分岐（if / else など）"]
+  L1 --> L2["貸出可能・貸出不可で案内文を切り替える"]
+  R0 --> R1["マルチエージェントの協調"]
+  R1 --> R2["各担当が役割を持ち、結果を受け渡す"]
+  L1 -. "M3：条件分岐をエージェント群と同一視" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4

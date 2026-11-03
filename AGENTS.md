@@ -1,8 +1,8 @@
 # Repository Instructions for Codex
 
-## 仕様版33の現行条件（2026-11-01）
+## 仕様版34の現行条件（2026-11-01）
 
-現行コードは仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`。仕様版32以下は閲覧専用で、既存参加者・教材・snapshotを更新しない。通常版テストは`split-actions-v3`を使い、PRETESTの指定選択肢本文をv2から改訂する。v1は仕様版27〜31、v2は仕様版32、v3は仕様版33の履歴バンクとして保持する。RETEST1/2・採点・6設問形式は維持し、誤答設問の学習確認は保存済みsnapshotの本文・選択肢を再利用する。教材の用語解説モードは新規参加者のみ登録時snapshotで固定する。「教材内解説」だけ辞書v3を両群共通の教材生成任意入力として渡し、定義文を転載せず、意味を保って文脈に合わせて言い換えるよう指示する。本文で使う登録語だけを説明し、文字数契約（注釈欄のみ600〜800、教材内解説600〜1200）を維持する。教材内解説では教材用注釈欄を隠し、回答後解説・テスト注釈と保存snapshotを維持する。詳細は[docs/24](docs/24_learning_glossary.md)・[docs/43](docs/43_glossary_definition_paraphrase.md)・[docs/44](docs/44_pretest_content_revision.md)・[docs/45](docs/45_pretest_memory_distractors.md)。受入検証と実験開始承認は別に扱う。
+現行コードは仕様版34 / `experiment-plan-2026-11-01-split-choice-wording-v1`。仕様版33以下は閲覧専用で、既存参加者・教材・snapshotを更新しない。通常版テストは`split-actions-v4`を使い、比較表のPRETEST・RETEST1/2の選択肢本文を整形する。v1は仕様版27〜31、v2は仕様版32、v3は仕様版33、v4は仕様版34の履歴バンクとして保持する。6設問の採点・形式は維持し、現在非表示の設問3もバンクに保持するが出題・採点しない。誤答設問の学習確認は保存済みsnapshotの本文・選択肢を再利用する。教材の用語解説モードは新規参加者のみ登録時snapshotで固定する。「教材内解説」だけ辞書v3を両群共通の教材生成任意入力として渡し、定義文を転載せず、意味を保って文脈に合わせて言い換えるよう指示する。本文で使う登録語だけを説明し、文字数契約（注釈欄のみ600〜800、教材内解説600〜1200）を維持する。教材内解説では教材用注釈欄を隠し、回答後解説・テスト注釈と保存snapshotを維持する。詳細は[docs/24](docs/24_learning_glossary.md)・[docs/43](docs/43_glossary_definition_paraphrase.md)・[docs/44](docs/44_pretest_content_revision.md)・[docs/45](docs/45_pretest_memory_distractors.md)・[docs/46](docs/46_split_assessment_choice_wording.md)。受入検証と実験開始承認は別に扱う。
 
 ## 2026-10-30 易しい版の停止
 
@@ -27,16 +27,16 @@
 
 - `docs/00_project_summary.md` から順に `docs/19_experiment_operation_runbook.md` までを必ず読む。
 - `docs/20_experiment_plan_alignment.md` を読み、目標仕様・現行実装・未対応・要確認を区別する。
-- 仕様版33のPRETEST差分とv1/v2/v3の対応は`docs/45_pretest_memory_distractors.md`を参照し、仕様版32の記録`docs/44_pretest_content_revision.md`は履歴として変更しない。
+- 仕様版33の履歴差分は`docs/45_pretest_memory_distractors.md`、仕様版34のv4比較表対応は`docs/46_split_assessment_choice_wording.md`を参照する。v1〜v3と過去の採用記録は履歴として変更しない。
 - 仕様版28の答え合わせ契約・API・保存・受入条件はdocs/40_question_pair_answer_review.mdを正とする。docs/39は仕様版27の採用時記録として保持する。
 - `docs/99_sources_and_notes.md` は現行計画書の出典と設計判断の根拠として扱う。旧PPTX・旧案はhistory資料であり現行要件ではない。
 - 実装依頼時の初期指示は `prompt.md` を使う。
 
 ## Research Invariants
 
-- 現行コードでは新規だけ仕様版33 / experiment-plan-2026-11-01-pretest-content-revision-v2を保存し、仕様版32以下は閲覧専用とする。通常版は学習15・テストsplit-actions-v3。指定されたPRETEST選択肢本文をv2から更新し、RETEST1/2・採点は変更しない。誤答PRETEST設問の学習確認は保存snapshotを再利用する。版27〜31のsplit-actions-v1、版32のv2、易しい版参加者は閲覧専用とし復元資産を保持する。テストは問題文・全選択肢・用語見出しから出現順に抽出する。教材・テストの注釈は広い画面で右側に追従し、狭い画面では開閉パネルに表示するが、教材内解説モードの教材用注釈欄だけは隠す。回答後解説の注釈は本文の下に表示する。注釈snapshotは保存し、再送・回答済み問題は保存値を使い、旧行を補完しない。辞書をAI入力へ含めるのは教材内解説モードだけであり、v3定義は意味を参照しながら教材の文脈に合わせて言い換える。共通履歴・採点へ注釈は追加しない。文字数は注釈欄のみ600〜800、教材内解説600〜1200。版25の問題本文・種類構成・同文再使用の限定例外はdocs/38を維持する。
+- 現行コードでは新規だけ仕様版34 / experiment-plan-2026-11-01-split-choice-wording-v1を保存し、仕様版33以下は閲覧専用とする。通常版は学習15・テストsplit-actions-v4。比較表の「整形後」本文をPRETEST・RETEST1/2の全設問データに適用し、現在は設問1・2のみ出題・採点する。旧版の結果・snapshotは仕様版に対応する不変バンクで復元し、誤答PRETEST設問の学習確認は保存snapshotを再利用する。版27〜31のsplit-actions-v1、版32のv2、版33のv3、易しい版参加者は閲覧専用とし復元資産を保持する。テストは問題文・全選択肢・用語見出しから出現順に抽出する。教材・テストの注釈は広い画面で右側に追従し、狭い画面では開閉パネルに表示するが、教材内解説モードの教材用注釈欄だけは隠す。回答後解説の注釈は本文の下に表示する。注釈snapshotは保存し、再送・回答済み問題は保存値を使い、旧行を補完しない。辞書をAI入力へ含めるのは教材内解説モードだけであり、v3定義は意味を参照しながら教材の文脈に合わせて言い換える。共通履歴・採点へ注釈は追加しない。文字数は注釈欄のみ600〜800、教材内解説600〜1200。版25の問題本文・種類構成・同文再使用の限定例外はdocs/38を維持する。
 
-- 通常版事前の版9〜11、過去のV1/V2/V3改訂を保持する。仕様版33では`split-actions-v3`を追加し、仕様版32のv2から指定PRETEST選択肢本文を改訂する。仕様版27〜31は`split-actions-v1`、仕様版32はv2で結果を復元し、保存snapshot・RETEST1/2文面は変更しない。
+- 通常版事前の版9〜11、過去のV1/V2/V3/V4改訂を保持する。仕様版34では`split-actions-v4`を追加し、仕様版33のv3から比較表指定の選択肢本文を整形する。仕様版27〜31は`split-actions-v1`、仕様版32はv2、仕様版33はv3で結果を復元する。保存snapshotは変更しない。
 - 両版の全テスト・学習確認で、選択肢の文字数下限・文長比・文字数差による拒否はしない。非空・重複・役割数・教授対象の検査を維持する。教材モード別の文字数検査（注釈欄のみ600〜800、教材内解説600〜1200）とは区別し、文長均一や難易度同等を保証しない。
 
 - 問題版は現行の新規登録では通常版に固定する。旧easy値を持つ参加者の再開・回答を拒否するが、易しい版のYAML・Question ID・snapshotと記録は履歴復元用に保持する。問題variantや保存版が欠落しても他版へフォールバックしない。
@@ -51,9 +51,9 @@
 - 被験者画面に内部分類、群名、教授方略を直接表示しない。
 - テスト回答中はチャット・ヒント・即時正解を表示しない。通常版では同じ用語の設問1・2を保存後、docs/40に従い同一画面内で本人の選択内容と正誤を示す。正答選択肢は表示しない。
 - 学習確認は1用語・1セッションあたり最大3回答。事前テスト後のテストはfinal_testも含め最大2回、事前込み最大3回。未回答を含む採点済みバッチを1回とし、全問未回答は採点しない。1回目未達は学習、2回目未達は未達のままアンケートへ進める。満点ならいつでもアンケートへ進める。
-- 現行通常版テストはsplit-actions-v3で、1用語2設問×3用語の6設問。v3のRETEST1/2本文はv2と同一。易しい版とアーカイブのYAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分ける。通常版activeキーはpretest_v1、retest_v1/v2。final_testはretest_v1を共用し、その後は全用語をretest_v2へ進める。用語別回答件数で回次を選ばない。scenario-actions-v9と旧問題・retest_v3を保持し、版付きconstruct_keyで本文・選択肢を上書きしない。学習確認は直前PRETESTの保存snapshotを利用する。学習確認v15の9問は維持するが、3セッション目は新規経路で到達しない。
+- 現行通常版テストはsplit-actions-v4で、1用語2設問×3用語の6設問。v4ではPRETEST・RETEST1/2の選択肢本文を整形する。易しい版とアーカイブのYAMLは`backend/app/seed/content/standard/`、`easy/`、`archive/`に分ける。通常版activeキーはpretest_v1、retest_v1/v2。final_testはretest_v1を共用し、その後は全用語をretest_v2へ進める。用語別回答件数で回次を選ばない。scenario-actions-v9とsplit-actions-v1〜v3を含む旧問題を保持し、版付きconstruct_keyで本文・選択肢を上書きしない。学習確認は直前PRETESTの保存snapshotを利用する。学習確認v15の9問は維持するが、3セッション目は新規経路で到達しない。
 - 選択肢配置は管理画面のDB保存設定で切り替える。既定値は `debug_fixed` で、新規参加者だけに適用する。実験データ収集前に `randomized` へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
-- 現行コードでは新規だけ仕様版33 / experiment-plan-2026-11-01-pretest-content-revision-v2を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数え、共通上限用のpost_pretest_tests_completedは採点済みfinal_testを加えて導出する。共通回数用DB列は追加しない。RuntimeSetting/Participant.learning_material_glossary_modeはnullableで保存し、既存行へ補完しない。仕様版32以下、旧protocol_id/NULL・未対応版は閲覧専用。旧行の版・進行・回答・評価・回数を更新/削除せず、補修も版とprotocol_idで限定する。
+- 現行コードでは新規だけ仕様版34 / experiment-plan-2026-11-01-split-choice-wording-v1を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数え、共通上限用のpost_pretest_tests_completedは採点済みfinal_testを加えて導出する。共通回数用DB列は追加しない。RuntimeSetting/Participant.learning_material_glossary_modeはnullableで保存し、既存行へ補完しない。仕様版33以下、旧protocol_id/NULL・未対応版は閲覧専用。旧行の版・進行・回答・評価・回数を更新/削除せず、補修も版とprotocol_idで限定する。
 - 両群の教材の小見出し・数・順序・まとめ方はAIが決める。冒頭の##用語名と非空の###セクションだけを要求し、実験群の必須教授内容・transfer_checkは本文内証拠で検証する。固定見出しから証拠文を自動補正しない。
 - 教材内のtransfer_checkは維持するが、独立した追加テスト・旧支援量・自由回答処理を戻さない。
 - 現行MVP対象用語は `llm_knowledge`、`multi_agent`、`memory_process` の3項目とする。

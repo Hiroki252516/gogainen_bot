@@ -1,0 +1,16 @@
+flowchart TB
+  Root["旅行プランの交通情報を扱う構成要素"]
+  Root --> L0["交通データを検索して返す"]
+  Root --> R0["条件を調べて判断する"]
+  L0 --> L1["乗換検索ツール"]
+  L1 --> L2["電車の発着時刻だけを取得・返却"]
+  R0 --> R1["移動確認エージェント"]
+  R1 --> R2["日程全体・17時帰着条件と交通情報を照合"]
+  L1 -. "M3：時刻表ツールを判断エージェントと同一視" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4

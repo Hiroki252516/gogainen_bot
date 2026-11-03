@@ -1,0 +1,16 @@
+flowchart TB
+  Root["利用者の食材に関係する過去の情報"]
+  Root --> L0["AIが以前生成した内容"]
+  Root --> R0["利用者自身の現在の意思"]
+  L0 --> L1["過去の献立提案履歴"]
+  L1 --> L2["AIが「ピーマンを使わない献立」を提案した事実"]
+  R0 --> R1["本人が伝えた現在の食材希望"]
+  R1 --> R2["「今後はピーマンも使ってほしい」という本人の変更"]
+  L1 -. "M3：提案履歴を本人の現在の希望と同一視" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4
