@@ -1,5 +1,15 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-03 PR #261：mainの選択肢修正に対する期待値整合
+
+- PR #261のCI run 41598659750ではBackend tests (2/5)で2件が失敗した。原因はmainのPR #260の文面修正後も、v5本文をv4期待値と比較していたこと。アンケート処理の失敗ではない。
+- PR #260のコミット507ea4ace68ac38ad71c64d1d823d1ded51b1ab8から、実際の56本文（A=3・B=27・D=26）の変更だけを期待値fixtureへ記録した。v4原型・初期追加案・56本文からv5全27問を再構成し、問題本文・選択肢・ラベル・役割の完全一致と設問3の非出題を検査する。seed後と再seed後のactive本文は最新v5期待値で照合し、v1〜v4復元・保存snapshot保全を維持する。
+- 修正前のCI失敗2件を隔離DBで再現し、修正後はtest_pretest_content_revision.pyの5件が通過した。
+- 文面期待値の修正後、Backend tests (2/5)は370 passed・1 failed。追加失敗はtest_initial_perfect_confirms_only_failed_final_item[M3-llm_knowledge-debug_fixed-B]で、誤答があるのにno failed split questions to confirmとなった。
+- latest_failed_attemptsが回答時刻・UUID順で回次を選んでいたため、同時刻・時計逆転時に過去の回次を参照する。保存test_roundの順序を優先する修正を加えた。実SQLiteの6再現ケースは修正前すべて失敗、修正後はデータガード・本文/seed・実APIの失敗2経路と合わせて56 passed。回次の欠落・variant不整合は引き続き拒否する。
+- 最終のBackend全5分割は1754 passed・107 skipped、失敗0件。Frontend全7テストスクリプトとproduction build（TypeScript検査を含む）も通過した。隔離DBで移行・再seed・保存値保全を含めて検証し、git diff --checkが通過した。実行コードの変更は学習確認元の回次選択のみで、問題YAML・採点基準・保存snapshot・DB列は変更しない。
+- 研究DB・実AI・通常ポート3000は使用していない。コミット・push・GitHubへのコメント投稿は行っていない。
+
 ## 2026-11-03 アンケートの用語事前知識・自由記述任意化
 
 - ユーザー指定の6用語を「知っていた／知らない」で必須回答とし、一般4・教材6項目の1〜10段階を維持する。AI自己評価は「使いこなせているか」とし、自由記述を任意にする。教材未表示者は教材6項目を従来どおり自動対象外とする。
