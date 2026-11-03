@@ -523,7 +523,7 @@ function isPageSubmissionFor(
     && Number.isFinite(candidate.elapsed_time_sec)
     && candidate.elapsed_time_sec > 0
     && Array.isArray(candidate.answers)
-    && candidate.answers.length === 2
+    && candidate.answers.length === expectedIds.size
     && candidate.answers.every((answer) => Boolean(
       answer
       && typeof answer === "object"
@@ -533,7 +533,7 @@ function isPageSubmissionFor(
       && typeof answer.selected_option_ids[0] === "string"
       && answer.selected_option_ids[0].length > 0
     ))
-    && new Set(candidate.answers.map((answer) => answer.question_id)).size === 2;
+    && new Set(candidate.answers.map((answer) => answer.question_id)).size === expectedIds.size;
 }
 
 function TermPageQuestionRunner({

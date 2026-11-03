@@ -31,9 +31,11 @@ function StatsTable({ groups }: { groups: any[] }) {
 }
 export function HypothesisMetrics({ data }: { data: any }) {
   if (!data) return null;
-  return <section className="panel stack" aria-labelledby="hypotheses-title">
-    <h2 id="hypotheses-title">6仮説の記述集計</h2>
-    <p>集計対象: 通常版</p>
+  if (data.strata?.length) return <div className="stack">{data.strata.map((stratum: any) => <HypothesisMetrics key={String(stratum.first_question_only)} data={stratum} />)}</div>;
+  const titleId = `hypotheses-title-${data.first_question_only ? "q1" : "q12"}`;
+  return <section className="panel stack" aria-labelledby={titleId}>
+    <h2 id={titleId}>6仮説の記述集計</h2>
+    <p>集計対象: 通常版／{data.first_question_only ? "設問1のみ（3問）" : "設問1・2（6問）"}</p>
     <p>新プロトコル登録者のみ。統計検定・仮説支持の自動判定は行いません。欠測は補完しません。</p>
     <StatsTable groups={data.groups} />
     <p className="muted">仮説2は満点到達者のみの条件付き集計です。仮説2の未観測は満点までの総回数が未確定の人数であり、表示済みセッションの記録欠落を意味しません。仮説3は用語内平均→参加者内平均、仮説4は参加者ごとの率の平均です。</p>
@@ -81,6 +83,7 @@ export function HypothesisMetrics({ data }: { data: any }) {
 export function ParticipantHypothesisMetrics({ data }: { data: any }) {
   if (!data) return null;
   return <section className="notice stack"><h3>参加者の6仮説対応値</h3>
+    <p>出題設問：{data.first_question_only ? "設問1のみ（3問）" : "設問1・2（6問）"}</p>
     <p>経路：{data.route}／教材表示：{data.has_viewed_material ? "あり" : "なし"}</p>
     {data.h2.censoring_reason && <p>満点未達の終了状況：{CENSORING_REASONS[data.h2.censoring_reason]}</p>}
     <ul>{Object.entries(LABELS).map(([key, label]) => <li key={key}>{label}：{format(data[key].value, key === "h4" || key === "h6")}（{data[key].status || "observed"}）</li>)}</ul>

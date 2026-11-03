@@ -1,5 +1,9 @@
 # 現行API
 
+## 設問1のみ出題（2026-11-03）
+
+管理認証付きGET/PUT `/api/admin/first-question-only` で厳密booleanのenabledを取得・保存する。初期値OFF、新規登録時に参加者へ固定する。用語ページ回答APIは1問または2問を受理し、答え合わせも同じ設問数で返す。3問/6問の6仮説集計は分離し、混在時はstrataを返す。詳細は[48](48_first_question_only.md)。
+
 ## 教材用語解説モード（仕様版29導入、文字数契約は版30、辞書更新は版31）
 
 認証済み管理API `GET/PUT /api/admin/learning-material-glossary-mode` で`mode` (`annotation_only` / `integrated_material`)を取得・保存し、`applies_to=new_participants_only`を返す。未設定は`annotation_only`。参加者登録時にsnapshotし、参加者一覧、個別ログ、participants CSVへ記録する。

@@ -17,6 +17,7 @@ type Participant = {
   experiment_spec_version: number | null;
   question_set_mode: "standard" | "easy";
   show_question_reviews: boolean | null;
+  first_question_only: boolean | null;
   show_pretest_results: boolean;
   show_retest_results: boolean;
   learning_material_glossary_mode: "annotation_only" | "integrated_material" | null;
@@ -149,6 +150,7 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   perceived_hint_amount: "ヒント・説明の量",
   free_comment: "自由記述",
   show_question_reviews: "設問ごとの答え合わせ",
+  first_question_only: "設問1のみ出題",
   learning_material_glossary_mode: "教材の用語解説モード",
   question_review_acknowledged_at: "答え合わせ確認時刻"
 };
@@ -167,6 +169,10 @@ export default function AdminPage() {
   const [pretestDisplay, setPretestDisplay] = useState<{ enabled: boolean } | null>(null);
   const [pretestDisplaySaving, setPretestDisplaySaving] = useState(false);
   const [pretestDisplayError, setPretestDisplayError] = useState("");
+  const [firstQuestionOnly, setFirstQuestionOnly] = useState<{ enabled: boolean } | null>(null);
+  const [firstQuestionOnlySaving, setFirstQuestionOnlySaving] = useState(false);
+  const [firstQuestionOnlyError, setFirstQuestionOnlyError] = useState("");
+  const [summaryFirstOnly, setSummaryFirstOnly] = useState(false);
   const [questionReviewDisplay, setQuestionReviewDisplay] = useState<{ enabled: boolean } | null>(null);
   const [questionReviewDisplaySaving, setQuestionReviewDisplaySaving] = useState(false);
   const [questionReviewDisplayError, setQuestionReviewDisplayError] = useState("");
@@ -194,6 +200,7 @@ export default function AdminPage() {
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants)).catch((err) => setLogError(err.message));
     api("/api/admin/logs/overview").then(setOverview).catch((err) => setLogError(err.message));
     api<{ enabled: boolean }>("/api/admin/pretest-result-display").then(setPretestDisplay).catch((err) => setPretestDisplayError(err.message));
+    api<{ enabled: boolean }>("/api/admin/first-question-only").then(setFirstQuestionOnly).catch((err) => setFirstQuestionOnlyError(err.message));
     api<{ enabled: boolean }>("/api/admin/question-review-display").then(setQuestionReviewDisplay).catch((err) => setQuestionReviewDisplayError(err.message));
     api<LearningMaterialGlossarySetting>("/api/admin/learning-material-glossary-mode").then(setMaterialGlossaryMode).catch((err) => setMaterialGlossaryModeError(err.message));
     api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setAiStatusError(err instanceof Error ? err.message : String(err)));
@@ -352,6 +359,19 @@ export default function AdminPage() {
     }
   }
 
+  async function updateFirstQuestionOnly(enabled: boolean) {
+    if (!firstQuestionOnly || firstQuestionOnlySaving) return;
+    setFirstQuestionOnlySaving(true);
+    setFirstQuestionOnlyError("");
+    try {
+      setFirstQuestionOnly(await api<{ enabled: boolean }>("/api/admin/first-question-only", { method: "PUT", body: JSON.stringify({ enabled }) }));
+    } catch (err) {
+      setFirstQuestionOnlyError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFirstQuestionOnlySaving(false);
+    }
+  }
+
   async function updateQuestionReviewDisplay(enabled: boolean) {
     if (!questionReviewDisplay || questionReviewDisplaySaving) return;
     setQuestionReviewDisplaySaving(true);
@@ -439,7 +459,7 @@ export default function AdminPage() {
   const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume && participant.question_set_mode === "standard").length;
   const readOnlyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume).length;
   const retiredEasyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume && participant.question_set_mode === "easy").length;
-  const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup);
+  const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup && (group.first_question_only === true) === summaryFirstOnly);
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
   const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only && row.question_set_mode === "standard");
 
@@ -572,6 +592,17 @@ export default function AdminPage() {
               {questionReviewDisplayError ? <p className="danger" role="alert">{questionReviewDisplayError}</p> : null}
             </div>
             <div className="notice question-set-setting">
+              <label className="pretest-display-toggle">
+                <input type="checkbox" role="switch" checked={firstQuestionOnly?.enabled ?? false}
+                  disabled={!firstQuestionOnly || firstQuestionOnlySaving}
+                  onChange={(event) => updateFirstQuestionOnly(event.target.checked)} />
+                設問1のみ出題
+              </label>
+              <p className="muted">ON：各用語の設問1のみ（計3問）。OFF：設問1・2（計6問）。事前テスト・再テスト・学習確認に適用します。新規参加者のみ、登録時に固定されます（初期値OFF）。</p>
+              {firstQuestionOnlySaving ? <p role="status">保存中...</p> : null}
+              {firstQuestionOnlyError ? <p className="danger" role="alert">{firstQuestionOnlyError}</p> : null}
+            </div>
+            <div className="notice question-set-setting">
               <strong>教材の用語解説モード</strong>
               <div className="reasoning-effort-buttons" role="group" aria-label="教材の用語解説モード">
                 {([
@@ -627,6 +658,12 @@ export default function AdminPage() {
               {optionOrderSaving ? <p className="muted">保存中...</p> : null}
               {optionOrderError ? <p className="danger" role="alert">{optionOrderError}</p> : null}
             </div>
+            <label>集計の出題条件
+              <select value={summaryFirstOnly ? "q1" : "q12"} onChange={(event) => setSummaryFirstOnly(event.target.value === "q1")}>
+                <option value="q12">設問1・2（6問）</option>
+                <option value="q1">設問1のみ（3問）</option>
+              </select>
+            </label>
             {activeGroupSummary ? (
               <div className="notice">
                 <strong>{activeGroupSummary.group_condition} / 通常版</strong>
@@ -701,6 +738,7 @@ export default function AdminPage() {
                 <th>ID</th>
                 <th>条件</th>
                 <th>問題版</th>
+                <th>出題設問</th>
                 <th>設問ごとの答え合わせ</th>
                 <th>教材の用語解説</th>
                 <th>進捗</th>
@@ -717,6 +755,7 @@ export default function AdminPage() {
                   <td>{p.display_code}</td>
                   <td>{p.group_condition}</td>
                   <td>{questionSetLabel(p.question_set_mode)}</td>
+                  <td>{p.can_resume ? (p.first_question_only ? "設問1のみ" : "設問1・2") : "旧仕様"}</td>
                   <td>{p.show_question_reviews === null ? "対象外" : p.show_question_reviews ? "ON" : "OFF"}</td>
                   <td>{materialGlossaryModeLabel(p.learning_material_glossary_mode)}</td>
                   <td>{p.can_resume ? p.current_step : `${p.question_set_mode === "easy" ? "易しい版停止" : "旧仕様"}（閲覧専用）: ${p.current_step}`}</td>
@@ -765,6 +804,7 @@ export default function AdminPage() {
                 <p>事前テスト後のテスト: {participantLog.participant.post_pretest_tests_completed ?? "-"} / {participantLog.participant.post_pretest_test_limit ?? "-"}回（学習前の追加テストを含む）</p>
                 <p>事前テストの結果表示: {participantLog.participant.show_pretest_results === false ? "非表示" : "表示"}</p>
                 <p>再テスト（内部final_testを含む）の結果表示: {participantLog.participant.show_retest_results === false ? "非表示" : "表示"}</p>
+                <p>出題設問: {participantLog.participant.can_resume ? (participantLog.participant.first_question_only ? "設問1のみ（3問）" : "設問1・2（6問）") : "旧仕様の保存記録"}</p>
                 <p>設問ごとの答え合わせ: {participantLog.participant.show_question_reviews === null ? "対象外" : participantLog.participant.show_question_reviews ? "表示" : "非表示"}</p>
                 <p>教材の用語解説モード: {materialGlossaryModeLabel(participantLog.participant.learning_material_glossary_mode)}</p>
                 <p>
