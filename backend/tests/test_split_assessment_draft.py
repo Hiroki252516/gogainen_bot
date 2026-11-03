@@ -34,7 +34,26 @@ def test_import_preserves_paragraphs_and_choice_text():
 """
     section = parse_draft(text, "pretest_v1")["pretest_v1"]["llm_knowledge"]
     assert section["scenario"] == "一段落。\n\n二段落。"
-    assert section["questions"][0]["choices"]["M3"]["body"] == "誤り3。"
+    assert section["questions"][0]["choices"][2] == {"role": "M3", "label": "C", "body": "誤り3。"}
+
+
+def test_import_preserves_duplicate_roles_in_six_choice_drafts():
+    text = """## 問題1：例
+### 共通の場面
+場面。
+### 設問1：見出し
+最も適切なものを1つ選びなさい。
+- A【正解】正しい。
+- B【M1】誤り1。
+- C【M1】誤り2。
+- D【M3】誤り3。
+- E【M3】誤り4。
+- F【わからない】わからない。
+"""
+    section = parse_draft(text, "pretest_v1")["pretest_v1"]["llm_knowledge"]
+    choices = section["questions"][0]["choices"]
+    assert [choice["label"] for choice in choices] == list("ABCDEF")
+    assert [choice["role"] for choice in choices] == ["correct", "M1", "M1", "M3", "M3", "unknown"]
 
 
 def test_invalid_draft_is_rejected():

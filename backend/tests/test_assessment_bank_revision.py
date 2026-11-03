@@ -65,7 +65,7 @@ def test_replacement_seed_preserves_old_questions_options_and_snapshotless_resul
         seed_database(db)
         assert db.query(Question).count() == 45
         assert db.query(Question).filter_by(is_active=True).count() == 30
-        assert db.query(QuestionOption).count() == 342
+        assert db.query(QuestionOption).count() == 378
         for qid, expected in before_questions.items():
             row = db.get(Question, qid)
             assert not row.is_active

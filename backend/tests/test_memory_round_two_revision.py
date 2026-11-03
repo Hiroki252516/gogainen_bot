@@ -171,6 +171,6 @@ def test_current_spec_resolves_without_historical_mapping(mode):
             term = db.query(Term).filter_by(slug="memory_process").one()
             restored = db.get(Question, question["question_id"]) if mode == "standard" else _test_result_question(db, participant, term, "test", "pretest")
             assert restored is not None and restored.id == question["question_id"]
-            assert restored.construct_key.endswith("split-actions-v4" if mode == "standard" else "scenario-actions-easy-v1")
+            assert restored.construct_key.endswith("split-actions-v5" if mode == "standard" else "scenario-actions-easy-v1")
     finally:
         _ok(client.put("/api/admin/question-set", json={"mode": previous_mode}))

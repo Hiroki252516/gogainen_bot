@@ -17,6 +17,7 @@ from app.seed.import_split_assessment_draft import validate
 
 TERMS = ("llm_knowledge", "multi_agent", "memory_process")
 ROLES = ("correct", "M1", "M3", "unknown")
+SPLIT_ROLE_COUNTS = Counter({"correct": 1, "M1": 2, "M3": 2, "unknown": 1})
 
 
 def split_data_error(code: str = "split_question_unavailable") -> HTTPException:
@@ -89,11 +90,12 @@ def require_confirmation_spec(practice: Any) -> dict:
             raise error
         if not isinstance(group.get("body"), str) or not group["body"].strip():
             raise error
-        if not isinstance(choices, list) or len(choices) != 4:
+        if not isinstance(choices, list) or len(choices) not in {4, 6}:
             raise error
         if any(not isinstance(choice, dict) for choice in choices):
             raise error
-        if [choice.get("label") for choice in choices] != list("ABCD"):
+        expected_labels = list("ABCD") if len(choices) == 4 else list("ABCDEF")
+        if [choice.get("label") for choice in choices] != expected_labels:
             raise error
         group_ids.add(question_id)
         displayed.extend((question_id, choice) for choice in choices)
@@ -106,7 +108,7 @@ def require_confirmation_spec(practice: Any) -> dict:
             raise error
         if not isinstance(option.get("question_id"), str) or option["question_id"] not in group_ids or not isinstance(option.get("is_correct"), bool):
             raise error
-        if option.get("label") not in ("A", "B", "C", "D"):
+        if option.get("label") not in tuple("ABCDEF"):
             raise error
         kind = option.get("misconception_type")
         if kind not in (None, "M1", "M3", "unknown") or option["is_correct"] != (kind is None):
@@ -127,7 +129,7 @@ def require_confirmation_spec(practice: Any) -> dict:
         raise error
     for question_id in group_ids:
         roles = Counter("correct" if o["is_correct"] else o["misconception_type"] for o in options if o["question_id"] == question_id)
-        if roles != Counter(ROLES):
+        if roles not in (Counter(ROLES), SPLIT_ROLE_COUNTS):
             raise error
     if practice.get("questions") != groups or practice.get("options") != [choice for _, choice in displayed]:
         raise error
@@ -135,16 +137,17 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 
 def uses_split(participant: Any) -> bool:
-    return participant.question_set_mode in {None, "standard"} and participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34}
+    return participant.question_set_mode in {None, "standard"} and participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35}
 
 
 @lru_cache
-def split_bank(bank_version: str = "split-actions-v4") -> dict:
+def split_bank(bank_version: str = "split-actions-v5") -> dict:
     bank_paths = {
         "split-actions-v1": "split_assessment_v1.yml",
         "split-actions-v2": "split_assessment_v2.yml",
         "split-actions-v3": "split_assessment_v3.yml",
         "split-actions-v4": "split_assessment_v4.yml",
+        "split-actions-v5": "split_assessment_v5.yml",
     }
     filename = bank_paths.get(bank_version)
     if filename is None:
@@ -157,10 +160,21 @@ def split_bank(bank_version: str = "split-actions-v4") -> dict:
 
 def split_specs(term_slug: str, round_key: str, bank_version: str | None = None) -> list[dict]:
     section = split_bank(bank_version or ASSESSMENT_BANK_VERSIONS[STANDARD])[round_key][term_slug]
+    def choices_for(question: dict) -> list[tuple[str, str, bool, str | None]]:
+        choices = question["choices"]
+        entries = (
+            [{"role": role, **choices[role]} for role in ROLES]
+            if isinstance(choices, dict)
+            else choices
+        )
+        return [
+            (choice["label"], choice["body"], choice["role"] == "correct", None if choice["role"] == "correct" else choice["role"])
+            for choice in entries
+        ]
     return [
         {"variant_key": f"{round_key}_q{q['number']}", "question_number": q["number"],
          "body": f"{section['scenario']}\n\n設問{q['number']}：{q['title']}\n\n{q['task']}",
-         "options": [(q["choices"][role]["label"], q["choices"][role]["body"], role == "correct", None if role == "correct" else role) for role in ROLES]}
+         "options": choices_for(q)}
         for q in section["questions"] if q["number"] in {1, 2}
     ]
 
@@ -262,10 +276,10 @@ def score_split_batch(questions: list[dict[str, Any]], selections: dict[str, str
     results = []
     for question, question_id in zip(questions, ids, strict=True):
         options = question.get("options") or []
-        if len(options) != 4 or Counter(option.get("role") for option in options) != Counter(ROLES):
-            raise ValueError("a question must contain exactly one option per role")
+        if len(options) != 6 or Counter(option.get("role") for option in options) != SPLIT_ROLE_COUNTS:
+            raise ValueError("a question must contain one correct, two M1, two M3, and one unknown option")
         option_ids = [str(option.get("option_id") or "") for option in options]
-        if "" in option_ids or len(set(option_ids)) != 4:
+        if "" in option_ids or len(set(option_ids)) != 6:
             raise ValueError("option IDs must be nonempty and unique within a question")
         selected = [option for option in options if str(option["option_id"]) == selections[question_id]]
         if len(selected) != 1:
