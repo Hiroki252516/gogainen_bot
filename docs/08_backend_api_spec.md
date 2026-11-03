@@ -46,7 +46,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版34と`experiment-plan-2026-11-01-split-choice-wording-v1`の両方で進行可否を判定する。仕様版29で導入した教材用語解説モードは引き続き使い、版33以下は閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)、仕様版34の選択肢文面は[46](46_split_assessment_choice_wording.md)。今回、API構造は変更しない。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版33と`experiment-plan-2026-11-01-pretest-content-revision-v2`の両方で進行可否を判定する。仕様版29で導入した教材用語解説モードは引き続き使い、版32以下は閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)。今回、API構造は変更しない。
 
 SurveyPayloadはservices/research_protocol.pyで定義する。experiences（chat/coding_assistance/cli/apiの厳密boolean）、general_ratings（ai_usage_frequency/self_rated_ai_knowledge/system_usability/system_clarity）、material_ratings（clarity/readability/japanese_clarity/difficulty_appropriateness/learning_usefulness/amount_appropriateness）、必須free_commentを受け付ける。評定は厳密な整数1〜10。material_ratingsは未表示者のみnull、表示者は6項目必須。余分なキー・旧フォーム・空白のみのコメントを拒否する。
 
