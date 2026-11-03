@@ -15,7 +15,7 @@ export type TestTermPage<T extends TestQuestionForPage> = {
   term_slug: string;
   term_label: string;
   test_round: string | null;
-  questions: [T, T];
+  questions: T[];
 };
 
 export function normalizeTestRound(value: string | null | undefined): string {
@@ -38,13 +38,13 @@ export function groupTestQuestionsByTerm<T extends TestQuestionForPage>(
   }
   const pages: TestTermPage<T>[] = [];
   for (const [term_slug, group] of groups) {
-    if (group.length !== 2 || group[0].test_round !== group[1].test_round) return null;
+    if (![1, 2].includes(group.length) || group.length !== groups.values().next().value?.length || group.some((question) => question.test_round !== questions[0].test_round)) return null;
     pages.push({
       key: `${term_slug}:${group[0].test_round ?? ""}`,
       term_slug,
       term_label: group[0].term_label,
       test_round: group[0].test_round ?? null,
-      questions: [group[0], group[1]],
+      questions: group,
     });
   }
   return pages.length === 3 ? pages : null;

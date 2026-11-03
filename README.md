@@ -1,5 +1,7 @@
 # 学習ログ駆動型AIチューター
 
+2026-11-03追加：管理画面の「設問1のみ出題」で、各用語1問（計3問）と設問1・2（計6問、初期値）を切り替えられます。新規参加者の登録時に固定し、既存参加者には反映しません。現行仕様版35・v5の条件分岐は[docs/48](docs/48_first_question_only.md)を参照してください。以下の過去版の説明は採用時の記録です。
+
 仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`では、通常版PRETESTの指定選択肢本文を`split-actions-v3`へ更新します。v1（仕様版27〜31）とv2（仕様版32）、旧データ・回答snapshotを履歴として保持し、仕様版32以下は閲覧専用です。RETEST1/2・内部final_test、6設問・4択単一選択、採点、設問ペア答え合わせは維持します。PRETESTで誤答した設問を学習確認に出す場合は、回答時の保存snapshotを再利用します。教材用語解説は「注釈欄のみ／教材内解説」を新規参加者の登録時に固定します。教材本文は注釈欄のみで700文字前後（600〜800文字）、教材内解説で1000文字前後（600〜1200文字）です。教材内解説モードでは辞書v3を意味の参照情報として渡し、定義文の転載を避けて文脈に合わせて言い換えるよう指示します。易しい版の新規実行は停止し、既存記録は閲覧・復元用に保持します。[仕様版27の採用記録](docs/39_split_assessment.md)、[仕様版28の答え合わせ](docs/40_question_pair_answer_review.md)、[仕様版29の用語解説モード](docs/41_learning_glossary_material_mode.md)、[仕様版30の文字数条件](docs/42_learning_glossary_material_length.md)、[仕様版31の辞書定義と言い換え](docs/43_glossary_definition_paraphrase.md)、[仕様版32のPRETEST改訂](docs/44_pretest_content_revision.md)、[仕様版33のPRETEST選択肢文面改訂](docs/45_pretest_memory_distractors.md)、[易しい版停止の現行方針](docs/22_question_set_modes.md)を参照してください。各変更の受入検証状況は[docs/14](docs/14_testing_acceptance.md)を参照してください。実験開始の承認や実AIでの確認とは区別します。
 
 ## 易しい版の停止（2026-10-30）

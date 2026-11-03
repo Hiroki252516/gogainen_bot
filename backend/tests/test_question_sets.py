@@ -210,9 +210,15 @@ def test_three_test_cap_with_snapshot_history_and_replay(isolated, mode, initial
         attempt.option_order_snapshot = None
         db.commit()
         history = build_interaction_history(db, pid, attempt.term_id)
-        assert history[0]["question_body"] == baseline[0]["body"]
         chosen = set(attempt.selected_option_ids)
-        assert history[0]["selected_options"] == [{"label": o["label"], "body": o["body"]} for o in baseline[0]["options"] if o["option_id"] in chosen]
+        # This checks fallback restoration, independently of wall-clock ordering.
+        # Retest observations may sort first after a system clock adjustment.
+        expected = {"question_body": baseline[0]["body"], "selected_options": [
+            {"label": o["label"], "body": o["body"]} for o in baseline[0]["options"] if o["option_id"] in chosen
+        ]}
+        assert expected in [
+            {key: row[key] for key in expected} for row in history if row["phase"] == "pretest"
+        ]
         assert len(history) == (6 if mode == "standard" else 3)
         first_retest = next(row for row in history if row["phase"] == phase)
         assert first_retest["selected_options"] == [{"label": "F" if mode == "standard" else "J", "body": "わからない。"}]
@@ -307,8 +313,9 @@ def test_material_feedback_prefetch_and_teaching_targets_use_fixed_bank(isolated
         term = db.query(Term).filter_by(slug="llm_knowledge").one()
         history = build_interaction_history(db, pid, term.id)
         assert len(history) == (3 if mode == "standard" else 2)
-        assert history[-1]["is_correct"] is False
-        assert history[-1]["question_body"] == spec["body"]
+        learning_record = next(row for row in history if row["source_type"] == "learning_turn")
+        assert learning_record["is_correct"] is False
+        assert learning_record["question_body"] == spec["body"]
         p = db.get(Participant, pid)
         assert p.question_set_mode == mode
         assert turn.practice_question_json["learning_content_version"] == LEARNING_CONTENT_VERSIONS[mode]
