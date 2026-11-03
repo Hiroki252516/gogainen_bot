@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import re
 from pathlib import Path
 
@@ -10,6 +11,22 @@ import yaml
 
 TERMS = ("llm_knowledge", "multi_agent", "memory_process")
 CHOICE_ROLES = {"正解": "correct", "M1": "M1", "M3": "M3", "わからない": "unknown"}
+ROLE_COUNTS = (
+    Counter({"correct": 1, "M1": 1, "M3": 1, "unknown": 1}),
+    Counter({"correct": 1, "M1": 2, "M3": 2, "unknown": 1}),
+)
+
+
+def _choice_entries(choices: object) -> list[dict]:
+    if isinstance(choices, dict):
+        if any(not isinstance(choice, dict) for choice in choices.values()):
+            raise ValueError("role-map choices must contain choice objects")
+        return [{"role": role, **choice} for role, choice in choices.items()]
+    if isinstance(choices, list):
+        if any(not isinstance(choice, dict) for choice in choices):
+            raise ValueError("ordered choices must contain choice objects")
+        return choices
+    raise ValueError("choices must be a role map or an ordered choice list")
 
 
 def parse_draft(text: str, initial_phase: str) -> dict:
@@ -49,16 +66,16 @@ def parse_draft(text: str, initial_phase: str) -> dict:
         match = re.match(r"(?:### )?設問([123])：(.+)", line)
         if match and section is not None:
             finish_scenario()
-            item = {"number": int(match.group(1)), "title": match.group(2), "task": "", "choices": {}}
+            item = {"number": int(match.group(1)), "title": match.group(2), "task": "", "choices": []}
             section["questions"].append(item)
             continue
         if in_scenario:
             scenario_lines.append(raw.rstrip())
             continue
-        match = re.match(r"- ([ABCD])【(正解|M1|M3|わからない)】(.*)", line)
+        match = re.match(r"- ([ABCDEF])【(正解|M1|M3|わからない)】(.*)", line)
         if match and item is not None:
             label, role, body = match.groups()
-            item["choices"][CHOICE_ROLES[role]] = {"label": label, "body": body.strip()}
+            item["choices"].append({"role": CHOICE_ROLES[role], "label": label, "body": body.strip()})
         elif item is not None and line and not item["task"]:
             item["task"] = line
     finish_scenario()
@@ -76,12 +93,17 @@ def validate(draft: dict) -> None:
                 raise ValueError(f"{phase}.{term} must have a scenario and three questions")
             for question in section["questions"]:
                 choices = question["choices"]
-                if not question["task"] or set(choices) != set(CHOICE_ROLES.values()):
+                if not question["task"]:
                     raise ValueError(f"{phase}.{term}.{question['number']} has incomplete choices")
-                if [choices[role]["label"] for role in ("correct", "M1", "M3", "unknown")] != list("ABCD"):
+                entries = _choice_entries(choices)
+                roles = Counter(entry.get("role") for entry in entries)
+                expected_labels = list("ABCD") if roles == ROLE_COUNTS[0] else list("ABCDEF") if roles == ROLE_COUNTS[1] else None
+                if expected_labels is None or [entry.get("label") for entry in entries] != expected_labels:
                     raise ValueError(f"{phase}.{term}.{question['number']} has incorrect labels")
-                bodies = [choice["body"] for choice in choices.values()]
-                if any(not body for body in bodies) or len(set(bodies)) != 4:
+                if any(entry.get("role") not in CHOICE_ROLES.values() for entry in entries):
+                    raise ValueError(f"{phase}.{term}.{question['number']} has an unsupported choice role")
+                bodies = [entry.get("body") for entry in entries]
+                if any(not isinstance(body, str) or not body.strip() for body in bodies) or len(set(bodies)) != len(entries):
                     raise ValueError(f"{phase}.{term}.{question['number']} has empty or duplicate choices")
 
 

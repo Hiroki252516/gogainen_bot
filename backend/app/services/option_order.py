@@ -145,6 +145,38 @@ def _display_label_by_source(options: list[Any], bank: str, item_index: int) -> 
             },
             _source_label(by_role["unknown"]): "D",
         }
+    if len(options) == 6:
+        by_role: dict[str, list[Any]] = {"correct": [], "M1": [], "M3": [], "unknown": []}
+        for option in options:
+            by_role[option_role(option)].append(option)
+        if tuple(len(by_role[role]) for role in ("correct", "M1", "M3", "unknown")) != (1, 2, 2, 1):
+            raise ValueError("randomized six-option order requires role counts 1/2/2/1")
+
+        labels = sorted(
+            "ABCDE",
+            key=lambda label: hashlib.sha256(
+                f"{OPTION_ORDER_VERSION}:{bank}:six:{item_index // 5}:{label}".encode()
+            ).digest(),
+        )
+        start = item_index % len(labels)
+        slots = {
+            "correct": [labels[start]],
+            "M1": [labels[(start + offset) % len(labels)] for offset in (1, 2)],
+            "M3": [labels[(start + offset) % len(labels)] for offset in (3, 4)],
+            "unknown": ["F"],
+        }
+        result: dict[str, str] = {}
+        for role, role_options in by_role.items():
+            role_options = sorted(
+                role_options,
+                key=lambda option: hashlib.sha256(
+                    f"{OPTION_ORDER_VERSION}:{bank}:{item_index}:{role}:{_source_label(option)}".encode()
+                ).digest(),
+            )
+            result.update(
+                {_source_label(option): label for option, label in zip(role_options, slots[role], strict=True)}
+            )
+        return result
     if len(options) != 10:
         raise ValueError("randomized option order requires exactly ten options")
 

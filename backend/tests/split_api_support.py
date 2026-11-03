@@ -53,10 +53,12 @@ def case_roles(labels):
 def select_roles(question, roles):
     """Select from internal DB metadata, never assume displayed correct labels."""
     with SessionLocal() as db:
-        rows = db.query(QuestionOption).filter_by(question_id=question["question_id"]).all()
-        if question.get("selection_mode") == "single" or len(question["options"]) == 4:
+        rows = db.query(QuestionOption).filter_by(question_id=question["question_id"]).order_by(QuestionOption.option_label).all()
+        if question.get("selection_mode") == "single" or len(question["options"]) in {4, 6}:
             assert len(roles) == 1
-            rows = [row for row in rows if row.misconception_type == roles[0]]
+            role = roles[0]
+            row = next(row for row in rows if row.is_correct) if role is None else next(row for row in rows if row.misconception_type == role)
+            rows = [row]
         else:
             available = list(rows)
             rows = []
@@ -90,9 +92,9 @@ def answer_test(client, pid, phase, slug, roles):
     assert len(questions) == 6
     indexes = {}
     for question in questions:
-        assert len(question["options"]) == 4
+        assert len(question["options"]) == 6
         assert question["selection_mode"] == "single"
-        assert question["options"][-1]["label"] == "D"
+        assert question["options"][-1]["label"] == "F"
         assert question["options"][-1]["exclusive"]
         assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
         index = indexes.get(question["term_slug"], 0)

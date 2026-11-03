@@ -9,7 +9,10 @@ def make_questions():
             "question_id": f"{term}-{number}",
             "term_slug": term,
             "question_number": number,
-            "options": [{"option_id": f"{term}-{number}-{role}", "role": role, "body": f"{role} body"} for role in ("correct", "M1", "M3", "unknown")],
+            "options": [
+                {"option_id": f"{term}-{number}-{index}", "role": role, "body": f"{role} body {index}"}
+                for index, role in enumerate(("correct", "M1", "M1", "M3", "M3", "unknown"))
+            ],
         }
         for term in TERMS
         for number in (1, 2)
@@ -31,7 +34,7 @@ def test_m3_priority_retains_both_observed_errors():
     questions = make_questions()
     selections = selections_for(questions)
     selections[questions[0]["question_id"]] = questions[0]["options"][1]["option_id"]
-    selections[questions[1]["question_id"]] = questions[1]["options"][2]["option_id"]
+    selections[questions[1]["question_id"]] = questions[1]["options"][3]["option_id"]
     result = score_split_batch(questions, selections)
     target = result["targets"][0]
     assert target["diagnosis"] == "M3"
@@ -42,8 +45,8 @@ def test_m3_priority_retains_both_observed_errors():
 def test_unknown_priority_suppresses_errors_but_confirms_both_questions():
     questions = make_questions()
     selections = selections_for(questions)
-    selections[questions[0]["question_id"]] = questions[0]["options"][3]["option_id"]
-    selections[questions[1]["question_id"]] = questions[1]["options"][2]["option_id"]
+    selections[questions[0]["question_id"]] = questions[0]["options"][5]["option_id"]
+    selections[questions[1]["question_id"]] = questions[1]["options"][3]["option_id"]
     target = score_split_batch(questions, selections)["targets"][0]
     assert target["diagnosis"] == "unknown"
     assert target["selected_errors"] == []
