@@ -43,6 +43,7 @@ from app.core.experiment_spec import (
     assert_current_experiment,
     can_resume,
 )
+from app.services.first_question_only import current_setting as current_first_question_setting, enabled as first_question_enabled, question_numbers
 from app.services.research_protocol import SURVEY_VERSION, validate_survey_for_participant
 from app.services.hypothesis_metrics import (
     METRICS_CSV_COLUMNS,
@@ -754,6 +755,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         show_pretest_results=show_test_results,
         show_retest_results=show_test_results,
         show_question_reviews=current_question_review_setting(db) if mode == STANDARD else None,
+        first_question_only=current_first_question_setting(db) if mode == STANDARD else None,
         learning_material_glossary_mode=current_material_glossary_setting(db),
         group_condition=group_condition,
         assignment_method="admin_code",
@@ -1043,7 +1045,7 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
     by_term: dict[str, list[Question]] = {}
     for question in all_questions:
         by_term.setdefault(question.term_id, []).append(question)
-    questions = [q for q in all_questions if q.variant_key in {f"{_expected_test_variant(db, participant, phase)}_q1", f"{_expected_test_variant(db, participant, phase)}_q2"}] if uses_split(participant) else [
+    questions = [q for q in all_questions if q.variant_key in {f"{_expected_test_variant(db, participant, phase)}_q{number}" for number in question_numbers(participant)}] if uses_split(participant) else [
         selected
         for term_id, candidates in by_term.items()
         if (selected := _question_for_phase_variant(db, participant, term_id, phase, candidates)) is not None
@@ -1052,8 +1054,8 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
         questions,
         key=lambda question: (PRETEST_TERM_ORDER.get(db.get(Term, question.term_id).slug, 99), question.variant_key),
     )
-    if uses_split(participant) and len(questions) != 6:
-        raise HTTPException(status_code=503, detail="今回の6設問が不足しています。管理者に連絡してください。")
+    if uses_split(participant) and (len(questions) != 3 * len(question_numbers(participant)) or any(len([q for q in questions if q.term_id == term_id]) != len(question_numbers(participant)) for term_id in by_term)):
+        raise HTTPException(status_code=503, detail="今回のテスト設問が不足しています。管理者に連絡してください。")
     submitted_attempts_by_question: dict[str, Attempt] = {}
     submitted_attempts = (
         db.query(Attempt)
@@ -1137,7 +1139,7 @@ def pending_question_review(
         if question is None:
             continue
         match = re.search(r"_q([12])$", question.variant_key or "")
-        if match is None or match.group(1) != "2":
+        if match is None or int(match.group(1)) != question_numbers(participant)[-1]:
             continue
         attempt = attempts_by_question.get(question.id)
         if attempt is not None and attempt.question_review_acknowledged_at is not None:
@@ -1180,12 +1182,12 @@ def pending_question_review(
     for row in question_rows:
         term_slug = row["term_slug"]
         pair = grouped.get(term_slug, {})
-        if set(pair) == {1, 2}:
+        if set(pair) == set(question_numbers(participant)):
             return {
                 "phase": phase,
                 "term_slug": term_slug,
                 "term_label": row["term_label"],
-                "results": [pair[1], pair[2]],
+                "results": [pair[number] for number in question_numbers(participant)],
             }
     return None
 
@@ -1214,7 +1216,7 @@ def acknowledge_question_review(
                 Attempt.participant_id == participant.id,
                 Attempt.phase == phase,
                 Term.slug == term_slug,
-                Question.variant_key.like("%_q2"),
+                Question.variant_key.like(f"%_q{question_numbers(participant)[-1]}"),
                 Attempt.question_review_acknowledged_at.is_not(None),
             )
             .order_by(Attempt.created_at.desc(), Attempt.id.desc())
@@ -1245,13 +1247,13 @@ def acknowledge_question_review(
             .order_by(Attempt.created_at.desc(), Attempt.id.desc())
             .first()
         )
-    if set(pair_attempts) != {1, 2} or any(pair_attempts[number] is None for number in (1, 2)):
-        raise HTTPException(status_code=409, detail="設問1・2の回答がそろっていないため、答え合わせを確認できません。")
+    if set(pair_attempts) != set(question_numbers(participant)) or any(attempt is None for attempt in pair_attempts.values()):
+        raise HTTPException(status_code=409, detail="この用語の回答がそろっていないため、答え合わせを確認できません。")
 
-    second_attempt = pair_attempts[2]
+    second_attempt = pair_attempts[question_numbers(participant)[-1]]
     if second_attempt.question_review_acknowledged_at is None:
         if any(not attempt.selected_option_ids for attempt in pair_attempts.values()):
-            raise HTTPException(status_code=409, detail="設問1・2の回答がそろっていないため、答え合わせを確認できません。")
+            raise HTTPException(status_code=409, detail="この用語の回答がそろっていないため、答え合わせを確認できません。")
         current_review = pending_question_review(db, participant.id, phase, question_rows)
         if current_review is None or current_review["term_slug"] != term_slug:
             raise HTTPException(status_code=409, detail="現在の答え合わせではありません。画面を再読み込みしてください。")
@@ -1345,7 +1347,7 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
             )
     _assert_phase_available(participant, phase)
     expected_key = _expected_test_variant(db, participant, phase)
-    if question.variant_key not in ({f"{expected_key}_q1", f"{expected_key}_q2"} if uses_split(participant) else {expected_key}):
+    if question.variant_key not in ({f"{expected_key}_q{number}" for number in question_numbers(participant)} if uses_split(participant) else {expected_key}):
         raise HTTPException(status_code=409, detail="この問題は今回のテスト対象ではありません。")
     pending = (
         db.query(Attempt)
@@ -1408,7 +1410,7 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
 
 
 def submit_test_term_page(db: Session, payload: dict[str, Any]) -> list[Attempt]:
-    """Persist the two answers atomically, respecting an outer idempotent transaction."""
+    """Persist a term page atomically, respecting an outer idempotent transaction."""
     previous_defer_commits = db.info.get("defer_commits", False)
     db.info["defer_commits"] = True
     try:
@@ -1444,14 +1446,15 @@ def _submit_test_term_page_in_transaction(db: Session, payload: dict[str, Any]) 
 
     questions_by_id = {question["question_id"]: question for question in question_payloads(db, participant.id, phase)}
     answers = payload.get("answers") or []
-    if len(answers) != 2:
-        raise HTTPException(status_code=400, detail="1ページにつき2設問への回答が必要です。")
+    page_count = len(question_numbers(participant))
+    if len(answers) != page_count:
+        raise HTTPException(status_code=400, detail=f"1ページにつき{page_count}設問への回答が必要です。")
     answer_ids = [str(answer.get("question_id") or "") for answer in answers]
-    if len(set(answer_ids)) != 2 or any(question_id not in questions_by_id for question_id in answer_ids):
-        raise HTTPException(status_code=409, detail="この2設問は今回の用語ページと一致しません。")
+    if len(set(answer_ids)) != page_count or any(question_id not in questions_by_id for question_id in answer_ids):
+        raise HTTPException(status_code=409, detail="この設問は今回の用語ページと一致しません。")
     selected_questions = [questions_by_id[question_id] for question_id in answer_ids]
     if any(question["term_slug"] != payload["term_slug"] for question in selected_questions):
-        raise HTTPException(status_code=409, detail="同じ用語の2設問を指定してください。")
+        raise HTTPException(status_code=409, detail="同じ用語の設問を指定してください。")
     if any(question["test_round"] != payload["test_round"] for question in selected_questions):
         raise HTTPException(status_code=409, detail="この用語ページのテスト回次が一致しません。")
     variants = {
@@ -1459,8 +1462,8 @@ def _submit_test_term_page_in_transaction(db: Session, payload: dict[str, Any]) 
         for question_id in answer_ids
     }
     expected_variant = _expected_test_variant(db, participant, phase)
-    if variants != {f"{expected_variant}_q1", f"{expected_variant}_q2"}:
-        raise HTTPException(status_code=409, detail="今回の用語ページには設問1・2が必要です。")
+    if variants != {f"{expected_variant}_q{number}" for number in question_numbers(participant)}:
+        raise HTTPException(status_code=409, detail="今回の用語ページの設問がそろっていません。")
     if not math.isfinite(float(payload["elapsed_time_sec"])) or payload["elapsed_time_sec"] <= 0:
         raise HTTPException(status_code=400, detail="ページ回答時間は0秒より大きい必要があります。")
 
@@ -1507,7 +1510,7 @@ def _submit_test_term_page_in_transaction(db: Session, payload: dict[str, Any]) 
             },
         )
         attempts.append(attempt)
-    if len(attempts) != 2:
+    if len(attempts) != page_count:
         raise HTTPException(status_code=500, detail="用語ページの回答保存を完了できませんでした。")
     for attempt in attempts:
         attempt.response_time_sec = None
@@ -1732,8 +1735,12 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
     if not attempts:
         raise HTTPException(status_code=400, detail="pretest attempts not found")
     active_term_ids = {term.id for term in _active_test_terms(db)}
-    if len(attempts) != len(active_term_ids) * (2 if uses_split(participant) else 1) or {attempt.term_id for attempt in attempts} != active_term_ids:
+    if len(attempts) != len(active_term_ids) * (len(question_numbers(participant)) if uses_split(participant) else 1) or {attempt.term_id for attempt in attempts} != active_term_ids:
         raise HTTPException(status_code=400, detail="pretest attempts are incomplete")
+    if uses_split(participant):
+        expected_ids = {row["question_id"] for row in question_payloads(db, participant.id, "pretest")}
+        if {attempt.question_id for attempt in attempts} != expected_ids:
+            raise HTTPException(status_code=400, detail="pretest attempts are incomplete")
     if pending_question_review(db, participant.id, "pretest") is not None:
         raise HTTPException(status_code=409, detail="用語ごとの答え合わせを確認してから進んでください。")
     if any(attempt.is_correct is not None for attempt in attempts):
@@ -3213,8 +3220,8 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         raise HTTPException(status_code=409, detail="用語ごとの答え合わせを確認してから進んでください。")
     if uses_split(participant):
         expected_ids = {q["question_id"] for q in question_payloads(db, participant.id, phase)}
-        if len(expected_ids) != 6 or {a.question_id for a in attempts} != expected_ids or len(attempts) != 6:
-            raise HTTPException(status_code=400, detail="6設問すべてに回答してください。")
+        if len(expected_ids) != 3 * len(question_numbers(participant)) or {a.question_id for a in attempts} != expected_ids or len(attempts) != len(expected_ids):
+            raise HTTPException(status_code=400, detail="今回の設問すべてに回答してください。")
     for attempt in attempts:
         question = db.get(Question, attempt.question_id)
         if not question or ("multi_select" not in question.question_type and question.question_type != "split_single"):
@@ -3228,7 +3235,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
                     "message": "問題に対応する用語データが見つかりません。管理者に連絡してください。",
                 },
             )
-        valid_variants = {f"{expected_variant}_q1", f"{expected_variant}_q2"} if uses_split(participant) else {expected_variant}
+        valid_variants = {f"{expected_variant}_q{number}" for number in question_numbers(participant)} if uses_split(participant) else {expected_variant}
         if not question.is_active or question.variant_key not in valid_variants or question.construct_key != assessment_construct_key(term.slug, phase, participant.question_set_mode):
             raise HTTPException(status_code=409, detail="この問題は今回のテスト対象ではありません。")
         result = _fixed_attempt_result(_selected_options(db, attempt))
@@ -3308,11 +3315,13 @@ def _active_test_terms(db: Session) -> list[Term]:
 
 def _is_mastery_test_batch(db: Session, attempts: list[Attempt]) -> bool:
     active_term_ids = {term.id for term in _active_test_terms(db)}
-    split = bool(attempts and uses_split(db.get(Participant, attempts[0].participant_id)))
+    participant = db.get(Participant, attempts[0].participant_id) if attempts else None
+    split = bool(participant and uses_split(participant))
     return (
         bool(active_term_ids)
-        and len(attempts) == len(active_term_ids) * (2 if split else 1)
+        and len(attempts) == len(active_term_ids) * (len(question_numbers(participant)) if split else 1)
         and {attempt.term_id for attempt in attempts} == active_term_ids
+        and (not split or set(split_item_keys(db, attempts).values()) == {(term_id, number) for term_id in active_term_ids for number in question_numbers(participant)})
         and all(attempt.is_correct is True for attempt in attempts)
     )
 
@@ -3424,7 +3433,7 @@ def _attempt_sort_key(attempt: Attempt) -> tuple[int, int, int, str]:
     return (*_round_sort_key(_attempt_test_round(attempt), attempt.phase, attempt.attempt_index), attempt.created_at.isoformat())
 
 
-def _test_rounds(attempts: list[Attempt]) -> list[dict[str, Any]]:
+def _test_rounds(attempts: list[Attempt], *, split: bool = False) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str, int], list[Attempt]] = {}
     for attempt in attempts:
         if attempt.phase not in TEST_PHASES:
@@ -3450,7 +3459,7 @@ def _test_rounds(attempts: list[Attempt]) -> list[dict[str, Any]]:
             "score_delta_from_pretest_pt": None if score_rate is None or pretest_score is None else round((score_rate - pretest_score) * 100, 6),
             "score_delta_from_previous_test_pt": None if score_rate is None or previous_score is None else round((score_rate - previous_score) * 100, 6),
             "remaining_learning_target_count": len({a.term_id for a in items if a.is_correct is False}) if phase in {"pretest", "retest", "final_test"} else None,
-            "scoring_unit": "subquestion" if len(items) == 6 else "term",
+            "scoring_unit": "subquestion" if split else "term",
             "event_time": _iso(max((attempt.answered_at or attempt.created_at for attempt in items), default=None)),
         }
         rows.append(row)
@@ -3615,7 +3624,7 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         if uses_split(participant):
             initial_by_key = {split_keys[a.question_id] for a in denom}
             paired = [a for a in attempts if _attempt_test_round(a) == "retest_1" and a.is_correct is not None]
-            if len(paired) != 6:
+            if len(paired) != 3 * len(question_numbers(participant)):
                 return None
             return sum(a.misconception_type == m for a in paired if split_keys[a.question_id] in initial_by_key) / len(denom)
         rec_terms = {a.term_id for a in by_phase["retest"] if a.recurrence_flag and a.misconception_type == m}
@@ -3642,7 +3651,7 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         m3_recurrence_rate=m_rate("M3"),
         learning_target_count=db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0,
         score_timeline_json={
-            "rounds": _test_rounds(attempts),
+            "rounds": _test_rounds(attempts, split=uses_split(participant)),
             "final_test_skipped_after_retest_mastery": final_test_skipped,
             "final_score_source": final_score_source,
         },
@@ -3782,8 +3791,9 @@ def admin_summary(db: Session, mode: str = STANDARD) -> dict[str, Any]:
     participants = [p for p in participants if question_set_mode(p.question_set_mode) == mode]
     terms = _term_map(db)
     rows = []
-    for group in ["control", "proposed"]:
-        group_participants = [p for p in participants if p.group_condition == group]
+    conditions = sorted({first_question_enabled(p) for p in participants}) or [False]
+    for condition, group in ((condition, group) for condition in conditions for group in ("control", "proposed")):
+        group_participants = [p for p in participants if p.group_condition == group and first_question_enabled(p) == condition]
         latest_summaries = []
         for p in group_participants:
             s = _ensure_evaluation_summary(db, p)
@@ -3806,6 +3816,7 @@ def admin_summary(db: Session, mode: str = STANDARD) -> dict[str, Any]:
             {
                 "group_condition": group,
                 "participant_count": len(group_participants),
+                "first_question_only": condition,
                 "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
                 "attainment_correct_rate": avg("attainment_correct_rate"),
                 "avg_score_delta_from_pretest_pt": avg_final_delta(),
@@ -4202,6 +4213,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "show_pretest_results": participant.show_pretest_results is not False,
             "show_retest_results": participant.show_retest_results is not False,
             "show_question_reviews": participant.show_question_reviews,
+            "first_question_only": participant.first_question_only,
             "learning_material_glossary_mode": participant.learning_material_glossary_mode,
             "participant_id": participant.id,
             "display_code": participant.display_code,

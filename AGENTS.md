@@ -4,6 +4,10 @@
 
 現行コードは仕様版35 / `experiment-plan-2026-11-03-split-added-choices-v1`。仕様版34以下は閲覧専用で、既存参加者・教材・snapshotを更新しない。通常版テストは`split-actions-v5`を使い、v4を土台に全27設問へ追加M1・M3を収録し、PR #260の選択肢56本文の修正を反映する。v4自体は履歴バンクとして保持する。正解1・M1二つ・M3二つ・unknown一つの6択で、デバッグ配置はA=正解、B/C=M1、D/E=M3、F=unknown。設問1・2だけを出題・採点し、設問3はバンクに保持する。ランダム配置ではunknownをFに固定し、残る5択を決定的にA〜Eへ配置する。v1は仕様版27〜31、v2は32、v3は33、v4は34、v5は35の履歴バンク対応。誤答設問の学習確認は保存済みsnapshotの本文・選択肢を再利用する。直前回次は検証済みtest_roundの順序で決め、回答時刻やUUIDによって別の回次を選ばない。教材の用語解説モードは新規参加者のみ登録時snapshotで固定する。「教材内解説」だけ辞書v3を両群共通の教材生成任意入力として渡し、定義文を転載せず、意味を保って文脈に合わせて言い換えるよう指示する。本文で使う登録語だけを説明し、文字数契約（注釈欄のみ600〜800、教材内解説600〜1200）を維持する。教材内解説では教材用注釈欄を隠し、回答後解説・テスト注釈と保存snapshotを維持する。詳細は[docs/24](docs/24_learning_glossary.md)・[docs/43](docs/43_glossary_definition_paraphrase.md)・[docs/44](docs/44_pretest_content_revision.md)・[docs/45](docs/45_pretest_memory_distractors.md)・[docs/46](docs/46_split_assessment_choice_wording.md)・[docs/47](docs/47_split_assessment_added_choices.md)。受入検証と実験開始承認は別に扱う。
 
+## 設問1のみ出題する設定（2026-11-03）
+
+管理画面の「設問1のみ出題」は初期値OFF。新規参加者にfirst_question_onlyを登録時固定し、ONなら各用語の設問1だけ（計3問）、OFF/旧NULLなら設問1・2（計6問）を出題・採点する。事前・再テスト1/2・内部final_test・学習確認を対象とする。設問2・3と旧snapshotを保持する。仕様版35・protocol・v5を維持し既存参加者を補完しない。指標分母は出題条件に合わせ、3問/6問の集計を混ぜない。以降の6設問固定の記述にはこの条件分岐を優先する。詳細は[docs/48](docs/48_first_question_only.md)。
+
 ## 2026-10-30 易しい版の停止
 
 易しい版停止時点（仕様版28・protocol維持）で新規参加者を通常版に固定した。保存済みRuntimeSettingの旧`easy`値も新規登録には使わず、管理画面は通常版固定を表示する。既存易しい版参加者は閲覧専用で、参加者向け画面/APIから再開・回答できない。易しい版の群集計・仮説CSVは停止し、版指定は422とする。参加者一覧・個別ログ・参加者別CSV・全件生ログは参照可能。既存参加者、回答、snapshot、評価、YAML、問題ID、DB列は変更・削除しない。現在の詳細と検証状況は[docs/22](docs/22_question_set_modes.md)、[docs/14](docs/14_testing_acceptance.md)、[docs/20](docs/20_experiment_plan_alignment.md)を参照する。

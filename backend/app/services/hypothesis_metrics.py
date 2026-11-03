@@ -12,10 +12,11 @@ from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PR
 from app.core.question_sets import STANDARD, question_set_mode
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
 from app.services.split_assessment import uses_split, split_item_keys
+from app.services.first_question_only import enabled as first_question_enabled, question_numbers
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SUPPORTED_SURVEY_VERSIONS
 from app.services.question_sets import require_aggregate_question_set_mode
 
-METRICS_VERSION = "six-hypotheses-v3-split"
+METRICS_VERSION = "six-hypotheses-v4-question-selection"
 TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
 METRICS_CSV_COLUMNS = [
     "metrics_version", "protocol_id", "group_condition", "participant_id", "display_code", "route",
@@ -47,7 +48,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     terms = {t.id: t.slug for t in db.query(Term).filter(Term.slug.in_(TERM_SLUGS)).all()}
     grouped = defaultdict(list)
     split = uses_split(participant)
-    expected_count = 6 if split else 3
+    expected_count = 3 * len(question_numbers(participant)) if split else 3
     attempts = db.query(Attempt).filter(
         Attempt.participant_id == participant.id,
         Attempt.term_id.in_(terms),
@@ -59,8 +60,10 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     for attempt in attempts:
         grouped[_round_number(attempt)].append(attempt)
 
+    expected_keys = {(term_id, number) for term_id in terms for number in question_numbers(participant)} if split else set(terms)
+
     def complete(items):
-        return len(terms) == 3 and len(items) == expected_count and len({item_key(a) for a in items}) == expected_count and {a.term_id for a in items} == set(terms) and all(a.is_correct is not None for a in items)
+        return len(terms) == 3 and len(items) == expected_count and {item_key(a) for a in items} == expected_keys and all(a.is_correct is not None for a in items)
 
     baseline = grouped.get(0, [])
     initial = grouped.get(1, [])
@@ -141,6 +144,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         "participant_id": participant.id, "display_code": participant.display_code,
         "question_set_mode": question_set_mode(participant.question_set_mode),
         "scoring_unit": "subquestion" if split else "term", "questions_per_test": expected_count,
+        "first_question_only": first_question_enabled(participant),
         "group_condition": participant.group_condition, "completion_reason": participant.completion_reason,
         "route": "initial_perfect_final_test" if pre_score == 1 else "learning_retest" if pre_complete else "pretest_incomplete",
         "has_viewed_material": bool(displayed), "rounds": rounds,
@@ -203,11 +207,20 @@ def _group(rows):
 def group_metrics(rows: list[dict], mode: str = STANDARD) -> dict:
     mode = require_aggregate_question_set_mode(mode)
     rows = [row for row in rows if row.get("question_set_mode", STANDARD) == mode]
+    conditions = sorted({row.get("first_question_only", False) is True for row in rows})
+    if len(conditions) > 1:
+        return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
+                "question_set_mode": mode, "groups": [], "routes": {},
+                "differences_proposed_minus_control": {}, "material_item_differences": {},
+                "strata": [group_metrics([row for row in rows if (row.get("first_question_only") is True) == condition], mode) for condition in conditions],
+                "descriptive_only": True}
+    first_only = conditions[0] if conditions else False
     groups = [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group])} for group in ("control", "proposed")]
     differences = {key: groups[1][key]["mean"] - groups[0][key]["mean"] if all(g[key]["mean"] is not None for g in groups) else None for key in ("h1", "h2", "h3", "h4", "h5", "h6")}
     item_differences = {k: groups[1]["h5"]["items"][k]["mean"] - groups[0]["h5"]["items"][k]["mean"] if all(g["h5"]["items"][k]["mean"] is not None for g in groups) else None for k in MATERIAL_RATING_KEYS}
     routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("initial_perfect_final_test", "learning_retest", "pretest_incomplete")}
     return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "question_set_mode": mode, "groups": groups,
+            "first_question_only": first_only, "questions_per_test": 3 if first_only else 6,
             "differences_proposed_minus_control": differences, "material_item_differences": item_differences,
             "routes": routes, "descriptive_only": True}
 
@@ -220,6 +233,11 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool, mode: str = STANDARD
     mode = require_aggregate_question_set_mode(mode)
     rows = [row for row in rows if row.get("question_set_mode", STANDARD) == mode]
     source = group_metrics(rows, mode)
+    if grouped and source.get("strata"):
+        return [record for stratum in source["strata"] for record in metrics_export_rows(
+            [row for row in rows if (row.get("first_question_only") is True) == stratum["first_question_only"]],
+            grouped=True, mode=mode,
+        )]
     if grouped:
         for group in source["groups"]:
             for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
@@ -234,6 +252,7 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool, mode: str = STANDARD
     else:
         for row in rows:
             base = {k: row[k] for k in ("group_condition", "participant_id", "display_code", "route")}
+            base["first_question_only"] = row.get("first_question_only") is True
             for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
                 metric = row[key]
                 records.append({**base, "metric": key, **{k: v for k, v in metric.items() if k in METRICS_CSV_COLUMNS}, "details_json": json.dumps(metric, ensure_ascii=False)})
@@ -243,7 +262,8 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool, mode: str = STANDARD
     output = []
     for record in records:
         details = json.loads(record.get("details_json") or "{}")
-        record["details_json"] = json.dumps({**details, "question_set_mode": mode}, ensure_ascii=False)
+        first_only = record.pop("first_question_only", source.get("first_question_only", False))
+        record["details_json"] = json.dumps({**details, "question_set_mode": mode, "first_question_only": first_only, "questions_per_test": 3 if first_only else 6}, ensure_ascii=False)
         output.append({"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, **record})
     return output
 

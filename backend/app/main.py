@@ -17,7 +17,7 @@ from datetime import datetime
 
 from app.models import Participant, Term, TutorSession, TutorTurn
 from app.services import pretest_display
-from app.services import question_review_display
+from app.services import question_review_display, first_question_only
 from app.services import learning_material_glossary_mode
 from pydantic import StrictBool
 
@@ -274,7 +274,7 @@ class TermPageAttemptPayload(BaseModel):
     term_slug: str
     test_round: str
     page_id: UUID
-    answers: list[TermPageAnswerPayload] = Field(min_length=2, max_length=2)
+    answers: list[TermPageAnswerPayload] = Field(min_length=1, max_length=2)
     question_shown_at: datetime
     answered_at: datetime
     elapsed_time_sec: float = Field(gt=0)
@@ -858,6 +858,16 @@ def api_save_question_review_display(payload: QuestionReviewDisplayPayload, db: 
     return {"enabled": question_review_display.save_setting(db, payload.enabled), "applies_to": "new_standard_participants_only"}
 
 
+@app.get("/api/admin/first-question-only")
+def api_first_question_only(db: Session = Depends(get_db)):
+    return JSONResponse({"enabled": first_question_only.current_setting(db), "applies_to": "new_standard_participants_only"}, headers={"Cache-Control": "no-store"})
+
+
+@app.put("/api/admin/first-question-only")
+def api_save_first_question_only(payload: QuestionReviewDisplayPayload, db: Session = Depends(get_db)):
+    return {"enabled": first_question_only.save_setting(db, payload.enabled), "applies_to": "new_standard_participants_only"}
+
+
 @app.get("/api/admin/learning-material-glossary-mode")
 def api_learning_material_glossary_mode(db: Session = Depends(get_db)):
     return JSONResponse({"mode": learning_material_glossary_mode.current_setting(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
@@ -897,6 +907,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "show_pretest_results": pretest_display.enabled(row.show_pretest_results),
                 "show_retest_results": pretest_display.enabled(row.show_retest_results),
                 "show_question_reviews": row.show_question_reviews,
+                "first_question_only": row.first_question_only,
                 "learning_material_glossary_mode": row.learning_material_glossary_mode,
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,
