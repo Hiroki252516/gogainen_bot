@@ -199,7 +199,9 @@ def latest_failed_attempts(db: Any, participant: Any, term_id: str) -> list:
         if attempt.test_round != expected_round or (attempt.phase == "final_test" and variant != "retest_v1"):
             raise split_data_error("split_test_round_unavailable")
         rounds[attempt.id] = expected_round
-    latest = attempts[0]
+    # A scored round advances even when wall-clock timestamps tie or move backwards.
+    round_order = {"test": 0, "retest_1": 1, "retest_2": 2}
+    latest = max(attempts, key=lambda a: (round_order[rounds[a.id]], a.created_at, a.id))
     failed = [a for a in attempts if a.phase == latest.phase and rounds[a.id] == rounds[latest.id] and not a.is_correct]
     return sorted(failed, key=lambda a: variants[a.question_id][1])
 

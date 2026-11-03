@@ -18,7 +18,7 @@
 6. 事前テストで満点だった参加者は内部final_testへ進む。final_testの採点結果に応じ、満点ならsurvey、不正解・未回答があれば既存の学習後retest_v2へ進む。内部final_testも通常版では6設問の完了後に採点する。
 7. survey保存後にfinish。
 
-surveyは経験4有無・一般4/教材6の1〜10段階・必須自由記述。教材表示者のみ6項目を必須とし、未表示者は自動対象外。[画面仕様](09_frontend_ux_flow.md)と[評価定義](12_evaluation_metrics.md)を参照する。
+surveyは用語の事前知識6項目（知っていた／知らない）、一般4/教材6の1〜10段階、任意の自由記述。教材表示者のみ6項目を必須とし、未表示者は自動対象外。[画面仕様](09_frontend_ux_flow.md)と[評価定義](12_evaluation_metrics.md)を参照する。
 
 事前後の問題variantは採点回次に対応して全用語共通に選ぶ。用語別の回答件数から回次を推測しない。学習後回数retest_cycles_completedはfinal_testを含めず、上限用のpost_pretest_tests_completedには採点済みfinal_testを加える。テスト回答中はチャット・ヒント・即時正解を表示しない。既存結果画面では従来どおり正誤を表示する。
 

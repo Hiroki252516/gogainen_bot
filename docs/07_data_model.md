@@ -24,7 +24,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 計画書では参加者・群・用語・フェーズ/回次、問題と選択内容、全体正誤とunknown区分、誤答タイプ・再発、時刻/時間、段階・方略、完了/中断、AI実行状態、アンケートを収集する。正誤のboolとunknown分類は別の記録であり、保存型を文書だけで三値へ変更しない。
 
-現行アンケートは経験4有無、一般4/教材6の1〜10段階、必須自由記述。ParticipantSurvey.survey_versionとresponses_jsonへ版付きで保存し、旧5段階列は新規入力に使わない。定義は[12](12_evaluation_metrics.md)。
+現行アンケートは用語の事前知識6項目（知っていた／知らない）、一般4/教材6の1〜10段階、任意の自由記述。ParticipantSurvey.survey_versionとresponses_jsonへ版付きで保存し、旧5段階列は新規入力に使わない。定義は[12](12_evaluation_metrics.md)。
 
 ## 現行の保存契約
 

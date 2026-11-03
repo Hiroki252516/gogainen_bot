@@ -12,7 +12,7 @@ from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PR
 from app.core.question_sets import STANDARD, question_set_mode
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
 from app.services.split_assessment import uses_split, split_item_keys
-from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION
+from app.services.research_protocol import MATERIAL_RATING_KEYS, SUPPORTED_SURVEY_VERSIONS
 from app.services.question_sets import require_aggregate_question_set_mode
 
 METRICS_VERSION = "six-hypotheses-v3-split"
@@ -116,7 +116,10 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
                                     "ended": session.ended_at is not None})
     term_means = {slug: mean(counts) for slug, counts in repetitions.items()}
 
-    survey = db.query(ParticipantSurvey).filter_by(participant_id=participant.id, survey_version=SURVEY_VERSION).order_by(ParticipantSurvey.created_at.desc(), ParticipantSurvey.id.desc()).first()
+    survey = db.query(ParticipantSurvey).filter(
+        ParticipantSurvey.participant_id == participant.id,
+        ParticipantSurvey.survey_version.in_(SUPPORTED_SURVEY_VERSIONS),
+    ).order_by(ParticipantSurvey.created_at.desc(), ParticipantSurvey.id.desc()).first()
     ratings = ((survey.responses_json or {}).get("material_ratings") if survey else None) if displayed else None
     ratings = ratings if isinstance(ratings, dict) and all(type(ratings.get(k)) is int and 1 <= ratings[k] <= 10 for k in MATERIAL_RATING_KEYS) else None
     reached = first_mastery_at is not None

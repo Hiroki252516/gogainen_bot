@@ -1,3 +1,4 @@
+from collections import Counter
 from copy import deepcopy
 from pathlib import Path
 
@@ -41,6 +42,7 @@ MEMORY_UPDATE_CORRECT = "利用者が以前の「辛い料理は避けたい」�
 MEMORY_SHARED_INSTRUCTION_DISTRACTOR = "利用者が「辛い料理は避けたい」から「少し辛い料理も食べたい」に希望を変更した際、AIがすべての利用者に共通して使う指示文を「少し辛い料理も提案する」に変更し、この設定を、利用者ごとの希望を記憶する仕組みとして利用する。"
 V4_EXPECTED = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v4_expected.yml").read_text(encoding="utf-8"))
 V5_ADDITIONS = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_added_choices_expected.yml").read_text(encoding="utf-8"))
+V5_PR260_WORDING = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_pr260_wording_expected.yml").read_text(encoding="utf-8"))
 
 
 def test_v2_changes_only_the_requested_pretest_content_and_preserves_v1():
@@ -130,36 +132,40 @@ def test_v4_matches_all_comparison_text_and_preserves_question_structure():
             assert [spec["question_number"] for spec in specs] == [1, 2]
 
 
-def test_v5_adds_only_the_expected_m1_m3_choices_and_preserves_v4_content():
+def test_v5_matches_pr260_wording_and_preserves_v4_structure():
     v4 = split_bank("split-actions-v4")
     revised = split_bank("split-actions-v5")
+    expected = deepcopy(v4)
     assert V5_ADDITIONS["source_bank"] == "split-actions-v4"
+    assert V5_PR260_WORDING["source_pr"] == 260
     assert sum(len(questions) for terms in V5_ADDITIONS["added_choices"].values() for questions in terms.values()) == 27
+    overrides = V5_PR260_WORDING["choice_overrides"]
+    changed_labels = Counter(
+        label for terms in overrides.values() for questions in terms.values()
+        for choices in questions.values() for label in choices
+    )
+    assert changed_labels == {"A": 3, "B": 27, "D": 26}
 
     for round_key, terms in V5_ADDITIONS["added_choices"].items():
         for term_slug, questions in terms.items():
-            original_questions = {q["number"]: q for q in v4[round_key][term_slug]["questions"]}
-            revised_questions = {q["number"]: q for q in revised[round_key][term_slug]["questions"]}
+            expected_questions = {q["number"]: q for q in expected[round_key][term_slug]["questions"]}
             for addition in questions:
                 number = addition["number"]
-                previous = original_questions[number]["choices"]
-                choices = revised_questions[number]["choices"]
-                assert isinstance(choices, list)
-                assert [(item["label"], item["role"]) for item in choices] == [
-                    ("A", "correct"), ("B", "M1"), ("C", "M1"),
-                    ("D", "M3"), ("E", "M3"), ("F", "unknown"),
+                question = expected_questions[number]
+                previous = question["choices"]
+                question["choices"] = [
+                    {"role": "correct", "label": "A", "body": previous["correct"]["body"]},
+                    {"role": "M1", "label": "B", "body": previous["M1"]["body"]},
+                    {"role": "M1", "label": "C", "body": addition["M1"]},
+                    {"role": "M3", "label": "D", "body": previous["M3"]["body"]},
+                    {"role": "M3", "label": "E", "body": addition["M3"]},
+                    {"role": "unknown", "label": "F", "body": previous["unknown"]["body"]},
                 ]
-                by_role = {
-                    role: [item["body"] for item in choices if item["role"] == role]
-                    for role in ("correct", "M1", "M3", "unknown")
-                }
-                assert by_role["correct"] == [previous["correct"]["body"]]
-                assert by_role["M1"][0] == previous["M1"]["body"]
-                assert by_role["M1"][1] == addition["M1"]
-                assert by_role["M3"][0] == previous["M3"]["body"]
-                assert by_role["M3"][1] == addition["M3"]
-                assert by_role["unknown"] == [previous["unknown"]["body"]]
+                for label, body in overrides.get(round_key, {}).get(term_slug, {}).get(number, {}).items():
+                    next(choice for choice in question["choices"] if choice["label"] == label)["body"] = body
 
+    # Covers every body and all unchanged scenarios/tasks/roles, including reserved Q3.
+    assert revised == expected
     assert revised["pretest_v1"]["llm_knowledge"]["questions"][2]["number"] == 3
     assert all(len(question["choices"]) == 6 for terms in revised.values() for section in terms.values() for question in section["questions"])
     for round_key in ("pretest_v1", "retest_v1", "retest_v2"):
@@ -191,7 +197,7 @@ def test_spec_35_seeds_v5_and_restores_spec_34_from_v4_without_changing_snapshot
             assert active.is_active
             assert "split-actions-v5" in active.construct_key
             active_m1 = db.query(QuestionOption).filter_by(question_id=active.id, option_label="B").one()
-            assert active_m1.body == V4_EXPECTED["pretest_v1"]["memory_process"][1]["M1"]
+            assert active_m1.body == V5_PR260_WORDING["choice_overrides"]["pretest_v1"]["memory_process"][1]["B"]
             active_added_m1 = db.query(QuestionOption).filter_by(question_id=active.id, option_label="C").one()
             assert active_added_m1.misconception_type == "M1"
 
@@ -401,7 +407,7 @@ def test_spec_35_seeds_v5_and_restores_spec_34_from_v4_without_changing_snapshot
             assert v5_attempt.option_order_snapshot == saved_options_v5
             assert active.is_active and active.body == saved_body_v5
             assert v4_question.body == v4_snapshot[0]
-            assert active_m1.body == V4_EXPECTED["pretest_v1"]["memory_process"][1]["M1"]
+            assert active_m1.body == V5_PR260_WORDING["choice_overrides"]["pretest_v1"]["memory_process"][1]["B"]
             assert [(o.option_label, o.body) for o in v4_options] == v4_snapshot[1]
             assert active_added_m1.body == V5_ADDITIONS["added_choices"]["pretest_v1"]["memory_process"][0]["M1"]
             assert latest_test_results(db, spec32_participant.id)["results"][0]["question_body"] == v2_snapshot[0]

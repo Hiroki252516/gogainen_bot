@@ -8,15 +8,17 @@ import { ParticipantFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, postIdempotent, requireParticipant } from "@/lib/api";
 
 const SURVEY_STEPS = ["survey"] as const;
-const EXPERIENCES = [
-  ["chat", "チャット形式でAIを利用した経験"],
-  ["coding_assistance", "プログラミングの補助にAIを利用した経験"],
-  ["cli", "CLIからAIを利用した経験"],
-  ["api", "APIからAIを利用した経験"],
+const PRIOR_TERM_KNOWLEDGE = [
+  ["pretraining", "事前学習"],
+  ["fine_tuning", "ファインチューニング"],
+  ["rag", "RAG"],
+  ["prompt_engineering", "プロンプトエンジニアリング"],
+  ["multi_agent", "マルチエージェント"],
+  ["memory_process", "記憶プロセス（AIが以前の会話で伝えた利用者の希望を記憶し、次回以降の回答に利用する仕組み）"],
 ] as const;
 const GENERAL = [
   ["ai_usage_frequency", "普段のAI利用頻度", "1：使用しない ／ 10：非常に頻繁に使用する"],
-  ["self_rated_ai_knowledge", "AIに関する知識の自己評価", "1：全く理解していない ／ 10：非常によく理解している"],
+  ["self_rated_ai_proficiency", "AIを使いこなせているかの自己評価", "1：全く使いこなせていない ／ 10：非常によく使いこなせている"],
   ["system_usability", "システムは操作しやすかった", ""],
   ["system_clarity", "システムの使い方はわかりやすかった", ""],
 ] as const;
@@ -51,9 +53,8 @@ export default function SurveyPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!context || submitting) return;
-    if (!comment.trim()) { setError("自由記述も必須です。特記事項がない場合は「特になし」と回答してください。"); return; }
     const requiredKeys = [
-      ...EXPERIENCES.map(([key]) => key),
+      ...PRIOR_TERM_KNOWLEDGE.map(([key]) => key),
       ...GENERAL.map(([key]) => key),
       ...(context.material_ratings_required ? MATERIAL.map(([key]) => key) : []),
     ];
@@ -67,7 +68,7 @@ export default function SurveyPage() {
       const participantId = requireParticipant();
       await postIdempotent(`/api/participants/${participantId}/survey`, {
         survey_version: context.survey_version,
-        experiences: Object.fromEntries(EXPERIENCES.map(([key]) => [key, values[key] === "yes"])),
+        prior_term_knowledge: Object.fromEntries(PRIOR_TERM_KNOWLEDGE.map(([key]) => [key, values[key] === "yes"])),
         general_ratings: Object.fromEntries(GENERAL.map(([key]) => [key, Number(values[key])])),
         material_ratings: context.material_ratings_required ? Object.fromEntries(MATERIAL.map(([key]) => [key, Number(values[key])])) : null,
         free_comment: comment.trim(),
@@ -80,19 +81,20 @@ export default function SurveyPage() {
     <AppShell step="アンケート">
       <form className="panel stack" onSubmit={submit}>
         <h1>実験後アンケート</h1>
-        <p>表示される項目はすべて必須です。各質問について回答してください。</p>
+        <p>自由記述以外の表示される項目はすべて必須です。各質問について回答してください。</p>
         {!context ? <p>回答項目を確認しています。</p> : <>
-          <h2>AIの利用経験</h2>
-          {EXPERIENCES.map(([key, label]) => <ChoiceButtons key={key} label={label} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
+          <h2>実験前に用語の意味を知っていたか</h2>
+          <p>今回の実験を始める前の状態について回答してください。</p>
+          {PRIOR_TERM_KNOWLEDGE.map(([key, label]) => <ChoiceButtons key={key} label={label} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
           <h2>AIとシステムについて</h2>
           {GENERAL.map(([key, label, anchors]) => <RatingButtons key={key} label={label} anchors={anchors || AGREEMENT_ANCHORS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
           <h2>教材について</h2>
           {context.material_ratings_required
             ? MATERIAL.map(([key, label]) => <RatingButtons key={key} label={label} anchors={AGREEMENT_ANCHORS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)
             : <p>教材の表示記録がないため、教材評価6項目は対象外です。</p>}
-          <label>自由記述（必須）
-            <textarea required value={comment} disabled={submitting} onChange={(event) => setComment(event.target.value)} rows={5} />
-            <span className="muted">特記事項がない場合は「特になし」と回答してください。</span>
+          <label>自由記述（任意）
+            <textarea value={comment} disabled={submitting} onChange={(event) => setComment(event.target.value)} rows={5} />
+            <span className="muted">感想や改善点があれば記入してください。空欄のまま送信できます。</span>
           </label>
         </>}
         {error ? <div className="danger" role="alert">{error}</div> : null}
@@ -105,9 +107,9 @@ export default function SurveyPage() {
 
 function ChoiceButtons({ label, value, disabled, onChange }: { label: string; value: string; disabled: boolean; onChange: (value: string) => void }) {
   return <div className="survey-choice-question">
-    <span className="survey-question-label">{label}</span>
+    <div className="survey-rating-label"><span className="survey-question-label">{label}</span><span className="required-indicator">必須</span></div>
     <div className="survey-choice-options" role="group" aria-label={label}>
-      {[['no', 'なし'], ['yes', 'ある']].map(([optionValue, optionLabel]) => <button
+      {[["yes", "知っていた"], ["no", "知らない"]].map(([optionValue, optionLabel]) => <button
         key={optionValue}
         type="button"
         className={`survey-choice-button${value === optionValue ? " selected" : ""}`}

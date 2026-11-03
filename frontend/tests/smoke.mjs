@@ -478,7 +478,7 @@ for (const expectedText of ["欠測・未観測", "censoring_breakdown", "censor
 for (const expectedText of ["material-view", "visibilitychange", "materialViewError"]) {
   if (!learningPage.includes(expectedText)) throw new Error(`material display recording is missing: ${expectedText}`);
 }
-for (const expectedText of ["実験後アンケート", "/survey", "experiences", "coding_assistance", "system_usability", "general_ratings", "material_ratings_required", "length: 10", "自由記述（必須）", "教材評価6項目は対象外", "回答を保存して終了", 'router.replace("/finish")']) {
+for (const expectedText of ["実験後アンケート", "/survey", "prior_term_knowledge", "pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process", "知っていた", "知らない", "self_rated_ai_proficiency", "system_usability", "general_ratings", "material_ratings_required", "length: 10", "自由記述（任意）", "教材評価6項目は対象外", "回答を保存して終了", 'router.replace("/finish")']) {
   if (!surveyPage.includes(expectedText)) {
     throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
   }

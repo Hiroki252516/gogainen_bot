@@ -1,14 +1,16 @@
 from copy import deepcopy
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import event
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session
 
 from admin_client import AuthenticatedTestClient
 from app import main as main_module
 from app.db.session import SessionLocal
-from app.models import Participant, Question, QuestionOption, TutorSession, TutorTurn
+from app.models import Attempt, Base, Participant, Question, QuestionOption, Term, TutorSession, TutorTurn
 from app.services import experiment
 from app.services.hypothesis_metrics import participant_metrics
 from app.services.split_assessment import (
@@ -165,6 +167,53 @@ def test_referenced_bad_variants_are_not_silently_skipped(learning_turn, variant
             latest_failed_attempts(db, participant, question.term_id)
         # No flush/commit of the intentionally malformed value.
         db.rollback()
+
+
+
+@pytest.mark.parametrize("phase,round_key,variant", [
+    ("final_test", "retest_1", "retest_v1"),
+    ("retest", "retest_1", "retest_v1"),
+    ("retest", "retest_2", "retest_v2"),
+])
+@pytest.mark.parametrize("clock_reversed", [False, True], ids=["same-timestamp", "clock-reversed"])
+def test_latest_failed_attempts_uses_saved_round_before_timestamps(phase, round_key, variant, clock_reversed):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            participant = Participant(display_code="ROUND-ORDER", group_condition="control")
+            term = Term(slug="llm_knowledge", label="LLM", display_order=1)
+            db.add_all([participant, term])
+            db.flush()
+            at = datetime(2026, 11, 3, 1)
+            previous = ("pretest", "test", "pretest_v1") if round_key == "retest_1" else ("retest", "retest_1", "retest_v1")
+            batches = [
+                (*previous, at, "ffffffff-ffff-ffff-ffff-", phase == "final_test"),
+                (phase, round_key, variant, at - timedelta(hours=1) if clock_reversed else at, "00000000-0000-0000-0000-", False),
+            ]
+            latest_ids = []
+            for batch_phase, saved_round, bank_variant, created, prefix, all_correct in batches:
+                for number in (1, 2):
+                    question = Question(term_id=term.id, phase="pretest" if batch_phase == "pretest" else "retest",
+                                        question_type="split_single", body=f"{bank_variant}-q{number}",
+                                        expected_answer="A", construct_key=f"round-order-{bank_variant}",
+                                        variant_key=f"{bank_variant}_q{number}")
+                    db.add(question)
+                    db.flush()
+                    is_latest = saved_round == round_key
+                    correct = all_correct or number == (1 if is_latest else 2)
+                    attempt = Attempt(id=f"{prefix}{number:012d}", participant_id=participant.id, term_id=term.id,
+                                      question_id=question.id, phase=batch_phase, test_round=saved_round,
+                                      is_correct=correct, misconception_type=None if correct else "M3",
+                                      created_at=created, updated_at=created)
+                    db.add(attempt)
+                    if is_latest and not correct:
+                        latest_ids.append(attempt.id)
+            db.commit()
+            # Older rows have later timestamps or larger IDs, but cannot replace the latest scored round.
+            assert [row.id for row in latest_failed_attempts(db, participant, term.id)] == latest_ids
+    finally:
+        engine.dispose()
 
 
 def test_missing_question_is_rejected_instead_of_using_a_default():
