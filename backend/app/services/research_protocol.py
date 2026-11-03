@@ -11,25 +11,28 @@ from sqlalchemy import update
 from app.core.experiment_spec import assert_current_experiment
 from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
-SURVEY_VERSION = "posttest-10point-v1"
+SURVEY_VERSION = "posttest-10point-v2"
+SUPPORTED_SURVEY_VERSIONS = ("posttest-10point-v1", SURVEY_VERSION)
 Rating = Annotated[int, Field(strict=True, ge=1, le=10)]
-Comment = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+Comment = Annotated[str, StringConstraints(strip_whitespace=True)]
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class Experiences(StrictModel):
-    chat: StrictBool
-    coding_assistance: StrictBool
-    cli: StrictBool
-    api: StrictBool
+class PriorTermKnowledge(StrictModel):
+    pretraining: StrictBool
+    fine_tuning: StrictBool
+    rag: StrictBool
+    prompt_engineering: StrictBool
+    multi_agent: StrictBool
+    memory_process: StrictBool
 
 
 class GeneralRatings(StrictModel):
     ai_usage_frequency: Rating
-    self_rated_ai_knowledge: Rating
+    self_rated_ai_proficiency: Rating
     system_usability: Rating
     system_clarity: Rating
 
@@ -47,11 +50,11 @@ MATERIAL_RATING_KEYS = tuple(MaterialRatings.model_fields)
 
 
 class SurveyPayload(StrictModel):
-    survey_version: Literal["posttest-10point-v1"] = SURVEY_VERSION
-    experiences: Experiences
+    survey_version: Literal["posttest-10point-v2"] = SURVEY_VERSION
+    prior_term_knowledge: PriorTermKnowledge
     general_ratings: GeneralRatings
     material_ratings: MaterialRatings | None
-    free_comment: Comment
+    free_comment: Comment | None = None
 
 
 def has_viewed_material(db: Session, participant_id: str) -> bool:

@@ -1,5 +1,19 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-03 アンケートの用語事前知識・自由記述任意化
+
+- ユーザー指定の6用語を「知っていた／知らない」で必須回答とし、一般4・教材6項目の1〜10段階を維持する。AI自己評価は「使いこなせているか」とし、自由記述を任意にする。教材未表示者は教材6項目を従来どおり自動対象外とする。
+- アンケート版はposttest-10point-v2。新規入力はprior_term_knowledgeとself_rated_ai_proficiencyへ保存し、v1のexperiences/self_rated_ai_knowledgeを上書き・変換しない。教材評定はv1/v2の保存値を読み出す。実験仕様版35・protocol・採点・6仮説の式・DB列は変更しない。
+- 全表示項目の欠落拒否、全6語のfalse回答、評定範囲、コメントの省略/null/空欄/空白、旧フォーム拒否、旧アンケート保全、APIの保存・冪等性・統合CSVを確認する。
+
+実施結果:
+
+- アンケート関連のBackendテスト32件が通過。旧版の教材評定読み出しと保存値の不変、隔離DBの追加移行/seed保全を含む。
+- Backend全体の5分割実行は1747 passed・107 skipped・1 failed。失敗はtest_llm_confirmation_retest_revision.pyのtest_natural_two_learning_rounds_feedback_history_and_retests[J-unknown-GHI-randomized-B]で、split_api_support.py:126の確認問題snapshot一致検査だった。アンケート処理を呼ばないケースであり、同ケースを独立DBで再実行すると通過し、アンケート関連32件と合わせて33 passed。全体実行時との差が生じた原因は未確定として残す。
+- Frontendの全7テストスクリプトとproduction build（TypeScript検査を含む）が通過。
+- frontend/tests/survey-browser.mjsで、隔離Mock DB・production buildの実画面を1440px/390px×教材表示あり/なしの4条件で確認した。未選択を送信できず、コメント空欄のまま終了へ進み、知識6項目のtrue/falseと評定が管理ログに保存される。横はみ出しがなく、記憶プロセスの長い説明も画面内に収まる。テストはSURVEY_VERIFY_ISOLATED=1、SURVEY_UI_BASE_URL、SURVEY_PLAYWRIGHT_MODULEを明示して使う。
+- 研究DB・通常ポート3000・実AIは使用せず、使い捨ての隔離DBとMockで検証した。質問文・主観評価の研究上の妥当性や実験開始承認を意味しない。
+
 ## 2026-11-03 通常版テストへのM1・M3選択肢追加（仕様版35・fix/issue-255）
 
 - 新規通常版参加者は仕様版35 / `experiment-plan-2026-11-03-split-added-choices-v1`・`split-actions-v5`で開始し、仕様版34以下の参加者・問題・回答・snapshotは閲覧専用で保全する。版27〜31=v1、32=v2、33=v3、34=v4の復元対応を維持する。

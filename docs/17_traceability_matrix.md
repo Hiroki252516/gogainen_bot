@@ -19,7 +19,7 @@
 | 共通履歴・群別入力 | services/interaction_history、ai/interaction_history | 実送信入力・指紋監査 |
 | 教授と証拠 | tutoring_prompt、mandatory_elements、teaching_contract | v7契約、unknownの定義・仕組み・適用確認 |
 | AI設定 | config、環境low、runtime_config | 不一致警告・実送信model/effort |
-| アンケート | research_protocol.SurveyPayload、survey画面 | 経験4有無・一般4/教材6の1〜10・必須自由記述 |
+| アンケート | research_protocol.SurveyPayload、survey画面 | 用語の事前知識6項目（知っていた／知らない）、一般4/教材6の1〜10段階、任意の自由記述 |
 | テスト上限・回次 | 学習後回数＋採点済みfinal_testから全体回次を導出 | 事前後最大2回、事前込み最大3回。未達を維持してsurvey |
 | 行動選択型問題 | scenario-actions-v9、9固有問、版付きconstruct_key | 旧問題非active保全、分類根拠は21 |
 | 旧記録保護 | 仕様版26＋protocol_id、API/worker/補修ガード | 旧版25以下も閲覧専用・新集計から除外 |
