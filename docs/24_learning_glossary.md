@@ -1,8 +1,8 @@
 # 教材・回答後解説・テストの用語注釈
 
-## 現行条件（仕様版34）
+## 現行条件（仕様版33）
 
-現行辞書は[learning_glossary_v3.yml](../backend/app/seed/content/learning_glossary_v3.yml)で、仕様版31から引き続き仕様版34の新規参加者にも使う。指定4語の定義を更新し、別表記・出典・他の項目・抽出規則はv2から維持する。仕様版32〜34では辞書内容を変更しない。保存済みの辞書snapshot・教材・テスト・回答後解説は記録時の内容を維持する。
+現行辞書は[learning_glossary_v3.yml](../backend/app/seed/content/learning_glossary_v3.yml)で、仕様版31から引き続き仕様版33の新規参加者にも使う。指定4語の定義を更新し、別表記・出典・他の項目・抽出規則はv2から維持する。仕様版32・33では辞書内容を変更しない。保存済みの辞書snapshot・教材・テスト・回答後解説は記録時の内容を維持する。
 
 教材内解説モードの目標は1000文字、許容範囲は600〜1200文字とする。注釈欄のみモードは目標700文字・許容600〜800文字を維持する。教材本文に含める文字数、生成検証、再生成指示、監査記録は参加者の登録済みモードに従う。詳細は[42](42_learning_glossary_material_length.md)。
 
@@ -30,7 +30,7 @@ feature/issue-132で導入した固定辞書を、fix/issue-188-tyusyakuのユ�
 
 ## 保存・再現・版
 
-実験仕様版26、protocolは `experiment-plan-2026-10-27-test-glossary-v2`、当時の辞書版は `learning-glossary-v2`。この節は導入時の履歴であり、現行版境界は仕様版34で33以下を閲覧専用とする。旧教材・注釈・回答・評価を補完・再計算しない。旧仕様版25のテスト結果復元にはscenario-actions-v9を指定し、問題バンク自体は変更しない。
+実験仕様版26、protocolは `experiment-plan-2026-10-27-test-glossary-v2`、当時の辞書版は `learning-glossary-v2`。この節は導入時の履歴であり、現行版境界は仕様版33で32以下を閲覧専用とする。旧教材・注釈・回答・評価を補完・再計算しない。旧仕様版25のテスト結果復元にはscenario-actions-v9を指定し、問題バンク自体は変更しない。
 
 `learning_glossary_v2.yml`は版26の履歴辞書として無変更で保持し、旧25語の[learning_glossary_v1.yml](../backend/app/seed/content/learning_glossary_v1.yml)も履歴用に保持する。現行正本は冒頭に記したv3である。起動時に版・非空項目・出典・ID・正規化した別表記の一意性と、除外語の型・競合を検査する。指紋にはexcluded_aliasesも含める。同じ辞書版の説明・除外語は変更せず、定義更新時は新しい辞書版を追加する。
 
