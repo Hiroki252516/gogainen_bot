@@ -237,7 +237,7 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
         db.refresh(retired_variant)
         assert not retired_variant.is_active
         assert db.get(QuestionOption, extra_option.id) is not None
-        assert len(experiment._displayed_options(db, participant, current_question)) == 4
+        assert len(experiment._displayed_options(db, participant, current_question)) == 6
         assert trial_snapshot(db, pid) == before
     with isolated.begin() as connection:
         connection.execute(text("ALTER TABLE participants DROP COLUMN experiment_spec_version"))

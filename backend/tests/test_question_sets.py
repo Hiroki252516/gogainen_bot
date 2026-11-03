@@ -58,7 +58,15 @@ def create(client, mode="standard", layout="debug_fixed", group="A"):
 
 def role_ids(question, spec, role):
     bodies = {o["body"] for o in spec["options"] if option_role(o) == role}
-    return [o["option_id"] for o in question["options"] if o["body"] in bodies]
+    if question.get("selection_mode") == "grouped_single":
+        selected = []
+        for group in question["questions"]:
+            match = next((option for option in group["options"] if option["body"] in bodies), None)
+            if match is not None:
+                selected.append(match["option_id"])
+        return selected
+    matches = [o["option_id"] for o in question["options"] if o["body"] in bodies]
+    return matches[:1] if question.get("selection_mode") == "single" else matches
 
 
 def saved_spec(factory, question):
@@ -207,7 +215,7 @@ def test_three_test_cap_with_snapshot_history_and_replay(isolated, mode, initial
         assert history[0]["selected_options"] == [{"label": o["label"], "body": o["body"]} for o in baseline[0]["options"] if o["option_id"] in chosen]
         assert len(history) == (6 if mode == "standard" else 3)
         first_retest = next(row for row in history if row["phase"] == phase)
-        assert first_retest["selected_options"] == [{"label": "D" if mode == "standard" else "J", "body": "わからない。"}]
+        assert first_retest["selected_options"] == [{"label": "F" if mode == "standard" else "J", "body": "わからない。"}]
 
 
 @pytest.mark.parametrize("mode", ["standard"])

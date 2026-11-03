@@ -28,7 +28,7 @@ async function answerTermPages(page, participant, phase, m1ChoiceIds, width, ass
     await page.getByText(`${pageIndex + 1} / 3`, { exact: true }).waitFor();
     await groups.first().waitFor();
     assert.equal(await groups.count(), 2);
-    assert.equal(await page.getByRole("radio").count(), 8);
+    assert.equal(await page.getByRole("radio").count(), 12);
     assert.equal(await page.locator(".notice .question-heading").count(), 1);
     const primaryAction = page.locator(".term-page-runner .corner-primary");
     assert.equal(await primaryAction.count(), 1);
@@ -99,7 +99,29 @@ async function answerTermPages(page, participant, phase, m1ChoiceIds, width, ass
       await page.screenshot({ path: `${directory}/pretest-${assignmentCode}-${optionOrder}-${width}.png`, fullPage: true });
     }
     await page.getByRole("button", { name: pageIndex === 2 ? "完了" : "次へ", exact: true }).click();
-    if (pageIndex < 2) await page.getByText(`${pageIndex + 2} / 3`, { exact: true }).waitFor();
+    const reviewAction = page.getByRole("button", {
+      name: pageIndex === 2 ? "テストを完了" : "次の用語へ",
+      exact: true,
+    });
+    const nextProgress = pageIndex < 2
+      ? page.getByText(`${pageIndex + 2} / 3`, { exact: true })
+      : null;
+    const transition = await Promise.race([
+      reviewAction.waitFor({ state: "visible" }).then(() => "review").catch(() => null),
+      (nextProgress
+        ? nextProgress.waitFor({ state: "visible" })
+        : page.waitForURL(/\/learning-targets$/)
+      ).then(() => "advanced").catch(() => null),
+    ]);
+    if (transition === "review") {
+      assert.equal(await groups.count(), 2);
+      for (const group of await groups.all()) {
+        assert.equal(await group.getByRole("radio").count(), 6, "answer review should retain all six choices");
+        assert.equal(await group.locator(".option-verdict").count(), 1);
+      }
+      await reviewAction.click();
+    }
+    if (nextProgress) await nextProgress.waitFor();
     if (pageIndex === 0) {
       await page.reload();
       await page.getByText("2 / 3", { exact: true }).waitFor();
@@ -149,12 +171,12 @@ try {
           assert.match(displayedBodies[0], /.+/s);
           assert.match(displayedBodies[1], /^設問1：/);
           assert.match(displayedBodies[2], /^設問2：/);
-          for (const group of await groups.all()) assert.equal(await group.getByRole("radio").count(), 4);
+          for (const group of await groups.all()) assert.equal(await group.getByRole("radio").count(), 6);
           assert.equal(await page.locator(".problem-block .option-answer-correct, .problem-block .option-answer-incorrect").count(), 0, "answer correctness must stay hidden before submission");
 
-          await groups.nth(0).getByRole("radio", { name: /^D\./ }).check();
+          await groups.nth(0).getByRole("radio", { name: /^F\./ }).check();
           assert.equal(await groups.nth(1).locator('input[type="radio"]:checked').count(), 0, "question selections must be independent");
-          await groups.nth(1).getByRole("radio", { name: /^D\./ }).check();
+          await groups.nth(1).getByRole("radio", { name: /^F\./ }).check();
           assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
           await page.screenshot({ path: `${directory}/${slug}-${assignment_code}-${optionOrder}-${width}.png`, fullPage: true });
           const feedbackResponse = page.waitForResponse((response) => /\/api\/tutor-turns\/[^/]+\/respond$/.test(response.url()));
@@ -169,8 +191,8 @@ try {
               verdict: label.querySelector(".option-verdict")?.textContent,
             })));
             assert.equal(options.filter((option) => option.correct).length, 1);
-            assert.equal(options.filter((option) => option.incorrect).length, 3);
-            assert.equal(options.filter((option) => option.incorrect && !option.checked).length, 2, "unselected incorrect choices must also be red");
+            assert.equal(options.filter((option) => option.incorrect).length, 5);
+            assert.equal(options.filter((option) => option.incorrect && !option.checked).length, 4, "unselected incorrect choices must also be red");
             for (const option of options) {
               assert.equal(option.verdict, option.correct ? "正解" : "不正解");
               assert.equal(option.incorrect, !option.correct);

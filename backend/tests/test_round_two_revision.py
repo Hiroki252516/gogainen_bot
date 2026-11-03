@@ -31,7 +31,7 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-multi-memory-retest1-v1"
 def test_v25_exact_banks_and_unchanged_content():
     assert CURRENT_EXPERIMENT_SPEC_VERSION >= 25
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[25] == {"standard": "scenario-actions-v9", "easy": "scenario-actions-easy-v1"}
-    assert ASSESSMENT_BANK_VERSIONS == {"standard": "split-actions-v3", "easy": "scenario-actions-easy-v1"}
+    assert ASSESSMENT_BANK_VERSIONS == {"standard": "split-actions-v5", "easy": "scenario-actions-easy-v1"}
     assert LEARNING_CONTENT_VERSIONS == {"standard": 15, "easy": 4}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[24] == {"standard": "scenario-actions-v8", "easy": "scenario-actions-easy-v1"}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS

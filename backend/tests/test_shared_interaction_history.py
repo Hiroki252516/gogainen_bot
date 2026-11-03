@@ -72,7 +72,7 @@ def test_history_merges_all_rounds_and_sessions_using_snapshots_without_diagnost
         pretest.question_body_snapshot = "保存当時の事前問題"
         pretest.option_order_snapshot = [{"option_id": option_id, "label": label, "body": f"保存当時の選択肢{label}", "misconception_type": "PRIVATE_DIAGNOSIS", "is_correct": False} for option_id, label in zip(pretest.selected_option_ids, "DEF")]
         rounds = (
-            ("retest", "retest_1", "retest_v1_q1", ["D"], False),
+            ("retest", "retest_1", "retest_v1_q1", ["F"], False),
             ("retest", "retest_2", "retest_v2_q1", ["A", "B", "C"], False),
             ("final_test", "retest_3", "retest_v1_q1", ["A"], True),
         )
@@ -96,7 +96,7 @@ def test_history_merges_all_rounds_and_sessions_using_snapshots_without_diagnost
         assert [row["phase"] for row in history] == ["pretest", "retest", "retest", "final_test", "learning", "learning"]
         assert history[0]["question_body"] == "保存当時の事前問題"
         assert history[0]["selected_options"][0] == {"label": "D", "body": "保存当時の選択肢D"}
-        assert history[1]["selected_options"] == [{"label": "D", "body": "わからない。"}]
+        assert history[1]["selected_options"] == [{"label": "F", "body": "わからない。"}]
         assert [row["label"] for row in history[2]["selected_options"]] == list("ABC")
         assert history[3]["is_correct"] is True
         assert [row["session_index"] for row in history[-2:]] == [1, 2]
@@ -275,7 +275,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 33
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 35
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION

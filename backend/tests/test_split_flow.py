@@ -24,7 +24,7 @@ def test_split_flow(group, layout, first_role, target_slug):
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "SPLIT-SYNTHETIC"}))["participant_id"]
     questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
     assert len(questions) == 6
-    assert all(len(q["options"]) == 4 and q["selection_mode"] == "single" for q in questions)
+    assert all(len(q["options"]) == 6 and q["selection_mode"] == "single" for q in questions)
     assert all(set(o) == {"option_id", "label", "body", "exclusive"} for q in questions for o in q["options"])
     assert client.post(f"/api/participants/{pid}/diagnose-pretest", json={}).status_code == 400
     target_index = 0
@@ -155,7 +155,7 @@ def test_initial_perfect_confirms_only_failed_final_item(group, layout, slug, ro
             actual = saved.diagnosis_json["instruction_audit"]["actual_ai_input"]
             assert len(actual["learning_scope"]["topics"]) == 1
             assert len(actual["learning_scope"]["selected_errors"]) == (0 if role == "unknown" else 1)
-            assert len(saved.practice_question_json["source_spec"]["options"]) == 4
+            assert len(saved.practice_question_json["source_spec"]["options"]) == 6
         url = f"/api/tutor-turns/{turn['turn_id']}/respond"
         assert client.post(url, json={"selected_option_ids": [o["option_id"] for o in target["options"][:2]]}).status_code == 400
         payload = {"selected_option_ids": select_roles(target, [None])}

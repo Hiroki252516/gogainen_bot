@@ -201,7 +201,7 @@ def _public_learning_options(
 
 
 def _selection_constraints(question_type: str | None, option_count: int) -> dict[str, Any]:
-    if question_type == "split_single" and option_count == 4:
+    if question_type == "split_single" and option_count in {4, 6}:
         return {"selection_mode": "single", "min_selections": 1, "max_selections": 1}
     if question_type and "multi_select" in question_type:
         return {"selection_mode": "multiple", "min_selections": 3, "max_selections": 3}

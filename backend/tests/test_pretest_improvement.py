@@ -184,7 +184,7 @@ def test_seed_keeps_old_ids_and_snapshotless_reviews_on_historical_bank(tmp_path
             assert db.execute(select(model.__table__)).mappings().all() == records
         assert db.query(Question).count() == 42
         assert db.query(Question).filter_by(is_active=True).count() == 30
-        assert db.query(QuestionOption).count() == 312
+        assert db.query(QuestionOption).count() == 348
         for qid, expected in questions_before.items():
             q = db.get(Question, qid)
             assert (q.body, q.expected_answer, q.construct_key, q.variant_key) == expected
