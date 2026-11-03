@@ -671,7 +671,11 @@ export default function AdminPage() {
                 <p>確認テスト正答率: {formatRate(activeGroupSummary.attainment_correct_rate)}</p>
                 <p>事前比改善: {formatPoints(activeGroupSummary.avg_score_delta_from_pretest_pt)}</p>
               </div>
-            ) : null}
+            ) : (
+              <div className="notice" role="status">
+                <p>この出題条件の参加者データはありません。</p>
+              </div>
+            )}
           </div>
           {flowNavigationError ? <p className="danger" role="alert">{flowNavigationError}</p> : null}
           <div className="actions">
