@@ -46,8 +46,11 @@ from app.services.experiment import (
     experiment_progress,
     export_overview_logs_excel_csv,
     export_overview_logs_csv,
+    export_overview_logs_xlsx,
+    export_hypothesis_metrics_xlsx,
     export_participant_logs_excel_csv,
     export_participant_logs_csv,
+    export_participant_logs_xlsx,
     diagnose_pretest,
     export_csv,
     generate_tutor_turn,
@@ -997,6 +1000,16 @@ def api_admin_logs_overview_excel_csv(db: Session = Depends(get_db)):
     return FileResponse(path, media_type="text/csv", filename=path.name)
 
 
+@app.get("/api/admin/logs/overview.xlsx")
+def api_admin_logs_overview_xlsx(db: Session = Depends(get_db)):
+    path = export_overview_logs_xlsx(db)
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=path.name,
+    )
+
+
 @app.get("/api/admin/participants/{participant_id}/logs")
 def api_admin_participant_logs(participant_id: str, db: Session = Depends(get_db)) -> dict:
     return participant_logs(db, participant_id)
@@ -1014,12 +1027,32 @@ def api_admin_participant_logs_excel_csv(participant_id: str, db: Session = Depe
     return FileResponse(path, media_type="text/csv", filename=path.name)
 
 
+@app.get("/api/admin/participants/{participant_id}/logs.xlsx")
+def api_admin_participant_logs_xlsx(participant_id: str, db: Session = Depends(get_db)):
+    path = export_participant_logs_xlsx(db, participant_id)
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=path.name,
+    )
+
+
 @app.get("/api/admin/export/{name}.csv")
 def api_export_csv(name: str, db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD):
     if name in {"hypothesis_metrics", "hypothesis_group_summary"}:
         question_set_mode = require_aggregate_question_set_mode(question_set_mode)
     path = export_csv(db, name, question_set_mode)
     return FileResponse(path, media_type="text/csv", filename=path.name)
+
+
+@app.get("/api/admin/export/{name}.xlsx")
+def api_export_xlsx(name: str, db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD):
+    path = export_hypothesis_metrics_xlsx(db, name, question_set_mode)
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=path.name,
+    )
 
 
 @app.get("/api/admin/ai/status")

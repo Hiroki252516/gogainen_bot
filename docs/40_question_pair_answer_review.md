@@ -1,12 +1,12 @@
 # 用語ごとの設問答え合わせ（仕様版28）
 
-> 状態: 仕様版28で導入し、現行仕様版34でも維持。PRETEST問題文の更新は版32の履歴[44](44_pretest_content_revision.md)、版33の差分[45](45_pretest_memory_distractors.md)、版34の現行差分[46](46_split_assessment_choice_wording.md)、仕様版27の採用時記録 [39](39_split_assessment.md)を当時の根拠として保持する。受入検証状況は[14](14_testing_acceptance.md)を参照。
+> 状態: 仕様版28で導入し、現行仕様版33でも維持。PRETEST問題文の更新は版32の履歴[44](44_pretest_content_revision.md)と現行差分[45](45_pretest_memory_distractors.md)、仕様版27の採用時記録 [39](39_split_assessment.md) は当時の根拠として保持する。受入検証状況は[14](14_testing_acceptance.md)を参照。
 
 > 2026-10-30追記: 易しい版の実行を停止した。新規参加者は通常版固定、既存easy参加者は閲覧専用。以下の適用範囲にある易しい版は当時の仕様記録であり、現在の参加者フローには含めない。詳細は[22](22_question_set_modes.md)。
 
 ## 対象と表示
 
-仕様版28では通常版テストへ用語ごとの設問ペア答え合わせを追加した。現行の通常版`split-actions-v4`でも、PRETEST、RETEST、内部 final_test に同じ確認を適用する。PRETEST本文の現行版と過去バンクの選択は版32の履歴[44](44_pretest_content_revision.md)、版33の差分[45](45_pretest_memory_distractors.md)、現行版34の差分[46](46_split_assessment_choice_wording.md)を参照する。用語は既存順で処理し、同じ用語の設問1・2が両方保存された後に限って、その2問の確認を表示する。設問1だけの回答では結果を返さない。
+仕様版28では通常版テストへ用語ごとの設問ペア答え合わせを追加した。現行の通常版`split-actions-v3`でも、PRETEST、RETEST、内部 final_test に同じ確認を適用する。PRETEST本文の現行版と過去バンクの選択は版32の履歴[44](44_pretest_content_revision.md)・現行版33の差分[45](45_pretest_memory_distractors.md)を参照する。用語は既存順で処理し、同じ用語の設問1・2が両方保存された後に限って、その2問の確認を表示する。設問1だけの回答では結果を返さない。
 
 答え合わせは、回答中のテスト画面内に表示する。URL・ページを切り替えず、画面内の「続行」で次の用語へ進む。最後の用語の「続行」後は既存のテスト完了・採点・結果確認・学習またはアンケートへの遷移を行う。答え合わせ自体ではフェーズ採点や学習状態を更新しない。
 
