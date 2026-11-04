@@ -8,7 +8,7 @@ from admin_client import AuthenticatedTestClient
 from app.main import app
 from app.db.session import SessionLocal
 from app.models import Participant
-from split_api_support import acknowledge_all_question_reviews, ok, select_roles
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey, ok, select_roles
 
 ENDPOINT = "/api/admin/pretest-result-display"
 
@@ -26,6 +26,7 @@ def test_display_snapshot_and_navigation(enabled, perfect, mode, group, layout):
         ok(client.put(ENDPOINT, json={"enabled": enabled}))
         ok(client.put("/api/admin/option-order", json={"mode": layout}))
         pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "DISPLAY-SYNTHETIC"}))["participant_id"]
+        complete_presurvey(client, pid)
         ok(client.put(ENDPOINT, json={"enabled": not enabled}))
         with SessionLocal() as db:
             assert db.get(Participant, pid).show_pretest_results is enabled

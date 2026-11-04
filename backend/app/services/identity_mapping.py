@@ -13,7 +13,7 @@ from sqlalchemy.engine import make_url
 
 from app.core.config import get_settings
 
-CONSENT_DOCUMENT_VERSION = "consent-2026-10-21-draft-v1"
+CONSENT_DOCUMENT_VERSION = "consent-2026-11-04-draft-v2"
 
 
 def validate_student_number(value: str) -> str:

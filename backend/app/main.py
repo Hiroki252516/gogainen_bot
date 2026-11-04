@@ -71,6 +71,7 @@ from app.services.experiment import (
     score_phase,
     submit_attempt,
     submit_test_term_page,
+    submit_presurvey,
     submit_survey,
 )
 from app.services.idempotency import normalize_idempotency_key, registration_key_was_deleted, run_idempotent
@@ -87,7 +88,7 @@ from app.services.question_sets import current_question_set_mode, require_aggreg
 from app.services.learning_glossary import load_learning_glossary, public_glossary
 from app.core.question_sets import QuestionSetMode, STANDARD, question_set_mode as effective_question_set_mode
 from app.services import identity_mapping
-from app.services.research_protocol import SurveyPayload, survey_context, record_material_view
+from app.services.research_protocol import PresurveyPayload, SurveyPayload, presurvey_context, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
 from app.services.prefetch import prefetch_coordinator, schedule_prefetch
 
@@ -599,6 +600,29 @@ def api_survey_context(participant_id: str, db: Session = Depends(get_db)) -> di
     participant = get_participant(db, participant_id)
     assert_current_experiment(participant)
     return survey_context(db, participant)
+
+
+@app.get("/api/participants/{participant_id}/presurvey")
+def api_presurvey_context(participant_id: str, db: Session = Depends(get_db)) -> dict:
+    participant = get_participant(db, participant_id)
+    return presurvey_context(participant)
+
+
+@app.post("/api/participants/{participant_id}/presurvey")
+async def api_submit_presurvey(
+    participant_id: str,
+    payload: PresurveyPayload,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+) -> dict:
+    return await run_idempotent(
+        db,
+        scope=f"presurvey:{participant_id}",
+        key=idempotency_key,
+        participant_id=participant_id,
+        request_data=payload.model_dump(mode="json"),
+        operation=lambda: submit_presurvey(db, participant_id, payload.model_dump()),
+    )
 
 
 @app.post("/api/tutor-turns/{turn_id}/material-view")

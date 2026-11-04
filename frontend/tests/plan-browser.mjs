@@ -31,8 +31,16 @@ try {
     await page.getByRole("textbox", { name: "学籍番号（必須）" }).fill("BROWSER-SYNTHETIC");
     await page.getByRole("checkbox", { name: "説明を読み、その内容を理解した上で、本実験に参加することに同意します。", exact: true }).check();
     const created = page.waitForResponse((response) => response.url().endsWith("/api/registrations") && response.request().method() === "POST");
-    await page.getByRole("button", { name: "同意してテストを開始", exact: true }).click();
+    await page.getByRole("button", { name: "同意して事前アンケートへ", exact: true }).click();
     const participant = await (await created).json();
+    await page.getByRole("heading", { name: "実験前アンケート", exact: true }).waitFor();
+    for (const label of ["事前学習", "ファインチューニング", "RAG", "プロンプトエンジニアリング", "マルチエージェント", "記憶プロセス"])
+      await page.getByRole("group", { name: new RegExp(`^${label}`) }).getByRole("button", { name: "知らない", exact: true }).click();
+    const baselineRatings = page.locator("form .survey-rating-options");
+    await baselineRatings.nth(0).getByRole("button", { name: "5", exact: true }).click();
+    await baselineRatings.nth(1).getByRole("button", { name: "5", exact: true }).click();
+    await page.getByRole("button", { name: "回答を保存して事前テストへ", exact: true }).click();
+    await page.waitForURL(/\/pretest$/);
     await answerTest(page, viewed);
     if (viewed) {
       await page.getByRole("link", { name: "学習を開始", exact: true }).click();
@@ -47,25 +55,26 @@ try {
     await answerTest(page, false);
     await page.getByRole("link", { name: "アンケートへ進む", exact: true }).click();
     await page.getByRole("heading", { name: "実験後アンケート", exact: true }).waitFor();
-    const optionGroups = page.locator("form .survey-choice-options, form .survey-rating-options");
+    const optionGroups = page.locator("form .survey-rating-options");
     await optionGroups.first().waitFor();
     const count = await optionGroups.count();
-    assert.equal(count, viewed ? 14 : 8);
+    assert.equal(count, viewed ? 8 : 2);
     for (let index = 0; index < count; index++) {
       const group = optionGroups.nth(index);
       assert.notEqual(await group.getAttribute("aria-label"), null);
-      await group.getByRole("button", { name: index < 4 ? "なし" : "8", exact: true }).click();
+      await group.getByRole("button", { name: "8", exact: true }).click();
     }
-    const comment = page.getByRole("textbox", { name: "自由記述（必須）", exact: false });
-    assert.notEqual(await comment.getAttribute("required"), null);
+    const comment = page.getByRole("textbox", { name: "自由記述（任意）", exact: false });
     await comment.fill("画面検証用の合成回答です。特になし。");
     const saved = page.waitForResponse((response) => response.url().endsWith(`/api/participants/${participant.participant_id}/survey`) && response.request().method() === "POST");
     await page.getByRole("button", { name: "回答を保存して終了", exact: true }).click();
     assert.equal((await saved).status(), 200);
     await page.getByRole("heading", { name: "実験は終了です", exact: true }).waitFor();
     const logs = await (await page.request.get(new URL(`/api/admin/participants/${participant.participant_id}/logs`, base).href)).json();
-    assert.equal(logs.surveys[0].responses.has_viewed_material, viewed);
-    assert.equal(logs.surveys[0].responses.material_ratings === null, !viewed);
+    assert.equal(logs.surveys[0].phase, "presurvey");
+    assert.equal(logs.surveys[1].phase, "posttest");
+    assert.equal(logs.surveys[1].responses.has_viewed_material, viewed);
+    assert.equal(logs.surveys[1].responses.material_ratings === null, !viewed);
     if (viewed) assert.equal(logs.latest_evaluation_summary.hypothesis_metrics.h5.value, 8);
     await page.goto(new URL("/admin", base).href);
     await page.getByRole("heading", { name: "6仮説の記述集計", exact: true }).waitFor();
@@ -75,7 +84,7 @@ try {
     }
     assert(await page.getByText("表示済みセッションの記録欠落を意味しません", { exact: false }).isVisible());
     const summary = await (await page.request.get(new URL("/api/admin/evaluation-summary", base).href)).json();
-    assert.equal(summary.hypotheses.metrics_version, "six-hypotheses-v2");
+    assert.equal(summary.hypotheses.metrics_version, "six-hypotheses-v4-question-selection");
     for (const group of summary.hypotheses.groups) {
       assert.equal(group.h2.missing_count, group.h2.not_attained_count);
       assert.equal(Object.values(group.h2.censoring_breakdown).reduce((count, stat) => count + stat.n, 0), group.h2.not_attained_count);

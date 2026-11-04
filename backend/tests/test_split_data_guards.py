@@ -20,7 +20,7 @@ from app.services.split_assessment import (
     parse_split_variant,
     split_item_keys,
 )
-from split_api_support import acknowledge_all_question_reviews
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey
 
 
 def ok(response):
@@ -36,6 +36,7 @@ def learning_turn(monkeypatch):
     ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
     ok(client.put("/api/admin/option-order", json={"mode": "randomized"}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": "B", "consent_checked": True, "student_number": "GUARD-SYNTHETIC"}))["participant_id"]
+    complete_presurvey(client, pid)
     questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
     for index, question in enumerate(questions):
         with SessionLocal() as db:

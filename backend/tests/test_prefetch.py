@@ -16,7 +16,7 @@ import app.services.experiment as experiment_service
 from app.services.prefetch import PrefetchCoordinator, wait_for_prefetch_tasks
 from app.services.tutor_prefetch import TutorPrefetchRegistry
 from app.services.learning_glossary import glossary_snapshot, public_glossary
-from split_api_support import acknowledge_all_question_reviews, case_roles, select_roles
+from split_api_support import acknowledge_all_question_reviews, case_roles, complete_presurvey, select_roles
 
 
 client = TestClient(app)
@@ -92,6 +92,7 @@ def _create_participant_with_pretest() -> str:
     )
     assert participant.status_code == 200, participant.text
     pid = participant.json()["participant_id"]
+    complete_presurvey(client, pid)
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:
         selected = select_roles(question, ["M1"] * (1 if question["selection_mode"] == "single" else 3))

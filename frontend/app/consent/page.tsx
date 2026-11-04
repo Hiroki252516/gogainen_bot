@@ -52,7 +52,7 @@ export default function ConsentPage() {
       localStorage.setItem("participant_id", data.participant_id);
       localStorage.setItem("display_code", data.display_code);
       localStorage.removeItem("pending_assignment_code");
-      router.replace("/pretest");
+      router.replace("/presurvey");
     } catch (err) {
       if (err instanceof ApiError && err.status >= 400 && err.status < 500 && !err.code?.startsWith("idempotency_")) {
         sessionStorage.removeItem("registration_request_key");
@@ -87,7 +87,7 @@ export default function ConsentPage() {
               戻る
             </button>
             <button type="button" onClick={agreeAndStart} disabled={submitting}>
-              {submitting ? "開始しています..." : "同意してテストを開始"}
+              {submitting ? "開始しています..." : "同意して事前アンケートへ"}
             </button>
           </div>
         </section>

@@ -1,0 +1,16 @@
+flowchart TB
+  Root["利用者が伝えた感想を後で利用する仕組み"]
+  Root --> L0["利用者に過去の会話を見せる"]
+  Root --> R0["AIが後日参照する記憶を管理する"]
+  L0 --> L1["会話履歴の表示画面"]
+  L1 --> L2["「次から量を少なめに」の発言を画面に表示する"]
+  R0 --> R1["記憶の保存・検索機構"]
+  R1 --> R2["利用者の希望を記録し次の相談で取得する"]
+  L1 -. "M3：履歴の表示画面＝記憶管理の仕組み" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4

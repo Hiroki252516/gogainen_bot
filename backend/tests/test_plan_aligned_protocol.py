@@ -21,7 +21,7 @@ from app.seed.seed_questions import seed_database
 from app.services import experiment
 from app.services.hypothesis_metrics import current_metrics, group_metrics, participant_metrics, write_metrics_csv
 from app.services.hypothesis_metrics import METRICS_VERSION
-from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION, SurveyPayload, record_material_view, survey_context, validate_survey_for_participant
+from app.services.research_protocol import MATERIAL_RATING_KEYS, PRESURVEY_VERSION, SURVEY_VERSION, PresurveyPayload, SurveyPayload, record_material_view, survey_context, validate_survey_for_participant
 
 client = TestClient(app)
 AT = datetime(2026, 10, 18, 1)
@@ -82,10 +82,44 @@ def session(db, p, slug, index, wrong=0, *, displayed=True, answered=True, ended
 
 def questionnaire(viewed=False):
     return {"survey_version": SURVEY_VERSION,
-            "prior_term_knowledge": {"pretraining": True, "fine_tuning": False, "rag": False, "prompt_engineering": True, "multi_agent": False, "memory_process": True},
-            "general_ratings": {"ai_usage_frequency": 1, "self_rated_ai_proficiency": 10, "system_usability": 9, "system_clarity": 8},
+            "general_ratings": {"system_usability": 9, "system_clarity": 8},
             "material_ratings": {key: 7 for key in MATERIAL_RATING_KEYS} if viewed else None,
             "free_comment": "  特になし  "}
+
+
+def baseline_questionnaire():
+    return {"survey_version": PRESURVEY_VERSION,
+            "prior_term_knowledge": {"pretraining": "can_explain", "fine_tuning": "unknown", "rag": "heard_of", "prompt_engineering": "knows_meaning", "multi_agent": "unknown", "memory_process": "can_explain"},
+            "general_ratings": {"ai_usage_frequency": 1, "self_rated_ai_proficiency": 10}}
+
+
+def test_spec_36_boolean_presurvey_record_remains_unchanged_and_read_only(study):
+    old = Participant(
+        display_code="OLD-PRESURVEY",
+        group_condition="control",
+        protocol_id="experiment-plan-2026-11-04-presurvey-baseline-v1",
+        experiment_spec_version=36,
+        learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD],
+        consent_checked=True,
+        current_step="pretest",
+    )
+    study.add(old)
+    study.flush()
+    old_responses = {"prior_term_knowledge": {
+        "pretraining": True, "fine_tuning": False, "rag": True,
+        "prompt_engineering": False, "multi_agent": True, "memory_process": False,
+    }}
+    survey = ParticipantSurvey(
+        participant_id=old.id,
+        phase="presurvey",
+        survey_version="presurvey-baseline-v1",
+        responses_json=old_responses,
+    )
+    study.add(survey)
+    study.flush()
+
+    assert can_resume(old) is False
+    assert study.get(ParticipantSurvey, survey.id).responses_json == old_responses
 
 
 def test_six_metrics_use_first_round_and_nested_term_means(study):
@@ -97,6 +131,8 @@ def test_six_metrics_use_first_round_and_nested_term_means(study):
     session(study, p, "llm_knowledge", 2, 1)
     session(study, p, "memory_process", 1, 0)
     session(study, p, "multi_agent", 1, displayed=False, answered=False)
+    study.add(ParticipantSurvey(participant_id=p.id, phase="presurvey", survey_version=PRESURVEY_VERSION,
+                               responses_json={"material_ratings": {key: 1 for key in MATERIAL_RATING_KEYS}}))
     study.add(ParticipantSurvey(participant_id=p.id, phase="posttest", survey_version=SURVEY_VERSION,
                                responses_json=questionnaire(True), free_comment="特になし"))
     study.flush()
@@ -280,7 +316,7 @@ def test_rounds_remain_distinct_after_variant_five_is_reused(study):
     assert row["h2"]["first_mastery_round"] == 6
 
 
-@pytest.mark.parametrize("field,value", [("ai_usage_frequency", 0), ("ai_usage_frequency", 11), ("system_usability", True), ("system_clarity", 5.5), ("self_rated_ai_proficiency", "5")])
+@pytest.mark.parametrize("field,value", [("system_usability", 0), ("system_usability", 11), ("system_usability", True), ("system_clarity", 5.5), ("system_clarity", "5")])
 def test_rating_validation_is_strict_and_bounded(field, value):
     payload = questionnaire()
     payload["general_ratings"][field] = value
@@ -291,18 +327,23 @@ def test_rating_validation_is_strict_and_bounded(field, value):
 def test_required_knowledge_and_material_fields():
     assert SurveyPayload.model_validate(questionnaire()).free_comment == "特になし"
     assert SurveyPayload.model_validate(questionnaire()).material_ratings is None
-    for mutate in (lambda p: p.pop("prior_term_knowledge"),
-                   lambda p: p["prior_term_knowledge"].update(pretraining="yes"),
+    for mutate in (lambda p: p.pop("general_ratings"),
                    lambda p: p.update(material_ratings={"clarity": 7})):
         payload = questionnaire()
         mutate(payload)
         with pytest.raises(ValidationError):
             SurveyPayload.model_validate(payload)
+    for mutate in (lambda p: p.pop("prior_term_knowledge"),
+                   lambda p: p["prior_term_knowledge"].update(pretraining="yes"),
+                   lambda p: p["general_ratings"].pop("ai_usage_frequency")):
+        payload = baseline_questionnaire()
+        mutate(payload)
+        with pytest.raises(ValidationError):
+            PresurveyPayload.model_validate(payload)
 
 
 @pytest.mark.parametrize("section,keys", [
-    ("prior_term_knowledge", ("pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process")),
-    ("general_ratings", ("ai_usage_frequency", "self_rated_ai_proficiency", "system_usability", "system_clarity")),
+    ("general_ratings", ("system_usability", "system_clarity")),
     ("material_ratings", MATERIAL_RATING_KEYS),
 ])
 def test_every_displayed_survey_item_requires_an_explicit_answer(section, keys):
@@ -312,8 +353,25 @@ def test_every_displayed_survey_item_requires_an_explicit_answer(section, keys):
         with pytest.raises(ValidationError):
             SurveyPayload.model_validate(payload)
     payload = questionnaire(True)
-    payload["prior_term_knowledge"] = dict.fromkeys(payload["prior_term_knowledge"], False)
-    assert not any(SurveyPayload.model_validate(payload).prior_term_knowledge.model_dump().values())
+
+
+@pytest.mark.parametrize("section,keys", [
+    ("prior_term_knowledge", ("pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process")),
+    ("general_ratings", ("ai_usage_frequency", "self_rated_ai_proficiency")),
+])
+def test_every_displayed_presurvey_item_requires_an_explicit_answer(section, keys):
+    for key in keys:
+        payload = baseline_questionnaire()
+        payload[section].pop(key)
+        with pytest.raises(ValidationError):
+            PresurveyPayload.model_validate(payload)
+    payload = baseline_questionnaire()
+    for category in ("unknown", "heard_of", "knows_meaning", "can_explain"):
+        payload["prior_term_knowledge"] = dict.fromkeys(payload["prior_term_knowledge"], category)
+        assert set(PresurveyPayload.model_validate(payload).prior_term_knowledge.model_dump().values()) == {category}
+    payload["prior_term_knowledge"]["pretraining"] = "yes"
+    with pytest.raises(ValidationError):
+        PresurveyPayload.model_validate(payload)
 
 
 @pytest.mark.parametrize("comment", [None, "", "   ", "  感想  "])
@@ -332,22 +390,27 @@ def test_old_questionnaire_cannot_be_written_as_the_new_version():
         SurveyPayload.model_validate(payload)
     payload = questionnaire()
     payload["experiences"] = {"chat": True, "coding_assistance": False, "cli": False, "api": False}
-    payload.pop("prior_term_knowledge")
     with pytest.raises(ValidationError):
         SurveyPayload.model_validate(payload)
 
 
-@pytest.mark.parametrize("version", ["posttest-10point-v1", SURVEY_VERSION])
+@pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", SURVEY_VERSION])
 def test_h5_keeps_saved_ratings_from_both_survey_versions_without_rewriting(study, version):
     p = participant(study)
     session(study, p, "llm_knowledge", 1)
     responses = questionnaire(True)
     responses["survey_version"] = version
     if version == "posttest-10point-v1":
-        responses.pop("prior_term_knowledge")
         responses["experiences"] = {"chat": True, "coding_assistance": False, "cli": False, "api": False}
         ratings = responses["general_ratings"]
-        ratings["self_rated_ai_knowledge"] = ratings.pop("self_rated_ai_proficiency")
+        ratings["self_rated_ai_knowledge"] = 5
+    elif version == "posttest-10point-v2":
+        responses["prior_term_knowledge"] = {"pretraining": True, "fine_tuning": False, "rag": False, "prompt_engineering": True, "multi_agent": False, "memory_process": True}
+        responses["general_ratings"] = {
+            **baseline_questionnaire()["general_ratings"],
+            "system_usability": 9,
+            "system_clarity": 8,
+        }
     original = json.loads(json.dumps(responses))
     survey = ParticipantSurvey(participant_id=p.id, phase="posttest", survey_version=version,
                                responses_json=responses, free_comment=None)
@@ -422,6 +485,22 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     created = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"})
     assert created.status_code == 200
     pid = created.json()["participant_id"]
+    assert created.json()["current_step"] == "presurvey"
+    assert client.get(f"/api/participants/{pid}/current-step").json()["next_url"] == "/presurvey"
+    assert client.get(f"/api/experiment/{pid}/pretest").status_code == 409
+    assert client.get(f"/api/participants/{pid}/presurvey").json() == {"survey_version": PRESURVEY_VERSION}
+    invalid_baseline = baseline_questionnaire()
+    invalid_baseline["prior_term_knowledge"].pop("rag")
+    assert client.post(f"/api/participants/{pid}/presurvey", json=invalid_baseline).status_code == 422
+    baseline = baseline_questionnaire()
+    saved_baseline = client.post(f"/api/participants/{pid}/presurvey", json=baseline, headers={"Idempotency-Key": f"presurvey-{pid}"})
+    assert saved_baseline.status_code == 200, saved_baseline.text
+    assert saved_baseline.json()["next_url"] == "/pretest"
+    assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "pretest"
+    assert client.post(f"/api/participants/{pid}/presurvey", json=baseline, headers={"Idempotency-Key": f"presurvey-{pid}"}).json() == saved_baseline.json()
+    changed_baseline = baseline_questionnaire()
+    changed_baseline["general_ratings"]["ai_usage_frequency"] = 2
+    assert client.post(f"/api/participants/{pid}/presurvey", json=changed_baseline).status_code == 409
     assert client.get(f"/api/participants/{pid}/survey").json()["material_ratings_required"] is False
     with SessionLocal() as db:
         p = db.get(Participant, pid)
@@ -437,19 +516,22 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     replay = client.post(f"/api/participants/{pid}/survey", json=payload, headers={"Idempotency-Key": f"survey-{pid}"})
     assert replay.json() == saved.json()
     logs = client.get(f"/api/admin/participants/{pid}/logs").json()
-    assert logs["surveys"][0]["survey_version"] == SURVEY_VERSION
-    assert logs["surveys"][0]["responses"]["material_rating_status"] == "not_applicable_not_viewed"
-    assert logs["surveys"][0]["ai_experience_level"] is None
-    assert logs["surveys"][0]["free_comment"] is None
-    assert logs["surveys"][0]["responses"]["prior_term_knowledge"] == payload["prior_term_knowledge"]
-    assert "experiences" not in logs["surveys"][0]["responses"]
+    assert [(row["phase"], row["survey_version"]) for row in logs["surveys"]] == [("presurvey", PRESURVEY_VERSION), ("posttest", SURVEY_VERSION)]
+    baseline_log, posttest_log = logs["surveys"]
+    assert baseline_log["responses"]["prior_term_knowledge"] == baseline["prior_term_knowledge"]
+    assert posttest_log["responses"]["material_rating_status"] == "not_applicable_not_viewed"
+    assert posttest_log["ai_experience_level"] is None
+    assert posttest_log["free_comment"] is None
+    assert "prior_term_knowledge" not in posttest_log["responses"]
+    assert "experiences" not in posttest_log["responses"]
     csv_response = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert next(csv.reader(csv_response.text.splitlines())) == experiment.LOG_CSV_COLUMNS
     assert CURRENT_PROTOCOL_ID in csv_response.text
     records = csv.DictReader(csv_response.text.splitlines())
-    exported = json.loads(next(row for row in records if row["record_type"] == "survey")["value_json"])
-    assert exported["survey_version"] == SURVEY_VERSION
-    assert exported["responses"]["prior_term_knowledge"] == payload["prior_term_knowledge"]
-    assert exported["free_comment"] is None
+    exported_surveys = [json.loads(row["value_json"]) for row in records if row["record_type"] == "survey"]
+    assert [row["survey_version"] for row in exported_surveys] == [PRESURVEY_VERSION, SURVEY_VERSION]
+    assert exported_surveys[0]["responses"]["prior_term_knowledge"] == baseline["prior_term_knowledge"]
+    assert "prior_term_knowledge" not in exported_surveys[1]["responses"]
+    assert exported_surveys[1]["free_comment"] is None
     for name in ("hypothesis_metrics", "hypothesis_group_summary"):
         assert client.get(f"/api/admin/export/{name}.csv").status_code == 200

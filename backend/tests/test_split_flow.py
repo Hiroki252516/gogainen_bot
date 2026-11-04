@@ -5,7 +5,7 @@ from app.db.session import SessionLocal
 from app.models import QuestionOption, TutorTurn, Participant, Attempt
 from app.seed.seed_questions import seed_database
 from app.services.hypothesis_metrics import participant_metrics
-from split_api_support import acknowledge_all_question_reviews, create_trial, answer_test, select_roles
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey, create_trial, answer_test, select_roles
 
 
 def ok(response):
@@ -22,6 +22,7 @@ def test_split_flow(group, layout, first_role, target_slug):
     ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
     ok(client.put("/api/admin/option-order", json={"mode": layout}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "SPLIT-SYNTHETIC"}))["participant_id"]
+    complete_presurvey(client, pid)
     questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
     assert len(questions) == 6
     assert all(len(q["options"]) == 6 and q["selection_mode"] == "single" for q in questions)
@@ -79,6 +80,7 @@ def test_split_maximum_rounds_and_mastery(pretest_perfect):
     client = AuthenticatedTestClient(app)
     ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": "B", "consent_checked": True, "student_number": "SPLIT-LIMIT"}))["participant_id"]
+    complete_presurvey(client, pid)
     def answer(phase, correct):
         questions = ok(client.get(f"/api/experiment/{pid}/{phase}"))["questions"]
         for q in questions:
@@ -115,6 +117,7 @@ def test_easy_bank_is_preserved_and_easy_participant_records_are_read_only():
         assert historical["variant_key"] == "pretest_v1"
 
     pid = ok(client.post("/api/registrations", json={"assignment_code": "B", "consent_checked": True, "student_number": "EASY-UNCHANGED"}))["participant_id"]
+    complete_presurvey(client, pid)
     questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
     assert len(questions) == 6
     q = questions[0]

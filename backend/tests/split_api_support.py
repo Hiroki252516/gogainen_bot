@@ -20,6 +20,22 @@ def ok(response):
     return response.json()
 
 
+def complete_presurvey(client, pid):
+    payload = {
+        "survey_version": "presurvey-baseline-v2",
+        "prior_term_knowledge": {
+            "pretraining": "unknown",
+            "fine_tuning": "unknown",
+            "rag": "unknown",
+            "prompt_engineering": "unknown",
+            "multi_agent": "unknown",
+            "memory_process": "unknown",
+        },
+        "general_ratings": {"ai_usage_frequency": 1, "self_rated_ai_proficiency": 1},
+    }
+    return ok(client.post(f"/api/participants/{pid}/presurvey", json=payload))
+
+
 def acknowledge_all_question_reviews(client, pid, phase):
     """Complete the in-page reviews before exercising phase scoring or learning."""
     path = f"/api/experiment/{pid}/{phase.replace('_', '-')}"
@@ -78,6 +94,7 @@ def create_trial(group, layout):
     ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
     ok(client.put("/api/admin/option-order", json={"mode": layout}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "SPLIT-CI-SYNTHETIC"}))["participant_id"]
+    complete_presurvey(client, pid)
     try:
         yield client, pid
     finally:

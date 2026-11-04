@@ -19,7 +19,7 @@ from app.models import Attempt, Base, Participant, Question, QuestionOption, Ter
 from app.seed.seed_questions import seed_database
 from app.services import experiment
 from app.services.question_review_display import current_setting
-from split_api_support import create_trial, ok, select_roles
+from split_api_support import complete_presurvey, create_trial, ok, select_roles
 
 
 SETTING_ENDPOINT = "/api/admin/question-review-display"
@@ -114,6 +114,7 @@ def _register(client: AuthenticatedTestClient, suffix: str) -> str:
             "student_number": f"QR-{suffix}-{uuid4().hex[:8]}",
         },
     ))
+    complete_presurvey(client, response["participant_id"])
     return response["participant_id"]
 
 

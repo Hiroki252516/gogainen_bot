@@ -6,7 +6,7 @@ import pytest
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from split_api_support import assert_learning_flow
+from split_api_support import assert_learning_flow, complete_presurvey
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD, HISTORICAL_ASSESSMENT_BANK_VERSIONS
@@ -161,6 +161,7 @@ def test_current_spec_resolves_without_historical_mapping(mode):
     try:
         _ok(client.put("/api/admin/question-set", json={"mode": mode}))
         created = _ok(client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "CURRENT-BANK-SYNTHETIC"}))
+        complete_presurvey(client, created["participant_id"])
         questions = _ok(client.get(f"/api/experiment/{created['participant_id']}/pretest"))["questions"]
         assert len(questions) == (6 if mode == "standard" else 3)
         question = next(question for question in questions if question["term_slug"] == "memory_process")
