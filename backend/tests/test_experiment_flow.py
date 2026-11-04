@@ -2900,7 +2900,7 @@ def test_tutoring_prompt_contract_mentions_three_topic_design_and_latest_taxonom
 
 def test_integrated_material_prompt_uses_only_the_supplied_glossary_reference():
     reference = {
-        "version": "learning-glossary-v3",
+        "version": "learning-glossary-v4",
         "entries": [{"id": "weights", "term": "重み", "definition": "学習で調整される内部数値です。"}],
     }
     payload = {
@@ -3296,7 +3296,7 @@ def test_codex_ai_call_preserves_invalid_raw_evidence_for_validation(monkeypatch
             "description": "情報を保存し、検索して現在の処理へ渡し、必要に応じて更新する仕組みです。",
         },
         "glossary_reference": {
-            "version": "learning-glossary-v3",
+            "version": "learning-glossary-v4",
             "entries": [{"id": "weights", "term": "重み", "definition": "学習で調整される内部数値です。"}],
         },
         "rag_context": {

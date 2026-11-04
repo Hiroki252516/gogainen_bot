@@ -87,7 +87,7 @@ try {
   await page.route("**/api/tutor-sessions/*/turns", async (route) => {
     const response = await route.fetch();
     const data = await response.json();
-    await route.fulfill({ response, json: { ...data, tutor_message: "## 読み物\n\n### 内容\n\n必要な情報を確かめて読み進めます。", glossary: { version: "learning-glossary-v3", entries: [] } } });
+    await route.fulfill({ response, json: { ...data, tutor_message: "## 読み物\n\n### 内容\n\n必要な情報を確かめて読み進めます。", glossary: { version: "learning-glossary-v4", entries: [] } } });
   });
   await page.goto(new URL("/learning/llm_knowledge", base).href);
   await page.getByRole("heading", { name: "読み物", exact: true }).waitFor();

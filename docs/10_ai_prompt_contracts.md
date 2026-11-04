@@ -60,7 +60,7 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 ## 教材契約と履歴（版26の基準契約・版29で維持）
 
-現行は実験仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。教材内解説モードだけ辞書v3を共通任意入力として追加し、教授方略や出力Schemaは変更しない。仕様版33では通常版PRETESTの指定選択肢本文を固定YAML/DB bankで更新するが、AI入力・教材生成指示は変更しない。文字数契約はモード別にし、仕様版32以下は閲覧専用。
+現行は実験仕様版36 / `experiment-plan-2026-11-04-rag-glossary-v1`。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。教材内解説モードだけ辞書v4を共通任意入力として追加し、教授方略や出力Schemaは変更しない。仕様版36では辞書v4にRAGの定義と別表記だけを追加し、既存注釈・snapshot・AI task/schemaは変更しない。文字数契約はモード別にし、仕様版35以下は閲覧専用。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 

@@ -9,7 +9,7 @@ assert(base.port && base.port !== "3000", "Do not use the study frontend.");
 const { chromium } = await import(process.env.GLOSSARY_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true, ...(process.env.GLOSSARY_BROWSER_CHANNEL ? { channel: process.env.GLOSSARY_BROWSER_CHANNEL } : {}) });
 await mkdir(process.env.GLOSSARY_SCREENSHOT_DIR, { recursive: true });
-const excluded = new Set(["ai", "pretraining", "fine_tuning", "prompt_engineering", "rag", "database", "multi_agent", "task", "memory_process"]);
+const excluded = new Set(["ai", "pretraining", "fine_tuning", "prompt_engineering", "database", "multi_agent", "task", "memory_process"]);
 const correctPretests = new Map();
 let views = 0;
 
@@ -38,7 +38,7 @@ async function verifyQuestion(page, question) {
 
 async function verifyGlossary(page, glossary) {
   const notes = page.getByRole("complementary", { name: "テストの用語の補足", exact: true });
-  assert.equal(glossary.version, "learning-glossary-v3");
+  assert.equal(glossary.version, "learning-glossary-v4");
   for (const entry of glossary.entries) assert(!excluded.has(entry.id));
   if (glossary.entries.length) {
     if (page.viewportSize().width < 1100) await page.getByRole("button", { name: "用語の補足", exact: true }).click();
@@ -76,7 +76,7 @@ async function runTest(page, pid, phase, perfect, capture) {
         const key = JSON.stringify([entry.id, entry.term, entry.definition]);
         if (!seen.has(key)) { seen.add(key); expectedGlossary.push(entry); }
       }
-      await verifyGlossary(page, { version: pair.find((question) => question.glossary?.entries.length)?.glossary.version || "learning-glossary-v3", entries: expectedGlossary });
+      await verifyGlossary(page, { version: pair.find((question) => question.glossary?.entries.length)?.glossary.version || "learning-glossary-v4", entries: expectedGlossary });
       for (let questionIndex = 0; questionIndex < pair.length; questionIndex++) {
         const question = pair[questionIndex];
         const selected = perfect
@@ -156,7 +156,7 @@ try {
     assert.equal((await api(page.request, `/api/participants/${pid}/current-step`)).step, "survey");
     const logs = await api(page.request, `/api/admin/participants/${pid}/logs`);
     assert.equal(logs.attempts.length, mode === "standard" ? 18 : 9);
-    assert(logs.attempts.every((attempt) => attempt.test_glossary.version === "learning-glossary-v3"));
+    assert(logs.attempts.every((attempt) => attempt.test_glossary.version === "learning-glossary-v4"));
     console.log(`ok ${width}px ${mode} ${layout} ${group} ${perfect ? "initial-perfect" : "normal"}`);
     await context.close();
   }

@@ -50,7 +50,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版33と`experiment-plan-2026-11-01-pretest-content-revision-v2`の両方で進行可否を判定する。仕様版29で導入した教材用語解説モードは引き続き使い、版32以下は閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)。今回、API構造は変更しない。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版36と`experiment-plan-2026-11-04-rag-glossary-v1`の両方で進行可否を判定する。仕様版29で導入した教材用語解説モードは引き続き使い、版35以下は閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)、RAG注釈は[49](49_rag_glossary.md)。今回、API構造は変更しない。
 
 SurveyPayloadはservices/research_protocol.pyで定義する。posttest-10point-v2のprior_term_knowledge（pretraining/fine_tuning/rag/prompt_engineering/multi_agent/memory_processの厳密boolean）、general_ratings（ai_usage_frequency/self_rated_ai_proficiency/system_usability/system_clarity）、material_ratings（clarity/readability/japanese_clarity/difficulty_appropriateness/learning_usefulness/amount_appropriateness）、任意free_commentを受け付ける。評定は厳密な整数1〜10。material_ratingsは未表示者のみnull、表示者は6項目必須。余分なキー・旧フォームを新規送信として拒否する。free_commentは省略・null・空文字を許可し、文字列の前後空白を除去する。v1の保存済み回答は変換せず保持する。
 
