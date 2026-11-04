@@ -44,6 +44,7 @@ V4_EXPECTED = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assess
 V5_ADDITIONS = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_added_choices_expected.yml").read_text(encoding="utf-8"))
 V5_PR260_WORDING = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_pr260_wording_expected.yml").read_text(encoding="utf-8"))
 V5_CURRENT_WORDING = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_current_wording_expected.yml").read_text(encoding="utf-8"))
+V5_POST_PR264_WORDING = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_post_pr264_wording_expected.yml").read_text(encoding="utf-8"))
 
 
 def test_v2_changes_only_the_requested_pretest_content_and_preserves_v1():
@@ -133,12 +134,14 @@ def test_v4_matches_all_comparison_text_and_preserves_question_structure():
             assert [spec["question_number"] for spec in specs] == [1, 2]
 
 
-def test_v5_matches_pr260_wording_and_preserves_v4_structure():
+def test_v5_matches_pr260_wording_and_pr264_review_fixes_while_preserving_v4_structure():
     v4 = split_bank("split-actions-v4")
     revised = split_bank("split-actions-v5")
     expected = deepcopy(v4)
     assert V5_ADDITIONS["source_bank"] == "split-actions-v4"
     assert V5_PR260_WORDING["source_pr"] == 260
+    assert V5_POST_PR264_WORDING["source_pr"] == 264
+    assert V5_POST_PR264_WORDING["source_commit"] == "0acca907bd3f1362bdc88693a72d577e6449438f"
     assert sum(len(questions) for terms in V5_ADDITIONS["added_choices"].values() for questions in terms.values()) == 27
     overrides = V5_PR260_WORDING["choice_overrides"]
     changed_labels = Counter(
@@ -166,13 +169,16 @@ def test_v5_matches_pr260_wording_and_preserves_v4_structure():
                     next(choice for choice in question["choices"] if choice["label"] == label)["body"] = body
 
     assert V5_CURRENT_WORDING["source_commit"] == "7eb4bcd22018aef9a2b2fdaf36728e89807ea969"
-    for round_key, terms in V5_CURRENT_WORDING["choice_overrides"].items():
+    assert V5_POST_PR264_WORDING["source_pr"] == 264
+    assert V5_POST_PR264_WORDING["source_commit"] == "0acca907bd3f1362bdc88693a72d577e6449438f"
+    assert V5_CURRENT_WORDING["choice_overrides"] == V5_POST_PR264_WORDING["choice_overrides"]
+    for round_key, terms in V5_POST_PR264_WORDING["choice_overrides"].items():
         for term_slug, questions in terms.items():
             expected_questions = {q["number"]: q for q in expected[round_key][term_slug]["questions"]}
             for number, choices in questions.items():
-                expected_choices = expected_questions[number]["choices"]
+                question = expected_questions[number]
                 for label, body in choices.items():
-                    next(choice for choice in expected_choices if choice["label"] == label)["body"] = body
+                    next(choice for choice in question["choices"] if choice["label"] == label)["body"] = body
 
     # Covers every body and all unchanged scenarios/tasks/roles, including reserved Q3.
     assert revised == expected
@@ -209,7 +215,7 @@ def test_spec_37_seeds_v5_and_restores_spec_34_from_v4_without_changing_snapshot
             assert active.is_active
             assert "split-actions-v5" in active.construct_key
             active_m1 = db.query(QuestionOption).filter_by(question_id=active.id, option_label="B").one()
-            assert active_m1.body == V5_CURRENT_WORDING["choice_overrides"]["pretest_v1"]["memory_process"][1]["B"]
+            assert active_m1.body == V5_POST_PR264_WORDING["choice_overrides"]["pretest_v1"]["memory_process"][1]["B"]
             active_added_m1 = db.query(QuestionOption).filter_by(question_id=active.id, option_label="C").one()
             assert active_added_m1.misconception_type == "M1"
 
@@ -429,7 +435,7 @@ def test_spec_37_seeds_v5_and_restores_spec_34_from_v4_without_changing_snapshot
             assert v5_attempt.option_order_snapshot == saved_options_v5
             assert active.is_active and active.body == saved_body_v5
             assert v4_question.body == v4_snapshot[0]
-            assert active_m1.body == V5_CURRENT_WORDING["choice_overrides"]["pretest_v1"]["memory_process"][1]["B"]
+            assert active_m1.body == V5_POST_PR264_WORDING["choice_overrides"]["pretest_v1"]["memory_process"][1]["B"]
             assert [(o.option_label, o.body) for o in v4_options] == v4_snapshot[1]
             assert active_added_m1.body == V5_ADDITIONS["added_choices"]["pretest_v1"]["memory_process"][0]["M1"]
             assert latest_test_results(db, spec32_participant.id)["results"][0]["question_body"] == v2_snapshot[0]
