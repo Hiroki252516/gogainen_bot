@@ -1,5 +1,20 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-04 事前知識4段階化（仕様版37・feature/issue-265）
+
+- 事前アンケートの6用語を「知らない／聞いたことがある／意味を知っている／説明できる」の4択に変更し、`unknown`・`heard_of`・`knows_meaning`・`can_explain`として保存する。新規参加者には`presurvey-baseline-v2`を適用し、既存の仕様版36以下のBoolean回答は変換せず閲覧専用で保持する。
+- 対象Backendテスト6ファイルで118 passed・100 skipped。`frontend`の`npm test`と`npm run build`が成功し、4カテゴリの送信値、事後アンケートからの項目除外、仕様版36記録の保全を確認した。
+- Playwrightによる隔離ブラウザの視覚確認は未実施。研究DB・localhost:3000・実AIは使用していない。
+- `git -c core.whitespace=cr-at-eol diff --check`通過。
+
+## 2026-11-04 事前アンケート追加（仕様版36・feature/issue-265、履歴）
+
+- 新規参加者は同意後に事前アンケート8項目を必須回答し、保存後に事前テストへ進む。欠落拒否、再送、事前テスト開始ガード、事前/事後の別phase・版でのログとCSV出力、仮説5が事後アンケートだけを参照することを確認する。
+- Backend全テストは1765 passed・107 skipped、失敗なし。既存DeprecationWarning 2件。事前知識の必須項目、posttest v1/v2互換、仕様版35以下の記録保全も含む。
+- Frontend `npm test`の全スクリプトと`npm run build`（TypeScriptを含む）が成功。smoke testは事前アンケート画面・同意後の遷移・事後フォームからの移動項目除外を確認する。
+- 隔離ブラウザ確認はPlaywrightランタイムが環境にないため未実施。`frontend/tests/presurvey-browser.mjs`は隔離Mock環境用に追加済み。PC/スマートフォンの視覚的確認は残課題。
+- `git diff --check`通過。研究DB・localhost:3000・実AIは使用していない。仕様版36は新規参加者だけに適用し、既存回答・保存済み評価は変換しない。アプリ内同意文書の変更は研究倫理上の承認を意味しない。
+
 ## 2026-11-03 設問1のみ出題する管理設定
 
 - [48](48_first_question_only.md)の設定を追加。初期値OFF、登録時固定。ONは各用語の設問1だけ計3問、OFF/旧NULLは設問1・2の計6問。事前・再テスト1/2・内部final_test、学習確認、答え合わせ、満点・指標分母を対応させる。

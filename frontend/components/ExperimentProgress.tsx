@@ -21,6 +21,7 @@ type ProgressState = {
 };
 
 const PARTICIPANT_PATHS = new Set([
+  "/presurvey",
   "/pretest",
   "/diagnosing",
   "/learning-targets",

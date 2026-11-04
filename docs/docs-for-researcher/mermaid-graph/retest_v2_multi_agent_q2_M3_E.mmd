@@ -1,0 +1,16 @@
+flowchart TB
+  Root["見学計画で受け渡すものの種類"]
+  Root --> L0["計画内容を記録するデータ"]
+  Root --> R0["受け取った情報から判断する担当"]
+  L0 --> L1["見学計画担当の予定表"]
+  L1 --> L2["展示の訪問順と予定時刻を表にまとめる"]
+  R0 --> R1["移動確認エージェント"]
+  R1 --> R2["館内移動条件と40分の制約を判断する"]
+  L1 -. "M3：見学予定表＝移動確認担当AI" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4

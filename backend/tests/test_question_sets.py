@@ -22,7 +22,7 @@ from app.models import Attempt, Base, EvaluationSummary, LearnerState, Participa
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, SCENARIO_ACTIONS_V1_CONTENT_PATH, LEARNING_V3_CONTENT_PATH, assessment_question_spec, learning_question_spec, load_content, load_learning_easy_content, _validate_assessment_variant
 from app.seed.seed_questions import seed_database
 from app.services import experiment, prefetch
-from split_api_support import acknowledge_all_question_reviews
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey
 from app.services.interaction_history import build_interaction_history
 from app.services.option_order import assessment_bank_index, learning_bank_index, present_options, option_role
 
@@ -53,7 +53,9 @@ def create(client, mode="standard", layout="debug_fixed", group="A"):
     assert client.put("/api/admin/option-order", json={"mode": layout}).status_code == 200
     response = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "TEST-EASY-VERSION"})
     assert response.status_code == 200, response.text
-    return response.json()["participant_id"]
+    participant_id = response.json()["participant_id"]
+    complete_presurvey(client, participant_id)
+    return participant_id
 
 
 def role_ids(question, spec, role):

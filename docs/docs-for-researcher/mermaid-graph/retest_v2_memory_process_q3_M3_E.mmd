@@ -1,0 +1,16 @@
+flowchart TB
+  Root["案内文に関係する希望と生成結果"]
+  Root --> L0["AIが今回生成した成果物"]
+  Root --> R0["本人が指定した文章構成の希望"]
+  L0 --> L1["要点を先に書いた案内文"]
+  L1 --> L2["希望に沿ってAIが作った今回のメール文面"]
+  R0 --> R1["案内文の現在の希望の記録"]
+  R1 --> R2["「次からは要点を先に」の希望内容を保存"]
+  L1 -. "M3：AIの生成文＝本人の現在の文章構成希望" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4

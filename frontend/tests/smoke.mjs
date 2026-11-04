@@ -4,6 +4,7 @@ const required = [
   "app/start/page.tsx",
   "app/consent/page.tsx",
   "app/pretest/page.tsx",
+  "app/presurvey/page.tsx",
   "app/learning/[termSlug]/page.tsx",
   "app/final-test/page.tsx",
   "app/survey/page.tsx",
@@ -451,7 +452,7 @@ for (const forbiddenText of ["pending_group_condition", "group_condition", "提�
   }
 }
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/pretest")', "同意してテストを開始", "ConsentDocument", "student_number", "timeoutMs: 15000", 'role="alert"']) {
+for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/presurvey")', "同意して事前アンケートへ", "ConsentDocument", "student_number", "timeoutMs: 15000", 'role="alert"']) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
   }
@@ -478,10 +479,17 @@ for (const expectedText of ["欠測・未観測", "censoring_breakdown", "censor
 for (const expectedText of ["material-view", "visibilitychange", "materialViewError"]) {
   if (!learningPage.includes(expectedText)) throw new Error(`material display recording is missing: ${expectedText}`);
 }
-for (const expectedText of ["実験後アンケート", "/survey", "prior_term_knowledge", "pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process", "知っていた", "知らない", "self_rated_ai_proficiency", "system_usability", "general_ratings", "material_ratings_required", "length: 10", "自由記述（任意）", "教材評価6項目は対象外", "回答を保存して終了", 'router.replace("/finish")']) {
+for (const expectedText of ["実験後アンケート", "/survey", "system_usability", "system_clarity", "general_ratings", "material_ratings_required", "length: 10", "自由記述（任意）", "教材評価6項目は対象外", "回答を保存して終了", 'router.replace("/finish")']) {
   if (!surveyPage.includes(expectedText)) {
     throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
   }
+}
+for (const excludedText of ["prior_term_knowledge", "ai_usage_frequency", "self_rated_ai_proficiency", "pretraining"]) {
+  if (surveyPage.includes(excludedText)) throw new Error(`baseline item must not remain in post survey: ${excludedText}`);
+}
+const presurveyPage = fs.readFileSync(new URL("../app/presurvey/page.tsx", import.meta.url), "utf8");
+for (const expectedText of ["実験前アンケート", "/presurvey", "prior_term_knowledge", "pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process", "unknown", "heard_of", "knows_meaning", "can_explain", "知らない", "聞いたことがある", "意味を知っている", "説明できる", "ai_usage_frequency", "self_rated_ai_proficiency", "length: 10", "回答を保存して事前テストへ", 'router.replace("/pretest")']) {
+  if (!presurveyPage.includes(expectedText)) throw new Error(`presurvey page missing required baseline behavior: ${expectedText}`);
 }
 
 const finishPage = fs.readFileSync(new URL("../app/finish/page.tsx", import.meta.url), "utf8");

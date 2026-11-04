@@ -77,8 +77,16 @@ try {
       await page.getByRole("textbox", { name: "学籍番号（必須）" }).fill("ISSUE156-SYNTHETIC");
       await page.getByRole("checkbox", { name: "説明を読み、その内容を理解した上で、本実験に参加することに同意します。", exact: true }).check();
       const registration = page.waitForResponse((r) => r.url().endsWith("/api/registrations") && r.request().method() === "POST");
-      await page.getByRole("button", { name: "同意してテストを開始", exact: true }).click();
+      await page.getByRole("button", { name: "同意して事前アンケートへ", exact: true }).click();
       const { participant_id: pid } = await (await registration).json();
+      await page.getByRole("heading", { name: "実験前アンケート", exact: true }).waitFor();
+      for (const label of ["事前学習", "ファインチューニング", "RAG", "プロンプトエンジニアリング", "マルチエージェント", "記憶プロセス"])
+        await page.getByRole("group", { name: new RegExp(`^${label}`) }).getByRole("button", { name: "知らない", exact: true }).click();
+      const baselineRatings = page.locator("form .survey-rating-options");
+      await baselineRatings.nth(0).getByRole("button", { name: "5", exact: true }).click();
+      await baselineRatings.nth(1).getByRole("button", { name: "5", exact: true }).click();
+      await page.getByRole("button", { name: "回答を保存して事前テストへ", exact: true }).click();
+      await page.waitForURL(/\/pretest$/);
       await answerTest(page, initialPerfect ? "ABC" : "DEF", pid);
       if (initialPerfect) {
         await page.getByRole("link", { name: "次のテストへ", exact: true }).click();
@@ -112,11 +120,11 @@ try {
       }
       await page.getByRole("link", { name: "アンケートへ進む", exact: true }).click();
       await page.getByRole("heading", { name: "実験後アンケート", exact: true }).waitFor();
-      const optionGroups = page.locator("form .survey-choice-options, form .survey-rating-options");
+      const optionGroups = page.locator("form .survey-rating-options");
       await optionGroups.first().waitFor();
-      assert.equal(await optionGroups.count(), 14);
-      for (let index = 0; index < 14; index++) await optionGroups.nth(index).getByRole("button", { name: index < 4 ? "なし" : "8", exact: true }).click();
-      await page.getByRole("textbox", { name: "自由記述（必須）", exact: false }).fill("隔離DBでの上限確認用の合成回答です。");
+      assert.equal(await optionGroups.count(), 8);
+      for (let index = 0; index < 8; index++) await optionGroups.nth(index).getByRole("button", { name: "8", exact: true }).click();
+      await page.getByRole("textbox", { name: "自由記述（任意）", exact: false }).fill("隔離DBでの上限確認用の合成回答です。");
       await page.getByRole("button", { name: "回答を保存して終了", exact: true }).click();
       await page.getByRole("heading", { name: "実験は終了です", exact: true }).waitFor();
       const logs = await (await page.request.get(new URL(`/api/admin/participants/${pid}/logs`, base).href)).json();

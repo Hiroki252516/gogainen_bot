@@ -1,18 +1,19 @@
-"""Versioned posttest questionnaire and observed material-display events."""
+"""Versioned baseline/posttest questionnaires and material-display events."""
 from __future__ import annotations
 
 from typing import Annotated, Literal
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy.orm import Session
 from sqlalchemy import update
 
 from app.core.experiment_spec import assert_current_experiment
 from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
-SURVEY_VERSION = "posttest-10point-v2"
-SUPPORTED_SURVEY_VERSIONS = ("posttest-10point-v1", SURVEY_VERSION)
+PRESURVEY_VERSION = "presurvey-baseline-v2"
+SURVEY_VERSION = "posttest-10point-v3"
+SUPPORTED_SURVEY_VERSIONS = ("posttest-10point-v1", "posttest-10point-v2", SURVEY_VERSION)
 Rating = Annotated[int, Field(strict=True, ge=1, le=10)]
 Comment = Annotated[str, StringConstraints(strip_whitespace=True)]
 
@@ -22,17 +23,20 @@ class StrictModel(BaseModel):
 
 
 class PriorTermKnowledge(StrictModel):
-    pretraining: StrictBool
-    fine_tuning: StrictBool
-    rag: StrictBool
-    prompt_engineering: StrictBool
-    multi_agent: StrictBool
-    memory_process: StrictBool
+    pretraining: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+    fine_tuning: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+    rag: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+    prompt_engineering: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+    multi_agent: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+    memory_process: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
 
 
-class GeneralRatings(StrictModel):
+class BaselineRatings(StrictModel):
     ai_usage_frequency: Rating
     self_rated_ai_proficiency: Rating
+
+
+class PosttestRatings(StrictModel):
     system_usability: Rating
     system_clarity: Rating
 
@@ -49,10 +53,15 @@ class MaterialRatings(StrictModel):
 MATERIAL_RATING_KEYS = tuple(MaterialRatings.model_fields)
 
 
-class SurveyPayload(StrictModel):
-    survey_version: Literal["posttest-10point-v2"] = SURVEY_VERSION
+class PresurveyPayload(StrictModel):
+    survey_version: Literal["presurvey-baseline-v2"] = PRESURVEY_VERSION
     prior_term_knowledge: PriorTermKnowledge
-    general_ratings: GeneralRatings
+    general_ratings: BaselineRatings
+
+
+class SurveyPayload(StrictModel):
+    survey_version: Literal["posttest-10point-v3"] = SURVEY_VERSION
+    general_ratings: PosttestRatings
     material_ratings: MaterialRatings | None
     free_comment: Comment | None = None
 
@@ -73,6 +82,17 @@ def survey_context(db: Session, participant: Participant) -> dict:
         "material_ratings_required": viewed,
         "material_rating_status": "required" if viewed else "not_applicable_not_viewed",
     }
+
+
+def presurvey_context(participant: Participant) -> dict:
+    assert_current_experiment(participant)
+    if participant.current_step != "presurvey":
+        raise HTTPException(status_code=409, detail="この参加者は事前アンケート対象ではありません。")
+    return {"survey_version": PRESURVEY_VERSION}
+
+
+def validate_presurvey_payload(payload: dict) -> dict:
+    return PresurveyPayload.model_validate(payload).model_dump()
 
 
 def validate_survey_for_participant(db: Session, participant: Participant, payload: dict) -> dict:

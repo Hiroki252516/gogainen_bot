@@ -121,6 +121,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
 
     survey = db.query(ParticipantSurvey).filter(
         ParticipantSurvey.participant_id == participant.id,
+        ParticipantSurvey.phase == "posttest",
         ParticipantSurvey.survey_version.in_(SUPPORTED_SURVEY_VERSIONS),
     ).order_by(ParticipantSurvey.created_at.desc(), ParticipantSurvey.id.desc()).first()
     ratings = ((survey.responses_json or {}).get("material_ratings") if survey else None) if displayed else None

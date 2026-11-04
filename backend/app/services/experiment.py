@@ -44,7 +44,12 @@ from app.core.experiment_spec import (
     can_resume,
 )
 from app.services.first_question_only import current_setting as current_first_question_setting, enabled as first_question_enabled, question_numbers
-from app.services.research_protocol import SURVEY_VERSION, validate_survey_for_participant
+from app.services.research_protocol import (
+    PRESURVEY_VERSION,
+    SURVEY_VERSION,
+    validate_presurvey_payload,
+    validate_survey_for_participant,
+)
 from app.services.hypothesis_metrics import (
     METRICS_CSV_COLUMNS,
     METRICS_VERSION,
@@ -762,7 +767,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         consent_checked=consent_checked,
         consent_document_version=CONSENT_DOCUMENT_VERSION,
         consented_at=now(),
-        current_step="pretest",
+        current_step="presurvey",
         learning_content_version=LEARNING_CONTENT_VERSIONS[mode],
         question_set_mode=mode,
         test_page_mode="per_term" if mode == STANDARD else "per_question",
@@ -776,6 +781,58 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
     _commit(db)
     db.refresh(participant)
     return participant
+
+
+def submit_presurvey(db: Session, participant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    participant = get_participant(db, participant_id, for_update=True)
+    assert_current_experiment(participant)
+    responses = validate_presurvey_payload(payload)
+    existing = (
+        db.query(ParticipantSurvey)
+        .filter_by(participant_id=participant.id, phase="presurvey")
+        .order_by(ParticipantSurvey.created_at.desc(), ParticipantSurvey.id.desc())
+        .first()
+    )
+    if existing is not None:
+        if existing.survey_version != PRESURVEY_VERSION or existing.responses_json != {
+            key: value for key, value in responses.items() if key != "survey_version"
+        }:
+            raise HTTPException(status_code=409, detail="事前アンケートはすでに保存されており、変更できません。")
+        return {
+            "status": "completed",
+            "survey_id": existing.id,
+            "next_step": participant.current_step,
+            "next_url": _next_url(participant.current_step),
+        }
+    if participant.current_step != "presurvey":
+        raise HTTPException(status_code=409, detail="この参加者は事前アンケート対象ではありません。")
+
+    before_step = participant.current_step
+    existing = ParticipantSurvey(
+        participant_id=participant.id,
+        phase="presurvey",
+        survey_version=PRESURVEY_VERSION,
+        responses_json={key: value for key, value in responses.items() if key != "survey_version"},
+    )
+    db.add(existing)
+    db.flush()
+    participant.current_step = "pretest"
+    db.add(AuditEvent(
+        actor="participant",
+        action="submit_presurvey",
+        entity_type="participant",
+        entity_id=participant.id,
+        before_json={"current_step": before_step},
+        after_json={"current_step": participant.current_step, "survey_id": existing.id},
+    ))
+    _commit(db)
+    db.refresh(existing)
+    return {
+        "status": "completed",
+        "survey_id": existing.id,
+        "next_step": participant.current_step,
+        "next_url": _next_url(participant.current_step),
+    }
 
 
 def submit_survey(db: Session, participant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -931,6 +988,8 @@ def experiment_progress(db: Session, participant: Participant) -> dict[str, str 
     if not can_resume(participant):
         return None
 
+    if participant.current_step == "presurvey":
+        return {"stage_id": "presurvey", "label": "事前アンケート", "percent": 0}
     if participant.current_step == "pretest":
         return {"stage_id": "pretest", "label": "事前テスト・採点中", "percent": 0}
     if participant.current_step in {"learning_targets", "retest", "final_test"}:
@@ -3288,6 +3347,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
 
 def _next_url(step: str) -> str:
     return {
+        "presurvey": "/presurvey",
         "pretest": "/pretest",
         "learning_targets": "/learning-targets",
         "retest": "/retest",
@@ -3835,7 +3895,7 @@ EXPORTS = {
     "recurrence_events": (RecurrenceEvent, ["id", "participant_id", "term_id", "previous_attempt_id", "current_attempt_id", "previous_misconception_type", "current_misconception_type", "is_same_type", "phase", "created_at"]),
     "ai_call_logs": (AICallLog, ["id", "provider", "fallback_provider", "purpose", "request_payload", "response_payload", "status", "error_code", "error_message", "latency_ms", "created_at"]),
     "evaluation_summary": (EvaluationSummary, ["participant_id", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "m1_recurrence_rate", "legacy_m2_recurrence_rate", "m3_recurrence_rate", "learning_target_count", "score_timeline_json", "misconception_timeline_json", "learning_burden_json", "condition_check_json", "completed", "created_at"]),
-    "participant_surveys": (ParticipantSurvey, ["id", "participant_id", "phase", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "term_confidences", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]),
+    "participant_surveys": (ParticipantSurvey, ["id", "participant_id", "phase", "survey_version", "responses_json", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "term_confidences", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]),
 }
 
 
@@ -4400,7 +4460,8 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
     for call in logs["ai_call_logs"]:
         rows.append({**base, "record_type": "ai_call", "phase": "", "term_slug": "", "event_time": call["created_at"], "summary": f"{call['purpose']} {call['status']} {call['error_code'] or ''}".strip(), "value_json": _csv_value(call)})
     for survey in logs["surveys"]:
-        rows.append({**base, "record_type": "survey", "source_type": "survey", "phase": survey["phase"], "term_slug": "", "event_time": survey["created_at"], "summary": "post-experiment survey", "value_json": _csv_value(survey)})
+        phase_summary = "pre-experiment survey" if survey["phase"] == "presurvey" else "post-experiment survey"
+        rows.append({**base, "record_type": "survey", "source_type": "survey", "phase": survey["phase"], "term_slug": "", "event_time": survey["created_at"], "summary": phase_summary, "value_json": _csv_value(survey)})
     if logs["latest_evaluation_summary"]:
         summary = logs["latest_evaluation_summary"]
         summary_label = f"latest evaluation summary completed={summary['completed']} completion_reason={summary.get('completion_reason') or '-'}"

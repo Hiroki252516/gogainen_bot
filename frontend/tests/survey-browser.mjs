@@ -8,9 +8,6 @@ assert(base.hostname === "survey-v2-frontend-check" || (["localhost", "127.0.0.1
 const { chromium } = await import(process.env.SURVEY_PLAYWRIGHT_MODULE);
 const fixtures = [1440, 390].flatMap((width) => [true, false].map((viewed) => ({ width, viewed })));
 const browser = await chromium.launch({ headless: true });
-const keys = ["pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process"];
-const labels = ["事前学習", "ファインチューニング", "RAG", "プロンプトエンジニアリング", "マルチエージェント",
-  "記憶プロセス（AIが以前の会話で伝えた利用者の希望を記憶し、次回以降の回答に利用する仕組み）"];
 if (process.env.SURVEY_SCREENSHOT_DIR) await mkdir(process.env.SURVEY_SCREENSHOT_DIR, { recursive: true });
 
 async function api(request, path, method = "GET", data) {
@@ -28,6 +25,12 @@ async function prepareFixture(request, fixture) {
     student_number: "SURVEY-SYNTHETIC-" + fixture.width + "-" + fixture.viewed + "-" + Date.now(),
   });
   const pid = record.participant_id;
+  const baseline = await api(request, "/api/participants/" + pid + "/presurvey", "POST", {
+    survey_version: "presurvey-baseline-v2",
+    prior_term_knowledge: { pretraining: "unknown", fine_tuning: "unknown", rag: "unknown", prompt_engineering: "unknown", multi_agent: "unknown", memory_process: "unknown" },
+    general_ratings: { ai_usage_frequency: 3, self_rated_ai_proficiency: 4 },
+  });
+  assert.equal(baseline.next_url, "/pretest");
   const questions = (await api(request, "/api/experiment/" + pid + "/pretest")).questions;
   const byTerm = new Map();
   for (const question of questions) byTerm.set(question.term_slug, [...(byTerm.get(question.term_slug) || []), question]);
@@ -72,7 +75,7 @@ try {
       localStorage.setItem("display_code", record.display_code);
     }, fixture);
     await page.goto(new URL("/survey", base).href);
-    await page.getByRole("heading", { name: "実験前に用語の意味を知っていたか", exact: true }).waitFor().catch(async (error) => {
+    await page.getByRole("heading", { name: "実験後アンケート", exact: true }).waitFor().catch(async (error) => {
       console.error("page URL:", page.url(), "page errors:", errors, "body:", await page.locator("body").innerText());
       throw error;
     });
@@ -82,18 +85,10 @@ try {
     }
     await save.click();
     assert.match(await page.locator("form").getByRole("alert").innerText(), /未選択/);
-    for (const label of labels.slice(0, -1)) {
-      await page.getByRole("group", { name: label, exact: true }).getByRole("button", { name: "知らない", exact: true }).click();
-    }
-    await save.click();
-    assert.match(await page.locator("form").getByRole("alert").innerText(), /未選択/);
-    await page.getByRole("group", { name: labels.at(-1), exact: true }).getByRole("button", { name: "知らない", exact: true }).click();
-    if (fixture.viewed) {
-      await page.getByRole("group", { name: labels[0], exact: true }).getByRole("button", { name: "知っていた", exact: true }).click();
-    }
-    assert.equal(await page.getByText("チャット形式でAIを利用した経験", { exact: true }).count(), 0);
+    assert.equal(await page.getByText("普段のAI利用頻度", { exact: true }).count(), 0);
+    assert.equal(await page.getByText("事前学習", { exact: true }).count(), 0);
     const ratings = page.locator(".survey-rating-options");
-    assert.equal(await ratings.count(), fixture.viewed ? 10 : 4);
+    assert.equal(await ratings.count(), fixture.viewed ? 8 : 2);
     for (let index = 0; index < await ratings.count() - 1; index++) {
       await ratings.nth(index).getByRole("button", { name: "7", exact: true }).click();
     }
@@ -108,10 +103,11 @@ try {
     const saved = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/survey"));
     await save.click();
     const body = (await posted).postDataJSON();
-    const expectedKnowledge = Object.fromEntries(keys.map((key) => [key, fixture.viewed && key === "pretraining"]));
-    assert.equal(body.survey_version, "posttest-10point-v2");
-    assert.deepEqual(body.prior_term_knowledge, expectedKnowledge);
-    assert.equal(body.general_ratings.self_rated_ai_proficiency, 7);
+    assert.equal(body.survey_version, "posttest-10point-v3");
+    assert(!("prior_term_knowledge" in body));
+    assert.equal(body.general_ratings.system_usability, 7);
+    assert.equal(body.general_ratings.system_clarity, 7);
+    assert(!("ai_usage_frequency" in body.general_ratings));
     assert(!("experiences" in body));
     assert(!("self_rated_ai_knowledge" in body.general_ratings));
     assert.equal(body.free_comment, "");
@@ -121,10 +117,15 @@ try {
     const logs = await context.request.get(new URL("/api/admin/participants/" + fixture.participant_id + "/logs", base).href);
     assert(logs.ok());
     const survey = (await logs.json()).surveys;
-    assert.equal(survey.length, 1);
-    assert.equal(survey[0].survey_version, "posttest-10point-v2");
-    assert.deepEqual(survey[0].responses.prior_term_knowledge, expectedKnowledge);
-    assert.equal(survey[0].free_comment, "");
+    assert.equal(survey.length, 2);
+    const presurvey = survey.find((row) => row.phase === "presurvey");
+    const posttest = survey.find((row) => row.phase === "posttest");
+    assert.equal(presurvey.survey_version, "presurvey-baseline-v2");
+    assert.deepEqual(presurvey.responses.prior_term_knowledge, { pretraining: "unknown", fine_tuning: "unknown", rag: "unknown", prompt_engineering: "unknown", multi_agent: "unknown", memory_process: "unknown" });
+    assert.equal(presurvey.responses.general_ratings.ai_usage_frequency, 3);
+    assert.equal(posttest.survey_version, "posttest-10point-v3");
+    assert(!("prior_term_knowledge" in posttest.responses));
+    assert.equal(posttest.free_comment, "");
     assert.deepEqual(errors, []);
     console.log("survey saved without comment:", fixture.width, fixture.viewed ? "material viewed" : "not viewed");
     await context.close();

@@ -1,0 +1,16 @@
+flowchart TB
+  Root["連絡方法の希望を会話を越えて利用する仕組み"]
+  Root --> L0["現在の会話で発言を参照する"]
+  Root --> R0["別の日の相談でも本人の希望を保持する"]
+  L0 --> L1["同一会話の履歴機能"]
+  L1 --> L2["同じ相談中に「電話で連絡してほしい」を参照"]
+  R0 --> R1["利用者別の長期記憶"]
+  R1 --> R2["電話希望を保存・検索・更新して後の相談へ渡す"]
+  L1 -. "M3：同じ会話の履歴参照＝長期記憶" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4

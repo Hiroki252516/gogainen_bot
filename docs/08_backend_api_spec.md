@@ -52,7 +52,9 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版33と`experiment-plan-2026-11-01-pretest-content-revision-v2`の両方で進行可否を判定する。仕様版29で導入した教材用語解説モードは引き続き使い、版32以下は閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)。今回、API構造は変更しない。
 
-SurveyPayloadはservices/research_protocol.pyで定義する。posttest-10point-v2のprior_term_knowledge（pretraining/fine_tuning/rag/prompt_engineering/multi_agent/memory_processの厳密boolean）、general_ratings（ai_usage_frequency/self_rated_ai_proficiency/system_usability/system_clarity）、material_ratings（clarity/readability/japanese_clarity/difficulty_appropriateness/learning_usefulness/amount_appropriateness）、任意free_commentを受け付ける。評定は厳密な整数1〜10。material_ratingsは未表示者のみnull、表示者は6項目必須。余分なキー・旧フォームを新規送信として拒否する。free_commentは省略・null・空文字を許可し、文字列の前後空白を除去する。v1の保存済み回答は変換せず保持する。
+事前アンケートはGET/POST `/api/participants/{id}/presurvey`を使い、`presurvey-baseline-v2`の厳密なpayloadを受け付ける。`prior_term_knowledge`の6項目は`unknown`、`heard_of`、`knows_meaning`、`can_explain`のいずれかを必須とし、AI利用頻度・自己評価も1〜10整数で必須とする。`phase=presurvey`のParticipantSurveyとして冪等に保存する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版36の`presurvey-baseline-v1`回答はBoolean形式のまま履歴保全し、新形式へ変換しない。
+
+事後SurveyPayloadはservices/research_protocol.pyで定義する。新規送信`posttest-10point-v3`はgeneral_ratings（system_usability/system_clarityの1〜10整数）、material_ratings（clarity/readability/japanese_clarity/difficulty_appropriateness/learning_usefulness/amount_appropriatenessの1〜10整数）、任意free_commentを受け付ける。material_ratingsは未表示者のみnull、表示者は6項目必須。余分なキー・旧フォームを新規送信として拒否する。free_commentは省略・null・空文字を許可し、文字列の前後空白を除去する。posttest v1/v2の保存済み回答は変換せず保持する。仮説5はphase=posttestだけを集計し、presurvey値を混ぜない。
 
 GET /api/participants/{id}/surveyはアンケート版・表示判定・教材評価の必須/対象外を返す。POST /api/tutor-turns/{id}/material-viewは初回表示時刻を冪等に記録し、未利用の先行生成は拒否する。管理集計のhypothesesおよび/export/hypothesis_metrics.csv、/export/hypothesis_group_summary.csvは6仮説の専用指標である。
 
@@ -74,8 +76,8 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 | 回答・解説 | POST `/api/tutor-turns/{id}/respond` |
 | テスト採点 | POST `/api/participants/{id}/score-retest`, `/score-final-test` |
 | 中断 | POST `/api/participants/{id}/give-up-learning`, `/give-up` |
-| アンケート | POST `/api/participants/{id}/survey` |
-| アンケート対象判定 | GET `/api/participants/{id}/survey` |
+| 事前アンケート | GET/POST `/api/participants/{id}/presurvey` |
+| 事後アンケート対象判定・送信 | GET/POST `/api/participants/{id}/survey` |
 | 教材表示記録 | POST `/api/tutor-turns/{id}/material-view` |
 | 6仮説の群別集計 | GET `/api/admin/evaluation-summary` のhypotheses |
 | 6仮説CSV / Excel | GET `/api/admin/export/hypothesis_metrics.csv`, `/hypothesis_group_summary.csv`, `/hypothesis_metrics.xlsx`, `/hypothesis_group_summary.xlsx` |

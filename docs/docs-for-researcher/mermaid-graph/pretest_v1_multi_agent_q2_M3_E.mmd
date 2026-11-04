@@ -1,0 +1,16 @@
+flowchart TB
+  Root["蔵書情報と貸出条件の結果を扱う方法"]
+  Root --> L0["利用者への結果の表示"]
+  Root --> R0["AI担当同士のデータの受け渡し"]
+  L0 --> L1["2つの表示欄"]
+  L1 --> L2["蔵書担当と条件担当の結果を同じ画面に並べる"]
+  R0 --> R1["エージェント間の情報共有"]
+  R1 --> R2["一方の出力を他方の処理に渡して利用させる"]
+  L1 -. "M3：同じ画面での表示＝担当間の情報交換" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4
