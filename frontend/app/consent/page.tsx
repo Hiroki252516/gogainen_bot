@@ -29,8 +29,8 @@ export default function ConsentPage() {
       setError("開始画面から管理者の参加コードを入力してください。");
       return;
     }
-    if (!studentNumber.trim() || studentNumber.trim().length > 64 || /\p{C}/u.test(studentNumber)) {
-      setError("学籍番号を1〜64文字で入力してください。改行・制御文字は使用できません。");
+    if (!/^[0-9]{1,64}$/.test(studentNumber)) {
+      setError("学籍番号は半角数字1〜64桁で入力してください。");
       return;
     }
     setSubmitting(true);
@@ -70,8 +70,10 @@ export default function ConsentPage() {
           <p className="danger" role="status">未確定項目を含む動作確認用です。責任者・保存場所・保管期間および管理アクセス対策の確定前に、本実験のデータを収集しないでください。</p>
           <ConsentDocument />
           <label>学籍番号（必須）
-            <input value={studentNumber} onChange={(event) => setStudentNumber(event.target.value)}
-              required maxLength={64} autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={submitting} />
+            <input value={studentNumber}
+              onChange={(event) => setStudentNumber(event.target.value.replace(/[^0-9]/g, ""))}
+              required maxLength={64} inputMode="numeric" pattern="[0-9]*"
+              autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={submitting} />
           </label>
           <p className="muted">学籍番号は撤回時の対応表にのみ使用し、研究用データやAIへの入力には含めません。</p>
           <h2>同意確認</h2>

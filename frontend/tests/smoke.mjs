@@ -451,7 +451,7 @@ for (const forbiddenText of ["pending_group_condition", "group_condition", "提�
   }
 }
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/pretest")', "同意してテストを開始", "ConsentDocument", "student_number", "timeoutMs: 15000", 'role="alert"']) {
+for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/pretest")', "同意してテストを開始", "ConsentDocument", "student_number", "timeoutMs: 15000", 'role="alert"', 'inputMode="numeric"', 'pattern="[0-9]*"', 'replace(/[^0-9]/g, "")', '/^[0-9]{1,64}$/']) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
   }
