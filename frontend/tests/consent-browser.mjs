@@ -10,7 +10,7 @@ const { chromium } = await import(process.env.PLAN_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ acceptDownloads: true });
 const page = await context.newPage();
-const synthetic = "001-BROWSER-PRIVATE";
+const synthetic = "001202611040001";
 try {
   if (previewOnly) {
     // Read-only deployment check: never register, download, or delete on the study service.
@@ -28,8 +28,11 @@ try {
   assert(await page.getByText("【実際の保存場所】", { exact: false }).count());
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "同意してテストを開始", exact: true }).click();
-  await page.getByRole("alert").filter({ hasText: "学籍番号を1〜64文字" }).waitFor();
-  await page.getByRole("textbox", { name: "学籍番号（必須）" }).fill(synthetic);
+  await page.getByRole("alert").filter({ hasText: "半角数字1〜64桁" }).waitFor();
+  const studentNumberInput = page.getByRole("textbox", { name: "学籍番号（必須）" });
+  await studentNumberInput.fill("00A1-０2");
+  assert.equal(await studentNumberInput.inputValue(), "0012", "non-ASCII digits and other characters must be removed");
+  await studentNumberInput.fill(synthetic);
   const response = page.waitForResponse(r => r.url().endsWith("/api/registrations") && r.request().method() === "POST");
   await page.getByRole("button", { name: "同意してテストを開始", exact: true }).click();
   const created = await response;
@@ -55,11 +58,11 @@ try {
   assert.equal((await context.request.get(new URL(`/api/participants/${participant.participant_id}/current-step`, base).href)).status(), 200);
   // Verify full-table deletion separately, using another synthetic registration.
   const another = await context.request.post(new URL("/api/registrations", base).href, {
-    data: { assignment_code: "B", consent_checked: true, student_number: "002-BROWSER-PRIVATE" },
+    data: { assignment_code: "B", consent_checked: true, student_number: "002202611040002" },
   });
   assert.equal(another.status(), 200);
   await page.getByRole("button", { name: "対応表を表示・更新", exact: true }).click();
-  await page.getByRole("cell", { name: "002-BROWSER-PRIVATE", exact: true }).waitFor();
+  await page.getByRole("cell", { name: "002202611040002", exact: true }).waitFor();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "対応表を全件削除", exact: true }).click();
   await page.getByText("アプリ内に対応表はありません。", { exact: true }).waitFor();
