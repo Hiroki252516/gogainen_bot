@@ -2,7 +2,7 @@
 
 ## 2026-11-03 設問1のみの条件分岐
 
-現行仕様版37でも登録時のfirst_question_onlyで区別する。ONは設問1、計3問。OFF/旧NULLは設問1・2、計6問。アンケート事前知識項目の版移行は[49](49_presurvey_baseline.md)を参照。完答・正答率・満点と仮説4の対応設問はこの条件で判定し、式・比較回次を維持する。3問/6問条件は別に集計する。指標版はsix-hypotheses-v4-question-selection。CSV/Excelの固定ヘッダを維持しdetails_jsonに条件と問題数を保存する。以下の旧版記述は履歴として保持する。詳細は[48](48_first_question_only.md)。
+現行仕様版38でも登録時のfirst_question_onlyで区別する。ONは設問1、計3問。OFF/旧NULLは設問1・2、計6問。アンケート事前知識項目の版移行は[事前アンケート](49_presurvey_baseline.md)を参照。完答・正答率・満点と仮説4の対応設問はこの条件で判定し、式・比較回次を維持する。3問/6問条件は別に集計する。指標版はsix-hypotheses-v4-question-selection。CSV/Excelの固定ヘッダを維持しdetails_jsonに条件と問題数を保存する。以下の旧版記述は履歴として保持する。詳細は[48](48_first_question_only.md)。
 
 ## 2026-10-30 易しい版の集計停止
 

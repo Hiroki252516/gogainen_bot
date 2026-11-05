@@ -25,18 +25,21 @@ from split_api_support import complete_presurvey
 
 client = TestClient(app)
 REMOVED_IDS = {"ai", "pretraining", "fine_tuning", "prompt_engineering", "rag", "database", "multi_agent", "task", "memory_process"}
+CURRENTLY_EXCLUDED_IDS = REMOVED_IDS - {"rag"}
 
 
 def test_current_dictionary_only_removes_requested_entries_and_preserves_old_source():
     v1_path = GLOSSARY_PATH.with_name("learning_glossary_v1.yml")
     v2_path = GLOSSARY_PATH.with_name("learning_glossary_v2.yml")
+    v3_path = GLOSSARY_PATH.with_name("learning_glossary_v3.yml")
     old = yaml.safe_load(v1_path.read_text(encoding="utf-8"))
     v2 = yaml.safe_load(v2_path.read_text(encoding="utf-8"))
+    v3 = yaml.safe_load(v3_path.read_text(encoding="utf-8"))
     current = yaml.safe_load(GLOSSARY_PATH.read_text(encoding="utf-8"))
     assert old["version"] == "learning-glossary-v1" and len(old["entries"]) == 25
     assert v2["version"] == "learning-glossary-v2"
     assert v2["entries"] == [entry for entry in old["entries"] if entry["id"] not in REMOVED_IDS]
-    assert current["version"] == GLOSSARY_VERSION == "learning-glossary-v3"
+    assert v3["version"] == "learning-glossary-v3"
     expected_v3 = deepcopy(v2)
     expected_v3["version"] = "learning-glossary-v3"
     updates = {
@@ -48,11 +51,17 @@ def test_current_dictionary_only_removes_requested_entries_and_preserves_old_sou
     for entry in expected_v3["entries"]:
         if entry["id"] in updates:
             entry["definition"] = updates[entry["id"]]
-    assert current == expected_v3
+    assert v3 == expected_v3
+    expected_v4 = deepcopy(v3)
+    expected_v4["version"] = "learning-glossary-v4"
+    expected_v4["entries"].append(deepcopy(next(entry for entry in old["entries"] if entry["id"] == "rag")))
+    assert current == expected_v4
+    assert current["version"] == GLOSSARY_VERSION == "learning-glossary-v4"
     for entry in old["entries"]:
         if entry["id"] in REMOVED_IDS:
             for alias in entry["aliases"]:
-                assert glossary_snapshot(alias)["entries"] == [], alias
+                expected_ids = ["rag"] if entry["id"] == "rag" else []
+                assert [item["id"] for item in glossary_snapshot(alias)["entries"]] == expected_ids, alias
     old_snapshot = {"version": old["version"], "dictionary_sha256": "old", "entries": [
         {key: entry[key] for key in ("id", "term", "definition")} for entry in old["entries"]
     ]}
@@ -65,7 +74,7 @@ def test_current_dictionary_only_removes_requested_entries_and_preserves_old_sou
     ("プロンプトエンジニアリングとプロンプト、マルチエージェントとエージェント", ["prompt", "agent"]),
     ("マルチ**エージェント**とプロンプト**エンジニアリング**", []),
     ("タスクとタスク分解、LLMと重み", ["task_decomposition", "llm", "weights"]),
-    ("AI、事前訓練、fine-tuning、RAG、DB、記憶機能", []),
+    ("AI、事前訓練、fine-tuning、RAG、DB、記憶機能", ["rag"]),
 ])
 def test_excluded_compounds_do_not_create_shorter_annotations(message, expected):
     assert [entry["id"] for entry in glossary_snapshot(message)["entries"]] == expected
@@ -107,8 +116,8 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     complete_presurvey(client, pid)
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 37
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-04-presurvey-baseline-v2"
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 38
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1"
         participant.current_step = phase
         participant.retest_cycles_completed = completed
         db.commit()
@@ -121,7 +130,7 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     for question in questions:
         expected = experiment._test_glossary(question["term_label"], question["body"], question["options"])
         assert question["glossary"] == public_glossary(expected)
-        assert REMOVED_IDS.isdisjoint(entry["id"] for entry in expected["entries"])
+        assert CURRENTLY_EXCLUDED_IDS.isdisjoint(entry["id"] for entry in expected["entries"])
         assert set(question["glossary"]) == {"version", "entries"}
         assert all(set(entry) == {"id", "term", "definition"} for entry in question["glossary"]["entries"])
         assert all(set(option) == {"option_id", "label", "body", "exclusive"} for option in question["options"])
@@ -163,7 +172,7 @@ def test_glossary_includes_unselected_options_and_deduplicates_in_display_order(
     snapshot = experiment._test_glossary("LLM", "モデルで回答する。", [
         {"body": "プロンプトに指示する。"}, {"body": "重みとモデルを調整する。"}, {"body": "AIとRAG。"},
     ])
-    assert [entry["id"] for entry in snapshot["entries"]] == ["llm", "model", "prompt", "weights"]
+    assert [entry["id"] for entry in snapshot["entries"]] == ["llm", "model", "prompt", "weights", "rag"]
     assert experiment._test_glossary("資料", "説明を読む。", [{"body": "わからない。"}])["entries"] == []
 
 

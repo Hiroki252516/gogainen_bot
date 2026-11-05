@@ -17,7 +17,7 @@
 - 管理GET/PUT `/api/admin/first-question-only` は `enabled: boolean` と `applies_to: new_standard_participants_only` を返す。管理認証を必須とし、PUTは厳密なbooleanだけを受理する。GETはno-store。
 - 新規登録時に参加者へ設定を固定する。後から管理スイッチを変えても登録済み参加者の問題数は変わらない。
 - 用語ページPOSTのanswersは入力型上1〜2件。受理する件数・問題ID・回次は参加者snapshotで検証する。一括保存・ページ時間・冪等再送・再読み込み後の再送復元を維持する。
-- 仕様版35・protocol・split-actions-v5を維持し、登録条件で区別する。旧版の閲覧専用条件を変更しない。
+- 仕様版35で導入した設定とprotocol・split-actions-v5を仕様版36でも維持し、登録条件で区別する。旧版の閲覧専用条件を変更しない。
 
 ## 指標とログ
 

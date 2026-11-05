@@ -1,5 +1,19 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-05 origin/mainとの統合（仕様版38）
+
+- 仕様版36がRAG辞書追加と事前アンケートv1で重複していたため、事前アンケートv2と辞書v4を合わせた仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を現行版とした。仕様版36の両protocolと仕様版37は閲覧専用とし、当該版の通常版テスト結果は`split-actions-v5`で復元する。現行問題バンク・辞書、保存済み回答・snapshotは変更しない。
+- Backend全テストは`1768 passed, 107 skipped`。統合対象6ファイルは`188 passed`。Frontendの`npm test`全スクリプトと`npm run build`（TypeScriptを含む）が通過した。
+- 競合ファイルをすべて解決し、`git -c core.whitespace=cr-at-eol diff --check`も通過。ブラウザでの目視確認は未実施。
+- 研究DB、既存localhost:3000環境、実AIは使用していない。マージコミットは作成していない。
+
+## 2026-11-04 RAG用語注釈の追加（仕様版36・fix/issue-268、統合前履歴）
+
+- 新規参加者は仕様版36 / `experiment-plan-2026-11-04-rag-glossary-v1`、共通辞書v4で開始する。v3と既存snapshotは変更せず、仕様版35以下を閲覧専用とする。仕様版35の結果復元には`split-actions-v5`を使う。
+- YAML比較でv3が不変、v4がv3へRAG（検索拡張生成）entryだけを追加し、定義・別表記・出典を辞書v1から引き継ぐことを確認した。
+- Backend全体は隔離SQLiteで1765 passed・107 skipped。用語注釈、snapshot保存・再表示、辞書v1〜v4比較、仕様版35のv5復元と閲覧専用、仕様版36登録を含む関連テスト85件も通過した。
+- Frontendの7テストスクリプトとproduction build（TypeScript検査を含む）、`git diff --check`が通過した。
+- 研究DB、既存3000番環境、実AIは使用していない。語義の教育的妥当性・学習効果は自動テストで実証していない。
 ## 2026-11-04 事前知識4段階化（仕様版37・feature/issue-265）
 
 - 事前アンケートの6用語を「知らない／聞いたことがある／意味を知っている／説明できる」の4択に変更し、`unknown`・`heard_of`・`knows_meaning`・`can_explain`として保存する。新規参加者には`presurvey-baseline-v2`を適用し、既存の仕様版36以下のBoolean回答は変換せず閲覧専用で保持する。

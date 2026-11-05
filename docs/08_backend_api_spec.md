@@ -50,7 +50,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版33と`experiment-plan-2026-11-01-pretest-content-revision-v2`の両方で進行可否を判定する。仕様版29で導入した教材用語解説モードは引き続き使い、版32以下は閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)。今回、API構造は変更しない。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版36と`experiment-plan-2026-11-04-rag-glossary-v1`の両方で進行可否を判定する。仕様版29で導入した教材用語解説モードは引き続き使い、版35以下は閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)、RAG注釈は[49](49_rag_glossary.md)。今回、API構造は変更しない。
 
 事前アンケートはGET/POST `/api/participants/{id}/presurvey`を使い、`presurvey-baseline-v2`の厳密なpayloadを受け付ける。`prior_term_knowledge`の6項目は`unknown`、`heard_of`、`knows_meaning`、`can_explain`のいずれかを必須とし、AI利用頻度・自己評価も1〜10整数で必須とする。`phase=presurvey`のParticipantSurveyとして冪等に保存する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版36の`presurvey-baseline-v1`回答はBoolean形式のまま履歴保全し、新形式へ変換しない。
 

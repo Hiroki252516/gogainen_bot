@@ -8,9 +8,9 @@
 
 ## 教材の用語解説モード（仕様版29導入、文字数条件は仕様版30、辞書言い換えは仕様版31）
 
-管理画面で「注釈欄のみ」と「教材内解説」を切り替える。初期値は「注釈欄のみ」。新しい設定は新規参加者だけに登録時snapshotとして固定し、開始済み参加者には遡及しない。教材内解説では教材本文で使う辞書登録語を初出時に説明する生成指示を加え、仕様版31から定義文は意味参照にとどめて文脈に沿う言葉へ言い換え、教材の右側用語注釈欄を隠す。教材本文は注釈欄のみで600〜800文字、教材内解説で600〜1200文字とする。教材注釈snapshotは保存・監査用に従来どおり保持する。回答後解説・テストの注釈表示は両モードで維持する。仕様版31以下は閲覧専用で、保存済み教材やsnapshotを更新しない。[設定・API・保存契約](41_learning_glossary_material_mode.md)、[文字数契約](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)。
+管理画面で「注釈欄のみ」と「教材内解説」を切り替える。初期値は「注釈欄のみ」。新しい設定は新規参加者だけに登録時snapshotとして固定し、開始済み参加者には遡及しない。教材内解説では教材本文で使う辞書登録語を初出時に説明する生成指示を加え、仕様版31から定義文は意味参照にとどめて文脈に沿う言葉へ言い換え、教材の右側用語注釈欄を隠す。教材本文は注釈欄のみで600〜800文字、教材内解説で600〜1200文字とする。教材注釈snapshotは保存・監査用に従来どおり保持する。回答後解説・テストの注釈表示は両モードで維持する。仕様版35以下は閲覧専用で、保存済み教材やsnapshotを更新しない。[設定・API・保存契約](41_learning_glossary_material_mode.md)、[文字数契約](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)、[RAG注釈](49_rag_glossary.md)。
 
-仕様版33では通常版PRETESTの指定選択肢本文を`split-actions-v3`から表示する。RETEST1/2・内部final_testはv2と同じ問題・選択肢を使い、採点・設問ペア答え合わせは変えない。誤答PRETEST設問は回答時の保存済み問題・選択肢snapshotを学習確認へ再利用する。仕様版32以下の参加者・結果は閲覧専用とする。[仕様版32の履歴](44_pretest_content_revision.md)、[現行差分](45_pretest_memory_distractors.md)。
+仕様版33当時は通常版PRETESTの指定選択肢本文を`split-actions-v3`から表示した。現在は仕様版36で新規参加者に`split-actions-v5`を使い、仕様版35以下の参加者・結果は閲覧専用とする。保存済み問題・選択肢・注釈snapshotは記録時の内容を表示する。[仕様版32の履歴](44_pretest_content_revision.md)、[PRETEST差分](45_pretest_memory_distractors.md)、[現行辞書差分](49_rag_glossary.md)。
 
 ## 仕様版28の設問ペア答え合わせ（版29でも維持）
 
