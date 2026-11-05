@@ -20,6 +20,7 @@ from app.services.interaction_history import _test_record
 from app.services.learning_glossary import (
     GLOSSARY_PATH, GLOSSARY_VERSION, glossary_snapshot, parse_learning_glossary, public_glossary,
 )
+from split_api_support import complete_presurvey
 
 
 client = TestClient(app)
@@ -112,10 +113,11 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     registration = client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "GLOSSARY-SYNTHETIC"})
     assert registration.status_code == 200, registration.text
     pid = registration.json()["participant_id"]
+    complete_presurvey(client, pid)
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 36
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-04-rag-glossary-v1"
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 38
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1"
         participant.current_step = phase
         participant.retest_cycles_completed = completed
         db.commit()

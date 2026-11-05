@@ -4,24 +4,25 @@
 
 計画書の手順は、事前テスト、必要な用語の学習、再テスト、未達用語の再学習、満点または中断後のアンケートという流れ。6仮説の測定上の回数・対象経路は[01](01_research_requirements.md)と[12](12_evaluation_metrics.md)に定め、画面表示の変更で評価式は変更しない。
 
-現行コードは仕様版36 / `experiment-plan-2026-11-04-rag-glossary-v1`。通常版はsplit-actions-v5の3用語×2設問、計6設問・4択単一選択で、設問1・2を出題する。RETEST1/2・内部final_testは現行v5の問題文・選択肢を使い、各用語の2問を保存後に同じ画面で答え合わせを表示する。誤答PRETEST設問の学習確認は保存済みsnapshotを利用する。教材用語解説モードは新規参加者に登録時固定する。仕様版30の文字数契約、仕様版31の辞書v3・教材内言い換え、仕様版36のRAG注釈を維持する。仕様版35以下は閲覧専用で、旧結果は仕様版ごとのバンクで復元する。[仕様版27の採用記録](39_split_assessment.md)、[仕様版28](40_question_pair_answer_review.md)、[仕様版29](41_learning_glossary_material_mode.md)、[仕様版30の文字数条件](42_learning_glossary_material_length.md)、[仕様版31](43_glossary_definition_paraphrase.md)、[仕様版32](44_pretest_content_revision.md)、[仕様版33](45_pretest_memory_distractors.md)、[仕様版36](49_rag_glossary.md)。
+現行コードは仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`。新規参加者は同意後に4段階の用語事前知識6項目とAI利用2項目を含む事前アンケートv2を完了してからPRETESTを開始する。通常版はsplit-actions-v5で、登録時設定に応じ各用語の設問1または設問1・2を出題する。PRETEST・RETEST1/2・内部final_testの保存・採点と既存snapshotは維持する。辞書v4でRAGを注釈対象にし、教材内解説モードでは意味を参照して自然に説明する。仕様版37以下・旧protocolは閲覧専用とし、結果は履歴バンクで復元する。詳細は[事前アンケート](49_presurvey_baseline.md)、[選択肢条件](47_split_assessment_added_choices.md)、[RAG注釈](49_rag_glossary.md)。
 
 2026-10-30から新規登録は通常版固定。既存易しい版参加者は閲覧専用で、参加者向け画面・APIから再開・回答できない。易しい版の群集計・仮説CSVも停止するが、個別ログと全件生ログは参照できる。既存データと復元用バンクは保持する。詳細は[停止後の契約](22_question_set_modes.md)。
 
-## 現行フロー（仕様版36）
+## 現行フロー（仕様版38）
 
 1. start → consentで参加コードA/Bを受け取り、新しい参加者を作成する。
-2. pretestで通常版の6設問に回答し、全設問の完了後に固定採点する。事前テストの全体結果表示は管理設定に従う。
-3. 学習対象があればlearning_targetsから用語順に学習する。学習対象がなければ内部final_testへ進む。
-4. 学習はAI教材＋固定確認問題。1用語・1セッションあたりの回答上限は既存仕様に従う。正解または上限到達後に次の対象へ進み、不正解の用語は未達のまま残る。
-5. 全対象の学習後、retestで通常版の6設問に回答する。1用語2設問の回答後に同じ画面で答え合わせを確認して次へ進む。採点済みバッチは未回答を含めて1回とし、全問未回答は採点しない。初回未達は既存の再学習経路へ進み、最終回未達は未達のままsurveyへ進む。満点ならsurveyへ進む。
-6. 事前テストで満点だった参加者は内部final_testへ進む。final_testの採点結果に応じ、満点ならsurvey、不正解・未回答があれば既存の学習後retest_v2へ進む。内部final_testも通常版では6設問の完了後に採点する。
-7. survey保存後にfinish。
+2. presurveyで用語事前知識6項目と普段のAI利用2項目へ回答し、必須8項目を保存してからpretestへ進む。未回答のまま事前テストは開始できない。
+3. pretestで登録時snapshotに従い通常版の設問へ回答し、全設問の完了後に固定採点する。事前テストの全体結果表示は管理設定に従う。
+4. 学習対象があればlearning_targetsから用語順に学習する。学習対象がなければ内部final_testへ進む。
+5. 学習はAI教材＋固定確認問題。1用語・1セッションあたりの回答上限は既存仕様に従う。正解または上限到達後に次の対象へ進み、不正解の用語は未達のまま残る。
+6. 全対象の学習後、retestで登録時snapshotに従い通常版の設問へ回答する。採点済みバッチは未回答を含めて1回とし、全問未回答は採点しない。初回未達は既存の再学習経路へ進み、最終回未達は未達のままsurveyへ進む。満点ならsurveyへ進む。
+7. 事前テストで満点だった参加者は内部final_testへ進む。final_testの採点結果に応じ、満点ならsurvey、不正解・未回答があれば既存の学習後retest_v2へ進む。
+8. survey（事後アンケート）保存後にfinish。
 
-surveyは用語の事前知識6項目（知っていた／知らない）、一般4/教材6の1〜10段階、任意の自由記述。教材表示者のみ6項目を必須とし、未表示者は自動対象外。[画面仕様](09_frontend_ux_flow.md)と[評価定義](12_evaluation_metrics.md)を参照する。
+事前アンケートはphase=presurvey、事後アンケートはphase=posttestで別々に記録する。事後はシステム評価2項目・教材評価6項目（表示者のみ必須）・任意自由記述とし、仮説5はposttestだけを参照する。[画面仕様](09_frontend_ux_flow.md)、[評価定義](12_evaluation_metrics.md)、[保存契約](49_presurvey_baseline.md)を参照する。
 
 事前後の問題variantは採点回次に対応して全用語共通に選ぶ。用語別の回答件数から回次を推測しない。学習後回数retest_cycles_completedはfinal_testを含めず、上限用のpost_pretest_tests_completedには採点済みfinal_testを加える。テスト回答中はチャット・ヒント・即時正解を表示しない。既存結果画面では従来どおり正誤を表示する。
 
 学習ギブアップはretestへ進む。retest/final_testの実験ギブアップはsurveyへ進む。採点・ギブアップ・再送・先行生成は仕様版の確認後に実行する。学習確認の出題規則は両群共通で、unknownはenrichment、M1/M3はconceptual_change。同じ状態・回答・ターンなら同じ問題とvariantを使う。
 
-仕様版35以下、旧protocol_id、NULL・未対応版の記録は既存方針どおり閲覧専用で保全する。新規開始は同意を取り直して新しいIDを作成する。現行コードは新規参加者へ版36を保存する。教材本文の文字数は注釈欄のみが目標700・600〜800文字、教材内解説が目標1000・600〜1200文字であり、登録済みモードで選択する。教材内解説モードだけ辞書v4を意味参照として生成入力に含め、本文では逐語転載せず言い換える。仕様版35以下の保存済み教材・注釈snapshotは変更しない。[文字数契約](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)、[PRETEST履歴](44_pretest_content_revision.md)、[RAG注釈](49_rag_glossary.md)。通常版ペア確認、設定独立性、再読み込みと確認記録は[40](40_question_pair_answer_review.md)に記録する。
+仕様版37以下、旧protocol_id、NULL・未対応版の記録は閲覧専用で保全する。新規開始は同意を取り直して新しいIDを作成する。現行コードは新規参加者へ仕様版38を保存する。教材本文の文字数は注釈欄のみ600〜800文字、教材内解説600〜1200文字であり、登録済みモードで選択する。教材内解説モードだけ辞書v4を意味参照として生成入力に含め、本文では逐語転載せず文脈に合わせて言い換える。旧版の保存済み教材・注釈snapshotは変更しない。[事前アンケート](49_presurvey_baseline.md)、[文字数契約](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)、[PRETEST履歴](44_pretest_content_revision.md)、[RAG注釈](49_rag_glossary.md)。通常版ペア確認の契約は[40](40_question_pair_answer_review.md)に記録する。

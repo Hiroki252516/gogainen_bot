@@ -11,7 +11,7 @@ from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PR
 from app.db.session import SessionLocal
 from app.main import app
 from app.models import AICallLog, Participant, TutorTurn
-from split_api_support import acknowledge_all_question_reviews, select_roles
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey, select_roles
 from app.services import experiment
 from app.services.learning_glossary import (
     GLOSSARY_PATH, GLOSSARY_VERSION, glossary_snapshot, load_learning_glossary,
@@ -163,6 +163,7 @@ def start_learning(mode, group, student_number=None):
     participant_response = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": student_number})
     assert participant_response.status_code == 200, participant_response.text
     pid = participant_response.json()["participant_id"]
+    complete_presurvey(client, pid)
     questions_response = client.get(f"/api/experiment/{pid}/pretest")
     assert questions_response.status_code == 200, questions_response.text
     questions = questions_response.json()["questions"]
@@ -192,8 +193,8 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 36
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-04-rag-glossary-v1"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 38
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1"
         assert p.learning_material_glossary_mode == "annotation_only"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material

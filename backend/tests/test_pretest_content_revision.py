@@ -43,6 +43,7 @@ MEMORY_SHARED_INSTRUCTION_DISTRACTOR = "利用者が「辛い料理は避けた�
 V4_EXPECTED = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v4_expected.yml").read_text(encoding="utf-8"))
 V5_ADDITIONS = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_added_choices_expected.yml").read_text(encoding="utf-8"))
 V5_PR260_WORDING = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_pr260_wording_expected.yml").read_text(encoding="utf-8"))
+V5_CURRENT_WORDING = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_current_wording_expected.yml").read_text(encoding="utf-8"))
 V5_POST_PR264_WORDING = yaml.safe_load((Path(__file__).parent / "fixtures" / "split_assessment_v5_post_pr264_wording_expected.yml").read_text(encoding="utf-8"))
 
 
@@ -167,6 +168,10 @@ def test_v5_matches_pr260_wording_and_pr264_review_fixes_while_preserving_v4_str
                 for label, body in overrides.get(round_key, {}).get(term_slug, {}).get(number, {}).items():
                     next(choice for choice in question["choices"] if choice["label"] == label)["body"] = body
 
+    assert V5_CURRENT_WORDING["source_commit"] == "7eb4bcd22018aef9a2b2fdaf36728e89807ea969"
+    assert V5_POST_PR264_WORDING["source_pr"] == 264
+    assert V5_POST_PR264_WORDING["source_commit"] == "0acca907bd3f1362bdc88693a72d577e6449438f"
+    assert V5_CURRENT_WORDING["choice_overrides"] == V5_POST_PR264_WORDING["choice_overrides"]
     for round_key, terms in V5_POST_PR264_WORDING["choice_overrides"].items():
         for term_slug, questions in terms.items():
             expected_questions = {q["number"]: q for q in expected[round_key][term_slug]["questions"]}
@@ -184,20 +189,22 @@ def test_v5_matches_pr260_wording_and_pr264_review_fixes_while_preserving_v4_str
             assert [item["question_number"] for item in split_specs(term_slug, round_key, bank_version="split-actions-v5")] == [1, 2]
 
 
-def test_spec_36_keeps_v5_and_restores_spec_35_as_read_only_without_changing_snapshots(tmp_path):
+def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 36
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-04-rag-glossary-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 38
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[33][STANDARD] == "split-actions-v3"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[34][STANDARD] == "split-actions-v4"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[35][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[36][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[37][STANDARD] == "split-actions-v5"
 
             term = db.query(Term).filter_by(slug="memory_process").one()
             active = db.query(Question).filter_by(
@@ -297,16 +304,52 @@ def test_spec_36_keeps_v5_and_restores_spec_35_as_read_only_without_changing_sna
                 question_set_mode=STANDARD,
                 learning_content_version=15,
             )
-            spec36_participant = Participant(
-                display_code="PRETEST-V36",
+            spec36_rag_participant = Participant(
+                display_code="PRETEST-V36-RAG",
                 group_condition="control",
                 current_step="learning",
                 experiment_spec_version=36,
+                protocol_id="experiment-plan-2026-11-04-rag-glossary-v1",
+                question_set_mode=STANDARD,
+                learning_content_version=15,
+            )
+            spec36_presurvey_participant = Participant(
+                display_code="PRETEST-V36-PRESURVEY",
+                group_condition="control",
+                current_step="learning",
+                experiment_spec_version=36,
+                protocol_id="experiment-plan-2026-11-04-presurvey-baseline-v1",
+                question_set_mode=STANDARD,
+                learning_content_version=15,
+            )
+            spec37_participant = Participant(
+                display_code="PRETEST-V37",
+                group_condition="control",
+                current_step="learning",
+                experiment_spec_version=37,
+                protocol_id="experiment-plan-2026-11-04-presurvey-baseline-v2",
+                question_set_mode=STANDARD,
+                learning_content_version=15,
+            )
+            spec38_participant = Participant(
+                display_code="PRETEST-V38",
+                group_condition="control",
+                current_step="learning",
+                experiment_spec_version=38,
                 protocol_id=CURRENT_PROTOCOL_ID,
                 question_set_mode=STANDARD,
                 learning_content_version=15,
             )
-            db.add_all([spec32_participant, spec33_participant, spec34_participant, spec35_participant, spec36_participant])
+            db.add_all([
+                spec32_participant,
+                spec33_participant,
+                spec34_participant,
+                spec35_participant,
+                spec36_rag_participant,
+                spec36_presurvey_participant,
+                spec37_participant,
+                spec38_participant,
+            ])
             db.flush()
             v2_selected = next(option for option in v2_options if option.option_label == "B")
             v2_attempt = Attempt(
@@ -349,20 +392,28 @@ def test_spec_36_keeps_v5_and_restores_spec_35_as_read_only_without_changing_sna
                 option_order_snapshot=_displayed_options(db, spec34_participant, v4_question),
             )
             v5_selected = next(option for option in db.query(QuestionOption).filter_by(question_id=active.id).all() if option.option_label == "C")
-            v5_attempt = Attempt(
-                participant_id=spec35_participant.id,
-                term_id=term.id,
-                question_id=active.id,
-                phase="pretest",
-                test_round="test",
-                selected_option_ids=[v5_selected.id],
-                is_correct=False,
-                misconception_type="M1",
-                question_body_snapshot=active.body,
-                option_order_snapshot=_displayed_options(db, spec35_participant, active),
-            )
+            def make_v5_attempt(participant):
+                return Attempt(
+                    participant_id=participant.id,
+                    term_id=term.id,
+                    question_id=active.id,
+                    phase="pretest",
+                    test_round="test",
+                    selected_option_ids=[v5_selected.id],
+                    is_correct=False,
+                    misconception_type="M1",
+                    question_body_snapshot=active.body,
+                    option_order_snapshot=_displayed_options(db, participant, active),
+                )
+
+            v5_attempt = make_v5_attempt(spec35_participant)
+            v5_legacy_attempts = [
+                make_v5_attempt(spec36_rag_participant),
+                make_v5_attempt(spec36_presurvey_participant),
+                make_v5_attempt(spec37_participant),
+            ]
             v5_current_attempt = Attempt(
-                participant_id=spec36_participant.id,
+                participant_id=spec38_participant.id,
                 term_id=term.id,
                 question_id=active.id,
                 phase="pretest",
@@ -371,17 +422,23 @@ def test_spec_36_keeps_v5_and_restores_spec_35_as_read_only_without_changing_sna
                 is_correct=False,
                 misconception_type="M1",
                 question_body_snapshot=active.body,
-                option_order_snapshot=_displayed_options(db, spec36_participant, active),
+                option_order_snapshot=_displayed_options(db, spec38_participant, active),
             )
-            db.add_all([v2_attempt, v3_attempt, v4_attempt, v5_attempt, v5_current_attempt])
+            db.add_all([v2_attempt, v3_attempt, v4_attempt, v5_attempt, *v5_legacy_attempts, v5_current_attempt])
             db.commit()
 
             assert not can_resume(spec33_participant)
             assert not can_resume(spec34_participant)
             assert not can_resume(spec35_participant)
-            assert can_resume(spec36_participant)
             assert uses_split(spec35_participant)
-            assert uses_split(spec36_participant)
+            assert not can_resume(spec36_rag_participant)
+            assert not can_resume(spec36_presurvey_participant)
+            assert not can_resume(spec37_participant)
+            assert can_resume(spec38_participant)
+            assert uses_split(spec36_rag_participant)
+            assert uses_split(spec36_presurvey_participant)
+            assert uses_split(spec37_participant)
+            assert uses_split(spec38_participant)
             assert not can_resume(spec32_participant)
             assert assessment_construct_key(
                 term.slug, "pretest", STANDARD,
@@ -404,7 +461,9 @@ def test_spec_36_keeps_v5_and_restores_spec_35_as_read_only_without_changing_sna
             assert latest_test_results(db, spec33_participant.id)["results"][0]["question_body"] == v3_snapshot[0]
             assert latest_test_results(db, spec34_participant.id)["results"][0]["question_body"] == v4_attempt.question_body_snapshot
             assert latest_test_results(db, spec35_participant.id)["results"][0]["question_body"] == v5_attempt.question_body_snapshot
-            assert latest_test_results(db, spec36_participant.id)["results"][0]["question_body"] == v5_current_attempt.question_body_snapshot
+            for participant in (spec36_rag_participant, spec36_presurvey_participant, spec37_participant):
+                assert latest_test_results(db, participant.id)["results"][0]["question_body"] == v5_attempt.question_body_snapshot
+            assert latest_test_results(db, spec38_participant.id)["results"][0]["question_body"] == v5_current_attempt.question_body_snapshot
 
             saved_body_v4 = v4_attempt.question_body_snapshot
             saved_options_v4 = deepcopy(v4_attempt.option_order_snapshot)
@@ -416,7 +475,7 @@ def test_spec_36_keeps_v5_and_restores_spec_35_as_read_only_without_changing_sna
             confirmation = split_learning_spec(db, spec34_participant, term)
             assert confirmation["questions"][0]["body"] == saved_body_v4
             assert confirmation["questions"][0]["options"] == saved_options_v4
-            confirmation_v5 = split_learning_spec(db, spec36_participant, term)
+            confirmation_v5 = split_learning_spec(db, spec38_participant, term)
             assert len(confirmation_v5["questions"][0]["options"]) == 6
             assert confirmation_v5["questions"][0]["body"] == saved_body_v5
             assert confirmation_v5["questions"][0]["options"] == saved_options_v5
@@ -429,6 +488,8 @@ def test_spec_36_keeps_v5_and_restores_spec_35_as_read_only_without_changing_sna
             db.refresh(v3_attempt)
             db.refresh(v4_attempt)
             db.refresh(v5_attempt)
+            for attempt in v5_legacy_attempts:
+                db.refresh(attempt)
             db.refresh(v5_current_attempt)
             db.refresh(active)
             db.refresh(active_m1)
@@ -458,6 +519,8 @@ def test_spec_36_keeps_v5_and_restores_spec_35_as_read_only_without_changing_sna
             assert latest_test_results(db, spec33_participant.id)["results"][0]["question_body"] == v3_snapshot[0]
             assert split_learning_spec(db, spec34_participant, term)["questions"][0]["body"] == saved_body_v4
             assert latest_test_results(db, spec35_participant.id)["results"][0]["question_body"] == v5_attempt.question_body_snapshot
-            assert split_learning_spec(db, spec36_participant, term)["questions"][0]["body"] == v5_current_attempt.question_body_snapshot
+            for participant in (spec36_rag_participant, spec36_presurvey_participant, spec37_participant):
+                assert latest_test_results(db, participant.id)["results"][0]["question_body"] == v5_attempt.question_body_snapshot
+            assert split_learning_spec(db, spec38_participant, term)["questions"][0]["body"] == v5_current_attempt.question_body_snapshot
     finally:
         engine.dispose()

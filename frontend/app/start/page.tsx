@@ -30,7 +30,7 @@ export default function StartPage() {
       <AppShell step="開始">
         <section className="panel stack">
           <h1>専門用語理解の実験を開始します</h1>
-          <p className="muted">管理者から伝えられた参加コードを入力し、同意書を確認してからテストを開始します。</p>
+          <p className="muted">管理者から伝えられた参加コードを入力し、同意書と事前アンケートへの回答後にテストを開始します。</p>
           <label>
             参加コード
             <input

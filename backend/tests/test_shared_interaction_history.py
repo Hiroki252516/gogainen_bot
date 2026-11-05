@@ -22,7 +22,7 @@ from app.seed.content_loader import learning_question_spec
 from app.seed.seed_questions import seed_database
 from app.services import experiment
 from app.services.interaction_history import build_interaction_history
-from split_api_support import acknowledge_all_question_reviews, select_roles
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey, select_roles
 from app.services.prefetch import wait_for_prefetch_tasks
 
 
@@ -32,6 +32,7 @@ client = TestClient(app)
 def create_trial(group="A", labels="DEF"):
     participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
+    complete_presurvey(client, pid)
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     role = {"ABC": None, "DEF": "M1", "GHI": "M3", "J": "unknown"}[labels]
     for question in questions:
@@ -275,7 +276,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 36
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 38
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION

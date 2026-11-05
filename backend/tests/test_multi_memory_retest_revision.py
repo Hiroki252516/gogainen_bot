@@ -7,7 +7,7 @@ import yaml
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from split_api_support import assert_retest_flow
+from split_api_support import assert_retest_flow, complete_presurvey
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, assessment_construct_key
@@ -169,6 +169,7 @@ def _selected(question, source, labels):
 def _create(client, group, layout):
     _ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
     created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "MULTI-MEMORY-RETEST-SYNTHETIC"}))
+    complete_presurvey(client, created["participant_id"])
     with SessionLocal() as db:
         participant = db.get(Participant, created["participant_id"])
         assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.learning_content_version == LEARNING_CONTENT_VERSIONS["standard"]

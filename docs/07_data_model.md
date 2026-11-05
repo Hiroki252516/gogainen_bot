@@ -24,11 +24,11 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 計画書では参加者・群・用語・フェーズ/回次、問題と選択内容、全体正誤とunknown区分、誤答タイプ・再発、時刻/時間、段階・方略、完了/中断、AI実行状態、アンケートを収集する。正誤のboolとunknown分類は別の記録であり、保存型を文書だけで三値へ変更しない。
 
-現行アンケートは用語の事前知識6項目（知っていた／知らない）、一般4/教材6の1〜10段階、任意の自由記述。ParticipantSurvey.survey_versionとresponses_jsonへ版付きで保存し、旧5段階列は新規入力に使わない。定義は[12](12_evaluation_metrics.md)。
+仕様版37のアンケートは、事前phaseの4段階カテゴリによる用語事前知識6項目・AI利用2評定と、事後phaseのシステム評価2・教材評価6・任意自由記述に分ける。既存ParticipantSurvey.phase、survey_version、responses_jsonへ保存し、新DB列は追加しない。仕様版36のBoolean形式`presurvey-baseline-v1`回答や旧posttest v1/v2・旧5段階列は新規入力に使わず、既存JSONを変換しない。H5はposttest phaseだけを参照する。詳細は[12](12_evaluation_metrics.md)・[49](49_presurvey_baseline.md)。
 
 ## 現行の保存契約
 
-モデルの正本は backend/app/models/__init__.py。現行コードは実験仕様版36 / experiment-plan-2026-11-04-rag-glossary-v1を使用する。今回、DB列・公開API・既存JSON形式は変更しない。辞書v4はファイルで管理し、v3・既存JSON snapshotは保持する。仕様版35の結果復元はsplit-actions-v5で行い、仕様版35以下の記録は閲覧専用とする。[RAG注釈](49_rag_glossary.md)。教材のモード別文字数契約と辞書言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者の option_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルに設定列を追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
+モデルの正本は backend/app/models/__init__.py。現行コードは実験仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を使用する。RAG辞書追加によるDB列・注釈JSON形式の変更はない。辞書v4はファイルで管理し、v1〜v3と既存JSON snapshotは保持する。アンケートは既存のParticipantSurveyをphase/version別に使い、DB列を追加しない。事前アンケートv2用のAPI・画面フローは仕様版37から引き継ぐ。仕様版37以下・旧アンケート回答を不変で保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36/37の結果復元はsplit-actions-v5を使う。詳細は[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材のモード別文字数契約と辞書言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルに設定列を追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 学籍番号はSQLAlchemyの研究DBへ追加しない。IDENTITY_MAPPING_PATHが指す別SQLiteへ、学籍番号・参加者ID・表示コード・作成日時・再送処理用キーを保存する。研究用エクスポート・AI入力・AIログ・冪等性のrequest_hash/response_jsonには学籍番号を含めない。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、登録は対応表を先行保存してから研究DBを確定し、通常の失敗では補償削除する。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
@@ -37,7 +37,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規参加者だけ仕様版36とexperiment-plan-2026-11-04-rag-glossary-v1を保存し、retest_cycles_completedを0で初期化する。既存版35以下を含む異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版38と`experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を保存し、retest_cycles_completedを0で初期化する。既存版37以下・異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 

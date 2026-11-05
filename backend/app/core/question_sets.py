@@ -38,6 +38,8 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     33: {STANDARD: "split-actions-v3", EASY: "scenario-actions-easy-v1"},
     34: {STANDARD: "split-actions-v4", EASY: "scenario-actions-easy-v1"},
     35: {STANDARD: "split-actions-v5", EASY: "scenario-actions-easy-v1"},
+    36: {STANDARD: "split-actions-v5", EASY: "scenario-actions-easy-v1"},
+    37: {STANDARD: "split-actions-v5", EASY: "scenario-actions-easy-v1"},
 }
 LEARNING_CONTENT_VERSIONS = {STANDARD: 15, EASY: 4}
 

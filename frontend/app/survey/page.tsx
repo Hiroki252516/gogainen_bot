@@ -8,17 +8,7 @@ import { ParticipantFlowGuard } from "@/components/ParticipantFlowGuard";
 import { api, postIdempotent, requireParticipant } from "@/lib/api";
 
 const SURVEY_STEPS = ["survey"] as const;
-const PRIOR_TERM_KNOWLEDGE = [
-  ["pretraining", "事前学習"],
-  ["fine_tuning", "ファインチューニング"],
-  ["rag", "RAG"],
-  ["prompt_engineering", "プロンプトエンジニアリング"],
-  ["multi_agent", "マルチエージェント"],
-  ["memory_process", "記憶プロセス（AIが以前の会話で伝えた利用者の希望を記憶し、次回以降の回答に利用する仕組み）"],
-] as const;
 const GENERAL = [
-  ["ai_usage_frequency", "普段のAI利用頻度", "1：使用しない ／ 10：非常に頻繁に使用する"],
-  ["self_rated_ai_proficiency", "AIを使いこなせているかの自己評価", "1：全く使いこなせていない ／ 10：非常によく使いこなせている"],
   ["system_usability", "システムは操作しやすかった", ""],
   ["system_clarity", "システムの使い方はわかりやすかった", ""],
 ] as const;
@@ -54,7 +44,6 @@ export default function SurveyPage() {
     event.preventDefault();
     if (!context || submitting) return;
     const requiredKeys = [
-      ...PRIOR_TERM_KNOWLEDGE.map(([key]) => key),
       ...GENERAL.map(([key]) => key),
       ...(context.material_ratings_required ? MATERIAL.map(([key]) => key) : []),
     ];
@@ -68,7 +57,6 @@ export default function SurveyPage() {
       const participantId = requireParticipant();
       await postIdempotent(`/api/participants/${participantId}/survey`, {
         survey_version: context.survey_version,
-        prior_term_knowledge: Object.fromEntries(PRIOR_TERM_KNOWLEDGE.map(([key]) => [key, values[key] === "yes"])),
         general_ratings: Object.fromEntries(GENERAL.map(([key]) => [key, Number(values[key])])),
         material_ratings: context.material_ratings_required ? Object.fromEntries(MATERIAL.map(([key]) => [key, Number(values[key])])) : null,
         free_comment: comment.trim(),
@@ -83,10 +71,7 @@ export default function SurveyPage() {
         <h1>実験後アンケート</h1>
         <p>自由記述以外の表示される項目はすべて必須です。各質問について回答してください。</p>
         {!context ? <p>回答項目を確認しています。</p> : <>
-          <h2>実験前に用語の意味を知っていたか</h2>
-          <p>今回の実験を始める前の状態について回答してください。</p>
-          {PRIOR_TERM_KNOWLEDGE.map(([key, label]) => <ChoiceButtons key={key} label={label} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
-          <h2>AIとシステムについて</h2>
+          <h2>システムについて</h2>
           {GENERAL.map(([key, label, anchors]) => <RatingButtons key={key} label={label} anchors={anchors || AGREEMENT_ANCHORS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
           <h2>教材について</h2>
           {context.material_ratings_required

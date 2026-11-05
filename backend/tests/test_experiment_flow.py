@@ -274,10 +274,7 @@ def test_current_step_reports_read_only_experiment_progress_for_every_stage():
     assert current["progress"] == {"stage_id": "survey", "label": "アンケート", "percent": 75}
 
     survey_payload = {
-        "prior_term_knowledge": {"pretraining": True, "fine_tuning": False, "rag": False, "prompt_engineering": True, "multi_agent": False, "memory_process": True},
         "general_ratings": {
-            "ai_usage_frequency": 4,
-            "self_rated_ai_proficiency": 3,
             "system_usability": 5,
             "system_clarity": 4,
         },
@@ -2045,8 +2042,7 @@ def test_experiment_give_up_during_retest_routes_to_survey_and_blocks_retest_act
         db.close()
 
     survey_payload = {
-        "prior_term_knowledge": {"pretraining": True, "fine_tuning": False, "rag": False, "prompt_engineering": True, "multi_agent": False, "memory_process": True},
-        "general_ratings": {"ai_usage_frequency": 4, "self_rated_ai_proficiency": 3, "system_usability": 5, "system_clarity": 4},
+        "general_ratings": {"system_usability": 5, "system_clarity": 4},
         "material_ratings": None,
         "free_comment": "再テストギブアップ後アンケートの確認",
     }
@@ -2146,8 +2142,7 @@ def test_experiment_give_up_during_final_test_routes_to_survey_and_blocks_final_
         db.close()
 
     survey_payload = {
-        "prior_term_knowledge": {"pretraining": True, "fine_tuning": False, "rag": False, "prompt_engineering": True, "multi_agent": False, "memory_process": True},
-        "general_ratings": {"ai_usage_frequency": 4, "self_rated_ai_proficiency": 3, "system_usability": 5, "system_clarity": 4},
+        "general_ratings": {"system_usability": 5, "system_clarity": 4},
         "material_ratings": None,
         "free_comment": "ギブアップ後アンケートの確認",
     }
@@ -2280,13 +2275,15 @@ def test_survey_submission_saves_and_finishes_participant():
     assert score.json()["next_step"] == "survey"
 
     payload = {
-        "prior_term_knowledge": {"pretraining": True, "fine_tuning": False, "rag": False, "prompt_engineering": True, "multi_agent": False, "memory_process": True},
-        "general_ratings": {"ai_usage_frequency": 4, "self_rated_ai_proficiency": 3, "system_usability": 5, "system_clarity": 4},
+        "general_ratings": {"system_usability": 5, "system_clarity": 4},
         "material_ratings": None,
         "free_comment": "仮アンケートの確認",
     }
-    missing_required_background = {key: value for key, value in payload.items() if key != "prior_term_knowledge"}
-    invalid = client.post(f"/api/participants/{pid}/survey", json=missing_required_background)
+    legacy_baseline_in_posttest = {
+        **payload,
+        "prior_term_knowledge": {"pretraining": "unknown", "fine_tuning": "unknown", "rag": "unknown", "prompt_engineering": "unknown", "multi_agent": "unknown", "memory_process": "unknown"},
+    }
+    invalid = client.post(f"/api/participants/{pid}/survey", json=legacy_baseline_in_posttest)
     assert invalid.status_code == 422
 
     response = client.post(f"/api/participants/{pid}/survey", json=payload)

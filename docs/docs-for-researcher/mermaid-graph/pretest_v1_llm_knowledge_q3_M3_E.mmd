@@ -1,0 +1,16 @@
+flowchart TB
+  Root["質問と回答の見本を使う方法"]
+  Root --> L0["回答時に具体例を提示する"]
+  Root --> R0["学習工程でモデルを調整する"]
+  L0 --> L1["プロンプトへの回答例の追加"]
+  L1 --> L2["担当者が確認した回答例を毎回の入力に加える"]
+  R0 --> R1["追加訓練（ファインチューニング）"]
+  R1 --> R2["学習用データとして例を使い重みを更新する"]
+  L1 -. "M3：プロンプトへの例示＝追加訓練" .-> R1
+  classDef root fill:#e6edf9,stroke:#496b9c,color:#172b4d
+  classDef left fill:#e5f0fc,stroke:#507eaf,color:#173a61
+  classDef right fill:#e6f4ed,stroke:#3b9170,color:#194b37
+  class Root root
+  class L0,L1,L2 left
+  class R0,R1,R2 right
+  linkStyle 6 stroke:#d64545,stroke-width:3px,stroke-dasharray:6 4
