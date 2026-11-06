@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD, question_set_mode
+from app.core.question_sets import LEARNING_CONTENT_VERSION
 
 
 CURRENT_EXPERIMENT_SPEC_VERSION = 38
@@ -19,10 +19,7 @@ def can_resume(participant: Any) -> bool:
         or getattr(participant, "protocol_id", None) != CURRENT_PROTOCOL_ID
     ):
         return False
-    try:
-        return question_set_mode(getattr(participant, "question_set_mode", None)) == STANDARD
-    except ValueError:
-        return False
+    return True
 
 
 def assert_current_experiment(participant: Any) -> None:
@@ -35,11 +32,10 @@ def assert_current_experiment(participant: Any) -> None:
             },
         )
     try:
-        mode = question_set_mode(getattr(participant, "question_set_mode", None))
-        if getattr(participant, "learning_content_version", LEARNING_CONTENT_VERSIONS[mode]) != LEARNING_CONTENT_VERSIONS[mode]:
-            raise ValueError("learning content version does not match question set")
+        if getattr(participant, "learning_content_version", LEARNING_CONTENT_VERSION) != LEARNING_CONTENT_VERSION:
+            raise ValueError("learning content version does not match the current experiment")
     except ValueError as exc:
         raise HTTPException(
             status_code=503,
-            detail={"error_code": "question_set_unavailable", "message": "参加者の問題版に不整合があります。管理者に連絡してください。"},
+            detail={"error_code": "learning_content_unavailable", "message": "参加者の教材版に不整合があります。管理者に連絡してください。"},
         ) from exc

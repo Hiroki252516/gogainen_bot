@@ -12,12 +12,11 @@ await fs.mkdir(process.env.CYCLE_SCREENSHOT_DIR, { recursive: true });
 const { chromium } = await import(process.env.CYCLE_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true, channel: process.env.CYCLE_BROWSER_CHANNEL || undefined });
 const terms = ["LLMに知識を与える方法", "マルチエージェント", "記憶プロセス"];
-const questionModes = (process.env.CYCLE_QUESTION_MODES || "standard").split(",");
 const optionModes = (process.env.CYCLE_OPTION_MODES || "debug_fixed").split(",");
 const backend = new URL("../../backend/", import.meta.url).pathname;
 const banks = JSON.parse(execFileSync(process.env.CYCLE_BACKEND_PYTHON || `${backend}.venv/bin/python`, ["-c", `import json
 from app.seed.content_loader import ACTIVE_TERM_SLUGS,assessment_question_spec,learning_question_spec
-print(json.dumps([s for mode in ('standard','easy') for term in ACTIVE_TERM_SLUGS for s in ([assessment_question_spec(term,p,i,mode) for p,i in [('pretest',1),('retest',1),('retest',2)]]+[learning_question_spec(term,'conceptual_change',i,mode) for i in (1,2,3)])],ensure_ascii=False))`], { cwd: backend, encoding: "utf8" }));
+print(json.dumps([s for term in ACTIVE_TERM_SLUGS for s in ([assessment_question_spec(term,p,i) for p,i in [('pretest',1),('retest',1),('retest',2)]]+[learning_question_spec(term,'conceptual_change',i) for i in (1,2,3)])],ensure_ascii=False))`], { cwd: backend, encoding: "utf8" }));
 const roleBodies = (role) => new Set(banks.flatMap((spec) => spec.options.filter((o) => role === "correct" ? o.is_correct : o.misconception_type === role).map((o) => o.body)));
 const correctBodies = roleBodies("correct");
 
@@ -53,9 +52,7 @@ try {
   const api = await browser.newContext();
   const status = await (await api.request.get(new URL("/api/admin/ai/status", base).href)).json();
   assert.equal(status.ai_backend, "mock");
-  for (const questionMode of questionModes) {
   for (const optionMode of optionModes) {
-  assert.equal((await api.request.put(new URL("/api/admin/question-set", base).href, { data: { mode: questionMode } })).status(), 200);
   assert.equal((await api.request.put(new URL("/api/admin/option-order", base).href, { data: { mode: optionMode } })).status(), 200);
   for (const assignment of ["A", "B"]) {
     for (const initialPerfect of [false, true]) {
@@ -115,7 +112,7 @@ try {
       assert.equal((await page.request.get(new URL(`/api/experiment/${pid}/retest`, base).href)).status(), 409);
       for (const [name, viewport] of [["desktop", { width: 1440, height: 1000 }], ["mobile", { width: 390, height: 844 }]]) {
         await page.setViewportSize(viewport);
-        await page.screenshot({ path: `${process.env.CYCLE_SCREENSHOT_DIR}/${questionMode}-${optionMode}-${assignment}-${initialPerfect ? "initial-perfect" : "learning"}-${name}.png`, fullPage: true });
+        await page.screenshot({ path: `${process.env.CYCLE_SCREENSHOT_DIR}/${optionMode}-${assignment}-${initialPerfect ? "initial-perfect" : "learning"}-${name}.png`, fullPage: true });
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "horizontal overflow");
       }
       await page.getByRole("link", { name: "アンケートへ進む", exact: true }).click();
@@ -129,7 +126,6 @@ try {
       await page.getByRole("heading", { name: "実験は終了です", exact: true }).waitFor();
       const logs = await (await page.request.get(new URL(`/api/admin/participants/${pid}/logs`, base).href)).json();
       assert.equal(logs.participant.experiment_spec_version, 7);
-      assert.equal(logs.participant.question_set_mode, questionMode);
       assert.equal(logs.latest_evaluation_summary.hypothesis_metrics.h6.value, 0);
       assert.equal(logs.attempts.length, 9);
       await page.setViewportSize({ width: 1440, height: 1000 });
@@ -142,10 +138,9 @@ try {
       await page.getByText("事前テスト後のテスト: 2 / 2回（学習前の追加テストを含む）", { exact: true }).waitFor();
       assert.equal(await page.getByText(`学習後の再テスト: ${initialPerfect ? 1 : 2}回`, { exact: true }).count(), 1);
       assert.equal(errors.length, 0, errors.join("\n"));
-      console.log(JSON.stringify({ questionMode, optionMode, assignment, initialPerfect, participant_id: pid, tests: problems.size / 3, post_tests: 2, raw_retests: review.retest_cycles_completed, flow: "passed" }));
+      console.log(JSON.stringify({ optionMode, assignment, initialPerfect, participant_id: pid, tests: problems.size / 3, post_tests: 2, raw_retests: review.retest_cycles_completed, flow: "passed" }));
       await context.close();
     }
-  }
   }
   }
   await api.close();

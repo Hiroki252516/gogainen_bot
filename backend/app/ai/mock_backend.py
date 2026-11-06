@@ -115,7 +115,6 @@ class MockAIBackend:
         result = {
             "tutor_message": _pad_tutoring_material(
                 message + _history_note(payload),
-                beginner=payload.get("explanation_level") == "beginner",
                 target_characters=material_length_contract(
                     integrated_material="glossary_reference" in payload,
                 )["target_character_count"],
@@ -131,8 +130,6 @@ class MockAIBackend:
     async def generate_correct_answer_summary(self, payload: dict[str, Any]) -> dict[str, Any]:
         term = payload.get("term") or {}
         label = payload.get("focus_label") or term.get("label", "この概念")
-        if payload.get("explanation_level") == "beginner":
-            return {"summary": f"## 今回の要点\n\n- **{label}**で何をするかを区別できました。\n- 今回の考え方を、学校や買物など別の場面でも使ってみましょう。"}
         return {
             "summary": (
                 "## 今回の要点\n\n"
@@ -148,8 +145,6 @@ class MockAIBackend:
         selected = payload.get("selected_option_bodies") or payload.get("selected_option_body") or "選択した説明"
         if isinstance(selected, list):
             selected = " / ".join(str(item) for item in selected)
-        if payload.get("explanation_level") == "beginner":
-            return {"feedback": f"## どこが違うか\n\n- 選んだ説明では、**{label}**が何をするかの区別を見直す必要があります。\n\n## 見直す観点\n\n- 教材の身近な例で、何を渡して何を行うかを確かめましょう。", "remediation_focus": "何をする仕組みかを確かめる。", "general_knowledge_supplement": None}
         return {
             "feedback": (
                 "## どこが違うか\n\n"
@@ -192,7 +187,6 @@ def _history_note(payload: dict[str, Any], *, feedback: bool = False) -> str:
 def _pad_tutoring_material(
     message: str,
     *,
-    beginner: bool = False,
     target_characters: int = 700,
 ) -> str:
     """Keep deterministic mock material inside the production contract range."""
@@ -201,12 +195,6 @@ def _pad_tutoring_material(
         "具体例では入力、処理、出力を対応付け、似た概念と違う点を言葉にします。",
         "最後に別の場面へ当てはめ、同じ判断基準で説明できるかを確かめます。",
     )
-    if beginner:
-        additions = (
-            "たとえば学校や買物の相談を考えます。AIに何を伝えるか、伝えた情報をどこで使うかを順に確かめましょう。",
-            "似た名前の仕組みでも、することが同じとは限りません。名前だけで決めず、実際にどんな作業を行うかを比べます。",
-            "説明を読んだら、自分の言葉で短く言い直してみましょう。別の場面でも同じ考え方が使えるかを考えると整理できます。",
-        )
     index = 0
     while len(message) < target_characters:
         message += f"\n\n{additions[index % len(additions)]}"

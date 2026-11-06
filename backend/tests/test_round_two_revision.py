@@ -30,16 +30,14 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-multi-memory-retest1-v1"
 
 def test_v25_exact_banks_and_unchanged_content():
     assert CURRENT_EXPERIMENT_SPEC_VERSION >= 25
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[25] == {"standard": "scenario-actions-v9", "easy": "scenario-actions-easy-v1"}
-    assert ASSESSMENT_BANK_VERSIONS == {"standard": "split-actions-v5", "easy": "scenario-actions-easy-v1"}
-    assert LEARNING_CONTENT_VERSIONS == {"standard": 15, "easy": 4}
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[24] == {"standard": "scenario-actions-v8", "easy": "scenario-actions-easy-v1"}
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[25] == {"standard": "scenario-actions-v9"}
+    assert ASSESSMENT_BANK_VERSIONS == {"standard": "split-actions-v5"}
+    assert LEARNING_CONTENT_VERSIONS == {"standard": 15}
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[24] == {"standard": "scenario-actions-v8"}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     for path, digest in (
         (content_loader.SCENARIO_ACTIONS_V8_CONTENT_PATH, "c07ac0de45d78abba642107842bc14d510ace7751a369d9a12a171fb0141c9ed"),
         (content_loader.LEARNING_V14_CONTENT_PATH, "72d37e3ae983758718020ddac5e95ee51fa4e3aade63e4b1936d54f2a8428d0d"),
-        (content_loader.EASY_CONTENT_PATH, "9b096d2a275a272e719976e07e007afa5b67423abb1eda4ae0c75a09e966f6bb"),
-        (content_loader.LEARNING_EASY_CONTENT_PATH, "586e892f63ab4fd0df1f6cfb1a66fe7630763415e91df1c59cf43830655a1206"),
     ):
         assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
     learning = deepcopy(load_learning_content(content_version=14))
@@ -123,29 +121,23 @@ def test_both_learning_repeat_exceptions_require_exact_locations(label, role, in
         content_loader._validate_learning_content(valid, load_content())
 
 
-@pytest.mark.parametrize("mode,version", [("standard", 14), ("easy", 4)])
-def test_old_and_easy_banks_keep_type_and_reuse_restrictions(mode, version):
-    content = deepcopy(load_learning_content(mode, version))
+def test_old_learning_bank_keeps_type_and_reuse_restrictions():
+    content = deepcopy(load_learning_content(14))
     content["terms"]["llm_knowledge"]["variants"][1]["scenario_type"] = "application"
     with pytest.raises(ValueError, match="scenario types"):
-        content_loader._validate_learning_content(content, load_content(mode), mode, content_version=version)
-    content = deepcopy(load_learning_content(mode, version))
+        content_loader._validate_learning_content(content, load_content(), content_version=14)
+    content = deepcopy(load_learning_content(14))
     variants = content["terms"]["llm_knowledge"]["variants"]
     variants[1]["choices"]["M1"][1] = variants[0]["choices"]["M1"][1]
     with pytest.raises(ValueError, match="unique across"):
-        content_loader._validate_learning_content(content, load_content(mode), mode, content_version=version)
+        content_loader._validate_learning_content(content, load_content(), content_version=14)
 
 
-def test_assessment_exception_is_not_available_to_old_or_easy_banks():
+def test_assessment_exception_is_not_available_to_old_banks():
     old = deepcopy(load_content())
     old["assessment_bank_version"] = "scenario-actions-v8"
     with pytest.raises(ValueError, match="assessment bank version is invalid"):
         content_loader._validate_content(old)
-    easy = deepcopy(load_content("easy"))
-    variants = easy["terms"][0]["questions"]["retest"]
-    variants[1]["choices"]["M1"][2] = variants[0]["choices"]["M1"][2]
-    with pytest.raises(ValueError, match="reused across"):
-        content_loader._validate_content(easy, "easy")
 
 
 def test_scenario_override_is_only_for_two_terms_and_two_slots():
@@ -163,7 +155,7 @@ def test_fixed_test_copy_is_still_rejected():
         content_loader._validate_learning_content(content, load_content())
 
 
-def test_missing_v15_or_wrong_mode_has_no_fallback(tmp_path, monkeypatch):
+def test_missing_v15_has_no_fallback(tmp_path, monkeypatch):
     try:
         with monkeypatch.context() as patch:
             patch.setattr(content_loader, "LEARNING_V15_CONTENT_PATH", tmp_path / "missing.yml")
@@ -172,8 +164,6 @@ def test_missing_v15_or_wrong_mode_has_no_fallback(tmp_path, monkeypatch):
                 load_learning_content()
     finally:
         load_learning_content.cache_clear()
-    with pytest.raises(ValueError):
-        load_learning_content("easy", 15)
 
 
 def _ok(response):
@@ -252,7 +242,7 @@ def test_old_spec24_v8_records_survive_seed_repair_and_missing_snapshot_restore(
             old_label = "H"
             option = db.query(QuestionOption).filter_by(question_id=question.id, option_label=old_label).one()
             participant = Participant(display_code="V8-HISTORY", group_condition="control", current_step="learning_targets",
-                                      question_set_mode="standard", learning_content_version=14, experiment_spec_version=24,
+                                      learning_content_version=14, experiment_spec_version=24,
                                       protocol_id=OLD_PROTOCOL, retest_cycles_completed=0 if phase == "final_test" else 1)
             db.add(participant)
             db.flush()
@@ -284,9 +274,9 @@ def test_old_spec24_v8_records_survive_seed_repair_and_missing_snapshot_restore(
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
             active = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_(["retest_v2", "retest_v2_q1", "retest_v2_q2"])).all()
-            assert len(active) == 3 and all(row.id != question.id for row in active)
-            assert db.query(Question).count() == 42
-            assert db.query(Question).filter_by(is_active=True).count() == 30
+            assert len(active) == 2 and all(row.id != question.id for row in active)
+            assert db.query(Question).count() == 30
+            assert db.query(Question).filter_by(is_active=True).count() == 18
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)
             assert record["question_body"] == ("保存時の問題" if snapshot else question.body)

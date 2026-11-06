@@ -27,7 +27,7 @@ OLD_PROTOCOL = "experiment-plan-2026-10-26-multi-memory-retests-v1"
 
 
 def test_v13_changes_only_llm_round_one_d_and_h():
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[20] == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[20] == {"standard": "scenario-actions-v6"}
     assert hashlib.sha256(content_loader.LEARNING_V12_CONTENT_PATH.read_bytes()).hexdigest() == "87dc5c40081f113350b9b7ffabef5f46fe6fe0fd0e68949eb68755c68de6eb4b"
     expected = deepcopy(load_learning_content(content_version=12))
     expected["version"] = 13
@@ -51,7 +51,7 @@ def test_revised_choices_keep_their_roles_and_display(stage):
     assert [option for option in current["options"] if option["label"] not in "DH"] == [option for option in old["options"] if option["label"] not in "DH"]
 
 
-def test_missing_v13_and_wrong_mode_never_fall_back(tmp_path, monkeypatch):
+def test_missing_v13_never_falls_back(tmp_path, monkeypatch):
     try:
         with monkeypatch.context() as patch:
             patch.setattr(content_loader, "LEARNING_V13_CONTENT_PATH", tmp_path / "missing.yml")
@@ -60,8 +60,6 @@ def test_missing_v13_and_wrong_mode_never_fall_back(tmp_path, monkeypatch):
                 load_learning_content(content_version=13)
     finally:
         load_learning_content.cache_clear()
-    with pytest.raises(ValueError, match="version"):
-        load_learning_content("easy", 13)
 
 
 def _ok(response):
@@ -91,7 +89,7 @@ def test_history_restores_snapshot_or_original_bank_without_changes(tmp_path, mo
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
-            participant = Participant(display_code="LLM-DH-HISTORY", group_condition="control", question_set_mode="standard",
+            participant = Participant(display_code="LLM-DH-HISTORY", group_condition="control",
                                       learning_content_version=version, experiment_spec_version=spec_version, protocol_id=protocol)
             term = Term(slug="llm_knowledge", label="LLM", description="description", display_order=1)
             db.add_all([participant, term])

@@ -82,9 +82,6 @@ def test_missing_v10_never_falls_back(tmp_path, monkeypatch):
         load_learning_content.cache_clear()
 
 
-def test_easy_mode_cannot_load_v10():
-    with pytest.raises(ValueError, match="version"):
-        load_learning_content("easy", 10)
 
 
 @pytest.mark.parametrize("version,spec_version,protocol", [(9, 16, OLD_PROTOCOL), (10, 17, "experiment-plan-2026-10-25-memory-confirmation-v1")])
@@ -95,7 +92,7 @@ def test_memory_first_question_history_preserves_snapshot_and_saved_bank(tmp_pat
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
-            participant = Participant(display_code="MEMORY-V1-HISTORY", group_condition="control", question_set_mode="standard",
+            participant = Participant(display_code="MEMORY-V1-HISTORY", group_condition="control",
                                       experiment_spec_version=spec_version, protocol_id=protocol, learning_content_version=version)
             term = Term(slug="memory_process", label="記憶プロセス", description="description", display_order=2)
             db.add_all([participant, term])

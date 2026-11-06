@@ -17,7 +17,22 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    _assert_retired_question_mode_is_purged()
     _ensure_lightweight_schema_updates()
+
+
+def _assert_retired_question_mode_is_purged() -> None:
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if any(
+        table in tables and "question_set_mode" in {
+            column["name"] for column in inspector.get_columns(table)
+        }
+        for table in ("participants", "runtime_settings")
+    ):
+        raise RuntimeError(
+            "legacy question-mode data must be removed with the guarded purge utility before startup"
+        )
 
 
 def _ensure_lightweight_schema_updates() -> None:
@@ -33,7 +48,6 @@ def _ensure_lightweight_schema_updates() -> None:
             ("show_question_reviews", "BOOLEAN"),
             ("first_question_only", "BOOLEAN"),
             ("learning_material_glossary_mode", "VARCHAR(32)"),
-            ("question_set_mode", "VARCHAR(32)"),
             ("test_page_mode", "VARCHAR(32)"),
             ("completion_reason", "TEXT"),
             ("learning_content_version", "INTEGER"),
@@ -48,7 +62,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("survey_version", "VARCHAR(80)"),
             ("responses_json", json_type),
         ],
-        "runtime_settings": [("first_question_only", "BOOLEAN"), ("question_set_mode", "VARCHAR(32)"), ("show_pretest_results", "BOOLEAN"), ("show_question_reviews", "BOOLEAN"), ("learning_material_glossary_mode", "VARCHAR(32)")],
+        "runtime_settings": [("first_question_only", "BOOLEAN"), ("show_pretest_results", "BOOLEAN"), ("show_question_reviews", "BOOLEAN"), ("learning_material_glossary_mode", "VARCHAR(32)")],
         "attempts": [
             ("test_round", "TEXT"),
             ("question_shown_at", datetime_type),
@@ -95,41 +109,9 @@ def _ensure_lightweight_schema_updates() -> None:
             for name, column_type in columns:
                 if name not in existing_columns:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
-        _backfill_attempt_test_rounds(connection)
         _backfill_completion_reasons(connection)
         _backfill_evaluation_completion_flags(connection)
         _backfill_tutor_prefetch_states(connection)
-
-
-def _backfill_attempt_test_rounds(connection) -> None:
-    """Repair the retained easy format, never guess missing split-assessment rounds."""
-    rows = connection.execute(
-        text("SELECT id, participant_id, phase, question_id FROM attempts WHERE (test_round IS NULL OR test_round = '') AND participant_id IN (SELECT id FROM participants WHERE experiment_spec_version = :spec_version AND protocol_id = :protocol_id AND question_set_mode = :mode)"),
-        {"spec_version": CURRENT_EXPERIMENT_SPEC_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "mode": "easy"},
-    ).mappings().all()
-    if not rows:
-        return
-
-    question_variants = dict(connection.execute(text("SELECT id, variant_key FROM questions")).all())
-    for row in rows:
-        phase = row["phase"]
-        if phase == "pretest":
-            test_round = "test"
-        elif phase == "final_test":
-            test_round = "retest_1"
-        elif phase == "retest":
-            variant_key = str(question_variants.get(row["question_id"], "") or "")
-            try:
-                variant_number = int(variant_key.removeprefix("retest_v"))
-            except ValueError:
-                variant_number = 1
-            test_round = f"retest_{variant_number}"
-        else:
-            continue
-        connection.execute(
-            text("UPDATE attempts SET test_round = :test_round WHERE id = :attempt_id"),
-            {"test_round": test_round, "attempt_id": row["id"]},
-        )
 
 
 def _backfill_completion_reasons(connection) -> None:

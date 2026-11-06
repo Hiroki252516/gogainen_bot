@@ -167,7 +167,6 @@ def _selected(question, source, labels):
 
 
 def _create(client, group, layout):
-    _ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
     created = _ok(client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "MULTI-MEMORY-RETEST-SYNTHETIC"}))
     complete_presurvey(client, created["participant_id"])
     with SessionLocal() as db:
@@ -266,7 +265,7 @@ def test_spec19_history_seed_and_repair_preserve_v5(tmp_path, monkeypatch, slug,
             question = db.query(Question).filter_by(term_id=term.id, phase="retest", variant_key=f"retest_v{index}").one()
             option = db.query(QuestionOption).filter_by(question_id=question.id, option_label="H").one()
             participant = Participant(display_code="V5-HISTORY", group_condition="control", current_step="learning_targets",
-                                      question_set_mode="standard", learning_content_version=12, experiment_spec_version=19,
+                                      learning_content_version=12, experiment_spec_version=19,
                                       protocol_id="experiment-plan-2026-10-26-llm-confirmation-retest-v1", retest_cycles_completed=index)
             db.add(participant)
             db.flush()
@@ -292,7 +291,7 @@ def test_spec19_history_seed_and_repair_preserve_v5(tmp_path, monkeypatch, slug,
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
             current = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_([f"retest_v{index}", f"retest_v{index}_q1", f"retest_v{index}_q2"])).all()
-            assert len(current) == 3  # Two standard items and one easy question.
+            assert len(current) == 2
             assert all(row.id != question.id for row in current)
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)

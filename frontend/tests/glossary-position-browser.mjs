@@ -103,7 +103,6 @@ try {
     page.setDefaultTimeout(30000);
     await api(page.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
     assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
-    await api(page.request, "/api/admin/question-set", "PUT", { mode: "standard" });
     await api(page.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
     const record = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, student_number: `GLOSSARY-POSITION-SYNTHETIC-${width}` });
     await page.addInitScript((p) => { localStorage.setItem("participant_id", p.participant_id); localStorage.setItem("display_code", p.display_code); }, record);

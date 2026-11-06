@@ -18,8 +18,7 @@ async function api(request, path, method = "GET", data) {
   return response.json();
 }
 
-async function create(request, mode, layout) {
-  await api(request, "/api/admin/question-set", "PUT", { mode });
+async function create(request, layout) {
   await api(request, "/api/admin/option-order", "PUT", { mode: layout });
   return api(request, "/api/registrations", "POST", {
     assignment_code: "A", consent_checked: true, student_number: "PRETEST-BROWSER-SYNTHETIC",
@@ -27,21 +26,19 @@ async function create(request, mode, layout) {
 }
 
 try {
-  for (const width of [1440, 390]) for (const mode of ["standard", "easy"]) for (const layout of ["debug_fixed", "randomized"]) {
+  for (const width of [1440, 390]) for (const layout of ["debug_fixed", "randomized"]) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const page = await context.newPage();
     assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
-    const reference = await create(page.request, mode, "debug_fixed");
+    const reference = await create(page.request, "debug_fixed");
     const canonical = (await api(page.request, `/api/experiment/${reference.participant_id}/pretest`)).questions;
-    if (mode === "standard") {
-      assert.deepEqual(canonical[0].options.slice(0, 2).map((option) => option.body), [
+    assert.deepEqual(canonical[0].options.slice(0, 2).map((option) => option.body), [
         "利用者の質問に応じて最新の取扱説明書を検索し、該当箇所を質問と一緒にAIへ渡して回答を作らせる仕組みを実装する。",
         "利用者からの質問に回答するとき、「結論・操作手順・注意点」の順に説明するよう、AIに指示するプロンプトを設定する。",
-      ]);
-      assert.equal(canonical[0].options.find((option) => option.label === "F").body,
-        "回答を「結論・操作手順・注意点」の順にする指示をプロンプトに加えることで、モデルの重みも更新されると考え、質問と回答の事例を使った追加訓練は行わない。");
-    }
-    const record = await create(page.request, mode, layout);
+    ]);
+    assert.equal(canonical[0].options.find((option) => option.label === "F").body,
+      "回答を「結論・操作手順・注意点」の順にする指示をプロンプトに加えることで、モデルの重みも更新されると考え、質問と回答の事例を使った追加訓練は行わない。");
+    const record = await create(page.request, layout);
     const questions = (await api(page.request, `/api/experiment/${record.participant_id}/pretest`)).questions;
     await page.addInitScript((created) => {
       localStorage.setItem("participant_id", created.participant_id);
@@ -72,7 +69,7 @@ try {
         await page.getByRole("checkbox", { name: `${option.label}. ${option.body}`, exact: true }).check();
       }
       assert.equal(await page.getByRole("checkbox", { checked: true }).count(), 3);
-      await page.screenshot({ path: `${PRETEST_SCREENSHOT_DIR}/${width}-${mode}-${layout}-q${index + 1}.png`, fullPage: true });
+      await page.screenshot({ path: `${PRETEST_SCREENSHOT_DIR}/${width}-${layout}-q${index + 1}.png`, fullPage: true });
       await page.getByRole("button", { name: index === 2 ? "完了" : "次へ", exact: true }).click();
     }
     await page.waitForURL((url) => url.pathname === "/learning-targets");
@@ -85,7 +82,7 @@ try {
         assert(questions[index].options.some((option) => option.body === selected.body && option.label === selected.label));
       }
     }
-    console.log(`ok ${width}px ${mode} ${layout}: all 3 questions, selection and saved review`);
+    console.log(`ok ${width}px ${layout}: all 3 questions, selection and saved review`);
     await context.close();
   }
 } finally {

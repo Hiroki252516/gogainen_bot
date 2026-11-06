@@ -67,8 +67,6 @@ def project_model_payload(payload: dict[str, Any], *, proposed: bool, feedback: 
         errors = scope.get("selected_errors")
         result["learning_scope"] = {"topics": [text for text in topics if isinstance(text, str)] if isinstance(topics, list) else [],
                                     "selected_errors": [{key: row[key] for key in ("label", "body") if isinstance(row.get(key), str)} for row in errors if isinstance(row, dict)] if isinstance(errors, list) else []}
-    if payload.get("explanation_level") == "beginner":
-        result["explanation_level"] = "beginner"
     result["interaction_history"] = project_interaction_history(payload.get("interaction_history"))
     if isinstance(result.get("term"), dict):
         result["term"] = {key: result["term"][key] for key in ("slug", "label", "description") if key in result["term"] and (result["term"][key] is None or isinstance(result["term"][key], str))}

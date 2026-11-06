@@ -97,18 +97,16 @@ def test_exclusions_are_part_of_dictionary_fingerprint():
 
 @pytest.fixture
 def restore_settings():
-    before = {key: client.get(f"/api/admin/{key}").json()["mode"] for key in ("question-set", "option-order")}
+    before = {key: client.get(f"/api/admin/{key}").json()["mode"] for key in ("option-order",)}
     yield
     for key, mode in before.items():
         client.put(f"/api/admin/{key}", json={"mode": mode})
 
 
-@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("phase,completed", [("pretest", 0), ("retest", 0), ("retest", 1), ("final_test", 0)])
-def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(mode, layout, group, phase, completed, restore_settings, monkeypatch):
-    client.put("/api/admin/question-set", json={"mode": mode})
+def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(layout, group, phase, completed, restore_settings, monkeypatch):
     client.put("/api/admin/option-order", json={"mode": layout})
     registration = client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "GLOSSARY-SYNTHETIC"})
     assert registration.status_code == 200, registration.text
@@ -125,7 +123,7 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     response = client.get(path)
     assert response.status_code == 200, response.text
     questions = response.json()["questions"]
-    assert len(questions) == (6 if mode == "standard" else 3)
+    assert len(questions) == 6
     assert client.get(path).json() == response.json()
     for question in questions:
         expected = experiment._test_glossary(question["term_label"], question["body"], question["options"])
@@ -183,7 +181,7 @@ def test_v25_saved_annotations_and_result_bank_are_preserved(monkeypatch):
     with SessionLocal() as db:
         participant = Participant(display_code="OLD-GLOSSARY-V25", group_condition="control", current_step="learning",
                                   experiment_spec_version=25, protocol_id="experiment-plan-2026-10-27-round2-revision-v1",
-                                  learning_content_version=15, question_set_mode="standard")
+                                  learning_content_version=15)
         db.add(participant)
         db.flush()
         pid = participant.id
@@ -234,11 +232,11 @@ def test_nullable_migration_and_repeated_seed_preserve_v25_records(tmp_path, mon
         database.init_db()
         with Session(isolated) as db:
             seed_database(db)
-            assert db.query(Question).filter_by(is_active=True).count() == 30
+            assert db.query(Question).filter_by(is_active=True).count() == 18
     assert next(column for column in inspect(isolated).get_columns("attempts") if column["name"] == "glossary_snapshot")["nullable"]
     with isolated.connect() as connection:
         after = dict(connection.execute(text("SELECT * FROM attempts")).mappings().one())
         assert after.pop("glossary_snapshot") is None
         assert after == before
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[25] == {"standard": "scenario-actions-v9", "easy": "scenario-actions-easy-v1"}
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[25] == {"standard": "scenario-actions-v9"}
     isolated.dispose()

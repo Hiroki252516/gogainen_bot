@@ -18,13 +18,11 @@
 
 当時の通常版PRETESTは`split-actions-v3`へ切り替え、仕様版32のv2から指定されたLLM・マルチエージェント・記憶プロセスの選択肢本文を更新した。RETEST1/2・内部final_testの問題文、6設問の採点と設問ペア答え合わせは維持し、誤答PRETEST設問の学習確認には保存済みsnapshotを使う。仕様版27〜31の`split-actions-v1`と仕様版32のv2、既存参加者記録を履歴復元用に保全した。仕様版28の設問ペア答え合わせ[40](40_question_pair_answer_review.md)、仕様版29のモード[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換え[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST改訂[44](44_pretest_content_revision.md)、仕様版33の差分[45](45_pretest_memory_distractors.md)を参照する。
 
-## 仕様版28の採用・易しい版停止時の記録
-
-2026-10-30から易しい版の新規実行を停止した。新規登録は通常版固定、既存易しい版参加者は閲覧専用で、易しい版の群集計・仮説CSVも停止する。参加者・回答・snapshot・評価・易しい版YAMLと問題IDは復元用に保持し、個別ログ・生ログ出力は維持する。詳細は[22](22_question_set_modes.md)と[14](14_testing_acceptance.md)。
+## 仕様版28の採用記録
 
 通常版のPRETEST・RETEST・内部final_testで、設問1・2の両方を保存した後に同じテスト画面内で選択内容と正誤を示し、続行で次の用語へ進む。設定・API・保存・受入条件は[40](40_question_pair_answer_review.md)を参照する。
 
-この節は仕様版28導入・易しい版停止時点の記録である。当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。この機能は現行仕様版38でも維持する。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
+当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。この機能は現行仕様版38でも維持する。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
 
 ## 仕様版26で採用した共通の用語注釈辞書（現行版36でも維持）
 
@@ -49,7 +47,7 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 現行コードは新規参加者に仕様版38と`experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を保存する。仕様版37以下、旧protocol_id、NULL・未対応版は閲覧専用で保全する。既存行へ版・protocol・答え合わせ設定・確認時刻・教材解説モードを補完しない。
 
-通常版テストは現行split-actions-v5により、3用語×2設問の6設問・4択単一選択となる。仕様版35で追加したPRETEST選択肢本文を使用し、RETEST1/2・内部final_testもv5を使う。設問3はデータだけ保持し、activeな問題・表示・採点には使わない。易しい版の従来形式は履歴資産として保持するが、現在の参加者フローでは利用しない。テスト上限・採点・回次は[39](39_split_assessment.md)、仕様版32のPRETEST本文は[44](44_pretest_content_revision.md)、現行差分と版復元は[45](45_pretest_memory_distractors.md)を参照する。答え合わせは通常版のPRETEST・RETEST・内部final_testに適用し、採点は6設問完了後に行う。学習確認には誤答PRETESTの保存済みsnapshotを使う。
+通常版テストは現行split-actions-v5により、3用語×2設問の6設問・4択単一選択となる。仕様版35で追加したPRETEST選択肢本文を使用し、RETEST1/2・内部final_testもv5を使う。設問3はデータだけ保持し、activeな問題・表示・採点には使わない。テスト上限・採点・回次は[39](39_split_assessment.md)、仕様版32のPRETEST本文は[44](44_pretest_content_revision.md)、現行差分と版復元は[45](45_pretest_memory_distractors.md)を参照する。答え合わせはPRETEST・RETEST・内部final_testに適用し、採点は6設問完了後に行う。学習確認には誤答PRETESTの保存済みsnapshotを使う。
 
 material-viewの初回表示時刻から実績を数え、未利用の先行生成を学習回数・教材表示者へ算入しない。アンケートは事前・事後のphaseと版を付けて既存の版付きJSONへ保存し、DB列を追加しない。旧5段階値・posttest v1/v2・既存評価列を変換しない。
 
@@ -59,6 +57,6 @@ A〜C正解等の配置はデバッグ用であり収集に使わない。管理
 
 検証結果は[14](14_testing_acceptance.md)、切替・運用は[18](18_implementation_blueprint.md)・[19](19_experiment_operation_runbook.md)。過去の資料・検証・生AIログは書き換えない。
 
-## 易しい版の履歴保全
+## 問題モードの廃止
 
-問題版設定のAPI形状と保存済みquestion_set_modeは後方互換のため維持するが、管理画面は切替を表示せず、GETは通常版を返す。新規登録も保存済みRuntimeSettingがeasyでも通常版に固定する。易しい版の参加者APIによる再開・回答は拒否し、表示のcurrent-stepは閲覧専用を返す。evaluation-summary・logs/overviewの群集計、6仮説CSVはeasy指定を422で拒否する。参加者一覧・個別ログ・参加者別CSV・全件生ログには既存記録を表示する。question_set_mode列、YAML、問題ID、snapshot、DB記録、旧版用の復元対応は変更・削除しない。[停止後の運用と契約](22_question_set_modes.md)・[履歴用問題全文](23_easy_question_bank.md)を参照する。
+現行実装は通常版だけを扱い、版切替の管理UI/API、版別集計、専用資産・分岐はありません。研究DB内の旧条件に関するデータと対応表を削除する場合は、アプリ停止後に[専用削除手順](../backend/scripts/purge_easy_mode_data.py)を明示設定で実行します。起動や通常のseedでデータを削除せず、設定されていない研究DBへの削除処理も実行しません。

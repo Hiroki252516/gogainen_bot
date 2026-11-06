@@ -33,7 +33,6 @@ def learning_turn(monkeypatch):
     monkeypatch.setattr(main_module, "schedule_prefetch", lambda *args: None)
     monkeypatch.setattr(main_module.tutor_prefetch_registry, "prepare", lambda *args: None)
     client = AuthenticatedTestClient(main_module.app)
-    ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
     ok(client.put("/api/admin/option-order", json={"mode": "randomized"}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": "B", "consent_checked": True, "student_number": "GUARD-SYNTHETIC"}))["participant_id"]
     complete_presurvey(client, pid)

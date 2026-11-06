@@ -111,10 +111,10 @@ for (const expectedText of [
   if (!experimentProgress.includes(expectedText)) throw new Error(`experiment progress meter missing: ${expectedText}`);
 }
 const groupAdminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
-for (const text of ["新規参加者に適用する問題版", "易しい版の参加者は閲覧専用", "集計対象: 通常版", "question_set_mode=standard"]) {
-  if (!groupAdminPage.includes(text)) throw new Error(`admin question-set behavior missing: ${text}`);
+for (const text of ["出題設問", "教材の用語解説", "集計対象: 全参加者"]) {
+  if (!groupAdminPage.includes(text)) throw new Error(`admin participant and aggregate display missing: ${text}`);
 }
-for (const expectedText of ["participant.can_resume", "currentParticipantCount", "!row.legacy_read_only", "現行参加者数", "閲覧専用参加者数", "停止した易しい版", "現行参加者の評価サマリー"]) {
+for (const expectedText of ["participant.can_resume", "currentParticipantCount", "!row.legacy_read_only", "現行参加者数", "閲覧専用参加者数", "現行参加者の評価サマリー"]) {
   if (!groupAdminPage.includes(expectedText)) throw new Error(`admin page must separate current aggregates from trial history: ${expectedText}`);
 }
 for (const expectedText of ['"proposed", "control"', "role=\"tablist\"", "activeGroup", "group_condition"]) {

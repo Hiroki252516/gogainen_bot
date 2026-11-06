@@ -57,9 +57,6 @@ def test_missing_v6_does_not_fall_back_to_v5(tmp_path, monkeypatch):
     load_learning_content.cache_clear()
 
 
-def test_easy_mode_cannot_load_standard_v6():
-    with pytest.raises(ValueError, match="version"):
-        load_learning_content("easy", 6)
 
 
 @pytest.mark.parametrize("snapshot", [False, True])
@@ -70,7 +67,7 @@ def test_multi_agent_history_restores_saved_version_without_rewriting_records(tm
     Base.metadata.create_all(isolated)
     try:
         with Session(isolated) as db:
-            participant = Participant(display_code="MULTI-HISTORY", group_condition="control", question_set_mode="standard",
+            participant = Participant(display_code="MULTI-HISTORY", group_condition="control",
                                       learning_content_version=version, experiment_spec_version={3: 11, 5: 12, 6: 13, 7: 14, 8: 15, 9: 16, 10: 17, 11: 18, 12: 20, 13: 21, 14: CURRENT_EXPERIMENT_SPEC_VERSION}[version],
                                       protocol_id={3: "experiment-plan-2026-10-25-pretest-f-wording-v1", 5: PREVIOUS_PROTOCOL, 6: "experiment-plan-2026-10-25-multi-agent-confirmation-v1", 7: "experiment-plan-2026-10-25-multi-agent-confirmation-v2", 8: "experiment-plan-2026-10-25-multi-agent-round2-v1", 9: "experiment-plan-2026-10-25-multi-agent-round3-v1", 10: "experiment-plan-2026-10-25-memory-confirmation-v1", 11: "experiment-plan-2026-10-26-memory-round2-v1", 12: "experiment-plan-2026-10-26-multi-memory-retests-v1", 13: "experiment-plan-2026-10-26-llm-round1-dh-v1", 14: CURRENT_PROTOCOL_ID}[version])
             term = Term(slug="multi_agent", label="マルチエージェント", description="description", display_order=2)

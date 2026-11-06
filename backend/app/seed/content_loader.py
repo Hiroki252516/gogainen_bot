@@ -7,12 +7,11 @@ from typing import Any
 
 import yaml
 
-from app.core.question_sets import STANDARD, EASY, ASSESSMENT_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, question_set_mode
+from app.core.question_sets import ASSESSMENT_BANK_VERSION, LEARNING_CONTENT_VERSION
 
 
 CONTENT_DIR = Path(__file__).with_name("content")
 STANDARD_CONTENT_DIR = CONTENT_DIR / "standard"
-EASY_CONTENT_DIR = CONTENT_DIR / "easy"
 ARCHIVE_CONTENT_DIR = CONTENT_DIR / "archive"
 CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_content.yml"
 UNUSED_CONTENT_PATH = ARCHIVE_CONTENT_DIR / "learning_questions_v2_unused.yml"
@@ -37,17 +36,14 @@ LEARNING_V12_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v12.yml"
 LEARNING_V13_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v13.yml"
 LEARNING_V14_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v14.yml"
 LEARNING_V15_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v15.yml"
-EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_content_easy.yml"
-LEARNING_EASY_CONTENT_PATH = EASY_CONTENT_DIR / "learning_questions_v4_easy.yml"
 ACTIVE_TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
 QUESTION_PHASES = ("pretest", "retest")
 LEARNING_STAGES = ("enrichment", "conceptual_change")
 LEARNING_SESSION_VARIANT_COUNT = 3
-CURRENT_LEARNING_CONTENT_VERSION = LEARNING_CONTENT_VERSIONS[STANDARD]
+CURRENT_LEARNING_CONTENT_VERSION = LEARNING_CONTENT_VERSION
 LEARNING_OPTION_ROLES = ("correct", "M1", "M3")
 LEARNING_SCENARIO_TYPES = ("application", "prediction", "comparison", "boundary", "diagnosis")
 ASSESSMENT_OPTION_ROLES = ("correct", "M1", "M3")
-ASSESSMENT_BANK_VERSION = ASSESSMENT_BANK_VERSIONS[STANDARD]
 ASSESSMENT_VARIANT_COUNTS = {"pretest": 1, "retest": 2}
 ASSESSMENT_ROLE_SLOTS = ("correct", "correct", "correct", "M1", "M1", "M1", "M3", "M3", "M3")
 UNKNOWN_OPTION = {"label": "J", "body": "わからない。", "is_correct": False, "misconception_type": "unknown"}
@@ -184,8 +180,8 @@ def _validate_teaching_targets(content: dict[str, Any]) -> None:
                 raise ValueError(f"teaching_targets.{slug}.{label} must not target {misconception_type}")
 
 
-def _validate_content(content: dict[str, Any], mode: str = STANDARD) -> None:
-    if content.get("assessment_bank_version") != ("scenario-actions-v9" if mode == STANDARD else ASSESSMENT_BANK_VERSIONS[mode]):
+def _validate_content(content: dict[str, Any]) -> None:
+    if content.get("assessment_bank_version") != "scenario-actions-v9":
         raise ValueError("assessment bank version is invalid")
     if tuple(term.get("slug") for term in content.get("terms", [])) != ACTIVE_TERM_SLUGS:
         raise ValueError(f"active terms must be exactly {ACTIVE_TERM_SLUGS}")
@@ -201,7 +197,7 @@ def _validate_content(content: dict[str, Any], mode: str = STANDARD) -> None:
 
     all_bodies: set[str] = set()
     all_choice_locations: dict[str, set[tuple[str, str, str]]] = {}
-    approved_repeats = APPROVED_ASSESSMENT_V9_REPEATS if mode == STANDARD and content.get("assessment_bank_version") == "scenario-actions-v9" else {}
+    approved_repeats = APPROVED_ASSESSMENT_V9_REPEATS if content.get("assessment_bank_version") == "scenario-actions-v9" else {}
 
     for term in content["terms"]:
         slug = term["slug"]
@@ -222,7 +218,7 @@ def _validate_content(content: dict[str, Any], mode: str = STANDARD) -> None:
             if len({variant.get("variant_key") for variant in variants}) != expected_count:
                 raise ValueError(f"{slug}.{phase} has duplicate variant keys")
             for variant in variants:
-                _validate_assessment_variant(slug, phase, variant, mode)
+                _validate_assessment_variant(slug, phase, variant)
                 body = f"{variant['scenario']}\n\n{variant['task']}"
                 if body in all_bodies:
                     raise ValueError("assessment question bodies must be unique")
@@ -245,7 +241,7 @@ def _validate_content(content: dict[str, Any], mode: str = STANDARD) -> None:
     _validate_teaching_targets(content)
 
 
-def _validate_assessment_variant(term_slug: str, phase: str, variant: Any, mode: str = STANDARD) -> None:
+def _validate_assessment_variant(term_slug: str, phase: str, variant: Any) -> None:
     name = f"{term_slug}.{phase}.{variant.get('variant_key') if isinstance(variant, dict) else 'unknown'}"
     if not isinstance(variant, dict) or not variant.get("variant_key"):
         raise ValueError(f"{name} is invalid")
@@ -264,16 +260,6 @@ def _validate_assessment_variant(term_slug: str, phase: str, variant: Any, mode:
         raise ValueError(f"{name} has duplicate choice text")
     if _contains_langgraph(variant):
         raise ValueError(f"{name} must not mention LangGraph")
-    if mode == EASY:
-        _validate_choice_rationales(name, variant)
-
-
-def _validate_choice_rationales(name: str, variant: dict[str, Any]) -> None:
-    rationales = variant.get("choice_rationales") or {}
-    if set(rationales) != set("DEFGHI") or any(not isinstance(value, str) or not value.strip() for value in rationales.values()):
-        raise ValueError(f"{name} needs a rationale for each incorrect choice")
-
-
 def _learning_options(variant: dict[str, Any]) -> list[dict[str, Any]]:
     choices = variant["choices"]
     options = []
@@ -293,7 +279,7 @@ def _learning_options(variant: dict[str, Any]) -> list[dict[str, Any]]:
     return options
 
 
-def assessment_question_spec(term_slug: str, phase: str, variant_index: int = 1, mode: str = STANDARD) -> dict[str, Any]:
+def assessment_question_spec(term_slug: str, phase: str, variant_index: int = 1) -> dict[str, Any]:
     if phase == "final_test":
         # The route remains for compatibility, but it uses the first post-pretest
         # question rather than maintaining a separate final_test variant.
@@ -303,7 +289,7 @@ def assessment_question_spec(term_slug: str, phase: str, variant_index: int = 1,
         source_phase = phase
     else:
         raise ValueError(f"unsupported assessment phase: {phase}")
-    variants = content_term(term_slug, mode)["questions"][source_phase]
+    variants = content_term(term_slug)["questions"][source_phase]
     index = min(max(variant_index, 1), len(variants)) - 1
     variant = dict(variants[index])
     variant["body"] = f"{variant['scenario']}\n\n{variant['task']}"
@@ -314,11 +300,10 @@ def assessment_question_spec(term_slug: str, phase: str, variant_index: int = 1,
 
 
 def _validate_learning_content(
-    content: dict[str, Any], assessment_content: dict[str, Any], mode: str = STANDARD,
-    *, content_version: int | None = None,
+    content: dict[str, Any], assessment_content: dict[str, Any], *, content_version: int | None = None,
 ) -> None:
-    if content.get("version") != (content_version if content_version is not None else LEARNING_CONTENT_VERSIONS[mode]):
-        raise ValueError("learning bank version does not match question set")
+    if content.get("version") != (content_version if content_version is not None else LEARNING_CONTENT_VERSION):
+        raise ValueError("learning bank version does not match the current experiment")
     terms = content.get("terms") or {}
     if tuple(terms) != ACTIVE_TERM_SLUGS:
         raise ValueError(f"learning terms must be exactly {ACTIVE_TERM_SLUGS}")
@@ -339,7 +324,7 @@ def _validate_learning_content(
     variant_count = 0
     learning_bodies: set[str] = set()
     learning_choice_locations: dict[str, set[tuple[str, str, str]]] = {}
-    approved_repeats = APPROVED_LEARNING_V15_REPEATS if mode == STANDARD and content.get("version") == 15 else {}
+    approved_repeats = APPROVED_LEARNING_V15_REPEATS if content.get("version") == 15 else {}
 
     for term_slug in ACTIVE_TERM_SLUGS:
         term_data = terms.get(term_slug) or {}
@@ -357,15 +342,13 @@ def _validate_learning_content(
         if [variant.get("variant_key") for variant in variants] != expected_keys:
             raise ValueError(f"{term_slug} must use variant keys {expected_keys}")
         expected_types = list(LEARNING_SCENARIO_TYPES[:LEARNING_SESSION_VARIANT_COUNT])
-        if mode == STANDARD and content.get("version") == 15 and term_slug in {"llm_knowledge", "memory_process"}:
+        if content.get("version") == 15 and term_slug in {"llm_knowledge", "memory_process"}:
             expected_types[1] = "application"
         if [variant.get("scenario_type") for variant in variants] != expected_types:
             raise ValueError(f"{term_slug} must use learning scenario types {expected_types}")
 
         for variant in variants:
             name = f"{term_slug}.{variant.get('variant_key')}"
-            if mode == EASY:
-                _validate_choice_rationales(name, variant)
             if not str(variant.get("scenario") or "").strip() or not str(variant.get("task") or "").strip():
                 raise ValueError(f"{name} needs scenario and task")
             choices = variant.get("choices") or {}
@@ -406,41 +389,35 @@ def _validate_learning_content(
         )
 
 
-@lru_cache(maxsize=6)
-def load_learning_content(mode: str = STANDARD, content_version: int | None = None) -> dict[str, Any]:
-    mode = question_set_mode(mode)
-    version = LEARNING_CONTENT_VERSIONS[mode] if content_version is None else content_version
+@lru_cache(maxsize=5)
+def load_learning_content(content_version: int | None = None) -> dict[str, Any]:
+    version = LEARNING_CONTENT_VERSION if content_version is None else content_version
     banks = {
-        3: (STANDARD, LEARNING_V3_CONTENT_PATH),
-        4: (EASY, LEARNING_EASY_CONTENT_PATH),
-        5: (STANDARD, LEARNING_V5_CONTENT_PATH),
-        6: (STANDARD, LEARNING_V6_CONTENT_PATH),
-        7: (STANDARD, LEARNING_V7_CONTENT_PATH),
-        8: (STANDARD, LEARNING_V8_CONTENT_PATH),
-        9: (STANDARD, LEARNING_V9_CONTENT_PATH),
-        10: (STANDARD, LEARNING_V10_CONTENT_PATH),
-        11: (STANDARD, LEARNING_V11_CONTENT_PATH),
-        12: (STANDARD, LEARNING_V12_CONTENT_PATH),
-        13: (STANDARD, LEARNING_V13_CONTENT_PATH),
-        14: (STANDARD, LEARNING_V14_CONTENT_PATH),
-        15: (STANDARD, LEARNING_V15_CONTENT_PATH),
+        3: LEARNING_V3_CONTENT_PATH,
+        5: LEARNING_V5_CONTENT_PATH,
+        6: LEARNING_V6_CONTENT_PATH,
+        7: LEARNING_V7_CONTENT_PATH,
+        8: LEARNING_V8_CONTENT_PATH,
+        9: LEARNING_V9_CONTENT_PATH,
+        10: LEARNING_V10_CONTENT_PATH,
+        11: LEARNING_V11_CONTENT_PATH,
+        12: LEARNING_V12_CONTENT_PATH,
+        13: LEARNING_V13_CONTENT_PATH,
+        14: LEARNING_V14_CONTENT_PATH,
+        15: LEARNING_V15_CONTENT_PATH,
     }
-    if version not in banks or banks[version][0] != mode:
-        raise ValueError("learning bank version does not match question set")
-    with banks[version][1].open("r", encoding="utf-8") as handle:
+    if version not in banks:
+        raise ValueError("unsupported learning bank version")
+    with banks[version].open("r", encoding="utf-8") as handle:
         content = yaml.safe_load(handle)
     if not isinstance(content, dict):
         raise ValueError("learning bank must contain a mapping")
-    _validate_learning_content(content, load_content(mode), mode, content_version=version)
+    _validate_learning_content(content, load_content(), content_version=version)
     return content
 
 
 def load_learning_v3_content() -> dict[str, Any]:
-    return load_learning_content(STANDARD, 3)
-
-
-def load_learning_easy_content() -> dict[str, Any]:
-    return load_learning_content(EASY, 4)
+    return load_learning_content(3)
 
 
 def _archived_assessment_variants() -> dict[str, dict[str, list[dict[str, Any]]]]:
@@ -462,11 +439,9 @@ def _archived_assessment_variants() -> dict[str, dict[str, list[dict[str, Any]]]
     return terms
 
 
-@lru_cache(maxsize=2)
-def load_content(mode: str = STANDARD) -> dict[str, Any]:
-    mode = question_set_mode(mode)
-    path = EASY_CONTENT_PATH if mode == EASY else CONTENT_PATH
-    with path.open("r", encoding="utf-8") as handle:
+@lru_cache(maxsize=1)
+def load_content() -> dict[str, Any]:
+    with CONTENT_PATH.open("r", encoding="utf-8") as handle:
         content = yaml.safe_load(handle)
     if not isinstance(content, dict):
         raise ValueError("learning_content.yml must contain a mapping")
@@ -474,22 +449,16 @@ def load_content(mode: str = STANDARD) -> dict[str, Any]:
     # Validate retired questions separately, but keep them out of the active
     # content object so normal seed/debug inspection sees only active questions.
     _archived_assessment_variants()
-    _validate_content(content, mode)
-    if mode == EASY:
-        standard_terms = {term["slug"]: term for term in load_content()["terms"]}
-        for term in content["terms"]:
-            for key in ("label", "description", "keywords", "component_terms", "rag_sections"):
-                if term.get(key) != standard_terms[term["slug"]].get(key):
-                    raise ValueError(f"easy bank must preserve shared term metadata: {key}")
+    _validate_content(content)
     return content
 
 
-def content_term(term_slug: str, mode: str = STANDARD) -> dict[str, Any]:
-    return next(term for term in load_content(mode)["terms"] if term["slug"] == term_slug)
+def content_term(term_slug: str) -> dict[str, Any]:
+    return next(term for term in load_content()["terms"] if term["slug"] == term_slug)
 
 
-def teaching_target_for_option(term_slug: str, option_label: str, mode: str = STANDARD) -> dict[str, Any] | None:
-    targets = (load_content(mode).get("teaching_targets") or {}).get(term_slug) or {}
+def teaching_target_for_option(term_slug: str, option_label: str) -> dict[str, Any] | None:
+    targets = (load_content().get("teaching_targets") or {}).get(term_slug) or {}
     target = targets.get(option_label)
     return deepcopy(target) if isinstance(target, dict) else None
 
@@ -498,13 +467,11 @@ def learning_question_spec(
     term_slug: str,
     learning_stage: str,
     variant_index: int = 1,
-    mode: str = STANDARD,
     *, content_version: int | None = None,
     use_current_assessment_source: bool | None = None,
 ) -> dict[str, Any]:
-    mode = question_set_mode(mode)
-    content_term(term_slug, mode)
-    current_version = LEARNING_CONTENT_VERSIONS[mode]
+    content_term(term_slug)
+    current_version = LEARNING_CONTENT_VERSION
     resolved_version = current_version if content_version is None else content_version
 
     # Version 15/4 is the current participant-facing learning contract.  Its
@@ -517,7 +484,7 @@ def learning_question_spec(
             min(max(variant_index, 1), len(CURRENT_LEARNING_ASSESSMENT_SOURCES)),
             CURRENT_LEARNING_ASSESSMENT_SOURCES[1],
         )
-        source = assessment_question_spec(term_slug, source_phase, source_index, mode)
+        source = assessment_question_spec(term_slug, source_phase, source_index)
         variant = {
             "variant_key": f"learning_round_v{min(max(variant_index, 1), len(CURRENT_LEARNING_ASSESSMENT_SOURCES))}",
             "body": source["body"],
@@ -527,7 +494,7 @@ def learning_question_spec(
         # The semantic learning stage controls the tutoring prompt only. The
         # question is selected by the learning-session round and is shared by
         # enrichment and conceptual_change.
-        bank = load_learning_content(mode, content_version)
+        bank = load_learning_content(content_version)
         variants = bank["terms"][term_slug]["variants"]
         index = min(max(variant_index, 1), len(variants)) - 1
         variant = dict(variants[index])
@@ -549,24 +516,24 @@ def learning_question_spec(
     return variant
 
 
-def seed_terms(mode: str = STANDARD) -> list[dict[str, Any]]:
+def seed_terms() -> list[dict[str, Any]]:
     terms: list[dict[str, Any]] = []
-    for term in load_content(mode)["terms"]:
+    for term in load_content()["terms"]:
         normalized_questions: dict[str, Any] = {
             "pretest": {
-                **assessment_question_spec(term["slug"], "pretest", mode=mode),
-                "options": _option_tuples(assessment_question_spec(term["slug"], "pretest", mode=mode)["options"]),
+                **assessment_question_spec(term["slug"], "pretest"),
+                "options": _option_tuples(assessment_question_spec(term["slug"], "pretest")["options"]),
             },
             "retest": [
                 {
-                    **assessment_question_spec(term["slug"], "retest", index, mode),
-                    "options": _option_tuples(assessment_question_spec(term["slug"], "retest", index, mode)["options"]),
+                    **assessment_question_spec(term["slug"], "retest", index),
+                    "options": _option_tuples(assessment_question_spec(term["slug"], "retest", index)["options"]),
                 }
                 for index in range(1, ASSESSMENT_VARIANT_COUNTS["retest"] + 1)
             ],
             "final_test": {
-                **assessment_question_spec(term["slug"], "final_test", mode=mode),
-                "options": _option_tuples(assessment_question_spec(term["slug"], "final_test", mode=mode)["options"]),
+                **assessment_question_spec(term["slug"], "final_test"),
+                "options": _option_tuples(assessment_question_spec(term["slug"], "final_test")["options"]),
             },
         }
         terms.append({**term, "questions": normalized_questions})

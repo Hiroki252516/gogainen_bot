@@ -38,13 +38,11 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-llm-retest1-v1"
 
 
 def test_v8_changes_only_five_retest_choices_and_preserves_banks():
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[23] == {"standard": "scenario-actions-v7", "easy": "scenario-actions-easy-v1"}
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[23] == {"standard": "scenario-actions-v7"}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     for path, digest in (
         (content_loader.SCENARIO_ACTIONS_V7_CONTENT_PATH, "315455197bc0b5833dea365845dff6e41c1b47a28db4ad0dcc033545a105cfe4"),
         (content_loader.LEARNING_V14_CONTENT_PATH, "72d37e3ae983758718020ddac5e95ee51fa4e3aade63e4b1936d54f2a8428d0d"),
-        (content_loader.EASY_CONTENT_PATH, "9b096d2a275a272e719976e07e007afa5b67423abb1eda4ae0c75a09e966f6bb"),
-        (content_loader.LEARNING_EASY_CONTENT_PATH, "586e892f63ab4fd0df1f6cfb1a66fe7630763415e91df1c59cf43830655a1206"),
     ):
         assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
     expected = yaml.safe_load(content_loader.SCENARIO_ACTIONS_V7_CONTENT_PATH.read_text(encoding="utf-8"))
@@ -79,7 +77,7 @@ def test_five_choices_keep_question_body_paragraphs_roles_and_shared_final_test(
     assert assessment_question_spec(slug, "final_test")["options"] == assessment_question_spec(slug, "retest")["options"]
 
 
-def test_missing_standard_bank_does_not_fall_back_to_v7_or_easy(tmp_path, monkeypatch):
+def test_missing_standard_bank_does_not_fall_back_to_v7(tmp_path, monkeypatch):
     try:
         with monkeypatch.context() as patch:
             patch.setattr(content_loader, "CONTENT_PATH", tmp_path / "missing.yml")
@@ -162,7 +160,7 @@ def test_old_spec23_v7_records_survive_seed_repair_and_missing_snapshot_restore(
             old_label = "E" if slug == "multi_agent" else "H"
             option = db.query(QuestionOption).filter_by(question_id=question.id, option_label=old_label).one()
             participant = Participant(display_code="V7-HISTORY", group_condition="control", current_step="learning_targets",
-                                      question_set_mode="standard", learning_content_version=14, experiment_spec_version=23,
+                                      learning_content_version=14, experiment_spec_version=23,
                                       protocol_id=OLD_PROTOCOL, retest_cycles_completed=0 if phase == "final_test" else 1)
             db.add(participant)
             db.flush()
@@ -194,9 +192,9 @@ def test_old_spec23_v7_records_survive_seed_repair_and_missing_snapshot_restore(
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
             active = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_(["retest_v1", "retest_v1_q1", "retest_v1_q2"])).all()
-            assert len(active) == 3 and all(row.id != question.id for row in active)
-            assert db.query(Question).count() == 42
-            assert db.query(Question).filter_by(is_active=True).count() == 30
+            assert len(active) == 2 and all(row.id != question.id for row in active)
+            assert db.query(Question).count() == 30
+            assert db.query(Question).filter_by(is_active=True).count() == 18
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)
             assert record["question_body"] == ("保存時の問題" if snapshot else question.body)

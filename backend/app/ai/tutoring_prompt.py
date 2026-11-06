@@ -41,7 +41,6 @@ def _validate_prompt_text(raw: Any) -> dict[str, Any]:
     for key in ("purpose_prefix", "taxonomy_intro", "additional_rules_heading", "input_heading"):
         _required_text(structured.get(key), f"structured.{key}")
     _required_text_list(structured.get("output_rules"), "structured.output_rules", expected_length=3)
-    _required_text_list(structured.get("beginner_rules"), "structured.beginner_rules", expected_length=5)
 
     tutoring = _required_mapping(root.get("tutoring"), "tutoring")
     common = _required_mapping(tutoring.get("common_rules"), "tutoring.common_rules")
@@ -132,8 +131,6 @@ def compose_structured_prompt(
 ) -> str:
     """Compose the common text envelope used for structured app-server calls."""
     structured_text = PROMPT_TEXT["structured"]
-    if payload.get("explanation_level") == "beginner":
-        rules = [*rules, *structured_text["beginner_rules"]]
     prompt_parts = [
         f"{structured_text['purpose_prefix']}{purpose}",
         "",

@@ -210,7 +210,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
             active = db.query(Question).filter_by(
                 term_id=term.id,
                 phase="pretest",
-                construct_key=assessment_construct_key(term.slug, "pretest", STANDARD),
+                construct_key=assessment_construct_key(term.slug, "pretest"),
                 variant_key="pretest_v1_q1",
             ).one()
             assert active.is_active
@@ -228,7 +228,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 question_type="split_single",
                 body=v4_spec["body"],
                 expected_answer="A",
-                construct_key=assessment_construct_key(term.slug, "pretest", STANDARD, bank_version="split-actions-v4"),
+                construct_key=assessment_construct_key(term.slug, "pretest", bank_version="split-actions-v4"),
                 variant_key=v4_spec["variant_key"],
                 options=v4_spec["options"],
             )
@@ -244,7 +244,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 question_type="split_single",
                 body=v2_spec["body"],
                 expected_answer="A",
-                construct_key=assessment_construct_key(term.slug, "pretest", STANDARD, bank_version="split-actions-v2"),
+                construct_key=assessment_construct_key(term.slug, "pretest", bank_version="split-actions-v2"),
                 variant_key=v2_spec["variant_key"],
                 options=v2_spec["options"],
             )
@@ -260,7 +260,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 question_type="split_single",
                 body=v3_spec["body"],
                 expected_answer="A",
-                construct_key=assessment_construct_key(term.slug, "pretest", STANDARD, bank_version="split-actions-v3"),
+                construct_key=assessment_construct_key(term.slug, "pretest", bank_version="split-actions-v3"),
                 variant_key=v3_spec["variant_key"],
                 options=v3_spec["options"],
             )
@@ -274,7 +274,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 current_step="finish",
                 experiment_spec_version=32,
                 protocol_id="experiment-plan-2026-11-01-pretest-content-revision-v1",
-                question_set_mode=STANDARD,
+
                 learning_content_version=15,
             )
             spec33_participant = Participant(
@@ -283,7 +283,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 current_step="learning",
                 experiment_spec_version=33,
                 protocol_id="experiment-plan-2026-11-01-pretest-content-revision-v2",
-                question_set_mode=STANDARD,
+
                 learning_content_version=15,
             )
             spec34_participant = Participant(
@@ -292,7 +292,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 current_step="learning",
                 experiment_spec_version=34,
                 protocol_id="experiment-plan-2026-11-01-split-choice-wording-v1",
-                question_set_mode=STANDARD,
+
                 learning_content_version=15,
             )
             spec35_participant = Participant(
@@ -301,7 +301,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 current_step="learning",
                 experiment_spec_version=35,
                 protocol_id="experiment-plan-2026-11-03-split-added-choices-v1",
-                question_set_mode=STANDARD,
+
                 learning_content_version=15,
             )
             spec36_rag_participant = Participant(
@@ -310,7 +310,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 current_step="learning",
                 experiment_spec_version=36,
                 protocol_id="experiment-plan-2026-11-04-rag-glossary-v1",
-                question_set_mode=STANDARD,
+
                 learning_content_version=15,
             )
             spec36_presurvey_participant = Participant(
@@ -319,7 +319,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 current_step="learning",
                 experiment_spec_version=36,
                 protocol_id="experiment-plan-2026-11-04-presurvey-baseline-v1",
-                question_set_mode=STANDARD,
+
                 learning_content_version=15,
             )
             spec37_participant = Participant(
@@ -328,7 +328,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 current_step="learning",
                 experiment_spec_version=37,
                 protocol_id="experiment-plan-2026-11-04-presurvey-baseline-v2",
-                question_set_mode=STANDARD,
+
                 learning_content_version=15,
             )
             spec38_participant = Participant(
@@ -337,7 +337,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 current_step="learning",
                 experiment_spec_version=38,
                 protocol_id=CURRENT_PROTOCOL_ID,
-                question_set_mode=STANDARD,
+
                 learning_content_version=15,
             )
             db.add_all([
@@ -441,22 +441,22 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
             assert uses_split(spec38_participant)
             assert not can_resume(spec32_participant)
             assert assessment_construct_key(
-                term.slug, "pretest", STANDARD,
+                term.slug, "pretest",
                 bank_version=HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD],
             ) == v2_question.construct_key
             assert assessment_construct_key(
-                term.slug, "pretest", STANDARD,
+                term.slug, "pretest",
                 bank_version=HISTORICAL_ASSESSMENT_BANK_VERSIONS[33][STANDARD],
             ) == v3_question.construct_key
             assert assessment_construct_key(
-                term.slug, "pretest", STANDARD,
+                term.slug, "pretest",
                 bank_version=HISTORICAL_ASSESSMENT_BANK_VERSIONS[34][STANDARD],
             ) == v4_question.construct_key
             assert assessment_construct_key(
-                term.slug, "pretest", STANDARD,
+                term.slug, "pretest",
                 bank_version=HISTORICAL_ASSESSMENT_BANK_VERSIONS[35][STANDARD],
             ) == active.construct_key
-            assert assessment_construct_key(term.slug, "pretest", STANDARD) == active.construct_key
+            assert assessment_construct_key(term.slug, "pretest") == active.construct_key
             assert latest_test_results(db, spec32_participant.id)["results"][0]["question_body"] == v2_snapshot[0]
             assert latest_test_results(db, spec33_participant.id)["results"][0]["question_body"] == v3_snapshot[0]
             assert latest_test_results(db, spec34_participant.id)["results"][0]["question_body"] == v4_attempt.question_body_snapshot

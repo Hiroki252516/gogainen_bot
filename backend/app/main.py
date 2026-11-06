@@ -84,9 +84,7 @@ from app.services.identity_mapping_cleanup import (
     recover_pending_identity_mapping_cleanups,
 )
 from app.services.option_order import current_option_order_mode, save_option_order_mode
-from app.services.question_sets import current_question_set_mode, require_aggregate_question_set_mode, save_question_set_mode
 from app.services.learning_glossary import load_learning_glossary, public_glossary
-from app.core.question_sets import QuestionSetMode, STANDARD, question_set_mode as effective_question_set_mode
 from app.services import identity_mapping
 from app.services.research_protocol import PresurveyPayload, SurveyPayload, presurvey_context, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
@@ -833,18 +831,14 @@ def api_recalculate(participant_id: str, db: Session = Depends(get_db)) -> dict:
 
 
 @app.get("/api/admin/evaluation-summary")
-def api_admin_summary(db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD) -> dict:
-    return admin_summary(db, require_aggregate_question_set_mode(question_set_mode))
+def api_admin_summary(request: Request, db: Session = Depends(get_db)) -> dict:
+    _reject_question_set_filter(request)
+    return admin_summary(db)
 
 
-class QuestionSetPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    mode: QuestionSetMode
-
-
-@app.get("/api/admin/question-set")
-def api_admin_question_set(db: Session = Depends(get_db)):
-    return JSONResponse({"mode": current_question_set_mode(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
+def _reject_question_set_filter(request: Request) -> None:
+    if "question_set_mode" in request.query_params:
+        raise HTTPException(status_code=422, detail="問題版フィルターは廃止されました。")
 
 
 class PretestDisplayPayload(BaseModel):
@@ -902,11 +896,6 @@ def api_save_learning_material_glossary_mode(payload: LearningMaterialGlossaryMo
     return {"mode": learning_material_glossary_mode.save_setting(db, payload.mode), "applies_to": "new_participants_only"}
 
 
-@app.put("/api/admin/question-set")
-def api_set_admin_question_set(payload: QuestionSetPayload, db: Session = Depends(get_db)):
-    return {"mode": save_question_set_mode(db, payload.mode), "applies_to": "new_participants_only"}
-
-
 @app.get("/api/admin/option-order")
 def api_admin_option_order(db: Session = Depends(get_db)) -> dict:
     return {"mode": current_option_order_mode(db), "applies_to": "new_participants_only"}
@@ -936,7 +925,6 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,
                 "option_order_mode": row.option_order_mode or "debug_fixed",
-                "question_set_mode": effective_question_set_mode(row.question_set_mode),
                 "experiment_spec_version": row.experiment_spec_version,
                 "protocol_id": row.protocol_id,
                 "can_resume": can_resume(row),
@@ -1019,24 +1007,28 @@ def api_delete_identity_mapping(participant_id: str):
 
 
 @app.get("/api/admin/logs/overview")
-def api_admin_logs_overview(db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD) -> dict:
-    return admin_logs_overview(db, require_aggregate_question_set_mode(question_set_mode))
+def api_admin_logs_overview(request: Request, db: Session = Depends(get_db)) -> dict:
+    _reject_question_set_filter(request)
+    return admin_logs_overview(db)
 
 
 @app.get("/api/admin/logs/overview.csv")
-def api_admin_logs_overview_csv(db: Session = Depends(get_db)):
+def api_admin_logs_overview_csv(request: Request, db: Session = Depends(get_db)):
+    _reject_question_set_filter(request)
     path = export_overview_logs_csv(db)
     return FileResponse(path, media_type="text/csv", filename=path.name)
 
 
 @app.get("/api/admin/logs/overview_excel.csv")
-def api_admin_logs_overview_excel_csv(db: Session = Depends(get_db)):
+def api_admin_logs_overview_excel_csv(request: Request, db: Session = Depends(get_db)):
+    _reject_question_set_filter(request)
     path = export_overview_logs_excel_csv(db)
     return FileResponse(path, media_type="text/csv", filename=path.name)
 
 
 @app.get("/api/admin/logs/overview.xlsx")
-def api_admin_logs_overview_xlsx(db: Session = Depends(get_db)):
+def api_admin_logs_overview_xlsx(request: Request, db: Session = Depends(get_db)):
+    _reject_question_set_filter(request)
     path = export_overview_logs_xlsx(db)
     return FileResponse(
         path,
@@ -1073,16 +1065,16 @@ def api_admin_participant_logs_xlsx(participant_id: str, db: Session = Depends(g
 
 
 @app.get("/api/admin/export/{name}.csv")
-def api_export_csv(name: str, db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD):
-    if name in {"hypothesis_metrics", "hypothesis_group_summary"}:
-        question_set_mode = require_aggregate_question_set_mode(question_set_mode)
-    path = export_csv(db, name, question_set_mode)
+def api_export_csv(name: str, request: Request, db: Session = Depends(get_db)):
+    _reject_question_set_filter(request)
+    path = export_csv(db, name)
     return FileResponse(path, media_type="text/csv", filename=path.name)
 
 
 @app.get("/api/admin/export/{name}.xlsx")
-def api_export_xlsx(name: str, db: Session = Depends(get_db), question_set_mode: QuestionSetMode = STANDARD):
-    path = export_hypothesis_metrics_xlsx(db, name, question_set_mode)
+def api_export_xlsx(name: str, request: Request, db: Session = Depends(get_db)):
+    _reject_question_set_filter(request)
+    path = export_hypothesis_metrics_xlsx(db, name)
     return FileResponse(
         path,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

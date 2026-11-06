@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from admin_client import AuthenticatedTestClient
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
-from app.core.question_sets import LEARNING_CONTENT_VERSIONS
 from app.db.session import SessionLocal
 from app.main import app
 from app.models import Attempt, Base, Participant, Question, QuestionOption, Term, now
@@ -46,10 +45,9 @@ def review_db():
             display_code=f"QR-UNIT-{uuid4().hex[:8]}",
             group_condition="control",
             current_step="pretest",
-            question_set_mode="standard",
-            learning_content_version=LEARNING_CONTENT_VERSIONS["standard"],
             experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
             protocol_id=CURRENT_PROTOCOL_ID,
+            learning_content_version=15,
             show_question_reviews=True,
             option_order_mode="debug_fixed",
         )
@@ -138,56 +136,38 @@ def test_question_review_setting_defaults_on_and_admin_api_is_strict():
 def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_null():
     client = AuthenticatedTestClient(app)
     previous_review = ok(client.get(SETTING_ENDPOINT))["enabled"]
-    previous_mode = ok(client.get("/api/admin/question-set"))["mode"]
     previous_order = ok(client.get("/api/admin/option-order"))["mode"]
     participant_ids: list[str] = []
     legacy_id: str | None = None
-    easy_id: str | None = None
     try:
         ok(client.put(SETTING_ENDPOINT, json={"enabled": True}))
-        ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
         standard_on = _register(client, "STANDARD-ON")
         participant_ids.append(standard_on)
         ok(client.put(SETTING_ENDPOINT, json={"enabled": False}))
         standard_off = _register(client, "STANDARD-OFF")
         participant_ids.append(standard_off)
 
-        assert client.put("/api/admin/question-set", json={"mode": "easy"}).status_code == 422
         with SessionLocal() as db:
             assert db.get(Participant, standard_on).show_question_reviews is True
             assert db.get(Participant, standard_off).show_question_reviews is False
-
-            easy = Participant(
-                display_code=f"QR-EASY-{uuid4().hex[:8]}",
-                group_condition="control",
-                current_step="pretest",
-                question_set_mode="easy",
-                learning_content_version=4,
-                experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
-                protocol_id=CURRENT_PROTOCOL_ID,
-                show_question_reviews=None,
-            )
 
             legacy = Participant(
                 display_code=f"QR-OLD-{uuid4().hex[:8]}",
                 group_condition="control",
                 current_step="start",
-                question_set_mode="standard",
                 experiment_spec_version=27,
                 protocol_id="experiment-plan-2026-10-29-split-tests-v1",
                 show_question_reviews=None,
             )
-            db.add_all([easy, legacy])
+            db.add(legacy)
             db.commit()
             legacy_id = legacy.id
-            easy_id = easy.id
 
         from app.db import session as database
 
         database.init_db()
         with SessionLocal() as db:
             assert db.get(Participant, legacy_id).show_question_reviews is None
-            assert db.get(Participant, easy_id).show_question_reviews is None
             assert db.get(Participant, standard_on).show_question_reviews is True
             assert db.get(Participant, standard_off).show_question_reviews is False
     finally:
@@ -199,14 +179,7 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
                 if legacy is not None:
                     db.delete(legacy)
                     db.commit()
-        if easy_id:
-            with SessionLocal() as db:
-                easy = db.get(Participant, easy_id)
-                if easy is not None:
-                    db.delete(easy)
-                    db.commit()
         ok(client.put(SETTING_ENDPOINT, json={"enabled": previous_review}))
-        ok(client.put("/api/admin/question-set", json={"mode": previous_mode}))
         ok(client.put("/api/admin/option-order", json={"mode": previous_order}))
 
 

@@ -6,7 +6,7 @@
 
 現行コードは仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`。新規参加者は同意後に4段階の用語事前知識6項目とAI利用2項目を含む事前アンケートv2を完了してからPRETESTを開始する。通常版はsplit-actions-v5で、登録時設定に応じ各用語の設問1または設問1・2を出題する。PRETEST・RETEST1/2・内部final_testの保存・採点と既存snapshotは維持する。辞書v4でRAGを注釈対象にし、教材内解説モードでは意味を参照して自然に説明する。仕様版37以下・旧protocolは閲覧専用とし、結果は履歴バンクで復元する。詳細は[事前アンケート](49_presurvey_baseline.md)、[選択肢条件](47_split_assessment_added_choices.md)、[RAG注釈](49_rag_glossary.md)。
 
-2026-10-30から新規登録は通常版固定。既存易しい版参加者は閲覧専用で、参加者向け画面・APIから再開・回答できない。易しい版の群集計・仮説CSVも停止するが、個別ログと全件生ログは参照できる。既存データと復元用バンクは保持する。詳細は[停止後の契約](22_question_set_modes.md)。
+新規登録・出題・学習・集計は通常版だけを扱い、問題バンクの切替経路はない。旧条件の保存データ削除は通常の起動・seedから分離し、[専用削除手順](../backend/scripts/purge_easy_mode_data.py)で明示実行する。
 
 ## 現行フロー（仕様版38）
 

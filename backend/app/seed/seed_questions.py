@@ -3,8 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal, init_db
 from app.models import Question, QuestionOption, Term
 from app.seed.data import SEED_TERMS
-from app.seed.content_loader import seed_terms
-from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, STANDARD, EASY, assessment_construct_key
+from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, STANDARD, assessment_construct_key
 
 
 def _sync_options(db: Session, question: Question, options: list[tuple[str, str, bool, str | None]]) -> None:
@@ -69,12 +68,7 @@ def _upsert_question(
 def seed_database(db: Session) -> None:
     active_slugs = {item["slug"] for item in SEED_TERMS}
     active_question_ids = set()
-    bank_items = [
-        (mode, index, item)
-        for mode in (STANDARD, EASY)
-        for index, item in enumerate(SEED_TERMS if mode == STANDARD else seed_terms(mode), start=1)
-    ]
-    for mode, index, item in bank_items:
+    for index, item in enumerate(SEED_TERMS, start=1):
         term = db.query(Term).filter(Term.slug == item["slug"]).one_or_none()
         if not term:
             term = Term(
@@ -90,45 +84,22 @@ def seed_database(db: Session) -> None:
         term.display_order = index
         term.is_active = True
 
-        if mode == STANDARD:
-            from app.services.split_assessment import split_specs
-            for phase, rounds in (("pretest", ["pretest_v1"]), ("retest", ["retest_v1", "retest_v2"])):
-                for round_key in rounds:
-                    for spec in split_specs(term.slug, round_key, bank_version=ASSESSMENT_BANK_VERSIONS[mode]):
-                        question = _upsert_question(db, term, phase=phase, question_type="split_single", body=spec["body"], expected_answer="A", construct_key=assessment_construct_key(term.slug, phase, mode), variant_key=spec["variant_key"], options=spec["options"])
-                        active_question_ids.add(question.id)
-            continue
-
-        for phase in ("pretest", "retest"):
-            variants = item["questions"][phase] if phase == "retest" else [item["questions"]["pretest"]]
-            for qd in variants:
-                question = _upsert_question(
-                    db,
-                    term,
-                    phase=phase,
-                    question_type="multi_select" if phase == "pretest" else "retest_multi_select",
-                    body=qd["body"],
-                    expected_answer=qd["expected"],
-                    construct_key=assessment_construct_key(item["slug"], phase, mode),
-                    variant_key=qd["variant_key"],
-                    options=qd["options"],
-                )
-                active_question_ids.add(question.id)
-
-        final_q = item["questions"].get("final_test")
-        if final_q:
-            question = _upsert_question(
-                db,
-                term,
-                phase="final_test",
-                question_type="final_multi_select",
-                body=final_q["body"],
-                expected_answer=final_q["expected"],
-                construct_key=assessment_construct_key(item["slug"], "final_test", mode),
-                variant_key=final_q["variant_key"],
-                options=final_q["options"],
-            )
-            active_question_ids.add(question.id)
+        from app.services.split_assessment import split_specs
+        for phase, rounds in (("pretest", ["pretest_v1"]), ("retest", ["retest_v1", "retest_v2"])):
+            for round_key in rounds:
+                for spec in split_specs(term.slug, round_key, bank_version=ASSESSMENT_BANK_VERSIONS[STANDARD]):
+                    question = _upsert_question(
+                        db,
+                        term,
+                        phase=phase,
+                        question_type="split_single",
+                        body=spec["body"],
+                        expected_answer="A",
+                        construct_key=assessment_construct_key(term.slug, phase),
+                        variant_key=spec["variant_key"],
+                        options=spec["options"],
+                    )
+                    active_question_ids.add(question.id)
 
     for term in db.query(Term).all():
         if term.slug not in active_slugs:

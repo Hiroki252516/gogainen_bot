@@ -82,9 +82,6 @@ def test_missing_v8_never_falls_back(tmp_path, monkeypatch):
         load_learning_content.cache_clear()
 
 
-def test_easy_mode_cannot_load_v8():
-    with pytest.raises(ValueError, match="version"):
-        load_learning_content("easy", 8)
 
 
 @pytest.mark.parametrize("version,spec_version,protocol", [(7, 14, OLD_PROTOCOL), (8, 15, "experiment-plan-2026-10-25-multi-agent-round2-v1")])
@@ -95,7 +92,7 @@ def test_round_two_history_uses_snapshot_or_saved_bank_without_writes(tmp_path, 
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
-            participant = Participant(display_code="ROUND2-HISTORY", group_condition="control", question_set_mode="standard",
+            participant = Participant(display_code="ROUND2-HISTORY", group_condition="control",
                                       experiment_spec_version=spec_version, protocol_id=protocol, learning_content_version=version)
             term = Term(slug="multi_agent", label="マルチエージェント", description="description", display_order=2)
             db.add_all([participant, term])

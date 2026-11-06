@@ -9,12 +9,10 @@ from statistics import mean, median
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, assert_current_experiment
-from app.core.question_sets import STANDARD, question_set_mode
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
 from app.services.split_assessment import uses_split, split_item_keys
 from app.services.first_question_only import enabled as first_question_enabled, question_numbers
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SUPPORTED_SURVEY_VERSIONS
-from app.services.question_sets import require_aggregate_question_set_mode
 
 METRICS_VERSION = "six-hypotheses-v4-question-selection"
 TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
@@ -143,7 +141,6 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     return {
         "metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
         "participant_id": participant.id, "display_code": participant.display_code,
-        "question_set_mode": question_set_mode(participant.question_set_mode),
         "scoring_unit": "subquestion" if split else "term", "questions_per_test": expected_count,
         "first_question_only": first_question_enabled(participant),
         "group_condition": participant.group_condition, "completion_reason": participant.completion_reason,
@@ -164,11 +161,10 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     }
 
 
-def current_metrics(db: Session, mode: str = STANDARD) -> list[dict]:
-    mode = require_aggregate_question_set_mode(mode)
+def current_metrics(db: Session) -> list[dict]:
     participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
                                                   protocol_id=CURRENT_PROTOCOL_ID, consent_checked=True).order_by(Participant.created_at, Participant.id).all()
-    return [participant_metrics(db, p) for p in participants if question_set_mode(p.question_set_mode) == mode]
+    return [participant_metrics(db, participant) for participant in participants]
 
 
 def _group(rows):
@@ -205,39 +201,35 @@ def _group(rows):
     return result
 
 
-def group_metrics(rows: list[dict], mode: str = STANDARD) -> dict:
-    mode = require_aggregate_question_set_mode(mode)
-    rows = [row for row in rows if row.get("question_set_mode", STANDARD) == mode]
+def group_metrics(rows: list[dict]) -> dict:
     conditions = sorted({row.get("first_question_only", False) is True for row in rows})
     if len(conditions) > 1:
         return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
-                "question_set_mode": mode, "groups": [], "routes": {},
+                "groups": [], "routes": {},
                 "differences_proposed_minus_control": {}, "material_item_differences": {},
-                "strata": [group_metrics([row for row in rows if (row.get("first_question_only") is True) == condition], mode) for condition in conditions],
+                "strata": [group_metrics([row for row in rows if (row.get("first_question_only") is True) == condition]) for condition in conditions],
                 "descriptive_only": True}
     first_only = conditions[0] if conditions else False
     groups = [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group])} for group in ("control", "proposed")]
     differences = {key: groups[1][key]["mean"] - groups[0][key]["mean"] if all(g[key]["mean"] is not None for g in groups) else None for key in ("h1", "h2", "h3", "h4", "h5", "h6")}
     item_differences = {k: groups[1]["h5"]["items"][k]["mean"] - groups[0]["h5"]["items"][k]["mean"] if all(g["h5"]["items"][k]["mean"] is not None for g in groups) else None for k in MATERIAL_RATING_KEYS}
     routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("initial_perfect_final_test", "learning_retest", "pretest_incomplete")}
-    return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "question_set_mode": mode, "groups": groups,
+    return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "groups": groups,
             "first_question_only": first_only, "questions_per_test": 3 if first_only else 6,
             "differences_proposed_minus_control": differences, "material_item_differences": item_differences,
             "routes": routes, "descriptive_only": True}
 
 
-def metrics_export_rows(rows: list[dict], *, grouped: bool, mode: str = STANDARD) -> list[dict]:
+def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
     """Return the canonical long-form records used by CSV and Excel exports."""
     import json
 
     records = []
-    mode = require_aggregate_question_set_mode(mode)
-    rows = [row for row in rows if row.get("question_set_mode", STANDARD) == mode]
-    source = group_metrics(rows, mode)
+    source = group_metrics(rows)
     if grouped and source.get("strata"):
         return [record for stratum in source["strata"] for record in metrics_export_rows(
             [row for row in rows if (row.get("first_question_only") is True) == stratum["first_question_only"]],
-            grouped=True, mode=mode,
+            grouped=True,
         )]
     if grouped:
         for group in source["groups"]:
@@ -264,14 +256,14 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool, mode: str = STANDARD
     for record in records:
         details = json.loads(record.get("details_json") or "{}")
         first_only = record.pop("first_question_only", source.get("first_question_only", False))
-        record["details_json"] = json.dumps({**details, "question_set_mode": mode, "first_question_only": first_only, "questions_per_test": 3 if first_only else 6}, ensure_ascii=False)
+        record["details_json"] = json.dumps({**details, "first_question_only": first_only, "questions_per_test": 3 if first_only else 6}, ensure_ascii=False)
         output.append({"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, **record})
     return output
 
 
-def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool, mode: str = STANDARD) -> Path:
+def write_metrics_csv(path: Path, rows: list[dict], *, grouped: bool) -> Path:
     """Write long-form numeric exports with denominators and status."""
-    records = metrics_export_rows(rows, grouped=grouped, mode=mode)
+    records = metrics_export_rows(rows, grouped=grouped)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8-sig") as stream:
         writer = csv.DictWriter(stream, fieldnames=METRICS_CSV_COLUMNS)

@@ -58,10 +58,10 @@ def test_only_llm_first_learning_variant_changes_and_v3_is_preserved():
         assert spec["options"][-1]["misconception_type"] == "unknown"
 
 
-@pytest.mark.parametrize("mode,version", [("standard", 4), ("easy", 3), ("easy", 5), ("standard", 99)])
-def test_mismatched_or_missing_learning_version_never_falls_back(mode, version):
+@pytest.mark.parametrize("version", [4, 99])
+def test_mismatched_or_missing_learning_version_never_falls_back(version):
     with pytest.raises(ValueError, match="version"):
-        learning_question_spec("llm_knowledge", "enrichment", mode=mode, content_version=version)
+        learning_question_spec("llm_knowledge", "enrichment", content_version=version)
 
 
 def test_missing_v5_file_does_not_use_v3(tmp_path, monkeypatch):

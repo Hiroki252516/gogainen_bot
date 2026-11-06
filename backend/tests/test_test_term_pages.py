@@ -35,15 +35,10 @@ def _page_payload(participant_id, page_questions, *, selected_ids=None, page_id=
     }
 
 
-@pytest.mark.parametrize(("mode", "expected_page_mode", "expected_count"), [
-    ("standard", "per_term", 6),
-])
-def test_registration_freezes_test_page_mode_for_new_participants(mode, expected_page_mode, expected_count):
+def test_registration_freezes_test_page_mode_for_new_participants():
     client = AuthenticatedTestClient(app)
-    previous_mode = ok(client.get("/api/admin/question-set"))["mode"]
     participant_id = None
     try:
-        assert mode == "standard"
         participant_id = ok(client.post("/api/registrations", json={
             "assignment_code": "A",
             "consent_checked": True,
@@ -52,14 +47,13 @@ def test_registration_freezes_test_page_mode_for_new_participants(mode, expected
         complete_presurvey(client, participant_id)
         with SessionLocal() as db:
             participant = db.get(Participant, participant_id)
-            assert participant.test_page_mode == expected_page_mode
+            assert participant.test_page_mode == "per_term"
         response = ok(client.get(f"/api/experiment/{participant_id}/pretest"))
-        assert response["test_page_mode"] == expected_page_mode
-        assert len(response["questions"]) == expected_count
+        assert response["test_page_mode"] == "per_term"
+        assert len(response["questions"]) == 6
     finally:
         if participant_id:
             ok(client.delete(f"/api/admin/participants/{participant_id}"))
-        ok(client.put("/api/admin/question-set", json={"mode": previous_mode}))
 
 
 def test_null_page_mode_remains_unmodified_and_uses_legacy_display():
