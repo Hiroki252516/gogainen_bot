@@ -1,5 +1,13 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-06 教材内解説の標準化（仕様版39・fix/issue-273）
+
+- 新規参加者へ仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を適用し、保存済みRuntimeSetting値に関係なく`integrated_material`を記録する。管理画面のモード切替と管理用GET/PUT APIを削除する。RuntimeSettingの旧列、参加者の履歴値、ログ・CSV、既存教材とglossary snapshotは維持する。
+- 仕様版38以下は既存方針どおり閲覧専用とし、仕様版38の通常版問題・結果は`split-actions-v5`で復元する。教材生成の意味参照、文字数条件、右側教材注釈欄の非表示、回答後解説・テスト注釈は維持する。
+- Backend全テストは隔離SQLiteで`1704 passed`。教材モード関連を含む5ファイルの重点テストは`89 passed`。仕様版38の問題snapshot復元、閲覧専用判定、旧modeログ保持、新規登録のRuntimeSetting値3条件（注釈欄のみ／教材内解説／NULL）を確認した。
+- Frontendの`npm test`全スクリプトと`npm run build`（TypeScriptを含む）が通過した。管理画面に切替UI/API参照がなく、過去ログ用のmode表示が残ることを確認した。Playwrightランタイムが利用できないため、隔離ブラウザでの画面確認は未実施。`git diff --check`も通過した。
+- 研究DB・通常のlocalhost:3000環境・実AI・GitHub Actions・コミット・pushは使用しない。自動検証は用語説明の意味的正確さや学習効果を実証しない。
+
 ## 2026-11-06 易しいモードの実行停止と削除手順
 
 - 新規登録・出題・学習・集計から問題版分岐を除き、通常版だけを使用する。Participant/RuntimeSettingの旧モード列と専用問題資産を削除処理で除去するまで、アプリ起動を匿名エラーで停止する。旧問題版APIは404、旧フィルター付き集計要求は422とし、通常版の履歴バンク・回答snapshot復元を維持する。

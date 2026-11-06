@@ -1,14 +1,14 @@
 # AI指示の目標と現行契約
 
-## 教材内用語解説モード（仕様版29導入、文字数契約は版30、辞書言い換えは版31）
+## 教材内用語解説モード（仕様版39の現行条件）
 
-初期値「注釈欄のみ」では、従来どおり固定辞書は教材生成AIへ渡さず、教材本文と表示用注釈snapshotを分ける。「教材内解説」を登録時に選んだ新規参加者に限り、辞書v3と16語のterm/definitionを`glossary_reference`として両群共通の任意入力に含める。仕様版31では定義文をそのまま転載せず、意味を参照して教材文脈に合わせて自然に言い換え、実際に使う登録語だけを説明し、定義にない性質を加えないよう指示する。現行の目標・許容範囲は注釈欄のみ700文字前後（600〜800）、教材内解説1000文字前後（600〜1200）。
+仕様版39では新規参加者を`integrated_material`に固定し、辞書v4のterm/definitionを`glossary_reference`として両群共通の教材生成入力に含める。定義文は転載用ではなく意味を確認する参照情報として扱い、教材文脈に合わせて自然に言い換え、実際に使う登録語だけを説明し、定義にない性質を加えないよう指示する。新規教材の目標・許容範囲は1000文字前後（600〜1200）。注釈欄のみ700文字前後（600〜800）の生成契約は既存データとの互換性のため保持するが、新規参加者では選択できない。
 
-この入力は両群で同じ形で投影し、群専用の診断・教授情報とは分離する。`TutorTurn.diagnosis_json.material_glossary`のsnapshotは引き続き保存するが、教材内解説モードでは参加者画面の教材用語注釈欄を表示しない。回答後解説のsnapshot・注釈表示は従来どおり。辞書全項目を本文へ列挙する指示ではなく、AIが実際にどの用語を説明したか、定義が意味的に正しいかは機械検査で保証しない。
+この入力は両群で同じ形で投影し、群専用の診断・教授情報とは分離する。`TutorTurn.diagnosis_json.material_glossary`のsnapshotは引き続き保存するが、仕様版39の新規教材では参加者画面の教材用語注釈欄を表示しない。回答後解説のsnapshot・注釈表示は従来どおり。辞書全項目を本文へ列挙する指示ではなく、AIが実際にどの用語を説明したか、定義が意味的に正しいかは機械検査で保証しない。旧annotation_only参加者の保存モードとsnapshotは変更しない。
 
-## 用語注釈と生成契約の境界（仕様版26導入・版31現行）
+## 用語注釈と生成契約の境界（仕様版26導入・版39現行）
 
-実験仕様版26で導入した注釈はbackendの固定辞書処理であり、現行の既定モード「注釈欄のみ」ではAIは生成しない。既定モードでは注釈のために入力・プロンプト・出力Schema・生成契約版v7を変更せず、tutor_message/summary/feedbackの文字列にも追記しない。回答後解説へ渡すmaterialも従来の本文だけ。共通履歴へ注釈を入れない。版29の「教材内解説」モードは明示的な実験条件であり、該当参加者だけにv3の`glossary_reference`を追加する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
+実験仕様版26で導入した注釈はbackendの固定辞書処理である。仕様版39の新規参加者は教材内解説に固定されるため、辞書v4を両群共通の`glossary_reference`として教材生成へ渡す。教材注釈snapshotは保存するが、教材本文や回答後解説へ自動挿入せず、共通回答履歴にも加えない。生成Schemaと契約v7は維持する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
 
 Wordと承認された実装判断を[20](20_experiment_plan_alignment.md)に記録する。6.7の共通・統制群指示を実装し、unknownの証拠Schema・taxonomy・検査・Mockも更新した。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
 
@@ -60,7 +60,7 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 ## 教材契約と履歴（版26の基準契約・版29で維持）
 
-現行は実験仕様版36 / `experiment-plan-2026-11-04-rag-glossary-v1`。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。教材内解説モードだけ辞書v4を共通任意入力として追加し、教授方略や出力Schemaは変更しない。仕様版36では辞書v4にRAGの定義と別表記だけを追加し、既存注釈・snapshot・AI task/schemaは変更しない。文字数契約はモード別にし、仕様版35以下は閲覧専用。
+現行は実験仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教授方略や出力Schemaは変更しない。RAGの定義・別表記を含む辞書v4と既存snapshotは維持する。文字数契約は履歴互換のためモード別にし、仕様版38以下は閲覧専用。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 

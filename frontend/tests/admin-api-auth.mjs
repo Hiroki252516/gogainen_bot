@@ -11,7 +11,6 @@ globalThis.fetch = async () => new Response(JSON.stringify({ detail: "expired" }
 
 for (const path of [
   "/api/admin/participants", "/api/admin/logs/overview?mode=all", "/api/seed",
-  "/api/admin/learning-material-glossary-mode",
   "/api/seed/?x=1", "/api/participants/123/evaluation-summary/recalculate",
   "/api/participants/123/evaluation-summary/recalculate/?x=1",
 ]) {

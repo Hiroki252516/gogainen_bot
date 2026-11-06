@@ -2,7 +2,7 @@
 
 ## 教材用語解説モードの保存（仕様版29）
 
-`RuntimeSetting.learning_material_glossary_mode`と`Participant.learning_material_glossary_mode`をnullable VARCHAR(32)で保存する。RuntimeSetting未設定またはNULLは実行時に`annotation_only`と解釈する。新規登録時に設定値をParticipantへsnapshotし、登録後の管理設定変更は既存参加者へ遡及しない。既存ParticipantはNULLのままとし、仕様版28以下は閲覧専用で再開できない。Participants CSV、参加者一覧・個別ログに登録時の生値を含め、旧NULLは「未記録（旧仕様）」として扱う。
+`RuntimeSetting.learning_material_glossary_mode`と`Participant.learning_material_glossary_mode`はnullable VARCHAR(32)として保持する。仕様版39以降、新規登録ではRuntimeSetting列を参照せず`integrated_material`をParticipantへ固定保存する。RuntimeSetting列は旧設定値の履歴保全用に残し、管理APIからは変更できない。既存ParticipantのモードとNULLは書き換えない。仕様版38以下は閲覧専用で再開できない。Participants CSV、参加者一覧・個別ログにはParticipantの保存値を含め、旧NULLは「未記録（旧仕様）」として扱う。
 
 ## 仕様版28の答え合わせ保存
 
@@ -24,7 +24,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 ## 現行の保存契約
 
-モデルの正本は backend/app/models/__init__.py。現行コードは実験仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を使用する。RAG辞書追加によるDB列・注釈JSON形式の変更はない。辞書v4はファイルで管理し、v1〜v3と既存JSON snapshotは保持する。アンケートは既存のParticipantSurveyをphase/version別に使い、DB列を追加しない。事前アンケートv2用のAPI・画面フローは仕様版37から引き継ぐ。仕様版37以下・旧アンケート回答を不変で保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36/37の結果復元はsplit-actions-v5を使う。詳細は[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材のモード別文字数契約と辞書言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。RuntimeSettingの単一行テーブルに設定列を追加する。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
+モデルの正本は backend/app/models/__init__.py。現行コードは仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を使用する。モード固定によるDB列・注釈JSON形式の変更はない。新規登録のモードは`integrated_material`、RuntimeSettingの旧モード列は保全目的で保持するが参照・更新しない。辞書v4と既存JSON snapshotは保持する。アンケートは既存のParticipantSurveyをphase/version別に使い、新DB列を追加しない。仕様版38以下・旧アンケート回答を不変で保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36〜38の結果復元はsplit-actions-v5を使う。詳細は[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材の文字数契約と言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 学籍番号はSQLAlchemyの研究DBへ追加しない。IDENTITY_MAPPING_PATHが指す別SQLiteへ、学籍番号・参加者ID・表示コード・作成日時・再送処理用キーを保存する。研究用エクスポート・AI入力・AIログ・冪等性のrequest_hash/response_jsonには学籍番号を含めない。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、登録は対応表を先行保存してから研究DBを確定し、通常の失敗では補償削除する。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
@@ -33,12 +33,12 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規参加者だけ仕様版38と`experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を保存し、retest_cycles_completedを0で初期化する。既存版37以下・異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版39と`experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を保存し、教材内解説モードとretest_cycles_completed=0を固定する。既存版38以下・異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 
 - Participant: 群、同意、進捗、開始・完了時刻、終了理由、実験仕様版、開始時に確定した選択肢配置・教材用語解説モード、学習後retestの採点済み回数。
-- RuntimeSetting: ID=1の単一行に、今後作成する参加者へ適用する選択肢配置・教材用語解説モードを保存する。未設定時の配置既定値は `debug_fixed`、用語解説モードは `annotation_only`。
+- RuntimeSetting: ID=1の単一行に、今後作成する参加者へ適用する選択肢配置を保存する。未設定時の配置既定値は `debug_fixed`。教材用語解説モード列は旧値保全のため残すが、現行コードは参照・更新しない。
 - Attempt: 問題ID、複数選択ID、フェーズ・周回、正誤・M1/M3/unknown、問題/選択肢snapshot、時刻。選択肢snapshotには参加者に表示したラベル・本文・順序を保存する。
 - LearnerState: 現在状態、主分類、方略、正答記録数、再発数、最終回答ID。
 - TutorSession / TutorTurn: 教材・固定問題snapshot、回答・解説、採点JSON、生成契約・版・検証・先行生成監査。学習確認問題snapshotにも表示時の選択肢ラベル・本文・順序を保存する。

@@ -189,14 +189,14 @@ def test_v5_matches_pr260_wording_and_pr264_review_fixes_while_preserving_v4_str
             assert [item["question_number"] for item in split_specs(term_slug, round_key, bank_version="split-actions-v5")] == [1, 2]
 
 
-def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snapshots(tmp_path):
+def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 38
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 39
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"
@@ -205,6 +205,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[35][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[36][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[37][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[38][STANDARD] == "split-actions-v5"
 
             term = db.query(Term).filter_by(slug="memory_process").one()
             active = db.query(Question).filter_by(
@@ -336,7 +337,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
                 group_condition="control",
                 current_step="learning",
                 experiment_spec_version=38,
-                protocol_id=CURRENT_PROTOCOL_ID,
+                protocol_id="experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1",
 
                 learning_content_version=15,
             )
@@ -434,7 +435,7 @@ def test_spec_38_keeps_v5_and_restores_prior_spec_results_without_changing_snaps
             assert not can_resume(spec36_rag_participant)
             assert not can_resume(spec36_presurvey_participant)
             assert not can_resume(spec37_participant)
-            assert can_resume(spec38_participant)
+            assert not can_resume(spec38_participant)
             assert uses_split(spec36_rag_participant)
             assert uses_split(spec36_presurvey_participant)
             assert uses_split(spec37_participant)

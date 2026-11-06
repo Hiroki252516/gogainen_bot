@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend
-from app.ai.interaction_history import COMMON_INPUT_KEYS, INTERACTION_HISTORY_VERSION, SHARED_QUESTION_ROUTE_VERSION, interaction_history_audit, project_model_payload
+from app.ai.interaction_history import COMMON_INPUT_KEYS, OPTIONAL_COMMON_INPUT_KEYS, INTERACTION_HISTORY_VERSION, SHARED_QUESTION_ROUTE_VERSION, interaction_history_audit, project_model_payload
 from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import taxonomy_for_prompt
 from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION
@@ -228,7 +228,9 @@ def test_both_groups_share_questions_transitions_and_feedback_history(initial, f
             assert generation.request_payload["experiment_spec_version"] == CURRENT_EXPERIMENT_SPEC_VERSION
             assert generation.request_payload["prompt_contract_version"] == PROMPT_CONTRACT_VERSION
             if group == "B":
-                assert set(generation.request_payload["input_projection"]) == set(COMMON_INPUT_KEYS)
+                projected_keys = set(generation.request_payload["input_projection"])
+                assert projected_keys == set(COMMON_INPUT_KEYS) | set(OPTIONAL_COMMON_INPUT_KEYS)
+                assert "glossary_reference" in projected_keys
         success = answer(next_turn, "ABC")
         assert success["next_action"] == "move_next"
         assert success["is_sufficient"] is True
@@ -276,7 +278,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 38
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 39
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
