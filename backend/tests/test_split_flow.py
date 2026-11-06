@@ -19,7 +19,6 @@ def ok(response):
 @pytest.mark.parametrize("target_slug", ["llm_knowledge", "multi_agent", "memory_process"])
 def test_split_flow(group, layout, first_role, target_slug):
     client = AuthenticatedTestClient(app)
-    ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
     ok(client.put("/api/admin/option-order", json={"mode": layout}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "SPLIT-SYNTHETIC"}))["participant_id"]
     complete_presurvey(client, pid)
@@ -78,7 +77,6 @@ def test_split_flow(group, layout, first_role, target_slug):
 @pytest.mark.parametrize("pretest_perfect", [False, True])
 def test_split_maximum_rounds_and_mastery(pretest_perfect):
     client = AuthenticatedTestClient(app)
-    ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": "B", "consent_checked": True, "student_number": "SPLIT-LIMIT"}))["participant_id"]
     complete_presurvey(client, pid)
     def answer(phase, correct):
@@ -103,38 +101,6 @@ def test_split_maximum_rounds_and_mastery(pretest_perfect):
     assert result["next_step"] == "survey"
     assert result["post_pretest_tests_completed"] == 2
     assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
-
-
-def test_easy_bank_is_preserved_and_easy_participant_records_are_read_only():
-    from app.seed.content_loader import assessment_question_spec
-
-    client = AuthenticatedTestClient(app)
-    assert client.put("/api/admin/question-set", json={"mode": "easy"}).status_code == 422
-    ok(client.put("/api/admin/option-order", json={"mode": "debug_fixed"}))
-    for slug in ("llm_knowledge", "multi_agent", "memory_process"):
-        historical = assessment_question_spec(slug, "pretest", mode="easy")
-        assert len(historical["options"]) == 10
-        assert historical["variant_key"] == "pretest_v1"
-
-    pid = ok(client.post("/api/registrations", json={"assignment_code": "B", "consent_checked": True, "student_number": "EASY-UNCHANGED"}))["participant_id"]
-    complete_presurvey(client, pid)
-    questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
-    assert len(questions) == 6
-    q = questions[0]
-    ok(client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "selected_option_ids": [q["options"][-1]["option_id"]]}))
-    with SessionLocal() as db:
-        participant = db.get(Participant, pid)
-        participant.question_set_mode = "easy"
-        db.commit()
-        before = [(a.id, a.question_body_snapshot, a.option_order_snapshot) for a in db.query(Attempt).filter_by(participant_id=pid).all()]
-        seed_database(db)
-        assert before == [(a.id, a.question_body_snapshot, a.option_order_snapshot) for a in db.query(Attempt).filter_by(participant_id=pid).all()]
-    assert client.get(f"/api/participants/{pid}/current-step").json()["can_resume"] is False
-    assert client.get(f"/api/experiment/{pid}/pretest").status_code == 409
-    assert client.post(f"/api/participants/{pid}/diagnose-pretest", json={}).status_code == 409
-    log = ok(client.get(f"/api/admin/participants/{pid}/logs"))
-    assert log["participant"]["question_set_mode"] == "easy"
-    assert log["participant"]["can_resume"] is False
 
 
 @pytest.mark.parametrize("group", ["A", "B"])

@@ -83,9 +83,6 @@ def test_missing_v11_never_falls_back(tmp_path, monkeypatch):
         load_learning_content.cache_clear()
 
 
-def test_easy_mode_cannot_load_v11():
-    with pytest.raises(ValueError, match="version"):
-        load_learning_content("easy", 11)
 
 
 @pytest.mark.parametrize("version,spec_version,protocol", [(10, 17, OLD_PROTOCOL), (11, 18, "experiment-plan-2026-10-26-memory-round2-v1"), (12, 20, "experiment-plan-2026-10-26-multi-memory-retests-v1"), (13, 21, "experiment-plan-2026-10-26-llm-round1-dh-v1"), (14, 24, "experiment-plan-2026-10-27-multi-memory-retest1-v1"), (15, CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)])
@@ -96,7 +93,7 @@ def test_memory_round_two_history_preserves_snapshot_and_saved_bank(tmp_path, mo
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
-            participant = Participant(display_code="MEMORY-V2-HISTORY", group_condition="control", question_set_mode="standard",
+            participant = Participant(display_code="MEMORY-V2-HISTORY", group_condition="control",
                                       experiment_spec_version=spec_version, protocol_id=protocol, learning_content_version=version)
             term = Term(slug="memory_process", label="記憶プロセス", description="description", display_order=2)
             db.add_all([participant, term])
@@ -153,25 +150,18 @@ def test_natural_memory_round_two_grading_feedback_replay_and_prefetch(group, la
     assert_learning_flow("memory_process", group, layout, initial, labels, expected_type, index=2)
 
 
-@pytest.mark.parametrize("mode", ["standard"])
-def test_current_spec_resolves_without_historical_mapping(mode):
+def test_current_spec_resolves_without_historical_mapping():
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     client = TestClient(app)
-    previous_mode = _ok(client.get("/api/admin/question-set"))["mode"]
-    try:
-        _ok(client.put("/api/admin/question-set", json={"mode": mode}))
-        created = _ok(client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "CURRENT-BANK-SYNTHETIC"}))
-        complete_presurvey(client, created["participant_id"])
-        questions = _ok(client.get(f"/api/experiment/{created['participant_id']}/pretest"))["questions"]
-        assert len(questions) == (6 if mode == "standard" else 3)
-        question = next(question for question in questions if question["term_slug"] == "memory_process")
-        with SessionLocal() as db:
-            participant = db.get(Participant, created["participant_id"])
-            assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
-            assert participant.learning_content_version == LEARNING_CONTENT_VERSIONS[mode]
-            term = db.query(Term).filter_by(slug="memory_process").one()
-            restored = db.get(Question, question["question_id"]) if mode == "standard" else _test_result_question(db, participant, term, "test", "pretest")
-            assert restored is not None and restored.id == question["question_id"]
-            assert restored.construct_key.endswith("split-actions-v5" if mode == "standard" else "scenario-actions-easy-v1")
-    finally:
-        _ok(client.put("/api/admin/question-set", json={"mode": previous_mode}))
+    created = _ok(client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "CURRENT-BANK-SYNTHETIC"}))
+    complete_presurvey(client, created["participant_id"])
+    questions = _ok(client.get(f"/api/experiment/{created['participant_id']}/pretest"))["questions"]
+    assert len(questions) == 6
+    question = next(question for question in questions if question["term_slug"] == "memory_process")
+    with SessionLocal() as db:
+        participant = db.get(Participant, created["participant_id"])
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
+        assert participant.learning_content_version == 15
+        restored = db.get(Question, question["question_id"])
+        assert restored is not None and restored.id == question["question_id"]
+        assert restored.construct_key.endswith("split-actions-v5")

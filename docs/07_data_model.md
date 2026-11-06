@@ -1,16 +1,12 @@
 # 現行データと履歴互換
 
-## 易しい版停止後のデータ保全（2026-10-30）
-
-易しい版停止時点では仕様版28・protocol・DBスキーマを変更しなかった。その後の版29で教材の用語解説モードだけを追加する。RuntimeSetting.question_set_modeの旧値easy、Participantの既存easy値は書き換えない。既存easy参加者・Attempt・TutorSession/TutorTurn・snapshot・EvaluationSummary・Question/QuestionOptionとYAMLは保持し、再開・回答・評価再計算・群集計の対象から除外する。管理者は個別ログ・参加者別CSV・全件生ログで閲覧できる。
-
 ## 教材用語解説モードの保存（仕様版29）
 
 `RuntimeSetting.learning_material_glossary_mode`と`Participant.learning_material_glossary_mode`をnullable VARCHAR(32)で保存する。RuntimeSetting未設定またはNULLは実行時に`annotation_only`と解釈する。新規登録時に設定値をParticipantへsnapshotし、登録後の管理設定変更は既存参加者へ遡及しない。既存ParticipantはNULLのままとし、仕様版28以下は閲覧専用で再開できない。Participants CSV、参加者一覧・個別ログに登録時の生値を含め、旧NULLは「未記録（旧仕様）」として扱う。
 
 ## 仕様版28の答え合わせ保存
 
-RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnullableで保存する。Attempt.question_review_acknowledged_atもnullableで、各用語の設問2のAttemptに答え合わせ確認時刻を保存する。新規通常版参加者は登録時のON/OFF値を保存し、易しい版は対象外のNULLとする。旧行は補完しない。参加者ログとparticipants CSVにshow_question_reviewsを含め、統合ログCSVの固定ヘッダーは維持し、確認時刻は既存のvalue_json形式で記録する。実装契約は[40](40_question_pair_answer_review.md)。
+RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnullableで保存する。Attempt.question_review_acknowledged_atもnullableで、各用語の設問2のAttemptに答え合わせ確認時刻を保存する。新規参加者は登録時のON/OFF値を保存する。旧行は補完しない。参加者ログとparticipants CSVにshow_question_reviewsを含め、統合ログCSVの固定ヘッダーは維持し、確認時刻は既存のvalue_json形式で記録する。実装契約は[40](40_question_pair_answer_review.md)。
 
 ## テスト結果表示snapshot（issue-233）
 
@@ -69,6 +65,6 @@ interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み
 
 旧回答の問題文・選択肢本文は保存時snapshotを優先する。旧自由回答採点のexpected_keywords列もlegacy_*マッピングとして保持し、新しいseedから更新しない。
 
-## 問題版の追加保存
+## 問題版の保存
 
-RuntimeSettingとParticipantにはnullableなquestion_set_mode列が存在する。新規参加者は常にstandardを保存する。旧easy値とNULLは既存行のまま維持する。通常版の現行学習版は15、易しい版4とそのテストバンクは履歴復元用に保持し、設定変更・seedで過去回答を上書きしない。教材・回答ログJSONにも版を併記する。詳細は[22](22_question_set_modes.md)。
+現行アプリは通常版だけを新規登録・出題に使用する。ParticipantとRuntimeSettingの旧question_set_mode列は専用の削除処理で物理削除する。通常版の履歴問題は版付きconstruct_keyと保存snapshotから復元し、版の異なる問題へフォールバックしない。

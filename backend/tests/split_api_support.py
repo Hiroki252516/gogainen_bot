@@ -90,8 +90,7 @@ def select_roles(question, roles):
 @contextmanager
 def create_trial(group, layout):
     client = AuthenticatedTestClient(app)
-    previous = {name: ok(client.get(f"/api/admin/{name}"))["mode"] for name in ("question-set", "option-order")}
-    ok(client.put("/api/admin/question-set", json={"mode": "standard"}))
+    previous = ok(client.get("/api/admin/option-order"))["mode"]
     ok(client.put("/api/admin/option-order", json={"mode": layout}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "SPLIT-CI-SYNTHETIC"}))["participant_id"]
     complete_presurvey(client, pid)
@@ -100,8 +99,7 @@ def create_trial(group, layout):
     finally:
         wait_for_prefetch_tasks()
         ok(client.delete(f"/api/admin/participants/{pid}"))
-        for name, mode in previous.items():
-            ok(client.put(f"/api/admin/{name}", json={"mode": mode}))
+        ok(client.put("/api/admin/option-order", json={"mode": previous}))
 
 
 def answer_test(client, pid, phase, slug, roles):

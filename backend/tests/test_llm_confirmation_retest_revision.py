@@ -151,7 +151,7 @@ def test_exact_question_text_roles_and_paragraphs(key, stage):
     assert assessment_question_spec("llm_knowledge", "final_test")["body"] == assessment_question_spec("llm_knowledge", "retest", 1)["body"]
 
 
-def test_missing_v12_and_wrong_mode_do_not_fall_back(tmp_path, monkeypatch):
+def test_missing_v12_does_not_fall_back(tmp_path, monkeypatch):
     try:
         with monkeypatch.context() as patch:
             patch.setattr(content_loader, "LEARNING_V12_CONTENT_PATH", tmp_path / "missing.yml")
@@ -160,8 +160,6 @@ def test_missing_v12_and_wrong_mode_do_not_fall_back(tmp_path, monkeypatch):
                 load_learning_content(content_version=12)
     finally:
         load_learning_content.cache_clear()
-    with pytest.raises(ValueError, match="version"):
-        load_learning_content("easy", 12)
 
 
 def _ok(response):

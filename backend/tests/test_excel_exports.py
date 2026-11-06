@@ -91,7 +91,7 @@ def _add_participant(factory):
         consent_checked=True,
         current_step="pretest",
         learning_content_version=LEARNING_CONTENT_VERSIONS["standard"],
-        question_set_mode="standard",
+
         experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
         protocol_id=CURRENT_PROTOCOL_ID,
     )
@@ -117,8 +117,8 @@ def test_excel_exports_match_existing_csv_data(isolated):
         ("hypothesis_metrics", "参加者別"),
         ("hypothesis_group_summary", "群別"),
     ):
-        xlsx = client.get(f"/api/admin/export/{name}.xlsx?question_set_mode=standard")
-        csv_response = client.get(f"/api/admin/export/{name}.csv?question_set_mode=standard")
+        xlsx = client.get(f"/api/admin/export/{name}.xlsx")
+        csv_response = client.get(f"/api/admin/export/{name}.csv")
         _assert_xlsx_matches_csv(xlsx, csv_response, sheet_title)
 
 

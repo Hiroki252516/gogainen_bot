@@ -30,7 +30,7 @@ OLD_PROTOCOL = "experiment-plan-2026-10-26-llm-round1-dh-v1"
 
 def test_v14_changes_only_the_four_requested_locations_and_keeps_v13():
     assert load_learning_content(content_version=14)["version"] == 14
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[22] == {"standard": "scenario-actions-v6", "easy": "scenario-actions-easy-v1"}
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[22] == {"standard": "scenario-actions-v6"}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[21] == HISTORICAL_ASSESSMENT_BANK_VERSIONS[22]
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     assert hashlib.sha256(content_loader.LEARNING_V13_CONTENT_PATH.read_bytes()).hexdigest() == "78fe46d82b29ab5cfcaab969def2410732d19e7306dfd96244a6325d4de78c57"
@@ -68,7 +68,7 @@ def test_revised_round_one_roles_and_paragraphs(term_slug, stage):
     assert options["J"]["body"] == "わからない。" and options["J"]["misconception_type"] == "unknown"
 
 
-def test_missing_v14_or_wrong_mode_never_falls_back(tmp_path, monkeypatch):
+def test_missing_v14_never_falls_back(tmp_path, monkeypatch):
     try:
         with monkeypatch.context() as patch:
             patch.setattr(content_loader, "LEARNING_V14_CONTENT_PATH", tmp_path / "missing.yml")
@@ -77,8 +77,6 @@ def test_missing_v14_or_wrong_mode_never_falls_back(tmp_path, monkeypatch):
                 load_learning_content(content_version=14)
     finally:
         load_learning_content.cache_clear()
-    with pytest.raises(ValueError, match="version"):
-        load_learning_content("easy", 14)
 
 
 def _ok(response):
@@ -111,7 +109,7 @@ def test_snapshot_or_saved_bank_restoration_and_old_rows_survive_seed_and_startu
         with Session(engine) as db:
             seed_database(db)
             term = db.query(Term).filter_by(slug=term_slug).one()
-            participant = Participant(display_code="MULTI-MEMORY-V1-HISTORY", group_condition="control", question_set_mode="standard",
+            participant = Participant(display_code="MULTI-MEMORY-V1-HISTORY", group_condition="control",
                                       learning_content_version=version, experiment_spec_version=spec_version, protocol_id=protocol)
             db.add(participant)
             db.flush()

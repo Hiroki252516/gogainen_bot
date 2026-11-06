@@ -4,18 +4,15 @@ import { mkdir } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const { LEARNING_VERIFY_ISOLATED, LEARNING_UI_BASE_URL, LEARNING_PLAYWRIGHT_MODULE, LEARNING_SCREENSHOT_DIR, LEARNING_TERM_SLUG, LEARNING_VARIANT_INDEX, LEARNING_QUESTION_SET_MODE, LEARNING_FIXTURE_DB_URL } = process.env;
+const { LEARNING_VERIFY_ISOLATED, LEARNING_UI_BASE_URL, LEARNING_PLAYWRIGHT_MODULE, LEARNING_SCREENSHOT_DIR, LEARNING_TERM_SLUG, LEARNING_VARIANT_INDEX, LEARNING_FIXTURE_DB_URL } = process.env;
 assert.equal(LEARNING_VERIFY_ISOLATED, "1");
 assert(LEARNING_UI_BASE_URL && LEARNING_PLAYWRIGHT_MODULE && LEARNING_SCREENSHOT_DIR);
 const base = new URL(LEARNING_UI_BASE_URL);
 const termSlug = LEARNING_TERM_SLUG ?? "llm_knowledge";
 const variantIndex = Number(LEARNING_VARIANT_INDEX ?? 1);
-const questionSet = LEARNING_QUESTION_SET_MODE ?? "standard";
 assert([1, 2, 3].includes(variantIndex));
 if (variantIndex === 3) assert(LEARNING_FIXTURE_DB_URL, "V3 requires an explicit isolated fixture database.");
-assert(["standard", "easy"].includes(questionSet));
 assert(variantIndex === 1 || termSlug === "multi_agent" || (["llm_knowledge", "memory_process"].includes(termSlug) && variantIndex === 2));
-assert(questionSet === "standard" || (termSlug === "multi_agent" && variantIndex === 2) || (["llm_knowledge", "memory_process"].includes(termSlug) && [1, 2].includes(variantIndex)));
 assert(["llm_knowledge", "multi_agent", "memory_process"].includes(termSlug));
 assert(["127.0.0.1", "localhost", "[::1]"].includes(base.hostname));
 assert(base.port && base.port !== "3000", "Never use the study frontend.");
@@ -72,18 +69,6 @@ const roundTwoBodies = [
   "案2で3つのAIに作業を分担させることは、1つのAIモデルの内部計算を複数に分割して処理速度を上げる方式と同じ種類の仕組みであると考える。"
 ];
 const roundTwoQuestionBody = "自治体が、被害状況や道路の情報をもとに、住民向けの避難案内を作成するAIシステムについて、次の2つの設計を比較している。\n\n案1： 1つのAIエージェントが、情報収集、避難方法の検討、住民向け案内文の作成を順番に行う。\n\n案2： 情報収集、避難方法の検討、案内文の作成をそれぞれ別のAIエージェントに担当させ、前の担当の結果を次の担当へ引き継ぐ。\n\n案1から案2に変更した場合の仕組みの違いについて、適切な説明を3つ選びなさい。";
-const easyRoundTwoBodies = [
-  "結果を渡す機能がないので、予定の担当が調査結果を使えるとは限らない。",
-  "役割を分けるだけでなく、どの情報を渡すか決める必要がある。",
-  "担当が別々の判断をしても、結果を受け渡して一つの案を作れる。",
-  "二つのAIがあるので、調査結果も自動で予定の担当へ伝わると考える。",
-  "役割名があれば渡す内容も順番も決まるので、共有の設計は省けると考える。",
-  "調査役が得た情報なので、確認せず予定に使っても正しいと考える。",
-  "調査結果の文章を担当AIの一人と数え、文章自体に予定を判断させる。",
-  "指示の中で手順を二つに分けたものを、別々の主体による協力として扱う。",
-  "複数のAIの連携を、一つのモデルの処理速度を上げる機能として扱う。"
-];
-const easyRoundTwoQuestionBody = "調査するAIと予定を作るAIを用意した。しかし調査結果を予定の担当へ送る処理は作っていない。\n\nこの場面について正しい説明を3つ選びなさい。";
 const roundThreeBodies = [
   "案1でWi-Fiの設定手順が検索ツールから返ってきた場合、その手順が学生の端末に合うかを確認し、どの対処を案内するかは、ツールを使うAIエージェントが判断する。",
   "案2では、調査担当のAIが見つけた設定手順や障害情報を、回答担当のAIが受け取り、学生の問い合わせ内容に合わせて説明を組み立てることで、2つのAIが連携できる。",
@@ -108,18 +93,6 @@ const memoryBodies = [
   "前回の会話を次の質問と一緒にプロンプトへ貼り付ける操作を、学生ごとの希望を継続して保存し、変更に応じて更新できる記憶管理の仕組みと同じものとして扱う。"
 ];
 const memoryQuestionBody = "大学が、授業内容について質問できる学習支援AIを開発している。学生は会話の中で「具体例を先に示してほしい」「結論から説明してほしい」など、説明の仕方について希望を伝えることがある。また、同じ学生でも、相談を重ねる中で希望が変わることがある。\n\n開発担当者は、同じ学生が別の日に新しく質問したとき、説明の仕方について希望を毎回伝え直さなくても、その学生が最後に伝えた希望に合わせて説明できるようにしたいと考えている。\n\nこのAIに記憶機能を設ける場合の対応として、適切なものを3つ選びなさい。";
-const easyMemoryBodies = [
-  "説明の希望を必要な要点だけ記録し、次回の相談で取り出す。",
-  "保存する内容と、次にその記録を使う手順を決めておく。",
-  "希望が変わったときに、前の記録を直せるようにしておく。",
-  "一度聞いた希望は変わらないと考え、その後の変更は確かめず使い続ける。",
-  "会話を全部残せば探す処理はいらないと考え、必要な記録を選ぶ機能を省く。",
-  "一度答えに使った情報はAI自体に残ると考え、保存する処理を用意しない。",
-  "希望を記録する仕組みをモデルの訓練とみなし、追加学習だけで置き換える。",
-  "記憶を保存する処理を利用者の検索画面とみなし、画面だけを作って済ませる。",
-  "今回の質問へ希望を貼るだけで、次回の保存や更新の機能もあるとみなす。"
-];
-const easyMemoryQuestionBody = "利用者は「例を多くして説明して」と希望した。会話を終えた後の相談にも、この希望を使わせたい。\n\n適切な対応を3つ選びなさい。";
 const memoryRoundTwoBodies = [
   "利用者が「辛い料理が好き」と伝えたら、その希望を利用者ごとの記録に保存し、別の日に相談があった際に関係する記録を取り出して、献立の提案に反映させる。",
   "料理の辛さや調理時間など、記録する希望の項目を決め、利用者ごとに情報を管理できるようにするとともに、記録を保持する期間や削除方法も設定する。",
@@ -132,31 +105,16 @@ const memoryRoundTwoBodies = [
   "前回の会話を次の相談と一緒にプロンプトへ貼り付ける操作を、利用者ごとの希望を継続して保存し、変更に応じて更新できる記憶管理の仕組みと同じものとして扱う。"
 ];
 const memoryRoundTwoQuestionBody = "料理の献立を提案するAIを開発している。利用者は会話の中で「辛い料理が好き」「調理は20分以内がよい」など、料理の好みや調理条件について希望を伝えることがある。また、同じ利用者でも、相談を重ねる中で希望が変わることがある。\n\n開発担当者は、同じ利用者が別の日に新しく献立を相談したとき、料理の好みや調理条件について希望を毎回伝え直さなくても、その利用者が最後に伝えた希望に合わせて提案できるようにしたいと考えている。\n\nこのAIに記憶機能を設ける場合の対応として、適切なものを3つ選びなさい。";
-const easyMemoryRoundTwoBodies = [
-  "新しい好みを保存しておけば、次回に今の希望を読み出せる。",
-  "古い記録を直さないまま使うと、今の希望に合わない提案になり得る。",
-  "次の相談に関係する記録を選んで取り出し、その回答に使える。",
-  "前の好みも記録してあるので、今も変わらず正しいものとして使える。",
-  "新しい希望を入力しただけで保存先も直ると考え、更新する処理を省く。",
-  "一度答えに使えば後にも残ると考え、新しい好みを保存しない。",
-  "記録を取り出す機能をモデルの訓練とみなし、読み出す代わりに追加学習する。",
-  "保存した好みの文章自体を検索の仕組みとみなし、取り出す処理を作らない。",
-  "記録管理を画面の表示と同じ機能とみなし、希望を画面に出すだけで済ませる。"
-];
-const easyMemoryRoundTwoQuestionBody = "AIが覚えていた好みを、利用者が「今は違うものが好き」と変えた。次の相談で使う記録を考える。\n\nこの場面について正しい説明を3つ選びなさい。";
 const questionFixtures = {
-  "standard:llm_knowledge:1": [llmBodies, llmQuestionBody],
-  "standard:llm_knowledge:2": [llmRoundTwoBodies, llmRoundTwoQuestionBody],
-  "standard:multi_agent:1": [multiBodies, multiQuestionBody],
-  "standard:multi_agent:2": [roundTwoBodies, roundTwoQuestionBody],
-  "standard:multi_agent:3": [roundThreeBodies, roundThreeQuestionBody],
-  "standard:memory_process:1": [memoryBodies, memoryQuestionBody],
-  "standard:memory_process:2": [memoryRoundTwoBodies, memoryRoundTwoQuestionBody],
-  "easy:multi_agent:2": [easyRoundTwoBodies, easyRoundTwoQuestionBody],
-  "easy:memory_process:1": [easyMemoryBodies, easyMemoryQuestionBody],
-  "easy:memory_process:2": [easyMemoryRoundTwoBodies, easyMemoryRoundTwoQuestionBody],
+  "llm_knowledge:1": [llmBodies, llmQuestionBody],
+  "llm_knowledge:2": [llmRoundTwoBodies, llmRoundTwoQuestionBody],
+  "multi_agent:1": [multiBodies, multiQuestionBody],
+  "multi_agent:2": [roundTwoBodies, roundTwoQuestionBody],
+  "multi_agent:3": [roundThreeBodies, roundThreeQuestionBody],
+  "memory_process:1": [memoryBodies, memoryQuestionBody],
+  "memory_process:2": [memoryRoundTwoBodies, memoryRoundTwoQuestionBody],
 };
-const fixture = questionFixtures[`${questionSet}:${termSlug}:${variantIndex}`];
+const fixture = questionFixtures[`${termSlug}:${variantIndex}`];
 assert(fixture, "Missing browser question fixture.");
 const [bodies, questionBody] = fixture;
 
@@ -178,11 +136,10 @@ async function api(request, path, method = "GET", data) {
 
 try {
   for (const width of [1440, 390]) for (const group of ["A", "B"]) for (const layout of ["debug_fixed", "randomized"]) for (const role of ["unknown", "M1", "M3"]) {
-    const caseName = `${termSlug}-${questionSet}-round${variantIndex}-${width}-${group}-${layout}-${role}`;
+    const caseName = `${termSlug}-round${variantIndex}-${width}-${group}-${layout}-${role}`;
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const page = await context.newPage();
     assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
-    await api(page.request, "/api/admin/question-set", "PUT", { mode: questionSet });
     await api(page.request, "/api/admin/option-order", "PUT", { mode: layout });
     const created = await api(page.request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "LEARNING-BROWSER-SYNTHETIC" });
     const questions = (await api(page.request, `/api/experiment/${created.participant_id}/pretest`)).questions;
@@ -250,7 +207,7 @@ engine = create_engine(url)
 with Session(engine) as db:
     participant = db.get(Participant, sys.argv[2])
     session = db.get(TutorSession, sys.argv[3])
-    assert participant and can_resume(participant) and participant.question_set_mode == "standard"
+    assert participant and can_resume(participant)
     assert participant.current_step == "learning_targets"
     assert session and session.participant_id == participant.id and session.ended_at is None
     assert db.scalar(select(TutorTurn.id).where(TutorTurn.tutor_session_id == session.id)) is None
@@ -277,11 +234,11 @@ engine.dispose()
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
     await assertQuestionLayout(page);
-    const preserveLines = questionSet === "standard" && ((termSlug === "multi_agent" && [2, 3].includes(variantIndex)) || (["llm_knowledge", "memory_process"].includes(termSlug) && [1, 2].includes(variantIndex)));
+    const preserveLines = (termSlug === "multi_agent" && [2, 3].includes(variantIndex)) || (["llm_knowledge", "memory_process"].includes(termSlug) && [1, 2].includes(variantIndex));
     assert.equal(await page.locator(".problem-block > p").evaluate((element) => getComputedStyle(element).whiteSpace), preserveLines ? "pre-wrap" : "normal");
     assert.equal(await page.locator(".problem-block > p strong").count(), 0);
     await page.screenshot({ path: `${LEARNING_SCREENSHOT_DIR}/${caseName}-question.png`, fullPage: true });
-    const focusIndex = questionSet === "standard" && variantIndex === 1
+    const focusIndex = variantIndex === 1
       ? termSlug === "multi_agent" ? 6 : termSlug === "memory_process" ? 7 : 8
       : 8;
     const lastChoice = question.options.find((option) => option.body === bodies[focusIndex]);
@@ -292,7 +249,7 @@ engine.dispose()
     assert.equal(await page.getByRole("checkbox", { checked: true }).count(), 1);
     await unknown.uncheck();
     const responseRole = role === "M3" ? "correct" : role === "M1" ? "unknown" : "mixed";
-    const revisedMemory = questionSet === "standard" && termSlug === "memory_process" && variantIndex === 1;
+    const revisedMemory = termSlug === "memory_process" && variantIndex === 1;
     const mixedBeliefIndex = revisedMemory ? 5 : 3;
     const mixedCategoryIndex = (termSlug === "llm_knowledge" && variantIndex === 1) || revisedMemory ? 7 : 6;
     const selectedBodies = responseRole === "correct" ? bodies.slice(0, 3) : responseRole === "unknown" ? ["わからない。"] : [bodies[0], bodies[mixedBeliefIndex], bodies[mixedCategoryIndex]];
@@ -313,7 +270,7 @@ engine.dispose()
       assert.equal(await page.getByText(questionBody, { exact: true }).count(), 1);
       assert.equal(await page.getByRole("checkbox").count(), 10);
     }
-    console.log(`ok ${termSlug} ${questionSet} round${variantIndex} ${width}px ${group} ${layout} ${role} -> ${responseRole}`);
+    console.log(`ok ${termSlug} round${variantIndex} ${width}px ${group} ${layout} ${role} -> ${responseRole}`);
     await context.close();
   }
 } finally {

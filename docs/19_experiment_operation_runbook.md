@@ -4,9 +4,15 @@
 
 登録前に管理画面の「設問1のみ出題」を選ぶ。ONは各用語の設問1、計3問。OFFは設問1・2、計6問。初期値OFFで、新規登録時に固定される。設定を変えても登録済み参加者には反映されない。一覧・ログの出題条件を確認し、3問/6問を混ぜて分析しない。詳細は[48](48_first_question_only.md)。
 
-## 現行の問題版運用（2026-10-30）
+## 現行の出題運用（2026-11-06）
 
-新規参加者は通常版のみで登録する。管理画面に問題版・集計版切替はなく、easyの旧設定値も新規登録へ適用しない。既存easy参加者は閲覧専用で再開・回答できず、群集計・仮説CSVから除外する。個別ログ、参加者別CSV、全件の生ログは参照可能。易しい版YAML、問題ID、snapshot、既存参加者と評価記録は履歴復元用に保持し、書換え・削除しない。[詳細](22_question_set_modes.md)。
+新規参加者は通常版で登録する。管理画面・APIに問題版・集計版の切替はなく、集計・結果復元も通常版だけを扱う。旧条件の研究記録と識別対応表を削除する場合は、アプリを停止し、[専用削除スクリプト](../backend/scripts/purge_easy_mode_data.py)のdry-run結果を確認後、明示した研究環境設定で実行する。起動・seed・通常テストは研究データを削除しない。
+
+## 廃止条件の研究データを削除する場合
+
+全てのAPI・workerプロセスを停止し、機関の既存バックアップ方針を確認する。専用スクリプトはバックアップを作らない。研究環境だけで`APP_ENV=research`、対象の`DATABASE_URL`、分離保管された`IDENTITY_MAPPING_PATH`を設定し、最初に`--execute`なしで件数だけのdry-runを行う。件数と接続先を照合してから、`--execute --confirm-database <正確なDB名> --app-stopped`を付けて実行する。スクリプトは参加者識別子を表示せず、失敗時は再試行情報をDBに保持する。失敗した場合は同じDB・対応表を指定して再試行し、マニフェストを手動削除しない。完了後は一時マニフェストを削除し、匿名件数の監査要約のみを残す。ダウンロード済みCSV、USB、外部コピーは別途管理する。
+
+ローカル`.local`成果物は研究DBと別処理である。対象パスを確認し、明示的な`--local-artifacts --execute --confirm-local-artifacts`なしに削除しない。
 
 ## 教材の文字数条件（仕様版30導入、現行仕様版36でも維持）
 
@@ -73,7 +79,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 2. ルート`.env`を設定し、`scripts/start-codex-app-server.sh`または`.ps1`でCodex app-serverを起動する
 3. `codex` または管理画面のログイン導線でChatGPT/Codexログインを確認する
 4. `docker compose up --build` を実行する
-5. `standard/learning_content.yml`、`easy/learning_content_easy.yml`の形式検証がbackend起動時に自動実行されることを確認する。固定テスト問題はseedされ、現行の学習確認問題は同用語のpretest/retest_v1（確認3はretest_v2）から参加者に固定された版のターンとして組み立てられる。旧学習YAMLは履歴復元用に保持する
+5. `standard/learning_content.yml`の形式検証がbackend起動時に自動実行されることを確認する。固定テスト問題はseedされ、現行の学習確認問題は同用語のpretest/retest_v1（確認3はretest_v2）から組み立てられる。旧通常版YAMLは履歴復元用に保持する
 6. `/admin` でAI backendが `codex_app_server` かつログイン済みであることを確認する（AI status APIは `/api/admin/ai/status`）
 7. `/admin` の選択肢配置が「ランダム配置」であることを確認する（設定APIは `GET /api/admin/option-order`）。必要なら「ランダム配置」へ切り替える（`PUT /api/admin/option-order`）。
 8. テスト・切り分け以外では `AI_BACKEND=mock` を使わない
@@ -121,7 +127,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 - ブラウザの戻るボタンやマウスのサイドボタンで同意書、診断、再テスト結果、完了済み学習画面へ戻った場合は、画面が現在の正規フェーズへ自動的に戻るまで操作しない。これは現在位置を確認するGETであり、回答や実験状態を変更しない。409が表示されても実験終了ではないため、画面を閉じずに現在の正規画面で続行する。
 - 回答済み問題へ戻った場合は、保存済みの選択肢が選択済みで表示され、入力は変更できない。「次の問題へ」で続行する。
 
-現行通常版（仕様版36）のPRETEST・RETESTは、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語を各2設問・4択単一選択で出題し、各用語の2問回答後にペア答え合わせを表示する。問題バンク`split-actions-v5`、設問3の非出題、誤答PRETEST設問の保存snapshot再利用は維持する。仕様版27〜31は`split-actions-v1`、32はv2、33はv3、34はv4、35はv5で復元し、35以下は閲覧専用とする。易しい版の従来形式は履歴復元用で、新規フローでは使用しない。[問題・保存・採点](39_split_assessment.md)、[答え合わせ](40_question_pair_answer_review.md)、[版32の改訂履歴](44_pretest_content_revision.md)、[版33の差分](45_pretest_memory_distractors.md)、[RAG注釈](49_rag_glossary.md)。/surveyは仮フォームで、送信時にparticipant_surveysへ保存する。
+現行通常版（仕様版36）のPRETEST・RETESTは、LLMに知識を与える方法、マルチエージェント、記憶プロセスの3用語を各2設問・4択単一選択で出題し、各用語の2問回答後にペア答え合わせを表示する。問題バンク`split-actions-v5`、設問3の非出題、誤答PRETEST設問の保存snapshot再利用は維持する。仕様版27〜31は`split-actions-v1`、32はv2、33はv3、34はv4、35はv5で復元し、35以下は閲覧専用とする。[問題・保存・採点](39_split_assessment.md)、[答え合わせ](40_question_pair_answer_review.md)、[版32の改訂履歴](44_pretest_content_revision.md)、[版33の差分](45_pretest_memory_distractors.md)、[RAG注釈](49_rag_glossary.md)。/surveyは仮フォームで、送信時にparticipant_surveysへ保存する。
 
 通常版のactiveな問題variantはpretest_v1とretest_v1/v2。内部final_testはretest_v1を共用し、その後はretest_v2へ進む。回次は全用語共通とし、未回答から推測しない。問題・採点の保全条件は[39](39_split_assessment.md)を参照する。答え合わせは各用語の設問1・2が保存された後、同じテスト画面内で行い、続行時の確認時刻を記録する。受入検証は未実施。問題内容、個別フィードバックの非公開情報、画面遷移の検証条件は[40](40_question_pair_answer_review.md)。
 
@@ -229,7 +235,3 @@ attainment_correct_rateはis_correctから計算した最終到達率で、final
 - 回答が不自然に短いケース
 
 ただし、個人情報はメモしない。
-
-## 停止前の問題版切替手順（履歴）
-
-この操作手順は停止前の履歴であり、現在は実施しない。現行では通常版だけを新規登録へ適用し、集計も通常版のみ。既存easy参加者の情報と全件生ログは保持する。[停止後の運用](22_question_set_modes.md)。研究DBへの検証用回答は作成せず、隔離DBで検証する。

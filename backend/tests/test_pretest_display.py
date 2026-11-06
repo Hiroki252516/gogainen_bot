@@ -15,12 +15,11 @@ ENDPOINT = "/api/admin/pretest-result-display"
 
 @pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("perfect", [False, True])
-@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("group,layout", [("A", "debug_fixed"), ("B", "randomized")])
-def test_display_snapshot_and_navigation(enabled, perfect, mode, group, layout):
+def test_display_snapshot_and_navigation(enabled, perfect, group, layout):
     client = AuthenticatedTestClient(app)
     previous = ok(client.get(ENDPOINT))["enabled"]
-    settings = {name: ok(client.get(f"/api/admin/{name}"))["mode"] for name in ("question-set", "option-order")}
+    settings = {name: ok(client.get(f"/api/admin/{name}"))["mode"] for name in ("option-order",)}
     pid = None
     try:
         ok(client.put(ENDPOINT, json={"enabled": enabled}))

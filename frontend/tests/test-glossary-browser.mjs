@@ -19,10 +19,9 @@ async function api(request, path, method = "GET", data) {
   return response.json();
 }
 
-async function create(request, mode, layout, group) {
+async function create(request, layout, group) {
   await api(request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD || "abc" });
   assert.equal((await api(request, "/api/admin/ai/status")).ai_backend, "mock");
-  await api(request, "/api/admin/question-set", "PUT", { mode });
   await api(request, "/api/admin/option-order", "PUT", { mode: layout });
   return api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "TEST-GLOSSARY-BROWSER-SYNTHETIC" });
 }
@@ -129,24 +128,21 @@ try {
   const baseline = await browser.newContext();
   await api(baseline.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD || "abc" });
   assert.equal((await api(baseline.request, "/api/admin/ai/status")).ai_backend, "mock");
-  for (const mode of ["standard", "easy"]) {
-    const record = await create(baseline.request, mode, "debug_fixed", "B");
-    const correctLabels = mode === "standard" ? new Set(["A"]) : new Set(["A", "B", "C"]);
-    for (const question of (await api(baseline.request, `/api/experiment/${record.participant_id}/pretest`)).questions) {
-      correctPretests.set(question.question_id, question.options.filter((option) => correctLabels.has(option.label)).map((option) => option.option_id));
-    }
+  const baselineRecord = await create(baseline.request, "debug_fixed", "B");
+  for (const question of (await api(baseline.request, `/api/experiment/${baselineRecord.participant_id}/pretest`)).questions) {
+    correctPretests.set(question.question_id, question.options.filter((option) => option.label === "A").map((option) => option.option_id));
   }
   await baseline.close();
-  for (const width of [1440, 390]) for (const mode of ["standard", "easy"]) for (const layout of ["debug_fixed", "randomized"]) for (const group of ["A", "B"]) for (const perfect of [false, true]) {
+  for (const width of [1440, 390]) for (const layout of ["debug_fixed", "randomized"]) for (const group of ["A", "B"]) for (const perfect of [false, true]) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const page = await context.newPage();
     page.setDefaultTimeout(30_000);
-    const record = await create(page.request, mode, layout, group);
+    const record = await create(page.request, layout, group);
     await page.addInitScript((created) => {
       localStorage.setItem("participant_id", created.participant_id);
       localStorage.setItem("display_code", created.display_code);
     }, record);
-    const capture = mode === "standard" && layout === "debug_fixed" && group === "A";
+    const capture = layout === "debug_fixed" && group === "A";
     const pid = record.participant_id;
     await runTest(page, pid, "pretest", perfect, capture);
     if (!perfect) await api(page.request, `/api/participants/${pid}/give-up-learning`, "POST", {});
@@ -155,14 +151,14 @@ try {
     await runTest(page, pid, "retest", false, capture);
     assert.equal((await api(page.request, `/api/participants/${pid}/current-step`)).step, "survey");
     const logs = await api(page.request, `/api/admin/participants/${pid}/logs`);
-    assert.equal(logs.attempts.length, mode === "standard" ? 18 : 9);
+    assert.equal(logs.attempts.length, 18);
     assert(logs.attempts.every((attempt) => attempt.test_glossary.version === "learning-glossary-v4"));
-    console.log(`ok ${width}px ${mode} ${layout} ${group} ${perfect ? "initial-perfect" : "normal"}`);
+    console.log(`ok ${width}px ${layout} ${group} ${perfect ? "initial-perfect" : "normal"}`);
     await context.close();
   }
   const empty = await browser.newContext({ viewport: { width: 390, height: 1000 } });
   const page = await empty.newPage();
-  const record = await create(page.request, "standard", "debug_fixed", "B");
+  const record = await create(page.request, "debug_fixed", "B");
   await page.addInitScript((created) => localStorage.setItem("participant_id", created.participant_id), record);
   await page.route("**/api/experiment/*/pretest", async (route) => {
     const response = await route.fetch();

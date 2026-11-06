@@ -7,7 +7,7 @@ from app.seed.seed_questions import _upsert_question
 
 
 def seed_scenario_bank(db):
-    bank = load_content("standard")
+    bank = load_content()
     for item in bank["terms"]:
         term = db.query(Term).filter_by(slug=item["slug"]).one()
         for phase in ("pretest", "retest"):

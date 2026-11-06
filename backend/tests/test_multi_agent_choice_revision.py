@@ -61,8 +61,3 @@ def test_missing_v7_does_not_fall_back_to_an_older_bank(tmp_path, monkeypatch):
                 load_learning_content(content_version=7)
     finally:
         load_learning_content.cache_clear()
-
-
-def test_easy_mode_cannot_load_standard_v7():
-    with pytest.raises(ValueError, match="version"):
-        load_learning_content("easy", 7)

@@ -122,7 +122,3 @@ AICallLogの既存JSON内に実送信thread/start、turn/start全文、Schemaと
 監査ログ・CSVを研究者限定で取り扱うことは運用方針である。現行管理APIに管理者認証・権限確認はなく、アクセスがシステムで制限されているとはみなさない。[セキュリティ仕様](15_security_privacy.md) に未解決事項を記載する。
 
 `AICallLog.response_payload.generation_validation.material_structure` と `TutorTurn.diagnosis_json.material_structure_validation` に、headings（表示順）、section_count、sectionsの位置/見出し/本文文字数、evidence_placements（内部フィールド→節番号）、valid/missingを保存する。各生成試行を監査し、成功した最後の検証をTutorTurnに残す。AI出力Schema、公開API、DB列、CSV固定ヘッダは追加しない。Mockの決定論的な章立てはテスト専用で、実AIの見出しを固定する根拠にしない。
-
-## 易しい版の追加指示
-
-易しい版だけexplanation_level=beginnerを共通allowlistへ追加し、教材生成・正答要約・誤答解説の全タスクで短文、身近な例、必要な専門語の短い説明を求める。両群共通で、統制群へ診断情報は追加しない。通常版の指示・600〜800文字・必須内容・本文証拠・検査と停止条件は維持する。原文と版情報は[22](22_question_set_modes.md)に示す。

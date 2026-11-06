@@ -32,7 +32,7 @@ def history_db():
 
 def build_history(db, first_post="retest", last_round=2, latest_correct=False):
     participant = Participant(
-        display_code="ROUND-GUARD", group_condition="proposed", question_set_mode="standard",
+        display_code="ROUND-GUARD", group_condition="proposed",
         experiment_spec_version=27, protocol_id="experiment-plan-2026-10-29-split-tests-v1",
     )
     db.add(participant)
@@ -141,27 +141,6 @@ def test_startup_does_not_guess_or_rewrite_split_rounds(history_db, monkeypatch,
     with pytest.raises(HTTPException) as error:
         latest_failed_attempts(db, participant, term.id)
     assert error.value.detail["error_code"] == "split_test_round_unavailable"
-
-
-@pytest.mark.parametrize("phase,variant,expected", [
-    ("pretest", "pretest_v1", "test"), ("retest", "retest_v2", "retest_2"), ("final_test", "retest_v1", "retest_1"),
-])
-def test_easy_round_backfill_is_preserved(history_db, monkeypatch, phase, variant, expected):
-    db = history_db
-    participant = Participant(display_code="EASY-ROUND", group_condition="control", question_set_mode="easy",
-                              experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID)
-    question = db.query(Question).filter_by(phase=phase, variant_key=variant).filter(Question.construct_key.endswith("scenario-actions-easy-v1")).first()
-    db.add(participant)
-    db.flush()
-    attempt = Attempt(participant_id=participant.id, term_id=question.term_id, question_id=question.id,
-                      phase=phase, test_round=None, attempt_index=1)
-    db.add(attempt)
-    db.commit()
-    monkeypatch.setattr(database, "engine", db.get_bind())
-    database.init_db()
-    database.init_db()
-    db.expire_all()
-    assert attempt.test_round == expected
 
 
 @pytest.mark.parametrize("group", ["A", "B"])

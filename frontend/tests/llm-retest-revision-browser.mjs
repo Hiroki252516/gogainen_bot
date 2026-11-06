@@ -163,8 +163,7 @@ async function api(request, path, method = "GET", data) {
   return response.json();
 }
 
-async function register(request, group, mode, layout) {
-  await api(request, "/api/admin/question-set", "PUT", { mode });
+async function register(request, group, layout) {
   await api(request, "/api/admin/option-order", "PUT", { mode: layout });
   return api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "LLM-RETEST-BROWSER-SYNTHETIC" });
 }
@@ -211,15 +210,15 @@ async function assertLayout(page) {
 
 try {
   for (const width of [1440, 390]) for (const group of ["A", "B"]) for (const layout of ["debug_fixed", "randomized"])
-  for (const mode of ["standard", "easy"]) for (const initialPerfect of [false, true]) {
-    const name = `${termSlug}-${mode}-${width}-${group}-${layout}-${initialPerfect ? "final" : "learning"}`;
+  for (const initialPerfect of [false, true]) {
+    const name = `${termSlug}-${width}-${group}-${layout}-${initialPerfect ? "final" : "learning"}`;
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
     assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
-    const reference = await register(page.request, group, mode, "debug_fixed");
-    const created = await register(page.request, group, mode, layout);
+    const reference = await register(page.request, group, "debug_fixed");
+    const created = await register(page.request, group, layout);
     const records = [reference, created];
     await answerApiPhase(page.request, records, "pretest", initialPerfect ? "ABC" : "DEF");
     for (const record of records) await api(page.request, `/api/participants/${record.participant_id}/diagnose-pretest`, "POST", {});
@@ -234,12 +233,10 @@ try {
       const canonical = (await api(page.request, `/api/experiment/${reference.participant_id}/${route}`)).questions;
       const questions = (await api(page.request, `/api/experiment/${created.participant_id}/${route}`)).questions;
       const targetQuestion = questions.find(question => question.term_slug === termSlug);
-      if (mode === "standard") {
-        const source = expected[`retest_v${index}`];
-        assert.equal(targetQuestion.body, source.scenario + "\n\n" + source.task);
-        assert.deepEqual(targetQuestion.options.map(option => option.body).sort(), [...Object.values(source.choices).flat(), "わからない。"].sort());
-        assert.equal(targetQuestion.body.split("\n\n").length, source.scenario.split("\n\n").length + 1);
-      }
+      const source = expected[`retest_v${index}`];
+      assert.equal(targetQuestion.body, source.scenario + "\n\n" + source.task);
+      assert.deepEqual(targetQuestion.options.map(option => option.body).sort(), [...Object.values(source.choices).flat(), "わからない。"].sort());
+      assert.equal(targetQuestion.body.split("\n\n").length, source.scenario.split("\n\n").length + 1);
       await page.goto(new URL("/" + route, base).href);
       for (const [questionIndex, question] of questions.entries()) {
         await page.getByText(question.body, { exact: true }).waitFor();
@@ -249,7 +246,7 @@ try {
         await assertLayout(page);
         if (question.term_slug === termSlug) {
           const paragraph = page.locator(".notice > p");
-          assert.equal(await paragraph.evaluate(element => getComputedStyle(element).whiteSpace), mode === "standard" ? "pre-wrap" : "normal");
+          assert.equal(await paragraph.evaluate(element => getComputedStyle(element).whiteSpace), "pre-wrap");
           assert.equal(await paragraph.locator("strong").count(), 0);
           await page.screenshot({ path: `${RETEST_SCREENSHOT_DIR}/${name}-retest${index}.png`, fullPage: true });
           const longest = question.options.reduce((a, b) => a.body.length > b.body.length ? a : b);

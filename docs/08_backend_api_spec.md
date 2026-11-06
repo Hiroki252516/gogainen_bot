@@ -10,12 +10,6 @@
 
 教材生成応答は`show_material_glossary`を返す。`false`は教材内解説モードであることを示し、Frontendは教材用GlossarySidebarのみ隠す。既存の`glossary` snapshotは返却・保存を継続し、回答後解説の注釈APIは変更しない。教材内解説モードの教材生成入力には両群共通の任意項目`glossary_reference`を含める。辞書は共通回答履歴ではなく、診断情報とも独立する。
 
-## 易しい版の停止（2026-10-30）
-
-新規登録は通常版に固定する。GET `/api/admin/question-set`はmode=standardを返し、PUTでeasyを指定した場合は422、standardは受理する。`/api/participants/{id}/current-step`は既存easy参加者に`can_resume=false`と閲覧専用の遷移先を返し、出題・学習対象・survey・回答・採点など参加者向け再開/操作APIは409で拒否する。既存参加者のログ、参加者別CSV、全件の生ログは引き続き取得可能。
-
-GET `/api/admin/evaluation-summary`、`/api/admin/logs/overview`と、6仮説の`hypothesis_metrics`・`hypothesis_group_summary` CSVで`question_set_mode=easy`を指定した要求は422とする。標準の管理一覧と全件ログCSVは既存easy参加者の情報も保持して表示する。API構造、DB、保存記録は変更しない。
-
 ## 仕様版28のペア答え合わせAPI（現行版29で維持）
 
 GET/PUT /api/admin/question-review-display は管理認証下で、{ enabled: true/false, applies_to: "new_standard_participants_only" }を扱う。enabledは厳密なbooleanとする。既定値はtrueとし、参加者登録時に通常版だけへ固定する。
@@ -110,7 +104,7 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 
 回答は `selected_option_ids` と時刻情報（response_time_sec、question_shown_at、answered_at）。テストはparticipant_id/question_id/phaseも指定する。廃止入力項目は422。
 
-事前・再テスト・内部final_testの取得APIは`test_page_mode`を返す。新規通常版は`per_term`、易しい版と既存NULL参加者は`per_question`。通常版の用語ページ形式は、新規参加者に限り同一用語の設問1・2を一括保存する。`POST /api/attempts/term-page`はparticipant_id、phase、term_slug、test_round、page_id、各設問のquestion_idと選択肢1件、共通表示/回答時刻、正のelapsed_time_secを受け、`Idempotency-Key`を必須とする。現在の2問であること、同じ用語・回次であることを検証し、同一トランザクションで確定する。既存回答は変更せず、異なる回答との競合は409。応答に正答・正誤・分類情報を含めない。既存の`POST /api/attempts`は維持する。
+事前・再テスト・内部final_testの取得APIは`test_page_mode`を返す。新規参加者は`per_term`で同一用語の設問1・2を一括保存する。`POST /api/attempts/term-page`はparticipant_id、phase、term_slug、test_round、page_id、各設問のquestion_idと選択肢1件、共通表示/回答時刻、正のelapsed_time_secを受け、`Idempotency-Key`を必須とする。現在の2問であること、同じ用語・回次であることを検証し、同一トランザクションで確定する。既存回答は変更せず、異なる回答との競合は409。応答に正答・正誤・分類情報を含めない。従来の`POST /api/attempts`は旧記録の互換読出しに残す。
 
 用語ページ時間は`Attempt.test_page_timing_json`（nullable JSON）へpage_id、`measurement_version=term_page_v1`、elapsed_time_secを記録し、新形式の設問別`response_time_sec`はNULLとする。2問には同じpage_id・時間を保存し、合計時間ではpage_idを一度だけ数える。従来記録は設問ごとのresponse_time_secで計算する。統合ログCSVの列は増やさず、JSON値・summary・表示単位フィールドで区別する。詳細は[設問分割仕様](39_split_assessment.md#テスト画面と時間計測issue-208)。
 
@@ -124,8 +118,8 @@ NULL・版1〜25・未対応版・旧protocol_idは、本文検証・冪等再�
 
 ランダム配置の学習問題で送る `option_id` は、表示済みのTutorTurnスナップショットに保存するランダムIDであり、元の選択肢ラベルや判定役割を符号化しない。回答時はそのスナップショットを内部選択肢へ照合する。設問再取得・送信再試行では保存済みTutorTurnを返すため、同じ表示に対するIDは維持される。問題の表示ラベルと順序自体は問題バンクから決定論的に生成する。
 
-## 問題版と集計版
+## 廃止された問題版フィルター
 
 AIモデル・推論レベル設定はDBへ保存しないbackendプロセス内の一時設定であり、両群・進行中参加者にも次のAI呼び出しから適用する。状態/更新応答は有効値と選択肢を返す。モデル選択はcodex_app_serverでのみ適用でき、Mockでは409で拒否する。実際に使ったモデル・推論レベルと標準条件への一致はAI監査JSONに残る。環境変数の明示値は既定値より優先し、backend再起動後に管理上書きは消える。
 
-旧設定API `/api/admin/question-set` のGETはstandardを返し、easyへのPUTは停止応答422とする。新規Participantは登録時にstandardを保存し、RuntimeSettingに旧easyが残っていても参照しない。配置設定とは独立である。集計API/仮説CSVはstandardのみで、easy queryは422。参加者一覧・個別ログ・参加者CSV・全件の生ログCSVは全版を保持する。旧easy参加者はcurrent-stepで閲覧専用となり、参加者向け再開・回答APIは拒否される。他版の問題IDは409、不足する当時の問題は503。YAML・snapshot・DB記録は削除・変更しない。[22](22_question_set_modes.md)。
+`/api/admin/question-set`は廃止し、GET/PUTとも404を返す。集計・ログ一覧・仮説CSV/Excelに`question_set_mode`を含む旧フィルターを指定した要求は422で拒否する。管理画面と新規Participantは通常版固定であり、版別の応答項目・集計切替は提供しない。旧モード列と専用問題資産は保守用削除処理の対象とし、通常版の保存snapshotと履歴バンクは維持する。

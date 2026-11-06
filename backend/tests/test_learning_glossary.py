@@ -150,14 +150,13 @@ def test_invalid_dictionary_stops_startup_before_database_writes(monkeypatch):
 
 @pytest.fixture
 def restore_settings():
-    settings = {name: client.get(f"/api/admin/{name}").json()["mode"] for name in ("question-set", "option-order", "learning-material-glossary-mode")}
+    settings = {name: client.get(f"/api/admin/{name}").json()["mode"] for name in ("option-order", "learning-material-glossary-mode")}
     yield
     for name, mode in settings.items():
         client.put(f"/api/admin/{name}", json={"mode": mode})
 
 
-def start_learning(mode, group, student_number=None):
-    client.put("/api/admin/question-set", json={"mode": mode})
+def start_learning(group, student_number=None, labels="DEF"):
     client.put("/api/admin/option-order", json={"mode": "debug_fixed"})
     student_number = student_number or f"GLOSSARY-TEST-{uuid4().hex}"
     participant_response = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": student_number})
@@ -169,8 +168,8 @@ def start_learning(mode, group, student_number=None):
     questions = questions_response.json()["questions"]
     assert all(question["glossary"]["version"] == GLOSSARY_VERSION for question in questions)
     for question in questions:
-        labels = "DEF" if question["term_slug"] == "llm_knowledge" else "ABC"
-        selected = select_roles(question, ["M1" if labels == "DEF" else None] * (1 if mode == "standard" else 3))
+        role = "M1" if question["term_slug"] == "llm_knowledge" else None
+        selected = select_roles(question, [role])
         saved = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": selected})
         assert saved.status_code == 200, saved.text
     acknowledge_all_question_reviews(client, pid, "pretest")
@@ -182,11 +181,10 @@ def start_learning(mode, group, student_number=None):
     return pid, url, response.json()
 
 
-@pytest.mark.parametrize("mode", ["standard"])
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("labels", ["ABC", "DEF"])
-def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, restore_settings, monkeypatch):
-    pid, url, turn = start_learning(mode, group)
+def test_material_and_feedback_snapshots_replays_and_audit(group, labels, restore_settings, monkeypatch):
+    pid, url, turn = start_learning(group, labels=labels)
     expected_material = glossary_snapshot(turn["tutor_message"])
     assert turn["glossary"] == public_glossary(expected_material)
     assert turn["glossary"]["entries"]
@@ -220,10 +218,7 @@ def test_material_and_feedback_snapshots_replays_and_audit(mode, group, labels, 
             assert replay.json() == turn
 
     respond_url = f"/api/tutor-turns/{turn['turn_id']}/respond"
-    if mode == "standard":
-        selected = [select_roles(q, [None if labels == "ABC" else "M1"])[0] for q in turn["practice_question"]["questions"]]
-    else:
-        selected = [option["option_id"] for option in turn["practice_question"]["options"] if option["label"] in labels]
+    selected = [select_roles(q, [None if labels == "ABC" else "M1"])[0] for q in turn["practice_question"]["questions"]]
     body = {"selected_option_ids": selected}
     response = client.post(respond_url, json=body, headers={"Idempotency-Key": "glossary-feedback"})
     assert response.status_code == 200, response.text
@@ -259,7 +254,7 @@ def test_integrated_material_mode_is_common_to_both_groups_and_snapshotted(resto
     projections = {}
     participant_ids = []
     for group in ("A", "B"):
-        pid, _url, turn = start_learning("standard", group, student_number=f"GLOSSARY-MODE-{group}")
+        pid, _url, turn = start_learning(group, student_number=f"GLOSSARY-MODE-{group}")
         participant_ids.append(pid)
         assert turn["show_material_glossary"] is False
         assert turn["glossary"]["entries"]
@@ -302,22 +297,3 @@ def test_integrated_material_mode_is_common_to_both_groups_and_snapshotted(resto
         assert logs["participant"]["learning_material_glossary_mode"] == "integrated_material"
     csv_response = client.get("/api/admin/export/participants.csv")
     assert "learning_material_glossary_mode" in csv_response.text.splitlines()[0]
-
-
-def test_old_v7_question_lookup_uses_its_own_bank_without_snapshot(restore_settings):
-    participant = client.post("/api/participants", json={
-        "assignment_code": "B", "consent_checked": True, "student_number": "OLD-EASY-LOOKUP",
-    })
-    assert participant.status_code == 200, participant.text
-    pid = participant.json()["participant_id"]
-    from app.models import Term
-    with SessionLocal() as db:
-        p = db.get(Participant, pid)
-        p.question_set_mode = "easy"
-        p.experiment_spec_version = 7
-        p.protocol_id = "experiment-plan-2026-10-24-easy-version-v1"
-        db.commit()
-        term = db.query(Term).filter_by(slug="llm_knowledge").one()
-        question = experiment._test_result_question(db, p, term, "retest_2", "retest")
-        assert question.variant_key == "retest_v2"
-        assert question.construct_key.endswith("scenario-actions-easy-v1")

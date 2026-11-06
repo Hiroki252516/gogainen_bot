@@ -134,7 +134,6 @@ async function answerTermPages(page, participant, phase, m1ChoiceIds, width, ass
 try {
   const baseline = await browser.newContext();
   await api(baseline.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
-  await api(baseline.request, "/api/admin/question-set", "PUT", { mode: "standard" });
   await api(baseline.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
   const reference = await api(baseline.request, "/api/registrations", "POST", {
     assignment_code: "A", consent_checked: true, student_number: `SPLIT-MODE-REFERENCE-${Date.now()}`,
@@ -152,7 +151,6 @@ try {
         page.setDefaultTimeout(30000);
         await api(page.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
         assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
-        await api(page.request, "/api/admin/question-set", "PUT", { mode: "standard" });
         await api(page.request, "/api/admin/option-order", "PUT", { mode: optionOrder });
         const participant = await api(page.request, "/api/registrations", "POST", {
           assignment_code,

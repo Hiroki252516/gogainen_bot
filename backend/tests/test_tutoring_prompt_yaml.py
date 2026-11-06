@@ -59,8 +59,7 @@ def test_rendered_prompt_matches_expected_contract_hashes():
         "version": "learning-glossary-v2",
         "entries": [{"id": "weights", "term": "重み", "definition": "学習で調整される内部数値です。"}],
     }
-    payload["explanation_level"] = "beginner"
-    rendered["control_integrated_beginner"] = _render(
+    rendered["control_integrated"] = _render(
         payload,
         group="control",
         expected_type=None,
@@ -129,7 +128,7 @@ def test_rendered_prompt_matches_expected_contract_hashes():
 
     expected_hashes = {
         "control_annotation": "5edbe59e4bff8265a5913dd9a3adaacb9afd57806367a093edeb92f67f686994",
-        "control_integrated_beginner": "ed522532d3a5b154f250a1103bffc9c29c16c56271beb1faf4a901431a4ab89c",
+        "control_integrated": "a24bbe64263f8abcb4e4fedf08b17b41c38a2dea10442c8444ceac73ba70c66a",
         "proposed_m1_retry_counted": "2fa8a9de65971995e167ac5ee7d2c8a2cf61be7e70c208dad0392b7927661763",
         "proposed_m3_integrated": "6939f35c48a688d70d60f7ed7cc4b9aceff57526fd19f4d0b659c97b103e1b1e",
         "proposed_unknown_retry_uncounted": "d109b93ffd4ecbf994c2c9cca4b3229205e5cdf6b544dc86515ecf1c2186c18d",

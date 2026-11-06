@@ -15,7 +15,6 @@ type Participant = {
   current_step: string;
   can_resume: boolean;
   experiment_spec_version: number | null;
-  question_set_mode: "standard" | "easy";
   show_question_reviews: boolean | null;
   first_question_only: boolean | null;
   show_pretest_results: boolean;
@@ -38,7 +37,6 @@ type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
 type LearningMaterialGlossaryMode = "annotation_only" | "integrated_material";
 type LearningMaterialGlossarySetting = { mode: LearningMaterialGlossaryMode; applies_to: "new_participants_only" };
-const questionSetLabel = (mode: string | null | undefined) => mode === "easy" ? "易しい版" : "通常版";
 const materialGlossaryModeLabel = (mode: string | null | undefined) => mode === "annotation_only"
   ? "注釈欄のみ"
   : mode === "integrated_material"
@@ -95,7 +93,6 @@ const MISCONCEPTION_TRANSITION_TYPES = Object.keys(MISCONCEPTION_TRANSITION_LABE
 const LOG_FIELD_LABELS: Record<string, string> = {
   display_code: "被験者",
   legacy_read_only: "閲覧専用",
-  question_set_mode: "問題版",
   test_page_mode: "テスト表示方式（登録値）",
   effective_test_page_mode: "テスト表示方式",
   test_timing_unit: "テスト時間の単位",
@@ -213,7 +210,7 @@ export default function AdminPage() {
     let active = true;
     setSummary(null);
     setSummaryError("");
-    api("/api/admin/evaluation-summary?question_set_mode=standard")
+    api("/api/admin/evaluation-summary")
       .then((data) => { if (active) setSummary(data); })
       .catch((err) => { if (active) setSummaryError(err.message); });
     return () => { active = false; };
@@ -456,12 +453,11 @@ export default function AdminPage() {
   }
 
   const activeParticipants = participants.filter((participant) => participant.group_condition === activeGroup);
-  const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume && participant.question_set_mode === "standard").length;
+  const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume).length;
   const readOnlyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume).length;
-  const retiredEasyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume && participant.question_set_mode === "easy").length;
   const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup && (group.first_question_only === true) === summaryFirstOnly);
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
-  const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only && row.question_set_mode === "standard");
+  const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only);
 
   return (
     <AppShell step="管理画面">
@@ -569,7 +565,7 @@ export default function AdminPage() {
                 </div>
               ) : null}
             </div>
-            <div className="notice question-set-setting">
+            <div className="notice setting-notice">
               <label className="pretest-display-toggle">
                 <input type="checkbox" role="switch" checked={pretestDisplay?.enabled ?? false}
                   disabled={!pretestDisplay || pretestDisplaySaving}
@@ -580,7 +576,7 @@ export default function AdminPage() {
               {pretestDisplaySaving ? <p role="status">保存中...</p> : null}
               {pretestDisplayError ? <p className="danger" role="alert">{pretestDisplayError}</p> : null}
             </div>
-            <div className="notice question-set-setting">
+            <div className="notice setting-notice">
               <label className="pretest-display-toggle">
                 <input type="checkbox" role="switch" checked={questionReviewDisplay?.enabled ?? false}
                   disabled={!questionReviewDisplay || questionReviewDisplaySaving}
@@ -591,7 +587,7 @@ export default function AdminPage() {
               {questionReviewDisplaySaving ? <p role="status">保存中...</p> : null}
               {questionReviewDisplayError ? <p className="danger" role="alert">{questionReviewDisplayError}</p> : null}
             </div>
-            <div className="notice question-set-setting">
+            <div className="notice setting-notice">
               <label className="pretest-display-toggle">
                 <input type="checkbox" role="switch" checked={firstQuestionOnly?.enabled ?? false}
                   disabled={!firstQuestionOnly || firstQuestionOnlySaving}
@@ -602,7 +598,7 @@ export default function AdminPage() {
               {firstQuestionOnlySaving ? <p role="status">保存中...</p> : null}
               {firstQuestionOnlyError ? <p className="danger" role="alert">{firstQuestionOnlyError}</p> : null}
             </div>
-            <div className="notice question-set-setting">
+            <div className="notice setting-notice">
               <strong>教材の用語解説モード</strong>
               <div className="reasoning-effort-buttons" role="group" aria-label="教材の用語解説モード">
                 {([
@@ -624,11 +620,6 @@ export default function AdminPage() {
               <p className="muted">新規参加者のみ。初期値は「注釈欄のみ」です。教材内解説では、教材に登場する登録語を本文中で説明し、教材右側の注釈欄は表示しません。</p>
               {materialGlossaryModeSaving ? <p role="status">保存中...</p> : null}
               {materialGlossaryModeError ? <p className="danger" role="alert">{materialGlossaryModeError}</p> : null}
-            </div>
-            <div className="notice question-set-setting">
-              <strong>新規参加者に適用する問題版</strong>
-              <p>通常版</p>
-              <p className="muted">今後の新規参加者には通常版を適用します。易しい版の参加者は閲覧専用で、群集計には含まれません。</p>
             </div>
             <div className="notice">
               <strong>選択肢の配置</strong>
@@ -711,7 +702,7 @@ export default function AdminPage() {
         </section>
         <section className="panel stack">
           <h2>全体ログ</h2>
-          <p><strong>集計対象: 通常版</strong>。1回6設問・単一選択で集計します。生ログと被験者一覧は、閲覧専用の易しい版参加者を含めて表示します。</p>
+          <p><strong>集計対象: 全参加者</strong>。有効な現行仕様の参加者を対象に、設定された設問数と単一選択の回答を集計します。</p>
           {summaryError ? <p className="danger" role="alert">{summaryError}</p> : null}
           <p className="muted">{activeGroup}群の進捗、回答履歴、評価サマリーを確認します。</p>
           <div className="grid">
@@ -723,15 +714,11 @@ export default function AdminPage() {
               <strong>閲覧専用参加者数</strong>
               <p>{readOnlyParticipantCount}</p>
             </div>
-            <div className="notice">
-              <strong>停止した易しい版</strong>
-              <p>{retiredEasyParticipantCount}</p>
-            </div>
           </div>
           <p className="muted">以下の従来保存値・推移は参考情報です。6仮説の確定指標は専用の集計欄を参照してください。</p>
           <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
-          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["question_set_mode", "test_page_mode", "test_timing_unit", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "response_time_unit", "test_page_timing_json", "created_at"]} />
-          <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["question_set_mode", "display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["test_page_mode", "test_timing_unit", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "response_time_unit", "test_page_timing_json", "created_at"]} />
+          <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
         <HypothesisMetrics data={summary?.hypotheses} />
         <section className="panel">
@@ -741,7 +728,6 @@ export default function AdminPage() {
               <tr>
                 <th>ID</th>
                 <th>条件</th>
-                <th>問題版</th>
                 <th>出題設問</th>
                 <th>設問ごとの答え合わせ</th>
                 <th>教材の用語解説</th>
@@ -758,11 +744,10 @@ export default function AdminPage() {
                 <tr key={p.participant_id}>
                   <td>{p.display_code}</td>
                   <td>{p.group_condition}</td>
-                  <td>{questionSetLabel(p.question_set_mode)}</td>
                   <td>{p.can_resume ? (p.first_question_only ? "設問1のみ" : "設問1・2") : "旧仕様"}</td>
                   <td>{p.show_question_reviews === null ? "対象外" : p.show_question_reviews ? "ON" : "OFF"}</td>
                   <td>{materialGlossaryModeLabel(p.learning_material_glossary_mode)}</td>
-                  <td>{p.can_resume ? p.current_step : `${p.question_set_mode === "easy" ? "易しい版停止" : "旧仕様"}（閲覧専用）: ${p.current_step}`}</td>
+                  <td>{p.can_resume ? p.current_step : `旧仕様（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
                   <td>
                     <div>{p.post_pretest_tests_completed ?? "-"} / {p.post_pretest_test_limit ?? "-"}</div>
@@ -798,7 +783,6 @@ export default function AdminPage() {
             <>
               <div className="notice">
                 <strong>{participantLog.participant.display_code}</strong>
-                <p>問題版: {questionSetLabel(participantLog.participant.question_set_mode)}</p>
                 <p>テスト表示方式: {participantLog.participant.effective_test_page_mode === "per_term" ? "用語ごと（2設問／ページ）" : "設問ごと"}</p>
                 <p>テスト時間の計測単位: {participantLog.participant.test_timing_unit === "term_page" ? "用語ページ" : "設問"}</p>
                 <p>
@@ -821,7 +805,7 @@ export default function AdminPage() {
                 <p>
                   学習ギブアップ: {participantLog.participant.give_up_learning_count ?? 0}回 / 実験ギブアップ: {participantLog.participant.give_up_experiment_count ?? 0}回
                 </p>
-                {!participantLog.participant.can_resume ? <p>{participantLog.participant.question_set_mode === "easy" ? "易しい版の実行を停止しています。保存済み記録は閲覧専用で、群集計から除外されます。" : "旧仕様の保存記録は閲覧専用です。"}</p> : null}
+                {!participantLog.participant.can_resume ? <p>旧仕様の保存記録は閲覧専用です。</p> : null}
                 <button className="secondary" disabled={recalculating || !participantLog.participant.can_resume} onClick={() => recalculateParticipantSummary(participantLog.participant.participant_id)}>
                   {recalculating ? "評価サマリー再計算中..." : "評価サマリーを再計算"}
                 </button>
@@ -849,7 +833,7 @@ export default function AdminPage() {
                 </details>
               ) : null}
               <LogList title="アンケート回答" rows={participantLog.surveys} fields={["phase", "survey_version", "responses", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]} />
-              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["question_set_mode", "test_page_mode", "test_timing_unit", "response_time_unit", "test_page_timing_json", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "created_at"]} />
+              <LogList title="回答履歴（テスト＋学習）" rows={participantLog.answer_history} fields={["test_page_mode", "test_timing_unit", "response_time_unit", "test_page_timing_json", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "created_at"]} />
               <LogList title="学習状態" rows={participantLog.learner_states} fields={["term_slug", "current_status", "current_stage_for_display", "primary_misconception", "teaching_strategy", "updated_at"]} />
               <SessionLog sessions={participantLog.tutor_sessions || []} />
             </>
@@ -1196,7 +1180,6 @@ function SessionLog({ sessions }: { sessions: any[] }) {
 function formatCell(field: string, value: any) {
   if (field === "learning_material_glossary_mode") return materialGlossaryModeLabel(value);
   if (value === null || value === undefined) return "-";
-  if (field === "question_set_mode") return questionSetLabel(value);
   if (field === "test_page_mode" || field === "effective_test_page_mode") return value === "per_term" ? "用語ごと（2設問／ページ）" : "設問ごと";
   if (field === "test_timing_unit" || field === "response_time_unit") return value === "term_page" ? "用語ページ" : value === "per_question" ? "設問" : String(value);
   if (typeof value === "boolean") {

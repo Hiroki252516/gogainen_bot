@@ -18,10 +18,9 @@ async function api(request, path, method = "GET", data) {
   return response.json();
 }
 
-async function participant(request, mode, group) {
+async function participant(request, group) {
   await api(request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD || "abc" });
   assert.equal((await api(request, "/api/admin/ai/status")).ai_backend, "mock");
-  await api(request, "/api/admin/question-set", "PUT", { mode });
   await api(request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
   const created = await api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "GLOSSARY-BROWSER-SYNTHETIC" });
   const pid = created.participant_id;
@@ -51,11 +50,11 @@ async function verifyNotes(page, label, expected) {
 }
 
 try {
-  for (const width of [1440, 390]) for (const mode of ["standard", "easy"]) for (const group of ["A", "B"]) for (const correct of [false, true]) {
+  for (const width of [1440, 390]) for (const group of ["A", "B"]) for (const correct of [false, true]) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const page = await context.newPage();
     page.setDefaultTimeout(30_000);
-    const created = await participant(page.request, mode, group);
+    const created = await participant(page.request, group);
     await page.addInitScript((record) => {
       localStorage.setItem("participant_id", record.participant_id);
       localStorage.setItem("display_code", record.display_code);
@@ -73,16 +72,16 @@ try {
     const feedback = await (await feedbackResponse).json();
     await page.getByText(correct ? "正解です。" : "不正解です。", { exact: true }).waitFor();
     await verifyNotes(page, "回答後解説の用語の補足", feedback.glossary);
-    await page.screenshot({ path: `${process.env.GLOSSARY_SCREENSHOT_DIR}/${width}-${mode}-${group}-${correct ? "correct" : "wrong"}.png`, fullPage: true });
+    await page.screenshot({ path: `${process.env.GLOSSARY_SCREENSHOT_DIR}/${width}-${group}-${correct ? "correct" : "wrong"}.png`, fullPage: true });
     assert(await page.getByRole("button", { name: feedback.session_completed ? "次へ" : "次の確認へ", exact: true }).isEnabled());
-    console.log(`ok ${width}px ${mode} ${group} ${correct ? "correct" : "wrong"}`);
+    console.log(`ok ${width}px ${group} ${correct ? "correct" : "wrong"}`);
     await context.close();
   }
 
   // A response fixture exercises the no-matching-terms rendering without changing saved materials.
   const context = await browser.newContext({ viewport: { width: 390, height: 1000 } });
   const page = await context.newPage();
-  const created = await participant(page.request, "standard", "B");
+  const created = await participant(page.request, "B");
   await page.addInitScript((record) => localStorage.setItem("participant_id", record.participant_id), created);
   await page.route("**/api/tutor-sessions/*/turns", async (route) => {
     const response = await route.fetch();

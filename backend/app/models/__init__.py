@@ -36,7 +36,6 @@ class Participant(Base):
     consented_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     current_step: Mapped[str] = mapped_column(String(64), default="start", nullable=False)
     learning_content_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    question_set_mode: Mapped[str | None] = mapped_column(String(32), nullable=True, default="standard")
     test_page_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     experiment_spec_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     protocol_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -58,7 +57,6 @@ class RuntimeSetting(Base):
     first_question_only: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     learning_material_glossary_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     option_order_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="debug_fixed")
-    question_set_mode: Mapped[str | None] = mapped_column(String(32), nullable=True, default="standard")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
