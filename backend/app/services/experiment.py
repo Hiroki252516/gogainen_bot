@@ -757,14 +757,13 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
     from app.services.pretest_display import current_setting
     show_test_results = current_setting(db)
     from app.services.question_review_display import current_setting as current_question_review_setting
-    from app.services.learning_material_glossary_mode import current_setting as current_material_glossary_setting
     participant = Participant(
         display_code=next_display_code(db),
         show_pretest_results=show_test_results,
         show_retest_results=show_test_results,
         show_question_reviews=current_question_review_setting(db),
         first_question_only=current_first_question_setting(db),
-        learning_material_glossary_mode=current_material_glossary_setting(db),
+        learning_material_glossary_mode=INTEGRATED_MATERIAL,
         group_condition=group_condition,
         assignment_method="admin_code",
         consent_checked=consent_checked,

@@ -1,12 +1,12 @@
 # 実験の概要と現行仕様
 
-## 仕様版38の現行コード
+## 仕様版39の現行コード
 
-現行コードは仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`。新規参加者は同意後、事前アンケートv2の必須8項目（用語知識6項目は4段階、AI利用頻度と自己評価は各10段階）を回答してから事前テストへ進む。事後アンケートv3にはシステム評価2項目、教材評価6項目、任意自由記述を保存する。H5は事後アンケートだけを参照する。共通辞書v4はRAGを含む17語で、テスト・教材・回答後解説から抽出し、教材内解説モードでは意味を参照して文脈に合わせて言い換える。仕様版37以下と旧protocolは閲覧専用とする。詳細は[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[受入記録](14_testing_acceptance.md)。
+現行コードは仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`。新規参加者は教材内解説モードに固定し、管理画面のモード切替UI/APIは提供しない。仕様版38以下と旧protocolは閲覧専用とし、既存参加者のモード・教材・snapshotは記録時の内容を保つ。事前アンケートv2（必須8項目）、事後アンケートv3、RAGを含む共通辞書v4と他の現行条件は維持する。教材内解説では辞書を意味参照として本文中で言い換え、教材右側の注釈欄を表示しない。詳細は[モード仕様](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版37の履歴記録
 
-当時の新規参加者は`experiment-plan-2026-11-04-presurvey-baseline-v2`を適用し、用語事前知識を4段階で保存した。現在は仕様版38に統合され、版37以下は閲覧専用。
+当時の新規参加者は`experiment-plan-2026-11-04-presurvey-baseline-v2`を適用し、用語事前知識を4段階で保存した。現在は仕様版39に統合され、版38以下は閲覧専用。
 
 ## 仕様版36の履歴記録
 
@@ -22,11 +22,11 @@
 
 通常版のPRETEST・RETEST・内部final_testで、設問1・2の両方を保存した後に同じテスト画面内で選択内容と正誤を示し、続行で次の用語へ進む。設定・API・保存・受入条件は[40](40_question_pair_answer_review.md)を参照する。
 
-当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。この機能は現行仕様版38でも維持する。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
+当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。この機能は現行仕様版39でも維持する。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
 
 ## 仕様版26で採用した共通の用語注釈辞書（現行版36でも維持）
 
-以下は採用時点の記録を含む。現在の保存版・readonly境界は冒頭の仕様版38の記述を正とする。
+以下は採用時点の記録を含む。現在の保存版・readonly境界は冒頭の仕様版39の記述を正とする。
 
 仕様版26で共通固定辞書learning-glossary-v2の16語を導入した。v1〜v3は履歴用に無変更で保持し、現行v4をテスト・回答後解説・教材注釈と教材内解説モードに使う。仕様版31で導入した教材内解説では辞書を意味参照として渡し、本文では定義を逐語転載せず自然に言い換える。仕様版36ではv1のRAG定義・別表記・出典をv4へ追加した。教材snapshotや回答後・テストの保存済みsnapshotは更新しない。AI、事前学習、ファインチューニング、プロンプトエンジニアリング、データベース、マルチエージェント、タスク、記憶プロセスの8語を注釈から除外する。長い除外語の一部からプロンプト・エージェントを抽出せず、独立して登場した場合は補足する。仕様版26の当時は新規だけprotocol_id=`experiment-plan-2026-10-27-test-glossary-v2`を保存し、版25以下を閲覧専用としていた。詳細は[24](24_learning_glossary.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、版25で採用した問題本文・分類理由は[38](38_round_two_revision.md)。
 
@@ -45,7 +45,7 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 ## 版・保存・フロー
 
-現行コードは新規参加者に仕様版38と`experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を保存する。仕様版37以下、旧protocol_id、NULL・未対応版は閲覧専用で保全する。既存行へ版・protocol・答え合わせ設定・確認時刻・教材解説モードを補完しない。
+現行コードは新規参加者に仕様版39と`experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を保存する。仕様版38以下、旧protocol_id、NULL・未対応版は閲覧専用で保全する。既存行へ版・protocol・答え合わせ設定・確認時刻・教材解説モードを補完しない。仕様版39の新規参加者は教材内解説モードを固定値として保存する。
 
 通常版テストは現行split-actions-v5により、3用語×2設問の6設問・4択単一選択となる。仕様版35で追加したPRETEST選択肢本文を使用し、RETEST1/2・内部final_testもv5を使う。設問3はデータだけ保持し、activeな問題・表示・採点には使わない。テスト上限・採点・回次は[39](39_split_assessment.md)、仕様版32のPRETEST本文は[44](44_pretest_content_revision.md)、現行差分と版復元は[45](45_pretest_memory_distractors.md)を参照する。答え合わせはPRETEST・RETEST・内部final_testに適用し、採点は6設問完了後に行う。学習確認には誤答PRETESTの保存済みsnapshotを使う。
 

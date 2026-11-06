@@ -1,10 +1,14 @@
 # 実験計画書との対応と実装判断
 
-## 仕様版38：事前アンケートv2とRAG用語注釈の統合
+## 仕様版39：教材内解説モードを新規参加者の標準に固定
 
-新規参加者へ仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を適用する。新規登録の事前アンケートは`presurvey-baseline-v2`を維持し、用語知識6項目を4段階で保存する。共通辞書v3は変更せずv4を追加し、RAG（検索拡張生成）を登録語・別表記として加える。定義文は教材内解説モードの意味参照に使い、本文へ逐語転載せず文脈に合わせて説明する。RAG追加では注釈の返却形式、採点、DB構造を変えず、事前アンケートv2のAPI・画面フローは仕様版37から引き継ぐ。
+新規参加者へ仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を適用し、教材モードを`integrated_material`に固定する。管理画面の切替UIと認証済みGET/PUT `/api/admin/learning-material-glossary-mode`を削除する。新規登録は旧RuntimeSetting値を参照せず、Participantへ固定値を保存する。Participantの履歴列とRuntimeSettingの旧設定列は削除・補完せず、後者は参照・更新しない。仕様版38以下・旧protocolは閲覧専用とし、旧モード、教材、snapshot、回答を変更しない。問題版、採点、アンケート、辞書、教材生成契約、DB構造は変更しない。現行教材は辞書v4を意味参照として使用し、600〜1200文字で登録語を自然に説明する。教材右側の注釈欄だけを非表示にし、回答後解説・テストの注釈は維持する。検証状況は[14](14_testing_acceptance.md)、履歴・表示契約は[41](41_learning_glossary_material_mode.md)を参照する。
 
-仕様版37以下と旧protocolは閲覧専用とし、仕様版36・37の結果は`split-actions-v5`で復元する。仕様版36には事前アンケートv1とRAG追加の異なるprotocol記録があるため、どちらも新規経路で再開させない。既存回答・snapshot・教材を記録時の内容で保全する。RAGの抽出は英字の完全語境界と既存のMarkdown表示文字規則に従う。表記・境界・リンク表示文字のテストは語義の教育的妥当性や学習効果を実証するものではない。詳細は[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、検証記録は[14](14_testing_acceptance.md)。
+## 仕様版38の履歴：事前アンケートv2とRAG用語注釈の統合
+
+当時の新規参加者へ仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を適用した。新規登録の事前アンケートは`presurvey-baseline-v2`を維持し、用語知識6項目を4段階で保存した。共通辞書v3は変更せずv4を追加し、RAG（検索拡張生成）を登録語・別表記として加えた。仕様版39への更新後、仕様版38は閲覧専用。
+
+仕様版38以下と旧protocolは閲覧専用とし、仕様版36〜38の結果は`split-actions-v5`で復元する。仕様版36には事前アンケートv1とRAG追加の異なるprotocol記録があるため、どちらも新規経路で再開させない。既存回答・snapshot・教材を記録時の内容で保全する。RAGの抽出は英字の完全語境界と既存のMarkdown表示文字規則に従う。表記・境界・リンク表示文字のテストは語義の教育的妥当性や学習効果を実証するものではない。詳細は[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、検証記録は[14](14_testing_acceptance.md)。
 
 ## 2026-11-04 事前知識の4段階化（仕様版37・履歴）
 
@@ -78,11 +82,11 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 
 > 現行変更: 学習確認は各用語・各セッション1回答とする。以下の過去の版や判断に記載された3回答・同一用語の再回答用先行生成は当時の記録である。
 
-> 2026-11-06時点の現行版は仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`。現行の問題版は通常版のみ。旧条件のコード・問題資産・保存記録を削除する変更は実験仕様版とprotocolを変えず、削除手順は[運用手順](19_experiment_operation_runbook.md)、検証は[受入記録](14_testing_acceptance.md)を参照する。
+> 仕様版38採用時の記録。現行版は冒頭の仕様版39節を参照する。現行の問題版は通常版のみ。旧条件のコード・問題資産・保存記録を削除する変更は実験仕様版とprotocolを変えず、削除手順は[運用手順](19_experiment_operation_runbook.md)、検証は[受入記録](14_testing_acceptance.md)を参照する。
 
 ## 仕様版28の採用仕様（仕様版35でも維持）
 
-設問ペア答え合わせは仕様版28 / experiment-plan-2026-10-30-question-review-v1で導入し、仕様版38でも維持する。現行コードの実験仕様版は38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`。仕様版27の採用時根拠[39](39_split_assessment.md)は変更せず保管する。
+設問ペア答え合わせは仕様版28 / experiment-plan-2026-10-30-question-review-v1で導入し、仕様版39でも維持する。仕様版27の採用時根拠[39](39_split_assessment.md)は変更せず保管する。
 
 通常版PRETEST・RETEST・内部final_testで、用語内の設問1・2を両方保存した後、同じテスト画面に本人の選択内容と正誤を表示する。ページ/URL遷移はせず、続行で次の用語へ進む。新設定は初期値ONの「設問ごとの答え合わせ」で、新規参加者だけに登録時snapshotとして固定する。既存のPRETEST全体結果スイッチは独立して残す。採点・学習遷移・テスト上限・評価式は変更しない。API・データ・受入条件は[40](40_question_pair_answer_review.md)。
 

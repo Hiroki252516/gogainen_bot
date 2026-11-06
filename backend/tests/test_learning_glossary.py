@@ -150,7 +150,7 @@ def test_invalid_dictionary_stops_startup_before_database_writes(monkeypatch):
 
 @pytest.fixture
 def restore_settings():
-    settings = {name: client.get(f"/api/admin/{name}").json()["mode"] for name in ("option-order", "learning-material-glossary-mode")}
+    settings = {"option-order": client.get("/api/admin/option-order").json()["mode"]}
     yield
     for name, mode in settings.items():
         client.put(f"/api/admin/{name}", json={"mode": mode})
@@ -191,21 +191,21 @@ def test_material_and_feedback_snapshots_replays_and_audit(group, labels, restor
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 38
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1"
-        assert p.learning_material_glossary_mode == "annotation_only"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 39
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"
+        assert p.learning_material_glossary_mode == "integrated_material"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material
-        assert 600 <= len(stored.tutor_message) <= 800
+        assert 600 <= len(stored.tutor_message) <= 1200
         length_validation = stored.diagnosis_json["material_length_validation"]
-        assert length_validation["target_character_count"] == 700
+        assert length_validation["target_character_count"] == 1000
         assert length_validation["min_character_count"] == 600
-        assert length_validation["max_character_count"] == 800
+        assert length_validation["max_character_count"] == 1200
         assert length_validation["valid"] is True
         metrics = stored.diagnosis_json["tutoring_output_metrics"]
-        assert metrics["target_character_count"] == 700
-        assert metrics["max_character_count"] == 800
-    assert turn["show_material_glossary"] is True
+        assert metrics["target_character_count"] == 1000
+        assert metrics["max_character_count"] == 1200
+    assert turn["show_material_glossary"] is False
 
     def no_recompute(_text):
         pytest.fail("saved glossary snapshots must not be recomputed")
@@ -235,9 +235,8 @@ def test_material_and_feedback_snapshots_replays_and_audit(group, labels, restor
         assert stored.ai_feedback == feedback["feedback"]
         assert stored.grading_json["feedback_glossary"] == expected_feedback
         calls = db.query(AICallLog).filter(AICallLog.request_payload["participant_id"].as_string() == pid).all()
-        for call in calls:
-            assert "glossary" not in json.dumps(call.request_payload["input_projection"], ensure_ascii=False)
-            assert "glossary_reference" not in call.request_payload["input_projection"]
+        material_call = next(call for call in calls if call.purpose == "generate_tutoring_turn")
+        assert material_call.request_payload["input_projection"]["glossary_reference"]["version"] == GLOSSARY_VERSION
     logs = client.get(f"/api/admin/participants/{pid}/logs").json()
     row = next(row for session in logs["tutor_sessions"] for row in session["turns"] if row["tutor_turn_id"] == turn["turn_id"])
     assert row["material_glossary"] == expected_material
@@ -250,7 +249,6 @@ def test_material_and_feedback_snapshots_replays_and_audit(group, labels, restor
 
 
 def test_integrated_material_mode_is_common_to_both_groups_and_snapshotted(restore_settings):
-    client.put("/api/admin/learning-material-glossary-mode", json={"mode": "integrated_material"})
     projections = {}
     participant_ids = []
     for group in ("A", "B"):

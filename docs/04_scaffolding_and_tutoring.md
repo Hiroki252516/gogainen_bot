@@ -1,10 +1,10 @@
 # 教材の教授方針と生成検査
 
-仕様版28で追加した設問ペア答え合わせは、AI生成や回答後解説ではなく、保存済みテスト回答の正誤・本人の選択を表示する独立したUI機能として仕様版36でも維持する。教材、回答後解説、教授方針は変更しない。教材内解説では現行辞書v4を意味の参照情報として渡し、定義文を本文へ逐語転載しないよう指示する。[答え合わせ仕様](40_question_pair_answer_review.md)。仕様版29の教材用語解説モードは[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件は[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の履歴差分は[45](45_pretest_memory_distractors.md)、仕様版36のRAG注釈は[49](49_rag_glossary.md)を参照。
+仕様版28で追加した設問ペア答え合わせは、AI生成や回答後解説ではなく、保存済みテスト回答の正誤・本人の選択を表示する独立したUI機能として現行仕様版39でも維持する。教材、回答後解説、教授方針は変更しない。教材内解説では現行辞書v4を意味の参照情報として渡し、定義文を本文へ逐語転載しないよう指示する。[答え合わせ仕様](40_question_pair_answer_review.md)。仕様版29の教材用語解説モードは[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件は[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の履歴差分は[45](45_pretest_memory_distractors.md)、仕様版36のRAG注釈は[49](49_rag_glossary.md)を参照。
 
 ## 本文とは別枠の注釈
 
-教材と回答後解説の表示文から、共通固定辞書v2の16語をbackendが抽出し、各文章の下に一覧表示する。事前/再テストも問題文・全選択肢の登録語を共通に補足する。注釈文字列自体は教材本文や本文証拠へ加えない。教材内解説モードでは辞書を教材生成へ渡し、本文中で実際に使う登録語の説明を促す。文字数契約は注釈欄のみ・教材内解説で異なる。[24](24_learning_glossary.md)、[42](42_learning_glossary_material_length.md)。
+backendは教材・回答後解説・事前/再テストの表示文から共通固定辞書v4の17語を抽出し、保存済みsnapshotを生成する。回答後解説とテストでは登録語の注釈を表示し、教材内解説に固定した新規参加者の教材ではsnapshotを監査用に保持しつつ右側注釈欄を表示しない。教材本文には辞書を意味参照として渡し、実際に使う登録語を文脈に合わせて説明するよう促す。注釈文字列自体は教材本文や本文証拠へ加えない。文字数契約は[24](24_learning_glossary.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)を参照。
 
 文書名はリンク互換のため維持するが、旧支援量の計算・更新は行わない。目標と現行実装を区別し、[計画書対応表](20_experiment_plan_alignment.md) を併読する。
 

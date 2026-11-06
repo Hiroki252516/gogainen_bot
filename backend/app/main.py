@@ -851,11 +851,6 @@ class QuestionReviewDisplayPayload(BaseModel):
     enabled: StrictBool
 
 
-class LearningMaterialGlossaryModePayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    mode: Literal["annotation_only", "integrated_material"]
-
-
 @app.get("/api/admin/pretest-result-display")
 def api_pretest_display(db: Session = Depends(get_db)):
     return JSONResponse({"enabled": pretest_display.current_setting(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
@@ -884,16 +879,6 @@ def api_first_question_only(db: Session = Depends(get_db)):
 @app.put("/api/admin/first-question-only")
 def api_save_first_question_only(payload: QuestionReviewDisplayPayload, db: Session = Depends(get_db)):
     return {"enabled": first_question_only.save_setting(db, payload.enabled), "applies_to": "new_standard_participants_only"}
-
-
-@app.get("/api/admin/learning-material-glossary-mode")
-def api_learning_material_glossary_mode(db: Session = Depends(get_db)):
-    return JSONResponse({"mode": learning_material_glossary_mode.current_setting(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
-
-
-@app.put("/api/admin/learning-material-glossary-mode")
-def api_save_learning_material_glossary_mode(payload: LearningMaterialGlossaryModePayload, db: Session = Depends(get_db)):
-    return {"mode": learning_material_glossary_mode.save_setting(db, payload.mode), "applies_to": "new_participants_only"}
 
 
 @app.get("/api/admin/option-order")

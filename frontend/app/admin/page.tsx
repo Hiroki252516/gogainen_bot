@@ -35,8 +35,6 @@ const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"]]
 type AiModel = (typeof AI_MODELS)[number][0];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
-type LearningMaterialGlossaryMode = "annotation_only" | "integrated_material";
-type LearningMaterialGlossarySetting = { mode: LearningMaterialGlossaryMode; applies_to: "new_participants_only" };
 const materialGlossaryModeLabel = (mode: string | null | undefined) => mode === "annotation_only"
   ? "注釈欄のみ"
   : mode === "integrated_material"
@@ -173,9 +171,6 @@ export default function AdminPage() {
   const [questionReviewDisplay, setQuestionReviewDisplay] = useState<{ enabled: boolean } | null>(null);
   const [questionReviewDisplaySaving, setQuestionReviewDisplaySaving] = useState(false);
   const [questionReviewDisplayError, setQuestionReviewDisplayError] = useState("");
-  const [materialGlossaryMode, setMaterialGlossaryMode] = useState<LearningMaterialGlossarySetting | null>(null);
-  const [materialGlossaryModeSaving, setMaterialGlossaryModeSaving] = useState(false);
-  const [materialGlossaryModeError, setMaterialGlossaryModeError] = useState("");
   const [summaryError, setSummaryError] = useState("");
   const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [login, setLogin] = useState<any>(null);
@@ -199,7 +194,6 @@ export default function AdminPage() {
     api<{ enabled: boolean }>("/api/admin/pretest-result-display").then(setPretestDisplay).catch((err) => setPretestDisplayError(err.message));
     api<{ enabled: boolean }>("/api/admin/first-question-only").then(setFirstQuestionOnly).catch((err) => setFirstQuestionOnlyError(err.message));
     api<{ enabled: boolean }>("/api/admin/question-review-display").then(setQuestionReviewDisplay).catch((err) => setQuestionReviewDisplayError(err.message));
-    api<LearningMaterialGlossarySetting>("/api/admin/learning-material-glossary-mode").then(setMaterialGlossaryMode).catch((err) => setMaterialGlossaryModeError(err.message));
     api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setAiStatusError(err instanceof Error ? err.message : String(err)));
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
@@ -379,22 +373,6 @@ export default function AdminPage() {
       setQuestionReviewDisplayError(err instanceof Error ? err.message : String(err));
     } finally {
       setQuestionReviewDisplaySaving(false);
-    }
-  }
-
-  async function updateMaterialGlossaryMode(mode: LearningMaterialGlossaryMode) {
-    if (!materialGlossaryMode || materialGlossaryModeSaving || materialGlossaryMode.mode === mode) return;
-    setMaterialGlossaryModeSaving(true);
-    setMaterialGlossaryModeError("");
-    try {
-      setMaterialGlossaryMode(await api<LearningMaterialGlossarySetting>("/api/admin/learning-material-glossary-mode", {
-        method: "PUT",
-        body: JSON.stringify({ mode })
-      }));
-    } catch (err) {
-      setMaterialGlossaryModeError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setMaterialGlossaryModeSaving(false);
     }
   }
 
@@ -600,26 +578,8 @@ export default function AdminPage() {
             </div>
             <div className="notice setting-notice">
               <strong>教材の用語解説モード</strong>
-              <div className="reasoning-effort-buttons" role="group" aria-label="教材の用語解説モード">
-                {([
-                  ["annotation_only", "注釈欄のみ"],
-                  ["integrated_material", "教材内解説"]
-                ] as [LearningMaterialGlossaryMode, string][]).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={materialGlossaryMode?.mode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
-                    aria-pressed={materialGlossaryMode?.mode === mode}
-                    disabled={!materialGlossaryMode || materialGlossaryModeSaving}
-                    onClick={() => updateMaterialGlossaryMode(mode)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <p className="muted">新規参加者のみ。初期値は「注釈欄のみ」です。教材内解説では、教材に登場する登録語を本文中で説明し、教材右側の注釈欄は表示しません。</p>
-              {materialGlossaryModeSaving ? <p role="status">保存中...</p> : null}
-              {materialGlossaryModeError ? <p className="danger" role="alert">{materialGlossaryModeError}</p> : null}
+              <p>教材内解説</p>
+              <p className="muted">新規参加者には教材内解説を適用します。教材に登場する登録語を本文中で説明し、教材右側の注釈欄は表示しません。</p>
             </div>
             <div className="notice">
               <strong>選択肢の配置</strong>

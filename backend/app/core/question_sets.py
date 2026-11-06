@@ -38,6 +38,7 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     35: {STANDARD: "split-actions-v5"},
     36: {STANDARD: "split-actions-v5"},
     37: {STANDARD: "split-actions-v5"},
+    38: {STANDARD: "split-actions-v5"},
 }
 
 
