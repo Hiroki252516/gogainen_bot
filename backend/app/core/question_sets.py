@@ -1,5 +1,5 @@
 STANDARD = "standard"
-ASSESSMENT_BANK_VERSIONS = {STANDARD: "split-actions-v6"}
+ASSESSMENT_BANK_VERSIONS = {STANDARD: "split-actions-v5"}
 LEARNING_CONTENT_VERSIONS = {STANDARD: 15}
 ASSESSMENT_BANK_VERSION = ASSESSMENT_BANK_VERSIONS[STANDARD]
 LEARNING_CONTENT_VERSION = LEARNING_CONTENT_VERSIONS[STANDARD]
@@ -41,7 +41,24 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     38: {STANDARD: "split-actions-v5"},
     39: {STANDARD: "split-actions-v5"},
     40: {STANDARD: "split-actions-v5"},
+    41: {STANDARD: "split-actions-v5"},
 }
+
+# Version 41 was used by parallel protocols. Keep the v5 default for the two
+# mainline protocols and restore the branch-specific v6 bank by protocol ID.
+HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
+    (41, "experiment-plan-2026-11-07-split-actions-v6-q1-only-v1"): {
+        STANDARD: "split-actions-v6",
+    },
+}
+
+
+def historical_assessment_bank_versions_for(participant):
+    key = (participant.experiment_spec_version, participant.protocol_id)
+    return HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS.get(
+        key,
+        HISTORICAL_ASSESSMENT_BANK_VERSIONS.get(participant.experiment_spec_version),
+    )
 
 
 def assessment_construct_key(term_slug: str, phase: str, *, bank_version: str | None = None) -> str:

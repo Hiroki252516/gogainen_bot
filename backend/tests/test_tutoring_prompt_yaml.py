@@ -6,6 +6,9 @@ import hashlib
 import pytest
 import yaml
 
+from app.ai.backend import strategy_for
+from app.ai.mandatory_elements import mandatory_element_requirements, mandatory_elements_schema
+from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
 from app.ai.tutoring_prompt import PROMPT_TEXT_PATH, _validate_prompt_text, build_tutoring_prompt
 
 
@@ -46,6 +49,50 @@ def test_prompt_yaml_is_valid_and_rejects_missing_required_sections():
     invalid["tutoring"]["group_rules"]["control"] = ["control-only instruction"]
     with pytest.raises(ValueError, match="group_rules.control is not supported"):
         _validate_prompt_text(invalid)
+
+    invalid = copy.deepcopy(raw)
+    del invalid["research_config"]["misconception_taxonomy"]["types"]["unknown"]
+    with pytest.raises(ValueError, match="must define M1, M3, and unknown"):
+        _validate_prompt_text(invalid)
+
+    invalid = copy.deepcopy(raw)
+    invalid["research_config"]["mandatory_elements"]["M1"]["wrong_belief"] = ""
+    with pytest.raises(ValueError, match="mandatory_elements.M1.wrong_belief"):
+        _validate_prompt_text(invalid)
+
+    invalid = copy.deepcopy(raw)
+    del invalid["research_config"]["teaching_strategies"]["proposed"]["by_type"]["M3"]
+    with pytest.raises(ValueError, match="by_type must define the taxonomy types"):
+        _validate_prompt_text(invalid)
+
+
+def test_fixed_tutoring_configuration_is_loaded_from_yaml():
+    config = yaml.safe_load(PROMPT_TEXT_PATH.read_text(encoding="utf-8"))["research_config"]
+    taxonomy = config["misconception_taxonomy"]
+    required_elements = config["mandatory_elements"]
+    strategy_config = config["teaching_strategies"]
+
+    assert TAXONOMY_VERSION == taxonomy["version"]
+    assert taxonomy_for_prompt() == taxonomy["types"]
+    for misconception_type, requirements in required_elements.items():
+        assert mandatory_element_requirements(misconception_type) == requirements
+        assert mandatory_elements_schema(misconception_type)["required"] == ["type", *requirements]
+
+    assert strategy_config == {
+        "control": "general_explanation",
+        "proposed": {
+            "by_type": {
+                "M1": "belief_revision",
+                "M3": "category_reorientation",
+                "unknown": "foundational_explanation",
+            },
+            "by_status": {"unknown": "foundational_explanation"},
+        },
+    }
+    assert strategy_for(None, None, "control") == "general_explanation"
+    for misconception_type, expected in strategy_config["proposed"]["by_type"].items():
+        assert strategy_for(misconception_type, None, "proposed") == expected
+    assert strategy_for(None, "unknown", "proposed") == strategy_config["proposed"]["by_status"]["unknown"]
 
 
 def test_tutoring_prompt_rejects_unsupported_group():
@@ -142,11 +189,11 @@ def test_rendered_prompt_matches_expected_contract_hashes():
     )
 
     expected_hashes = {
-        "control_annotation": "32fafd19f9037517779a903569f460fd21bbeeb788fc428aad151efa3dd4290a",
-        "control_integrated": "a8e9bb5afc3224b698d617d1137d8f91954193fc64c64b73c78f5fe3d86af9c7",
-        "proposed_m1_retry_counted": "2fa8a9de65971995e167ac5ee7d2c8a2cf61be7e70c208dad0392b7927661763",
-        "proposed_m3_integrated": "6939f35c48a688d70d60f7ed7cc4b9aceff57526fd19f4d0b659c97b103e1b1e",
-        "proposed_unknown_retry_uncounted": "d109b93ffd4ecbf994c2c9cca4b3229205e5cdf6b544dc86515ecf1c2186c18d",
+        "control_annotation": "c8c8af0baf80e2b2373ecbb7be74a11024160bfcec3c334dd27216521369195a",
+        "control_integrated": "1721e6b58cfc0a3b7e9b0858c276eda6bbf61030c687f482d499bc979f910b39",
+        "proposed_m1_retry_counted": "8fb509032ffff35d8609ddba255041f3ccc9703be5ffbb13364e94737eaadb46",
+        "proposed_m3_integrated": "371bef7de24f009149588d9c4a714b7b23c60d0be5b02593f3e9df625fbed15b",
+        "proposed_unknown_retry_uncounted": "360a8bf46a59071d1c7d681a121ff495873d42af4a9fc56ae203d0e5304a5076",
     }
     assert {name: hashlib.sha256(prompt.encode("utf-8")).hexdigest() for name, prompt in rendered.items()} == expected_hashes
 

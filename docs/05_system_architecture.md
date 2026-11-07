@@ -4,7 +4,7 @@
 
 採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。新6仮説はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧記録保護は仕様版とprotocol_idで限定する。
 
-仕様版41はsplit-actions-v6を使い、新規参加者には登録時snapshotに従って各用語の設問1だけを出題する。答え合わせを有効にした場合、保存済みの設問1について本人の選択内容と正誤を同じテスト画面内に表示し、AIサービスを呼ばない。設問1・2の旧版契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、版30のモード別文字数契約は[42](42_learning_glossary_material_length.md)、版31の用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)。
+現行仕様版42はsplit-actions-v5を使い、新規参加者には登録時snapshotに従って各用語の設問1だけを出題する。保存済みの設問1について本人の選択内容と正誤を同じテスト画面内に表示し、AIサービスを呼ばない。仕様版41の`split-actions-v6-q1-only-v1` protocolは履歴復元用に保全し、protocol IDを使ってV6から復元する。設問1・2の旧版契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、版30のモード別文字数契約は[42](42_learning_glossary_material_length.md)、版31の用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)。
 
 ## 現行MVPの実装
 

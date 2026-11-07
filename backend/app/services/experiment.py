@@ -29,10 +29,9 @@ from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
 from app.ai.material_structure import validate_material_structure
 from app.ai.teaching_contract import (
     PROMPT_CONTRACT_VERSION,
-    material_length_contract,
     validate_tutoring_material_safety,
     validate_teaching_contract,
-    validate_tutoring_material_length,
+    tutoring_material_length_metrics,
 )
 from app.core.config import get_settings
 from app.core.experiment_spec import (
@@ -43,7 +42,7 @@ from app.core.experiment_spec import (
     assert_current_experiment,
     can_resume,
 )
-from app.services.first_question_only import current_setting as current_first_question_setting, enabled as first_question_enabled, question_numbers
+from app.services.first_question_only import enabled as first_question_enabled, question_numbers
 from app.services.research_protocol import (
     PRESURVEY_VERSION,
     SURVEY_VERSION,
@@ -69,8 +68,10 @@ from app.core.question_sets import (
     ASSESSMENT_BANK_VERSION,
     ASSESSMENT_BANK_VERSIONS,
     HISTORICAL_ASSESSMENT_BANK_VERSIONS,
+    HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS,
     LEARNING_CONTENT_VERSION,
     assessment_construct_key,
+    historical_assessment_bank_versions_for,
 )
 from app.services.split_assessment import (
     uses_split,
@@ -145,9 +146,8 @@ LEARNING_ALLOWED_STEPS = {"learning_targets"}
 RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではありません。"
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
-# Both validation paths include the initial generation plus up to two retries.
+# Material contract validation includes the initial generation plus up to two retries.
 MANDATORY_ELEMENT_MAX_ATTEMPTS = 3
-MATERIAL_LENGTH_MAX_ATTEMPTS = 3
 PREFETCH_STATES = {"pending", "generating", "ready", "consumed", "failed", "discarded"}
 PREFETCH_WAITING_STATES = {"pending", "generating", "ready"}
 
@@ -326,16 +326,6 @@ def _misconception_teaching_guidance(misconception_type: str | None) -> str:
     }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
 
 
-def _material_length_retry(length_validation: dict[str, Any], attempt: int) -> dict[str, Any]:
-    return {
-        "attempt": attempt,
-        "target_character_count": length_validation["target_character_count"],
-        "min_character_count": length_validation["min_character_count"],
-        "max_character_count": length_validation["max_character_count"],
-        "actual_character_count": length_validation.get("character_count"),
-    }
-
-
 async def _generate_validated_tutoring_turn(
     db: Session,
     payload: dict[str, Any],
@@ -346,7 +336,7 @@ async def _generate_validated_tutoring_turn(
     expected_type = expected_mandatory_type({**payload, "group_condition": group}) if group == "proposed" else None
     selected_strategy = strategy_for(expected_type, None, group)
     term_label = (payload.get("term") or {}).get("label")
-    retry_limit = max(MANDATORY_ELEMENT_MAX_ATTEMPTS, MATERIAL_LENGTH_MAX_ATTEMPTS)
+    retry_limit = MANDATORY_ELEMENT_MAX_ATTEMPTS
     request_payload = {**payload, "generation_attempt": 1}
     validation: dict[str, Any] = {}
     for attempt in range(1, retry_limit + 1):
@@ -354,10 +344,7 @@ async def _generate_validated_tutoring_turn(
         mandatory = validate_mandatory_elements(result, expected_type, term_label)
         contract = validate_teaching_contract(result, expected_type, payload, term_label)
         safety = validate_tutoring_material_safety(result, forbidden_strings)
-        length = validate_tutoring_material_length(
-            result,
-            integrated_material="glossary_reference" in payload,
-        )
+        length_metrics = tutoring_material_length_metrics(result)
         structure = validate_material_structure(result, term_label)
         strategy_valid = result.get("teaching_strategy") == selected_strategy
         retry_missing = list(dict.fromkeys([
@@ -368,11 +355,11 @@ async def _generate_validated_tutoring_turn(
             retry_missing.append("teaching_strategy.mismatch")
         validation = {
             **mandatory,
-            "valid": mandatory["valid"] and contract["valid"] and safety["valid"] and length["valid"] and structure["valid"] and strategy_valid,
-            "missing": [*retry_missing, *length.get("missing", [])],
+            "valid": mandatory["valid"] and contract["valid"] and safety["valid"] and structure["valid"] and strategy_valid,
+            "missing": retry_missing,
             "teaching_contract": contract,
             "material_safety": safety,
-            "material_length": length,
+            "material_length_metrics": length_metrics,
             "material_structure": structure,
             "teaching_strategy": {"expected": selected_strategy, "actual": result.get("teaching_strategy"), "valid": strategy_valid},
             "attempt": attempt,
@@ -382,8 +369,6 @@ async def _generate_validated_tutoring_turn(
             return result, {**validation, "attempts": attempt}
         if attempt < retry_limit:
             request_payload = {**payload, "generation_attempt": attempt + 1}
-            if not length["valid"]:
-                request_payload["material_length_retry"] = _material_length_retry(length, attempt + 1)
             if retry_missing:
                 request_payload["mandatory_element_retry"] = {"attempt": attempt + 1, "missing": retry_missing}
     raise HTTPException(status_code=503, detail={
@@ -754,15 +739,12 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
     group_condition = group_condition_by_code.get(normalized_code)
     if group_condition is None:
         raise HTTPException(status_code=400, detail="管理者から伝えられた参加コード（AまたはB）が必要です。")
-    from app.services.pretest_display import current_setting
-    show_test_results = current_setting(db)
-    from app.services.question_review_display import current_setting as current_question_review_setting
     participant = Participant(
         display_code=next_display_code(db),
-        show_pretest_results=show_test_results,
-        show_retest_results=show_test_results,
-        show_question_reviews=current_question_review_setting(db),
-        first_question_only=current_first_question_setting(db),
+        show_pretest_results=False,
+        show_retest_results=False,
+        show_question_reviews=True,
+        first_question_only=True,
         learning_material_glossary_mode=INTEGRATED_MATERIAL,
         group_condition=group_condition,
         assignment_method="admin_code",
@@ -1580,16 +1562,10 @@ def _submit_test_term_page_in_transaction(db: Session, payload: dict[str, Any]) 
 
 def _tutoring_output_metrics(
     result: dict[str, Any],
-    *,
-    integrated_material: bool = False,
 ) -> dict[str, int]:
     material = str(result.get("tutor_message") or "")
-    character_count = len(material)
-    length_contract = material_length_contract(integrated_material=integrated_material)
     return {
-        "character_count": character_count,
-        **length_contract,
-        "character_count_in_target_range": int(length_contract["min_character_count"] <= character_count <= length_contract["max_character_count"]),
+        **tutoring_material_length_metrics(result),
         "paragraph_count": len([block for block in re.split(r"\n\s*\n", material.strip()) if block.strip()]),
         "bullet_count": len(re.findall(r"(?m)^\s*(?:[-*+] |\d+[.)] )", material)),
     }
@@ -1653,10 +1629,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
         result = dict(result)
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
         if purpose == "generate_tutoring_turn":
-            result["output_metrics"] = _tutoring_output_metrics(
-                result,
-                integrated_material="glossary_reference" in backend_payload,
-            )
+            result["output_metrics"] = _tutoring_output_metrics(result)
         if request_audit is not None:
             logged_payload["effective_request"] = _effective_request_with_instruction_audit(
                 request_audit,
@@ -2009,7 +1982,7 @@ def _test_result_question(
     test_round: str,
     phase: str,
 ) -> Question | None:
-    historical_banks = HISTORICAL_ASSESSMENT_BANK_VERSIONS.get(participant.experiment_spec_version)
+    historical_banks = historical_assessment_bank_versions_for(participant)
     uses_scenario_bank = historical_banks is not None or participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
     expected_variant: str | None = None
     if test_round == "test":
@@ -2047,6 +2020,8 @@ def _test_result_question(
     else:
         bank_versions = set(ASSESSMENT_BANK_VERSIONS.values())
         for banks in HISTORICAL_ASSESSMENT_BANK_VERSIONS.values():
+            bank_versions.update(banks.values())
+        for banks in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS.values():
             bank_versions.update(banks.values())
         for bank_version in bank_versions:
             query = query.filter(~Question.construct_key.endswith(bank_version))
@@ -2459,12 +2434,11 @@ def _tutor_turn_from_generation(
         "mandatory_elements_validation": mandatory_validation,
         "teaching_contract": result.get("teaching_contract"),
         "teaching_contract_validation": mandatory_validation.get("teaching_contract"),
-        "material_length_validation": mandatory_validation.get("material_length"),
+        "material_length_metrics": mandatory_validation.get("material_length_metrics"),
         "material_structure_validation": mandatory_validation.get("material_structure"),
         "generation_attempts": mandatory_validation.get("attempts"),
         "tutoring_output_metrics": result.get("output_metrics") or _tutoring_output_metrics(
             result,
-            integrated_material="glossary_reference" in payload,
         ),
         "group_condition": group_condition,
         "taxonomy_version": payload.get("taxonomy_version"),
@@ -3838,7 +3812,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
     participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID, consent_checked=True).all()
     terms = _term_map(db)
     rows = []
-    conditions = sorted({first_question_enabled(p) for p in participants}) or [False]
+    conditions = sorted({first_question_enabled(p) for p in participants}) or [True]
     for condition, group in ((condition, group) for condition in conditions for group in ("control", "proposed")):
         group_participants = [p for p in participants if p.group_condition == group and first_question_enabled(p) == condition]
         latest_summaries = []
@@ -3874,7 +3848,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_retest_results", "show_question_reviews", "learning_material_glossary_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
+    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_retest_results", "show_question_reviews", "first_question_only", "learning_material_glossary_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "test_page_timing_json", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "question_review_acknowledged_at", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "legacy_scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "legacy_l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),

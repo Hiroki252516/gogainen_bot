@@ -40,7 +40,7 @@ def isolated(tmp_path):
 
 
 def test_only_standard_bank_is_available_and_history_is_standard_only():
-    assert ASSESSMENT_BANK_VERSIONS == {STANDARD: "split-actions-v6"}
+    assert ASSESSMENT_BANK_VERSIONS == {STANDARD: "split-actions-v5"}
     assert LEARNING_CONTENT_VERSIONS == {STANDARD: 15}
     assert all(set(banks) == {STANDARD} for banks in HISTORICAL_ASSESSMENT_BANK_VERSIONS.values())
     assert len(load_content()["terms"]) == len(ACTIVE_TERM_SLUGS)

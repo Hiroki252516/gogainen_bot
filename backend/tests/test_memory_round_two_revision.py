@@ -156,7 +156,7 @@ def test_current_spec_resolves_without_historical_mapping():
     created = _ok(client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "CURRENT-BANK-SYNTHETIC"}))
     complete_presurvey(client, created["participant_id"])
     questions = _ok(client.get(f"/api/experiment/{created['participant_id']}/pretest"))["questions"]
-    assert len(questions) == 6
+    assert len(questions) == 3
     question = next(question for question in questions if question["term_slug"] == "memory_process")
     with SessionLocal() as db:
         participant = db.get(Participant, created["participant_id"])

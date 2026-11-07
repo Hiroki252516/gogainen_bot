@@ -30,8 +30,6 @@ async function createParticipant(request, group, serial) {
   await api(request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD || "abc" });
   assert.equal((await api(request, "/api/admin/ai/status")).ai_backend, "mock");
   await api(request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
-  await api(request, "/api/admin/pretest-result-display", "PUT", { enabled: false });
-  await api(request, "/api/admin/question-review-display", "PUT", { enabled: false });
   const created = await api(request, "/api/registrations", "POST", {
     assignment_code: group,
     consent_checked: true,
@@ -39,33 +37,47 @@ async function createParticipant(request, group, serial) {
   });
   const participantId = created.participant_id;
 
+  await api(request, `/api/participants/${participantId}/presurvey`, "POST", {
+    survey_version: "presurvey-baseline-v2",
+    prior_term_knowledge: { pretraining: "unknown", fine_tuning: "unknown", rag: "unknown", prompt_engineering: "unknown", multi_agent: "unknown", memory_process: "unknown" },
+    general_ratings: { ai_usage_frequency: 1, self_rated_ai_proficiency: 1 },
+  });
+
   const log = await api(request, `/api/admin/participants/${participantId}/logs`);
   assert.equal(log.participant.learning_material_glossary_mode, "integrated_material", "new registrations must use integrated material");
+  assert.equal(log.participant.show_pretest_results, false);
+  assert.equal(log.participant.show_retest_results, false);
+  assert.equal(log.participant.show_question_reviews, true);
+  assert.equal(log.participant.first_question_only, true);
 
   const questions = (await api(request, `/api/experiment/${participantId}/pretest`)).questions;
-  assert.equal(questions.length, 6);
-  const byTerm = new Map();
-  for (const question of questions) byTerm.set(question.term_slug, [...(byTerm.get(question.term_slug) || []), question]);
-  for (const [termSlug, pair] of byTerm) {
-    assert.equal(pair.length, 2);
+  assert.equal(questions.length, 3);
+  for (const question of questions) {
     const now = new Date().toISOString();
     await api(request, "/api/attempts/term-page", "POST", {
       participant_id: participantId,
       phase: "pretest",
-      term_slug: termSlug,
-      test_round: pair[0].test_round,
+      term_slug: question.term_slug,
+      test_round: question.test_round,
       page_id: crypto.randomUUID(),
-      answers: pair.map((question) => ({
+      answers: [{
         question_id: question.question_id,
         selected_option_ids: [question.options.find((option) => option.exclusive).option_id],
-      })),
+      }],
       question_shown_at: now,
       answered_at: now,
       elapsed_time_sec: 1,
-    }, { "Idempotency-Key": `glossary-mode-${serial}-${termSlug}` });
+    }, { "Idempotency-Key": `glossary-mode-${serial}-${question.term_slug}` });
+    const pending = (await api(request, `/api/experiment/${participantId}/pretest`)).pending_question_review;
+    assert.equal(pending.term_slug, question.term_slug);
+    assert.equal(pending.results.length, 1);
+    await api(request, `/api/participants/${participantId}/question-review-acknowledgements`, "POST", {
+      phase: "pretest", term_slug: question.term_slug,
+    });
   }
   const diagnosis = await api(request, `/api/participants/${participantId}/diagnose-pretest`, "POST", {});
   assert.equal(diagnosis.next_step, "learning_targets");
+  assert.equal(diagnosis.review_required, false);
   const targets = await api(request, `/api/participants/${participantId}/learning-targets`);
   assert(targets.targets.some((target) => target.term_slug === "llm_knowledge"));
   return { ...created, participant_id: participantId, target_slugs: targets.targets.map((target) => target.term_slug) };

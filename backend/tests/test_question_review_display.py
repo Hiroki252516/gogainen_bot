@@ -14,25 +14,15 @@ from admin_client import AuthenticatedTestClient
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.db.session import SessionLocal
 from app.main import app
-from app.models import Attempt, Base, Participant, Question, QuestionOption, Term, now
+from app.models import Attempt, Base, Participant, Question, QuestionOption, RuntimeSetting, Term, now
 from app.seed.seed_questions import seed_database
 from app.services import experiment
-from app.services.question_review_display import current_setting
 from split_api_support import complete_presurvey, create_trial, ok, select_roles
-
-
-SETTING_ENDPOINT = "/api/admin/question-review-display"
-
 
 @contextmanager
 def set_question_reviews(enabled: bool):
-    admin = AuthenticatedTestClient(app)
-    previous = ok(admin.get(SETTING_ENDPOINT))["enabled"]
-    ok(admin.put(SETTING_ENDPOINT, json={"enabled": enabled}))
-    try:
-        yield
-    finally:
-        ok(admin.put(SETTING_ENDPOINT, json={"enabled": previous}))
+    assert enabled is True
+    yield
 
 
 @pytest.fixture
@@ -117,40 +107,38 @@ def _register(client: AuthenticatedTestClient, suffix: str) -> str:
     return response["participant_id"]
 
 
-def test_question_review_setting_defaults_on_and_admin_api_is_strict():
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    with Session(engine) as db:
-        assert current_setting(db) is True
-    engine.dispose()
-
-    assert TestClient(app).get(SETTING_ENDPOINT).status_code == 401
-    client = AuthenticatedTestClient(app)
-    response = ok(client.get(SETTING_ENDPOINT))
-    assert response["applies_to"] == "new_standard_participants_only"
-    assert client.get(SETTING_ENDPOINT).headers["cache-control"] == "no-store"
-    for value in (None, 0, 1, "false", "true", [], {}):
-        assert client.put(SETTING_ENDPOINT, json={"enabled": value}).status_code == 422
-    assert client.put(SETTING_ENDPOINT, json={"enabled": True, "extra": 1}).status_code == 422
+def test_question_review_is_fixed_on_and_setting_api_is_removed():
+    for client in (TestClient(app), AuthenticatedTestClient(app)):
+        assert client.get("/api/admin/question-review-display").status_code == 404
+        assert client.put("/api/admin/question-review-display", json={"enabled": False}).status_code == 404
 
 
 def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_null():
     client = AuthenticatedTestClient(app)
-    previous_review = ok(client.get(SETTING_ENDPOINT))["enabled"]
     previous_order = ok(client.get("/api/admin/option-order"))["mode"]
     participant_ids: list[str] = []
     legacy_id: str | None = None
+    previous_settings = None
     try:
-        ok(client.put(SETTING_ENDPOINT, json={"enabled": True}))
-        standard_on = _register(client, "STANDARD-ON")
-        participant_ids.append(standard_on)
-        ok(client.put(SETTING_ENDPOINT, json={"enabled": False}))
-        standard_off = _register(client, "STANDARD-OFF")
-        participant_ids.append(standard_off)
+        with SessionLocal() as db:
+            row = db.get(RuntimeSetting, 1)
+            if row is None:
+                row = RuntimeSetting(id=1)
+                db.add(row)
+            previous_settings = (row.show_question_reviews, row.first_question_only)
+            row.show_question_reviews = False
+            row.first_question_only = False
+            db.commit()
+        participant_id = _register(client, "FIXED-ON")
+        participant_ids.append(participant_id)
 
         with SessionLocal() as db:
-            assert db.get(Participant, standard_on).show_question_reviews is True
-            assert db.get(Participant, standard_off).show_question_reviews is False
+            participant = db.get(Participant, participant_id)
+            assert participant.show_question_reviews is True
+            assert participant.first_question_only is True
+            assert participant.show_pretest_results is False
+            assert participant.show_retest_results is False
+            assert len(experiment.question_payloads(db, participant_id, "pretest")) == 3
 
             legacy = Participant(
                 display_code=f"QR-OLD-{uuid4().hex[:8]}",
@@ -169,8 +157,7 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
         database.init_db()
         with SessionLocal() as db:
             assert db.get(Participant, legacy_id).show_question_reviews is None
-            assert db.get(Participant, standard_on).show_question_reviews is True
-            assert db.get(Participant, standard_off).show_question_reviews is False
+            assert db.get(Participant, participant_id).show_question_reviews is True
     finally:
         for participant_id in participant_ids:
             ok(client.delete(f"/api/admin/participants/{participant_id}"))
@@ -180,7 +167,11 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
                 if legacy is not None:
                     db.delete(legacy)
                     db.commit()
-        ok(client.put(SETTING_ENDPOINT, json={"enabled": previous_review}))
+        if previous_settings is not None:
+            with SessionLocal() as db:
+                row = db.get(RuntimeSetting, 1)
+                row.show_question_reviews, row.first_question_only = previous_settings
+                db.commit()
         ok(client.put("/api/admin/option-order", json={"mode": previous_order}))
 
 

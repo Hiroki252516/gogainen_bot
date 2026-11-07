@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app import main as main_module
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.ai.mock_backend import MockAIBackend
-from app.ai.teaching_contract import validate_teaching_contract, validate_tutoring_material_length
+from app.ai.teaching_contract import tutoring_material_length_metrics, validate_teaching_contract
 from app.models import Attempt, Base, LearnerState, Participant, Question, Term, TutorSession, TutorTurn
 from app.seed.seed_questions import seed_database
 from app.services import experiment
@@ -244,7 +244,7 @@ def test_valid_mock_scope_keeps_both_claims_and_contract(kind, mixed):
     assert all(item["observed_claim"] in result["tutor_message"] for item in payload["pretest_targets"])
     validation = validate_teaching_contract(result, kind, payload, "Memory")
     assert validation["valid"], validation
-    assert validate_tutoring_material_length(result)["valid"]
+    assert tutoring_material_length_metrics(result)["target_character_count"] == 800
     assert payload == before
 
 

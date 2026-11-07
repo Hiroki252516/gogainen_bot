@@ -137,11 +137,11 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 
 def uses_split(participant: Any) -> bool:
-    return participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41}
+    return participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42}
 
 
 @lru_cache
-def split_bank(bank_version: str = "split-actions-v6") -> dict:
+def split_bank(bank_version: str = "split-actions-v5") -> dict:
     bank_paths = {
         "split-actions-v1": "split_assessment_v1.yml",
         "split-actions-v2": "split_assessment_v2.yml",
