@@ -160,7 +160,12 @@ def split_bank(bank_version: str = "split-actions-v5") -> dict:
 
 def split_specs(term_slug: str, round_key: str, bank_version: str | None = None) -> list[dict]:
     section = split_bank(bank_version or ASSESSMENT_BANK_VERSIONS[STANDARD])[round_key][term_slug]
-    def choices_for(question: dict) -> list[tuple[str, str, bool, str | None]]:
+    def choices_for(
+        question: dict,
+    ) -> list[
+        tuple[str, str, bool, str | None]
+        | tuple[str, str, bool, str | None, str]
+    ]:
         choices = question["choices"]
         entries = (
             [{"role": role, **choices[role]} for role in ROLES]
@@ -169,6 +174,7 @@ def split_specs(term_slug: str, round_key: str, bank_version: str | None = None)
         )
         return [
             (choice["label"], choice["body"], choice["role"] == "correct", None if choice["role"] == "correct" else choice["role"])
+            + ((choice["rationale"],) if choice.get("rationale") else ())
             for choice in entries
         ]
     return [

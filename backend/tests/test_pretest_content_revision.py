@@ -3,10 +3,11 @@ from copy import deepcopy
 from pathlib import Path
 
 import yaml
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, can_resume
+from app.db import session as db_session
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, STANDARD, assessment_construct_key
 from app.models import Attempt, Base, Participant, Question, QuestionOption, Term
 from app.seed.seed_questions import _upsert_question, seed_database
@@ -180,13 +181,83 @@ def test_v5_matches_pr260_wording_and_pr264_review_fixes_while_preserving_v4_str
                 for label, body in choices.items():
                     next(choice for choice in question["choices"] if choice["label"] == label)["body"] = body
 
-    # Covers every body and all unchanged scenarios/tasks/roles, including reserved Q3.
-    assert revised == expected
+    # 理由は内部メタデータとし、設問本文・選択肢・役割・シナリオ・設問3は変更しない。
+    assert sum(
+        1
+        for round_key in ("pretest_v1", "retest_v1", "retest_v2")
+        for term_slug in ("llm_knowledge", "multi_agent", "memory_process")
+        for question in revised[round_key][term_slug]["questions"]
+        if question["number"] == 1
+        for choice in question["choices"]
+        if choice.get("rationale")
+    ) == 54
+    content_only = deepcopy(revised)
+    for round_key in ("pretest_v1", "retest_v1", "retest_v2"):
+        for term_slug in ("llm_knowledge", "multi_agent", "memory_process"):
+            question = next(q for q in content_only[round_key][term_slug]["questions"] if q["number"] == 1)
+            for choice in question["choices"]:
+                choice.pop("rationale", None)
+    assert content_only == expected
     assert revised["pretest_v1"]["llm_knowledge"]["questions"][2]["number"] == 3
     assert all(len(question["choices"]) == 6 for terms in revised.values() for section in terms.values() for question in section["questions"])
     for round_key in ("pretest_v1", "retest_v1", "retest_v2"):
         for term_slug in ("llm_knowledge", "multi_agent", "memory_process"):
             assert [item["question_number"] for item in split_specs(term_slug, round_key, bank_version="split-actions-v5")] == [1, 2]
+
+
+def test_q1_rationales_are_seeded_as_internal_metadata_not_participant_options(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'q1-rationales.db'}")
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            seed_database(db)
+            participant = Participant(
+                display_code="Q1-RATIONALE-TEST",
+                group_condition="control",
+                current_step="pretest",
+                experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
+                protocol_id=CURRENT_PROTOCOL_ID,
+                learning_content_version=15,
+                option_order_mode="debug_fixed",
+            )
+            db.add(participant)
+            db.flush()
+
+            for round_key in ("pretest_v1", "retest_v1", "retest_v2"):
+                phase = "pretest" if round_key == "pretest_v1" else "retest"
+                for term_slug in ("llm_knowledge", "multi_agent", "memory_process"):
+                    term = db.query(Term).filter_by(slug=term_slug).one()
+                    question = db.query(Question).filter_by(
+                        term_id=term.id,
+                        phase=phase,
+                        variant_key=f"{round_key}_q1",
+                    ).one()
+                    stored = {
+                        option.option_label: option.rationale
+                        for option in db.query(QuestionOption).filter_by(question_id=question.id).all()
+                    }
+                    assert set(stored) == set("ABCDEF")
+                    assert all(isinstance(value, str) and value.strip() for value in stored.values())
+
+                    participant_options = _displayed_options(db, participant, question)
+                    assert len(participant_options) == 6
+                    assert all("rationale" not in option for option in participant_options)
+    finally:
+        engine.dispose()
+
+
+def test_init_db_adds_rationale_column_to_existing_question_options_table(monkeypatch, tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'question-option-schema.db'}")
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE question_options DROP COLUMN rationale"))
+    monkeypatch.setattr(db_session, "engine", engine)
+
+    db_session.init_db()
+
+    columns = {column["name"] for column in inspect(engine).get_columns("question_options")}
+    assert "rationale" in columns
+    engine.dispose()
 
 
 def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshots(tmp_path):
