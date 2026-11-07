@@ -6,9 +6,18 @@ from app.seed.data import SEED_TERMS
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, STANDARD, assessment_construct_key
 
 
-def _sync_options(db: Session, question: Question, options: list[tuple[str, str, bool, str | None]]) -> None:
+def _sync_options(
+    db: Session,
+    question: Question,
+    options: list[
+        tuple[str, str, bool, str | None]
+        | tuple[str, str, bool, str | None, str]
+    ],
+) -> None:
     existing = {option.option_label: option for option in db.query(QuestionOption).filter(QuestionOption.question_id == question.id).all()}
-    for order, (label, body, is_correct, misconception_type) in enumerate(options, start=1):
+    for order, entry in enumerate(options, start=1):
+        label, body, is_correct, misconception_type = entry[:4]
+        rationale = entry[4] if len(entry) == 5 else None
         option = existing.get(label)
         if not option:
             option = QuestionOption(question_id=question.id, option_label=label)
@@ -16,6 +25,8 @@ def _sync_options(db: Session, question: Question, options: list[tuple[str, str,
         option.body = body
         option.is_correct = is_correct
         option.misconception_type = misconception_type
+        if rationale is not None:
+            option.rationale = rationale
         option.default_order = order
 
 
@@ -29,7 +40,10 @@ def _upsert_question(
     expected_answer: str,
     construct_key: str,
     variant_key: str,
-    options: list[tuple[str, str, bool, str | None]] | None = None,
+    options: list[
+        tuple[str, str, bool, str | None]
+        | tuple[str, str, bool, str | None, str]
+    ] | None = None,
 ) -> Question:
     # A retired bank must still resolve historical answers without snapshots.
     question = (
