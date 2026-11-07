@@ -2,7 +2,7 @@
 # M1/M3は設問設計上の操作的な解釈であり、選択だけで個人の信念を確定しない。
 # エージェントの別は論理的な担当構成を指し、別モデル・別プロセスを必須としない。
 # V6 contains question 1 only. Historical banks V1-V5 retain their recorded question sets.
-status: active_standard_split_v6
+status: historical_only_standard_split_v6
 rounds:
   pretest_v1:
     llm_knowledge:

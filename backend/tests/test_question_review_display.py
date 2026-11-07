@@ -56,6 +56,7 @@ def _question_rows(db: Session, phase: str) -> list[dict]:
         .join(Term, Term.id == Question.term_id)
         .filter(
             Question.phase == source_phase,
+            Question.is_active.is_(True),
             Question.variant_key == f"{variant}_q1",
         )
         .order_by(Term.display_order, Question.variant_key)
@@ -309,6 +310,9 @@ def test_none_variant_key_is_safe_and_acknowledged_question_skips_review(review_
     pending = experiment.pending_question_review(db, participant.id, "pretest", rows)
     assert pending is not None
     assert pending["term_slug"] == rows[1]["term_slug"]
-    assert len(selected_attempt_ids) == 12
+    assert selected_attempt_ids == [
+        attempts_by_question[rows[1]["question_id"]].id,
+        attempts_by_question[rows[2]["question_id"]].id,
+    ]
     assert attempts_by_question[rows[0]["question_id"]].id not in selected_attempt_ids
     assert acknowledged_term == rows[0]["term_slug"]
