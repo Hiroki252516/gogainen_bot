@@ -54,10 +54,16 @@ HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
 
 
 def historical_assessment_bank_versions_for(participant):
-    key = (participant.experiment_spec_version, participant.protocol_id)
+    if participant is None:
+        return None
+    experiment_spec_version = getattr(participant, "experiment_spec_version", None)
+    if experiment_spec_version is None:
+        return None
+    protocol_id = getattr(participant, "protocol_id", None)
+    key = (experiment_spec_version, protocol_id)
     return HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS.get(
         key,
-        HISTORICAL_ASSESSMENT_BANK_VERSIONS.get(participant.experiment_spec_version),
+        HISTORICAL_ASSESSMENT_BANK_VERSIONS.get(experiment_spec_version),
     )
 
 
