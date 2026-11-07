@@ -31,7 +31,7 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-multi-memory-retest1-v1"
 def test_v25_exact_banks_and_unchanged_content():
     assert CURRENT_EXPERIMENT_SPEC_VERSION >= 25
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[25] == {"standard": "scenario-actions-v9"}
-    assert ASSESSMENT_BANK_VERSIONS == {"standard": "split-actions-v5"}
+    assert ASSESSMENT_BANK_VERSIONS == {"standard": "split-actions-v6"}
     assert LEARNING_CONTENT_VERSIONS == {"standard": 15}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[24] == {"standard": "scenario-actions-v8"}
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
@@ -273,10 +273,10 @@ def test_old_spec24_v8_records_survive_seed_repair_and_missing_snapshot_restore(
             for oid, fields in options_before.items():
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
-            active = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_(["retest_v2", "retest_v2_q1", "retest_v2_q2"])).all()
-            assert len(active) == 2 and all(row.id != question.id for row in active)
-            assert db.query(Question).count() == 30
-            assert db.query(Question).filter_by(is_active=True).count() == 18
+            active = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key == "retest_v2_q1").all()
+            assert len(active) == 1 and all(row.id != question.id for row in active)
+            assert db.query(Question).count() == 21
+            assert db.query(Question).filter_by(is_active=True).count() == 9
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)
             assert record["question_body"] == ("保存時の問題" if snapshot else question.body)

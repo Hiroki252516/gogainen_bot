@@ -1,8 +1,9 @@
-"""Exercise both registration conditions through the saved-snapshot test flow."""
+"""Exercise the fixed V6 Q1 registration snapshot through saved test flows."""
 from contextlib import contextmanager
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -72,19 +73,23 @@ def answer_test(client, pid, phase, count, *, wrong=False, reviews=True):
     return questions, result
 
 
-def test_setting_defaults_off_is_strict_and_requires_admin(tmp_path):
+def test_setting_defaults_on_is_strict_and_requires_admin(tmp_path):
     unauthorized = TestClient(app)
     assert unauthorized.get(ENDPOINT).status_code == 401
     assert unauthorized.put(ENDPOINT, json={"enabled": True}).status_code == 401
-    with condition(False) as client:
+    with condition(True) as client:
         assert client.get(ENDPOINT).headers["cache-control"] == "no-store"
         for value in (1, "true", None):
             assert client.put(ENDPOINT, json={"enabled": value}).status_code == 422
         assert client.put(ENDPOINT, json={"enabled": True, "extra": True}).status_code == 422
+        assert client.put(ENDPOINT, json={"enabled": False}).status_code == 409
     engine = create_engine(f"sqlite:///{tmp_path / 'setting.db'}")
     Base.metadata.create_all(engine)
     with Session(engine) as db:
-        assert current_setting(db) is False
+        assert current_setting(db) is True
+        db.add(RuntimeSetting(id=1))
+        db.commit()
+        assert current_setting(db) is True
         legacy = Participant(display_code="Q1-NULL", group_condition="control")
         db.add(legacy)
         db.commit()
@@ -93,47 +98,44 @@ def test_setting_defaults_off_is_strict_and_requires_admin(tmp_path):
         assert legacy.first_question_only is None
     with Session(engine) as db:
         assert current_setting(db) is True
-        save_setting(db, False)
-        assert current_setting(db) is False
+        with pytest.raises(HTTPException) as error:
+            save_setting(db, False)
+        assert error.value.status_code == 409
+        assert current_setting(db) is True
     engine.dispose()
 
 
-@pytest.mark.parametrize("first_only", [False, True])
 @pytest.mark.parametrize("reviews", [False, True])
-def test_registration_snapshot_final_test_and_disabled_question_rejection(first_only, reviews):
-    count = 3 if first_only else 6
-    with condition(first_only, reviews):
+def test_registration_snapshot_final_test_and_v6_only_has_question_one(reviews):
+    count = 3
+    with condition(True, reviews):
         with create_trial("A", "debug_fixed") as (client, pid):
-            ok(client.put(ENDPOINT, json={"enabled": not first_only}))
+            assert client.put(ENDPOINT, json={"enabled": False}).status_code == 409
             with SessionLocal() as db:
                 participant = db.get(Participant, pid)
-                assert participant.first_question_only is first_only
+                assert participant.first_question_only is True
                 rows = experiment.question_payloads(db, pid, "pretest")
                 assert len(rows) == count
-                if first_only:
-                    q1 = db.get(Question, rows[0]["question_id"])
-                    q2 = db.query(Question).filter_by(term_id=q1.term_id, construct_key=q1.construct_key, variant_key="pretest_v1_q2").one()
-                    q2id = q2.id
-            if first_only:
-                assert client.post("/api/attempts", json={"participant_id": pid, "phase": "pretest", "question_id": q2id, "selected_option_ids": []}).status_code == 409
+                assert all(db.get(Question, row["question_id"]).variant_key.endswith("_q1") for row in rows)
+                q23 = [f"{round_key}_q{number}" for round_key in ("pretest_v1", "retest_v1", "retest_v2") for number in (2, 3)]
+                assert db.query(Question).filter(Question.construct_key.like("%split-actions-v6"), Question.variant_key.in_(q23)).count() == 0
             answer_test(client, pid, "pretest", count, reviews=reviews)
             answer_test(client, pid, "final_test", count, reviews=reviews)
             with SessionLocal() as db:
                 participant = db.get(Participant, pid)
                 metric = participant_metrics(db, participant)
                 assert metric["questions_per_test"] == count
-                assert metric["first_question_only"] is first_only
+                assert metric["first_question_only"] is True
                 assert metric["h1"]["value"] == 0
                 assert metric["h6"]["attained"] is True
                 assert participant.current_step == "survey"
                 assert db.query(Attempt).filter_by(participant_id=pid).count() == count * 2
-                assert experiment.participant_logs(db, pid)["participant"]["first_question_only"] is first_only
+                assert experiment.participant_logs(db, pid)["participant"]["first_question_only"] is True
 
 
-@pytest.mark.parametrize("first_only", [False, True])
-def test_learning_snapshot_and_both_retest_rounds(first_only):
-    count = 3 if first_only else 6
-    with condition(first_only):
+def test_learning_snapshot_and_both_retest_rounds():
+    count = 3
+    with condition(True):
         with create_trial("B", "randomized") as (client, pid):
             questions, _ = answer_test(client, pid, "pretest", count, wrong=True)
             failed = questions[0]
@@ -141,8 +143,7 @@ def test_learning_snapshot_and_both_retest_rounds(first_only):
             turn = ok(client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}))
             practice = turn["practice_question"]
             assert practice["questions"] == [{"question_id": failed["question_id"], "body": failed["body"], "options": failed["options"]}]
-            ok(client.post(f"/api/tutor-turns/{turn['turn_id']}/respond",
-                           json={"selected_option_ids": select_roles(failed, [None])}))
+            ok(client.post(f"/api/tutor-turns/{turn['turn_id']}/respond", json={"selected_option_ids": select_roles(failed, [None])}))
             with SessionLocal() as db:
                 saved = db.get(TutorTurn, turn["turn_id"])
                 assert len(saved.grading_json["question_results"]) == 1
@@ -197,26 +198,22 @@ def test_additive_migration_keeps_legacy_rows_null_and_seeded_content(tmp_path, 
     engine.dispose()
 
 
-def test_metric_strata_and_fixed_csv_headers_identify_each_condition():
+def test_fixed_q1_stratum_and_csv_headers_identify_the_condition():
     rows = []
-    for first_only in (False, True):
-        with condition(first_only):
-            with create_trial("A" if first_only else "B", "debug_fixed") as (client, pid):
-                count = 3 if first_only else 6
-                answer_test(client, pid, "pretest", count)
-                answer_test(client, pid, "final_test", count)
+    for assignment in ("A", "B"):
+        with condition(True):
+            with create_trial(assignment, "debug_fixed") as (client, pid):
+                answer_test(client, pid, "pretest", 3)
+                answer_test(client, pid, "final_test", 3)
                 with SessionLocal() as db:
                     rows.append(participant_metrics(db, db.get(Participant, pid)))
     result = group_metrics(rows)
-    assert result["groups"] == []
-    assert len(result["strata"]) == 2
-    for stratum in result["strata"]:
-        assert sum(g["participant_count"] for g in stratum["groups"]) == 1
-        assert stratum["differences_proposed_minus_control"]["h1"] is None
+    assert len(result["groups"]) == 2
+    assert not result.get("strata")
     import json
     from app.services.hypothesis_metrics import METRICS_CSV_COLUMNS
     for grouped in (False, True):
         records = metrics_export_rows(rows, grouped=grouped)
-        assert {json.loads(r["details_json"])["first_question_only"] for r in records} == {False, True}
+        assert {json.loads(r["details_json"])["first_question_only"] for r in records} == {True}
         assert all(set(r) <= set(METRICS_CSV_COLUMNS) for r in records)
-        assert all(json.loads(r["details_json"])["questions_per_test"] in (3, 6) for r in records)
+        assert all(json.loads(r["details_json"])["questions_per_test"] == 3 for r in records)

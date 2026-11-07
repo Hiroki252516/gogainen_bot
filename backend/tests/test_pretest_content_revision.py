@@ -260,15 +260,15 @@ def test_init_db_adds_rationale_column_to_existing_question_options_table(monkey
     engine.dispose()
 
 
-def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshots(tmp_path):
+def test_spec_41_keeps_v6_and_restores_spec_40_results_without_changing_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 40
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-control-shared-prompt-v1"
-            assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 41
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-split-actions-v6-q1-only-v1"
+            assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v6"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[33][STANDARD] == "split-actions-v3"
@@ -277,6 +277,8 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[36][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[37][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[38][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[39][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[40][STANDARD] == "split-actions-v5"
 
             term = db.query(Term).filter_by(slug="memory_process").one()
             active = db.query(Question).filter_by(
@@ -286,11 +288,27 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
                 variant_key="pretest_v1_q1",
             ).one()
             assert active.is_active
-            assert "split-actions-v5" in active.construct_key
+            assert "split-actions-v6" in active.construct_key
             active_m1 = db.query(QuestionOption).filter_by(question_id=active.id, option_label="B").one()
             assert active_m1.body == V5_POST_PR264_WORDING["choice_overrides"]["pretest_v1"]["memory_process"][1]["B"]
             active_added_m1 = db.query(QuestionOption).filter_by(question_id=active.id, option_label="C").one()
             assert active_added_m1.misconception_type == "M1"
+
+            v5_spec = split_specs(term.slug, "pretest_v1", bank_version="split-actions-v5")[0]
+            v5_question = _upsert_question(
+                db,
+                term,
+                phase="pretest",
+                question_type="split_single",
+                body=v5_spec["body"],
+                expected_answer="A",
+                construct_key=assessment_construct_key(term.slug, "pretest", bank_version="split-actions-v5"),
+                variant_key=v5_spec["variant_key"],
+                options=v5_spec["options"],
+            )
+            v5_question.is_active = False
+            v5_options = db.query(QuestionOption).filter_by(question_id=v5_question.id).order_by(QuestionOption.option_label).all()
+            v5_snapshot = (v5_question.body, [(o.option_label, o.body) for o in v5_options])
 
             v4_spec = split_specs(term.slug, "pretest_v1", bank_version="split-actions-v4")[0]
             v4_question = _upsert_question(
@@ -463,19 +481,19 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
                 question_body_snapshot=v4_question.body,
                 option_order_snapshot=_displayed_options(db, spec34_participant, v4_question),
             )
-            v5_selected = next(option for option in db.query(QuestionOption).filter_by(question_id=active.id).all() if option.option_label == "C")
+            v5_selected = next(option for option in v5_options if option.option_label == "C")
             def make_v5_attempt(participant):
                 return Attempt(
                     participant_id=participant.id,
                     term_id=term.id,
-                    question_id=active.id,
+                    question_id=v5_question.id,
                     phase="pretest",
                     test_round="test",
                     selected_option_ids=[v5_selected.id],
                     is_correct=False,
                     misconception_type="M1",
-                    question_body_snapshot=active.body,
-                    option_order_snapshot=_displayed_options(db, participant, active),
+                    question_body_snapshot=v5_question.body,
+                    option_order_snapshot=_displayed_options(db, participant, v5_question),
                 )
 
             v5_attempt = make_v5_attempt(spec35_participant)
@@ -487,14 +505,14 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             v5_current_attempt = Attempt(
                 participant_id=spec38_participant.id,
                 term_id=term.id,
-                question_id=active.id,
+                question_id=v5_question.id,
                 phase="pretest",
                 test_round="test",
                 selected_option_ids=[v5_selected.id],
                 is_correct=False,
                 misconception_type="M1",
-                question_body_snapshot=active.body,
-                option_order_snapshot=_displayed_options(db, spec38_participant, active),
+                question_body_snapshot=v5_question.body,
+                option_order_snapshot=_displayed_options(db, spec38_participant, v5_question),
             )
             db.add_all([v2_attempt, v3_attempt, v4_attempt, v5_attempt, *v5_legacy_attempts, v5_current_attempt])
             db.commit()
@@ -564,11 +582,13 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
                 db.refresh(attempt)
             db.refresh(v5_current_attempt)
             db.refresh(active)
+            db.refresh(v5_question)
             db.refresh(active_m1)
             db.refresh(active_added_m1)
             assert not v2_question.is_active
             assert not v3_question.is_active
             assert not v4_question.is_active
+            assert not v5_question.is_active
             restored_options = db.query(QuestionOption).filter_by(question_id=v2_question.id).order_by(QuestionOption.option_label).all()
             assert (v2_question.body, [(o.option_label, o.body) for o in restored_options]) == v2_snapshot
             restored_v3_options = db.query(QuestionOption).filter_by(question_id=v3_question.id).order_by(QuestionOption.option_label).all()

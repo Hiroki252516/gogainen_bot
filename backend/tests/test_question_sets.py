@@ -40,7 +40,7 @@ def isolated(tmp_path):
 
 
 def test_only_standard_bank_is_available_and_history_is_standard_only():
-    assert ASSESSMENT_BANK_VERSIONS == {STANDARD: "split-actions-v5"}
+    assert ASSESSMENT_BANK_VERSIONS == {STANDARD: "split-actions-v6"}
     assert LEARNING_CONTENT_VERSIONS == {STANDARD: 15}
     assert all(set(banks) == {STANDARD} for banks in HISTORICAL_ASSESSMENT_BANK_VERSIONS.values())
     assert len(load_content()["terms"]) == len(ACTIVE_TERM_SLUGS)
@@ -74,13 +74,13 @@ def test_new_participant_has_standard_content_and_no_mode_fields(isolated):
     participant_id = response.json()["participant_id"]
     complete_presurvey(client, participant_id)
     questions = client.get(f"/api/experiment/{participant_id}/pretest").json()["questions"]
-    assert len(questions) == 6
+    assert len(questions) == 3
     assert all(len(question["options"]) == 6 for question in questions)
     with factory() as db:
         participant = db.get(Participant, participant_id)
         assert participant.learning_content_version == 15
         assert not hasattr(participant, "question_set_mode")
         assert db.query(Question).filter(Question.construct_key.contains("easy")).count() == 0
-        assert db.query(QuestionOption).count() == 108
+        assert db.query(QuestionOption).count() == 54
     assert "question_set_mode" not in {column["name"] for column in inspect(engine).get_columns("participants")}
     assert "question_set_mode" not in {column["name"] for column in inspect(engine).get_columns("runtime_settings")}

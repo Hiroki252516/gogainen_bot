@@ -165,7 +165,6 @@ export default function AdminPage() {
   const [pretestDisplaySaving, setPretestDisplaySaving] = useState(false);
   const [pretestDisplayError, setPretestDisplayError] = useState("");
   const [firstQuestionOnly, setFirstQuestionOnly] = useState<{ enabled: boolean } | null>(null);
-  const [firstQuestionOnlySaving, setFirstQuestionOnlySaving] = useState(false);
   const [firstQuestionOnlyError, setFirstQuestionOnlyError] = useState("");
   const [summaryFirstOnly, setSummaryFirstOnly] = useState(false);
   const [questionReviewDisplay, setQuestionReviewDisplay] = useState<{ enabled: boolean } | null>(null);
@@ -347,19 +346,6 @@ export default function AdminPage() {
       setPretestDisplayError(err instanceof Error ? err.message : String(err));
     } finally {
       setPretestDisplaySaving(false);
-    }
-  }
-
-  async function updateFirstQuestionOnly(enabled: boolean) {
-    if (!firstQuestionOnly || firstQuestionOnlySaving) return;
-    setFirstQuestionOnlySaving(true);
-    setFirstQuestionOnlyError("");
-    try {
-      setFirstQuestionOnly(await api<{ enabled: boolean }>("/api/admin/first-question-only", { method: "PUT", body: JSON.stringify({ enabled }) }));
-    } catch (err) {
-      setFirstQuestionOnlyError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setFirstQuestionOnlySaving(false);
     }
   }
 
@@ -567,13 +553,10 @@ export default function AdminPage() {
             </div>
             <div className="notice setting-notice">
               <label className="pretest-display-toggle">
-                <input type="checkbox" role="switch" checked={firstQuestionOnly?.enabled ?? false}
-                  disabled={!firstQuestionOnly || firstQuestionOnlySaving}
-                  onChange={(event) => updateFirstQuestionOnly(event.target.checked)} />
+                <input type="checkbox" role="switch" checked={firstQuestionOnly?.enabled ?? true} disabled />
                 設問1のみ出題
               </label>
-              <p className="muted">ON：各用語の設問1のみ（計3問）。OFF：設問1・2（計6問）。事前テスト・再テスト・学習確認に適用します。新規参加者のみ、登録時に固定されます（初期値OFF）。</p>
-              {firstQuestionOnlySaving ? <p role="status">保存中...</p> : null}
+              <p className="muted">仕様版41・V6は各用語の設問1のみ（計3問）です。新規参加者に固定します。設問数の切替はできません。</p>
               {firstQuestionOnlyError ? <p className="danger" role="alert">{firstQuestionOnlyError}</p> : null}
             </div>
             <div className="notice setting-notice">

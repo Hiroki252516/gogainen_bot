@@ -2,21 +2,21 @@
 
 ## 設問1のみ出題（2026-11-03）
 
-管理認証付きGET/PUT `/api/admin/first-question-only` で厳密booleanのenabledを取得・保存する。初期値OFF、新規登録時に参加者へ固定する。用語ページ回答APIは1問または2問を受理し、答え合わせも同じ設問数で返す。3問/6問の6仮説集計は分離し、混在時はstrataを返す。詳細は[48](48_first_question_only.md)。
+管理認証付きGET/PUT `/api/admin/first-question-only` で厳密booleanのenabledを取得・保存する。仕様版41 / V6ではONに固定し、新規登録時に参加者へ保存する。GETはONを返し、PUTのOFF指定は409で拒否する。用語ページ回答APIはV6では1問を受理し、旧snapshotの復元では指定済みの設問数を使う。履歴データの3問/6問条件は分けて集計する。詳細は[48](48_first_question_only.md)。
 
-## 教材用語解説モード（仕様版39導入・40維持）
+## 教材用語解説モード（仕様版39導入・40/41維持）
 
-新規参加者は登録時に`integrated_material`へ固定する。管理画面の切替UIと管理API `GET/PUT /api/admin/learning-material-glossary-mode`は提供しない。既存Participantの保存値は変更せず、参加者一覧・個別ログ・participants CSVで履歴を参照できる。RuntimeSettingの旧モード列はDB互換性のため残すが、登録・管理APIでは参照しない。
+仕様版41の新規参加者は登録時に`integrated_material`へ固定する。管理画面の切替UIと管理API `GET/PUT /api/admin/learning-material-glossary-mode`は提供しない。既存Participantの保存値は変更せず、参加者一覧・個別ログ・participants CSVで履歴を参照できる。RuntimeSettingの旧モード列はDB互換性のため残すが、登録・管理APIでは参照しない。
 
 教材生成応答は`show_material_glossary`を返す。`false`は教材内解説モードであることを示し、Frontendは教材用GlossarySidebarのみ隠す。既存の`glossary` snapshotは返却・保存を継続し、回答後解説の注釈APIは変更しない。教材内解説モードの教材生成入力には両群共通の任意項目`glossary_reference`を含める。辞書は共通回答履歴ではなく、診断情報とも独立する。
 
-## 仕様版28のペア答え合わせAPI（現行版29で維持）
+## 設問ごとの答え合わせAPI（仕様版28導入・現行版41）
 
 GET/PUT /api/admin/question-review-display は管理認証下で、{ enabled: true/false, applies_to: "new_standard_participants_only" }を扱う。enabledは厳密なbooleanとする。既定値はtrueとし、参加者登録時に通常版だけへ固定する。
 
-既存のpretest/retest/final-test取得APIは、設定ON・仕様版28・通常版において、同じ用語の設問1・2がともに保存済みで未確認の場合だけpending_question_reviewを返す。結果にはphase、term_slug、term_label、各設問番号、選択済み選択肢のlabel/body、is_correctだけを含め、正答キー・未選択肢・解説・診断情報を含めない。単一設問だけの回答では返さない。
+既存のpretest/retest/final-test取得APIは、答え合わせ設定がONの新規通常版参加者について、first_question_onlyの登録時snapshotが指定する設問が同じ用語で全て保存済みかつ未確認の場合にpending_question_reviewを返す。仕様版41では設問1だけを回答した時点で返す。結果にはphase、term_slug、term_label、出題した設問番号、本人が選択した選択肢のlabel/body、is_correctだけを含め、正答キー・未選択肢・解説・診断情報・研究者向け理由は含めない。
 
-POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slugを受け取り、確認時刻を設問2のAttemptへ保存する。確認済みの再送は冪等とし、不完全なペアや現在表示中ではないペアは拒否する。採点APIは未確認ペアがある状態での進行を拒否する。詳細と受入条件は[40](40_question_pair_answer_review.md)。
+POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slugを受け取り、確認時刻を出題した最後の設問のAttemptへ保存する。確認済みの再送は冪等とし、不完全な設問集合や現在表示中ではない答え合わせ要求は拒否する。採点APIは未確認の答え合わせがある状態での進行を拒否する。旧版の設問1・2ペア契約は[40](40_question_pair_answer_review.md)を参照する。
 
 ## テスト結果表示設定（issue-204・issue-233）
 
@@ -44,7 +44,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版36と`experiment-plan-2026-11-04-rag-glossary-v1`の両方で進行可否を判定する。仕様版29で導入した教材用語解説モードは引き続き使い、版35以下は閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)、RAG注釈は[49](49_rag_glossary.md)。今回、API構造は変更しない。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは実験仕様版41と`experiment-plan-2026-11-07-split-actions-v6-q1-only-v1`の両方で進行可否を判定し、問題バンクsplit-actions-v6を使う。仕様版39で導入した教材用語解説モードは引き続き使い、仕様版40以下と異なるprotocolは閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)、RAG注釈は[49](49_rag_glossary.md)。今回、API構造は変更しない。
 
 事前アンケートはGET/POST `/api/participants/{id}/presurvey`を使い、`presurvey-baseline-v2`の厳密なpayloadを受け付ける。`prior_term_knowledge`の6項目は`unknown`、`heard_of`、`knows_meaning`、`can_explain`のいずれかを必須とし、AI利用頻度・自己評価も1〜10整数で必須とする。`phase=presurvey`のParticipantSurveyとして冪等に保存する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版36の`presurvey-baseline-v1`回答はBoolean形式のまま履歴保全し、新形式へ変換しない。
 
@@ -104,11 +104,11 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 
 回答は `selected_option_ids` と時刻情報（response_time_sec、question_shown_at、answered_at）。テストはparticipant_id/question_id/phaseも指定する。廃止入力項目は422。
 
-事前・再テスト・内部final_testの取得APIは`test_page_mode`を返す。新規参加者は`per_term`で同一用語の設問1・2を一括保存する。`POST /api/attempts/term-page`はparticipant_id、phase、term_slug、test_round、page_id、各設問のquestion_idと選択肢1件、共通表示/回答時刻、正のelapsed_time_secを受け、`Idempotency-Key`を必須とする。現在の2問であること、同じ用語・回次であることを検証し、同一トランザクションで確定する。既存回答は変更せず、異なる回答との競合は409。応答に正答・正誤・分類情報を含めない。従来の`POST /api/attempts`は旧記録の互換読出しに残す。
+事前・再テスト・内部final_testの取得APIは`test_page_mode`を返す。新規参加者は`per_term`で同一用語の設問1だけを一括保存する。設問1・2を出題する既存参加者は2問を一括保存する。`POST /api/attempts/term-page`はparticipant_id、phase、term_slug、test_round、page_id、各設問のquestion_idと選択肢1件、共通表示/回答時刻、正のelapsed_time_secを受け、`Idempotency-Key`を必須とする。参加者snapshotが指定する1問または2問であること、同じ用語・回次であることを検証し、同一トランザクションで確定する。既存回答は変更せず、異なる回答との競合は409。応答に正答・正誤・分類情報を含めない。従来の`POST /api/attempts`は旧記録の互換読出しに残す。
 
 用語ページ時間は`Attempt.test_page_timing_json`（nullable JSON）へpage_id、`measurement_version=term_page_v1`、elapsed_time_secを記録し、新形式の設問別`response_time_sec`はNULLとする。2問には同じpage_id・時間を保存し、合計時間ではpage_idを一度だけ数える。従来記録は設問ごとのresponse_time_secで計算する。統合ログCSVの列は増やさず、JSON値・summary・表示単位フィールドで区別する。詳細は[設問分割仕様](39_split_assessment.md#テスト画面と時間計測issue-208)。
 
-NULL・版1〜25・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。新規版26＋現行protocol_idのみcan_resume=true。
+仕様版40以下・NULL・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。仕様版41＋現行protocol_idのみcan_resume=true。
 
 参加者の出題APIに正答や分類メタデータを公開しない。回答後の結果確認では問題・選択内容・正誤を返す。Idempotency-Keyの再送、回答済みロックは維持する。旧試用の管理者閲覧・CSVは許可し、再計算は拒否する。
 

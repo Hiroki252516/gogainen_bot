@@ -35,7 +35,10 @@ try {
   await api("/api/admin/auth/login", "POST", { password: "abc" });
   const status = await api("/api/admin/ai/status");
   assert.equal(status.ai_backend, process.env.Q1_EXPECT_BACKEND ?? "mock");
-  await api("/api/admin/first-question-only", "PUT", { enabled: false });
+  const disabledSetting = await admin.request.fetch(new URL("/api/admin/first-question-only", base).href, {
+    method: "PUT", data: { enabled: false }, timeout: 20000,
+  });
+  assert.equal(disabledSetting.status(), 409, "V6 must reject turning off its Q1-only condition");
   await api("/api/admin/option-order", "PUT", { mode: "debug_fixed" });
   await api("/api/admin/question-review-display", "PUT", { enabled: true });
   await api("/api/admin/pretest-result-display", "PUT", { enabled: false });
@@ -44,15 +47,12 @@ try {
   await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
   const toggle = page.getByRole("switch", { name: "設問1のみ出題", exact: true });
   await toggle.waitFor();
-  await Promise.all([page.waitForResponse((response) => response.url().endsWith("/api/admin/first-question-only") && response.request().method() === "PUT"), toggle.click()]);
-  assert.equal((await api("/api/admin/first-question-only")).enabled, true);
+  assert.equal(await toggle.isChecked(), true);
+  assert.equal(await toggle.isDisabled(), true, "V6 Q1-only setting is fixed in the admin screen");
   const record = await register();
   if (screenshotDir) await toggle.locator("../..").screenshot({ path: screenshotDir + "/admin-q1-switch.png" });
-  await Promise.all([page.waitForResponse((response) => response.url().endsWith("/api/admin/first-question-only") && response.request().method() === "PUT"), toggle.click()]);
-  const normal = await register();
   const questions = (await api("/api/experiment/" + record.participant_id + "/pretest")).questions;
-  assert.equal(questions.length, 3, "turning the setting off keeps the registered Q1 snapshot");
-  assert.equal((await api("/api/experiment/" + normal.participant_id + "/pretest")).questions.length, 6);
+  assert.equal(questions.length, 3, "V6 serves question 1 only for each term");
   await page.evaluate((record) => {
     localStorage.setItem("participant_id", record.participant_id);
     localStorage.setItem("display_code", record.display_code);
@@ -92,9 +92,8 @@ try {
   }
   if (screenshotDir) await page.screenshot({ path: screenshotDir + "/q1-learning.png", fullPage: true });
   assert.deepEqual(errors, []);
-  console.log("Q1-only admin switch, frozen registration, desktop/mobile test, answer review and learning passed (" + status.ai_backend + ")");
+  console.log("V6 fixed Q1-only admin state, desktop/mobile test, answer review and learning passed (" + status.ai_backend + ")");
 } finally {
   for (const id of participants) await api("/api/admin/participants/" + id, "DELETE").catch(() => {});
-  await api("/api/admin/first-question-only", "PUT", { enabled: false }).catch(() => {});
   await browser.close();
 }

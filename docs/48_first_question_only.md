@@ -2,22 +2,22 @@
 
 ## 現行条件
 
-管理画面の「設問1のみ出題」は初期値OFF。ONでは新規参加者に各用語の設問1だけを出題する。対象3用語、6択単一選択、M1/M3/unknownの分類、テスト回数上限は維持する。
+仕様版41 / split-actions-v6は設問1のみを固定し、新規登録時にtrueを保存する。管理画面・APIからOFFへ変更できない。新規参加者には各用語1問、計3問を出題する。対象3用語、6択単一選択、M1/M3/unknownの分類、テスト回数上限は維持する。
 
 | 設定 | 事前・再テスト1/2・内部final_test | 用語ページ | 学習確認 |
 | --- | --- | --- | --- |
-| OFF | 設問1・2、計6問 | 2設問をまとめて保存 | 誤答設問の保存snapshot |
-| ON | 設問1だけ、計3問 | 1設問を保存 | 誤答した設問1の保存snapshot |
+| 旧版でOFF | 設問1・2、計6問 | 2設問をまとめて保存 | 誤答設問の保存snapshot |
+| 仕様版41 / V6 | 設問1だけ、計3問 | 1設問を保存 | 誤答した設問1の保存snapshot |
 
-内部final_testはRETEST1を共用する。設問2・3のYAML・ID・選択肢・旧snapshotは保持する。ONの参加者による設問2への直接回答は409で拒否する。教材対象は実際の誤答から決める。「設問ごとの答え合わせ」がONなら、出題した1設問または2設問の選択内容・正誤を同じ画面内で示す。正答・解説・内部分類は表示しない。
+内部final_testはRETEST1を共用する。V6に設問2・3は含めない。旧V5以前のYAML・ID・選択肢・snapshotは保全する。V6では設問1以外への回答を拒否する。教材対象は実際の誤答から決める。「設問ごとの答え合わせ」がONなら、設問1の選択内容・正誤を同じ画面内で示す。正答・解説・内部分類は表示しない。
 
 ## 保存・API・互換性
 
-- RuntimeSetting.first_question_only、Participant.first_question_onlyをnullable booleanとして追加する。設定未保存・旧NULLはOFFとして読むが、既存行を補完しない。
-- 管理GET/PUT `/api/admin/first-question-only` は `enabled: boolean` と `applies_to: new_standard_participants_only` を返す。管理認証を必須とし、PUTは厳密なbooleanだけを受理する。GETはno-store。
-- 新規登録時に参加者へ設定を固定する。後から管理スイッチを変えても登録済み参加者の問題数は変わらない。
-- 用語ページPOSTのanswersは入力型上1〜2件。受理する件数・問題ID・回次は参加者snapshotで検証する。一括保存・ページ時間・冪等再送・再読み込み後の再送復元を維持する。
-- 仕様版35で導入した設定とprotocol・split-actions-v5を仕様版36でも維持し、登録条件で区別する。旧版の閲覧専用条件を変更しない。
+- RuntimeSetting.first_question_only、Participant.first_question_onlyはnullable booleanとして保持する。仕様版41の新規登録では常にtrueを保存する。既存参加者のsnapshot・NULL解釈は履歴仕様に従い、既存行は補完しない。
+- 管理GET `/api/admin/first-question-only` はtrueと `applies_to: new_standard_participants_only` を返す。管理認証を必須とし、PUTはtrueだけを保存する。falseは409で拒否し、GETはno-store。
+- 新規登録時に参加者へtrueを固定する。仕様版41では後から設定を切り替える操作を提供しない。
+- 用語ページPOSTのanswersは1件とする。受理する問題ID・回次は参加者snapshotとV6バンクで検証する。一括保存・ページ時間・冪等再送・再読み込み後の再送復元を維持する。
+- 仕様版35で導入した設定を維持する。仕様版41ではV6の設問1のみを固定する。旧仕様版の登録値・protocolは変更しない。旧版の閲覧専用条件を変更しない。
 
 ## 指標とログ
 

@@ -49,6 +49,7 @@ def review_db():
             protocol_id=CURRENT_PROTOCOL_ID,
             learning_content_version=15,
             show_question_reviews=True,
+            first_question_only=True,
             option_order_mode="debug_fixed",
         )
         db.add(participant)
@@ -65,7 +66,7 @@ def _question_rows(db: Session, phase: str) -> list[dict]:
         .join(Term, Term.id == Question.term_id)
         .filter(
             Question.phase == source_phase,
-            Question.variant_key.in_([f"{variant}_q1", f"{variant}_q2"]),
+            Question.variant_key == f"{variant}_q1",
         )
         .order_by(Term.display_order, Question.variant_key)
         .all()
@@ -183,102 +184,66 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
         ok(client.put("/api/admin/option-order", json={"mode": previous_order}))
 
 
-def test_pair_review_requires_both_answers_is_private_and_acknowledgement_is_idempotent():
+def test_single_question_review_is_private_and_acknowledgement_is_idempotent():
     with set_question_reviews(True):
         with create_trial("A", "debug_fixed") as (client, participant_id):
             questions = ok(client.get(f"/api/experiment/{participant_id}/pretest"))["questions"]
-            term_slug = questions[0]["term_slug"]
-            pair = [question for question in questions if question["term_slug"] == term_slug]
-            assert len(pair) == 2
-
-            selected_ids = [
-                select_roles(pair[0], ["unknown"]),
-                select_roles(pair[1], [None]),
-            ]
-            for question, option_ids in zip(pair[:1], selected_ids[:1], strict=True):
-                response = client.post(
-                    "/api/attempts",
-                    json={
-                        "participant_id": participant_id,
-                        "question_id": question["question_id"],
-                        "phase": "pretest",
-                        "selected_option_ids": option_ids,
-                    },
-                )
-                assert response.status_code == 200, response.text
+            question = questions[0]
+            term_slug = question["term_slug"]
+            assert len([item for item in questions if item["term_slug"] == term_slug]) == 1
             assert ok(client.get(f"/api/experiment/{participant_id}/pretest"))["pending_question_review"] is None
 
-            incomplete = client.post(
-                f"/api/participants/{participant_id}/question-review-acknowledgements",
-                json={"phase": "pretest", "term_slug": term_slug},
-            )
-            assert incomplete.status_code == 409
+            ack_url = f"/api/participants/{participant_id}/question-review-acknowledgements"
+            ack_payload = {"phase": "pretest", "term_slug": term_slug}
+            assert client.post(ack_url, json=ack_payload).status_code == 409
 
-            second = pair[1]
-            response = client.post(
-                "/api/attempts",
-                json={
-                    "participant_id": participant_id,
-                    "question_id": second["question_id"],
-                    "phase": "pretest",
-                    "selected_option_ids": selected_ids[1],
-                },
-            )
+            selected_ids = select_roles(question, ["unknown"])
+            response = client.post("/api/attempts", json={
+                "participant_id": participant_id,
+                "question_id": question["question_id"],
+                "phase": "pretest",
+                "selected_option_ids": selected_ids,
+            })
             assert response.status_code == 200, response.text
             review = ok(client.get(f"/api/experiment/{participant_id}/pretest"))["pending_question_review"]
             assert set(review) == {"phase", "term_slug", "term_label", "results"}
             assert review["term_slug"] == term_slug
-            assert len(review["results"]) == 2
+            assert len(review["results"]) == 1
+            result = review["results"][0]
+            selected = next(option for option in question["options"] if option["option_id"] == selected_ids[0])
+            assert set(result) == {"question_number", "selected_option", "is_correct"}
+            assert result["question_number"] == 1
+            assert result["selected_option"] == {"label": selected["label"], "body": selected["body"]}
+            assert result["is_correct"] is False
+            assert set(result["selected_option"]) == {"label", "body"}
 
-            for index, result in enumerate(review["results"]):
-                question = pair[index]
-                option_id = selected_ids[index][0]
-                selected = next(option for option in question["options"] if option["option_id"] == option_id)
-                assert set(result) == {"question_number", "selected_option", "is_correct"}
-                assert result["question_number"] == index + 1
-                assert result["selected_option"] == {"label": selected["label"], "body": selected["body"]}
-                assert result["is_correct"] is (index == 1)
-                assert set(result["selected_option"]) == {"label", "body"}
-
-            ack_url = f"/api/participants/{participant_id}/question-review-acknowledgements"
-            ack_payload = {"phase": "pretest", "term_slug": term_slug}
             first_ack = client.post(ack_url, json=ack_payload)
             second_ack = client.post(ack_url, json=ack_payload)
             assert first_ack.status_code == second_ack.status_code == 200
             assert second_ack.json() == first_ack.json()
-            assert first_ack.json()["current_step"] == "pretest"
             with SessionLocal() as db:
                 acknowledged = db.query(Attempt).filter_by(
                     participant_id=participant_id,
                     phase="pretest",
-                    question_id=second["question_id"],
+                    question_id=question["question_id"],
                 ).one()
-                acknowledged_at = acknowledged.question_review_acknowledged_at
-                assert acknowledged_at is not None
+                assert acknowledged.question_review_acknowledged_at is not None
             assert ok(client.get(f"/api/experiment/{participant_id}/pretest"))["pending_question_review"] is None
-            with SessionLocal() as db:
-                assert db.query(Attempt).filter_by(
-                    participant_id=participant_id,
-                    phase="pretest",
-                    question_id=second["question_id"],
-                ).one().question_review_acknowledged_at == acknowledged_at
 
 
 def test_out_of_order_ack_and_pretest_diagnosis_are_rejected_without_scoring():
     with set_question_reviews(True):
         with create_trial("B", "randomized") as (client, participant_id):
             questions = ok(client.get(f"/api/experiment/{participant_id}/pretest"))["questions"]
+            assert len(questions) == 3
             for question in questions:
                 selected_ids = select_roles(question, ["unknown"])
-                response = client.post(
-                    "/api/attempts",
-                    json={
-                        "participant_id": participant_id,
-                        "question_id": question["question_id"],
-                        "phase": "pretest",
-                        "selected_option_ids": selected_ids,
-                    },
-                )
+                response = client.post("/api/attempts", json={
+                    "participant_id": participant_id,
+                    "question_id": question["question_id"],
+                    "phase": "pretest",
+                    "selected_option_ids": selected_ids,
+                })
                 assert response.status_code == 200, response.text
 
             review = ok(client.get(f"/api/experiment/{participant_id}/pretest"))["pending_question_review"]
@@ -295,7 +260,7 @@ def test_out_of_order_ack_and_pretest_diagnosis_are_rejected_without_scoring():
                 participant = db.get(Participant, participant_id)
                 attempts = db.query(Attempt).filter_by(participant_id=participant_id, phase="pretest").all()
                 assert participant.current_step == "pretest"
-                assert len(attempts) == 6
+                assert len(attempts) == 3
                 assert all(attempt.is_correct is None and attempt.score is None for attempt in attempts)
                 assert all(attempt.question_review_acknowledged_at is None for attempt in attempts)
 
@@ -305,7 +270,7 @@ def test_score_phase_rejects_an_unacknowledged_review_without_partial_scoring(re
     db, participant = review_db
     participant.current_step = phase
     rows = _question_rows(db, phase)
-    assert len(rows) == 6
+    assert len(rows) == 3
     for row in rows:
         question = db.get(Question, row["question_id"])
         _add_answer(db, participant, question, phase, correct=False)
@@ -315,11 +280,11 @@ def test_score_phase_rejects_an_unacknowledged_review_without_partial_scoring(re
     assert error.value.status_code == 409
     db.expire_all()
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase=phase).all()
-    assert len(attempts) == 6
+    assert len(attempts) == 3
     assert all(attempt.is_correct is None and attempt.score is None for attempt in attempts)
 
 
-def test_none_variant_key_is_safe_and_acknowledged_term_skips_both_questions(review_db, monkeypatch):
+def test_none_variant_key_is_safe_and_acknowledged_question_skips_review(review_db, monkeypatch):
     db, participant = review_db
     rows = _question_rows(db, "pretest")
     first = db.get(Question, rows[0]["question_id"])
@@ -338,7 +303,7 @@ def test_none_variant_key_is_safe_and_acknowledged_term_skips_both_questions(rev
         question = db.get(Question, row["question_id"])
         attempts_by_question[question.id] = _add_answer(db, participant, question, "pretest", correct=False)
     acknowledged_term = rows[0]["term_slug"]
-    attempts_by_question[rows[1]["question_id"]].question_review_acknowledged_at = now()
+    attempts_by_question[rows[0]["question_id"]].question_review_acknowledged_at = now()
     attempts_by_question[rows[0]["question_id"]].option_order_snapshot = None
     db.flush()
 
@@ -352,8 +317,7 @@ def test_none_variant_key_is_safe_and_acknowledged_term_skips_both_questions(rev
     monkeypatch.setattr(experiment, "_selected_options", record_selected_options)
     pending = experiment.pending_question_review(db, participant.id, "pretest", rows)
     assert pending is not None
-    assert pending["term_slug"] == rows[2]["term_slug"]
-    assert len(selected_attempt_ids) == 4
+    assert pending["term_slug"] == rows[1]["term_slug"]
+    assert len(selected_attempt_ids) == 12
     assert attempts_by_question[rows[0]["question_id"]].id not in selected_attempt_ids
-    assert attempts_by_question[rows[1]["question_id"]].id not in selected_attempt_ids
     assert acknowledged_term == rows[0]["term_slug"]

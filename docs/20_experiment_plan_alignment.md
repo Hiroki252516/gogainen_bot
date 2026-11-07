@@ -1,6 +1,10 @@
+## 仕様版41：V6設問1のみを新規参加者へ適用する
+
+新規参加者へ仕様版41 / `experiment-plan-2026-11-07-split-actions-v6-q1-only-v1`を適用する。通常版問題バンクをsplit-actions-v5からsplit-actions-v6へ進め、設問1の9選択肢を改訂し、研究者向け理由をQuestionOption.rationaleへ保存する。V5と仕様版40以下の問題本文・回答・snapshotは変更せず、既存版は各記録時のバンクで復元する。仕様版41では設問1のみ出題を登録時に固定し、各用語1問、計3問を出題・採点する。V6には設問1だけを収録し、設問2・3はV5以前の履歴バンクに保持する。管理画面・APIでもOFFへ切り替えられない。教材、辞書、アンケート、群条件、答え合わせ、評価式は仕様版40から維持する。理由欄は研究者用で参加者向けペイロードに含めない。分類根拠が弱い選択肢には要確認注記を残す。文面の変更は研究上の妥当性確認や実験開始承認を意味しない。詳細は[設問1のみ](48_first_question_only.md)、[V6問題バンク](../backend/app/seed/content/standard/split_assessment_v6.yml)、[受入記録](14_testing_acceptance.md)を参照する。
+
 # 実験計画書との対応と実装判断
 
-## 仕様版40：統制群の教材指示を共通ルールのみにする
+## 仕様版40の履歴：統制群の教材指示を共通ルールのみにする
 
 新規参加者へ仕様版40 / `experiment-plan-2026-11-07-control-shared-prompt-v1`を適用する。仕様版39で統制群に送っていた「通常のAIチューターとして説明する」「general_explanationの意味」「teaching_strategyをgeneral_explanationに固定する」という3つの自然言語指示を、YAMLとPythonの組立て処理から除く。共通指示・入力投影・出力Schema・Backend検証は維持し、統制群の`teaching_strategy`出力値はSchema enumとBackend検証で`general_explanation`に固定する。提案群の診断・教授方略指示は変更しない。仕様版39以下は閲覧専用とし、既存の回答・教材・snapshotは書き換えない。仕様版39での指示は当時の実装履歴として次節に保持する。この記録は実装判断を示すもので、研究上の承認を意味しない。詳細と検証状況は[AI指示](10_ai_prompt_contracts.md)・[受入記録](14_testing_acceptance.md)を参照する。
 
@@ -86,11 +90,11 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 
 > 現行変更: 学習確認は各用語・各セッション1回答とする。以下の過去の版や判断に記載された3回答・同一用語の再回答用先行生成は当時の記録である。
 
-> 仕様版38採用時の記録。現行版は冒頭の仕様版40節を参照する。現行の問題版は通常版のみ。旧条件のコード・問題資産・保存記録を削除する変更は実験仕様版とprotocolを変えず、削除手順は[運用手順](19_experiment_operation_runbook.md)、検証は[受入記録](14_testing_acceptance.md)を参照する。
+> 仕様版38採用時の記録。現行版は冒頭の仕様版41節を参照する。現行の問題版は通常版のみ。旧条件のコード・問題資産・保存記録を削除する変更は実験仕様版とprotocolを変えず、削除手順は[運用手順](19_experiment_operation_runbook.md)、検証は[受入記録](14_testing_acceptance.md)を参照する。
 
 ## 仕様版28の採用仕様（仕様版35でも維持）
 
-設問ペア答え合わせは仕様版28 / experiment-plan-2026-10-30-question-review-v1で導入し、仕様版40でも維持する。仕様版27の採用時根拠[39](39_split_assessment.md)は変更せず保管する。
+設問ペア答え合わせは仕様版28 / experiment-plan-2026-10-30-question-review-v1で導入し、仕様版41でも維持する。仕様版27の採用時根拠[39](39_split_assessment.md)は変更せず保管する。
 
 通常版PRETEST・RETEST・内部final_testで、用語内の設問1・2を両方保存した後、同じテスト画面に本人の選択内容と正誤を表示する。ページ/URL遷移はせず、続行で次の用語へ進む。新設定は初期値ONの「設問ごとの答え合わせ」で、新規参加者だけに登録時snapshotとして固定する。既存のPRETEST全体結果スイッチは独立して残す。採点・学習遷移・テスト上限・評価式は変更しない。API・データ・受入条件は[40](40_question_pair_answer_review.md)。
 
