@@ -4,11 +4,11 @@
 
 計画書の手順は、事前テスト、必要な用語の学習、再テスト、未達用語の再学習、満点または中断後のアンケートという流れ。6仮説の測定上の回数・対象経路は[01](01_research_requirements.md)と[12](12_evaluation_metrics.md)に定め、画面表示の変更で評価式は変更しない。
 
-現行コードは仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`。新規参加者は同意後に事前アンケートv2を完了し、PRETESTへ進む。通常版はsplit-actions-v5で、登録時設定に応じ各用語の設問1または設問1・2を出題する。教材は教材内解説モードに固定し、辞書v4を意味参照として使い、本文内で説明する。仕様版38以下・旧protocolは閲覧専用とし、結果は履歴バンクで復元する。詳細は[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[選択肢条件](47_split_assessment_added_choices.md)、[RAG注釈](49_rag_glossary.md)。
+現行コードは仕様版40 / `experiment-plan-2026-11-07-learning-material-target-800-v1`。新規参加者は同意後に事前アンケートv2を完了し、PRETESTへ進む。通常版はsplit-actions-v5で、登録時設定に応じ各用語の設問1または設問1・2を出題する。教材は教材内解説モードに固定し、辞書v4を意味参照として使って本文内で説明する。本文は800文字程度を目安にし、文字数による合否判定・再試行は行わない。仕様版39以下・旧protocolは閲覧専用とし、結果は履歴バンクで復元する。詳細は[教材モード](41_learning_glossary_material_mode.md)、[文字数目標](42_learning_glossary_material_length.md)、[事前アンケート](49_presurvey_baseline.md)、[選択肢条件](47_split_assessment_added_choices.md)、[RAG注釈](49_rag_glossary.md)。
 
 新規登録・出題・学習・集計は通常版だけを扱い、問題バンクの切替経路はない。旧条件の保存データ削除は通常の起動・seedから分離し、[専用削除手順](../backend/scripts/purge_easy_mode_data.py)で明示実行する。
 
-## 現行フロー（仕様版39）
+## 現行フロー（仕様版40）
 
 1. start → consentで参加コードA/Bを受け取り、新しい参加者を作成する。
 2. presurveyで用語事前知識6項目と普段のAI利用2項目へ回答し、必須8項目を保存してからpretestへ進む。未回答のまま事前テストは開始できない。
@@ -25,4 +25,4 @@
 
 学習ギブアップはretestへ進む。retest/final_testの実験ギブアップはsurveyへ進む。採点・ギブアップ・再送・先行生成は仕様版の確認後に実行する。学習確認の出題規則は両群共通で、unknownはenrichment、M1/M3はconceptual_change。同じ状態・回答・ターンなら同じ問題とvariantを使う。
 
-仕様版38以下、旧protocol_id、NULL・未対応版の記録は閲覧専用で保全する。新規開始は同意を取り直して新しいIDを作成する。現行コードは新規参加者へ仕様版39を保存する。教材内解説では辞書v4を意味参照として生成入力に含め、本文では逐語転載せず文脈に合わせて言い換える。教材の右側注釈欄は表示しない。旧版の保存済み教材・注釈snapshotは変更しない。[事前アンケート](49_presurvey_baseline.md)、[教材モード](41_learning_glossary_material_mode.md)、[文字数契約](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)、[PRETEST履歴](44_pretest_content_revision.md)、[RAG注釈](49_rag_glossary.md)。通常版ペア確認の契約は[40](40_question_pair_answer_review.md)に記録する。
+仕様版39以下、旧protocol_id、NULL・未対応版の記録は閲覧専用で保全する。新規開始は同意を取り直して新しいIDを作成する。現行コードは新規参加者へ仕様版40を保存し、教材本文は800文字程度を目安とする。上下限による合否判定と長さだけを理由にした再生成は行わない。教材内解説では辞書v4を意味参照として生成入力に含め、本文では逐語転載せず文脈に合わせて言い換える。教材の右側注釈欄は表示しない。旧版の保存済み教材・注釈snapshot・監査記録は変更しない。[事前アンケート](49_presurvey_baseline.md)、[教材モード](41_learning_glossary_material_mode.md)、[文字数目標](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)、[PRETEST履歴](44_pretest_content_revision.md)、[RAG注釈](49_rag_glossary.md)。通常版ペア確認の契約は[40](40_question_pair_answer_review.md)に記録する。

@@ -2,7 +2,7 @@
 
 ## 教材用語解説モードの保存（仕様版29）
 
-`RuntimeSetting.learning_material_glossary_mode`と`Participant.learning_material_glossary_mode`はnullable VARCHAR(32)として保持する。仕様版39以降、新規登録ではRuntimeSetting列を参照せず`integrated_material`をParticipantへ固定保存する。RuntimeSetting列は旧設定値の履歴保全用に残し、管理APIからは変更できない。既存ParticipantのモードとNULLは書き換えない。仕様版38以下は閲覧専用で再開できない。Participants CSV、参加者一覧・個別ログにはParticipantの保存値を含め、旧NULLは「未記録（旧仕様）」として扱う。
+`RuntimeSetting.learning_material_glossary_mode`と`Participant.learning_material_glossary_mode`はnullable VARCHAR(32)として保持する。仕様版39以降、新規登録ではRuntimeSetting列を参照せず`integrated_material`をParticipantへ固定保存する。RuntimeSetting列は旧設定値の履歴保全用に残し、管理APIからは変更できない。既存ParticipantのモードとNULLは書き換えない。仕様版40では仕様版39以下は閲覧専用で再開できない。Participants CSV、参加者一覧・個別ログにはParticipantの保存値を含め、旧NULLは「未記録（旧仕様）」として扱う。
 
 ## 仕様版28の答え合わせ保存
 
@@ -24,7 +24,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 ## 現行の保存契約
 
-モデルの正本は backend/app/models/__init__.py。現行コードは仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を使用する。モード固定によるDB列・注釈JSON形式の変更はない。新規登録のモードは`integrated_material`、RuntimeSettingの旧モード列は保全目的で保持するが参照・更新しない。辞書v4と既存JSON snapshotは保持する。アンケートは既存のParticipantSurveyをphase/version別に使い、新DB列を追加しない。仕様版38以下・旧アンケート回答を不変で保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36〜38の結果復元はsplit-actions-v5を使う。詳細は[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材の文字数契約と言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
+モデルの正本は backend/app/models/__init__.py。現行コードは仕様版40 / `experiment-plan-2026-11-07-learning-material-target-800-v1`を使用する。教材文字数条件の変更によるDB列・注釈JSON形式の変更はない。新規登録のモードは`integrated_material`、RuntimeSettingの旧モード列は保全目的で保持するが参照・更新しない。辞書v4と既存JSON snapshotは保持する。アンケートは既存のParticipantSurveyをphase/version別に使い、新DB列を追加しない。仕様版39以下・旧アンケート回答を不変で保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36〜38の結果復元はsplit-actions-v5を使う。詳細は[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材の文字数目標と言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 学籍番号はSQLAlchemyの研究DBへ追加しない。IDENTITY_MAPPING_PATHが指す別SQLiteへ、学籍番号・参加者ID・表示コード・作成日時・再送処理用キーを保存する。研究用エクスポート・AI入力・AIログ・冪等性のrequest_hash/response_jsonには学籍番号を含めない。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、登録は対応表を先行保存してから研究DBを確定し、通常の失敗では補償削除する。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
@@ -33,7 +33,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規参加者だけ仕様版39と`experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を保存し、教材内解説モードとretest_cycles_completed=0を固定する。既存版38以下・異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版40と`experiment-plan-2026-11-07-learning-material-target-800-v1`を保存し、教材内解説モードとretest_cycles_completed=0を固定する。既存版39以下・異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 

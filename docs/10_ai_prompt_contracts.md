@@ -1,14 +1,14 @@
 # AI指示の目標と現行契約
 
-## 教材内用語解説モード（仕様版39の現行条件）
+## 教材内用語解説モード（仕様版40の現行条件）
 
-仕様版39では新規参加者を`integrated_material`に固定し、辞書v4のterm/definitionを`glossary_reference`として両群共通の教材生成入力に含める。定義文は転載用ではなく意味を確認する参照情報として扱い、教材文脈に合わせて自然に言い換え、実際に使う登録語だけを説明し、定義にない性質を加えないよう指示する。新規教材の目標・許容範囲は1000文字前後（600〜1200）。注釈欄のみ700文字前後（600〜800）の生成契約は既存データとの互換性のため保持するが、新規参加者では選択できない。
+仕様版40では新規参加者を`integrated_material`に固定し、辞書v4のterm/definitionを`glossary_reference`として両群共通の教材生成入力に含める。定義文は転載用ではなく意味を確認する参照情報として扱い、教材文脈に合わせて自然に言い換え、実際に使う登録語だけを説明し、定義にない性質を加えないよう指示する。教材本文は800文字程度を目安とするが、上下限は設けない。文字数だけを理由に生成を拒否・再試行しない。実文字数と目標だけを新しい監査記録に残す。仕様版39以下の教材・snapshot・監査記録は保存時の内容で保持する。
 
-この入力は両群で同じ形で投影し、群専用の診断・教授情報とは分離する。`TutorTurn.diagnosis_json.material_glossary`のsnapshotは引き続き保存するが、仕様版39の新規教材では参加者画面の教材用語注釈欄を表示しない。回答後解説のsnapshot・注釈表示は従来どおり。辞書全項目を本文へ列挙する指示ではなく、AIが実際にどの用語を説明したか、定義が意味的に正しいかは機械検査で保証しない。旧annotation_only参加者の保存モードとsnapshotは変更しない。
+この入力は両群で同じ形で投影し、群専用の診断・教授情報とは分離する。`TutorTurn.diagnosis_json.material_glossary`のsnapshotは引き続き保存するが、新規教材では参加者画面の教材用語注釈欄を表示しない。回答後解説のsnapshot・注釈表示は従来どおり。辞書全項目を本文へ列挙する指示ではなく、AIが実際にどの用語を説明したか、定義が意味的に正しいかは機械検査で保証しない。既存参加者の保存モードとsnapshotは変更しない。
 
-## 用語注釈と生成契約の境界（仕様版26導入・版39現行）
+## 用語注釈と生成契約の境界（仕様版26導入・版40現行）
 
-実験仕様版26で導入した注釈はbackendの固定辞書処理である。仕様版39の新規参加者は教材内解説に固定されるため、辞書v4を両群共通の`glossary_reference`として教材生成へ渡す。教材注釈snapshotは保存するが、教材本文や回答後解説へ自動挿入せず、共通回答履歴にも加えない。生成Schemaと契約v7は維持する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
+実験仕様版26で導入した注釈はbackendの固定辞書処理である。仕様版40の新規参加者は教材内解説に固定されるため、辞書v4を両群共通の`glossary_reference`として教材生成へ渡す。教材注釈snapshotは保存するが、教材本文や回答後解説へ自動挿入せず、共通回答履歴にも加えない。生成Schemaと契約v7は維持する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
 
 Wordと承認された実装判断を[20](20_experiment_plan_alignment.md)に記録する。6.7の共通・統制群指示を実装し、unknownの証拠Schema・taxonomy・検査・Mockも更新した。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
 
@@ -60,7 +60,7 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 ## 教材契約と履歴（版26の基準契約・版29で維持）
 
-現行は実験仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教授方略や出力Schemaは変更しない。RAGの定義・別表記を含む辞書v4と既存snapshotは維持する。文字数契約は履歴互換のためモード別にし、仕様版38以下は閲覧専用。
+現行は実験仕様版40 / `experiment-plan-2026-11-07-learning-material-target-800-v1`。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教授方略や出力Schemaは変更しない。RAGの定義・別表記を含む辞書v4と既存snapshotは維持する。本文は800文字程度を目安とし、文字数による合否判定は行わない。仕様版39以下は閲覧専用。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 
@@ -90,11 +90,11 @@ backend指定方略はcontrol→general_explanation、M1→belief_revision、M3�
 
 proposedの教材はtutor_message、teaching_strategy、mandatory_elements、teaching_contractを持つ。契約項目はtarget_claim_id、addressed_claim_ids、refutation_mode、corrected_claim、mechanism_explanation、contrast_example、transfer_check、target_addressed。
 
-M1は反駁、M3はカテゴリー比較、unknownは基礎説明を生成するよう指示する。transfer_checkは教材内の適用確認であり必須。backendの自動検証は以下の構造・文字列検査であり、教授内容の意味的な正しさを判定するものではない。注釈欄のみは700文字前後（600〜800）、教材内解説は1000文字前後（600〜1200）を検証する。検証違反時は初回＋最大2回同backendで再生成し、mode-specificな目標・上下限を再指示する。失敗は503。Mockへ切り替えない。教材長検証とpromptの更新識別子は`tutoring-prompt-contract-v9-mode-specific-length`。
+M1は反駁、M3はカテゴリー比較、unknownは基礎説明を生成するよう指示する。transfer_checkは教材内の適用確認であり必須。backendの自動検証は以下の構造・文字列検査であり、教授内容の意味的な正しさを判定するものではない。本文の目標800文字程度は生成時の目安であり、実測長は合否判定・再試行条件に使わない。構造・教授契約・安全性の検証違反時は初回＋最大2回同backendで再生成する。失敗は503。Mockへ切り替えない。更新識別子は`tutoring-prompt-contract-v10-target-800`。
 
 | 区分 | 現行の処理と保証範囲 |
 | --- | --- |
-| backendの自動検査 | 契約内のtarget_claim_id/addressed_claim_idsが指定対象IDの条件を満たすこと、タイプ別refutation_mode・teaching_strategy、必須フィールドの非空・null条件、target_addressed、証拠文の節本文内出現、用語見出し・非空節・内部ラベル、教材文字数を確認する。証拠一致では空白や一部Markdown記号を正規化する。 |
+| backendの自動検査 | 契約内のtarget_claim_id/addressed_claim_idsが指定対象IDの条件を満たすこと、タイプ別refutation_mode・teaching_strategy、必須フィールドの非空・null条件、target_addressed、証拠文の節本文内出現、用語見出し・非空節・内部ラベルを確認する。証拠一致では空白や一部Markdown記号を正規化する。教材本文の実文字数と目標値は監査するが、文字数で合否を判定しない。 |
 | 禁止文字列検査 | 現在の固定確認問題の本文、expected_answer、正解選択肢本文について、各文字列が教材にそのまま含まれる場合を拒否する。言い換えや部分的な手掛かりを意味的に検出する検査ではない。 |
 | 入力分離とプロンプト指示 | 直前のAI解説全文を次教材の入力から除き、過去問題・回答・解説の転載、未観察誤概念の創作、正答漏えいをしないよう指示する。入力に渡さないことと、生成文の意味的な混入を判定することは別である。 |
 | 研究者の目視確認 | 教材の事実的正しさ、訂正・反駁・カテゴリー比較の妥当性、対象主張への実質的な対応、別事例への適用確認、言い換えによる正答漏えい、意味的な過去解説混入を確認する。これらを自動検証で保証しない。 |

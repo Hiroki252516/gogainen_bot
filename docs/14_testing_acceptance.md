@@ -1,5 +1,13 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-07 教材生成を目標800文字へ変更（仕様版40・fix/issue-278）
+
+- 新規参加者を仕様版40 / `experiment-plan-2026-11-07-learning-material-target-800-v1`へ更新し、教材本文は800文字程度を目安とする。上下限の合否判定・長さのみを理由とした再生成を廃止し、構造・教授内容などの検証は維持する。新規の生成監査には実文字数と目標だけを記録する。
+- 仕様版39以下の参加者・教材・snapshot・監査記録は変更しない。API・DBスキーマ・教材表示・辞書・採点条件は変更しない。
+- Backend全テストは隔離SQLiteで`1712 passed`。教材本文80文字・2000文字の両方が文字数を理由に再生成されず、構造・教授契約違反では従来どおり再試行することを含む関連テスト144件も通過した。
+- Frontendの`npm test`全7スクリプトと`npm run build`（TypeScript検査を含む）が通過した。画面変更はないためブラウザ確認は行っていない。
+- `git diff --check`通過。研究DB・localhost:3000・実AI・GitHub Actions・コミット・pushは使用していない。
+
 ## 2026-11-06 教材内解説の標準化（仕様版39・fix/issue-273）
 
 - 新規参加者へ仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を適用し、保存済みRuntimeSetting値に関係なく`integrated_material`を記録する。管理画面のモード切替と管理用GET/PUT APIを削除する。RuntimeSettingの旧列、参加者の履歴値、ログ・CSV、既存教材とglossary snapshotは維持する。

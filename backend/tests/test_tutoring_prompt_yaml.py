@@ -127,10 +127,10 @@ def test_rendered_prompt_matches_expected_contract_hashes():
     )
 
     expected_hashes = {
-        "control_annotation": "5edbe59e4bff8265a5913dd9a3adaacb9afd57806367a093edeb92f67f686994",
-        "control_integrated": "a24bbe64263f8abcb4e4fedf08b17b41c38a2dea10442c8444ceac73ba70c66a",
-        "proposed_m1_retry_counted": "2fa8a9de65971995e167ac5ee7d2c8a2cf61be7e70c208dad0392b7927661763",
-        "proposed_m3_integrated": "6939f35c48a688d70d60f7ed7cc4b9aceff57526fd19f4d0b659c97b103e1b1e",
-        "proposed_unknown_retry_uncounted": "d109b93ffd4ecbf994c2c9cca4b3229205e5cdf6b544dc86515ecf1c2186c18d",
+        "control_annotation": "13fa044e55c7bd2154947df70e6f6d85762e38a01c1992d656eb8ea76c83da0a",
+        "control_integrated": "98e3388ab105dc05ea6be7f99e584a99ca6cc7b8a126b810f5771abcb9f12ecc",
+        "proposed_m1_retry_counted": "8fb509032ffff35d8609ddba255041f3ccc9703be5ffbb13364e94737eaadb46",
+        "proposed_m3_integrated": "371bef7de24f009149588d9c4a714b7b23c60d0be5b02593f3e9df625fbed15b",
+        "proposed_unknown_retry_uncounted": "360a8bf46a59071d1c7d681a121ff495873d42af4a9fc56ae203d0e5304a5076",
     }
     assert {name: hashlib.sha256(prompt.encode("utf-8")).hexdigest() for name, prompt in rendered.items()} == expected_hashes

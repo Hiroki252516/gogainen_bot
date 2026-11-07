@@ -50,10 +50,7 @@ def _validate_prompt_text(raw: Any) -> dict[str, Any]:
         _required_text(common.get(key), f"tutoring.common_rules.{key}")
     if {field for _, field, _, _ in Formatter().parse(common["heading"]) if field} != {"term_label"}:
         raise ValueError("Prompt text template tutoring.common_rules.heading has invalid fields")
-    glossary_rules = _required_text_list(tutoring.get("glossary_rules"), "tutoring.glossary_rules", expected_length=3)
-    glossary_fields = {field for _, field, _, _ in Formatter().parse(glossary_rules[1]) if field}
-    if glossary_fields != {"min_characters", "max_characters"}:
-        raise ValueError("Prompt text template tutoring.glossary_rules[1] has invalid fields")
+    _required_text_list(tutoring.get("glossary_rules"), "tutoring.glossary_rules", expected_length=3)
     _required_text(tutoring.get("validation_retry_prefix"), "tutoring.validation_retry_prefix")
     _required_text(tutoring.get("learning_scope_rule"), "tutoring.learning_scope_rule")
     group_rules = _required_mapping(tutoring.get("group_rules"), "tutoring.group_rules")
@@ -63,7 +60,7 @@ def _validate_prompt_text(raw: Any) -> dict[str, Any]:
     templates = _required_mapping(tutoring.get("templates"), "tutoring.templates")
     template_fields = {
         "term_topic": {"term_label"},
-        "material_length": {"target_characters", "min_characters", "max_characters"},
+        "material_length": {"target_characters"},
         "mandatory_element_intro": {"misconception_type"},
         "teaching_strategy": {"strategies"},
     }
@@ -73,15 +70,6 @@ def _validate_prompt_text(raw: Any) -> dict[str, Any]:
         if fields != expected_fields:
             raise ValueError(f"Prompt text template tutoring.templates.{key!s} has invalid fields")
 
-    retry = _required_mapping(tutoring.get("material_length_retry"), "tutoring.material_length_retry")
-    retry_fields = {
-        "counted": {"actual_character_count", "target_character_count", "min_characters", "max_characters"},
-        "uncounted": {"target_character_count", "min_characters", "max_characters"},
-    }
-    for key, expected_fields in retry_fields.items():
-        template = _required_text(retry.get(key), f"tutoring.material_length_retry.{key}")
-        if {field for _, field, _, _ in Formatter().parse(template) if field} != expected_fields:
-            raise ValueError(f"Prompt text template tutoring.material_length_retry.{key} has invalid fields")
     expected = _required_mapping(tutoring.get("expected_type_rules"), "tutoring.expected_type_rules")
     _required_text_list(expected.get("common"), "tutoring.expected_type_rules.common", expected_length=1)
     _required_text_list(expected.get("m1_m3"), "tutoring.expected_type_rules.m1_m3", expected_length=4)
@@ -167,12 +155,8 @@ def build_tutoring_prompt(
     owns only the textual instruction order; output schemas and local
     validation remain separate contracts.
     """
-    length_contract = material_length_contract(
-        integrated_material="glossary_reference" in payload,
-    )
+    length_contract = material_length_contract()
     target_characters = length_contract["target_character_count"]
-    min_characters = length_contract["min_character_count"]
-    max_characters = length_contract["max_character_count"]
     prompt_text = PROMPT_TEXT["tutoring"]
     templates = prompt_text["templates"]
     common = prompt_text["common_rules"]
@@ -182,8 +166,6 @@ def build_tutoring_prompt(
         *common["context"],
         templates["material_length"].format(
             target_characters=target_characters,
-            min_characters=min_characters,
-            max_characters=max_characters,
         ),
         common["formatting"],
         common["heading"].format(term_label=term_label),
@@ -192,36 +174,11 @@ def build_tutoring_prompt(
     ]
     if payload.get("glossary_reference"):
         glossary_rules = [*prompt_text["glossary_rules"]]
-        glossary_rules[1] = glossary_rules[1].format(
-            min_characters=min_characters,
-            max_characters=max_characters,
-        )
         rules.extend(glossary_rules)
 
-    # ``retry_context`` is server-side generation metadata.  It may contribute
-    # a length-adjustment instruction, but it must never become model input.
+    # ``retry_context`` is server-side generation metadata; only validation
+    # errors selected below may contribute a retry instruction.
     retry_source = retry_context or payload
-    material_length_retry = retry_source.get("material_length_retry")
-    if isinstance(material_length_retry, dict):
-        actual_character_count = material_length_retry.get("actual_character_count")
-        if isinstance(actual_character_count, int) and not isinstance(actual_character_count, bool):
-            rules.append(
-                prompt_text["material_length_retry"]["counted"].format(
-                    actual_character_count=actual_character_count,
-                    target_character_count=target_characters,
-                    min_characters=min_characters,
-                    max_characters=max_characters,
-                )
-            )
-        else:
-            rules.append(
-                prompt_text["material_length_retry"]["uncounted"].format(
-                    target_character_count=target_characters,
-                    min_characters=min_characters,
-                    max_characters=max_characters,
-                )
-            )
-
     if expected_type:
         expected_rules = prompt_text["expected_type_rules"]
         rules.extend(expected_rules["common"])
