@@ -191,8 +191,8 @@ def test_material_and_feedback_snapshots_replays_and_audit(group, labels, restor
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 39
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 40
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-control-shared-prompt-v1"
         assert p.learning_material_glossary_mode == "integrated_material"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material

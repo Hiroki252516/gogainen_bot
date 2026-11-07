@@ -195,8 +195,8 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 39
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 40
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-control-shared-prompt-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"

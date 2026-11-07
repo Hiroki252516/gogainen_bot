@@ -1,12 +1,12 @@
 # 実験の概要と現行仕様
 
-## 仕様版39の現行コード
+## 仕様版40の現行コード
 
-現行コードは仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`。新規参加者は教材内解説モードに固定し、管理画面のモード切替UI/APIは提供しない。仕様版38以下と旧protocolは閲覧専用とし、既存参加者のモード・教材・snapshotは記録時の内容を保つ。事前アンケートv2（必須8項目）、事後アンケートv3、RAGを含む共通辞書v4と他の現行条件は維持する。教材内解説では辞書を意味参照として本文中で言い換え、教材右側の注釈欄を表示しない。詳細は[モード仕様](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[受入記録](14_testing_acceptance.md)。
+現行コードは仕様版40 / `experiment-plan-2026-11-07-control-shared-prompt-v1`。新規参加者は教材内解説モードに固定し、教材生成の統制群には群別の自然言語方略指示を加えず、提案群だけに診断・教授方略指示を加える。仕様版39以下と旧protocolは閲覧専用とし、既存参加者のモード・教材・snapshotは記録時の内容を保つ。事前アンケートv2（必須8項目）、事後アンケートv3、RAGを含む共通辞書v4と他の現行条件は維持する。教材内解説では辞書を意味参照として本文中で言い換え、教材右側の注釈欄を表示しない。詳細は[AI指示](10_ai_prompt_contracts.md)、[モード仕様](41_learning_glossary_material_mode.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版37の履歴記録
 
-当時の新規参加者は`experiment-plan-2026-11-04-presurvey-baseline-v2`を適用し、用語事前知識を4段階で保存した。現在は仕様版39に統合され、版38以下は閲覧専用。
+当時の新規参加者は`experiment-plan-2026-11-04-presurvey-baseline-v2`を適用し、用語事前知識を4段階で保存した。仕様版40に統合され、版39以下は閲覧専用。
 
 ## 仕様版36の履歴記録
 

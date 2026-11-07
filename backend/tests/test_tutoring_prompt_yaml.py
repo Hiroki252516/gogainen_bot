@@ -42,6 +42,11 @@ def test_prompt_yaml_is_valid_and_rejects_missing_required_sections():
     with pytest.raises(ValueError, match="group_rules.proposed"):
         _validate_prompt_text(invalid)
 
+    invalid = copy.deepcopy(raw)
+    invalid["tutoring"]["group_rules"]["control"] = ["control-only instruction"]
+    with pytest.raises(ValueError, match="group_rules.control is not supported"):
+        _validate_prompt_text(invalid)
+
 
 def test_rendered_prompt_matches_expected_contract_hashes():
     rendered = {}
@@ -134,3 +139,13 @@ def test_rendered_prompt_matches_expected_contract_hashes():
         "proposed_unknown_retry_uncounted": "d109b93ffd4ecbf994c2c9cca4b3229205e5cdf6b544dc86515ecf1c2186c18d",
     }
     assert {name: hashlib.sha256(prompt.encode("utf-8")).hexdigest() for name, prompt in rendered.items()} == expected_hashes
+
+    control_prompt = rendered["control_annotation"]
+    for removed_rule in (
+        "通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。",
+        "general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。",
+        "teaching_strategy は general_explanation に固定する。",
+        "teaching_strategy はbackendで指定された general_explanation に固定する。",
+    ):
+        assert removed_rule not in control_prompt
+    assert "教材には意味や仕組みの解説を含める。" in control_prompt

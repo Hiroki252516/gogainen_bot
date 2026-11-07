@@ -1,8 +1,8 @@
 # Repository Instructions for Codex
 
-## 仕様版39の現行条件（2026-11-06）
+## 仕様版40の現行条件（2026-11-07）
 
-現行コードは仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`。新規参加者は同意後に`presurvey-baseline-v2`の必須8項目へ回答してから事前テストへ進む。用語知識6項目は4択カテゴリ、AI利用頻度と自己評価は各10段階とする。事後アンケート`posttest-10point-v3`はシステム評価2項目・教材評価6項目・任意自由記述を保存し、H5はposttestだけを参照する。共通辞書v4はRAGを含む17語で、教材内解説を標準とし、定義を意味参照として渡して文脈に合わせて言い換える。仕様版38以下と旧protocolは閲覧専用で、既存回答・教材・snapshotを更新しない。事前アンケートは[docs/49_presurvey_baseline.md]、教材モードは[docs/41_learning_glossary_material_mode.md]、RAG注釈は[docs/49_rag_glossary.md]。
+現行コードは仕様版40 / `experiment-plan-2026-11-07-control-shared-prompt-v1`。新規参加者は同意後に`presurvey-baseline-v2`の必須8項目へ回答してから事前テストへ進む。用語知識6項目は4択カテゴリ、AI利用頻度と自己評価は各10段階とする。事後アンケート`posttest-10point-v3`はシステム評価2項目・教材評価6項目・任意自由記述を保存し、H5はposttestだけを参照する。共通辞書v4はRAGを含む17語で、教材内解説を標準とし、定義を意味参照として渡して文脈に合わせて言い換える。教材生成の統制群に群別の自然言語方略指示はなく、提案群だけに診断・タイプ別教授指示を加える。仕様版39以下と旧protocolは閲覧専用で、既存回答・教材・snapshotを更新しない。prompt条件は[docs/10_ai_prompt_contracts.md]。
 
 ## 仕様版37の履歴条件（2026-11-04）
 
