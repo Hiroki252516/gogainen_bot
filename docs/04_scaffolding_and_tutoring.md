@@ -1,6 +1,6 @@
 # 教材の教授方針と生成検査
 
-仕様版28で追加した設問ペア答え合わせは、AI生成や回答後解説ではなく、保存済みテスト回答の正誤・本人の選択を表示する独立したUI機能として現行仕様版41でも維持する。仕様版40で教材生成の群別指示を変更し、仕様版41で文字数目標を更新したが、回答後解説の指示は変更しない。教材、回答後解説、教授方針の構造は維持する。教材内解説では現行辞書v4を意味の参照情報として渡し、定義文を本文へ逐語転載しないよう指示する。[答え合わせ仕様](40_question_pair_answer_review.md)。仕様版29の教材用語解説モードは[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件は[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の履歴差分は[45](45_pretest_memory_distractors.md)、仕様版36のRAG注釈は[49](49_rag_glossary.md)を参照。
+仕様版28で追加した設問ペア答え合わせは、AI生成や回答後解説ではなく、保存済みテスト回答の正誤・本人の選択を表示する独立したUI機能として現行仕様版42でも維持する。新規参加者は各用語の設問1だけを出題し、各設問の回答後に同じ画面内で確認する。仕様版40で教材生成の群別指示を変更し、仕様版41で文字数目標を更新したが、回答後解説の指示は変更しない。教材、回答後解説、教授方針の構造は維持する。教材内解説では現行辞書v4を意味の参照情報として渡し、定義文を本文へ逐語転載しないよう指示する。本文は800文字程度を目安とし、上下限判定・長さを理由とした再生成は行わない。[答え合わせ仕様](40_question_pair_answer_review.md)。仕様版29の教材用語解説モードは[41](41_learning_glossary_material_mode.md)、仕様版30の文字数条件は[42](42_learning_glossary_material_length.md)、仕様版31の辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の履歴差分は[45](45_pretest_memory_distractors.md)、仕様版36のRAG注釈は[49](49_rag_glossary.md)を参照。
 
 ## 本文とは別枠の注釈
 

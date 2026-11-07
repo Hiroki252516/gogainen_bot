@@ -1,5 +1,6 @@
-"""Exercise both registration conditions through the saved-snapshot test flow."""
-from contextlib import contextmanager
+"""Exercise fixed question selection and historical snapshot behavior."""
+import csv
+import io
 from uuid import uuid4
 
 import pytest
@@ -12,25 +13,9 @@ from app.db.session import SessionLocal
 from app.main import app
 from app.models import Attempt, Base, Participant, Question, RuntimeSetting, TutorTurn
 from app.services import experiment
-from app.services.first_question_only import current_setting, enabled, save_setting
+from app.services.first_question_only import enabled
 from app.services.hypothesis_metrics import group_metrics, metrics_export_rows, participant_metrics
-from split_api_support import create_trial, ok, select_roles
-
-ENDPOINT = "/api/admin/first-question-only"
-
-
-@contextmanager
-def condition(first_only, reviews=True):
-    client = AuthenticatedTestClient(app)
-    previous = ok(client.get(ENDPOINT))["enabled"]
-    previous_reviews = ok(client.get("/api/admin/question-review-display"))["enabled"]
-    ok(client.put(ENDPOINT, json={"enabled": first_only}))
-    ok(client.put("/api/admin/question-review-display", json={"enabled": reviews}))
-    try:
-        yield client
-    finally:
-        ok(client.put(ENDPOINT, json={"enabled": previous}))
-        ok(client.put("/api/admin/question-review-display", json={"enabled": previous_reviews}))
+from split_api_support import complete_presurvey, create_trial, ok, select_roles
 
 
 def answer_page(client, pid, phase, questions, *, wrong=False):
@@ -72,39 +57,86 @@ def answer_test(client, pid, phase, count, *, wrong=False, reviews=True):
     return questions, result
 
 
-def test_setting_defaults_off_is_strict_and_requires_admin(tmp_path):
-    unauthorized = TestClient(app)
-    assert unauthorized.get(ENDPOINT).status_code == 401
-    assert unauthorized.put(ENDPOINT, json={"enabled": True}).status_code == 401
-    with condition(False) as client:
-        assert client.get(ENDPOINT).headers["cache-control"] == "no-store"
-        for value in (1, "true", None):
-            assert client.put(ENDPOINT, json={"enabled": value}).status_code == 422
-        assert client.put(ENDPOINT, json={"enabled": True, "extra": True}).status_code == 422
-    engine = create_engine(f"sqlite:///{tmp_path / 'setting.db'}")
-    Base.metadata.create_all(engine)
-    with Session(engine) as db:
-        assert current_setting(db) is False
-        legacy = Participant(display_code="Q1-NULL", group_condition="control")
-        db.add(legacy)
+def test_new_registration_uses_fixed_defaults_and_removes_settings_apis():
+    client = AuthenticatedTestClient(app)
+    previous_settings = None
+    with SessionLocal() as db:
+        row = db.get(RuntimeSetting, 1)
+        if row is None:
+            row = RuntimeSetting(id=1)
+            db.add(row)
+        previous_settings = (row.show_pretest_results, row.show_question_reviews, row.first_question_only)
+        row.show_pretest_results = True
+        row.show_question_reviews = False
+        row.first_question_only = False
         db.commit()
-        assert enabled(legacy) is False
-        save_setting(db, True)
-        assert legacy.first_question_only is None
-    with Session(engine) as db:
-        assert current_setting(db) is True
-        save_setting(db, False)
-        assert current_setting(db) is False
-    engine.dispose()
+    participant_id = None
+    try:
+        for endpoint in ("pretest-result-display", "question-review-display", "first-question-only", "learning-material-glossary-mode"):
+            assert TestClient(app).get(f"/api/admin/{endpoint}").status_code == 404
+            assert client.get(f"/api/admin/{endpoint}").status_code == 404
+            assert client.put(f"/api/admin/{endpoint}", json={"enabled": False}).status_code == 404
+        participant_id = ok(client.post("/api/registrations", json={
+            "assignment_code": "A", "consent_checked": True, "student_number": "Q1-FIXED-SYNTHETIC"
+        }))["participant_id"]
+        complete_presurvey(client, participant_id)
+        with SessionLocal() as db:
+            participant = db.get(Participant, participant_id)
+            assert participant.show_pretest_results is False
+            assert participant.show_retest_results is False
+            assert participant.show_question_reviews is True
+            assert participant.first_question_only is True
+            assert participant.experiment_spec_version == 42
+            assert participant.protocol_id == "experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1"
+            rows = experiment.question_payloads(db, participant_id, "pretest")
+            assert len(rows) == 3
+            q1 = db.get(Question, rows[0]["question_id"])
+            q2 = db.query(Question).filter_by(
+                term_id=q1.term_id, construct_key=q1.construct_key, variant_key="pretest_v1_q2"
+            ).one()
+        assert client.post("/api/attempts", json={
+            "participant_id": participant_id,
+            "phase": "pretest",
+            "question_id": q2.id,
+            "selected_option_ids": [],
+        }).status_code == 409
+        _, scored = answer_test(client, participant_id, "pretest", 3, reviews=True)
+        assert scored["review_required"] is False
+        assert scored["next_url"] == "/final-test"
+        _, final = answer_test(client, participant_id, "final_test", 3, reviews=True)
+        assert final["review_required"] is False
+        assert final["next_url"] == "/survey"
+        logs = ok(client.get(f"/api/admin/participants/{participant_id}/logs"))["participant"]
+        assert logs["show_pretest_results"] is False
+        assert logs["show_retest_results"] is False
+        assert logs["show_question_reviews"] is True
+        assert logs["first_question_only"] is True
+        assert logs["learning_material_glossary_mode"] == "integrated_material"
+        participant_rows = csv.DictReader(io.StringIO(client.get("/api/admin/export/participants.csv").text))
+        exported = next(row for row in participant_rows if row["id"] == participant_id)
+        assert exported["show_pretest_results"] == "False"
+        assert exported["show_retest_results"] == "False"
+        assert exported["show_question_reviews"] == "True"
+        assert exported["first_question_only"] == "True"
+        assert exported["learning_material_glossary_mode"] == "integrated_material"
+    finally:
+        if participant_id:
+            ok(client.delete(f"/api/admin/participants/{participant_id}"))
+        with SessionLocal() as db:
+            row = db.get(RuntimeSetting, 1)
+            if row and previous_settings is not None:
+                row.show_pretest_results, row.show_question_reviews, row.first_question_only = previous_settings
+                db.commit()
 
 
 @pytest.mark.parametrize("first_only", [False, True])
 @pytest.mark.parametrize("reviews", [False, True])
 def test_registration_snapshot_final_test_and_disabled_question_rejection(first_only, reviews):
     count = 3 if first_only else 6
-    with condition(first_only, reviews):
-        with create_trial("A", "debug_fixed") as (client, pid):
-            ok(client.put(ENDPOINT, json={"enabled": not first_only}))
+    with create_trial(
+        "A", "debug_fixed", first_question_only=first_only,
+        show_pretest_results=False, show_retest_results=False, show_question_reviews=reviews,
+    ) as (client, pid):
             with SessionLocal() as db:
                 participant = db.get(Participant, pid)
                 assert participant.first_question_only is first_only
@@ -133,8 +165,10 @@ def test_registration_snapshot_final_test_and_disabled_question_rejection(first_
 @pytest.mark.parametrize("first_only", [False, True])
 def test_learning_snapshot_and_both_retest_rounds(first_only):
     count = 3 if first_only else 6
-    with condition(first_only):
-        with create_trial("B", "randomized") as (client, pid):
+    with create_trial(
+        "B", "randomized", first_question_only=first_only,
+        show_pretest_results=False, show_retest_results=False,
+    ) as (client, pid):
             questions, _ = answer_test(client, pid, "pretest", count, wrong=True)
             failed = questions[0]
             session = ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": failed["term_slug"]}))
@@ -200,8 +234,10 @@ def test_additive_migration_keeps_legacy_rows_null_and_seeded_content(tmp_path, 
 def test_metric_strata_and_fixed_csv_headers_identify_each_condition():
     rows = []
     for first_only in (False, True):
-        with condition(first_only):
-            with create_trial("A" if first_only else "B", "debug_fixed") as (client, pid):
+        with create_trial(
+            "A" if first_only else "B", "debug_fixed", first_question_only=first_only,
+            show_pretest_results=False, show_retest_results=False,
+        ) as (client, pid):
                 count = 3 if first_only else 6
                 answer_test(client, pid, "pretest", count)
                 answer_test(client, pid, "final_test", count)

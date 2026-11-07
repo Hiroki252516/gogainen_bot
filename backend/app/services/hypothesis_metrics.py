@@ -202,7 +202,7 @@ def _group(rows):
 
 
 def group_metrics(rows: list[dict]) -> dict:
-    conditions = sorted({row.get("first_question_only", False) is True for row in rows})
+    conditions = sorted({row.get("first_question_only", False) is True for row in rows}) or [True]
     if len(conditions) > 1:
         return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
                 "groups": [], "routes": {},

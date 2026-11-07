@@ -140,7 +140,7 @@ def test_metrics_ignore_unrelated_bad_variants_and_prefetch_questions(learning_t
         try:
             participant = db.get(Participant, pid)
             metrics = participant_metrics(db, participant)
-            assert metrics["h1"]["pretest_score"] == 5 / 6
+            assert metrics["h1"]["pretest_score"] == 2 / 3
             assert len(statements) == 1
             assert "questions.id IN" in statements[0]
             statements.clear()

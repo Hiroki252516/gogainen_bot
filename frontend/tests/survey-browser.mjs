@@ -18,8 +18,6 @@ async function api(request, path, method = "GET", data) {
 
 async function prepareFixture(request, fixture) {
   await api(request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
-  await api(request, "/api/admin/question-review-display", "PUT", { enabled: false });
-  await api(request, "/api/admin/pretest-result-display", "PUT", { enabled: false });
   const record = await api(request, "/api/registrations", "POST", {
     assignment_code: "A", consent_checked: true,
     student_number: "SURVEY-SYNTHETIC-" + fixture.width + "-" + fixture.viewed + "-" + Date.now(),
@@ -32,26 +30,35 @@ async function prepareFixture(request, fixture) {
   });
   assert.equal(baseline.next_url, "/pretest");
   const questions = (await api(request, "/api/experiment/" + pid + "/pretest")).questions;
-  const byTerm = new Map();
-  for (const question of questions) byTerm.set(question.term_slug, [...(byTerm.get(question.term_slug) || []), question]);
-  for (const [slug, pair] of byTerm) {
+  assert.equal(questions.length, 3);
+  for (const question of questions) {
     const at = new Date().toISOString();
     await api(request, "/api/attempts/term-page", "POST", {
-      participant_id: pid, phase: "pretest", term_slug: slug, test_round: pair[0].test_round,
+      participant_id: pid, phase: "pretest", term_slug: question.term_slug, test_round: question.test_round,
       page_id: crypto.randomUUID(), question_shown_at: at, answered_at: at, elapsed_time_sec: 1,
-      answers: pair.map((question) => ({
+      answers: [{
         question_id: question.question_id,
         selected_option_ids: [question.options.find((option) => fixture.viewed ? option.exclusive : option.label === "A").option_id],
-      })),
+      }],
+    });
+    const pending = (await api(request, "/api/experiment/" + pid + "/pretest")).pending_question_review;
+    assert.equal(pending.term_slug, question.term_slug);
+    assert.equal(pending.results.length, 1);
+    await api(request, "/api/participants/" + pid + "/question-review-acknowledgements", "POST", {
+      phase: "pretest", term_slug: question.term_slug,
     });
   }
-  await api(request, "/api/participants/" + pid + "/diagnose-pretest", "POST", {});
+  const diagnosis = await api(request, "/api/participants/" + pid + "/diagnose-pretest", "POST", {});
+  assert.equal(diagnosis.review_required, false);
   if (fixture.viewed) {
     const targets = await api(request, "/api/participants/" + pid + "/learning-targets");
+    assert(targets.targets.length > 0);
     const session = await api(request, "/api/tutor-sessions", "POST", { participant_id: pid, term_slug: targets.targets[0].term_slug });
     const turn = await api(request, "/api/tutor-sessions/" + session.tutor_session_id + "/turns", "POST", {});
     await api(request, "/api/tutor-turns/" + turn.turn_id + "/material-view", "POST", {});
     await api(request, "/api/participants/" + pid + "/give-up-learning", "POST", {});
+  } else {
+    assert.equal(diagnosis.next_step, "final_test");
   }
   const ended = await api(request, "/api/participants/" + pid + "/give-up", "POST", {});
   assert.equal(ended.next_step, "survey");

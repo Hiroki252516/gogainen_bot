@@ -50,7 +50,7 @@ def test_registration_freezes_test_page_mode_for_new_participants():
             assert participant.test_page_mode == "per_term"
         response = ok(client.get(f"/api/experiment/{participant_id}/pretest"))
         assert response["test_page_mode"] == "per_term"
-        assert len(response["questions"]) == 6
+        assert len(response["questions"]) == 3
     finally:
         if participant_id:
             ok(client.delete(f"/api/admin/participants/{participant_id}"))

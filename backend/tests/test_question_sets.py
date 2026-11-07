@@ -74,7 +74,7 @@ def test_new_participant_has_standard_content_and_no_mode_fields(isolated):
     participant_id = response.json()["participant_id"]
     complete_presurvey(client, participant_id)
     questions = client.get(f"/api/experiment/{participant_id}/pretest").json()["questions"]
-    assert len(questions) == 6
+    assert len(questions) == 3
     assert all(len(question["options"]) == 6 for question in questions)
     with factory() as db:
         participant = db.get(Participant, participant_id)

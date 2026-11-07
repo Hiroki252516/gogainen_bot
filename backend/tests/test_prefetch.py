@@ -80,7 +80,10 @@ def test_prefetch_wait_propagates_caller_cancellation():
 
 def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
     if question.get("selection_mode") == "grouped_single":
-        return [select_roles(q, [role])[0] for q, role in zip(question["questions"], case_roles("".join(labels)), strict=True)]
+        roles = case_roles("".join(labels))
+        questions = question["questions"]
+        assert len(questions) in {1, 2}
+        return [select_roles(q, [role])[0] for q, role in zip(questions, roles[-len(questions):], strict=True)]
     by_label = {option["label"]: option["option_id"] for option in question["options"]}
     return [by_label[label] for label in labels]
 

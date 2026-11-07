@@ -115,6 +115,8 @@ def trial_snapshot(db, pid):
         (15, 29, "experiment-plan-2026-10-30-learning-glossary-material-v1"),
         (15, 40, "experiment-plan-2026-11-07-learning-material-target-800-v1"),
         (15, 40, "experiment-plan-2026-11-07-control-shared-prompt-v1"),
+        (15, 41, "experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1"),
+        (15, 41, "experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1"),
         (15, 39, "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"),
     ],
 )

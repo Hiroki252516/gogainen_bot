@@ -111,7 +111,7 @@ for (const expectedText of [
   if (!experimentProgress.includes(expectedText)) throw new Error(`experiment progress meter missing: ${expectedText}`);
 }
 const groupAdminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
-for (const text of ["出題設問", "教材の用語解説", "集計対象: 全参加者"]) {
+for (const text of ["集計対象: 全参加者"]) {
   if (!groupAdminPage.includes(text)) throw new Error(`admin participant and aggregate display missing: ${text}`);
 }
 for (const expectedText of ["participant.can_resume", "currentParticipantCount", "!row.legacy_read_only", "現行参加者数", "閲覧専用参加者数", "現行参加者の評価サマリー"]) {
@@ -364,8 +364,12 @@ for (const expectedText of ['phase="retest"', 'useState("再テスト1")', 'step
 }
 
 const learningTargetsPage = fs.readFileSync(new URL("../app/learning-targets/page.tsx", import.meta.url), "utf8");
-for (const text of ['role="switch"', 'テスト結果の表示', '再テスト1/2・内部final_test', '/api/admin/pretest-result-display', 'pretestDisplaySaving']) {
-  if (!groupAdminPage.includes(text)) throw new Error(`pretest display setting missing: ${text}`);
+for (const text of [
+  "テスト結果の表示", "設問ごとの答え合わせ", "設問1のみ出題", "教材の用語解説モード",
+  "教材の用語解説", "集計の出題条件", "/api/admin/pretest-result-display",
+  "/api/admin/question-review-display", "/api/admin/first-question-only",
+]) {
+  if (groupAdminPage.includes(text)) throw new Error(`removed admin setting remains visible: ${text}`);
 }
 for (const text of ['data.review_required === false', 'router.replace(data.next_url', '!loaded']) {
   if (!learningTargetsPage.includes(text)) throw new Error(`hidden pretest review guard missing: ${text}`);

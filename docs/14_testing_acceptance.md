@@ -1,12 +1,38 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-07 origin/main統合（仕様版41）
+## 2026-11-07 仕様版41固定設定・統制群プロンプト統合（履歴）
 
-- 競合した仕様版40の二つの変更を別々の履歴protocolとして保ち、仕様版41 / `experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`へ統合した。教材本文は800文字程度を目安とし、上下限による合否判定・長さを理由にした再生成は行わない。統制群への群別自然言語方略指示は送らず、提案群の診断・教授指示は維持する。
-- 仕様版40以下は閲覧専用。旧version40のいずれのprotocolも現行版として扱わず、既存教材・回答・snapshot・監査記録は変更しない。結果復元では仕様版39・40にも通常版問題バンク`split-actions-v5`を対応付けた。
+- 仕様版40には固定設定化と統制群共通プロンプト化の別protocolが存在したため、両変更を統合する仕様版41 / `experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`を追加する。両仕様版40 protocolは履歴・閲覧専用とし、既存参加者の問題・回答・教材・snapshotは変更しない。
+- 新規参加者のテスト条件（結果非表示・設問レビューON・設問1のみ）と教材内解説固定は維持し、教材生成では統制群の群別自然言語方略指示を除く。提案群の診断・教授指示は維持する。
+- このマージ後のテスト結果は以下に追記する。研究DB・localhost:3000・実AIは使わず、コミット・pushは行わない。
+- 解決後のBackend全テストは隔離SQLiteで`1718 passed`。関連する仕様版・教材モード・用語注釈・選択肢根拠のテスト`208 passed`も確認した。Frontendの`npm test`と`npm run build`（TypeScript検査を含む）が通過した。
+- 競合マーカーは残っておらず、`git diff --check`と`git diff --cached --check`が通過した。研究DB・localhost:3000・実AIは使用していない。マージコミットは作成していない。
+
+## 2026-11-07 管理画面の固定設定化（仕様版40・fix/issue-280の履歴）
+
+- 新規参加者は`experiment-plan-2026-11-07-fixed-admin-settings-v1`へ登録し、テスト全体の結果確認なし、設問ごとの答え合わせあり、各用語の設問1のみ（計3問）に固定する。教材モードは従来どおり`integrated_material`。
+- 旧RuntimeSetting値に依存せずParticipant snapshotを作る。3つの設定操作UI、教材モード表示、設定GET/PUT API、集計条件セレクターを削除する。参加者一覧・個別ログの旧設定値表示も除く。
+- DB列、participant log API、CSV、過去の問題・回答・snapshotは保持する。仕様版39以下は閲覧専用とし、新しい設定を既存参加者へ遡及しない。
+- Backend全体テストは隔離DBで`1714 passed`。Frontendの`npm test`と本番ビルドは成功した。
+- Playwrightの隔離Mockブラウザで、管理画面・参加者一覧・個別ログに対象設定がないこと、旧設定APIのGET/PUTが404となること、新規Participantの固定値、3問の進行、各問の答え合わせ、全体結果画面を省略した学習遷移を確認した。390px幅でも横はみ出しがない。
+- `git diff --check`は成功。隔離ブラウザ起動時にrewrite先を直す前、既定の`:8000`へ管理ログインとAI状態照会だけが通ったためMock以外の応答を検知して登録前に中断した。研究DB操作・参加者登録・AI生成呼び出しはなく、以降は別ポートの隔離Mock環境だけで確認した。localhost:3000と実験開始環境は使用していない。
+
+## 2026-11-07 仕様版41教材文字数・統制群プロンプト統合（履歴）
+
+- 仕様版40の二つの変更を別protocolの履歴として保ち、仕様版41 / `experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`へ統合した。当時の教材本文は800文字程度を目安とし、上下限による合否判定・長さを理由にした再生成を行わず、統制群への群別自然言語方略指示を除いた。
+- 仕様版41以下の参加者は仕様版42への更新後、閲覧専用。旧仕様版のいずれのprotocolも現行版として扱わず、既存教材・回答・snapshot・監査記録は変更しない。結果復元では仕様版39〜41にも通常版問題バンク`split-actions-v5`を対応付ける。
 - 教材生成prompt、仕様版・protocol、旧問題版復元、用語辞書・教材snapshot、学習確認、回答履歴、必須教授要素に関するBackendテスト8ファイルは合計`196 passed`（164件と32件の2回に分けて実行）。DeprecationWarning 2件。
 - `git diff --check`と競合マーカーの残存確認は通過した。
 - Frontendテスト・buildとブラウザ確認は、Frontendコードを変更していないため未実施。研究DB・localhost:3000・実AIは使用していない。マージコミットは作成しない。
+
+## 2026-11-07 origin/main統合（仕様版42）
+
+- 仕様版41に存在した固定管理設定と教材生成条件の別protocol履歴を保持したまま、仕様版42 / `experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`を現行とする。新規参加者は全体結果非表示、設問ごとの答え合わせON、各用語の設問1のみ（計3問）、教材内解説に固定する。
+- 教材本文は800文字程度を目安とし、長さによる合否判定・再生成は行わない。統制群に群別自然言語方略指示を加えず、提案群の診断・教授指示を維持する。prompt YAML設定とその読み込み処理を取り込む。
+- 仕様版41以下は閲覧専用。旧問題・回答・教材・snapshot・監査記録は書き換えない。仕様版41は別protocolの両方を認識し、問題バンクv5で結果を復元する。
+- Backend全体テストは隔離SQLiteで`1721 passed`。prompt設定・教材文字数・用語モード・問題履歴・固定テスト条件に関する重点テスト10ファイルも`217 passed`。最初の重点実行では固定条件テスト1件が統合前の仕様版41 protocolを期待して失敗したため、現行仕様版42 protocolへ期待値を更新して再実行した。
+- `git diff --check`と`git diff --cached --check`、競合マーカーの残存確認は通過した。Frontendコードはこの統合で変更していないため、Frontendテスト・buildとブラウザ確認は未実施。
+- 研究DB・localhost:3000・実AIは使用していない。マージコミットは作成しない。
 
 ## 統合前の仕様版40記録：目標800文字（fix/issue-278）
 

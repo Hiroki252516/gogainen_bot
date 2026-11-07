@@ -15,11 +15,6 @@ type Participant = {
   current_step: string;
   can_resume: boolean;
   experiment_spec_version: number | null;
-  show_question_reviews: boolean | null;
-  first_question_only: boolean | null;
-  show_pretest_results: boolean;
-  show_retest_results: boolean;
-  learning_material_glossary_mode: "annotation_only" | "integrated_material" | null;
   retest_cycles_completed: number | null;
   post_pretest_tests_completed: number | null;
   post_pretest_test_limit: number | null;
@@ -35,11 +30,6 @@ const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"]]
 type AiModel = (typeof AI_MODELS)[number][0];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
-const materialGlossaryModeLabel = (mode: string | null | undefined) => mode === "annotation_only"
-  ? "注釈欄のみ"
-  : mode === "integrated_material"
-    ? "教材内解説"
-    : "未記録（旧仕様）";
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
   study_settings_warning?: string | null;
@@ -144,9 +134,6 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   helpfulness_rating: "役立ち度",
   perceived_hint_amount: "ヒント・説明の量",
   free_comment: "自由記述",
-  show_question_reviews: "設問ごとの答え合わせ",
-  first_question_only: "設問1のみ出題",
-  learning_material_glossary_mode: "教材の用語解説モード",
   question_review_acknowledged_at: "答え合わせ確認時刻"
 };
 
@@ -161,16 +148,6 @@ export default function AdminPage() {
   const [optionOrder, setOptionOrder] = useState<OptionOrderSetting | null>(null);
   const [optionOrderSaving, setOptionOrderSaving] = useState(false);
   const [optionOrderError, setOptionOrderError] = useState("");
-  const [pretestDisplay, setPretestDisplay] = useState<{ enabled: boolean } | null>(null);
-  const [pretestDisplaySaving, setPretestDisplaySaving] = useState(false);
-  const [pretestDisplayError, setPretestDisplayError] = useState("");
-  const [firstQuestionOnly, setFirstQuestionOnly] = useState<{ enabled: boolean } | null>(null);
-  const [firstQuestionOnlySaving, setFirstQuestionOnlySaving] = useState(false);
-  const [firstQuestionOnlyError, setFirstQuestionOnlyError] = useState("");
-  const [summaryFirstOnly, setSummaryFirstOnly] = useState(false);
-  const [questionReviewDisplay, setQuestionReviewDisplay] = useState<{ enabled: boolean } | null>(null);
-  const [questionReviewDisplaySaving, setQuestionReviewDisplaySaving] = useState(false);
-  const [questionReviewDisplayError, setQuestionReviewDisplayError] = useState("");
   const [summaryError, setSummaryError] = useState("");
   const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [login, setLogin] = useState<any>(null);
@@ -191,9 +168,6 @@ export default function AdminPage() {
     if (activeParticipantId) rememberAdminResumeParticipant(activeParticipantId);
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants)).catch((err) => setLogError(err.message));
     api("/api/admin/logs/overview").then(setOverview).catch((err) => setLogError(err.message));
-    api<{ enabled: boolean }>("/api/admin/pretest-result-display").then(setPretestDisplay).catch((err) => setPretestDisplayError(err.message));
-    api<{ enabled: boolean }>("/api/admin/first-question-only").then(setFirstQuestionOnly).catch((err) => setFirstQuestionOnlyError(err.message));
-    api<{ enabled: boolean }>("/api/admin/question-review-display").then(setQuestionReviewDisplay).catch((err) => setQuestionReviewDisplayError(err.message));
     api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setAiStatusError(err instanceof Error ? err.message : String(err)));
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
@@ -337,45 +311,6 @@ export default function AdminPage() {
     }
   }
 
-  async function updatePretestDisplay(enabled: boolean) {
-    if (!pretestDisplay || pretestDisplaySaving) return;
-    setPretestDisplaySaving(true);
-    setPretestDisplayError("");
-    try {
-      setPretestDisplay(await api<{ enabled: boolean }>("/api/admin/pretest-result-display", { method: "PUT", body: JSON.stringify({ enabled }) }));
-    } catch (err) {
-      setPretestDisplayError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPretestDisplaySaving(false);
-    }
-  }
-
-  async function updateFirstQuestionOnly(enabled: boolean) {
-    if (!firstQuestionOnly || firstQuestionOnlySaving) return;
-    setFirstQuestionOnlySaving(true);
-    setFirstQuestionOnlyError("");
-    try {
-      setFirstQuestionOnly(await api<{ enabled: boolean }>("/api/admin/first-question-only", { method: "PUT", body: JSON.stringify({ enabled }) }));
-    } catch (err) {
-      setFirstQuestionOnlyError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setFirstQuestionOnlySaving(false);
-    }
-  }
-
-  async function updateQuestionReviewDisplay(enabled: boolean) {
-    if (!questionReviewDisplay || questionReviewDisplaySaving) return;
-    setQuestionReviewDisplaySaving(true);
-    setQuestionReviewDisplayError("");
-    try {
-      setQuestionReviewDisplay(await api<{ enabled: boolean }>("/api/admin/question-review-display", { method: "PUT", body: JSON.stringify({ enabled }) }));
-    } catch (err) {
-      setQuestionReviewDisplayError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setQuestionReviewDisplaySaving(false);
-    }
-  }
-
   async function loadParticipantLog(participantId: string) {
     setLogError("");
     try {
@@ -433,7 +368,7 @@ export default function AdminPage() {
   const activeParticipants = participants.filter((participant) => participant.group_condition === activeGroup);
   const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume).length;
   const readOnlyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume).length;
-  const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup && (group.first_question_only === true) === summaryFirstOnly);
+  const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup && group.first_question_only === true);
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
   const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only);
 
@@ -543,44 +478,6 @@ export default function AdminPage() {
                 </div>
               ) : null}
             </div>
-            <div className="notice setting-notice">
-              <label className="pretest-display-toggle">
-                <input type="checkbox" role="switch" checked={pretestDisplay?.enabled ?? false}
-                  disabled={!pretestDisplay || pretestDisplaySaving}
-                  onChange={(event) => updatePretestDisplay(event.target.checked)} />
-                テスト結果の表示
-              </label>
-              <p className="muted">事前テスト・再テスト1/2・内部final_testに適用。新規参加者のみ</p>
-              {pretestDisplaySaving ? <p role="status">保存中...</p> : null}
-              {pretestDisplayError ? <p className="danger" role="alert">{pretestDisplayError}</p> : null}
-            </div>
-            <div className="notice setting-notice">
-              <label className="pretest-display-toggle">
-                <input type="checkbox" role="switch" checked={questionReviewDisplay?.enabled ?? false}
-                  disabled={!questionReviewDisplay || questionReviewDisplaySaving}
-                  onChange={(event) => updateQuestionReviewDisplay(event.target.checked)} />
-                設問ごとの答え合わせ
-              </label>
-              <p className="muted">通常版の新規参加者のみ（初期値ON）</p>
-              {questionReviewDisplaySaving ? <p role="status">保存中...</p> : null}
-              {questionReviewDisplayError ? <p className="danger" role="alert">{questionReviewDisplayError}</p> : null}
-            </div>
-            <div className="notice setting-notice">
-              <label className="pretest-display-toggle">
-                <input type="checkbox" role="switch" checked={firstQuestionOnly?.enabled ?? false}
-                  disabled={!firstQuestionOnly || firstQuestionOnlySaving}
-                  onChange={(event) => updateFirstQuestionOnly(event.target.checked)} />
-                設問1のみ出題
-              </label>
-              <p className="muted">ON：各用語の設問1のみ（計3問）。OFF：設問1・2（計6問）。事前テスト・再テスト・学習確認に適用します。新規参加者のみ、登録時に固定されます（初期値OFF）。</p>
-              {firstQuestionOnlySaving ? <p role="status">保存中...</p> : null}
-              {firstQuestionOnlyError ? <p className="danger" role="alert">{firstQuestionOnlyError}</p> : null}
-            </div>
-            <div className="notice setting-notice">
-              <strong>教材の用語解説モード</strong>
-              <p>教材内解説</p>
-              <p className="muted">新規参加者には教材内解説を適用します。教材に登場する登録語を本文中で説明し、教材右側の注釈欄は表示しません。</p>
-            </div>
             <div className="notice">
               <strong>選択肢の配置</strong>
               <p>{optionOrder ? (optionOrder.mode === "debug_fixed" ? "デバッグ配置" : "ランダム配置") : "設定を確認中"}</p>
@@ -609,12 +506,6 @@ export default function AdminPage() {
               {optionOrderSaving ? <p className="muted">保存中...</p> : null}
               {optionOrderError ? <p className="danger" role="alert">{optionOrderError}</p> : null}
             </div>
-            <label>集計の出題条件
-              <select value={summaryFirstOnly ? "q1" : "q12"} onChange={(event) => setSummaryFirstOnly(event.target.value === "q1")}>
-                <option value="q12">設問1・2（6問）</option>
-                <option value="q1">設問1のみ（3問）</option>
-              </select>
-            </label>
             {activeGroupSummary ? (
               <div className="notice">
                 <strong>{activeGroupSummary.group_condition} / 通常版</strong>
@@ -688,9 +579,6 @@ export default function AdminPage() {
               <tr>
                 <th>ID</th>
                 <th>条件</th>
-                <th>出題設問</th>
-                <th>設問ごとの答え合わせ</th>
-                <th>教材の用語解説</th>
                 <th>進捗</th>
                 <th>完了</th>
                 <th>事前テスト後の回数</th>
@@ -704,9 +592,6 @@ export default function AdminPage() {
                 <tr key={p.participant_id}>
                   <td>{p.display_code}</td>
                   <td>{p.group_condition}</td>
-                  <td>{p.can_resume ? (p.first_question_only ? "設問1のみ" : "設問1・2") : "旧仕様"}</td>
-                  <td>{p.show_question_reviews === null ? "対象外" : p.show_question_reviews ? "ON" : "OFF"}</td>
-                  <td>{materialGlossaryModeLabel(p.learning_material_glossary_mode)}</td>
                   <td>{p.can_resume ? p.current_step : `旧仕様（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
                   <td>
@@ -750,11 +635,6 @@ export default function AdminPage() {
                 </p>
                 <p>学習後の再テスト: {participantLog.participant.retest_cycles_completed ?? "-"}回</p>
                 <p>事前テスト後のテスト: {participantLog.participant.post_pretest_tests_completed ?? "-"} / {participantLog.participant.post_pretest_test_limit ?? "-"}回（学習前の追加テストを含む）</p>
-                <p>事前テストの結果表示: {participantLog.participant.show_pretest_results === false ? "非表示" : "表示"}</p>
-                <p>再テスト（内部final_testを含む）の結果表示: {participantLog.participant.show_retest_results === false ? "非表示" : "表示"}</p>
-                <p>出題設問: {participantLog.participant.can_resume ? (participantLog.participant.first_question_only ? "設問1のみ（3問）" : "設問1・2（6問）") : "旧仕様の保存記録"}</p>
-                <p>設問ごとの答え合わせ: {participantLog.participant.show_question_reviews === null ? "対象外" : participantLog.participant.show_question_reviews ? "表示" : "非表示"}</p>
-                <p>教材の用語解説モード: {materialGlossaryModeLabel(participantLog.participant.learning_material_glossary_mode)}</p>
                 <p>
                   終了理由: {participantLog.participant.completion_reason === "give_up"
                     ? "実験ギブアップ"
@@ -1138,7 +1018,6 @@ function SessionLog({ sessions }: { sessions: any[] }) {
 }
 
 function formatCell(field: string, value: any) {
-  if (field === "learning_material_glossary_mode") return materialGlossaryModeLabel(value);
   if (value === null || value === undefined) return "-";
   if (field === "test_page_mode" || field === "effective_test_page_mode") return value === "per_term" ? "用語ごと（2設問／ページ）" : "設問ごと";
   if (field === "test_timing_unit" || field === "response_time_unit") return value === "term_page" ? "用語ページ" : value === "per_question" ? "設問" : String(value);
