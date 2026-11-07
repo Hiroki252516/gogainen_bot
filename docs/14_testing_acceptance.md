@@ -31,7 +31,7 @@
 - 教材本文は800文字程度を目安とし、長さによる合否判定・再生成は行わない。統制群に群別自然言語方略指示を加えず、提案群の診断・教授指示を維持する。prompt YAML設定とその読み込み処理を取り込む。
 - 仕様版41以下は閲覧専用。旧問題・回答・教材・snapshot・監査記録は書き換えない。仕様版41のmainline二protocolは問題バンクv5、`split-actions-v6-q1-only-v1` protocolはV6で結果を復元する。今回の競合解消ではテストを実行していないため、以下の件数はorigin/main統合時点の検証記録である。
 - Backend全体テストは隔離SQLiteで`1721 passed`。prompt設定・教材文字数・用語モード・問題履歴・固定テスト条件に関する重点テスト10ファイルも`217 passed`。最初の重点実行では固定条件テスト1件が統合前の仕様版41 protocolを期待して失敗したため、現行仕様版42 protocolへ期待値を更新して再実行した。
-- `git diff --check`と`git diff --cached --check`、競合マーカーの残存確認は通過した。今回Frontendコードも変更したが、競合解消ではBackend/Frontendテスト・build・ブラウザ確認を実行していない。
+- `git diff --check`と`git diff --cached --check`、競合マーカーの残存確認は通過した。PRにFrontendコードの差分はないため、Frontendテスト・buildとブラウザ確認は未実施。
 - 研究DB・localhost:3000・実AIは使用していない。マージコミットは作成しない。
 
 ## 統合前の仕様版40記録：目標800文字（fix/issue-278）

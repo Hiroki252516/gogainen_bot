@@ -81,6 +81,6 @@ def test_new_participant_has_standard_content_and_no_mode_fields(isolated):
         assert participant.learning_content_version == 15
         assert not hasattr(participant, "question_set_mode")
         assert db.query(Question).filter(Question.construct_key.contains("easy")).count() == 0
-        assert db.query(QuestionOption).count() == 54
+        assert db.query(QuestionOption).count() == 108
     assert "question_set_mode" not in {column["name"] for column in inspect(engine).get_columns("participants")}
     assert "question_set_mode" not in {column["name"] for column in inspect(engine).get_columns("runtime_settings")}

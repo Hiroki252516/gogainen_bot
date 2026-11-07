@@ -188,10 +188,10 @@ def test_old_spec22_v6_records_survive_seed_repair_and_missing_snapshot_restore(
             for oid, fields in options_before.items():
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
-            active = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key == "retest_v1_q1").all()
-            assert len(active) == 1 and all(row.id != question.id for row in active)
-            assert db.query(Question).count() == 21
-            assert db.query(Question).filter_by(is_active=True).count() == 9
+            active = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_(["retest_v1", "retest_v1_q1", "retest_v1_q2"])).all()
+            assert len(active) == 2 and all(row.id != question.id for row in active)
+            assert db.query(Question).count() == 30
+            assert db.query(Question).filter_by(is_active=True).count() == 18
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)
             assert record["question_body"] == ("保存時の問題" if snapshot else question.body)
