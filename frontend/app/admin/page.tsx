@@ -24,9 +24,9 @@ type Participant = {
   give_up_experiment_count: number;
 };
 type GroupCondition = "control" | "proposed";
-const REASONING_EFFORTS = ["low", "medium", "high"] as const;
+const REASONING_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
-const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"]] as const;
+const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"], ["gpt-6-astra", "GPT-6 Astra"]] as const;
 type AiModel = (typeof AI_MODELS)[number][0];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
