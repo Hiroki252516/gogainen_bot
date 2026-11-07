@@ -82,10 +82,13 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 | AI設定状態 | GET `/api/admin/ai/status` |
 | 推論レベル設定 | POST `/api/admin/ai/reasoning-effort` (`reasoning_effort`: `low`, `medium`, `high`, `xhigh`, `max`) |
 | AIモデル設定 | POST `/api/admin/ai/model` (`model`: `gpt-6.1-sol`, `gpt-6-luna`, `gpt-6-astra`) |
+| Codex Fast mode設定 | POST `/api/admin/ai/fast-mode` (`enabled`: boolean) |
 | 選択肢配置設定の取得 | GET `/api/admin/option-order` |
 | 選択肢配置設定の更新 | PUT `/api/admin/option-order` (`mode`: `debug_fixed` または `randomized`) |
 | 管理者ログ | GET `/api/admin/participants/{id}/logs`, `/logs.csv`, `/logs_excel.csv`, `/logs.xlsx`; 全体ログは `/api/admin/logs/overview.csv`, `/overview_excel.csv`, `/overview.xlsx` |
 | 評価再計算 | POST `/api/participants/{id}/evaluation-summary/recalculate` |
+
+`GET /api/admin/ai/status`は`fast_mode`、`can_change_fast_mode`、`fast_mode_applies`を返す。Fast mode更新は厳密なJSON真偽値だけを受け付け、`AI_BACKEND=mock`では409を返す。設定はbackendプロセス内だけに保持する。
 
 `GET /api/participants/{id}/current-step` は既存の `step`、`next_url`、`can_resume` を維持し、新規参加者向けに `progress` を追加する。進捗は現在の保存済み状態と採点済みテスト回数から読み取り専用で算出し、DB列追加や評価再計算は行わない。
 

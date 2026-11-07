@@ -8,8 +8,11 @@ from app.core.config import get_settings
 from app.core.runtime_config import (
     ALLOWED_MODELS,
     ALLOWED_REASONING_EFFORTS,
+    current_ai_runtime_settings,
+    reset_fast_mode_override,
     reset_model_override,
     reset_reasoning_effort_override,
+    set_fast_mode,
 )
 from app.main import app
 
@@ -18,9 +21,11 @@ from app.main import app
 def reset_runtime_overrides():
     reset_model_override()
     reset_reasoning_effort_override()
+    reset_fast_mode_override()
     yield
     reset_model_override()
     reset_reasoning_effort_override()
+    reset_fast_mode_override()
 
 
 def test_admin_ai_api_exposes_and_accepts_all_model_and_effort_options(monkeypatch):
@@ -36,6 +41,9 @@ def test_admin_ai_api_exposes_and_accepts_all_model_and_effort_options(monkeypat
     assert status.status_code == 200
     assert status.json()["allowed_models"] == list(ALLOWED_MODELS)
     assert status.json()["allowed_reasoning_efforts"] == list(ALLOWED_REASONING_EFFORTS)
+    assert status.json()["fast_mode"] is False
+    assert status.json()["can_change_fast_mode"] is True
+    assert status.json()["fast_mode_applies"] is True
 
     for model in ALLOWED_MODELS:
         response = client.post("/api/admin/ai/model", json={"model": model})
@@ -50,10 +58,39 @@ def test_admin_ai_api_exposes_and_accepts_all_model_and_effort_options(monkeypat
     assert client.post("/api/admin/ai/model", json={"model": "unknown-model"}).status_code == 422
     assert client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": "ultra"}).status_code == 422
 
+    enabled = client.post("/api/admin/ai/fast-mode", json={"enabled": True})
+    assert enabled.status_code == 200
+    assert enabled.json()["fast_mode"] is True
+    disabled = client.post("/api/admin/ai/fast-mode", json={"enabled": False})
+    assert disabled.status_code == 200
+    assert disabled.json()["fast_mode"] is False
+    for value in ("true", 1, None):
+        assert client.post("/api/admin/ai/fast-mode", json={"enabled": value}).status_code == 422
+
+
+def test_fast_mode_is_process_local_and_defaults_off():
+    assert current_ai_runtime_settings()[2] is False
+    assert set_fast_mode(True) is True
+    assert current_ai_runtime_settings()[2] is True
+    reset_fast_mode_override()
+    assert current_ai_runtime_settings()[2] is False
+
+
+def test_fast_mode_api_is_disabled_for_mock_backend(monkeypatch):
+    monkeypatch.setattr(get_settings(), "ai_backend", "mock")
+    client = AuthenticatedTestClient(app)
+
+    status = client.get("/api/admin/ai/status")
+    assert status.json()["fast_mode"] is False
+    assert status.json()["can_change_fast_mode"] is False
+    assert status.json()["fast_mode_applies"] is False
+    assert client.post("/api/admin/ai/fast-mode", json={"enabled": True}).status_code == 409
+
 
 @pytest.mark.parametrize("model", ALLOWED_MODELS)
 @pytest.mark.parametrize("effort", ["xhigh", "max"])
-def test_app_server_receives_selected_model_and_effort_in_payload_and_audit(monkeypatch, model, effort):
+@pytest.mark.parametrize("fast_mode", [False, True])
+def test_app_server_receives_selected_settings_in_payload_and_audit(monkeypatch, model, effort, fast_mode):
     calls = []
 
     class FakeRpc:
@@ -93,7 +130,7 @@ def test_app_server_receives_selected_model_and_effort_in_payload_and_audit(monk
         async def __aexit__(self, *_args):
             return False
 
-    backend = CodexAppServerBackend(model=model, reasoning_effort=effort)
+    backend = CodexAppServerBackend(model=model, reasoning_effort=effort, fast_mode=fast_mode)
     monkeypatch.setattr(backend, "_client", lambda: FakeClientContext())
     result = asyncio.run(backend._run_structured_turn(
         "runtime-settings-test",
@@ -106,6 +143,9 @@ def test_app_server_receives_selected_model_and_effort_in_payload_and_audit(monk
     assert thread_payload["model"] == model
     assert turn_payload["model"] == model
     assert turn_payload["effort"] == effort
+    assert turn_payload["serviceTierForTurn"] == ("fast" if fast_mode else "default")
     assert result.request_audit["model"] == model
     assert result.request_audit["reasoning_effort"] == effort
+    assert result.request_audit["fast_mode"] is fast_mode
     assert result.request_audit["turn_start_params"]["effort"] == effort
+    assert result.request_audit["turn_start_params"]["serviceTierForTurn"] == ("fast" if fast_mode else "default")

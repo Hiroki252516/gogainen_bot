@@ -809,6 +809,21 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.fast-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fast-mode-toggle input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary);
+}
+
 .learning-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

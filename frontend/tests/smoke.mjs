@@ -135,6 +135,10 @@ for (const expectedText of [
   "reasoning-effort-buttons",
   "aria-pressed",
   "/api/admin/ai/reasoning-effort",
+  "/api/admin/ai/fast-mode",
+  'role="switch"',
+  "Fast mode: ",
+  "使用量が増え、速度向上幅はモデルにより異なります",
   "保存中...",
   "実験中でも変更できます",
   "AI_BACKEND=mock"
@@ -142,6 +146,9 @@ for (const expectedText of [
   if (!groupAdminPage.includes(expectedText)) {
     throw new Error(`admin page missing reasoning effort control: ${expectedText}`);
   }
+}
+for (const expectedText of [".fast-mode-toggle", "accent-color: var(--primary)"]) {
+  if (!styles.includes(expectedText)) throw new Error(`Fast mode toggle styling missing: ${expectedText}`);
 }
 if (groupAdminPage.includes("条件統制チェック")) {
   throw new Error("admin page must not show the condition control check card");

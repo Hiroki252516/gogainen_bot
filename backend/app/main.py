@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ConfigDict, SecretStr, Field
+from pydantic import BaseModel, ConfigDict, SecretStr, Field, StrictBool
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -29,6 +29,7 @@ from app.core.runtime_config import (
     STUDY_MODEL,
     STUDY_REASONING_EFFORT,
     current_ai_runtime_settings,
+    set_fast_mode,
     set_model,
     set_reasoning_effort,
 )
@@ -142,7 +143,7 @@ def _public_practice_question(question: object) -> dict | None:
 
 
 def _reasoning_effort_status() -> dict:
-    model, effort = current_ai_runtime_settings()
+    model, effort, fast_mode = current_ai_runtime_settings()
     study_settings_match = effort == STUDY_REASONING_EFFORT and model == STUDY_MODEL
     return {
         "model": model,
@@ -154,6 +155,9 @@ def _reasoning_effort_status() -> dict:
         "can_change_reasoning_effort": True,
         "reasoning_effort_change_block_reason": None,
         "reasoning_effort_applies": settings.ai_backend == "codex_app_server",
+        "fast_mode": fast_mode,
+        "can_change_fast_mode": settings.ai_backend == "codex_app_server",
+        "fast_mode_applies": settings.ai_backend == "codex_app_server",
         "study_settings_match": study_settings_match,
         "study_settings_reference": {
             "model": STUDY_MODEL,
@@ -304,6 +308,10 @@ class ReasoningEffortPayload(BaseModel):
 
 class AIModelPayload(BaseModel):
     model: Literal["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"]
+
+
+class FastModePayload(BaseModel):
+    enabled: StrictBool
 
 
 class OptionOrderPayload(BaseModel):
@@ -1061,6 +1069,17 @@ def api_set_ai_model(payload: AIModelPayload) -> dict:
     set_model(payload.model)
     return {
         "ai_backend": "codex_app_server" if settings.ai_backend == "codex_app_server" else "mock",
+        **_reasoning_effort_status(),
+    }
+
+
+@app.post("/api/admin/ai/fast-mode")
+def api_set_fast_mode(payload: FastModePayload) -> dict:
+    if settings.ai_backend != "codex_app_server":
+        raise HTTPException(status_code=409, detail="AI_BACKEND=mockではFast modeを適用できません。")
+    set_fast_mode(payload.enabled)
+    return {
+        "ai_backend": settings.ai_backend,
         **_reasoning_effort_status(),
     }
 

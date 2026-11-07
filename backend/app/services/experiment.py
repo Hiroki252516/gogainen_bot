@@ -1597,8 +1597,8 @@ def _effective_request_with_instruction_audit(
 
 
 async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[str, Any]:
-    model, reasoning_effort = current_ai_runtime_settings()
-    backend = get_ai_backend(reasoning_effort=reasoning_effort, model=model)
+    model, reasoning_effort, fast_mode = current_ai_runtime_settings()
+    backend = get_ai_backend(reasoning_effort=reasoning_effort, model=model, fast_mode=fast_mode)
     # Generation provenance is server-side audit metadata.  Keep it in the
     # database log, but never send it to the model as part of the teaching
     # contract or prompt input.
@@ -1607,6 +1607,8 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
     logged_payload = {
         **backend_payload,
         "reasoning_effort": reasoning_effort,
+        "fast_mode": fast_mode,
+        "service_tier": "fast" if fast_mode else "default",
         "experiment_spec_version": CURRENT_EXPERIMENT_SPEC_VERSION,
         "protocol_id": CURRENT_PROTOCOL_ID,
         "model": model,
