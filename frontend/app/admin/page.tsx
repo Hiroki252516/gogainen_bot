@@ -47,6 +47,9 @@ type AiStatus = {
   can_change_reasoning_effort?: boolean;
   reasoning_effort_change_block_reason?: string | null;
   reasoning_effort_applies?: boolean;
+  fast_mode?: boolean;
+  can_change_fast_mode?: boolean;
+  fast_mode_applies?: boolean;
 };
 
 const ADMIN_RESUME_PARTICIPANT_ID_KEY = "admin_resume_participant_id";
@@ -157,6 +160,8 @@ export default function AdminPage() {
   const [reasoningEffortError, setReasoningEffortError] = useState("");
   const [modelSaving, setModelSaving] = useState(false);
   const [modelError, setModelError] = useState("");
+  const [fastModeSaving, setFastModeSaving] = useState(false);
+  const [fastModeError, setFastModeError] = useState("");
   const [logError, setLogError] = useState("");
   const [recalculating, setRecalculating] = useState(false);
   const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null);
@@ -254,7 +259,7 @@ export default function AdminPage() {
 
   async function updateReasoningEffort(reasoningEffort: ReasoningEffort) {
     if (
-      reasoningEffortSaving || modelSaving ||
+      reasoningEffortSaving || modelSaving || fastModeSaving ||
       !ai ||
       ai.ai_backend !== "codex_app_server" ||
       ai.reasoning_effort === reasoningEffort
@@ -278,7 +283,7 @@ export default function AdminPage() {
   }
 
   async function updateAiModel(model: AiModel) {
-    if (modelSaving || reasoningEffortSaving || !ai || ai.ai_backend !== "codex_app_server" || ai.model === model) return;
+    if (modelSaving || reasoningEffortSaving || fastModeSaving || !ai || ai.ai_backend !== "codex_app_server" || ai.model === model) return;
     setModelError("");
     setModelSaving(true);
     try {
@@ -291,6 +296,29 @@ export default function AdminPage() {
       setModelError(err instanceof Error ? err.message : String(err));
     } finally {
       setModelSaving(false);
+    }
+  }
+
+  async function updateFastMode(enabled: boolean) {
+    if (
+      fastModeSaving || modelSaving || reasoningEffortSaving ||
+      !ai || ai.ai_backend !== "codex_app_server" || Boolean(ai.fast_mode) === enabled
+    ) {
+      return;
+    }
+
+    setFastModeError("");
+    setFastModeSaving(true);
+    try {
+      const result = await api<AiStatus>("/api/admin/ai/fast-mode", {
+        method: "POST",
+        body: JSON.stringify({ enabled })
+      });
+      setAi((current) => ({ ...current, ...result }));
+    } catch (err) {
+      setFastModeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFastModeSaving(false);
     }
   }
 
@@ -430,7 +458,7 @@ export default function AdminPage() {
                         className={ai.model === model ? "reasoning-effort-button active" : "reasoning-effort-button"}
                         aria-pressed={ai.model === model}
                         disabled={
-                          modelSaving || reasoningEffortSaving ||
+                          modelSaving || reasoningEffortSaving || fastModeSaving ||
                           ai.ai_backend !== "codex_app_server" ||
                           ai.can_change_model === false ||
                           !(ai.allowed_models || []).includes(model)
@@ -460,7 +488,7 @@ export default function AdminPage() {
                         className={ai.reasoning_effort === effort ? "reasoning-effort-button active" : "reasoning-effort-button"}
                         aria-pressed={ai.reasoning_effort === effort}
                         disabled={
-                          reasoningEffortSaving || modelSaving ||
+                          reasoningEffortSaving || modelSaving || fastModeSaving ||
                           ai.ai_backend !== "codex_app_server"
                         }
                         onClick={() => updateReasoningEffort(effort)}
@@ -475,6 +503,32 @@ export default function AdminPage() {
                     <p className="muted">AI_BACKEND=mockのため、推論レベルはCodex app-serverには適用されません。</p>
                   ) : null}
                   {reasoningEffortError ? <p className="danger">{reasoningEffortError}</p> : null}
+                </div>
+              ) : null}
+              {ai ? (
+                <div className="reasoning-effort-control" aria-labelledby="fast-mode-title">
+                  <strong id="fast-mode-title">応答速度</strong>
+                  <label className="fast-mode-toggle">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      aria-label="Codex Fast mode"
+                      checked={Boolean(ai.fast_mode)}
+                      disabled={
+                        fastModeSaving || modelSaving || reasoningEffortSaving ||
+                        ai.ai_backend !== "codex_app_server" ||
+                        ai.can_change_fast_mode === false
+                      }
+                      onChange={(event) => updateFastMode(event.target.checked)}
+                    />
+                    <span>Fast mode: {ai.fast_mode ? "ON" : "OFF"}</span>
+                  </label>
+                  {fastModeSaving ? <p className="muted">切替中...</p> : null}
+                  <p className="muted">対応モデル・アカウントで高速処理を利用します。使用量が増え、速度向上幅はモデルにより異なります。</p>
+                  {ai.ai_backend !== "codex_app_server" ? (
+                    <p className="muted">Mock実行中のためFast modeは適用されません。</p>
+                  ) : null}
+                  {fastModeError ? <p className="danger" role="alert">{fastModeError}</p> : null}
                 </div>
               ) : null}
             </div>

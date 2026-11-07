@@ -1,5 +1,13 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-07 Codex Fast mode切替（feature/issue-293）
+
+- 管理APIに厳密なBooleanのFast mode更新を追加した。初期値はOFFで、プロセス内の一時設定として保持し、再起動後はOFFへ戻す。Mock backendでは状態をONにできず、HTTP 409で拒否する。
+- app-serverのモックtransportで、ON時の`turn/start`に`serviceTierForTurn: "fast"`、OFF時に`"default"`を渡し、設定値と実際のtierが監査payloadに記録されることを確認した。要求値を受け付けられない場合にdefaultへフォールバックしない。
+- 隔離SQLite・別ポートのheadless Chromeで管理画面を操作し、初期OFF、ON/OFF保存、保存失敗時の状態維持とエラー表示を確認した。AI接続先は到達不能なローカルURLとし、AI呼び出しは行っていない。
+- Backend全テスト`1740 passed`、FrontendテストとNext.js production build/TypeScript検査、`git diff --check`が成功した。既存のDeprecationWarningが6件ある。
+- 研究DB、localhost:3000、実AI、DB schema、実験仕様版は変更・使用していない。
+
 ## 2026-11-07 管理画面のGPT-6 Astra・推論レベル追加
 
 - 許可値に`gpt-6-astra`、`xhigh`、`max`を加え、既定の`gpt-6-luna / low`とプロセス内だけの一時設定は維持した。認証付き管理APIで許可値一覧、全選択値の更新、不正値の422を確認した。

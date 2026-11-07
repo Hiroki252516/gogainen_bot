@@ -183,7 +183,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 }
 ```
 
-モデルは起動時の `CODEX_MODEL` を基準とし、管理画面での一時上書きを含む有効値をthread/startとturn/startへ渡す。管理選択肢は `gpt-6.1-sol`、`gpt-6-luna`、`gpt-6-astra`、推論レベルは`low`、`medium`、`high`、`xhigh`、`max`。アプリ標準値は `gpt-6-luna / low` である。未指定の環境既定もこれに合わせるが、明示された環境変数は優先する。
+モデルは起動時の `CODEX_MODEL` を基準とし、管理画面での一時上書きを含む有効値をthread/startとturn/startへ渡す。管理選択肢は `gpt-6.1-sol`、`gpt-6-luna`、`gpt-6-astra`、推論レベルは`low`、`medium`、`high`、`xhigh`、`max`。アプリ標準値は `gpt-6-luna / low` である。未指定の環境既定もこれに合わせるが、明示された環境変数は優先する。Fast modeは初期OFFのプロセス内一時設定で、ONでは`turn/start.serviceTierForTurn`へ`fast`、OFFでは`default`を明示する。対応モデル・アカウントでのみ利用でき、使用量が増える。速度向上幅はモデルにより異なるため、一定の倍率を保証しない。backend再起動後はOFFへ戻る。
 
 `cwd` は既定で `/tmp` にする。アプリが研究仕様リポジトリ配下の `AGENTS.md` をAIタスクへ混入させないためである。
 
@@ -204,6 +204,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
     "approvalPolicy": "never",
     "sandboxPolicy": { "type": "readOnly", "networkAccess": false },
     "effort": "low",
+    "serviceTierForTurn": "default",
     "outputSchema": {
       "type": "object",
       "properties": {
@@ -242,7 +243,7 @@ MVPではフロントエンドにAI生成途中のストリームを見せなく
 9. `ai_call_logs` にrequest/response/errorを保存
 10. 用途ごとのJSON辞書を呼び出し側へ返す
 
-各Codex呼び出しでは、`AICallLog.request_payload.effective_request`に送信直前の実際の`thread/start`設定、`turn/start`の全文prompt・JSON Schema・モデル・推論レベルを保存する。両値とアプリ標準比較基準・一致判定も記録する。併せてprompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、教材生成試行番号、送信状態を記録する。認証ヘッダー・tokenは保存しない。接続や送信前の失敗では、送信試行と実送信の状態を区別する。Mockの入力にはこのCodex実送信監査を付けない。
+各Codex呼び出しでは、`AICallLog.request_payload.effective_request`に送信直前の実際の`thread/start`設定、`turn/start`の全文prompt・JSON Schema・モデル・推論レベル・`serviceTierForTurn`を保存する。Fast modeの有効状態と実際に指定したtierも監査し、設定と送信値を照合できるようにする。併せてprompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、教材生成試行番号、送信状態を記録する。認証ヘッダー・tokenは保存しない。接続や送信前の失敗では、送信試行と実送信の状態を区別する。Mockの入力にはこのCodex実送信監査を付けない。
 
 仕様版26でも共通interaction_historyの版・件数・SHA-256、共通出題規則版とactual_ai_inputを記録する。モデルへは共通履歴の診断除外投影を送り、proposedだけに診断・対象主張・教授方針を追加する。input_projectionはサーバー側投影であり、送信済みかどうかはeffective_request.transmissionを確認する。仕様版4で追加した学習後retest回数制限はbackendの遷移制御であり、AI promptの送信内容を変更しない。
 

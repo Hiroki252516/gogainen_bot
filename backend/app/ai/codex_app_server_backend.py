@@ -157,15 +157,21 @@ class _CodexRpcClient:
 class CodexAppServerBackend:
     provider = "codex_app_server"
 
-    def __init__(self, reasoning_effort: str | None = None, model: str | None = None) -> None:
+    def __init__(
+        self,
+        reasoning_effort: str | None = None,
+        model: str | None = None,
+        fast_mode: bool | None = None,
+    ) -> None:
         self.settings = get_settings()
-        configured_model, configured_effort = (None, None)
-        if model is None or reasoning_effort is None:
-            configured_model, configured_effort = current_ai_runtime_settings()
+        configured_model, configured_effort, configured_fast_mode = (None, None, None)
+        if model is None or reasoning_effort is None or fast_mode is None:
+            configured_model, configured_effort, configured_fast_mode = current_ai_runtime_settings()
         self.model = model if model is not None else configured_model
         self.reasoning_effort = normalize_reasoning_effort(
             reasoning_effort if reasoning_effort is not None else configured_effort
         )
+        self.fast_mode = fast_mode if fast_mode is not None else configured_fast_mode
 
     async def status(self) -> dict[str, Any]:
         try:
@@ -391,6 +397,7 @@ class CodexAppServerBackend:
             "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
             "model": self.model or None,
             "effort": self.reasoning_effort,
+            "serviceTierForTurn": "fast" if self.fast_mode else "default",
         }
         audit = {
             "purpose": purpose,
@@ -406,6 +413,7 @@ class CodexAppServerBackend:
             "generation_attempt": (audit_context or {}).get("generation_attempt"),
             "model": self.model,
             "reasoning_effort": self.reasoning_effort,
+            "fast_mode": self.fast_mode,
             "study_settings_reference": {
                 "model": STUDY_MODEL,
                 "reasoning_effort": STUDY_REASONING_EFFORT,
