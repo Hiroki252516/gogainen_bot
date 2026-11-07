@@ -48,7 +48,7 @@ def review_db():
     engine.dispose()
 
 
-def _question_rows(db: Session, phase: str) -> list[dict]:
+def _question_rows(db: Session, phase: str, numbers: tuple[int, ...] = (1,)) -> list[dict]:
     source_phase = "retest" if phase == "final_test" else phase
     variant = "pretest_v1" if phase == "pretest" else "retest_v1"
     questions = (
@@ -57,7 +57,7 @@ def _question_rows(db: Session, phase: str) -> list[dict]:
         .filter(
             Question.phase == source_phase,
             Question.is_active.is_(True),
-            Question.variant_key == f"{variant}_q1",
+            Question.variant_key.in_([f"{variant}_q{number}" for number in numbers]),
         )
         .order_by(Term.display_order, Question.variant_key)
         .all()
@@ -176,9 +176,36 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
         ok(client.put("/api/admin/option-order", json={"mode": previous_order}))
 
 
+def test_legacy_pair_review_waits_for_both_question_answers(review_db):
+    db, participant = review_db
+    participant.experiment_spec_version = 40
+    participant.protocol_id = "experiment-plan-2026-11-07-control-shared-prompt-v1"
+    participant.first_question_only = False
+    rows = _question_rows(db, "pretest", numbers=(1, 2))
+    assert len(rows) == 6
+
+    term_slug = rows[0]["term_slug"]
+    pair = [row for row in rows if row["term_slug"] == term_slug]
+    assert len(pair) == 2
+    assert [
+        db.get(Question, row["question_id"]).variant_key for row in pair
+    ] == ["pretest_v1_q1", "pretest_v1_q2"]
+
+    first = db.get(Question, pair[0]["question_id"])
+    _add_answer(db, participant, first, "pretest", correct=False)
+    assert experiment.pending_question_review(db, participant.id, "pretest", rows) is None
+
+    second = db.get(Question, pair[1]["question_id"])
+    _add_answer(db, participant, second, "pretest", correct=False)
+    review = experiment.pending_question_review(db, participant.id, "pretest", rows)
+    assert review is not None
+    assert review["term_slug"] == term_slug
+    assert [result["question_number"] for result in review["results"]] == [1, 2]
+
+
 def test_single_question_review_is_private_and_acknowledgement_is_idempotent():
     with set_question_reviews(True):
-        with create_trial("A", "debug_fixed") as (client, participant_id):
+        with create_trial("A", "debug_fixed", first_question_only=True) as (client, participant_id):
             questions = ok(client.get(f"/api/experiment/{participant_id}/pretest"))["questions"]
             question = questions[0]
             term_slug = question["term_slug"]
@@ -225,7 +252,7 @@ def test_single_question_review_is_private_and_acknowledgement_is_idempotent():
 
 def test_out_of_order_ack_and_pretest_diagnosis_are_rejected_without_scoring():
     with set_question_reviews(True):
-        with create_trial("B", "randomized") as (client, participant_id):
+        with create_trial("B", "randomized", first_question_only=True) as (client, participant_id):
             questions = ok(client.get(f"/api/experiment/{participant_id}/pretest"))["questions"]
             assert len(questions) == 3
             for question in questions:

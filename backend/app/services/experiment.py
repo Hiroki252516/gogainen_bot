@@ -2002,6 +2002,9 @@ def _test_result_question(
             )
             expected_variant = f"retest_v{variant_number}"
 
+    if expected_variant and uses_split(participant):
+        expected_variant = f"{expected_variant}_q{question_numbers(participant)[0]}"
+
     query = (
         db.query(Question)
         .filter(

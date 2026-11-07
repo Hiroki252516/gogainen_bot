@@ -53,13 +53,17 @@ HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
 }
 
 
-def historical_assessment_bank_versions_for(participant):
+def historical_assessment_bank_versions_for(participant: object) -> dict[str, str] | None:
     if participant is None:
         return None
-    experiment_spec_version = getattr(participant, "experiment_spec_version", None)
+    if isinstance(participant, dict):
+        experiment_spec_version = participant.get("experiment_spec_version")
+        protocol_id = participant.get("protocol_id")
+    else:
+        experiment_spec_version = getattr(participant, "experiment_spec_version", None)
+        protocol_id = getattr(participant, "protocol_id", None)
     if experiment_spec_version is None:
         return None
-    protocol_id = getattr(participant, "protocol_id", None)
     key = (experiment_spec_version, protocol_id)
     return HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS.get(
         key,
