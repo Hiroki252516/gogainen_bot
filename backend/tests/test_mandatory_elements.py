@@ -640,7 +640,13 @@ def test_control_tutoring_prompt_is_independent_of_participant_diagnostics_and_f
         assert private_value not in prompts[0]
     assert "記憶プロセス" in prompts[0]
     assert "chunk-1" in prompts[0]
-    assert "通常のAIチューター" in prompts[0]
+    assert "教材には意味や仕組みの解説を含める。" in prompts[0]
+    for control_only_rule in (
+        "通常のAIチューターとして、共通の用語情報",
+        "general_explanation は、共通の用語情報",
+        "teaching_strategy は general_explanation に固定する。",
+    ):
+        assert control_only_rule not in prompts[0]
 
 
 def test_control_feedback_uses_only_current_feedback_context_for_both_outcomes(monkeypatch):

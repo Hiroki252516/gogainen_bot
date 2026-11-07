@@ -48,6 +48,16 @@ def test_prompt_yaml_is_valid_and_rejects_missing_required_sections():
         _validate_prompt_text(invalid)
 
 
+def test_tutoring_prompt_rejects_unsupported_group():
+    with pytest.raises(ValueError, match="Unsupported tutoring group"):
+        _render(
+            _base_payload(),
+            group="unexpected",
+            expected_type=None,
+            strategies=["general_explanation"],
+        )
+
+
 def test_rendered_prompt_matches_expected_contract_hashes():
     rendered = {}
 
@@ -132,8 +142,8 @@ def test_rendered_prompt_matches_expected_contract_hashes():
     )
 
     expected_hashes = {
-        "control_annotation": "5edbe59e4bff8265a5913dd9a3adaacb9afd57806367a093edeb92f67f686994",
-        "control_integrated": "a24bbe64263f8abcb4e4fedf08b17b41c38a2dea10442c8444ceac73ba70c66a",
+        "control_annotation": "32fafd19f9037517779a903569f460fd21bbeeb788fc428aad151efa3dd4290a",
+        "control_integrated": "a8e9bb5afc3224b698d617d1137d8f91954193fc64c64b73c78f5fe3d86af9c7",
         "proposed_m1_retry_counted": "2fa8a9de65971995e167ac5ee7d2c8a2cf61be7e70c208dad0392b7927661763",
         "proposed_m3_integrated": "6939f35c48a688d70d60f7ed7cc4b9aceff57526fd19f4d0b659c97b103e1b1e",
         "proposed_unknown_retry_uncounted": "d109b93ffd4ecbf994c2c9cca4b3229205e5cdf6b544dc86515ecf1c2186c18d",
@@ -149,3 +159,6 @@ def test_rendered_prompt_matches_expected_contract_hashes():
     ):
         assert removed_rule not in control_prompt
     assert "教材には意味や仕組みの解説を含める。" in control_prompt
+
+    proposed_prompt = rendered["proposed_m1_retry_counted"]
+    assert "teaching_strategy はbackendで指定された belief_revision に固定する。" in proposed_prompt

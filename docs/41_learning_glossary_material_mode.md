@@ -1,16 +1,16 @@
 # 教材の用語解説モード（仕様版29導入履歴）
 
-## 現行条件（仕様版39）
+## 現行条件（仕様版40）
 
 新規参加者は`integrated_material`に固定する。管理画面には切替ボタンを置かず、管理用GET/PUT APIも提供しない。登録時には`Participant.learning_material_glossary_mode`へ固定値を保存し、教材生成では辞書v4を両群共通の意味参照として渡す。教材本文で実際に使う登録語を文脈に合わせて説明し、教材右側の用語注釈欄を隠す。教材snapshot・回答後解説・テスト注釈は従来どおり保存・表示する。
 
-仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を新規参加者に適用する。仕様版38以下・旧protocolは閲覧専用とし、参加者の保存モード、教材、snapshot、回答を変更しない。`RuntimeSetting.learning_material_glossary_mode`列は過去値を保全するため残すが、現行コードでは参照・更新しない。仕様版39の履歴と検証は[受入記録](14_testing_acceptance.md)を参照する。
+仕様版40 / `experiment-plan-2026-11-07-control-shared-prompt-v1`を新規参加者に適用する。仕様版39以下・旧protocolは閲覧専用とし、参加者の保存モード、教材、snapshot、回答を変更しない。`RuntimeSetting.learning_material_glossary_mode`列は過去値を保全するため残すが、現行コードでは参照・更新しない。仕様版39・40の履歴と検証は[受入記録](14_testing_acceptance.md)を参照する。
 
 ## 仕様版29導入時の条件・実装履歴
 
 ## 条件と適用範囲
 
-仕様版29導入時に管理画面の「注釈欄のみ／教材内解説」切替を追加し、当時は初期値を「注釈欄のみ」とした。選択内容は新規参加者へ登録時固定し、登録後の設定変更は既存参加者へ遡及しなかった。設定未保存・RuntimeSettingのNULLは当時`annotation_only`として扱った。この節の既定値とUIは導入時履歴であり、現行条件は上の仕様版39節を参照する。
+仕様版29導入時に管理画面の「注釈欄のみ／教材内解説」切替を追加し、当時は初期値を「注釈欄のみ」とした。選択内容は新規参加者へ登録時固定し、登録後の設定変更は既存参加者へ遡及しなかった。設定未保存・RuntimeSettingのNULLは当時`annotation_only`として扱った。この節の既定値とUIは導入時履歴であり、現行条件は上の仕様版40節を参照する。
 
 仕様版29 / `experiment-plan-2026-10-30-learning-glossary-material-v1`を当時の新規参加者へ保存した。現行版境界に従い仕様版35以下の既存記録は進行・回答・教材・snapshot・評価を変更しない。教材生成の実験条件を区別するための版更新であり、教材の正確さや学習効果の確認済みを意味しない。
 

@@ -58,7 +58,7 @@ def _validate_prompt_text(raw: Any) -> dict[str, Any]:
     _required_text(tutoring.get("learning_scope_rule"), "tutoring.learning_scope_rule")
     group_rules = _required_mapping(tutoring.get("group_rules"), "tutoring.group_rules")
     if "control" in group_rules:
-        raise ValueError("Prompt text section 'tutoring.group_rules.control' is not supported")
+        raise ValueError("Prompt text section tutoring.group_rules.control is not supported")
     _required_text_list(group_rules.get("proposed"), "tutoring.group_rules.proposed", expected_length=7)
 
     templates = _required_mapping(tutoring.get("templates"), "tutoring.templates")
@@ -168,6 +168,9 @@ def build_tutoring_prompt(
     owns only the textual instruction order; output schemas and local
     validation remain separate contracts.
     """
+    if group not in {"control", "proposed"}:
+        raise ValueError(f"Unsupported tutoring group: {group!r}")
+
     length_contract = material_length_contract(
         integrated_material="glossary_reference" in payload,
     )

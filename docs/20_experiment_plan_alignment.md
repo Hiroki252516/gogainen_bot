@@ -1,12 +1,16 @@
 # 実験計画書との対応と実装判断
 
-## 仕様版39：教材内解説モードを新規参加者の標準に固定
+## 仕様版40：統制群の教材指示を共通ルールのみにする
 
-新規参加者へ仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を適用し、教材モードを`integrated_material`に固定する。管理画面の切替UIと認証済みGET/PUT `/api/admin/learning-material-glossary-mode`を削除する。新規登録は旧RuntimeSetting値を参照せず、Participantへ固定値を保存する。Participantの履歴列とRuntimeSettingの旧設定列は削除・補完せず、後者は参照・更新しない。仕様版38以下・旧protocolは閲覧専用とし、旧モード、教材、snapshot、回答を変更しない。問題版、採点、アンケート、辞書、教材生成契約、DB構造は変更しない。現行教材は辞書v4を意味参照として使用し、600〜1200文字で登録語を自然に説明する。教材右側の注釈欄だけを非表示にし、回答後解説・テストの注釈は維持する。検証状況は[14](14_testing_acceptance.md)、履歴・表示契約は[41](41_learning_glossary_material_mode.md)を参照する。
+新規参加者へ仕様版40 / `experiment-plan-2026-11-07-control-shared-prompt-v1`を適用する。仕様版39で統制群に送っていた「通常のAIチューターとして説明する」「general_explanationの意味」「teaching_strategyをgeneral_explanationに固定する」という3つの自然言語指示を、YAMLとPythonの組立て処理から除く。共通指示・入力投影・出力Schema・Backend検証は維持し、統制群の`teaching_strategy`出力値はSchema enumとBackend検証で`general_explanation`に固定する。提案群の診断・教授方略指示は変更しない。仕様版39以下は閲覧専用とし、既存の回答・教材・snapshotは書き換えない。仕様版39での指示は当時の実装履歴として次節に保持する。この記録は実装判断を示すもので、研究上の承認を意味しない。詳細と検証状況は[AI指示](10_ai_prompt_contracts.md)・[受入記録](14_testing_acceptance.md)を参照する。
+
+## 仕様版39の履歴：教材内解説モードを新規参加者の標準に固定
+
+当時の新規参加者へ仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を適用し、教材モードを`integrated_material`に固定した。管理画面の切替UIと認証済みGET/PUT `/api/admin/learning-material-glossary-mode`を削除した。新規登録は旧RuntimeSetting値を参照せず、Participantへ固定値を保存した。Participantの履歴列とRuntimeSettingの旧設定列は削除・補完せず、後者は参照・更新しない。仕様版38以下・旧protocolは閲覧専用とし、旧モード、教材、snapshot、回答を変更しない。問題版、採点、アンケート、辞書、教材生成契約、DB構造は変更しない。辞書v4を意味参照として使用し、600〜1200文字で登録語を自然に説明する。教材右側の注釈欄だけを非表示にし、回答後解説・テストの注釈は維持した。検証状況は[14](14_testing_acceptance.md)、履歴・表示契約は[41](41_learning_glossary_material_mode.md)を参照する。
 
 ## 仕様版38の履歴：事前アンケートv2とRAG用語注釈の統合
 
-当時の新規参加者へ仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を適用した。新規登録の事前アンケートは`presurvey-baseline-v2`を維持し、用語知識6項目を4段階で保存した。共通辞書v3は変更せずv4を追加し、RAG（検索拡張生成）を登録語・別表記として加えた。仕様版39への更新後、仕様版38は閲覧専用。
+当時の新規参加者へ仕様版38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`を適用した。新規登録の事前アンケートは`presurvey-baseline-v2`を維持し、用語知識6項目を4段階で保存した。共通辞書v3は変更せずv4を追加し、RAG（検索拡張生成）を登録語・別表記として加えた。仕様版40への更新後、仕様版38は閲覧専用。
 
 仕様版38以下と旧protocolは閲覧専用とし、仕様版36〜38の結果は`split-actions-v5`で復元する。仕様版36には事前アンケートv1とRAG追加の異なるprotocol記録があるため、どちらも新規経路で再開させない。既存回答・snapshot・教材を記録時の内容で保全する。RAGの抽出は英字の完全語境界と既存のMarkdown表示文字規則に従う。表記・境界・リンク表示文字のテストは語義の教育的妥当性や学習効果を実証するものではない。詳細は[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、検証記録は[14](14_testing_acceptance.md)。
 
@@ -82,11 +86,11 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 
 > 現行変更: 学習確認は各用語・各セッション1回答とする。以下の過去の版や判断に記載された3回答・同一用語の再回答用先行生成は当時の記録である。
 
-> 仕様版38採用時の記録。現行版は冒頭の仕様版39節を参照する。現行の問題版は通常版のみ。旧条件のコード・問題資産・保存記録を削除する変更は実験仕様版とprotocolを変えず、削除手順は[運用手順](19_experiment_operation_runbook.md)、検証は[受入記録](14_testing_acceptance.md)を参照する。
+> 仕様版38採用時の記録。現行版は冒頭の仕様版40節を参照する。現行の問題版は通常版のみ。旧条件のコード・問題資産・保存記録を削除する変更は実験仕様版とprotocolを変えず、削除手順は[運用手順](19_experiment_operation_runbook.md)、検証は[受入記録](14_testing_acceptance.md)を参照する。
 
 ## 仕様版28の採用仕様（仕様版35でも維持）
 
-設問ペア答え合わせは仕様版28 / experiment-plan-2026-10-30-question-review-v1で導入し、仕様版39でも維持する。仕様版27の採用時根拠[39](39_split_assessment.md)は変更せず保管する。
+設問ペア答え合わせは仕様版28 / experiment-plan-2026-10-30-question-review-v1で導入し、仕様版40でも維持する。仕様版27の採用時根拠[39](39_split_assessment.md)は変更せず保管する。
 
 通常版PRETEST・RETEST・内部final_testで、用語内の設問1・2を両方保存した後、同じテスト画面に本人の選択内容と正誤を表示する。ページ/URL遷移はせず、続行で次の用語へ進む。新設定は初期値ONの「設問ごとの答え合わせ」で、新規参加者だけに登録時snapshotとして固定する。既存のPRETEST全体結果スイッチは独立して残す。採点・学習遷移・テスト上限・評価式は変更しない。API・データ・受入条件は[40](40_question_pair_answer_review.md)。
 
@@ -261,7 +265,7 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 | ID | 今回の対応 | 状態 |
 | --- | --- | --- |
 | D01 | 共通指示を意味や仕組みの解説へ変更。具体例・注意点の一律必須指定を撤廃 | 実装 |
-| D02 | 統制群の通常説明の追加指示を6.7.2へ一致。自然な誤り訂正を許容 | 実装 |
+| D02 | 統制群の通常説明の追加指示を6.7.2へ一致。自然な誤り訂正を許容 | 仕様版39まで適用。仕様版40では群別指示を削除し、共通指示のみ |
 | D03 | unknownを意味・仕組み・適用確認へ変更。taxonomy/指針/Schema/検査/Mockを整合 | 実装 |
 | D04 | Word原本のモデル目標記載はgpt-5.6-luna / low。承認されたアプリ側標準はgpt-6-luna / lowとし、gpt-6.1-sol / gpt-6-lunaを管理画面から一時切替できる。両群に次回呼出しから適用し、再起動後は環境値へ戻す。監査に実値と標準基準を保存 | 実装。ただし2026-10-25の検証用ChatGPTアカウントでは、両モデルともlow/medium/highの生成要求がmodel_not_foundで拒否された。利用権限のあるアカウントで成功を確認するまで実験利用不可。このアプリ側変更はWord原本を改訂したことを意味しない |
 | D05 | 仕様版37で4段階の事前知識6・AI利用2評定と事後システム評価2・教材評価6・任意自由記述をphase/version別JSONに保存 | 実装 |
