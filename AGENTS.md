@@ -8,7 +8,7 @@
 
 ## 仕様版41の履歴条件（2026-11-07）
 
-仕様版41には`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`と`experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`の別protocolがある。前者は設定固定、後者は800文字目標を導入した。どちらも仕様版42へ統合する前の履歴として保持し、閲覧専用とする。仕様版41以下は閲覧専用。
+仕様版41には`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`、`experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`、`experiment-plan-2026-11-07-split-actions-v6-q1-only-v1`の別protocolがある。最初の二つは通常版バンクv5、三つ目は設問1のみのバンクv6を使った。仕様版42への統合後はいずれも履歴・閲覧専用とし、回答復元ではprotocol IDに応じてv5またはv6を選ぶ。仕様版41以下は閲覧専用。
 
 ## 仕様版39の履歴条件（2026-11-06）
 

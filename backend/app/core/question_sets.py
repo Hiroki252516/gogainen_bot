@@ -44,6 +44,32 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     41: {STANDARD: "split-actions-v5"},
 }
 
+# Version 41 was used by parallel protocols. Keep the v5 default for the two
+# mainline protocols and restore the branch-specific v6 bank by protocol ID.
+HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
+    (41, "experiment-plan-2026-11-07-split-actions-v6-q1-only-v1"): {
+        STANDARD: "split-actions-v6",
+    },
+}
+
+
+def historical_assessment_bank_versions_for(participant: object) -> dict[str, str] | None:
+    if participant is None:
+        return None
+    if isinstance(participant, dict):
+        experiment_spec_version = participant.get("experiment_spec_version")
+        protocol_id = participant.get("protocol_id")
+    else:
+        experiment_spec_version = getattr(participant, "experiment_spec_version", None)
+        protocol_id = getattr(participant, "protocol_id", None)
+    if experiment_spec_version is None:
+        return None
+    key = (experiment_spec_version, protocol_id)
+    return HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS.get(
+        key,
+        HISTORICAL_ASSESSMENT_BANK_VERSIONS.get(experiment_spec_version),
+    )
+
 
 def assessment_construct_key(term_slug: str, phase: str, *, bank_version: str | None = None) -> str:
     bank = bank_version or ASSESSMENT_BANK_VERSION

@@ -8,7 +8,7 @@
 
 ## 仕様版41のprotocol履歴
 
-仕様版41には別ブランチ由来の二つのprotocol履歴がある。`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`は固定管理条件と統制群共通プロンプトを、`experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`は800文字目標と統制群共通プロンプトを導入した。いずれも仕様版42更新後は閲覧専用とし、当時の保存記録・受入結果を履歴として保持する。
+仕様版41には三つのprotocol履歴がある。`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`と`experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`は通常版バンクv5を使い、固定管理条件または800文字目標を導入した。`experiment-plan-2026-11-07-split-actions-v6-q1-only-v1`は設問1のみのバンクv6を使った。いずれも仕様版42更新後は閲覧専用とし、当時の保存記録・受入結果を保持する。回答復元はprotocol IDも参照し、V6 protocolだけをv6で復元する。
 
 ## 仕様版40のprotocol履歴
 

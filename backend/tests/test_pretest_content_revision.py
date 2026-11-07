@@ -1,6 +1,7 @@
 from collections import Counter
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 
 import yaml
 from sqlalchemy import create_engine, inspect, text
@@ -8,10 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, can_resume
 from app.db import session as db_session
-from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, STANDARD, assessment_construct_key
+from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, STANDARD, assessment_construct_key, historical_assessment_bank_versions_for
 from app.models import Attempt, Base, Participant, Question, QuestionOption, Term
 from app.seed.seed_questions import _upsert_question, seed_database
-from app.services.experiment import _displayed_options, latest_test_results
+from app.services.experiment import (
+    _displayed_options,
+    _test_result_question,
+    latest_test_results,
+)
 from app.services.split_assessment import learning_spec as split_learning_spec, split_bank, split_specs, uses_split
 
 
@@ -260,6 +265,111 @@ def test_init_db_adds_rationale_column_to_existing_question_options_table(monkey
     engine.dispose()
 
 
+def test_split_actions_v6_bank_loads_and_validates_question_1_only():
+    bank = split_bank("split-actions-v6")
+    assert set(bank) == {"pretest_v1", "retest_v1", "retest_v2"}
+    for round_key, terms in bank.items():
+        assert set(terms) == {"llm_knowledge", "multi_agent", "memory_process"}
+        for term_slug, section in terms.items():
+            assert [question["number"] for question in section["questions"]] == [1]
+            choices = section["questions"][0]["choices"]
+            entries = list(choices.values()) if isinstance(choices, dict) else choices
+            assert [choice["label"] for choice in entries] == list("ABCDEF")
+            assert Counter(choice["role"] for choice in entries) == Counter({
+                "correct": 1, "M1": 2, "M3": 2, "unknown": 1,
+            })
+            assert [item["question_number"] for item in split_specs(
+                term_slug, round_key, bank_version="split-actions-v6",
+            )] == [1]
+
+
+def test_historical_assessment_bank_mapping_accepts_dict_and_falls_back_to_version():
+    protocol_id = "experiment-plan-2026-11-07-split-actions-v6-q1-only-v1"
+    assert historical_assessment_bank_versions_for({
+        "experiment_spec_version": 41,
+        "protocol_id": protocol_id,
+    }) == {STANDARD: "split-actions-v6"}
+    assert historical_assessment_bank_versions_for({
+        "experiment_spec_version": 41,
+    }) == {STANDARD: "split-actions-v5"}
+    assert historical_assessment_bank_versions_for({"protocol_id": protocol_id}) is None
+    assert historical_assessment_bank_versions_for(SimpleNamespace()) is None
+    assert historical_assessment_bank_versions_for(None) is None
+
+
+def test_spec_41_v6_protocol_restores_question_and_latest_result(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'spec41-v6-history.db'}")
+    Base.metadata.create_all(engine)
+    protocol_id = "experiment-plan-2026-11-07-split-actions-v6-q1-only-v1"
+    try:
+        with Session(engine) as db:
+            seed_database(db)
+            participant = Participant(
+                display_code="PRETEST-V41-V6",
+                group_condition="control",
+                current_step="finish",
+                experiment_spec_version=41,
+                protocol_id=protocol_id,
+                learning_content_version=15,
+                option_order_mode="debug_fixed",
+                first_question_only=True,
+            )
+            db.add(participant)
+            db.flush()
+
+            term = db.query(Term).filter_by(slug="memory_process").one()
+            spec = split_specs(term.slug, "pretest_v1", bank_version="split-actions-v6")[0]
+            question = _upsert_question(
+                db,
+                term,
+                phase="pretest",
+                question_type="split_single",
+                body=spec["body"],
+                expected_answer="A",
+                construct_key=assessment_construct_key(
+                    term.slug, "pretest", bank_version="split-actions-v6",
+                ),
+                variant_key=spec["variant_key"],
+                options=spec["options"],
+            )
+            question.is_active = False
+            db.flush()
+
+            restored = _test_result_question(db, participant, term, "test", "pretest")
+            assert restored is not None
+            assert restored.id == question.id
+            assert restored.body == spec["body"]
+            assert restored.construct_key.endswith("split-actions-v6")
+
+            selected = db.query(QuestionOption).filter_by(
+                question_id=question.id, option_label="F",
+            ).one()
+            attempt = Attempt(
+                participant_id=participant.id,
+                term_id=term.id,
+                question_id=question.id,
+                phase="pretest",
+                test_round="test",
+                selected_option_ids=[selected.id],
+                is_correct=False,
+                question_body_snapshot=question.body,
+                option_order_snapshot=_displayed_options(db, participant, question),
+            )
+            db.add(attempt)
+            db.flush()
+
+            results = latest_test_results(db, participant.id)["results"]
+            assert len(results) == 1
+            assert results[0]["question_id"] == question.id
+            assert results[0]["question_body"] == spec["body"]
+            assert results[0]["selected_options"] == [{
+                "label": "F",
+                "body": selected.body,
+            }]
+    finally:
+        engine.dispose()
+
+
 def test_spec_42_keeps_v5_and_preserves_previous_read_only_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
@@ -280,6 +390,10 @@ def test_spec_42_keeps_v5_and_preserves_previous_read_only_snapshots(tmp_path):
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[39][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[40][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[41][STANDARD] == "split-actions-v5"
+            assert historical_assessment_bank_versions_for(SimpleNamespace(
+                experiment_spec_version=41,
+                protocol_id="experiment-plan-2026-11-07-split-actions-v6-q1-only-v1",
+            )) == {STANDARD: "split-actions-v6"}
 
             term = db.query(Term).filter_by(slug="memory_process").one()
             active = db.query(Question).filter_by(

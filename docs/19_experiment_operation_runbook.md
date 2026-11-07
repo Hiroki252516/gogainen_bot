@@ -111,7 +111,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 
 **実験開始前の必須確認:** テスト系・現行学習確認ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
 
-現行コードの実験仕様版42と`experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`だけで進行・補修・集計する。仕様版41以下を含む旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。仕様版36〜42の結果は`split-actions-v5`で復元する。旧行を付け替えず、retest_cycles_completedも保存値のままにする。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで動作を確認してから配布する。
+現行コードの実験仕様版42と`experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`だけで進行・補修・集計する。仕様版41以下を含む旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。仕様版36〜42の結果は通常`split-actions-v5`で復元し、仕様版41の`split-actions-v6-q1-only-v1` protocolだけprotocol IDに応じてV6を使う。旧行を付け替えず、retest_cycles_completedも保存値のままにする。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで動作を確認してから配布する。
 
 **管理アクセスの確認:** 管理画面はパスワード入力ポップアップで保護する（既定abc、READMEに記載）。管理API・CSV・対応表・seed・管理用再計算もbackend認証が必要。30分で失効し、ロック・backend再起動でも失効する。実配布環境で匿名アクセスの401と認証後の取得を確認し、参加者へ端末を渡す前に「管理画面をロック」を押す。共通パスワードのため研究者だけが扱う環境で運用する。詳細は [セキュリティ仕様](15_security_privacy.md) を参照する。
 

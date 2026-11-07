@@ -148,6 +148,7 @@ def split_bank(bank_version: str = "split-actions-v5") -> dict:
         "split-actions-v3": "split_assessment_v3.yml",
         "split-actions-v4": "split_assessment_v4.yml",
         "split-actions-v5": "split_assessment_v5.yml",
+        "split-actions-v6": "split_assessment_v6.yml",
     }
     filename = bank_paths.get(bank_version)
     if filename is None:

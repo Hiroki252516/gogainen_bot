@@ -1,32 +1,32 @@
-# 設問1のみ出題する設定（2026-11-03）
+# 設問1のみ出題する設定（導入履歴）
 
-## 現行条件
+## 現行条件（仕様版42）
 
-管理画面の「設問1のみ出題」は初期値OFF。ONでは新規参加者に各用語の設問1だけを出題する。対象3用語、6択単一選択、M1/M3/unknownの分類、テスト回数上限は維持する。
+新規参加者は通常版split-actions-v5の各用語の設問1だけ、計3問に回答する。対象はPRETEST・RETEST1/2・内部final_testで、各問の回答後に本人の選択内容と正誤を同じ画面で示す。テスト全体の結果確認画面は表示しない。登録snapshotは`show_pretest_results=false`、`show_retest_results=false`、`show_question_reviews=true`、`first_question_only=true`、`learning_material_glossary_mode=integrated_material`に固定する。旧RuntimeSetting値は参照せず、設定UI/APIと集計条件セレクターを提供しない。仕様版41以下の既存記録は閲覧専用とし、回答・教材・snapshotを変更しない。
 
-| 設定 | 事前・再テスト1/2・内部final_test | 用語ページ | 学習確認 |
+| 条件 | 出題 | 回答後 | 問題バンク |
 | --- | --- | --- | --- |
-| OFF | 設問1・2、計6問 | 2設問をまとめて保存 | 誤答設問の保存snapshot |
-| ON | 設問1だけ、計3問 | 1設問を保存 | 誤答した設問1の保存snapshot |
+| 旧版で設問1のみOFF | 設問1・2、計6問 | 保存した2設問をまとめて扱う | 保存された仕様版に対応する履歴バンク |
+| 仕様版41 / V6履歴protocol | 設問1だけ、計3問 | 1設問を保存し、本人の選択内容と正誤を表示 | split-actions-v6（設問1のみ収録） |
+| 仕様版42 / 現行 | 設問1だけ、計3問 | 各問の回答後に本人の選択内容と正誤を表示 | split-actions-v5（設問1〜3を保持） |
 
-内部final_testはRETEST1を共用する。設問2・3のYAML・ID・選択肢・旧snapshotは保持する。ONの参加者による設問2への直接回答は409で拒否する。教材対象は実際の誤答から決める。「設問ごとの答え合わせ」がONなら、出題した1設問または2設問の選択内容・正誤を同じ画面内で示す。正答・解説・内部分類は表示しない。
+## 仕様版41のprotocol履歴
 
-## 保存・API・互換性
+仕様版41には複数protocolがある。`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`と`experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`は通常版バンクv5を使った。`experiment-plan-2026-11-07-split-actions-v6-q1-only-v1`はV6を使い、設問1の指定9選択肢を改訂して研究者向け理由を保存した。V6には設問1のみを含め、設問2・3はV5以前の履歴バンクに残した。V6の結果復元は仕様番号だけでなくprotocol IDを参照する。
 
-- RuntimeSetting.first_question_only、Participant.first_question_onlyをnullable booleanとして追加する。設定未保存・旧NULLはOFFとして読むが、既存行を補完しない。
-- 管理GET/PUT `/api/admin/first-question-only` は `enabled: boolean` と `applies_to: new_standard_participants_only` を返す。管理認証を必須とし、PUTは厳密なbooleanだけを受理する。GETはno-store。
-- 新規登録時に参加者へ設定を固定する。後から管理スイッチを変えても登録済み参加者の問題数は変わらない。
-- 用語ページPOSTのanswersは入力型上1〜2件。受理する件数・問題ID・回次は参加者snapshotで検証する。一括保存・ページ時間・冪等再送・再読み込み後の再送復元を維持する。
-- 仕様版35で導入した設定とprotocol・split-actions-v5を仕様版36でも維持し、登録条件で区別する。旧版の閲覧専用条件を変更しない。
+## 仕様版41の保存・API契約（履歴）
+
+- 仕様版41のV6 protocolでは新規登録時に`first_question_only=true`を保存した。旧参加者のsnapshot・NULL解釈は当時の仕様に従い、既存行は補完しない。
+- 管理画面は出題数を表示するだけでOFFへ変更できない。管理GET `/api/admin/first-question-only` はtrueと `applies_to: new_standard_participants_only` を返し、PUTはtrueだけを保存した。falseは409で拒否し、GETはno-store。仕様版42ではこのUI/APIを廃止した。
+- 用語ページPOSTでは当時の参加者snapshotとV6バンクで問題ID・回次を検証し、V6の設問1だけを受理した。一括保存・ページ時間・冪等再送・再読み込み後の再送復元を維持した。
+- 回答後の正誤表示に正答選択肢・解説・内部分類を含めない。仕様版42でもこの表示条件を維持する。
 
 ## 指標とログ
 
-仮説の式・比較回次・欠測の扱いは維持し、完答と分母を出題条件に合わせる。仮説1の正答率は3問または6問。仮説4は同じ用語・設問番号を対応づける。仮説6の満点は対象3問または6問が重複なく採点済みで全問正解の場合とする。非出題の設問2を誤答・欠測に数えない。
+仕様版41当時は完答・分母を出題条件に合わせ、仮説1の正答率は3問または6問、仮説4は同じ用語・設問番号を対応づけた。仮説6の満点は対象設問が重複なく採点済みで全問正解の場合とし、非出題設問は誤答・欠測に数えなかった。指標版は`six-hypotheses-v4-question-selection`。当時の集計は3問条件と6問条件を分離し、混在時は`strata`内に条件別集計を返した。
 
-指標版は `six-hypotheses-v4-question-selection`。管理の群集計・6仮説集計は3問条件と6問条件を分離する。混在時の6仮説APIは統合集計を返さず、`strata` 内に条件別集計を返す。同じ条件内でcontrol/proposedを比較する。条件間の難易度同等性・学習効果は保証しない。
+現行仕様版42の集計は3問条件に固定し、画面上の条件セレクターはない。保存された履歴値・CSVヘッダは維持するが、参加者一覧・個別ログ画面には旧条件を表示しない。
 
-参加者一覧・個別ログ・指標JSONでfirst_question_onlyを確認できる。固定CSVヘッダを維持し、統合ログCSVの参加者value_json、6仮説CSV/Excelの各行details_jsonに条件を記録する。details_jsonにはquestions_per_testも3または6で保存する。現行版の指標キャッシュは必要時に新指標版として追加し、旧版の評価・snapshotは再計算しない。
+## 検証記録
 
-## 検証
-
-登録時固定、認証・厳密入力、設問2拒否、保存・再送、答え合わせ、事前満点からfinal_test、学習確認snapshot、再テスト2回、満点判定、条件別CSVとDBの追加移行を検証する。画面側は1/2設問の表示・再送復元を確認する。結果は[14](14_testing_acceptance.md)に記録する。受入検証は実験開始承認と別に扱う。
+仕様版41当時の登録固定、認証・入力検証、設問2拒否、保存・再送、答え合わせ、学習確認snapshot、再テスト、条件別CSVとDB移行の検証は[受入記録](14_testing_acceptance.md)を参照する。仕様版42への今回のマージ競合解消ではテストを実行していない。受入検証と実験開始承認は別に扱う。

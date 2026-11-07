@@ -68,8 +68,10 @@ from app.core.question_sets import (
     ASSESSMENT_BANK_VERSION,
     ASSESSMENT_BANK_VERSIONS,
     HISTORICAL_ASSESSMENT_BANK_VERSIONS,
+    HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS,
     LEARNING_CONTENT_VERSION,
     assessment_construct_key,
+    historical_assessment_bank_versions_for,
 )
 from app.services.split_assessment import (
     uses_split,
@@ -1980,7 +1982,7 @@ def _test_result_question(
     test_round: str,
     phase: str,
 ) -> Question | None:
-    historical_banks = HISTORICAL_ASSESSMENT_BANK_VERSIONS.get(participant.experiment_spec_version)
+    historical_banks = historical_assessment_bank_versions_for(participant)
     uses_scenario_bank = historical_banks is not None or participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
     expected_variant: str | None = None
     if test_round == "test":
@@ -2000,6 +2002,9 @@ def _test_result_question(
             )
             expected_variant = f"retest_v{variant_number}"
 
+    if expected_variant and uses_split(participant):
+        expected_variant = f"{expected_variant}_q{question_numbers(participant)[0]}"
+
     query = (
         db.query(Question)
         .filter(
@@ -2018,6 +2023,8 @@ def _test_result_question(
     else:
         bank_versions = set(ASSESSMENT_BANK_VERSIONS.values())
         for banks in HISTORICAL_ASSESSMENT_BANK_VERSIONS.values():
+            bank_versions.update(banks.values())
+        for banks in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS.values():
             bank_versions.update(banks.values())
         for bank_version in bank_versions:
             query = query.filter(~Question.construct_key.endswith(bank_version))
