@@ -14,6 +14,89 @@ structured:
   # 入力データをプロンプト内で示す見出しです。
   input_heading: '入力JSON:'
 
+# AIへ渡す固定の研究上の定義・対応表です。値の選択や参加者ごとの診断はPythonが行います。
+research_config:
+  # 診断や教授方略の参照用taxonomyです。versionは監査・記録に使い、prompt本文には含めません。
+  misconception_taxonomy:
+    version: 'm1-m3-unknown-v3'
+    types:
+      # 一つの命題・考えを誤って信じている型です。
+      M1:
+        label: '誤信念型'
+        definition: '対象概念について、単一の命題や考えを誤って信じている状態。'
+        diagnostic_cues:
+          - '一つの誤った説明文で表現できる'
+          - '他の説明構造を変えなくても局所的に修正できる'
+        teaching_guidelines:
+          - '誤った信念を明示する'
+          - '反証または反対事例と正しい説明を対比する'
+          - '修正後の信念を短く再説明させる'
+        avoid:
+          - '誤りを曖昧にしたまま情報を追加する'
+          - '学習者を責める'
+          - '内部ラベルを学習者に見せる'
+        learning_outcome: 'belief_revision'
+        research_basis: 'Chi (2009), belief revision'
+      # 対象を誤った上位カテゴリーに分類している型です。
+      M3:
+        label: 'カテゴリー誤り型'
+        definition: '対象概念を、本来属する上位カテゴリーとは異なる種類のものとして捉えている状態。'
+        diagnostic_cues:
+          - '対象を別の種類・存在論的カテゴリーとして説明する'
+          - '細部を追加しても説明の土台がずれ続ける'
+        teaching_guidelines:
+          - '誤ったカテゴリーへの分類を明示する'
+          - '正しいカテゴリーの特徴と境界を示す'
+          - '複数の対比例で正しいカテゴリーへ再分類させる'
+        avoid:
+          - '誤カテゴリーのまま細部だけを補足する'
+          - '表層的なキーワード一致で理解したとみなす'
+          - 'カテゴリー移行前に専門用語を増やしすぎる'
+        learning_outcome: 'categorical_shift'
+        research_basis: 'Chi (2009), categorical shift'
+      # 回答から特定の誤った考えを確定できない場合の操作上の区分です。
+      unknown:
+        label: '誤概念未特定'
+        definition: '選択された回答から特定の誤った命題やカテゴリーを置けない操作上の区分。知識不足や誤概念の不存在を確定するものではない。'
+        diagnostic_cues:
+          - 'わからないを単独選択する'
+          - '具体的な誤った説明が確認できない'
+        teaching_guidelines:
+          - '対象用語の意味や仕組みを説明する'
+          - '特定の誤概念や反駁対象を推測しない'
+          - '別事例への適用確認を教材本文に含める'
+        avoid:
+          - '誤概念があると断定する'
+          - '反証を先に提示する'
+          - '学習者へ内部分類を示す'
+        learning_outcome: 'foundational_explanation'
+        research_basis: 'operational knowledge-gap category for this study'
+  # タイプごとに教材本文で扱い、mandatory_elementsとして証拠を返す項目です。
+  mandatory_elements:
+    M1:
+      wrong_belief: '誤った単一命題を明示する。'
+      correct_belief: 'その命題を置き換える正しい考えを示す。'
+      counterexample: '誤った考えでは説明できず、正しい考えを支持する反例を示す。'
+      reason: '反例がなぜ誤った考えを否定するのかを説明する。'
+    M3:
+      wrong_category: '対象を置いている誤った上位カテゴリーを示す。'
+      correct_category: '対象が属する正しいカテゴリーを示す。'
+      boundary_criterion: '誤カテゴリーと正カテゴリーを分ける境界基準を示す。'
+      contrast_example: '近いカテゴリーとの比較を示す。'
+    unknown:
+      definition: '対象用語の基礎定義を示す。'
+  # backendが返却値として選ぶ固定ラベルです。条件判定はPython側に残します。
+  teaching_strategies:
+    control: 'general_explanation'
+    proposed:
+      by_type:
+        M1: 'belief_revision'
+        M3: 'category_reorientation'
+        unknown: 'foundational_explanation'
+      # misconception_typeが特定できず、状態だけがunknownの場合に使う値です。
+      by_status:
+        unknown: 'foundational_explanation'
+
 # tutoring_turn（教材生成）に固有の指示です。固定文言をここに置き、適用条件や値の選択はPythonが制御します。
 tutoring:
   # 群・診断タイプによらず、すべての教材生成へ適用する共通ルールです。
@@ -71,7 +154,7 @@ tutoring:
   mandatory_element_rules:
     # 必須要素用の専用見出しを作らず、同じ節へまとめてもよいという指定です。
     section_grouping: '必須要素ごとの専用見出しや記述順序は要求しない。複数の必須要素を同じセクションへまとめてよい。'
-    # mandatory_element_requirements（Python側）の動的な項目説明の後ろに、順番に追加する固定ルールです。
+    # research_config.mandatory_elements（上記）の動的な項目説明の後ろに、順番に追加する固定ルールです。
     lines:
       - 'mandatory_elements は type と上記フィールドを直下に持つオブジェクトにし、不要なフィールドや入れ子を追加しない。'
       - 'mandatory_elements の各値は、教材本文からそのまま抜き出した短い証拠文にする。'

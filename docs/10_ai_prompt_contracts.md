@@ -57,7 +57,7 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 | backend/app/ai/prompts/learning_material.yml（提案群のみ） | `teaching_strategy はbackendで指定された {strategies} に固定する。`。統制群へはこの自然言語指定を送らない。 |
 | backend/app/services/experiment.py | 誤概念を推測せず、対象用語の意味や仕組みと、別事例への適用確認を教材本文に含める。 |
 
-教材生成と構造化promptの固定指示文は[learning_material.yml](../backend/app/ai/prompts/learning_material.yml)にまとめる。モジュール起動時にYAMLを検証して読み込み、`compose_structured_prompt`と`build_tutoring_prompt`が群・診断タイプ・教材モードなどの適用条件と動的な値の埋め込みを行う。入力投影、出力Schema、生成後の検証は引き続きPython側が担当する。YAMLの文言変更は生成条件の変更として扱う。unknownの必須項目は[mandatory_elements.py](../backend/app/ai/mandatory_elements.py)を参照する。生成文の意味的な正しさまで機械検査したとは扱わない。
+教材生成と構造化promptの固定指示文、誤概念taxonomy、タイプ別の必須教授要素、教授方略の固定値は[learning_material.yml](../backend/app/ai/prompts/learning_material.yml)を唯一の設定元とする。モジュール起動時にYAMLを検証して読み込み、`compose_structured_prompt`と`build_tutoring_prompt`が適用条件と動的な値の埋め込みを行う。個別の診断・入力投影、教授要素から作る出力Schema、生成後の検証、方略の選択条件はPython側が担当する。YAMLの文言・定義・値の変更は生成条件の変更として扱う。生成文の意味的な正しさまで機械検査したとは扱わない。
 
 ## 教材契約と履歴（版26の基準契約・版29で維持）
 

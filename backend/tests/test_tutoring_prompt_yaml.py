@@ -6,6 +6,9 @@ import hashlib
 import pytest
 import yaml
 
+from app.ai.backend import strategy_for
+from app.ai.mandatory_elements import mandatory_element_requirements, mandatory_elements_schema
+from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
 from app.ai.tutoring_prompt import PROMPT_TEXT_PATH, _validate_prompt_text, build_tutoring_prompt
 
 
@@ -46,6 +49,50 @@ def test_prompt_yaml_is_valid_and_rejects_missing_required_sections():
     invalid["tutoring"]["group_rules"]["control"] = ["control-only instruction"]
     with pytest.raises(ValueError, match="group_rules.control is not supported"):
         _validate_prompt_text(invalid)
+
+    invalid = copy.deepcopy(raw)
+    del invalid["research_config"]["misconception_taxonomy"]["types"]["unknown"]
+    with pytest.raises(ValueError, match="must define M1, M3, and unknown"):
+        _validate_prompt_text(invalid)
+
+    invalid = copy.deepcopy(raw)
+    invalid["research_config"]["mandatory_elements"]["M1"]["wrong_belief"] = ""
+    with pytest.raises(ValueError, match="mandatory_elements.M1.wrong_belief"):
+        _validate_prompt_text(invalid)
+
+    invalid = copy.deepcopy(raw)
+    del invalid["research_config"]["teaching_strategies"]["proposed"]["by_type"]["M3"]
+    with pytest.raises(ValueError, match="by_type must define the taxonomy types"):
+        _validate_prompt_text(invalid)
+
+
+def test_fixed_tutoring_configuration_is_loaded_from_yaml():
+    config = yaml.safe_load(PROMPT_TEXT_PATH.read_text(encoding="utf-8"))["research_config"]
+    taxonomy = config["misconception_taxonomy"]
+    required_elements = config["mandatory_elements"]
+    strategy_config = config["teaching_strategies"]
+
+    assert TAXONOMY_VERSION == taxonomy["version"]
+    assert taxonomy_for_prompt() == taxonomy["types"]
+    for misconception_type, requirements in required_elements.items():
+        assert mandatory_element_requirements(misconception_type) == requirements
+        assert mandatory_elements_schema(misconception_type)["required"] == ["type", *requirements]
+
+    assert strategy_config == {
+        "control": "general_explanation",
+        "proposed": {
+            "by_type": {
+                "M1": "belief_revision",
+                "M3": "category_reorientation",
+                "unknown": "foundational_explanation",
+            },
+            "by_status": {"unknown": "foundational_explanation"},
+        },
+    }
+    assert strategy_for(None, None, "control") == "general_explanation"
+    for misconception_type, expected in strategy_config["proposed"]["by_type"].items():
+        assert strategy_for(misconception_type, None, "proposed") == expected
+    assert strategy_for(None, "unknown", "proposed") == strategy_config["proposed"]["by_status"]["unknown"]
 
 
 def test_tutoring_prompt_rejects_unsupported_group():
