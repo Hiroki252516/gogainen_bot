@@ -1,22 +1,24 @@
 # AI指示の目標と現行契約
 
-## 教材内用語解説モード（仕様版39の現行条件）
+## 現行条件（仕様版41・教材内解説と共通prompt）
 
-仕様版39では新規参加者を`integrated_material`に固定し、辞書v4のterm/definitionを`glossary_reference`として両群共通の教材生成入力に含める。定義文は転載用ではなく意味を確認する参照情報として扱い、教材文脈に合わせて自然に言い換え、実際に使う登録語だけを説明し、定義にない性質を加えないよう指示する。新規教材の目標・許容範囲は1000文字前後（600〜1200）。注釈欄のみ700文字前後（600〜800）の生成契約は既存データとの互換性のため保持するが、新規参加者では選択できない。
+仕様版41では新規参加者を`integrated_material`に固定し、辞書v4のterm/definitionを`glossary_reference`として両群共通の教材生成入力に含める。定義文は転載用ではなく意味を確認する参照情報として扱い、教材文脈に合わせて自然に言い換え、実際に使う登録語だけを説明し、定義にない性質を加えないよう指示する。新規教材の目標・許容範囲は1000文字前後（600〜1200）。注釈欄のみ700文字前後（600〜800）の生成契約は既存データとの互換性のため保持するが、新規参加者では選択できない。仕様版40以下は閲覧専用である。
 
-この入力は両群で同じ形で投影し、群専用の診断・教授情報とは分離する。`TutorTurn.diagnosis_json.material_glossary`のsnapshotは引き続き保存するが、仕様版39の新規教材では参加者画面の教材用語注釈欄を表示しない。回答後解説のsnapshot・注釈表示は従来どおり。辞書全項目を本文へ列挙する指示ではなく、AIが実際にどの用語を説明したか、定義が意味的に正しいかは機械検査で保証しない。旧annotation_only参加者の保存モードとsnapshotは変更しない。
+この入力は両群で同じ形で投影し、群専用の診断・教授情報とは分離する。`TutorTurn.diagnosis_json.material_glossary`のsnapshotは引き続き保存するが、仕様版41の新規教材では参加者画面の教材用語注釈欄を表示しない。回答後解説のsnapshot・注釈表示は従来どおり。辞書全項目を本文へ列挙する指示ではなく、AIが実際にどの用語を説明したか、定義が意味的に正しいかは機械検査で保証しない。旧annotation_only参加者の保存モードとsnapshotは変更しない。
 
-## 用語注釈と生成契約の境界（仕様版26導入・版39現行）
+## 用語注釈と生成契約の境界（仕様版26導入・版41現行）
 
-実験仕様版26で導入した注釈はbackendの固定辞書処理である。仕様版39の新規参加者は教材内解説に固定されるため、辞書v4を両群共通の`glossary_reference`として教材生成へ渡す。教材注釈snapshotは保存するが、教材本文や回答後解説へ自動挿入せず、共通回答履歴にも加えない。生成Schemaと契約v7は維持する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
+実験仕様版26で導入した注釈はbackendの固定辞書処理である。仕様版41の新規参加者は教材内解説に固定されるため、辞書v4を両群共通の`glossary_reference`として教材生成へ渡す。教材注釈snapshotは保存するが、教材本文や回答後解説へ自動挿入せず、共通回答履歴にも加えない。生成Schemaと契約v7は維持する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
 
-Wordと承認された実装判断を[20](20_experiment_plan_alignment.md)に記録する。6.7の共通・統制群指示を実装し、unknownの証拠Schema・taxonomy・検査・Mockも更新した。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
+Wordと実装判断を[20](20_experiment_plan_alignment.md)に記録する。仕様版39までは計画書6.7.2の統制群指示を送っていたが、仕様版40で削除し、現行仕様版41でも6.7.1の共通指示と6.7.3の提案群指示を適用する。unknownの証拠Schema・taxonomy・検査・Mockも維持する。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
 
 ## 目標プロンプトと現行原文
 
-### 計画書の指示文の抜粋
+### 計画書の指示文の抜粋（仕様版39までの適用）
 
-以下は計画書6.7の抜粋で、現行指示に反映している。完全な送信promptではなく、共通ルール・個別入力・出力Schema等と組み合わせる。
+以下の統制群指示は計画書6.7.2の原文であり、仕様版39まで適用した。仕様版40では統制群の群別自然言語指示としては送信しない。
+
+以下は計画書6.7の抜粋である。6.7.1は現行の共通指示、6.7.2は仕様版39までの履歴、6.7.3は現行の提案群指示に対応する。いずれも完全な送信promptではなく、共通ルール・個別入力・出力Schema等と組み合わせる。
 
 共通教材指示（6.7.1）:
 
@@ -24,7 +26,7 @@ Wordと承認された実装判断を[20](20_experiment_plan_alignment.md)に記
 教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。
 ```
 
-統制群の指示（6.7.2）:
+統制群の計画書原文（6.7.2）:
 
 ```text
 通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。
@@ -52,15 +54,14 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 | 場所 | 現行原文 |
 | --- | --- |
 | backend/app/ai/prompts/learning_material.yml | 教材には意味や仕組みの解説を含める。一般的な誤解を正確に説明・訂正してよい。 |
-| backend/app/ai/prompts/learning_material.yml | 通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。 |
-| backend/app/ai/prompts/learning_material.yml | general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。 |
+| backend/app/ai/prompts/learning_material.yml（提案群のみ） | `teaching_strategy はbackendで指定された {strategies} に固定する。`。統制群へはこの自然言語指定を送らない。 |
 | backend/app/services/experiment.py | 誤概念を推測せず、対象用語の意味や仕組みと、別事例への適用確認を教材本文に含める。 |
 
 教材生成と構造化promptの固定指示文は[learning_material.yml](../backend/app/ai/prompts/learning_material.yml)にまとめる。モジュール起動時にYAMLを検証して読み込み、`compose_structured_prompt`と`build_tutoring_prompt`が群・診断タイプ・教材モードなどの適用条件と動的な値の埋め込みを行う。入力投影、出力Schema、生成後の検証は引き続きPython側が担当する。YAMLの文言変更は生成条件の変更として扱う。unknownの必須項目は[mandatory_elements.py](../backend/app/ai/mandatory_elements.py)を参照する。生成文の意味的な正しさまで機械検査したとは扱わない。
 
 ## 教材契約と履歴（版26の基準契約・版29で維持）
 
-現行は実験仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教授方略や出力Schemaは変更しない。RAGの定義・別表記を含む辞書v4と既存snapshotは維持する。文字数契約は履歴互換のためモード別にし、仕様版38以下は閲覧専用。
+現行は実験仕様版41 / `experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。提案群だけに教授方略の自然言語指示を追加する。出力SchemaとBackend検証は変更せず、統制群のstrategy値は`general_explanation`に固定する。仕様版40以下は閲覧専用。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 
@@ -76,13 +77,13 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 | pretest_target(s)、diagnostic_evidence、訂正メタデータ | なし | 追加 |
 | taxonomy、教授方針、必須教授要素、診断由来段階 | なし | 追加 |
 
-general_explanationは、backendの明示的診断・タイプ別教授方針によらず共通履歴を利用する通常説明としてプロンプト内で定義する。回答から自然に誤りを見つけて訂正することは許容する。比較は明示的な誤概念対応の追加効果であり、統制群が誤概念に全く対応しないことを保証する設計ではない。
+仕様版41の統制群では、`general_explanation`を通常説明として定義する自然言語の方略説明は送らない。これは出力JSONの`teaching_strategy`をSchema enumとBackend検証で固定する内部値である。統制群は共通履歴を利用し、回答から自然に誤りを見つけて訂正することが許容される。比較は明示的な誤概念対応の追加効果であり、統制群が誤概念に全く対応しないことを保証する設計ではない。
 
 interaction_historyは同じ参加者・用語の採点済み事前/再/最終テストと学習確認を全周回から取得する。記録種別、phase/test_round、session_index/turn_index、問題本文、selected_optionsのlabel/body、全体is_correct、表示/回答時刻、回答時間だけを含む。snapshotを優先して復元し、回答時刻または記録時刻で時系列順にする。分類・理由・確信度・段階・方略・再発・訂正メタデータ・内部ID・選択肢別正誤・正答キーは除く。未回答・未利用prefetch・他用語・他参加者を含めない。全文を渡し、暗黙の履歴切り捨てはしない。
 
 AI教材・解説全文は履歴に入れず、過去問題/回答の自動prefix追記もしない。共通履歴と実験群専用情報を別allowlistで投影し、履歴のselected_options内もlabel/bodyだけに制限する。両群で履歴の取得規則は同じだが、参加者ごとの値まで同一にするわけではない。
 
-backend指定方略はcontrol→general_explanation、M1→belief_revision、M3→category_reorientation、unknown→foundational_explanation。Schemaのteaching_strategy enumは当該1つに固定し、不一致を拒否する。
+backend指定方略値はcontrol→general_explanation、M1→belief_revision、M3→category_reorientation、unknown→foundational_explanation。Schemaの`teaching_strategy` enumは当該1つに固定し、不一致を拒否する。仕様版41では値を説明する自然言語テンプレートを提案群だけに追加する。
 
 ## 出力検証
 
@@ -90,7 +91,7 @@ backend指定方略はcontrol→general_explanation、M1→belief_revision、M3�
 
 proposedの教材はtutor_message、teaching_strategy、mandatory_elements、teaching_contractを持つ。契約項目はtarget_claim_id、addressed_claim_ids、refutation_mode、corrected_claim、mechanism_explanation、contrast_example、transfer_check、target_addressed。
 
-M1は反駁、M3はカテゴリー比較、unknownは基礎説明を生成するよう指示する。transfer_checkは教材内の適用確認であり必須。backendの自動検証は以下の構造・文字列検査であり、教授内容の意味的な正しさを判定するものではない。注釈欄のみは700文字前後（600〜800）、教材内解説は1000文字前後（600〜1200）を検証する。検証違反時は初回＋最大2回同backendで再生成し、mode-specificな目標・上下限を再指示する。失敗は503。Mockへ切り替えない。教材長検証とpromptの更新識別子は`tutoring-prompt-contract-v9-mode-specific-length`。
+M1は反駁、M3はカテゴリー比較、unknownは基礎説明を生成するよう指示する。transfer_checkは教材内の適用確認であり必須。backendの自動検証は以下の構造・文字列検査であり、教授内容の意味的な正しさを判定するものではない。注釈欄のみは700文字前後（600〜800）、教材内解説は1000文字前後（600〜1200）を検証する。検証違反時は初回＋最大2回同backendで再生成し、mode-specificな目標・上下限を再指示する。失敗は503。Mockへ切り替えない。教材長検証とpromptの更新識別子は`tutoring-prompt-contract-v10-control-shared-prompt`。
 
 | 区分 | 現行の処理と保証範囲 |
 | --- | --- |

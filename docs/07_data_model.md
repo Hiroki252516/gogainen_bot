@@ -1,20 +1,20 @@
 # 現行データと履歴互換
 
-## 仕様版40のテスト設定snapshot
+## 仕様版41のテスト設定snapshot
 
-新規参加者は`show_pretest_results=false`、`show_retest_results=false`、`show_question_reviews=true`、`first_question_only=true`をParticipantへ登録時に保存する。登録処理はRuntimeSettingの旧設定値を読まず、対応する管理設定GET/PUT APIも提供しない。`RuntimeSetting.show_pretest_results`、`show_question_reviews`、`first_question_only`およびParticipantの各snapshot列はDB互換性と履歴監査のため残し、既存行を書き換えない。参加者一覧と個別ログ画面ではこれらの履歴値を表示しないが、管理ログAPIと参加者CSVには保存値を維持する。集計は仕様版40の3問条件に固定し、画面上の条件セレクターは設けない。仕様版39以下は閲覧専用。
+新規参加者は`show_pretest_results=false`、`show_retest_results=false`、`show_question_reviews=true`、`first_question_only=true`をParticipantへ登録時に保存する。登録処理はRuntimeSettingの旧設定値を読まず、対応する管理設定GET/PUT APIも提供しない。`RuntimeSetting.show_pretest_results`、`show_question_reviews`、`first_question_only`およびParticipantの各snapshot列はDB互換性と履歴監査のため残し、既存行を書き換えない。参加者一覧と個別ログ画面ではこれらの履歴値を表示しないが、管理ログAPIと参加者CSVには保存値を維持する。集計は仕様版41の3問条件に固定し、画面上の条件セレクターは設けない。仕様版40以下は閲覧専用。
 
 ## 教材用語解説モードの保存（仕様版29）
 
-`RuntimeSetting.learning_material_glossary_mode`と`Participant.learning_material_glossary_mode`はnullable VARCHAR(32)として保持する。仕様版39以降、新規登録ではRuntimeSetting列を参照せず`integrated_material`をParticipantへ固定保存する。RuntimeSetting列は旧設定値の履歴保全用に残し、管理APIからは変更できない。既存ParticipantのモードとNULLは書き換えない。仕様版39以下は閲覧専用で再開できない。participants CSVと管理ログAPIにはParticipantの保存値を含め、参加者一覧・個別ログ画面には表示しない。旧NULLは「未記録（旧仕様）」として扱う。
+`RuntimeSetting.learning_material_glossary_mode`と`Participant.learning_material_glossary_mode`はnullable VARCHAR(32)として保持する。仕様版39以降、新規登録ではRuntimeSetting列を参照せず`integrated_material`をParticipantへ固定保存する。RuntimeSetting列は旧設定値の履歴保全用に残し、管理APIからは変更できない。既存ParticipantのモードとNULLは書き換えない。仕様版40以下は閲覧専用で再開できない。participants CSVと管理ログAPIにはParticipantの保存値を含めるが、参加者一覧・個別ログ画面には表示しない。旧NULLは「未記録（旧仕様）」として扱う。
 
 ## 仕様版28の答え合わせ保存
 
-RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnullableで保存する。Attempt.question_review_acknowledged_atもnullableで、仕様版40の新規参加者は出題する設問1のAttemptに答え合わせ確認時刻を保存する。新規参加者はtrueへ固定する。旧行は補完しない。participant logs APIとparticipants CSVにshow_question_reviewsを含め、管理画面の一覧・個別ログ表示からは除く。統合ログCSVの固定ヘッダーは維持し、確認時刻は既存のvalue_json形式で記録する。実装契約は[40](40_question_pair_answer_review.md)。
+RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnullableで保存する。Attempt.question_review_acknowledged_atもnullableで、仕様版41の新規参加者は出題する設問1のAttemptに答え合わせ確認時刻を保存する。新規参加者はtrueへ固定する。旧行は補完しない。participant logs APIとparticipants CSVにshow_question_reviewsを含め、管理画面の一覧・個別ログ表示からは除く。統合ログCSVの固定ヘッダーは維持し、確認時刻は既存のvalue_json形式で記録する。実装契約は[40](40_question_pair_answer_review.md)。
 
 ## テスト結果表示snapshot（issue-233）
 
-`Participant.show_pretest_results`と`Participant.show_retest_results`はnullable Boolean。仕様版40の新規参加者は両方falseへ固定する。旧RuntimeSetting設定APIは廃止するが、RuntimeSettingの各列は履歴保全のため残し、新規登録では参照しない。既存参加者の値は補完・更新しない。旧snapshotのNULLは従来どおり表示ありとして扱う。participant logs API・participants CSVに両方の設定値を出すが、参加者一覧・個別ログ画面には表示しない。
+`Participant.show_pretest_results`と`Participant.show_retest_results`はnullable Boolean。仕様版41の新規参加者は両方falseへ固定する。旧RuntimeSetting設定APIは廃止するが、RuntimeSettingの各列は履歴保全のため残し、新規登録では参照しない。既存参加者の値は補完・更新しない。旧snapshotのNULLは従来どおり表示ありとして扱う。participant logs API・participants CSVに両方の設定値を出すが、参加者一覧・個別ログ画面には表示しない。
 
 ## 用語注釈snapshot（仕様版26）
 
@@ -28,7 +28,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 ## 現行の保存契約
 
-モデルの正本は backend/app/models/__init__.py。現行コードは仕様版40 / `experiment-plan-2026-11-07-fixed-admin-settings-v1`を使用する。固定設定によるDB列・注釈JSON形式の変更はない。新規登録のモードは`integrated_material`、テスト設定4値は固定値をParticipantへ保存する。RuntimeSettingの旧設定列は保全目的で保持するが参照・更新しない。辞書v4と既存JSON snapshotは保持する。アンケートは既存のParticipantSurveyをphase/version別に使い、新DB列を追加しない。仕様版39以下・旧アンケート回答を不変で保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36〜39の結果復元はsplit-actions-v5を使う。詳細は[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材の文字数契約と言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
+モデルの正本は backend/app/models/__init__.py。現行コードは仕様版41 / `experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`を使用する。固定設定・教材モード固定によるDB列・注釈JSON形式の変更はない。新規登録では`integrated_material`とテスト設定4値をParticipantへ保存し、RuntimeSettingの旧設定列は保全目的で保持するが参照・更新しない。辞書v4と既存JSON snapshotは保持する。アンケートは既存のParticipantSurveyをphase/version別に使い、新DB列を追加しない。仕様版40以下・旧アンケート回答を不変で保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36〜40の結果復元はsplit-actions-v5を使う。`question_options.rationale`はmain由来の内部メタデータであり、表示APIへ含めない。詳細は[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材の文字数契約と言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 学籍番号はSQLAlchemyの研究DBへ追加しない。IDENTITY_MAPPING_PATHが指す別SQLiteへ、学籍番号・参加者ID・表示コード・作成日時・再送処理用キーを保存する。研究用エクスポート・AI入力・AIログ・冪等性のrequest_hash/response_jsonには学籍番号を含めない。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、登録は対応表を先行保存してから研究DBを確定し、通常の失敗では補償削除する。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
@@ -37,7 +37,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規参加者だけ仕様版40と`experiment-plan-2026-11-07-fixed-admin-settings-v1`を保存し、教材内解説モード、4つのテスト設定、retest_cycles_completed=0を固定する。仕様版39以下・異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版41と`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`を保存し、教材内解説モード、4つのテスト設定、retest_cycles_completed=0を固定する。仕様版40以下・異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 

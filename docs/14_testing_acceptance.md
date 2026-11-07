@@ -1,6 +1,14 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-07 管理画面の固定設定化（仕様版40・fix/issue-280）
+## 2026-11-07 main統合（仕様版41）
+
+- 仕様版40には固定設定化と統制群共通プロンプト化の別protocolが存在したため、両変更を統合する仕様版41 / `experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`を追加する。両仕様版40 protocolは履歴・閲覧専用とし、既存参加者の問題・回答・教材・snapshotは変更しない。
+- 新規参加者のテスト条件（結果非表示・設問レビューON・設問1のみ）と教材内解説固定は維持し、教材生成では統制群の群別自然言語方略指示を除く。提案群の診断・教授指示は維持する。
+- このマージ後のテスト結果は以下に追記する。研究DB・localhost:3000・実AIは使わず、コミット・pushは行わない。
+- 解決後のBackend全テストは隔離SQLiteで`1718 passed`。関連する仕様版・教材モード・用語注釈・選択肢根拠のテスト`208 passed`も確認した。Frontendの`npm test`と`npm run build`（TypeScript検査を含む）が通過した。
+- 競合マーカーは残っておらず、`git diff --check`と`git diff --cached --check`が通過した。研究DB・localhost:3000・実AIは使用していない。マージコミットは作成していない。
+
+## 2026-11-07 管理画面の固定設定化（仕様版40・fix/issue-280の履歴）
 
 - 新規参加者は`experiment-plan-2026-11-07-fixed-admin-settings-v1`へ登録し、テスト全体の結果確認なし、設問ごとの答え合わせあり、各用語の設問1のみ（計3問）に固定する。教材モードは従来どおり`integrated_material`。
 - 旧RuntimeSetting値に依存せずParticipant snapshotを作る。3つの設定操作UI、教材モード表示、設定GET/PUT API、集計条件セレクターを削除する。参加者一覧・個別ログの旧設定値表示も除く。
@@ -8,6 +16,15 @@
 - Backend全体テストは隔離DBで`1714 passed`。Frontendの`npm test`と本番ビルドは成功した。
 - Playwrightの隔離Mockブラウザで、管理画面・参加者一覧・個別ログに対象設定がないこと、旧設定APIのGET/PUTが404となること、新規Participantの固定値、3問の進行、各問の答え合わせ、全体結果画面を省略した学習遷移を確認した。390px幅でも横はみ出しがない。
 - `git diff --check`は成功。隔離ブラウザ起動時にrewrite先を直す前、既定の`:8000`へ管理ログインとAI状態照会だけが通ったためMock以外の応答を検知して登録前に中断した。研究DB操作・参加者登録・AI生成呼び出しはなく、以降は別ポートの隔離Mock環境だけで確認した。localhost:3000と実験開始環境は使用していない。
+
+## 2026-11-07 統制群の教材指示を共通ルールのみにする（仕様版40・fix/issue-279の履歴）
+
+- 新規参加者を仕様版40 / `experiment-plan-2026-11-07-control-shared-prompt-v1`で登録する。統制群から通常教授方略を説明する3つの自然言語指示を取り除き、両群共通の教材ルール・入力は維持する。提案群の診断・タイプ別教授指示と`teaching_strategy`の自然言語指定は維持する。
+- 統制群の出力Schema enumとBackend検証は維持し、内部の`teaching_strategy`値を`general_explanation`に固定する。prompt契約識別子を`tutoring-prompt-contract-v10-control-shared-prompt`とし、旧仕様版39以下・旧prompt監査記録・保存済み回答・教材・snapshotは変更しない。
+- 新規参加者の現行split問題取得で仕様版40がsplit形式として認識されない版判定漏れも修正し、現在の問題バンクを利用できるようにした。仕様39の閲覧専用・記録不変テストと、仕様40の登録・出題を検証した。
+- prompt YAMLの必須セクション検証、control/proposedの生成prompt hash、統制群からの旧3文除去、提案群の方略指示、両群のSchema enumとBackend検証を含む重点テストは104 passed。Backend全テストは隔離SQLiteで1716 passed。
+- `git diff --check`通過。Frontendの表示・APIは変更していないためFrontendテスト・buildは未実施。研究DB・localhost:3000・実AI・コミット・pushは使用していない。
+- これは実装条件の変更と自動検証の記録であり、研究上の承認、教材の意味的正しさ、実験効果を示すものではない。
 
 ## 2026-11-06 教材内解説の標準化（仕様版39・fix/issue-273）
 

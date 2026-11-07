@@ -3,10 +3,11 @@ from copy import deepcopy
 from pathlib import Path
 
 import yaml
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, can_resume
+from app.db import session as db_session
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, HISTORICAL_ASSESSMENT_BANK_VERSIONS, STANDARD, assessment_construct_key
 from app.models import Attempt, Base, Participant, Question, QuestionOption, Term
 from app.seed.seed_questions import _upsert_question, seed_database
@@ -180,8 +181,23 @@ def test_v5_matches_pr260_wording_and_pr264_review_fixes_while_preserving_v4_str
                 for label, body in choices.items():
                     next(choice for choice in question["choices"] if choice["label"] == label)["body"] = body
 
-    # Covers every body and all unchanged scenarios/tasks/roles, including reserved Q3.
-    assert revised == expected
+    # 理由は内部メタデータとし、設問本文・選択肢・役割・シナリオ・設問3は変更しない。
+    assert sum(
+        1
+        for round_key in ("pretest_v1", "retest_v1", "retest_v2")
+        for term_slug in ("llm_knowledge", "multi_agent", "memory_process")
+        for question in revised[round_key][term_slug]["questions"]
+        if question["number"] == 1
+        for choice in question["choices"]
+        if choice.get("rationale")
+    ) == 54
+    content_only = deepcopy(revised)
+    for round_key in ("pretest_v1", "retest_v1", "retest_v2"):
+        for term_slug in ("llm_knowledge", "multi_agent", "memory_process"):
+            question = next(q for q in content_only[round_key][term_slug]["questions"] if q["number"] == 1)
+            for choice in question["choices"]:
+                choice.pop("rationale", None)
+    assert content_only == expected
     assert revised["pretest_v1"]["llm_knowledge"]["questions"][2]["number"] == 3
     assert all(len(question["choices"]) == 6 for terms in revised.values() for section in terms.values() for question in section["questions"])
     for round_key in ("pretest_v1", "retest_v1", "retest_v2"):
@@ -189,14 +205,69 @@ def test_v5_matches_pr260_wording_and_pr264_review_fixes_while_preserving_v4_str
             assert [item["question_number"] for item in split_specs(term_slug, round_key, bank_version="split-actions-v5")] == [1, 2]
 
 
-def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
+def test_q1_rationales_are_seeded_as_internal_metadata_not_participant_options(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'q1-rationales.db'}")
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            seed_database(db)
+            participant = Participant(
+                display_code="Q1-RATIONALE-TEST",
+                group_condition="control",
+                current_step="pretest",
+                experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
+                protocol_id=CURRENT_PROTOCOL_ID,
+                learning_content_version=15,
+                option_order_mode="debug_fixed",
+            )
+            db.add(participant)
+            db.flush()
+
+            for round_key in ("pretest_v1", "retest_v1", "retest_v2"):
+                phase = "pretest" if round_key == "pretest_v1" else "retest"
+                for term_slug in ("llm_knowledge", "multi_agent", "memory_process"):
+                    term = db.query(Term).filter_by(slug=term_slug).one()
+                    question = db.query(Question).filter_by(
+                        term_id=term.id,
+                        phase=phase,
+                        variant_key=f"{round_key}_q1",
+                    ).one()
+                    stored = {
+                        option.option_label: option.rationale
+                        for option in db.query(QuestionOption).filter_by(question_id=question.id).all()
+                    }
+                    assert set(stored) == set("ABCDEF")
+                    assert all(isinstance(value, str) and value.strip() for value in stored.values())
+
+                    participant_options = _displayed_options(db, participant, question)
+                    assert len(participant_options) == 6
+                    assert all("rationale" not in option for option in participant_options)
+    finally:
+        engine.dispose()
+
+
+def test_init_db_adds_rationale_column_to_existing_question_options_table(monkeypatch, tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'question-option-schema.db'}")
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE question_options DROP COLUMN rationale"))
+    monkeypatch.setattr(db_session, "engine", engine)
+
+    db_session.init_db()
+
+    columns = {column["name"] for column in inspect(engine).get_columns("question_options")}
+    assert "rationale" in columns
+    engine.dispose()
+
+
+def test_spec_41_keeps_v5_and_preserves_previous_read_only_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 40
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-fixed-admin-settings-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 41
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"
@@ -207,6 +278,7 @@ def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[37][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[38][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[39][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[40][STANDARD] == "split-actions-v5"
 
             term = db.query(Term).filter_by(slug="memory_process").one()
             active = db.query(Question).filter_by(
@@ -350,6 +422,28 @@ def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
                 protocol_id="experiment-plan-2026-11-06-learning-glossary-integrated-default-v1",
                 learning_content_version=15,
             )
+            spec40_fixed_settings_participant = Participant(
+                display_code="PRETEST-V40-FIXED",
+                group_condition="control",
+                current_step="learning",
+                experiment_spec_version=40,
+                protocol_id="experiment-plan-2026-11-07-fixed-admin-settings-v1",
+                learning_content_version=15,
+                first_question_only=True,
+                show_pretest_results=False,
+                show_retest_results=False,
+                show_question_reviews=True,
+            )
+            spec40_shared_prompt_participant = Participant(
+                display_code="PRETEST-V40-PROMPT",
+                group_condition="control",
+                current_step="learning",
+                experiment_spec_version=40,
+                protocol_id="experiment-plan-2026-11-07-control-shared-prompt-v1",
+                learning_content_version=15,
+                first_question_only=False,
+                learning_material_glossary_mode="integrated_material",
+            )
             db.add_all([
                 spec32_participant,
                 spec33_participant,
@@ -360,6 +454,8 @@ def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
                 spec37_participant,
                 spec38_participant,
                 spec39_participant,
+                spec40_fixed_settings_participant,
+                spec40_shared_prompt_participant,
             ])
             db.flush()
             v2_selected = next(option for option in v2_options if option.option_label == "B")
@@ -436,7 +532,11 @@ def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
                 option_order_snapshot=_displayed_options(db, spec38_participant, active),
             )
             v5_spec39_attempt = make_v5_attempt(spec39_participant)
-            db.add_all([v2_attempt, v3_attempt, v4_attempt, v5_attempt, *v5_legacy_attempts, v5_current_attempt, v5_spec39_attempt])
+            v5_spec40_legacy_attempts = [
+                make_v5_attempt(spec40_fixed_settings_participant),
+                make_v5_attempt(spec40_shared_prompt_participant),
+            ]
+            db.add_all([v2_attempt, v3_attempt, v4_attempt, v5_attempt, *v5_legacy_attempts, v5_current_attempt, v5_spec39_attempt, *v5_spec40_legacy_attempts])
             db.commit()
 
             assert not can_resume(spec33_participant)
@@ -448,10 +548,14 @@ def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
             assert not can_resume(spec37_participant)
             assert not can_resume(spec38_participant)
             assert not can_resume(spec39_participant)
+            assert not can_resume(spec40_fixed_settings_participant)
+            assert not can_resume(spec40_shared_prompt_participant)
             assert uses_split(spec36_rag_participant)
             assert uses_split(spec36_presurvey_participant)
             assert uses_split(spec37_participant)
             assert uses_split(spec38_participant)
+            assert uses_split(spec40_fixed_settings_participant)
+            assert uses_split(spec40_shared_prompt_participant)
             assert not can_resume(spec32_participant)
             assert assessment_construct_key(
                 term.slug, "pretest",
@@ -478,6 +582,11 @@ def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
                 assert latest_test_results(db, participant.id)["results"][0]["question_body"] == v5_attempt.question_body_snapshot
             assert latest_test_results(db, spec38_participant.id)["results"][0]["question_body"] == v5_current_attempt.question_body_snapshot
             assert latest_test_results(db, spec39_participant.id)["results"][0]["question_body"] == v5_spec39_attempt.question_body_snapshot
+            for participant, attempt in zip(
+                (spec40_fixed_settings_participant, spec40_shared_prompt_participant),
+                v5_spec40_legacy_attempts,
+            ):
+                assert latest_test_results(db, participant.id)["results"][0]["question_body"] == attempt.question_body_snapshot
 
             saved_body_v4 = v4_attempt.question_body_snapshot
             saved_options_v4 = deepcopy(v4_attempt.option_order_snapshot)
@@ -507,6 +616,8 @@ def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
             db.refresh(v5_attempt)
             for attempt in v5_legacy_attempts:
                 db.refresh(attempt)
+            for attempt in v5_spec40_legacy_attempts:
+                db.refresh(attempt)
             db.refresh(v5_current_attempt)
             db.refresh(v5_spec39_attempt)
             db.refresh(active)
@@ -530,6 +641,9 @@ def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
             assert v5_current_attempt.option_order_snapshot == saved_options_v5
             assert v5_spec39_attempt.question_body_snapshot == saved_body_v5
             assert v5_spec39_attempt.option_order_snapshot == v5_current_attempt.option_order_snapshot
+            for attempt in v5_spec40_legacy_attempts:
+                assert attempt.question_body_snapshot == saved_body_v5
+                assert attempt.option_order_snapshot == v5_current_attempt.option_order_snapshot
             assert active.is_active and active.body == saved_body_v5
             assert v4_question.body == v4_snapshot[0]
             assert active_m1.body == V5_POST_PR264_WORDING["choice_overrides"]["pretest_v1"]["memory_process"][1]["B"]
