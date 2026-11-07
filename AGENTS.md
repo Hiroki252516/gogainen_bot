@@ -86,7 +86,7 @@
 - AI呼び出しは必ず `AIBackend` インターフェース経由にする。
 - AIタスクは教材生成・正答要約・誤答解説だけ。採点・分類・状態更新・方略決定はbackendで行う。
 - 通常実行では `CodexAppServerBackend` を使い、ユーザーのChatGPT/Codexログイン済みapp-serverへ接続する。
-- アプリ既定のAI設定は `gpt-6-luna / low`。管理画面では `gpt-6.1-sol` / `gpt-6-luna` と low/medium/highを一時切替でき、両群・進行中参加者の次回呼び出しから適用する。DBには保存せずbackend再起動でCODEX_MODEL/CODEX_REASONING_EFFORTへ戻す。研究計画書原本のgpt-5.6-luna記載は変更せず、アプリ設定との差を明示する。同一参加者内での実験中切替はモデル混在を生むため、収集時は設定を固定する。
+- アプリ既定のAI設定は `gpt-6-luna / low`。管理画面では `gpt-6.1-sol` / `gpt-6-luna` / `gpt-6-astra` とlow/medium/high/xhigh/maxを一時切替でき、両群・進行中参加者の次回呼び出しから適用する。DBには保存せずbackend再起動でCODEX_MODEL/CODEX_REASONING_EFFORTへ戻す。研究計画書原本のgpt-5.6-luna記載は変更せず、アプリ設定との差を明示する。同一参加者内での実験中切替はモデル混在を生むため、収集時は設定を固定する。
 - `MockAIBackend` は自動テスト・障害切り分け専用にし、通常実験データへ混ぜない。
 - `AI_BACKEND=codex_app_server` ではMockへ自動フォールバックしない。
 - ChatGPT/Codex認証情報、アクセストークン、APIキーをDBに保存しない。

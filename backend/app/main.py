@@ -299,11 +299,11 @@ class AILoginCancel(BaseModel):
 
 
 class ReasoningEffortPayload(BaseModel):
-    reasoning_effort: Literal["low", "medium", "high"]
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"]
 
 
 class AIModelPayload(BaseModel):
-    model: Literal["gpt-6.1-sol", "gpt-6-luna"]
+    model: Literal["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"]
 
 
 class OptionOrderPayload(BaseModel):

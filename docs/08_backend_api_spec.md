@@ -80,8 +80,8 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 | 6仮説の群別集計 | GET `/api/admin/evaluation-summary` のhypotheses |
 | 6仮説CSV / Excel | GET `/api/admin/export/hypothesis_metrics.csv`, `/hypothesis_group_summary.csv`, `/hypothesis_metrics.xlsx`, `/hypothesis_group_summary.xlsx` |
 | AI設定状態 | GET `/api/admin/ai/status` |
-| 推論レベル設定 | POST `/api/admin/ai/reasoning-effort` (`reasoning_effort`: `low`, `medium`, `high`) |
-| AIモデル設定 | POST `/api/admin/ai/model` (`model`: `gpt-6.1-sol` または `gpt-6-luna`) |
+| 推論レベル設定 | POST `/api/admin/ai/reasoning-effort` (`reasoning_effort`: `low`, `medium`, `high`, `xhigh`, `max`) |
+| AIモデル設定 | POST `/api/admin/ai/model` (`model`: `gpt-6.1-sol`, `gpt-6-luna`, `gpt-6-astra`) |
 | 選択肢配置設定の取得 | GET `/api/admin/option-order` |
 | 選択肢配置設定の更新 | PUT `/api/admin/option-order` (`mode`: `debug_fixed` または `randomized`) |
 | 管理者ログ | GET `/api/admin/participants/{id}/logs`, `/logs.csv`, `/logs_excel.csv`, `/logs.xlsx`; 全体ログは `/api/admin/logs/overview.csv`, `/overview_excel.csv`, `/overview.xlsx` |

@@ -5,8 +5,8 @@ from threading import Lock
 from app.core.config import get_settings
 
 
-ALLOWED_REASONING_EFFORTS = ("low", "medium", "high")
-ALLOWED_MODELS = ("gpt-6.1-sol", "gpt-6-luna")
+ALLOWED_REASONING_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+ALLOWED_MODELS = ("gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra")
 STUDY_MODEL = "gpt-6-luna"
 STUDY_REASONING_EFFORT = "low"
 
