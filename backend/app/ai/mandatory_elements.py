@@ -3,32 +3,19 @@ from __future__ import annotations
 from typing import Any
 
 from app.ai.material_structure import evidence_sections, normalize_evidence, validate_material_structure
+from app.ai.prompt_config import MISCONCEPTION_TYPE_CODES, PROMPT_TEXT
 
 
-MANDATORY_MISCONCEPTION_TYPES = ("M1", "M3", "unknown")
+MANDATORY_MISCONCEPTION_TYPES = MISCONCEPTION_TYPE_CODES
 
-_REQUIREMENTS: dict[str, dict[str, str]] = {
-    "M1": {
-        "wrong_belief": "誤った単一命題を明示する。",
-        "correct_belief": "その命題を置き換える正しい考えを示す。",
-        "counterexample": "誤った考えでは説明できず、正しい考えを支持する反例を示す。",
-        "reason": "反例がなぜ誤った考えを否定するのかを説明する。",
-    },
-    "M3": {
-        "wrong_category": "対象を置いている誤った上位カテゴリーを示す。",
-        "correct_category": "対象が属する正しいカテゴリーを示す。",
-        "boundary_criterion": "誤カテゴリーと正カテゴリーを分ける境界基準を示す。",
-        "contrast_example": "近いカテゴリーとの比較を示す。",
-    },
-    "unknown": {
-        "definition": "対象用語の基礎定義を示す。",
-    },
-}
+
+def _mandatory_element_definitions() -> dict[str, dict[str, str]]:
+    return PROMPT_TEXT["research_config"]["mandatory_elements"]
 
 
 def mandatory_element_requirements(misconception_type: str | None) -> dict[str, str]:
     """Return the research-operation fields required for an MVP type."""
-    return dict(_REQUIREMENTS.get(misconception_type or "", {}))
+    return dict(_mandatory_element_definitions().get(misconception_type or "", {}))
 
 
 def expected_mandatory_type(payload: dict[str, Any]) -> str | None:
@@ -70,7 +57,7 @@ def mandatory_elements_schema(misconception_type: str | None = None) -> dict[str
     if not fields:
         fields = {
             field: description
-            for field_group in _REQUIREMENTS.values()
+            for field_group in _mandatory_element_definitions().values()
             for field, description in field_group.items()
         }
 

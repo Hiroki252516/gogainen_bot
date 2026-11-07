@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from app.ai.prompt_config import PROMPT_TEXT
+
+
+_TEACHING_STRATEGIES = PROMPT_TEXT["research_config"]["teaching_strategies"]
+
 
 class AIBackend(Protocol):
     provider: str
@@ -15,11 +20,15 @@ class AIBackend(Protocol):
 
 def strategy_for(misconception_type: str | None, status: str | None, group_condition: str) -> str:
     if group_condition == "control":
-        return "general_explanation"
+        return _TEACHING_STRATEGIES["control"]
+    proposed = _TEACHING_STRATEGIES["proposed"]
+    by_type = proposed["by_type"]
     if misconception_type == "M1":
-        return "belief_revision"
+        return by_type["M1"]
     if misconception_type == "M3":
-        return "category_reorientation"
-    if status == "unknown" or misconception_type == "unknown":
-        return "foundational_explanation"
+        return by_type["M3"]
+    if misconception_type == "unknown":
+        return by_type["unknown"]
+    if status == "unknown":
+        return proposed["by_status"]["unknown"]
     raise ValueError(f"unsupported teaching type: {misconception_type!r}")
