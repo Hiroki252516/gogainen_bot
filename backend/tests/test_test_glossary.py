@@ -114,8 +114,8 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     complete_presurvey(client, pid)
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 39
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 40
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-fixed-admin-settings-v1"
         participant.current_step = phase
         participant.retest_cycles_completed = completed
         db.commit()
@@ -123,7 +123,7 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     response = client.get(path)
     assert response.status_code == 200, response.text
     questions = response.json()["questions"]
-    assert len(questions) == 6
+    assert len(questions) == 3
     assert client.get(path).json() == response.json()
     for question in questions:
         expected = experiment._test_glossary(question["term_label"], question["body"], question["options"])

@@ -32,6 +32,10 @@ client = TestClient(app)
 def create_trial(group="A", labels="DEF"):
     participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "TEST-0001"}).json()
     pid = participant["participant_id"]
+    # This suite exercises the historical two-question interaction-history path.
+    with SessionLocal() as db:
+        db.get(Participant, pid).first_question_only = False
+        db.commit()
     complete_presurvey(client, pid)
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     role = {"ABC": None, "DEF": "M1", "GHI": "M3", "J": "unknown"}[labels]
@@ -278,7 +282,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 39
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 40
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION

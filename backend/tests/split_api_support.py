@@ -10,7 +10,7 @@ from admin_client import AuthenticatedTestClient
 
 from app.db.session import SessionLocal
 from app.main import app
-from app.models import Attempt, Question, QuestionOption, TutorSession, TutorTurn
+from app.models import Attempt, Participant, Question, QuestionOption, TutorSession, TutorTurn
 from app.services.interaction_history import build_interaction_history
 from app.services.prefetch import wait_for_prefetch_tasks
 
@@ -88,11 +88,27 @@ def select_roles(question, roles):
 
 
 @contextmanager
-def create_trial(group, layout):
+def create_trial(
+    group,
+    layout,
+    *,
+    first_question_only=False,
+    show_pretest_results=True,
+    show_retest_results=True,
+    show_question_reviews=True,
+):
+    """Create a flow fixture with explicit snapshots for legacy behavior tests."""
     client = AuthenticatedTestClient(app)
     previous = ok(client.get("/api/admin/option-order"))["mode"]
     ok(client.put("/api/admin/option-order", json={"mode": layout}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "SPLIT-CI-SYNTHETIC"}))["participant_id"]
+    with SessionLocal() as db:
+        participant = db.get(Participant, pid)
+        participant.first_question_only = first_question_only
+        participant.show_pretest_results = show_pretest_results
+        participant.show_retest_results = show_retest_results
+        participant.show_question_reviews = show_question_reviews
+        db.commit()
     complete_presurvey(client, pid)
     try:
         yield client, pid

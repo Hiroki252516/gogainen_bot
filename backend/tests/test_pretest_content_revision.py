@@ -189,14 +189,14 @@ def test_v5_matches_pr260_wording_and_pr264_review_fixes_while_preserving_v4_str
             assert [item["question_number"] for item in split_specs(term_slug, round_key, bank_version="split-actions-v5")] == [1, 2]
 
 
-def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshots(tmp_path):
+def test_spec_40_keeps_v5_and_preserves_spec_39_read_only_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 39
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 40
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-fixed-admin-settings-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"
@@ -206,6 +206,7 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[36][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[37][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[38][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[39][STANDARD] == "split-actions-v5"
 
             term = db.query(Term).filter_by(slug="memory_process").one()
             active = db.query(Question).filter_by(
@@ -341,6 +342,14 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
 
                 learning_content_version=15,
             )
+            spec39_participant = Participant(
+                display_code="PRETEST-V39",
+                group_condition="control",
+                current_step="learning",
+                experiment_spec_version=39,
+                protocol_id="experiment-plan-2026-11-06-learning-glossary-integrated-default-v1",
+                learning_content_version=15,
+            )
             db.add_all([
                 spec32_participant,
                 spec33_participant,
@@ -350,6 +359,7 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
                 spec36_presurvey_participant,
                 spec37_participant,
                 spec38_participant,
+                spec39_participant,
             ])
             db.flush()
             v2_selected = next(option for option in v2_options if option.option_label == "B")
@@ -425,7 +435,8 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
                 question_body_snapshot=active.body,
                 option_order_snapshot=_displayed_options(db, spec38_participant, active),
             )
-            db.add_all([v2_attempt, v3_attempt, v4_attempt, v5_attempt, *v5_legacy_attempts, v5_current_attempt])
+            v5_spec39_attempt = make_v5_attempt(spec39_participant)
+            db.add_all([v2_attempt, v3_attempt, v4_attempt, v5_attempt, *v5_legacy_attempts, v5_current_attempt, v5_spec39_attempt])
             db.commit()
 
             assert not can_resume(spec33_participant)
@@ -436,6 +447,7 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             assert not can_resume(spec36_presurvey_participant)
             assert not can_resume(spec37_participant)
             assert not can_resume(spec38_participant)
+            assert not can_resume(spec39_participant)
             assert uses_split(spec36_rag_participant)
             assert uses_split(spec36_presurvey_participant)
             assert uses_split(spec37_participant)
@@ -465,6 +477,7 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             for participant in (spec36_rag_participant, spec36_presurvey_participant, spec37_participant):
                 assert latest_test_results(db, participant.id)["results"][0]["question_body"] == v5_attempt.question_body_snapshot
             assert latest_test_results(db, spec38_participant.id)["results"][0]["question_body"] == v5_current_attempt.question_body_snapshot
+            assert latest_test_results(db, spec39_participant.id)["results"][0]["question_body"] == v5_spec39_attempt.question_body_snapshot
 
             saved_body_v4 = v4_attempt.question_body_snapshot
             saved_options_v4 = deepcopy(v4_attempt.option_order_snapshot)
@@ -480,6 +493,9 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             assert len(confirmation_v5["questions"][0]["options"]) == 6
             assert confirmation_v5["questions"][0]["body"] == saved_body_v5
             assert confirmation_v5["questions"][0]["options"] == saved_options_v5
+            confirmation_v5_spec39 = split_learning_spec(db, spec39_participant, term)
+            assert confirmation_v5_spec39["questions"][0]["body"] == saved_body_v5
+            assert confirmation_v5_spec39["questions"][0]["options"] == v5_spec39_attempt.option_order_snapshot
 
             seed_database(db)
             db.refresh(v2_question)
@@ -492,6 +508,7 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             for attempt in v5_legacy_attempts:
                 db.refresh(attempt)
             db.refresh(v5_current_attempt)
+            db.refresh(v5_spec39_attempt)
             db.refresh(active)
             db.refresh(active_m1)
             db.refresh(active_added_m1)
@@ -511,6 +528,8 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             assert v5_attempt.option_order_snapshot == saved_options_v5
             assert v5_current_attempt.question_body_snapshot == saved_body_v5
             assert v5_current_attempt.option_order_snapshot == saved_options_v5
+            assert v5_spec39_attempt.question_body_snapshot == saved_body_v5
+            assert v5_spec39_attempt.option_order_snapshot == v5_current_attempt.option_order_snapshot
             assert active.is_active and active.body == saved_body_v5
             assert v4_question.body == v4_snapshot[0]
             assert active_m1.body == V5_POST_PR264_WORDING["choice_overrides"]["pretest_v1"]["memory_process"][1]["B"]
@@ -523,5 +542,6 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             for participant in (spec36_rag_participant, spec36_presurvey_participant, spec37_participant):
                 assert latest_test_results(db, participant.id)["results"][0]["question_body"] == v5_attempt.question_body_snapshot
             assert split_learning_spec(db, spec38_participant, term)["questions"][0]["body"] == v5_current_attempt.question_body_snapshot
+            assert split_learning_spec(db, spec39_participant, term)["questions"][0]["body"] == v5_spec39_attempt.question_body_snapshot
     finally:
         engine.dispose()

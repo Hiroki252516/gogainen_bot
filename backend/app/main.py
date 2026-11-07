@@ -17,9 +17,7 @@ from datetime import datetime
 
 from app.models import Participant, Term, TutorSession, TutorTurn
 from app.services import pretest_display
-from app.services import question_review_display, first_question_only
 from app.services import learning_material_glossary_mode
-from pydantic import StrictBool
 
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
@@ -839,46 +837,6 @@ def api_admin_summary(request: Request, db: Session = Depends(get_db)) -> dict:
 def _reject_question_set_filter(request: Request) -> None:
     if "question_set_mode" in request.query_params:
         raise HTTPException(status_code=422, detail="問題版フィルターは廃止されました。")
-
-
-class PretestDisplayPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    enabled: StrictBool
-
-
-class QuestionReviewDisplayPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    enabled: StrictBool
-
-
-@app.get("/api/admin/pretest-result-display")
-def api_pretest_display(db: Session = Depends(get_db)):
-    return JSONResponse({"enabled": pretest_display.current_setting(db), "applies_to": "new_participants_only"}, headers={"Cache-Control": "no-store"})
-
-
-@app.put("/api/admin/pretest-result-display")
-def api_save_pretest_display(payload: PretestDisplayPayload, db: Session = Depends(get_db)):
-    return {"enabled": pretest_display.save_setting(db, payload.enabled), "applies_to": "new_participants_only"}
-
-
-@app.get("/api/admin/question-review-display")
-def api_question_review_display(db: Session = Depends(get_db)):
-    return JSONResponse({"enabled": question_review_display.current_setting(db), "applies_to": "new_standard_participants_only"}, headers={"Cache-Control": "no-store"})
-
-
-@app.put("/api/admin/question-review-display")
-def api_save_question_review_display(payload: QuestionReviewDisplayPayload, db: Session = Depends(get_db)):
-    return {"enabled": question_review_display.save_setting(db, payload.enabled), "applies_to": "new_standard_participants_only"}
-
-
-@app.get("/api/admin/first-question-only")
-def api_first_question_only(db: Session = Depends(get_db)):
-    return JSONResponse({"enabled": first_question_only.current_setting(db), "applies_to": "new_standard_participants_only"}, headers={"Cache-Control": "no-store"})
-
-
-@app.put("/api/admin/first-question-only")
-def api_save_first_question_only(payload: QuestionReviewDisplayPayload, db: Session = Depends(get_db)):
-    return {"enabled": first_question_only.save_setting(db, payload.enabled), "applies_to": "new_standard_participants_only"}
 
 
 @app.get("/api/admin/option-order")

@@ -1,8 +1,8 @@
 # 学習ログ駆動型AIチューター
 
-2026-11-06現行条件：新規参加者は仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`で登録します。事前アンケートv2、RAGを含む共通辞書v4、通常版テストsplit-actions-v5を維持します。教材モードは「教材内解説」に固定し、管理画面の切替UIと管理APIはありません。仕様版38以下と旧protocolは閲覧専用で、既存参加者のモード・回答・教材snapshotは変更しません。[教材モード](docs/41_learning_glossary_material_mode.md)、[事前アンケート](docs/49_presurvey_baseline.md)、[辞書と履歴](docs/24_learning_glossary.md)、[受入記録](docs/14_testing_acceptance.md)を参照してください。
+2026-11-07現行条件：新規参加者は仕様版40 / `experiment-plan-2026-11-07-fixed-admin-settings-v1`で登録します。結果確認画面は非表示、設問ごとの答え合わせはON、設問1のみ出題（各用語1問、計3問）に固定します。これらの管理UI/APIと集計条件セレクターはありません。教材モードも「教材内解説」に固定し、管理画面にはモード表示を置きません。仕様版39以下と旧protocolは閲覧専用で、既存参加者の保存値・回答・教材snapshotは変更しません。履歴用DB列・参加者ログAPI・CSV値は保持します。[事前アンケート](docs/49_presurvey_baseline.md)、[教材モード](docs/41_learning_glossary_material_mode.md)、[辞書と履歴](docs/24_learning_glossary.md)、[受入記録](docs/14_testing_acceptance.md)を参照してください。
 
-2026-11-03追加：管理画面の「設問1のみ出題」で、各用語1問（計3問）と設問1・2（計6問、初期値）を切り替えられます。新規参加者の登録時に固定し、既存参加者には反映しません。仕様版35で導入し、現行仕様版39でも維持する条件分岐は[docs/48](docs/48_first_question_only.md)を参照してください。以下の過去版の説明は採用時の記録です。
+2026-11-03履歴：仕様版35では管理画面の「設問1のみ出題」で、各用語1問（計3問）と設問1・2（計6問）を切り替えていました。仕様版40では各用語1問（計3問）に固定し、設定UI/APIを廃止しています。過去の導入記録は[docs/48](docs/48_first_question_only.md)を参照してください。以下の過去版の説明は採用時の記録です。
 
 仕様版33 / `experiment-plan-2026-11-01-pretest-content-revision-v2`の採用時は、通常版PRETESTの指定選択肢本文を`split-actions-v3`へ更新しました。v1（仕様版27〜31）とv2（仕様版32）、旧データ・回答snapshotを履歴として保持し、当時は仕様版32以下を閲覧専用としました。RETEST1/2・内部final_test、設問数・採点、設問ペア答え合わせは維持しました。誤答PRETEST設問の学習確認では回答時の保存snapshotを再利用します。教材用語解説は登録時に固定し、本文の文字数条件とv3辞書による言い換え指示を追加しました。[仕様版27の採用記録](docs/39_split_assessment.md)、[仕様版28の答え合わせ](docs/40_question_pair_answer_review.md)、[仕様版29の用語解説モード](docs/41_learning_glossary_material_mode.md)、[仕様版30の文字数条件](docs/42_learning_glossary_material_length.md)、[仕様版31の辞書定義と言い換え](docs/43_glossary_definition_paraphrase.md)、[仕様版32のPRETEST改訂](docs/44_pretest_content_revision.md)、[仕様版33のPRETEST選択肢文面改訂](docs/45_pretest_memory_distractors.md)を参照してください。各変更の受入検証状況は[docs/14](docs/14_testing_acceptance.md)を参照してください。実験開始の承認や実AIでの確認とは区別します。
 
@@ -74,7 +74,7 @@
 
 Wordと承認された実装計画に沿い、教材・low設定・新アンケート・6仮説の記述集計を実装しています。[採用判断と残課題](docs/20_experiment_plan_alignment.md)と[評価定義](docs/12_evaluation_metrics.md)を先に確認してください。
 
-現行の新規参加者には仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を保存します。仕様版38以下、NULL、旧protocol_idの参加者は閲覧・CSV出力専用で、進行・削除・補修・再計算・現行集計をしません。既存の版・回数・注釈・教材解説モードを補完しません。Participantの教材モードとRuntimeSettingの旧設定列はnullableのまま保持し、既存行を変更しません。
+現行の新規参加者には仕様版40 / `experiment-plan-2026-11-07-fixed-admin-settings-v1`を保存します。仕様版39以下、NULL、旧protocol_idの参加者は閲覧・CSV出力専用で、進行・削除・補修・再計算・現行集計をしません。既存の版・回数・注釈・教材解説モードを補完しません。Participantの教材モードとRuntimeSettingの旧設定列はnullableのまま保持し、既存行を変更しません。
 
 このリポジトリは、卒業研究で使う「誤概念タイプと学習ステージに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 

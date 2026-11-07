@@ -1,5 +1,14 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-07 管理画面の固定設定化（仕様版40・fix/issue-280）
+
+- 新規参加者は`experiment-plan-2026-11-07-fixed-admin-settings-v1`へ登録し、テスト全体の結果確認なし、設問ごとの答え合わせあり、各用語の設問1のみ（計3問）に固定する。教材モードは従来どおり`integrated_material`。
+- 旧RuntimeSetting値に依存せずParticipant snapshotを作る。3つの設定操作UI、教材モード表示、設定GET/PUT API、集計条件セレクターを削除する。参加者一覧・個別ログの旧設定値表示も除く。
+- DB列、participant log API、CSV、過去の問題・回答・snapshotは保持する。仕様版39以下は閲覧専用とし、新しい設定を既存参加者へ遡及しない。
+- Backend全体テストは隔離DBで`1714 passed`。Frontendの`npm test`と本番ビルドは成功した。
+- Playwrightの隔離Mockブラウザで、管理画面・参加者一覧・個別ログに対象設定がないこと、旧設定APIのGET/PUTが404となること、新規Participantの固定値、3問の進行、各問の答え合わせ、全体結果画面を省略した学習遷移を確認した。390px幅でも横はみ出しがない。
+- `git diff --check`は成功。隔離ブラウザ起動時にrewrite先を直す前、既定の`:8000`へ管理ログインとAI状態照会だけが通ったためMock以外の応答を検知して登録前に中断した。研究DB操作・参加者登録・AI生成呼び出しはなく、以降は別ポートの隔離Mock環境だけで確認した。localhost:3000と実験開始環境は使用していない。
+
 ## 2026-11-06 教材内解説の標準化（仕様版39・fix/issue-273）
 
 - 新規参加者へ仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を適用し、保存済みRuntimeSetting値に関係なく`integrated_material`を記録する。管理画面のモード切替と管理用GET/PUT APIを削除する。RuntimeSettingの旧列、参加者の履歴値、ログ・CSV、既存教材とglossary snapshotは維持する。

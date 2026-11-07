@@ -1,24 +1,8 @@
-from app.models import RuntimeSetting
 from fastapi import HTTPException
 
 
 def enabled(value) -> bool:
     return value is not False
-
-
-def current_setting(db) -> bool:
-    row = db.get(RuntimeSetting, 1)
-    return enabled(row.show_pretest_results if row else None)
-
-
-def save_setting(db, value: bool) -> bool:
-    row = db.get(RuntimeSetting, 1)
-    if row is None:
-        row = RuntimeSetting(id=1)
-        db.add(row)
-    row.show_pretest_results = value
-    db.commit()
-    return value
 
 
 def skip_review(db, participant) -> bool:
