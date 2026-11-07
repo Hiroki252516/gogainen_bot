@@ -2,7 +2,7 @@
 
 ## 目標設定と現行設定
 
-アプリ側標準条件は両群共通のgpt-6-luna / low。Word計画書原本にあるgpt-5.6-luna / lowの記載は別の目標記録であり、原本は変更していない。管理画面でgpt-6.1-sol / gpt-6-lunaと推論レベルlow/medium/highを一時切替できる。モデル・推論レベルは一呼び出しの開始時に一緒に確定し、その呼び出しのthread/start、turn/start、監査ログに同一値を使う。切替は両群・進行中参加者にも次回呼び出しから適用し、backend再起動後は環境値へ戻る。収集中の切替は同一参加者内のモデル混在を生み得るため、実験前に設定を固定する。実送信model/effortを監査し、過去の検証記録は書き換えない。[対応表](20_experiment_plan_alignment.md)を参照する。
+アプリ側標準条件は両群共通のgpt-6-luna / low。Word計画書原本にあるgpt-5.6-luna / lowの記載は別の目標記録であり、原本は変更していない。管理画面でgpt-6.1-sol / gpt-6-luna / gpt-6-astraと推論レベルlow/medium/high/xhigh/maxを一時切替できる。モデル・推論レベルは一呼び出しの開始時に一緒に確定し、その呼び出しのthread/start、turn/start、監査ログに同一値を使う。切替は両群・進行中参加者にも次回呼び出しから適用し、backend再起動後は環境値へ戻る。収集中の切替は同一参加者内のモデル混在を生み得るため、実験前に設定を固定する。実送信model/effortを監査し、過去の検証記録は書き換えない。[対応表](20_experiment_plan_alignment.md)を参照する。
 
 仕様版28の設問ペア答え合わせは、保存済みAttemptの選択内容・正誤を表示するもので、AI生成タスクやapp-server呼び出しを追加しない。[詳細](40_question_pair_answer_review.md)。
 
@@ -183,7 +183,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 }
 ```
 
-モデルは起動時の `CODEX_MODEL` を基準とし、管理画面での一時上書きを含む有効値をthread/startとturn/startへ渡す。管理選択肢は `gpt-6.1-sol` と `gpt-6-luna`、アプリ標準値は `gpt-6-luna` である。未指定の環境既定もこれに合わせるが、明示された環境変数は優先する。
+モデルは起動時の `CODEX_MODEL` を基準とし、管理画面での一時上書きを含む有効値をthread/startとturn/startへ渡す。管理選択肢は `gpt-6.1-sol`、`gpt-6-luna`、`gpt-6-astra`、推論レベルは`low`、`medium`、`high`、`xhigh`、`max`。アプリ標準値は `gpt-6-luna / low` である。未指定の環境既定もこれに合わせるが、明示された環境変数は優先する。
 
 `cwd` は既定で `/tmp` にする。アプリが研究仕様リポジトリ配下の `AGENTS.md` をAIタスクへ混入させないためである。
 

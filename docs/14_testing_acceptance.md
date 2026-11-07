@@ -1,5 +1,12 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-07 管理画面のGPT-6 Astra・推論レベル追加
+
+- 許可値に`gpt-6-astra`、`xhigh`、`max`を加え、既定の`gpt-6-luna / low`とプロセス内だけの一時設定は維持した。認証付き管理APIで許可値一覧、全選択値の更新、不正値の422を確認した。
+- モックapp-server transportで、現在選択可能な全モデルと`xhigh`/`max`の組み合わせがthread/start、turn/start、監査payloadへ同一値で伝わることを確認した。実AI app-serverへの接続・アカウント別の利用可否は検証していない。
+- backend全1728テスト、frontendテスト、Next.js production build/TypeScript検査、git diff --checkに合格。既存のDeprecationWarningが6件ある。
+- DB、実験仕様版・protocol、既定モデル・推論レベル、研究DB、実AI、3000番環境は変更・使用していない。
+
 ## 2026-11-07 仕様版41固定設定・統制群プロンプト統合（履歴）
 
 - 仕様版40には固定設定化と統制群共通プロンプト化の別protocolが存在したため、両変更を統合する仕様版41 / `experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`を追加する。両仕様版40 protocolは履歴・閲覧専用とし、既存参加者の問題・回答・教材・snapshotは変更しない。
