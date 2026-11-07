@@ -12,7 +12,7 @@ INTEGRATED_MATERIAL_TARGET_CHARACTERS = 1000
 INTEGRATED_MATERIAL_MAX_CHARACTERS = 1200
 
 
-PROMPT_CONTRACT_VERSION = "tutoring-prompt-contract-v9-mode-specific-length"
+PROMPT_CONTRACT_VERSION = "tutoring-prompt-contract-v10-control-shared-prompt"
 TEACHING_CONTRACT_TYPES = ("M1", "M3", "unknown")
 REFUTATION_MODES = ("explicit", "implicit", "category_comparison", "none")
 

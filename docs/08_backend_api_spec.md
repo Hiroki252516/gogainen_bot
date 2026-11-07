@@ -4,7 +4,7 @@
 
 管理認証付きGET/PUT `/api/admin/first-question-only` で厳密booleanのenabledを取得・保存する。初期値OFF、新規登録時に参加者へ固定する。用語ページ回答APIは1問または2問を受理し、答え合わせも同じ設問数で返す。3問/6問の6仮説集計は分離し、混在時はstrataを返す。詳細は[48](48_first_question_only.md)。
 
-## 教材用語解説モード（仕様版39）
+## 教材用語解説モード（仕様版39導入・40維持）
 
 新規参加者は登録時に`integrated_material`へ固定する。管理画面の切替UIと管理API `GET/PUT /api/admin/learning-material-glossary-mode`は提供しない。既存Participantの保存値は変更せず、参加者一覧・個別ログ・participants CSVで履歴を参照できる。RuntimeSettingの旧モード列はDB互換性のため残すが、登録・管理APIでは参照しない。
 

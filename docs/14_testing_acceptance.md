@@ -1,5 +1,14 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-07 統制群の教材指示を共通ルールのみにする（仕様版40・fix/issue-279）
+
+- 新規参加者を仕様版40 / `experiment-plan-2026-11-07-control-shared-prompt-v1`で登録する。統制群から通常教授方略を説明する3つの自然言語指示を取り除き、両群共通の教材ルール・入力は維持する。提案群の診断・タイプ別教授指示と`teaching_strategy`の自然言語指定は維持する。
+- 統制群の出力Schema enumとBackend検証は維持し、内部の`teaching_strategy`値を`general_explanation`に固定する。prompt契約識別子を`tutoring-prompt-contract-v10-control-shared-prompt`とし、旧仕様版39以下・旧prompt監査記録・保存済み回答・教材・snapshotは変更しない。
+- 新規参加者の現行split問題取得で仕様版40がsplit形式として認識されない版判定漏れも修正し、現在の問題バンクを利用できるようにした。仕様39の閲覧専用・記録不変テストと、仕様40の登録・出題を検証した。
+- prompt YAMLの必須セクション検証、control/proposedの生成prompt hash、統制群からの旧3文除去、提案群の方略指示、両群のSchema enumとBackend検証を含む重点テストは104 passed。Backend全テストは隔離SQLiteで1716 passed。
+- `git diff --check`通過。Frontendの表示・APIは変更していないためFrontendテスト・buildは未実施。研究DB・localhost:3000・実AI・コミット・pushは使用していない。
+- これは実装条件の変更と自動検証の記録であり、研究上の承認、教材の意味的正しさ、実験効果を示すものではない。
+
 ## 2026-11-06 教材内解説の標準化（仕様版39・fix/issue-273）
 
 - 新規参加者へ仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を適用し、保存済みRuntimeSetting値に関係なく`integrated_material`を記録する。管理画面のモード切替と管理用GET/PUT APIを削除する。RuntimeSettingの旧列、参加者の履歴値、ログ・CSV、既存教材とglossary snapshotは維持する。
