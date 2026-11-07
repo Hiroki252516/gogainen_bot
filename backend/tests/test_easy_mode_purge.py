@@ -25,6 +25,7 @@ from app.models import (
     TutorTurn,
 )
 from app.db import session as database
+from scripts import purge_easy_mode_data
 from scripts.purge_easy_mode_data import (
     _contains_any,
     _contains_identifier_token,
@@ -176,6 +177,118 @@ def test_research_cli_requires_explicit_non_sqlite_environment(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./.local/test.db")
     monkeypatch.setenv("APP_ENV", "research")
     assert main(["--execute", "--confirm-database", "test", "--app-stopped"]) == 2
+
+
+def test_development_debug_dry_run_is_read_only(tmp_path, monkeypatch, capsys):
+    engine, mapping_path, exports, easy_id, standard_id = _fixture(tmp_path)
+    mapping_before = sqlite3.connect(mapping_path).execute(
+        "SELECT participant_id, display_code FROM identity_mappings ORDER BY participant_id"
+    ).fetchall()
+    csv_before = {path.name: path.read_bytes() for path in exports.glob("*.csv")}
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://app:app@127.0.0.1:5432/ai_tutor")
+    monkeypatch.setenv("IDENTITY_MAPPING_PATH", str(mapping_path))
+    monkeypatch.setattr(purge_easy_mode_data, "create_engine", lambda *args, **kwargs: engine)
+
+    assert main(["--development-debug-data"]) == 0
+    output = capsys.readouterr().out
+    assert "participants: 1" in output
+    assert easy_id not in output and standard_id not in output
+    with engine.connect() as db:
+        assert db.execute(text("SELECT count(*) FROM participants")).scalar_one() == 2
+        assert "question_set_mode" in {
+            column["name"] for column in inspect(engine).get_columns("participants")
+        }
+        assert "_easy_mode_purge_manifest" not in inspect(engine).get_table_names()
+        assert "easy_mode_purge_audits" not in inspect(engine).get_table_names()
+    with sqlite3.connect(mapping_path) as mapping:
+        assert mapping.execute(
+            "SELECT participant_id, display_code FROM identity_mappings ORDER BY participant_id"
+        ).fetchall() == mapping_before
+    assert {path.name: path.read_bytes() for path in exports.glob("*.csv")} == csv_before
+    engine.dispose()
+
+
+def test_development_debug_execute_removes_only_easy_records_and_keeps_exports(
+    tmp_path, monkeypatch,
+):
+    engine, mapping_path, exports, easy_id, standard_id = _fixture(tmp_path)
+    csv_before = {path.name: path.read_bytes() for path in exports.glob("*.csv")}
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://app:app@localhost:5432/ai_tutor")
+    monkeypatch.setenv("IDENTITY_MAPPING_PATH", str(mapping_path))
+    monkeypatch.setattr(purge_easy_mode_data, "create_engine", lambda *args, **kwargs: engine)
+
+    assert main([
+        "--development-debug-data", "--execute", "--confirm-database", "ai_tutor",
+        "--app-stopped",
+    ]) == 0
+    with engine.connect() as db:
+        assert db.execute(text("SELECT id FROM participants")).scalar_one() == standard_id
+        assert db.execute(text("SELECT count(*) FROM attempts")).scalar_one() == 1
+        assert db.execute(text("SELECT count(*) FROM questions WHERE construct_key LIKE '%easy%'")).scalar_one() == 0
+        assert db.execute(text("SELECT count(*) FROM easy_mode_purge_audits")).scalar_one() == 1
+        assert "question_set_mode" not in {
+            column["name"] for column in inspect(engine).get_columns("participants")
+        }
+        assert "question_set_mode" not in {
+            column["name"] for column in inspect(engine).get_columns("runtime_settings")
+        }
+        audit = db.execute(text("SELECT counts_json FROM easy_mode_purge_audits")).scalar_one()
+        assert easy_id not in audit and standard_id not in audit
+    with sqlite3.connect(mapping_path) as mapping:
+        assert mapping.execute("SELECT participant_id FROM identity_mappings").fetchone()[0] == standard_id
+    assert {path.name: path.read_bytes() for path in exports.glob("*.csv")} == csv_before
+    engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("app_env", "database_url", "argv"),
+    [
+        ("research", "postgresql://app:app@127.0.0.1:5432/ai_tutor",
+         ["--development-debug-data"]),
+        ("development", "sqlite:///tmp/test.db",
+         ["--development-debug-data"]),
+        ("development", "postgresql://app:app@example.com:5432/ai_tutor",
+         ["--development-debug-data"]),
+        ("development", "postgresql://app:app@127.0.0.1:5432/ai_tutor",
+         ["--development-debug-data", "--execute", "--app-stopped"]),
+        ("development", "postgresql://app:app@127.0.0.1:5432/ai_tutor",
+         ["--development-debug-data", "--execute", "--confirm-database", "wrong", "--app-stopped"]),
+        ("development", "postgresql://app:app@127.0.0.1:5432/ai_tutor",
+         ["--development-debug-data", "--execute", "--confirm-database", "ai_tutor"]),
+    ],
+)
+def test_development_debug_execution_guards_reject_before_connecting(
+    monkeypatch, tmp_path, app_env, database_url, argv,
+):
+    mapping_path = tmp_path / "identities.sqlite3"
+    mapping_path.touch()
+    monkeypatch.setenv("APP_ENV", app_env)
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("IDENTITY_MAPPING_PATH", str(mapping_path))
+    monkeypatch.setattr(
+        purge_easy_mode_data, "create_engine",
+        lambda *args, **kwargs: pytest.fail("guard must reject before connecting"),
+    )
+    assert main(argv) == 2
+
+
+def test_development_mode_requires_explicit_opt_in(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://app:app@127.0.0.1:5432/ai_tutor")
+    assert main([]) == 2
+
+
+def test_development_debug_requires_existing_identity_mapping(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://app:app@127.0.0.1:5432/ai_tutor")
+    monkeypatch.setenv("IDENTITY_MAPPING_PATH", str(tmp_path / "missing.sqlite3"))
+    monkeypatch.setattr(
+        purge_easy_mode_data, "create_engine",
+        lambda *args, **kwargs: pytest.fail("missing mapping must reject before connecting"),
+    )
+    assert main(["--development-debug-data"]) == 2
 
 
 def test_application_start_is_blocked_until_legacy_easy_participants_are_purged(tmp_path, monkeypatch):

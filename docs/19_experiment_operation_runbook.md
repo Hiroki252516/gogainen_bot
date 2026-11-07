@@ -12,6 +12,34 @@
 
 全てのAPI・workerプロセスを停止し、機関の既存バックアップ方針を確認する。専用スクリプトはバックアップを作らない。研究環境だけで`APP_ENV=research`、対象の`DATABASE_URL`、分離保管された`IDENTITY_MAPPING_PATH`を設定し、最初に`--execute`なしで件数だけのdry-runを行う。件数と接続先を照合してから、`--execute --confirm-database <正確なDB名> --app-stopped`を付けて実行する。スクリプトは参加者識別子を表示せず、失敗時は再試行情報をDBに保持する。失敗した場合は同じDB・対応表を指定して再試行し、マニフェストを手動削除しない。完了後は一時マニフェストを削除し、匿名件数の監査要約のみを残す。ダウンロード済みCSV、USB、外部コピーは別途管理する。
 
+## 開発DBの旧「易しい版」デバッグデータを整理する場合
+
+本手順は、本実験開始前の研究者デバッグ記録だけを整理するための開発環境専用経路である。`--development-debug-data`を明示した場合に限り、`APP_ENV=development`かつloopback上のPostgreSQLと既存の`IDENTITY_MAPPING_PATH`を対象にできる。実行には正確なDB名を指定する`--confirm-database`と、すべてのAPI/workerを停止した確認`--app-stopped`も必須である。研究環境用の`APP_ENV=research`ガードは変更しない。この手順を研究データに使わない。
+
+この一回限りのデバッグデータ整理ではバックアップを作らない（対象が研究者のデバッグ記録のみで、保存不要と確認した場合に限る）。削除は元に戻せない。旧easy参加者とその関連記録、easy専用問題・選択肢、該当するアプリ内識別対応行を削除し、`participants`と`runtime_settings`の`question_set_mode`列を削除する。通常版参加者・記録は保持する。`exports/`内のCSV、ダウンロード済みCSV、USBやその他の外部コピーは変更しない。
+
+1. PostgreSQLは起動したまま、frontendとbackendを停止する。例: `docker compose stop frontend backend`。
+2. ルート`.env`の対象が`APP_ENV=development`、`DATABASE_URL`のhostが`127.0.0.1`または`localhost`、database名が想定した開発DB（通常`ai_tutor`）であることを確認する。
+3. スクリプトを読み取り専用でコンテナに渡し、`--execute`を付けず件数を確認する。例:
+
+   ```sh
+   docker compose run --rm --no-deps \
+     -v "$PWD/backend/scripts/purge_easy_mode_data.py:/tmp/purge_easy_mode_data.py:ro" \
+     backend python /tmp/purge_easy_mode_data.py --development-debug-data
+   ```
+
+4. 表示された匿名件数が作業前に確認したデバッグ対象件数と完全一致し、DBが正しい場合だけ続行する。不一致、接続先不明、または実験データの混在が疑われる場合は実行しない。
+5. dry-runと同じ接続先で、DB名を厳密に指定して実行する。例:
+
+   ```sh
+   docker compose run --rm --no-deps \
+     -v "$PWD/backend/scripts/purge_easy_mode_data.py:/tmp/purge_easy_mode_data.py:ro" \
+     backend python /tmp/purge_easy_mode_data.py --development-debug-data \
+       --execute --confirm-database ai_tutor --app-stopped
+   ```
+
+6. 完了後、dry-run件数が0、両テーブルの廃止列が存在しないこと、通常版データが残っていることを確認する。その後にアプリを再起動する。
+
 ローカル`.local`成果物は研究DBと別処理である。対象パスを確認し、明示的な`--local-artifacts --execute --confirm-local-artifacts`なしに削除しない。
 
 ## 教材の文字数条件（仕様版30導入、現行仕様版39でも維持）

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import ipaddress
 import json
 import os
 import re
@@ -614,20 +615,83 @@ def _run_research(args: argparse.Namespace) -> int:
         engine.dispose()
 
 
+def _is_loopback_host(host: str | None) -> bool:
+    if not host:
+        return False
+    if host.rstrip(".").lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _run_development_debug(args: argparse.Namespace) -> int:
+    database_url = os.environ.get("DATABASE_URL")
+    app_env = os.environ.get("APP_ENV", "").strip().lower()
+    if not database_url or app_env != "development":
+        print("development debug purge requires DATABASE_URL and APP_ENV=development", file=sys.stderr)
+        return 2
+
+    try:
+        url = make_url(database_url)
+    except Exception:
+        print("development debug purge requires a valid local PostgreSQL URL", file=sys.stderr)
+        return 2
+    if (not url.drivername.lower().startswith("postgresql") or not url.database
+            or not _is_loopback_host(url.host)):
+        print("development debug purge only permits PostgreSQL on a loopback host", file=sys.stderr)
+        return 2
+
+    identity_path_value = os.environ.get("IDENTITY_MAPPING_PATH")
+    if not identity_path_value:
+        print("development debug purge requires IDENTITY_MAPPING_PATH", file=sys.stderr)
+        return 2
+    identity_path = Path(identity_path_value).expanduser().resolve()
+    if not identity_path.is_file():
+        print("identity mapping database is missing; no rows were changed", file=sys.stderr)
+        return 2
+
+    if args.execute and (args.confirm_database != url.database or not args.app_stopped):
+        print("execution requires the exact database-name confirmation and --app-stopped", file=sys.stderr)
+        return 2
+
+    engine = create_engine(url, future=True, pool_pre_ping=True)
+    try:
+        if not args.execute:
+            _print_counts(inspect_counts(engine, identity_path),
+                          title="Development-only dry run (anonymous counts)")
+            return 0
+        counts = execute_purge(engine, identity_path)
+        _print_counts(counts, title="Development debug purge completed (anonymous counts)")
+        return 0
+    except Exception:
+        print("development debug purge failed; no identifiers were emitted", file=sys.stderr)
+        return 1
+    finally:
+        engine.dispose()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--local-artifacts", action="store_true", help="target only backend/.local/test.db and its local companions")
+    parser.add_argument("--development-debug-data", action="store_true",
+                        help="explicitly target retired easy-mode debug records in a local development PostgreSQL database")
     parser.add_argument("--execute", action="store_true", help="execute deletion; otherwise counts-only dry run")
     parser.add_argument("--confirm-local-artifacts", action="store_true")
-    parser.add_argument("--confirm-database", help="exact PostgreSQL database name for research execution")
-    parser.add_argument("--app-stopped", action="store_true", help="confirm all app workers using the research DB are stopped")
+    parser.add_argument("--confirm-database", help="exact PostgreSQL database name for execution")
+    parser.add_argument("--app-stopped", action="store_true", help="confirm all app workers using the target DB are stopped")
     args = parser.parse_args(argv)
+    if args.local_artifacts and args.development_debug_data:
+        parser.error("--local-artifacts and --development-debug-data cannot be combined")
     if args.local_artifacts:
         if args.confirm_database or args.app_stopped:
-            parser.error("research confirmations cannot be combined with --local-artifacts")
+            parser.error("database confirmations cannot be combined with --local-artifacts")
         return _run_local(args)
     if args.confirm_local_artifacts:
         parser.error("--confirm-local-artifacts requires --local-artifacts")
+    if args.development_debug_data:
+        return _run_development_debug(args)
     return _run_research(args)
 
 
