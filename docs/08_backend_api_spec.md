@@ -4,7 +4,7 @@
 
 管理認証付きGET/PUT `/api/admin/first-question-only` で厳密booleanのenabledを取得・保存する。初期値OFF、新規登録時に参加者へ固定する。用語ページ回答APIは1問または2問を受理し、答え合わせも同じ設問数で返す。3問/6問の6仮説集計は分離し、混在時はstrataを返す。詳細は[48](48_first_question_only.md)。
 
-## 教材用語解説モード（仕様版40）
+## 教材用語解説モード（仕様版39導入・41現行）
 
 新規参加者は登録時に`integrated_material`へ固定する。管理画面の切替UIと管理API `GET/PUT /api/admin/learning-material-glossary-mode`は提供しない。既存Participantの保存値は変更せず、参加者一覧・個別ログ・participants CSVで履歴を参照できる。RuntimeSettingの旧モード列はDB互換性のため残すが、登録・管理APIでは参照しない。
 
@@ -44,7 +44,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版40 / `experiment-plan-2026-11-07-learning-material-target-800-v1`で進行可否を判定する。仕様版39以下は閲覧専用とする。教材本文の目標文字数変更による公開API構造の変更はない。旧仕様の教材文字数契約は[42](42_learning_glossary_material_length.md)、教材モードは[41](41_learning_glossary_material_mode.md)、RAG注釈は[49](49_rag_glossary.md)を参照する。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版41 / `experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`で進行可否を判定する。仕様版40以下は閲覧専用とする。教材本文の目標文字数変更による公開API構造の変更はない。旧仕様の教材文字数契約は[42](42_learning_glossary_material_length.md)、教材モードは[41](41_learning_glossary_material_mode.md)、RAG注釈は[49](49_rag_glossary.md)を参照する。
 
 事前アンケートはGET/POST `/api/participants/{id}/presurvey`を使い、`presurvey-baseline-v2`の厳密なpayloadを受け付ける。`prior_term_knowledge`の6項目は`unknown`、`heard_of`、`knows_meaning`、`can_explain`のいずれかを必須とし、AI利用頻度・自己評価も1〜10整数で必須とする。`phase=presurvey`のParticipantSurveyとして冪等に保存する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版36の`presurvey-baseline-v1`回答はBoolean形式のまま履歴保全し、新形式へ変換しない。
 

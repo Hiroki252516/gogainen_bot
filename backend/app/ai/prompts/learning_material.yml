@@ -44,7 +44,7 @@ tutoring:
     material_length: '教材本文はMarkdown記号を含めて{target_characters}文字程度を目安とする。意味や仕組みの説明を保ち、不要な繰り返しで水増ししない。'
     # M1/M3/unknownの必須教授要素を教材本文に含める指示です。タイプ名はPythonが渡します。
     mandatory_element_intro: '現在の必須教授要素タイプは {misconception_type}。次の内容を教材のセクション本文に含める:'
-    # teaching_strategyの選択値はbackendが決め、Pythonが文字列へ埋め込みます。
+    # teaching_strategyの自然言語指定は提案群だけで使います。統制群の出力値はSchemaで固定します。
     teaching_strategy: 'teaching_strategy はbackendで指定された {strategies} に固定する。'
   # payloadにglossary_referenceがある場合（教材内解説モード）だけ、以下のルールを順番に追加します。
   glossary_rules:
@@ -81,13 +81,8 @@ tutoring:
   validation_retry_prefix: '前回生成で本文構造または生成契約の検証に失敗した。次の検証エラーを修正する: '
   # payloadにlearning_scopeがある場合だけ追加し、教材の対象範囲を制限します。
   learning_scope_rule: 'learning_scopeのtopicsだけを今回の学習対象とする。selected_errorsがある場合はその全てを扱い、正解済みの設問へ学習を広げない。selected_errorsが空の場合は誤概念を推測せずtopicsの意味や仕組みを基礎から説明する。確認問題はシステムが別途表示するため生成しない。'
-  # groupに応じて、controlまたはproposedのどちらか一方を共通ルールの後に追加します。
+  # 提案群にだけ診断・教授方針を追加します。統制群には群別の教材指示を追加しません。
   group_rules:
-    # 統制群に使う通常のチューター方針です。診断由来の教授ルールは含みません。
-    control:
-      - '通常のAIチューターとして、共通の用語情報、教材コンテキスト、interaction_historyを使い、今回の学習対象を説明する。'
-      - 'general_explanation は、共通の用語情報、教材コンテキスト、回答履歴に基づいて学習対象を説明する通常の教授方略を意味する。'
-      - 'teaching_strategy は general_explanation に固定する。'
     # 提案群に使う診断・教授方針です。診断データの入力分離はPython側が行います。
     proposed:
       - '誤概念タイプに応じたAIチューターとして、active_misconception_type、pretest_target、pretest_targets、diagnostic_evidence、session_misconception_historyを、その方略に沿った説明・対比例の具体化に利用し、別方略へ変更しない。'

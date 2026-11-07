@@ -266,8 +266,8 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 40
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-learning-material-target-800-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 41
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"
@@ -277,6 +277,8 @@ def test_spec_39_keeps_v5_and_restores_spec_38_results_without_changing_snapshot
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[36][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[37][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[38][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[39][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[40][STANDARD] == "split-actions-v5"
 
             term = db.query(Term).filter_by(slug="memory_process").one()
             active = db.query(Question).filter_by(

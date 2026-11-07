@@ -1,8 +1,8 @@
 # 教材・回答後解説・テストの用語注釈
 
-## 現行条件（仕様版40）
+## 現行条件（仕様版41）
 
-現行辞書は[learning_glossary_v4.yml](../backend/app/seed/content/learning_glossary_v4.yml)で、仕様版40の新規参加者に適用する。v4はv3を変更せず、RAG（検索拡張生成）をv1の定義・出典・別表記を引き継いで追加する。v1〜v3は履歴として無変更で保持する。既存参加者の辞書snapshot・教材・テスト・回答後解説は記録時の内容を維持し、仕様版39以下は閲覧専用とする。
+現行辞書は[learning_glossary_v4.yml](../backend/app/seed/content/learning_glossary_v4.yml)で、仕様版41の新規参加者に適用する。v4はv3を変更せず、RAG（検索拡張生成）をv1の定義・出典・別表記を引き継いで追加する。v1〜v3は履歴として無変更で保持する。既存参加者の辞書snapshot・教材・テスト・回答後解説は記録時の内容を維持し、仕様版40以下は閲覧専用とする。
 
 新規参加者には教材内解説モードを固定し、教材本文は800文字程度を目安にする。上下限による合否判定や長さを理由にした再生成は行わず、実文字数と目標値を監査用に記録する。仕様版39以下の保存済み教材・snapshot・監査記録は変更しない。管理画面の切替UIと設定APIは提供しない。詳細は[41](41_learning_glossary_material_mode.md)・[42](42_learning_glossary_material_length.md)。
 

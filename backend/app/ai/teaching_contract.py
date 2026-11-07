@@ -8,7 +8,7 @@ from app.ai.material_structure import evidence_sections, validate_material_struc
 MATERIAL_TARGET_CHARACTERS = 800
 
 
-PROMPT_CONTRACT_VERSION = "tutoring-prompt-contract-v10-target-800"
+PROMPT_CONTRACT_VERSION = "tutoring-prompt-contract-v11-target-800-control-shared-prompt"
 TEACHING_CONTRACT_TYPES = ("M1", "M3", "unknown")
 REFUTATION_MODES = ("explicit", "implicit", "category_comparison", "none")
 

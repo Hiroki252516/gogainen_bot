@@ -113,6 +113,9 @@ def trial_snapshot(db, pid):
         (15, 26, "experiment-plan-2026-10-27-test-glossary-v2"),
         (4, 26, "experiment-plan-2026-10-27-test-glossary-v2"),
         (15, 29, "experiment-plan-2026-10-30-learning-glossary-material-v1"),
+        (15, 40, "experiment-plan-2026-11-07-learning-material-target-800-v1"),
+        (15, 40, "experiment-plan-2026-11-07-control-shared-prompt-v1"),
+        (15, 39, "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"),
     ],
 )
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):
@@ -203,7 +206,10 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
     new = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
     assert new["participant_id"] != pid
     with SessionLocal() as db:
-        assert db.get(Participant, new["participant_id"]).retest_cycles_completed == 0
+        new_participant = db.get(Participant, new["participant_id"])
+        assert new_participant.retest_cycles_completed == 0
+        assert new_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
+        assert new_participant.protocol_id == CURRENT_PROTOCOL_ID
 
 
 def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkeypatch):
@@ -289,10 +295,13 @@ def test_current_effective_prompts_and_schema_lock_backend_strategy(monkeypatch,
         assert retired not in captured["prompt"]
         assert retired not in json.dumps(captured["schema"])
     if group == "proposed":
+        if mtype == "M1":
+            assert "teaching_strategy はbackendで指定された belief_revision に固定する。" in captured["prompt"]
         assert "transfer_check" in captured["schema"]["properties"]["teaching_contract"]["required"]
         assert result["teaching_contract"]["transfer_check"]
     else:
         assert "misconception_taxonomy" not in captured["prompt"]
+        assert "teaching_strategy はbackendで指定された" not in captured["prompt"]
 
 
 def test_strategy_mismatch_is_retried_then_rejected_without_mock_fallback(monkeypatch):
