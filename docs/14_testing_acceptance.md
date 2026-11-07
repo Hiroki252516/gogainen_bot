@@ -1,13 +1,24 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-07 統制群の教材指示を共通ルールのみにする（仕様版40・fix/issue-279）
+## 2026-11-07 origin/main統合（仕様版41）
 
-- 新規参加者を仕様版40 / `experiment-plan-2026-11-07-control-shared-prompt-v1`で登録する。統制群から通常教授方略を説明する3つの自然言語指示を取り除き、両群共通の教材ルール・入力は維持する。提案群の診断・タイプ別教授指示と`teaching_strategy`の自然言語指定は維持する。
-- 統制群の出力Schema enumとBackend検証は維持し、内部の`teaching_strategy`値を`general_explanation`に固定する。prompt契約識別子を`tutoring-prompt-contract-v10-control-shared-prompt`とし、旧仕様版39以下・旧prompt監査記録・保存済み回答・教材・snapshotは変更しない。
-- 新規参加者の現行split問題取得で仕様版40がsplit形式として認識されない版判定漏れも修正し、現在の問題バンクを利用できるようにした。仕様39の閲覧専用・記録不変テストと、仕様40の登録・出題を検証した。
-- prompt YAMLの必須セクション検証、control/proposedの生成prompt hash、統制群からの旧3文除去、提案群の方略指示、両群のSchema enumとBackend検証を含む重点テストは104 passed。Backend全テストは隔離SQLiteで1716 passed。
-- `git diff --check`通過。Frontendの表示・APIは変更していないためFrontendテスト・buildは未実施。研究DB・localhost:3000・実AI・コミット・pushは使用していない。
-- これは実装条件の変更と自動検証の記録であり、研究上の承認、教材の意味的正しさ、実験効果を示すものではない。
+- 競合した仕様版40の二つの変更を別々の履歴protocolとして保ち、仕様版41 / `experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`へ統合した。教材本文は800文字程度を目安とし、上下限による合否判定・長さを理由にした再生成は行わない。統制群への群別自然言語方略指示は送らず、提案群の診断・教授指示は維持する。
+- 仕様版40以下は閲覧専用。旧version40のいずれのprotocolも現行版として扱わず、既存教材・回答・snapshot・監査記録は変更しない。結果復元では仕様版39・40にも通常版問題バンク`split-actions-v5`を対応付けた。
+- 教材生成prompt、仕様版・protocol、旧問題版復元、用語辞書・教材snapshot、学習確認、回答履歴、必須教授要素に関するBackendテスト8ファイルは合計`196 passed`（164件と32件の2回に分けて実行）。DeprecationWarning 2件。
+- `git diff --check`と競合マーカーの残存確認は通過した。
+- Frontendテスト・buildとブラウザ確認は、Frontendコードを変更していないため未実施。研究DB・localhost:3000・実AIは使用していない。マージコミットは作成しない。
+
+## 統合前の仕様版40記録：目標800文字（fix/issue-278）
+
+- 別ブランチでは新規参加者を仕様版40 / `experiment-plan-2026-11-07-learning-material-target-800-v1`へ更新し、教材本文は800文字程度を目安とした。上下限の合否判定・長さのみを理由とした再生成を廃止し、構造・教授内容などの検証を維持した。新規の生成監査には実文字数と目標だけを記録する。
+- 当時の検証ではBackend全テストが隔離SQLiteで`1712 passed`。教材本文80文字・2000文字が文字数を理由に再生成されず、構造・教授契約違反では再試行する関連テスト144件も通過した。Frontend全7スクリプトとbuild、`git diff --check`も通過した。
+- このprotocolは統合後の現行protocolではない。記録は当時の実行結果として保持し、API・DBスキーマ等の現行条件とは区別する。
+
+## 統合前の仕様版40記録：統制群の共通プロンプト（fix/issue-279）
+
+- 別ブランチでは仕様版40 / `experiment-plan-2026-11-07-control-shared-prompt-v1`を適用し、統制群から通常教授方略を説明する3つの自然言語指示を取り除いた。共通ルール・入力、提案群の診断・タイプ別教授指示、出力Schema enumとBackend検証は維持し、統制群の内部`teaching_strategy`を`general_explanation`に固定した。
+- 当時の検証では仕様版40の登録・出題、旧3文の除去と提案群指示を含む重点テスト104件、Backend全体1716件が通過した。Frontendは未実施、`git diff --check`は通過した。
+- これら二つの仕様版40記録は別protocolのブランチ検証であり、同時に有効だった条件ではない。統合時に仕様版41へ上げ、両変更を新protocolへまとめた。研究DB・localhost:3000・実AI・コミット・pushは当時の検証でも使用していない。
 
 ## 2026-11-06 教材内解説の標準化（仕様版39・fix/issue-273）
 
