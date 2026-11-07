@@ -260,14 +260,14 @@ def test_init_db_adds_rationale_column_to_existing_question_options_table(monkey
     engine.dispose()
 
 
-def test_spec_41_keeps_v5_and_preserves_previous_read_only_snapshots(tmp_path):
+def test_spec_42_keeps_v5_and_preserves_previous_read_only_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 41
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 42
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"
@@ -279,6 +279,7 @@ def test_spec_41_keeps_v5_and_preserves_previous_read_only_snapshots(tmp_path):
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[38][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[39][STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[40][STANDARD] == "split-actions-v5"
+            assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[41][STANDARD] == "split-actions-v5"
 
             term = db.query(Term).filter_by(slug="memory_process").one()
             active = db.query(Question).filter_by(

@@ -282,7 +282,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 41
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 42
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION

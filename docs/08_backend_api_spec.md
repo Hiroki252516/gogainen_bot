@@ -1,14 +1,14 @@
 # 現行API
 
-## 仕様版41の固定設定
+## 仕様版42の固定設定
 
-新規登録はRuntimeSettingの旧表示設定を参照せず、結果表示false・設問ごとの答え合わせtrue・設問1のみ出題true・教材内解説モードをParticipantへ固定保存する。管理API `/api/admin/pretest-result-display`、`/api/admin/question-review-display`、`/api/admin/first-question-only`、`/api/admin/learning-material-glossary-mode` は提供しない。RuntimeSettingとParticipantの履歴値はparticipant log API・CSVに保持するが、管理画面の一覧・個別ログ表示からは除く。出題条件は現行の3問のみであり、集計の条件指定API/UIは設けない。仕様版40以下は閲覧専用。
+新規登録はRuntimeSettingの旧表示設定を参照せず、結果表示false・設問ごとの答え合わせtrue・設問1のみ出題true・教材内解説モードをParticipantへ固定保存する。管理API `/api/admin/pretest-result-display`、`/api/admin/question-review-display`、`/api/admin/first-question-only`、`/api/admin/learning-material-glossary-mode` は提供しない。RuntimeSettingとParticipantの履歴値はparticipant log API・CSVに保持するが、管理画面の一覧・個別ログ表示からは除く。出題条件は現行の3問のみであり、集計の条件指定API/UIは設けない。仕様版41以下は閲覧専用。
 
-## 設問1のみ出題（仕様版35で導入した履歴）
+## 設問1のみ出題APIの廃止（仕様版35で導入した履歴）
 
-過去には管理認証付きGET/PUT `/api/admin/first-question-only` で条件を切り替えていた。仕様版40から当該APIを廃止し、仕様版41でも新規参加者を各用語1問・計3問へ固定する。旧参加者の記録復元には保存snapshotと版対応を使う。詳細は[48](48_first_question_only.md)。
+過去には管理認証付きGET/PUT `/api/admin/first-question-only` で条件を切り替えていた。仕様版40から当該APIを廃止し、仕様版42でも新規参加者を各用語1問・計3問へ固定する。旧参加者の記録復元には保存snapshotと版対応を使う。詳細は[48](48_first_question_only.md)。
 
-## 教材用語解説モード（仕様版39導入・41現行）
+## 教材用語解説モード（仕様版39導入・42現行）
 
 新規参加者は登録時に`integrated_material`へ固定する。管理画面の切替UI・固定値表示と管理API `GET/PUT /api/admin/learning-material-glossary-mode`は提供しない。既存Participantの保存値は変更せず、participants CSVと管理ログAPIで履歴を参照できる。RuntimeSettingの旧モード列はDB互換性のため残すが、登録・管理APIでは参照しない。管理画面の参加者一覧・個別ログには表示しない。
 
@@ -16,7 +16,7 @@
 
 ## 設問ごとの答え合わせAPI（機能契約）
 
-設定GET/PUT `/api/admin/question-review-display` は仕様版40で廃止した。仕様版41の新規参加者にも常に有効とし、通常版の出題設問について選択済み選択肢と正誤を返す。
+設定GET/PUT `/api/admin/question-review-display` は仕様版40で廃止した。仕様版42の新規参加者にも常に有効とし、通常版の出題設問について選択済み選択肢と正誤を返す。
 
 既存のpretest/retest/final-test取得APIは、設定ON・仕様版28・通常版において、同じ用語の設問1・2がともに保存済みで未確認の場合だけpending_question_reviewを返す。結果にはphase、term_slug、term_label、各設問番号、選択済み選択肢のlabel/body、is_correctだけを含め、正答キー・未選択肢・解説・診断情報を含めない。単一設問だけの回答では返さない。
 
@@ -24,7 +24,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## テスト結果表示（issue-204・issue-233の履歴と現行条件）
 
-管理用GET/PUT `/api/admin/pretest-result-display` は仕様版40で廃止した。仕様版41の新規Participantの`show_pretest_results`と`show_retest_results`もfalseに固定する。RuntimeSetting列は履歴互換のため残すが参照・更新しない。既存行には補完せず、旧snapshotのNULLは表示ありと解釈する。
+管理用GET/PUT `/api/admin/pretest-result-display` は仕様版40で廃止した。仕様版42の新規Participantの`show_pretest_results`と`show_retest_results`もfalseに固定する。RuntimeSetting列は履歴互換のため残すが参照・更新しない。既存行には補完せず、旧snapshotのNULLは表示ありと解釈する。
 
 設定はPRETEST、RETEST 1/2、内部`final_test`の全体結果確認に適用する。採点APIは`review_required`と遷移先`next_url`を返し、表示ONなら結果確認画面、OFFなら学習・次テスト・アンケートへ進む。採点結果と正誤判定は維持する。学習対象APIは表示OFF時に現在のテスト結果配列を空にし、現在位置API・直接URL・再開でも同じ遷移を適用する。古い冪等応答に`review_required`がない場合、FrontendはRETEST/final_testでは従来どおり結果確認へ進む。
 
@@ -48,7 +48,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版41と`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`の両方で進行可否を判定する。教材内解説モードは新規参加者に固定し、管理設定APIは提供しない。仕様版40以下は閲覧専用とする。仕様版30の文字数契約は[42](42_learning_glossary_material_length.md)、仕様版31の辞書更新は[43](43_glossary_definition_paraphrase.md)、仕様版32のPRETEST履歴は[44](44_pretest_content_revision.md)、仕様版33の差分は[45](45_pretest_memory_distractors.md)、RAG注釈は[49](49_rag_glossary.md)。仕様版40で固定設定APIを廃止し、現行仕様版41でもParticipant/RuntimeSettingの列、管理ログAPI、CSV形式を維持する。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版42 / `experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`で進行可否を判定する。仕様版41以下は閲覧専用とする。教材本文の目標800文字化による公開API構造の変更はない。教材モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、辞書更新は[43](43_glossary_definition_paraphrase.md)、RAG注釈は[49](49_rag_glossary.md)を参照する。
 
 事前アンケートはGET/POST `/api/participants/{id}/presurvey`を使い、`presurvey-baseline-v2`の厳密なpayloadを受け付ける。`prior_term_knowledge`の6項目は`unknown`、`heard_of`、`knows_meaning`、`can_explain`のいずれかを必須とし、AI利用頻度・自己評価も1〜10整数で必須とする。`phase=presurvey`のParticipantSurveyとして冪等に保存する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版36の`presurvey-baseline-v1`回答はBoolean形式のまま履歴保全し、新形式へ変換しない。
 
