@@ -123,8 +123,8 @@ tutoring:
   templates:
     # 教材の主題を指定します。term_labelはPythonから渡されます。
     term_topic: '教材の主題は現在の用語『{term_label}』とし、入力された用語説明を中心にする。'
-    # 教材の文字数契約です。目標・上下限は辞書入力の有無に応じてPythonが渡します。
-    material_length: '教材本文はMarkdown記号を含めて{target_characters}文字前後（{min_characters}〜{max_characters}文字）に統一する。意味や仕組みの説明を保ち、不要な繰り返しで水増ししない。'
+    # 教材本文の目標文字数です。Pythonから渡され、許容範囲の制約は設けません。
+    material_length: '教材本文はMarkdown記号を含めて{target_characters}文字程度を目安とする。意味や仕組みの説明を保ち、不要な繰り返しで水増ししない。'
     # M1/M3/unknownの必須教授要素を教材本文に含める指示です。タイプ名はPythonが渡します。
     mandatory_element_intro: '現在の必須教授要素タイプは {misconception_type}。次の内容を教材のセクション本文に含める:'
     # teaching_strategyの自然言語指定は提案群だけで使います。統制群の出力値はSchemaで固定します。
@@ -132,15 +132,8 @@ tutoring:
   # payloadにglossary_referenceがある場合（教材内解説モード）だけ、以下のルールを順番に追加します。
   glossary_rules:
     - 'glossary_reference は両群共通の用語辞書であり、定義文をそのまま転載するためではなく、意味を確認する参考情報として使う。教材本文で実際に使う登録語だけを選び、初出時に教材の文脈に合わせて自然な言葉で短く説明する。'
-    - '教材に使わない辞書語を列挙したり、用語一覧を追加したりしない。説明は本文の流れに自然に含め、本文{min_characters}〜{max_characters}文字の条件を維持する。'
+    - '教材に使わない辞書語を列挙したり、用語一覧を追加したりしない。説明は本文の流れに自然に含める。'
     - '辞書の定義文をそのまま引用・転記せず、自分の言葉で言い換える。用語の中心的な意味は変えず、定義にない性質や断定を付け加えない。'
-  # 文字数検証の再試行時だけ使います。actual_character_countが整数ならcounted、それ以外ならuncountedです。
-  # 再試行の実測値はサーバー側metadataからPythonが渡します。
-  material_length_retry:
-    # 前回の文字数を把握できている場合の指示です。
-    counted: '前回の教材本文は{actual_character_count}文字で許容範囲外だった。今回は前回の内容を冗長に繰り返さず、Markdown記号を含めて{target_character_count}文字前後（{min_characters}〜{max_characters}文字）に必ず収める。'
-    # 前回の文字数を数値として使えない場合の指示です。
-    uncounted: '前回の教材本文が文字数の許容範囲外だった。今回はMarkdown記号を含めて{target_character_count}文字前後（{min_characters}〜{max_characters}文字）に必ず収める。'
   # expected_typeが指定された場合に追加する、タイプ別teaching_contractのルールです。
   expected_type_rules:
     # M1/M3/unknownのどのタイプにも共通する注意です。

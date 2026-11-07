@@ -92,9 +92,8 @@ def _validate_prompt_text(raw: Any) -> dict[str, Any]:
     if {field for _, field, _, _ in Formatter().parse(common["heading"]) if field} != {"term_label"}:
         raise ValueError("Prompt text template tutoring.common_rules.heading has invalid fields")
     glossary_rules = _required_text_list(tutoring.get("glossary_rules"), "tutoring.glossary_rules", expected_length=3)
-    glossary_fields = {field for _, field, _, _ in Formatter().parse(glossary_rules[1]) if field}
-    if glossary_fields != {"min_characters", "max_characters"}:
-        raise ValueError("Prompt text template tutoring.glossary_rules[1] has invalid fields")
+    if any(field for rule in glossary_rules for _, field, _, _ in Formatter().parse(rule)):
+        raise ValueError("Prompt text tutoring.glossary_rules must not contain template fields")
     _required_text(tutoring.get("validation_retry_prefix"), "tutoring.validation_retry_prefix")
     _required_text(tutoring.get("learning_scope_rule"), "tutoring.learning_scope_rule")
     group_rules = _required_mapping(tutoring.get("group_rules"), "tutoring.group_rules")
@@ -105,7 +104,7 @@ def _validate_prompt_text(raw: Any) -> dict[str, Any]:
     templates = _required_mapping(tutoring.get("templates"), "tutoring.templates")
     template_fields = {
         "term_topic": {"term_label"},
-        "material_length": {"target_characters", "min_characters", "max_characters"},
+        "material_length": {"target_characters"},
         "mandatory_element_intro": {"misconception_type"},
         "teaching_strategy": {"strategies"},
     }
@@ -114,16 +113,6 @@ def _validate_prompt_text(raw: Any) -> dict[str, Any]:
         fields = {field for _, field, _, _ in Formatter().parse(template) if field}
         if fields != expected_fields:
             raise ValueError(f"Prompt text template tutoring.templates.{key!s} has invalid fields")
-
-    retry = _required_mapping(tutoring.get("material_length_retry"), "tutoring.material_length_retry")
-    retry_fields = {
-        "counted": {"actual_character_count", "target_character_count", "min_characters", "max_characters"},
-        "uncounted": {"target_character_count", "min_characters", "max_characters"},
-    }
-    for key, expected_fields in retry_fields.items():
-        template = _required_text(retry.get(key), f"tutoring.material_length_retry.{key}")
-        if {field for _, field, _, _ in Formatter().parse(template) if field} != expected_fields:
-            raise ValueError(f"Prompt text template tutoring.material_length_retry.{key} has invalid fields")
     expected = _required_mapping(tutoring.get("expected_type_rules"), "tutoring.expected_type_rules")
     _required_text_list(expected.get("common"), "tutoring.expected_type_rules.common", expected_length=1)
     _required_text_list(expected.get("m1_m3"), "tutoring.expected_type_rules.m1_m3", expected_length=4)

@@ -113,6 +113,8 @@ def trial_snapshot(db, pid):
         (15, 26, "experiment-plan-2026-10-27-test-glossary-v2"),
         (4, 26, "experiment-plan-2026-10-27-test-glossary-v2"),
         (15, 29, "experiment-plan-2026-10-30-learning-glossary-material-v1"),
+        (15, 40, "experiment-plan-2026-11-07-learning-material-target-800-v1"),
+        (15, 40, "experiment-plan-2026-11-07-control-shared-prompt-v1"),
         (15, 39, "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"),
     ],
 )

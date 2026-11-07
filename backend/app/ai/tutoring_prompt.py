@@ -77,12 +77,8 @@ def build_tutoring_prompt(
     if group not in {"control", "proposed"}:
         raise ValueError(f"Unsupported tutoring group: {group!r}")
 
-    length_contract = material_length_contract(
-        integrated_material="glossary_reference" in payload,
-    )
+    length_contract = material_length_contract()
     target_characters = length_contract["target_character_count"]
-    min_characters = length_contract["min_character_count"]
-    max_characters = length_contract["max_character_count"]
     prompt_text = PROMPT_TEXT["tutoring"]
     templates = prompt_text["templates"]
     common = prompt_text["common_rules"]
@@ -92,8 +88,6 @@ def build_tutoring_prompt(
         *common["context"],
         templates["material_length"].format(
             target_characters=target_characters,
-            min_characters=min_characters,
-            max_characters=max_characters,
         ),
         common["formatting"],
         common["heading"].format(term_label=term_label),
@@ -102,36 +96,11 @@ def build_tutoring_prompt(
     ]
     if payload.get("glossary_reference"):
         glossary_rules = [*prompt_text["glossary_rules"]]
-        glossary_rules[1] = glossary_rules[1].format(
-            min_characters=min_characters,
-            max_characters=max_characters,
-        )
         rules.extend(glossary_rules)
 
-    # ``retry_context`` is server-side generation metadata.  It may contribute
-    # a length-adjustment instruction, but it must never become model input.
+    # ``retry_context`` is server-side generation metadata; only validation
+    # errors selected below may contribute a retry instruction.
     retry_source = retry_context or payload
-    material_length_retry = retry_source.get("material_length_retry")
-    if isinstance(material_length_retry, dict):
-        actual_character_count = material_length_retry.get("actual_character_count")
-        if isinstance(actual_character_count, int) and not isinstance(actual_character_count, bool):
-            rules.append(
-                prompt_text["material_length_retry"]["counted"].format(
-                    actual_character_count=actual_character_count,
-                    target_character_count=target_characters,
-                    min_characters=min_characters,
-                    max_characters=max_characters,
-                )
-            )
-        else:
-            rules.append(
-                prompt_text["material_length_retry"]["uncounted"].format(
-                    target_character_count=target_characters,
-                    min_characters=min_characters,
-                    max_characters=max_characters,
-                )
-            )
-
     if expected_type:
         expected_rules = prompt_text["expected_type_rules"]
         rules.extend(expected_rules["common"])

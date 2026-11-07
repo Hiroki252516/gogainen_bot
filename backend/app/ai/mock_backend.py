@@ -115,9 +115,7 @@ class MockAIBackend:
         result = {
             "tutor_message": _pad_tutoring_material(
                 message + _history_note(payload),
-                target_characters=material_length_contract(
-                    integrated_material="glossary_reference" in payload,
-                )["target_character_count"],
+                target_characters=material_length_contract()["target_character_count"],
             ),
             "teaching_strategy": strategy_for(mandatory_type, None, group),
         }
@@ -189,7 +187,7 @@ def _pad_tutoring_material(
     *,
     target_characters: int = 700,
 ) -> str:
-    """Keep deterministic mock material inside the production contract range."""
+    """Pad deterministic mock material toward the configured target length."""
     additions = (
         "定義だけでなく、構成要素がどの役割を担い、情報がどの順で処理されるかを確認します。",
         "具体例では入力、処理、出力を対応付け、似た概念と違う点を言葉にします。",

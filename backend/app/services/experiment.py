@@ -29,10 +29,9 @@ from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
 from app.ai.material_structure import validate_material_structure
 from app.ai.teaching_contract import (
     PROMPT_CONTRACT_VERSION,
-    material_length_contract,
     validate_tutoring_material_safety,
     validate_teaching_contract,
-    validate_tutoring_material_length,
+    tutoring_material_length_metrics,
 )
 from app.core.config import get_settings
 from app.core.experiment_spec import (
@@ -145,9 +144,8 @@ LEARNING_ALLOWED_STEPS = {"learning_targets"}
 RETEST_NOT_AVAILABLE_DETAIL = "この参加者は再テスト対象ではありません。"
 LEARNING_NOT_AVAILABLE_DETAIL = "この参加者は学習セッション対象ではありません。"
 EXPERIMENT_FINISHED_DETAIL = "この実験は終了しています。"
-# Both validation paths include the initial generation plus up to two retries.
+# Material contract validation includes the initial generation plus up to two retries.
 MANDATORY_ELEMENT_MAX_ATTEMPTS = 3
-MATERIAL_LENGTH_MAX_ATTEMPTS = 3
 PREFETCH_STATES = {"pending", "generating", "ready", "consumed", "failed", "discarded"}
 PREFETCH_WAITING_STATES = {"pending", "generating", "ready"}
 
@@ -326,16 +324,6 @@ def _misconception_teaching_guidance(misconception_type: str | None) -> str:
     }.get(misconception_type, "現在の構成用語の定義、役割、判断基準を短く整理する。")
 
 
-def _material_length_retry(length_validation: dict[str, Any], attempt: int) -> dict[str, Any]:
-    return {
-        "attempt": attempt,
-        "target_character_count": length_validation["target_character_count"],
-        "min_character_count": length_validation["min_character_count"],
-        "max_character_count": length_validation["max_character_count"],
-        "actual_character_count": length_validation.get("character_count"),
-    }
-
-
 async def _generate_validated_tutoring_turn(
     db: Session,
     payload: dict[str, Any],
@@ -346,7 +334,7 @@ async def _generate_validated_tutoring_turn(
     expected_type = expected_mandatory_type({**payload, "group_condition": group}) if group == "proposed" else None
     selected_strategy = strategy_for(expected_type, None, group)
     term_label = (payload.get("term") or {}).get("label")
-    retry_limit = max(MANDATORY_ELEMENT_MAX_ATTEMPTS, MATERIAL_LENGTH_MAX_ATTEMPTS)
+    retry_limit = MANDATORY_ELEMENT_MAX_ATTEMPTS
     request_payload = {**payload, "generation_attempt": 1}
     validation: dict[str, Any] = {}
     for attempt in range(1, retry_limit + 1):
@@ -354,10 +342,7 @@ async def _generate_validated_tutoring_turn(
         mandatory = validate_mandatory_elements(result, expected_type, term_label)
         contract = validate_teaching_contract(result, expected_type, payload, term_label)
         safety = validate_tutoring_material_safety(result, forbidden_strings)
-        length = validate_tutoring_material_length(
-            result,
-            integrated_material="glossary_reference" in payload,
-        )
+        length_metrics = tutoring_material_length_metrics(result)
         structure = validate_material_structure(result, term_label)
         strategy_valid = result.get("teaching_strategy") == selected_strategy
         retry_missing = list(dict.fromkeys([
@@ -368,11 +353,11 @@ async def _generate_validated_tutoring_turn(
             retry_missing.append("teaching_strategy.mismatch")
         validation = {
             **mandatory,
-            "valid": mandatory["valid"] and contract["valid"] and safety["valid"] and length["valid"] and structure["valid"] and strategy_valid,
-            "missing": [*retry_missing, *length.get("missing", [])],
+            "valid": mandatory["valid"] and contract["valid"] and safety["valid"] and structure["valid"] and strategy_valid,
+            "missing": retry_missing,
             "teaching_contract": contract,
             "material_safety": safety,
-            "material_length": length,
+            "material_length_metrics": length_metrics,
             "material_structure": structure,
             "teaching_strategy": {"expected": selected_strategy, "actual": result.get("teaching_strategy"), "valid": strategy_valid},
             "attempt": attempt,
@@ -382,8 +367,6 @@ async def _generate_validated_tutoring_turn(
             return result, {**validation, "attempts": attempt}
         if attempt < retry_limit:
             request_payload = {**payload, "generation_attempt": attempt + 1}
-            if not length["valid"]:
-                request_payload["material_length_retry"] = _material_length_retry(length, attempt + 1)
             if retry_missing:
                 request_payload["mandatory_element_retry"] = {"attempt": attempt + 1, "missing": retry_missing}
     raise HTTPException(status_code=503, detail={
@@ -1580,16 +1563,10 @@ def _submit_test_term_page_in_transaction(db: Session, payload: dict[str, Any]) 
 
 def _tutoring_output_metrics(
     result: dict[str, Any],
-    *,
-    integrated_material: bool = False,
 ) -> dict[str, int]:
     material = str(result.get("tutor_message") or "")
-    character_count = len(material)
-    length_contract = material_length_contract(integrated_material=integrated_material)
     return {
-        "character_count": character_count,
-        **length_contract,
-        "character_count_in_target_range": int(length_contract["min_character_count"] <= character_count <= length_contract["max_character_count"]),
+        **tutoring_material_length_metrics(result),
         "paragraph_count": len([block for block in re.split(r"\n\s*\n", material.strip()) if block.strip()]),
         "bullet_count": len(re.findall(r"(?m)^\s*(?:[-*+] |\d+[.)] )", material)),
     }
@@ -1653,10 +1630,7 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
         result = dict(result)
         latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
         if purpose == "generate_tutoring_turn":
-            result["output_metrics"] = _tutoring_output_metrics(
-                result,
-                integrated_material="glossary_reference" in backend_payload,
-            )
+            result["output_metrics"] = _tutoring_output_metrics(result)
         if request_audit is not None:
             logged_payload["effective_request"] = _effective_request_with_instruction_audit(
                 request_audit,
@@ -2459,12 +2433,11 @@ def _tutor_turn_from_generation(
         "mandatory_elements_validation": mandatory_validation,
         "teaching_contract": result.get("teaching_contract"),
         "teaching_contract_validation": mandatory_validation.get("teaching_contract"),
-        "material_length_validation": mandatory_validation.get("material_length"),
+        "material_length_metrics": mandatory_validation.get("material_length_metrics"),
         "material_structure_validation": mandatory_validation.get("material_structure"),
         "generation_attempts": mandatory_validation.get("attempts"),
         "tutoring_output_metrics": result.get("output_metrics") or _tutoring_output_metrics(
             result,
-            integrated_material="glossary_reference" in payload,
         ),
         "group_condition": group_condition,
         "taxonomy_version": payload.get("taxonomy_version"),

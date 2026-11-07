@@ -191,20 +191,17 @@ def test_material_and_feedback_snapshots_replays_and_audit(group, labels, restor
     assert "glossary" not in turn["practice_question"]
     with SessionLocal() as db:
         p = db.get(Participant, pid)
-        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 40
-        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-control-shared-prompt-v1"
+        assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 41
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1"
         assert p.learning_material_glossary_mode == "integrated_material"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material
-        assert 600 <= len(stored.tutor_message) <= 1200
-        length_validation = stored.diagnosis_json["material_length_validation"]
-        assert length_validation["target_character_count"] == 1000
-        assert length_validation["min_character_count"] == 600
-        assert length_validation["max_character_count"] == 1200
-        assert length_validation["valid"] is True
+        length_metrics = stored.diagnosis_json["material_length_metrics"]
+        assert length_metrics == {"character_count": len(stored.tutor_message), "target_character_count": 800}
         metrics = stored.diagnosis_json["tutoring_output_metrics"]
-        assert metrics["target_character_count"] == 1000
-        assert metrics["max_character_count"] == 1200
+        assert metrics["target_character_count"] == 800
+        assert "min_character_count" not in metrics
+        assert "max_character_count" not in metrics
     assert turn["show_material_glossary"] is False
 
     def no_recompute(_text):
@@ -266,17 +263,15 @@ def test_integrated_material_mode_is_common_to_both_groups_and_snapshotted(resto
                 .one()
             )
             stored_turn = db.get(TutorTurn, turn["turn_id"])
-            assert 600 <= len(stored_turn.tutor_message) <= 1200
-            length_validation = stored_turn.diagnosis_json["material_length_validation"]
-            assert length_validation["target_character_count"] == 1000
-            assert length_validation["min_character_count"] == 600
-            assert length_validation["max_character_count"] == 1200
-            assert length_validation["valid"] is True
+            length_metrics = stored_turn.diagnosis_json["material_length_metrics"]
+            assert length_metrics == {"character_count": len(stored_turn.tutor_message), "target_character_count": 800}
             metrics = stored_turn.diagnosis_json["tutoring_output_metrics"]
-            assert metrics["target_character_count"] == 1000
-            assert metrics["max_character_count"] == 1200
-            assert call.response_payload["output_metrics"]["target_character_count"] == 1000
-            assert call.response_payload["output_metrics"]["max_character_count"] == 1200
+            assert metrics["target_character_count"] == 800
+            assert "min_character_count" not in metrics
+            assert "max_character_count" not in metrics
+            assert call.response_payload["output_metrics"]["target_character_count"] == 800
+            assert "min_character_count" not in call.response_payload["output_metrics"]
+            assert "max_character_count" not in call.response_payload["output_metrics"]
             projection = call.request_payload["input_projection"]
             assert projection["glossary_reference"]["version"] == GLOSSARY_VERSION
             assert len(projection["glossary_reference"]["entries"]) == 17
