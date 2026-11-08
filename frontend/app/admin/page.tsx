@@ -12,6 +12,8 @@ type Participant = {
   participant_id: string;
   display_code: string;
   group_condition: string;
+  test_content_mode: TestContentMode | null;
+  test_content_mode_label?: string | null;
   current_step: string;
   can_resume: boolean;
   experiment_spec_version: number | null;
@@ -30,6 +32,8 @@ const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"],
 type AiModel = (typeof AI_MODELS)[number][0];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
+type TestContentMode = "application" | "basic_understanding";
+type TestContentModeSetting = { mode: TestContentMode; label: string; applies_to: "new_participants_only" };
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
   study_settings_warning?: string | null;
@@ -89,6 +93,8 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   test_timing_unit: "テスト時間の単位",
   response_time_unit: "回答時間の単位",
   test_page_timing_json: "用語ページ計測",
+  test_content_mode: "テスト問題モード",
+  test_content_mode_label: "テスト問題モード",
   source_type: "記録種別",
   test_round: "周回",
   term_slug: "用語",
@@ -151,6 +157,9 @@ export default function AdminPage() {
   const [optionOrder, setOptionOrder] = useState<OptionOrderSetting | null>(null);
   const [optionOrderSaving, setOptionOrderSaving] = useState(false);
   const [optionOrderError, setOptionOrderError] = useState("");
+  const [testContentMode, setTestContentMode] = useState<TestContentModeSetting | null>(null);
+  const [testContentModeSaving, setTestContentModeSaving] = useState(false);
+  const [testContentModeError, setTestContentModeError] = useState("");
   const [summaryError, setSummaryError] = useState("");
   const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [login, setLogin] = useState<any>(null);
@@ -177,6 +186,9 @@ export default function AdminPage() {
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
       .catch((err) => setOptionOrderError(err instanceof Error ? err.message : String(err)));
+    api<TestContentModeSetting>("/api/admin/test-content-mode")
+      .then(setTestContentMode)
+      .catch((err) => setTestContentModeError(err instanceof Error ? err.message : String(err)));
   }, []);
 
   useEffect(() => {
@@ -339,6 +351,23 @@ export default function AdminPage() {
     }
   }
 
+  async function updateTestContentMode(mode: TestContentMode) {
+    if (testContentModeSaving || !testContentMode || testContentMode.mode === mode) return;
+    setTestContentModeError("");
+    setTestContentModeSaving(true);
+    try {
+      const updated = await api<TestContentModeSetting>("/api/admin/test-content-mode", {
+        method: "PUT",
+        body: JSON.stringify({ mode })
+      });
+      setTestContentMode(updated);
+    } catch (err) {
+      setTestContentModeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTestContentModeSaving(false);
+    }
+  }
+
   async function loadParticipantLog(participantId: string) {
     setLogError("");
     try {
@@ -396,7 +425,7 @@ export default function AdminPage() {
   const activeParticipants = participants.filter((participant) => participant.group_condition === activeGroup);
   const currentParticipantCount = activeParticipants.filter((participant) => participant.can_resume).length;
   const readOnlyParticipantCount = activeParticipants.filter((participant) => !participant.can_resume).length;
-  const activeGroupSummary = summary?.groups?.find((group: any) => group.group_condition === activeGroup && group.first_question_only === true);
+  const activeGroupSummaries = (summary?.groups || []).filter((group: any) => group.group_condition === activeGroup && group.first_question_only === true);
   const activeAnswerHistory = (overview?.recent_answer_history || []).filter((row: any) => row.group_condition === activeGroup);
   const activeEvaluationSummaries = (overview?.evaluation_summaries || []).filter((row: any) => row.group_condition === activeGroup && !row.legacy_read_only);
 
@@ -560,19 +589,43 @@ export default function AdminPage() {
               {optionOrderSaving ? <p className="muted">保存中...</p> : null}
               {optionOrderError ? <p className="danger" role="alert">{optionOrderError}</p> : null}
             </div>
-            {activeGroupSummary ? (
-              <div className="notice">
-                <strong>{activeGroupSummary.group_condition} / 通常版</strong>
-                <p>参加者: {activeGroupSummary.participant_count}</p>
-                <p>確認テスト正答率: {formatRate(activeGroupSummary.attainment_correct_rate)}</p>
-                <p>事前比改善: {formatPoints(activeGroupSummary.avg_score_delta_from_pretest_pt)}</p>
+            <div className="notice">
+              <strong>テスト問題モード</strong>
+              <p>{testContentMode?.label || (testContentModeError ? "取得できません" : "設定を確認中")}</p>
+              <div className="reasoning-effort-buttons option-order-buttons" role="group" aria-label="テスト問題モード">
+                {([
+                  ["application", "現行版（場面応用）"],
+                  ["basic_understanding", "基礎理解版"]
+                ] as [TestContentMode, string][]).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={testContentMode?.mode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
+                    aria-pressed={testContentMode?.mode === mode}
+                    disabled={!testContentMode || testContentModeSaving}
+                    onClick={() => updateTestContentMode(mode)}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <div className="notice" role="status">
-                <p>この出題条件の参加者データはありません。</p>
-              </div>
-            )}
+              <p className="muted">新規参加者の事前テスト・再テスト・確認問題に適用します。登録済みの参加者には反映されません。</p>
+              {testContentModeSaving ? <p className="muted">保存中...</p> : null}
+              {testContentModeError ? <p className="danger" role="alert">{testContentModeError}</p> : null}
+            </div>
           </div>
+          {activeGroupSummaries.length ? (
+            <div className="grid">
+              {activeGroupSummaries.map((group: any) => (
+                <div className="notice" key={`${group.group_condition}-${group.test_content_mode}`}>
+                  <strong>{group.group_condition} / {group.test_content_mode_label}</strong>
+                  <p>参加者: {group.participant_count}</p>
+                  <p>確認テスト正答率: {formatRate(group.attainment_correct_rate)}</p>
+                  <p>事前比改善: {formatPoints(group.avg_score_delta_from_pretest_pt)}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
           {flowNavigationError ? <p className="danger" role="alert">{flowNavigationError}</p> : null}
           <div className="actions">
             <button className="secondary" type="button" onClick={returnToExperimentStart} disabled={resumingExperiment}>
@@ -621,7 +674,15 @@ export default function AdminPage() {
             </div>
           </div>
           <p className="muted">以下の従来保存値・推移は参考情報です。6仮説の確定指標は専用の集計欄を参照してください。</p>
-          <MisconceptionTransitionSummary summary={activeGroupSummary?.misconception_transition_summary} />
+          <div className="grid">
+            {activeGroupSummaries.map((group: any) => (
+              <MisconceptionTransitionSummary
+                key={`${group.group_condition}-${group.test_content_mode}-misconceptions`}
+                summary={group.misconception_transition_summary}
+                title={`${group.test_content_mode_label}の誤概念推移`}
+              />
+            ))}
+          </div>
           <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["test_page_mode", "test_timing_unit", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "response_time_unit", "test_page_timing_json", "created_at"]} />
           <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
@@ -633,6 +694,7 @@ export default function AdminPage() {
               <tr>
                 <th>ID</th>
                 <th>条件</th>
+                <th>テスト問題モード</th>
                 <th>進捗</th>
                 <th>完了</th>
                 <th>事前テスト後の回数</th>
@@ -646,6 +708,7 @@ export default function AdminPage() {
                 <tr key={p.participant_id}>
                   <td>{p.display_code}</td>
                   <td>{p.group_condition}</td>
+                  <td>{p.test_content_mode_label || p.test_content_mode || "旧記録"}</td>
                   <td>{p.can_resume ? p.current_step : `旧仕様（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
                   <td>
@@ -682,7 +745,8 @@ export default function AdminPage() {
             <>
               <div className="notice">
                 <strong>{participantLog.participant.display_code}</strong>
-                <p>テスト表示方式: {participantLog.participant.effective_test_page_mode === "per_term" ? "用語ごと（2設問／ページ）" : "設問ごと"}</p>
+                <p>テスト問題モード: {participantLog.participant.test_content_mode_label || participantLog.participant.test_content_mode || "旧記録"}</p>
+                <p>テスト表示方式: {participantLog.participant.effective_test_page_mode === "per_term" ? "用語ごと" : "設問ごと"}</p>
                 <p>テスト時間の計測単位: {participantLog.participant.test_timing_unit === "term_page" ? "用語ページ" : "設問"}</p>
                 <p>
                   {participantLog.participant.group_condition} / {participantLog.participant.current_step}
@@ -752,13 +816,14 @@ function formatPoints(value: number | null) {
   return `${sign}${Math.round(value * 10) / 10}pt`;
 }
 
-function MisconceptionTransitionSummary({ summary }: { summary: any }) {
+function MisconceptionTransitionSummary({ summary, title }: { summary: any; title?: string }) {
   if (!summary) return null;
   const terms = summary.terms || [];
+  const headingId = title ? `misconception-${title.replace(/[^\p{L}\p{N}]+/gu, "-")}` : "group-misconception-title";
   return (
-    <section className="insight-panel stack" aria-labelledby="group-misconception-title">
+    <section className="insight-panel stack" aria-labelledby={headingId}>
       <div>
-        <h3 id="group-misconception-title">誤概念推移（群集計）</h3>
+        <h3 id={headingId}>{title || "誤概念推移（群集計）"}</h3>
         <p className="muted">用語ごとの事前テスト実施者を分母に、誤概念の変化を集計しています。</p>
       </div>
       {terms.length ? (
@@ -1073,7 +1138,7 @@ function SessionLog({ sessions }: { sessions: any[] }) {
 
 function formatCell(field: string, value: any) {
   if (value === null || value === undefined) return "-";
-  if (field === "test_page_mode" || field === "effective_test_page_mode") return value === "per_term" ? "用語ごと（2設問／ページ）" : "設問ごと";
+  if (field === "test_page_mode" || field === "effective_test_page_mode") return value === "per_term" ? "用語ごと" : "設問ごと";
   if (field === "test_timing_unit" || field === "response_time_unit") return value === "term_page" ? "用語ページ" : value === "per_question" ? "設問" : String(value);
   if (typeof value === "boolean") {
     if (field === "legacy_read_only") return value ? "閲覧専用" : "現行";

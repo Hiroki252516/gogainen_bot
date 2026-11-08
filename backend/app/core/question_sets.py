@@ -1,5 +1,13 @@
 STANDARD = "standard"
 ASSESSMENT_BANK_VERSIONS = {STANDARD: "split-actions-v5"}
+ASSESSMENT_MODE_BANK_VERSIONS = {
+    "application": "split-actions-v5",
+    "basic_understanding": "split-actions-basic-v1",
+}
+ASSESSMENT_MODE_LABELS = {
+    "application": "現行版（場面応用）",
+    "basic_understanding": "基礎理解版",
+}
 LEARNING_CONTENT_VERSIONS = {STANDARD: 15}
 ASSESSMENT_BANK_VERSION = ASSESSMENT_BANK_VERSIONS[STANDARD]
 LEARNING_CONTENT_VERSION = LEARNING_CONTENT_VERSIONS[STANDARD]
@@ -42,6 +50,7 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     39: {STANDARD: "split-actions-v5"},
     40: {STANDARD: "split-actions-v5"},
     41: {STANDARD: "split-actions-v5"},
+    42: {STANDARD: "split-actions-v5"},
 }
 
 # Version 41 was used by parallel protocols. Keep the v5 default for the two
@@ -59,9 +68,14 @@ def historical_assessment_bank_versions_for(participant: object) -> dict[str, st
     if isinstance(participant, dict):
         experiment_spec_version = participant.get("experiment_spec_version")
         protocol_id = participant.get("protocol_id")
+        test_content_mode = participant.get("test_content_mode")
     else:
         experiment_spec_version = getattr(participant, "experiment_spec_version", None)
         protocol_id = getattr(participant, "protocol_id", None)
+        test_content_mode = getattr(participant, "test_content_mode", None)
+    if test_content_mode is not None:
+        bank_version = ASSESSMENT_MODE_BANK_VERSIONS.get(test_content_mode)
+        return {STANDARD: bank_version} if bank_version else None
     if experiment_spec_version is None:
         return None
     key = (experiment_spec_version, protocol_id)
@@ -69,6 +83,21 @@ def historical_assessment_bank_versions_for(participant: object) -> dict[str, st
         key,
         HISTORICAL_ASSESSMENT_BANK_VERSIONS.get(experiment_spec_version),
     )
+
+
+def assessment_bank_for_participant(participant: object) -> str:
+    """Resolve the saved question mode, while treating pre-mode records as v5."""
+    if isinstance(participant, dict):
+        experiment_spec_version = participant.get("experiment_spec_version")
+        mode = participant.get("test_content_mode")
+    else:
+        experiment_spec_version = getattr(participant, "experiment_spec_version", None)
+        mode = getattr(participant, "test_content_mode", None)
+    if mode in ASSESSMENT_MODE_BANK_VERSIONS:
+        return ASSESSMENT_MODE_BANK_VERSIONS[mode]
+    if experiment_spec_version is not None and experiment_spec_version <= 42:
+        return "split-actions-v5"
+    raise ValueError("participant has no supported test content mode")
 
 
 def assessment_construct_key(term_slug: str, phase: str, *, bank_version: str | None = None) -> str:

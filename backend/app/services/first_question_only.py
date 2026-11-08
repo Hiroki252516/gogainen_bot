@@ -6,4 +6,6 @@ def enabled(participant) -> bool:
 
 
 def question_numbers(participant) -> tuple[int, ...]:
+    if getattr(participant, "test_content_mode", None) == "basic_understanding":
+        return (1,)
     return (1,) if enabled(participant) else (1, 2)

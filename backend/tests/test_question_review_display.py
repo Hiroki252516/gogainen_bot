@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from admin_client import AuthenticatedTestClient
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
+from app.core.question_sets import ASSESSMENT_MODE_BANK_VERSIONS
 from app.db.session import SessionLocal
 from app.main import app
 from app.models import Attempt, Base, Participant, Question, QuestionOption, RuntimeSetting, Term, now
@@ -37,6 +38,7 @@ def review_db():
             current_step="pretest",
             experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
             protocol_id=CURRENT_PROTOCOL_ID,
+            test_content_mode="application",
             learning_content_version=15,
             show_question_reviews=True,
             first_question_only=True,
@@ -57,6 +59,7 @@ def _question_rows(db: Session, phase: str, numbers: tuple[int, ...] = (1,)) -> 
         .filter(
             Question.phase == source_phase,
             Question.is_active.is_(True),
+            Question.construct_key.endswith(ASSESSMENT_MODE_BANK_VERSIONS["application"]),
             Question.variant_key.in_([f"{variant}_q{number}" for number in numbers]),
         )
         .order_by(Term.display_order, Question.variant_key)

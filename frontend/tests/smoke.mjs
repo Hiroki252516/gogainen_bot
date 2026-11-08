@@ -515,10 +515,13 @@ const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.u
 if (!adminPage.includes("clearParticipantSession") || !adminPage.includes("participantId()")) {
   throw new Error("admin page must clear a deleted participant's browser session");
 }
-for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "全体ログ Excel (.xlsx)", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "被験者ログ Excel (.xlsx)", "ギブアップ回数", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/api/admin/logs/overview.xlsx", "/logs.csv", "/logs_excel.csv", "/logs.xlsx"]) {
+for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "テスト問題モード", "現行版（場面応用）", "基礎理解版", "basic_understanding", "new_participants_only", "test_content_mode_label", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "全体ログ Excel (.xlsx)", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "被験者ログ Excel (.xlsx)", "ギブアップ回数", "参加者を削除", "window.confirm", "/api/admin/test-content-mode", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/api/admin/logs/overview.xlsx", "/logs.csv", "/logs_excel.csv", "/logs.xlsx"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }
+}
+if (adminPage.includes("用語ごと（2設問／ページ）")) {
+  throw new Error("admin log must not assume a fixed number of questions per term page");
 }
 for (const buttonLabel of ["実験開始画面へ戻る", "実験途中に戻る"]) {
   if (!adminPage.includes(buttonLabel)) {

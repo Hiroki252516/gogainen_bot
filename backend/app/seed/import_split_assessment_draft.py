@@ -90,8 +90,9 @@ def validate(draft: dict) -> None:
             raise ValueError(f"{phase} must contain all three terms")
         for term, section in terms.items():
             numbers = [q["number"] for q in section["questions"]]
-            if not section["scenario"] or numbers not in ([1], [1, 2, 3]):
-                raise ValueError(f"{phase}.{term} must have a scenario and either question 1 only or questions 1, 2, and 3")
+            standalone = section.get("presentation") == "standalone"
+            if (not section["scenario"] and not standalone) or (standalone and section["scenario"]) or numbers not in ([1], [1, 2, 3]):
+                raise ValueError(f"{phase}.{term} must have a scenario or standalone presentation and question 1 only or questions 1, 2, and 3")
             for question in section["questions"]:
                 choices = question["choices"]
                 if not question["task"]:

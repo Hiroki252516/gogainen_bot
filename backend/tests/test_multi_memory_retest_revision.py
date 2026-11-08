@@ -262,7 +262,10 @@ def test_spec19_history_seed_and_repair_preserve_v5(tmp_path, monkeypatch, slug,
                                          variant_key=variant["variant_key"],
                                          options=[(option["label"], option["body"], option["is_correct"], option["misconception_type"]) for option in content_loader._assessment_options(variant)])
             term = db.query(Term).filter_by(slug=slug).one()
-            question = db.query(Question).filter_by(term_id=term.id, phase="retest", variant_key=f"retest_v{index}").one()
+            question = db.query(Question).filter_by(
+                term_id=term.id, phase="retest", variant_key=f"retest_v{index}",
+                construct_key=assessment_construct_key(term.slug, "retest", bank_version="scenario-actions-v5"),
+            ).one()
             option = db.query(QuestionOption).filter_by(question_id=question.id, option_label="H").one()
             participant = Participant(display_code="V5-HISTORY", group_condition="control", current_step="learning_targets",
                                       learning_content_version=12, experiment_spec_version=19,
@@ -290,7 +293,10 @@ def test_spec19_history_seed_and_repair_preserve_v5(tmp_path, monkeypatch, slug,
             for oid, fields in options_before.items():
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
-            current = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_([f"retest_v{index}", f"retest_v{index}_q1", f"retest_v{index}_q2"])).all()
+            current = db.query(Question).filter_by(
+                term_id=term.id, phase="retest", is_active=True,
+                construct_key=assessment_construct_key(term.slug, "retest", bank_version=ASSESSMENT_BANK_VERSIONS["standard"]),
+            ).filter(Question.variant_key.in_([f"retest_v{index}", f"retest_v{index}_q1", f"retest_v{index}_q2"])).all()
             assert len(current) == 2
             assert all(row.id != question.id for row in current)
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)

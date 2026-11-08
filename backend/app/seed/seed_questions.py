@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal, init_db
 from app.models import Question, QuestionOption, Term
 from app.seed.data import SEED_TERMS
-from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, STANDARD, assessment_construct_key
+from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, ASSESSMENT_MODE_BANK_VERSIONS, STANDARD, assessment_construct_key
 
 
 def _sync_options(
@@ -99,21 +99,23 @@ def seed_database(db: Session) -> None:
         term.is_active = True
 
         from app.services.split_assessment import split_specs
-        for phase, rounds in (("pretest", ["pretest_v1"]), ("retest", ["retest_v1", "retest_v2"])):
-            for round_key in rounds:
-                for spec in split_specs(term.slug, round_key, bank_version=ASSESSMENT_BANK_VERSIONS[STANDARD]):
-                    question = _upsert_question(
-                        db,
-                        term,
-                        phase=phase,
-                        question_type="split_single",
-                        body=spec["body"],
-                        expected_answer="A",
-                        construct_key=assessment_construct_key(term.slug, phase),
-                        variant_key=spec["variant_key"],
-                        options=spec["options"],
-                    )
-                    active_question_ids.add(question.id)
+        bank_versions = set(ASSESSMENT_MODE_BANK_VERSIONS.values())
+        for bank_version in bank_versions:
+            for phase, rounds in (("pretest", ["pretest_v1"]), ("retest", ["retest_v1", "retest_v2"])):
+                for round_key in rounds:
+                    for spec in split_specs(term.slug, round_key, bank_version=bank_version):
+                        question = _upsert_question(
+                            db,
+                            term,
+                            phase=phase,
+                            question_type="split_single",
+                            body=spec["body"],
+                            expected_answer="A",
+                            construct_key=assessment_construct_key(term.slug, phase, bank_version=bank_version),
+                            variant_key=spec["variant_key"],
+                            options=spec["options"],
+                        )
+                        active_question_ids.add(question.id)
 
     for term in db.query(Term).all():
         if term.slug not in active_slugs:

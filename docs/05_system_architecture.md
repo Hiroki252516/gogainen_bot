@@ -4,7 +4,7 @@
 
 採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。新6仮説はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧記録保護は仕様版とprotocol_idで限定する。
 
-現行仕様版42はsplit-actions-v5を使い、新規参加者には登録時snapshotに従って各用語の設問1だけを出題する。保存済みの設問1について本人の選択内容と正誤を同じテスト画面内に表示し、AIサービスを呼ばない。仕様版41の`split-actions-v6-q1-only-v1` protocolは履歴復元用に保全し、protocol IDを使ってV6から復元する。設問1・2の旧版契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、版30のモード別文字数契約は[42](42_learning_glossary_material_length.md)、版31の用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)。
+現行仕様版43では新規参加者のsnapshotされた問題モードに応じて`split-actions-v5`または`split-actions-basic-v1`を使い、各用語の設問1だけを出題する。保存済み回答の選択内容と正誤を同じテスト画面内に表示し、AIサービスは呼ばない。管理画面の初期値は現行版で、登録後の変更は既存参加者へ遡及しない。仮説集計はモード別に分離する。仕様版42以下の問題は当時の通常バンクから復元する。仕様版41の`split-actions-v6-q1-only-v1` protocolは履歴復元用に保全し、protocol IDを使ってV6から復元する。旧設問1・2契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、問題モードは[50](50_basic_understanding_question_mode.md)。
 
 ## 現行MVPの実装
 
@@ -200,7 +200,7 @@ services/interaction_history.pyが同じ参加者・用語の採点済みAttempt
 
 同一セッションの次教材では、固定採点した現在回答と時刻を履歴へ投影してAI呼出しを先行する。回答確定後の同期履歴と同じ入力になり、解説失敗時は公開しない。履歴からAI解説を除き、生成教材への過去問題/回答prefix追記をしない。
 
-履歴の版・件数・SHA-256、出題規則版、群別追加情報、入力投影を既存JSONで監査する。統合CSV固定ヘッダを維持し、protocol_id・アンケート・表示時刻・指標のnullable列を使用する。進行・集計・補修は版26＋現行protocol_idだけに限定する。共通テスト回数は既存回数と採点済みfinal_testから導出し、回数用の新列は追加しない。テスト注釈の保存用nullable JSON列は別に追加する。
+履歴の版・件数・SHA-256、出題規則版、群別追加情報、入力投影を既存JSONで監査する。仕様版43で統合CSVに`test_content_mode`列を追加し、他の従来列とvalue_jsonを維持する。protocol_id・アンケート・表示時刻・指標のnullable列を使用する。進行・集計・補修は現行仕様版とprotocol_idに限定する。共通テスト回数は既存回数と採点済みfinal_testから導出し、回数用の新列は追加しない。テスト注釈の保存用nullable JSON列は別に追加する。
 
 教材章立ては両群ともAI生成し、material_structureでMarkdownの見出しと節本文を解析する。実験群の必須教授証拠は任意の節本文で検証する。章立て・証拠配置は既存JSONへ記録し、固定見出しからの自動補正はしない。
 

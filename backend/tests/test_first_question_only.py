@@ -86,8 +86,8 @@ def test_new_registration_uses_fixed_defaults_and_removes_settings_apis():
             assert participant.show_retest_results is False
             assert participant.show_question_reviews is True
             assert participant.first_question_only is True
-            assert participant.experiment_spec_version == 42
-            assert participant.protocol_id == "experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1"
+            assert participant.experiment_spec_version == 43
+            assert participant.protocol_id == "experiment-plan-2026-11-08-basic-understanding-question-mode-v1"
             rows = experiment.question_payloads(db, participant_id, "pretest")
             assert len(rows) == 3
             q1 = db.get(Question, rows[0]["question_id"])
@@ -215,17 +215,23 @@ def test_additive_migration_keeps_legacy_rows_null_and_seeded_content(tmp_path, 
         before = [(q.id, q.body, q.variant_key) for q in db.query(Question).order_by(Question.id)]
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE participants DROP COLUMN first_question_only"))
+        connection.execute(text("ALTER TABLE participants DROP COLUMN test_content_mode"))
         connection.execute(text("ALTER TABLE runtime_settings DROP COLUMN first_question_only"))
+        connection.execute(text("ALTER TABLE runtime_settings DROP COLUMN test_content_mode"))
     database.init_db()
     database.init_db()
     for table in ("participants", "runtime_settings"):
-        assert "first_question_only" in {column["name"] for column in inspect(engine).get_columns(table)}
+        columns = {column["name"] for column in inspect(engine).get_columns(table)}
+        assert "first_question_only" in columns
+        assert "test_content_mode" in columns
     with Session(engine) as db:
         seed_database(db)
         participant = db.query(Participant).filter_by(display_code="Q1-MIGRATION-OLD").one()
         assert participant.first_question_only is None
+        assert participant.test_content_mode is None
         assert participant.current_step == "finish"
         assert db.get(RuntimeSetting, 1).first_question_only is None
+        assert db.get(RuntimeSetting, 1).test_content_mode is None
         assert db.get(RuntimeSetting, 1).show_question_reviews is False
         assert before == [(q.id, q.body, q.variant_key) for q in db.query(Question).order_by(Question.id)]
     engine.dispose()

@@ -156,7 +156,10 @@ def test_old_spec23_v7_records_survive_seed_repair_and_missing_snapshot_restore(
                                          variant_key=variant["variant_key"],
                                          options=[(option["label"], option["body"], option["is_correct"], option["misconception_type"]) for option in content_loader._assessment_options(variant)])
             term = db.query(Term).filter_by(slug=slug).one()
-            question = db.query(Question).filter_by(term_id=term.id, phase=phase, variant_key="retest_v1").one()
+            question = db.query(Question).filter_by(
+                term_id=term.id, phase=phase, variant_key="retest_v1",
+                construct_key=assessment_construct_key(term.slug, phase, bank_version="scenario-actions-v7"),
+            ).one()
             old_label = "E" if slug == "multi_agent" else "H"
             option = db.query(QuestionOption).filter_by(question_id=question.id, option_label=old_label).one()
             participant = Participant(display_code="V7-HISTORY", group_condition="control", current_step="learning_targets",
@@ -191,10 +194,13 @@ def test_old_spec23_v7_records_survive_seed_repair_and_missing_snapshot_restore(
             for oid, fields in options_before.items():
                 saved = db.get(QuestionOption, oid)
                 assert (saved.body, saved.is_correct, saved.misconception_type) == fields
-            active = db.query(Question).filter_by(term_id=term.id, phase="retest", is_active=True).filter(Question.variant_key.in_(["retest_v1", "retest_v1_q1", "retest_v1_q2"])).all()
+            active = db.query(Question).filter_by(
+                term_id=term.id, phase="retest", is_active=True,
+                construct_key=assessment_construct_key(term.slug, "retest", bank_version=ASSESSMENT_BANK_VERSIONS["standard"]),
+            ).filter(Question.variant_key.in_(["retest_v1", "retest_v1_q1", "retest_v1_q2"])).all()
             assert len(active) == 2 and all(row.id != question.id for row in active)
-            assert db.query(Question).count() == 30
-            assert db.query(Question).filter_by(is_active=True).count() == 18
+            assert db.query(Question).count() == 39
+            assert db.query(Question).filter_by(is_active=True).count() == 27
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)
             assert record["question_body"] == ("保存時の問題" if snapshot else question.body)
