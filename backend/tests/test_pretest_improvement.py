@@ -183,11 +183,11 @@ def test_seed_keeps_old_ids_and_snapshotless_reviews_on_historical_bank(tmp_path
         seed_database(db)
         assert db.query(Question).count() == question_count_after_first_seed
         assert db.query(QuestionOption).count() == option_count_after_first_seed
-        assert db.query(Question).filter_by(is_active=True).count() == 27
+        assert db.query(Question).filter_by(is_active=True).count() == 39
         for oid, expected in options_before.items():
             o = db.get(QuestionOption, oid)
             assert (o.question_id, o.body, o.is_correct, o.misconception_type) == expected
-        for t in db.query(Term):
+        for t in experiment._active_test_terms(db, participant):
             for round_name, phase, key in (("test", "pretest", "pretest_v1"), ("retest_1", "final_test", "retest_v1"), ("retest_2", "retest", "retest_v2")):
                 q = experiment._test_result_question(db, participant, t, round_name, phase)
                 assert q.id in questions_before

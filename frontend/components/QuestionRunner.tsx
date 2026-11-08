@@ -37,6 +37,7 @@ type PendingQuestionReview = {
   results: Array<{
     question_number: 1 | 2;
     selected_option: { label: string; body: string };
+    selected_options?: Array<{ label: string; body: string }>;
     is_correct: boolean;
   }>;
 };
@@ -75,6 +76,14 @@ function nextMultipleSelection(options: Option[], selectedIds: string[], option:
   return withoutUnknown.length >= requiredSelections ? selectedIds : [...withoutUnknown, option.option_id];
 }
 
+function hasCompleteSelection(question: Question, selectedIds: string[]) {
+  if (question.selection_mode !== "multiple") return selectedIds.length === 1;
+  const minimum = question.min_selections ?? 3;
+  const maximum = question.max_selections ?? 3;
+  const state = multipleSelectionState(question.options, selectedIds, minimum);
+  return state.isComplete && selectedIds.length <= maximum;
+}
+
 const toFullWidthDigits = (value: number) =>
   String(value).replace(/\d/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 0xfee0));
 
@@ -98,7 +107,8 @@ function QuestionReviewPanel({
         {review.results.map((result) => (
           <div className="notice" key={result.question_number}>
             <strong>設問{toFullWidthDigits(result.question_number)}：{result.is_correct ? "正解" : "不正解"}</strong>
-            <p>あなたの選択：{result.selected_option.label}. {result.selected_option.body}</p>
+            <p>あなたの選択：{(result.selected_options?.length ? result.selected_options : [result.selected_option])
+              .map((option) => `${option.label}. ${option.body}`).join(" / ")}</p>
           </div>
         ))}
       </div>
@@ -524,15 +534,15 @@ function isPageSubmissionFor(
     && candidate.elapsed_time_sec > 0
     && Array.isArray(candidate.answers)
     && candidate.answers.length === expectedIds.size
-    && candidate.answers.every((answer) => Boolean(
-      answer
-      && typeof answer === "object"
-      && expectedIds.has(answer.question_id)
-      && Array.isArray(answer.selected_option_ids)
-      && answer.selected_option_ids.length === 1
-      && typeof answer.selected_option_ids[0] === "string"
-      && answer.selected_option_ids[0].length > 0
-    ))
+    && candidate.answers.every((answer) => {
+      if (!answer || typeof answer !== "object" || !expectedIds.has(answer.question_id) || !Array.isArray(answer.selected_option_ids)) return false;
+      const question = page.questions.find((row) => row.question_id === answer.question_id);
+      return Boolean(question)
+        && answer.selected_option_ids.every((id) => typeof id === "string" && id.length > 0)
+        && answer.selected_option_ids.every((id) => question?.options.some((option) => option.option_id === id))
+        && new Set(answer.selected_option_ids).size === answer.selected_option_ids.length
+        && hasCompleteSelection(question as Question, answer.selected_option_ids);
+    })
     && new Set(candidate.answers.map((answer) => answer.question_id)).size === expectedIds.size;
 }
 
@@ -591,7 +601,7 @@ function TermPageQuestionRunner({
   const pageIsFrozen = frozenPage?.scope === pageScope;
   const pageAlreadySaved = Boolean(page?.questions.every((question) => question.answer_status === "submitted"));
   const canAnswerAll = Boolean(page?.questions.every((question) =>
-    question.answer_status === "submitted" || (selectedByQuestion[question.question_id] || []).length === 1,
+    question.answer_status === "submitted" || hasCompleteSelection(question, selectedByQuestion[question.question_id] || []),
   ));
 
   useEffect(() => {
@@ -675,8 +685,19 @@ function TermPageQuestionRunner({
         question_id: question.question_id,
         selected_option_ids: selectedByQuestion[question.question_id] || [],
       }));
-      if (answers.some((answer) => answer.selected_option_ids.length !== 1)) {
-        setError("各設問で選択肢を1つ選んでください。");
+      const invalidAnswer = answers.some((answer) => {
+        const question = page.questions.find((candidate) => candidate.question_id === answer.question_id);
+        if (!question) return true;
+        if (question.selection_mode === "multiple") {
+          const minimum = question.min_selections ?? 3;
+          const maximum = question.max_selections ?? 3;
+          const state = multipleSelectionState(question.options, answer.selected_option_ids, minimum);
+          return !state.isComplete || answer.selected_option_ids.length > maximum;
+        }
+        return answer.selected_option_ids.length !== 1;
+      });
+      if (invalidAnswer) {
+        setError("各設問の指定数を選択してください。「わからない」は単独で選択してください。");
         return;
       }
       const answeredAt = new Date().toISOString();
@@ -812,9 +833,13 @@ function TermPageQuestionRunner({
         <div className="stack term-page-questions">
           {page.questions.map((question, questionIndex) => {
             const isAnswered = question.answer_status === "submitted";
+            const isMultiple = question.selection_mode !== "single";
+            const requiredSelections = question.min_selections ?? 3;
+            const maxSelections = question.max_selections ?? 3;
             const selectedIds = isAnswered
               ? question.submitted_answer?.selected_option_ids || []
               : selectedByQuestion[question.question_id] || [];
+            const selectionState = multipleSelectionState(question.options, selectedIds, requiredSelections);
             const reviewResult = pendingQuestionReview?.term_slug === page.term_slug
               ? pendingQuestionReview.results.find((result) => result.question_number === questionIndex + 1)
               : undefined;
@@ -826,23 +851,45 @@ function TermPageQuestionRunner({
                     <strong>回答済み・変更不可</strong>
                     <p>この設問の回答は保存済みです。</p>
                   </div>
-                ) : !isAnswered ? <div className="selection-status">最も適切なものを1つ選んでください。</div> : null}
+                ) : !isAnswered ? (
+                  isMultiple ? (
+                    <div className={`selection-status ${selectionState.isComplete ? "ok" : ""}`}>
+                      <strong>{selectionState.hasUnknown ? "わからないを選択中" : `${selectionState.normalSelectedCount}/${requiredSelections} 選択済み`}</strong>
+                      <span>{selectionState.hasUnknown
+                        ? "わからないを選ぶ場合は単独選択です。"
+                        : selectionState.reachedLimit
+                          ? "上限に達しました。変更するには選択済みの項目を外してください。"
+                          : `正しい説明を${requiredSelections}つ、または「わからない」のみを選んでください。`}</span>
+                    </div>
+                  ) : <div className="selection-status">最も適切なものを1つ選んでください。</div>
+                ) : null}
                 {question.options.length ? (
                   <div className="options">
                     {question.options.map((option) => {
                       const selected = selectedIds.includes(option.option_id);
+                      const isUnknown = Boolean(option.exclusive);
+                      const disabledBySelection = isMultiple && !selected && (
+                        (selectionState.hasUnknown && !isUnknown)
+                        || (!isUnknown && selectionState.normalSelectedCount >= maxSelections)
+                        || (isUnknown && selectionState.normalSelectedCount > 0)
+                      );
                       const answerClass = selected && reviewResult
                         ? optionAnswerClass(true, reviewResult.is_correct)
                         : "";
                       return (
-                        <label className={`option ${isAnswered && selected && !reviewResult ? "option-selected-locked" : ""} ${option.exclusive ? "option-unknown" : ""} ${answerClass}`} key={option.option_id}>
+                        <label className={`option ${disabledBySelection ? "option-disabled" : ""} ${isAnswered && selected && !reviewResult ? "option-selected-locked" : ""} ${isUnknown ? "option-unknown" : ""} ${answerClass}`} key={option.option_id}>
                           <input
-                            type="radio"
+                            type={isMultiple ? "checkbox" : "radio"}
                             name={`option-${question.question_id}`}
                             value={option.option_id}
                             checked={selected}
-                            disabled={isAnswered || saving || pageIsFrozen}
-                            onChange={() => setSelectedByQuestion((previous) => ({ ...previous, [question.question_id]: [option.option_id] }))}
+                            disabled={isAnswered || saving || pageIsFrozen || disabledBySelection}
+                            onChange={() => setSelectedByQuestion((previous) => ({
+                              ...previous,
+                              [question.question_id]: isMultiple
+                                ? nextMultipleSelection(question.options, previous[question.question_id] || [], option, requiredSelections)
+                                : [option.option_id],
+                            }))}
                           />
                           <span>
                             {selected && reviewResult ? (

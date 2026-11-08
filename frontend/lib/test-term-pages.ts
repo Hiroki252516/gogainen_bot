@@ -47,7 +47,7 @@ export function groupTestQuestionsByTerm<T extends TestQuestionForPage>(
       questions: group,
     });
   }
-  return pages.length === 3 ? pages : null;
+  return [3, 4].includes(pages.length) ? pages : null;
 }
 
 export function combineTestGlossaries(questions: TestQuestionForPage[]): Glossary | null {

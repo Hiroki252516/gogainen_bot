@@ -16,6 +16,13 @@ const PRIOR_TERM_KNOWLEDGE = [
   ["multi_agent", "マルチエージェント"],
   ["memory_process", "記憶プロセス（AIが以前の会話で伝えた利用者の希望を記憶し、次回以降の回答に利用する仕組み）"],
 ] as const;
+const FOUR_TOPIC_PRIOR_TERM_KNOWLEDGE = [
+  ["transformer", "Transformer"],
+  ["llm_training_stages", "LLMの学習段階"],
+  ["multi_agent", "マルチエージェント"],
+  ["memory_process", "記憶プロセス（AIが以前の会話で伝えた利用者の希望を記憶し、次回以降の回答に利用する仕組み）"],
+] as const;
+const FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v1";
 const BASELINE_RATINGS = [
   ["ai_usage_frequency", "普段のAI利用頻度", "1：使用しない ／ 10：非常に頻繁に使用する"],
   ["self_rated_ai_proficiency", "AIを使いこなせているかの自己評価", "1：全く使いこなせていない ／ 10：非常によく使いこなせている"],
@@ -37,12 +44,15 @@ export default function PresurveyPage() {
   }
 
   useEffect(() => { void loadContext(); }, []);
+  const priorTermKnowledge = context?.survey_version === FOUR_TOPIC_PRESURVEY_VERSION
+    ? FOUR_TOPIC_PRIOR_TERM_KNOWLEDGE
+    : PRIOR_TERM_KNOWLEDGE;
   const update = (key: string, value: string) => setValues((previous) => ({ ...previous, [key]: value }));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!context || submitting) return;
-    const requiredKeys = [...PRIOR_TERM_KNOWLEDGE.map(([key]) => key), ...BASELINE_RATINGS.map(([key]) => key)];
+    const requiredKeys = [...priorTermKnowledge.map(([key]) => key), ...BASELINE_RATINGS.map(([key]) => key)];
     if (requiredKeys.some((key) => !values[key])) {
       setError("未選択の項目があります。各項目を選択してください。");
       return;
@@ -53,7 +63,7 @@ export default function PresurveyPage() {
       const participantId = requireParticipant();
       await postIdempotent(`/api/participants/${participantId}/presurvey`, {
         survey_version: context.survey_version,
-        prior_term_knowledge: Object.fromEntries(PRIOR_TERM_KNOWLEDGE.map(([key]) => [key, values[key]])),
+        prior_term_knowledge: Object.fromEntries(priorTermKnowledge.map(([key]) => [key, values[key]])),
         general_ratings: Object.fromEntries(BASELINE_RATINGS.map(([key]) => [key, Number(values[key])])),
       }, `presurvey:${participantId}`);
       router.replace("/pretest");
@@ -67,7 +77,7 @@ export default function PresurveyPage() {
         <p>今回の実験を始める前の状態について回答してください。表示される項目はすべて必須です。</p>
         {!context ? <p>回答項目を確認しています。</p> : <>
           <h2>実験前に用語の意味を知っていたか</h2>
-          {PRIOR_TERM_KNOWLEDGE.map(([key, label]) => <ChoiceButtons key={key} label={label} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
+          {priorTermKnowledge.map(([key, label]) => <ChoiceButtons key={key} label={label} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
           <h2>普段のAI利用について</h2>
           {BASELINE_RATINGS.map(([key, label, anchors]) => <RatingButtons key={key} label={label} anchors={anchors} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
         </>}

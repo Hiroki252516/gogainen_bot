@@ -12,6 +12,7 @@ from app.core.experiment_spec import assert_current_experiment
 from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
 PRESURVEY_VERSION = "presurvey-baseline-v2"
+FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v1"
 SURVEY_VERSION = "posttest-10point-v3"
 SUPPORTED_SURVEY_VERSIONS = ("posttest-10point-v1", "posttest-10point-v2", SURVEY_VERSION)
 Rating = Annotated[int, Field(strict=True, ge=1, le=10)]
@@ -27,6 +28,13 @@ class PriorTermKnowledge(StrictModel):
     fine_tuning: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
     rag: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
     prompt_engineering: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+    multi_agent: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+    memory_process: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+
+
+class FourTopicPriorTermKnowledge(StrictModel):
+    transformer: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+    llm_training_stages: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
     multi_agent: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
     memory_process: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
 
@@ -59,6 +67,12 @@ class PresurveyPayload(StrictModel):
     general_ratings: BaselineRatings
 
 
+class FourTopicPresurveyPayload(StrictModel):
+    survey_version: Literal["presurvey-four-topic-baseline-v1"] = FOUR_TOPIC_PRESURVEY_VERSION
+    prior_term_knowledge: FourTopicPriorTermKnowledge
+    general_ratings: BaselineRatings
+
+
 class SurveyPayload(StrictModel):
     survey_version: Literal["posttest-10point-v3"] = SURVEY_VERSION
     general_ratings: PosttestRatings
@@ -88,10 +102,17 @@ def presurvey_context(participant: Participant) -> dict:
     assert_current_experiment(participant)
     if participant.current_step != "presurvey":
         raise HTTPException(status_code=409, detail="この参加者は事前アンケート対象ではありません。")
-    return {"survey_version": PRESURVEY_VERSION}
+    survey_version = (
+        FOUR_TOPIC_PRESURVEY_VERSION
+        if participant.test_content_mode == "four_topic_fundamentals"
+        else PRESURVEY_VERSION
+    )
+    return {"survey_version": survey_version}
 
 
-def validate_presurvey_payload(payload: dict) -> dict:
+def validate_presurvey_payload(payload: dict, test_content_mode: str | None = None) -> dict:
+    if test_content_mode == "four_topic_fundamentals":
+        return FourTopicPresurveyPayload.model_validate(payload).model_dump()
     return PresurveyPayload.model_validate(payload).model_dump()
 
 

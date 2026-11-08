@@ -3,10 +3,12 @@ ASSESSMENT_BANK_VERSIONS = {STANDARD: "split-actions-v5"}
 ASSESSMENT_MODE_BANK_VERSIONS = {
     "application": "split-actions-v5",
     "basic_understanding": "split-actions-basic-v1",
+    "four_topic_fundamentals": "split-actions-four-topic-v1",
 }
 ASSESSMENT_MODE_LABELS = {
     "application": "現行版（場面応用）",
     "basic_understanding": "基礎理解版",
+    "four_topic_fundamentals": "4用語版",
 }
 LEARNING_CONTENT_VERSIONS = {STANDARD: 15}
 ASSESSMENT_BANK_VERSION = ASSESSMENT_BANK_VERSIONS[STANDARD]

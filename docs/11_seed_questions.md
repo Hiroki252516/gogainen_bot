@@ -1,6 +1,10 @@
 # 現行問題バンク
 
-## 仕様版43の問題モード
+## 仕様版44の4用語版
+
+新規参加者は登録時snapshotした`test_content_mode`に応じて問題バンクを選ぶ。第3モード`four_topic_fundamentals`は独立バンク`split-actions-four-topic-v1`（`four_topic_fundamentals_v1.yml`）を使い、Transformer、LLMの学習段階、マルチエージェント、記憶プロセスを各1問・10択で出題する。A〜C正解、D〜F=M1、G〜I=M3、J=unknownとし、3択またはJ単独で採点する。事前・再テスト1/2・内部final_testは同一問題・選択肢を使用し、学習確認は直前テストで誤答した問題のsnapshotを再利用する。役割メタデータ・教授対象は参加者向けAPIへ含めない。問題構成と研究上の注意は[51](51_four_topic_foundation_mode.md)。
+
+## 仕様版43の問題モード（導入時）
 
 新規参加者は管理設定を登録時に固定し、現行`split-actions-v5`または基礎理解`split-actions-basic-v1`を使う。仕様版43の新規出題は両モードとも各用語の設問1のみ計3問で、再テスト1/2・内部final_test・学習確認も参加者の選択モードを維持する。基礎理解版YAMLには3回次×3用語の計9問を保持し、各問に正解1・M1二つ・M3二つ・unknown一つを置く。問題ID・construct keyは別にseedし、保存snapshotを優先する。問題の全文と研究上の注意は[50](50_basic_understanding_question_mode.md)。
 

@@ -9,6 +9,7 @@ from app.models import RuntimeSetting
 
 APPLICATION = "application"
 BASIC_UNDERSTANDING = "basic_understanding"
+FOUR_TOPIC_FUNDAMENTALS = "four_topic_fundamentals"
 DEFAULT_MODE = APPLICATION
 
 

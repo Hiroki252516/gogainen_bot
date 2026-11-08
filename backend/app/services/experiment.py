@@ -44,7 +44,6 @@ from app.core.experiment_spec import (
 )
 from app.services.first_question_only import enabled as first_question_enabled, question_numbers
 from app.services.research_protocol import (
-    PRESURVEY_VERSION,
     SURVEY_VERSION,
     validate_presurvey_payload,
     validate_survey_for_participant,
@@ -96,8 +95,10 @@ from app.db.session import SessionLocal
 from app.rag.retriever import retrieve_rag_context
 from app.seed.content_loader import (
     ASSESSMENT_VARIANT_COUNTS,
+    FOUR_TOPIC_TERM_SLUGS,
     LEARNING_SESSION_VARIANT_COUNT,
     content_term,
+    four_topic_terms,
     learning_question_spec,
     load_content,
     teaching_target_for_option,
@@ -143,6 +144,20 @@ LEARNING_STAGE_LABELS = {
     "conceptual_change": "概念変化",
     "final_feedback": "教材フィードバック",
 }
+
+
+def _test_term_catalog(participant: Participant) -> list[dict[str, Any]]:
+    if participant_test_content_mode(participant) == "four_topic_fundamentals":
+        return list(four_topic_terms())
+    return list(load_content()["terms"])
+
+
+def _test_term_slugs(participant: Participant) -> set[str]:
+    return {term["slug"] for term in _test_term_catalog(participant)}
+
+
+def _test_term_order(participant: Participant) -> dict[str, int]:
+    return {term["slug"]: index for index, term in enumerate(_test_term_catalog(participant))}
 TEST_PHASES = {"pretest", "retest", "final_test"}
 ATTEMPT_PHASES = TEST_PHASES
 FINAL_TEST_NOT_AVAILABLE_DETAIL = "この参加者は最終テスト対象ではありません。"
@@ -521,6 +536,7 @@ def _rag_context(term_slug: str, *parts: str | None) -> dict[str, Any]:
         top_k=3,
         allowed_sections=term_config.get("rag_sections") or [],
         topic_slug=term_slug,
+        rag_dir=term_config.get("rag_dir"),
     )
 
 
@@ -775,7 +791,8 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
 def submit_presurvey(db: Session, participant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     participant = get_participant(db, participant_id, for_update=True)
     assert_current_experiment(participant)
-    responses = validate_presurvey_payload(payload)
+    responses = validate_presurvey_payload(payload, participant.test_content_mode)
+    survey_version = responses["survey_version"]
     existing = (
         db.query(ParticipantSurvey)
         .filter_by(participant_id=participant.id, phase="presurvey")
@@ -783,7 +800,7 @@ def submit_presurvey(db: Session, participant_id: str, payload: dict[str, Any]) 
         .first()
     )
     if existing is not None:
-        if existing.survey_version != PRESURVEY_VERSION or existing.responses_json != {
+        if existing.survey_version != survey_version or existing.responses_json != {
             key: value for key, value in responses.items() if key != "survey_version"
         }:
             raise HTTPException(status_code=409, detail="事前アンケートはすでに保存されており、変更できません。")
@@ -800,7 +817,7 @@ def submit_presurvey(db: Session, participant_id: str, payload: dict[str, Any]) 
     existing = ParticipantSurvey(
         participant_id=participant.id,
         phase="presurvey",
-        survey_version=PRESURVEY_VERSION,
+        survey_version=survey_version,
         responses_json={key: value for key, value in responses.items() if key != "survey_version"},
     )
     db.add(existing)
@@ -1035,15 +1052,16 @@ def _test_round_display_label(test_round: str | None) -> str | None:
 
 def _question_query_for_phase(db: Session, participant: Participant, phase: str):
     source_phase = "retest" if uses_split(participant) and phase == "final_test" else _source_question_phase(phase)
+    term_slugs = _test_term_slugs(participant)
     query = db.query(Question).join(Term, Question.term_id == Term.id).filter(Question.phase == source_phase, Question.is_active.is_(True), Term.is_active.is_(True))
     query = query.filter(Question.construct_key.in_([
         assessment_construct_key(slug, phase, bank_version=assessment_bank_for_participant(participant))
-        for slug in PRETEST_TERM_SLUGS
+        for slug in term_slugs
     ]))
     if phase == "pretest":
-        query = query.filter(Term.slug.in_(PRETEST_TERM_SLUGS))
+        query = query.filter(Term.slug.in_(term_slugs))
     if phase == "retest":
-        query = query.filter(Term.slug.in_(PRETEST_TERM_SLUGS))
+        query = query.filter(Term.slug.in_(term_slugs))
     return query.order_by(Term.display_order, Question.variant_key)
 
 
@@ -1089,7 +1107,9 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
     _assert_participant_active(participant)
     _assert_phase_available(participant, phase)
     all_questions = _question_query_for_phase(db, participant, phase).all()
-    if {db.get(Term, question.term_id).slug for question in all_questions} != PRETEST_TERM_SLUGS:
+    term_slugs = _test_term_slugs(participant)
+    term_order = _test_term_order(participant)
+    if {db.get(Term, question.term_id).slug for question in all_questions} != term_slugs:
         raise HTTPException(status_code=503, detail="今回のテスト問題が不足しています。管理者に連絡してください。")
     by_term: dict[str, list[Question]] = {}
     for question in all_questions:
@@ -1101,9 +1121,9 @@ def question_payloads(db: Session, participant_id: str, phase: str) -> list[dict
     ]
     questions = sorted(
         questions,
-        key=lambda question: (PRETEST_TERM_ORDER.get(db.get(Term, question.term_id).slug, 99), question.variant_key),
+        key=lambda question: (term_order.get(db.get(Term, question.term_id).slug, 99), question.variant_key),
     )
-    if uses_split(participant) and (len(questions) != 3 * len(question_numbers(participant)) or any(len([q for q in questions if q.term_id == term_id]) != len(question_numbers(participant)) for term_id in by_term)):
+    if uses_split(participant) and (len(questions) != len(term_slugs) * len(question_numbers(participant)) or any(len([q for q in questions if q.term_id == term_id]) != len(question_numbers(participant)) for term_id in by_term)):
         raise HTTPException(status_code=503, detail="今回のテスト設問が不足しています。管理者に連絡してください。")
     submitted_attempts_by_question: dict[str, Attempt] = {}
     submitted_attempts = (
@@ -1220,14 +1240,32 @@ def pending_question_review(
                 detail={"error_code": "question_review_snapshot_unavailable", "message": "回答表示の保存情報が見つかりません。管理者に連絡してください。"},
             )
         selected_options = _selected_options(db, attempt)
-        grouped.setdefault(row["term_slug"], {})[number] = {
+        selected_snapshot_options = [
+            next(
+                (option for option in snapshot_options if str(option.get("option_id")) == str(option_id)),
+                None,
+            )
+            for option_id in attempt.selected_option_ids
+        ]
+        if any(option is None for option in selected_snapshot_options):
+            raise HTTPException(
+                status_code=503,
+                detail={"error_code": "question_review_snapshot_unavailable", "message": "回答表示の保存情報が見つかりません。管理者に連絡してください。"},
+            )
+        result = {
             "question_number": number,
             "selected_option": {
                 "label": selected_option["label"],
                 "body": selected_option["body"],
             },
-            "is_correct": len(selected_options) == 1 and selected_options[0].is_correct,
+            "is_correct": _classify_selected_options(selected_options)[0],
         }
+        if participant_test_content_mode(participant) == "four_topic_fundamentals":
+            result["selected_options"] = [
+                {"label": option["label"], "body": option["body"]}
+                for option in selected_snapshot_options
+            ]
+        grouped.setdefault(row["term_slug"], {})[number] = result
     for row in question_rows:
         term_slug = row["term_slug"]
         pair = grouped.get(term_slug, {})
@@ -1379,7 +1417,7 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
         term.slug, phase, bank_version=assessment_bank_for_participant(participant)
     ):
         raise HTTPException(status_code=409, detail="この問題は現在のテスト問題と一致しません。")
-    if phase in TEST_PHASES and term.slug not in PRETEST_TERM_SLUGS:
+    if phase in TEST_PHASES and term.slug not in _test_term_slugs(participant):
         raise HTTPException(status_code=400, detail="question is outside the active experiment terms")
     if normalized_idempotency_key:
         existing = (
@@ -1527,7 +1565,20 @@ def _submit_test_term_page_in_transaction(db: Session, payload: dict[str, Any]) 
     for answer in answers:
         question_id = str(answer["question_id"])
         selected_option_ids = [str(option_id) for option_id in (answer.get("selected_option_ids") or []) if option_id]
-        if len(selected_option_ids) != 1 or len(set(selected_option_ids)) != 1:
+        if len(selected_option_ids) != len(set(selected_option_ids)):
+            raise HTTPException(status_code=400, detail="選択肢を重複して指定できません。")
+        question_row = questions_by_id[question_id]
+        question = db.get(Question, question_id)
+        constraints = _selection_constraints(question.question_type, len(question_row["options"]))
+        selected_rows = db.query(QuestionOption).filter(
+            QuestionOption.question_id == question_id,
+            QuestionOption.id.in_(selected_option_ids or ["__none__"]),
+        ).all()
+        if len(selected_rows) != len(selected_option_ids):
+            raise HTTPException(status_code=400, detail="invalid selected options")
+        if constraints["selection_mode"] == "multiple":
+            _validate_multi_select_options(selected_rows, len(selected_option_ids))
+        elif len(selected_option_ids) != 1:
             raise HTTPException(status_code=400, detail="各設問で選択肢を1つ選んでください。")
 
         existing = (
@@ -1778,7 +1829,7 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
     attempts = db.query(Attempt).filter_by(participant_id=participant.id, phase="pretest").all()
     if not attempts:
         raise HTTPException(status_code=400, detail="pretest attempts not found")
-    active_term_ids = {term.id for term in _active_test_terms(db)}
+    active_term_ids = {term.id for term in _active_test_terms(db, participant)}
     if len(attempts) != len(active_term_ids) * (len(question_numbers(participant)) if uses_split(participant) else 1) or {attempt.term_id for attempt in attempts} != active_term_ids:
         raise HTTPException(status_code=400, detail="pretest attempts are incomplete")
     if uses_split(participant):
@@ -1829,7 +1880,7 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
         .filter(
             TermAssignment.participant_id == participant.id,
             Term.is_active.is_(True),
-            Term.slug.in_(PRETEST_TERM_SLUGS),
+            Term.slug.in_(_test_term_slugs(participant)),
         )
         .order_by(Term.display_order.asc())
         .all()
@@ -1857,7 +1908,7 @@ def learning_targets(db: Session, participant_id: str) -> list[dict[str, Any]]:
             TermAssignment.participant_id == participant.id,
             TermAssignment.is_learning_target.is_(True),
             Term.is_active.is_(True),
-            Term.slug.in_(PRETEST_TERM_SLUGS),
+            Term.slug.in_(_test_term_slugs(participant)),
         )
         # Priority remains an analysis/selection value, but the participant
         # follows the same term order as the pretest and retest.
@@ -1903,7 +1954,7 @@ def pretest_results(db: Session, participant_id: str) -> list[dict[str, Any]]:
     targets_by_slug = {row["term_slug"]: row for row in target_rows}
     terms = (
         db.query(Term)
-        .filter(Term.slug.in_(PRETEST_TERM_SLUGS), Term.is_active.is_(True))
+        .filter(Term.slug.in_(_test_term_slugs(participant)), Term.is_active.is_(True))
         .order_by(Term.display_order)
         .all()
     )
@@ -2079,7 +2130,7 @@ def latest_test_results(db: Session, participant_id: str) -> dict[str, Any]:
     targets_by_slug = {row["term_slug"]: row for row in learning_targets(db, participant_id)}
     results: list[dict[str, Any]] = []
 
-    for term in _active_test_terms(db):
+    for term in _active_test_terms(db, participant):
         attempt = latest_by_term.get(term.id)
         question = db.get(Question, attempt.question_id) if attempt else _test_result_question(db, participant, term, selected_round, result_phase)
         selected_options = _public_selected_options(db, attempt) if attempt else []
@@ -2120,7 +2171,8 @@ def _split_public_results(db: Session, participant: Participant, attempts: list[
         rows.append({"question_id": question.id, "term_slug": term.slug, "term_label": f"{term.label}・設問{number}", "question_number": number,
                      "question_body": attempt.question_body_snapshot or question.body, "selected_options": _public_selected_options(db, attempt),
                      "is_correct": attempt.is_correct, "result_label": "正解" if attempt.is_correct else "不正解", "result_summary": "回答結果", "is_learning_target": term.slug in targets})
-    return sorted(rows, key=lambda r: (PRETEST_TERM_ORDER.get(r["term_slug"], 99), r["question_number"]))
+    term_order = _test_term_order(participant)
+    return sorted(rows, key=lambda r: (term_order.get(r["term_slug"], 99), r["question_number"]))
 
 
 def create_tutor_session(db: Session, participant_id: str, term_slug: str) -> TutorSession:
@@ -2674,14 +2726,15 @@ def prepare_prefetch_sessions(db: Session, participant_id: str, source_session_i
         return []
 
     source_term = db.get(Term, source_session.term_id)
-    source_order = PRETEST_TERM_ORDER.get(source_term.slug if source_term else "", -1)
+    term_order = _test_term_order(participant)
+    source_order = term_order.get(source_term.slug if source_term else "", -1)
     target_rows = learning_targets(db, participant.id)
     target_rows = sorted(
         (
             row for row in target_rows
-            if PRETEST_TERM_ORDER.get(row["term_slug"], -1) > source_order
+            if term_order.get(row["term_slug"], -1) > source_order
         ),
-        key=lambda row: PRETEST_TERM_ORDER.get(row["term_slug"], 10_000),
+        key=lambda row: term_order.get(row["term_slug"], 10_000),
     )
     prepared_ids: list[str] = []
     requested_at = now()
@@ -3200,11 +3253,12 @@ async def respond_tutor_turn(
             # removed from learning_targets() before the next URL is chosen.
             remaining_targets = target_rows_before_completion[current_target_index + 1:]
         else:
-            current_order = PRETEST_TERM_ORDER.get(term.slug, -1)
+            term_order = _test_term_order(participant)
+            current_order = term_order.get(term.slug, -1)
             remaining_targets = [
                 target
                 for target in target_rows_before_completion
-                if PRETEST_TERM_ORDER.get(target["term_slug"], -1) > current_order
+                if term_order.get(target["term_slug"], -1) > current_order
             ]
         if remaining_targets:
             participant.current_step = "learning_targets"
@@ -3256,7 +3310,7 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         raise HTTPException(status_code=409, detail="用語ごとの答え合わせを確認してから進んでください。")
     if uses_split(participant):
         expected_ids = {q["question_id"] for q in question_payloads(db, participant.id, phase)}
-        if len(expected_ids) != 3 * len(question_numbers(participant)) or {a.question_id for a in attempts} != expected_ids or len(attempts) != len(expected_ids):
+        if len(expected_ids) != len(_active_test_terms(db, participant)) * len(question_numbers(participant)) or {a.question_id for a in attempts} != expected_ids or len(attempts) != len(expected_ids):
             raise HTTPException(status_code=400, detail="今回の設問すべてに回答してください。")
     for attempt in attempts:
         question = db.get(Question, attempt.question_id)
@@ -3343,18 +3397,18 @@ def _rate(items: list[Attempt], predicate) -> float | None:
     return sum(1 for item in graded_items if predicate(item)) / len(graded_items)
 
 
-def _active_test_terms(db: Session) -> list[Term]:
+def _active_test_terms(db: Session, participant: Participant) -> list[Term]:
     return (
         db.query(Term)
-        .filter(Term.slug.in_(PRETEST_TERM_SLUGS), Term.is_active.is_(True))
+        .filter(Term.slug.in_(_test_term_slugs(participant)), Term.is_active.is_(True))
         .order_by(Term.display_order)
         .all()
     )
 
 
 def _is_mastery_test_batch(db: Session, attempts: list[Attempt]) -> bool:
-    active_term_ids = {term.id for term in _active_test_terms(db)}
     participant = db.get(Participant, attempts[0].participant_id) if attempts else None
+    active_term_ids = {term.id for term in _active_test_terms(db, participant)} if participant else set()
     split = bool(participant and uses_split(participant))
     return (
         bool(active_term_ids)
@@ -3370,7 +3424,7 @@ def _reset_test_learning_targets(db: Session, participant: Participant, attempts
     # material prepared for the previous round is tied to stale learner state
     # and must not leak into the new round.
     discard_unconsumed_prefetches(db, participant.id, reason="new_learning_round")
-    active_terms = _active_test_terms(db)
+    active_terms = _active_test_terms(db, participant)
     active_term_ids = {term.id for term in active_terms}
     attempts_by_term: dict[str, list[Attempt]] = {term_id: [] for term_id in active_term_ids}
     for attempt in attempts:
@@ -3428,7 +3482,8 @@ def _latest_retest_mastery_attempts(db: Session, attempts: list[Attempt]) -> lis
             rounds.setdefault(_attempt_test_round(attempt), []).append(attempt)
         latest = max(rounds.values(), key=lambda items: max(a.created_at for a in items))
         return latest if _is_mastery_test_batch(db, latest) else []
-    active_terms = _active_test_terms(db)
+    participant = db.get(Participant, attempts[0].participant_id) if attempts else None
+    active_terms = _active_test_terms(db, participant) if participant else []
     active_term_ids = {term.id for term in active_terms}
     latest_by_term: dict[str, Attempt] = {}
     for attempt in sorted(attempts, key=lambda item: (item.created_at, item.answered_at or item.created_at, item.id), reverse=True):
@@ -3663,7 +3718,7 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         if uses_split(participant):
             initial_by_key = {split_keys[a.question_id] for a in denom}
             paired = [a for a in attempts if _attempt_test_round(a) == "retest_1" and a.is_correct is not None]
-            if len(paired) != 3 * len(question_numbers(participant)):
+            if len(paired) != len(_active_test_terms(db, participant)) * len(question_numbers(participant)):
                 return None
             return sum(a.misconception_type == m for a in paired if split_keys[a.question_id] in initial_by_key) / len(denom)
         rec_terms = {a.term_id for a in by_phase["retest"] if a.recurrence_flag and a.misconception_type == m}
@@ -3707,7 +3762,8 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
 
 
 def _has_scored_pretest(db: Session, participant_id: str) -> bool:
-    active_term_ids = {term.id for term in _active_test_terms(db)}
+    participant = get_participant(db, participant_id)
+    active_term_ids = {term.id for term in _active_test_terms(db, participant)}
     if not active_term_ids:
         return False
     attempts = db.query(Attempt).filter_by(participant_id=participant_id, phase="pretest").all()
@@ -3782,10 +3838,12 @@ def _group_misconception_transition_summary(
     group_participants: list[Participant],
     latest_summaries: list[EvaluationSummary],
     terms: dict[str, Term],
+    mode: str,
 ) -> dict[str, Any]:
     summaries_by_participant = {summary.participant_id: summary for summary in latest_summaries}
+    mode_slugs = set(FOUR_TOPIC_TERM_SLUGS) if mode == "four_topic_fundamentals" else PRETEST_TERM_SLUGS
     active_terms = sorted(
-        (term for term in terms.values() if term.slug in PRETEST_TERM_SLUGS),
+        (term for term in terms.values() if term.slug in mode_slugs),
         key=lambda term: term.display_order,
     )
     output_terms: list[dict[str, Any]] = []
@@ -3829,7 +3887,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
     terms = _term_map(db)
     rows = []
     conditions = sorted({first_question_enabled(p) for p in participants}) or [True]
-    modes = ("application", "basic_understanding")
+    modes = ("application", "basic_understanding", "four_topic_fundamentals")
     for condition, mode, group in (
         (condition, mode, group)
         for condition in conditions
@@ -3870,7 +3928,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
                 "attainment_correct_rate": avg("attainment_correct_rate"),
                 "avg_score_delta_from_pretest_pt": avg_final_delta(),
-                "misconception_transition_summary": _group_misconception_transition_summary(group_participants, latest_summaries, terms),
+                "misconception_transition_summary": _group_misconception_transition_summary(group_participants, latest_summaries, terms, mode),
             }
         )
     return {"groups": rows, "hypotheses": group_metrics(current_metrics(db))}

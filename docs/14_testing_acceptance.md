@@ -1,5 +1,14 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-09 4用語版問題モード（仕様版44・feature/issue-297）
+
+- 新規参加者用に`four_topic_fundamentals`を追加し、従来の`application`・`basic_understanding`と登録snapshot・設定既定値を分離した。対象語はTransformer、LLMの学習段階、マルチエージェント、記憶プロセス。
+- 添付問題の本文と選択肢を独立問題バンクへ追加した。事前・再テスト1/2・内部final_testの同一本文、3択/J単独、配置、誤答確認snapshot、複数選択UIを検証する。
+- TransformerとLLM学習段階のRAG節指定、4用語用presurvey、4問分母のモード別仮説集計、ログ・CSV/XLSXを検証する。
+- Backend全体は隔離SQLiteで`1744 passed`。Frontendテスト、Next.js production build/TypeScript検査、`git -c core.whitespace=cr-at-eol diff --check`も通過した。
+- 隔離SQLiteの`/api/health`は`200 OK`、別ポート`3101`の管理画面HTMLも`200 OK`。ブラウザ自動操作環境がないため、実画面の視覚確認は未実施。
+- 問題の反復による練習効果、問題モード間の難易度・測定特性・回次同等性、研究上の承認は実証・確認していない。
+
 ## 2026-11-08 基礎理解版問題モード（仕様版43・feature/issue-295）
 
 - 管理画面の問題モードを新規参加者の登録時にsnapshotし、`application`と`basic_understanding`で問題取得・回答保存・復元・仮説集計を分離した。旧仕様版42以下の記録とNULLモードの履歴解釈を保持する。

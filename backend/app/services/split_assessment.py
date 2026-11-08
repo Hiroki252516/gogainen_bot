@@ -12,10 +12,12 @@ import yaml
 from fastapi import HTTPException
 
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, STANDARD
+from app.seed.content_loader import four_topic_terms, teaching_target_for_option
 from app.seed.import_split_assessment_draft import validate
 
 
 TERMS = ("llm_knowledge", "multi_agent", "memory_process")
+FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v1"
 ROLES = ("correct", "M1", "M3", "unknown")
 SPLIT_ROLE_COUNTS = Counter({"correct": 1, "M1": 2, "M3": 2, "unknown": 1})
 
@@ -74,7 +76,7 @@ def require_confirmation_spec(practice: Any) -> dict:
     if "stage_meta" in practice and not isinstance(practice["stage_meta"], dict):
         raise error
     spec = practice.get("source_spec")
-    if not isinstance(spec, dict) or spec.get("selection_mode") != "grouped_single":
+    if not isinstance(spec, dict) or spec.get("selection_mode") not in {"grouped_single", "multiple"}:
         raise error
     groups, options = spec.get("questions"), spec.get("options")
     if not isinstance(groups, list) or not 1 <= len(groups) <= 2 or not isinstance(options, list):
@@ -90,12 +92,15 @@ def require_confirmation_spec(practice: Any) -> dict:
             raise error
         if not isinstance(group.get("body"), str) or not group["body"].strip():
             raise error
-        if not isinstance(choices, list) or len(choices) not in {4, 6}:
+        expected_counts = {10} if spec["selection_mode"] == "multiple" else {4, 6}
+        if not isinstance(choices, list) or len(choices) not in expected_counts:
             raise error
         if any(not isinstance(choice, dict) for choice in choices):
             raise error
-        expected_labels = list("ABCD") if len(choices) == 4 else list("ABCDEF")
-        if [choice.get("label") for choice in choices] != expected_labels:
+        expected_labels = list("ABCDEFGHIJ") if len(choices) == 10 else list("ABCD") if len(choices) == 4 else list("ABCDEF")
+        if len(choices) != 10 and [choice.get("label") for choice in choices] != expected_labels:
+            raise error
+        if len(choices) == 10 and (len({choice.get("label") for choice in choices}) != 10 or {choice.get("label") for choice in choices} != set(expected_labels)):
             raise error
         group_ids.add(question_id)
         displayed.extend((question_id, choice) for choice in choices)
@@ -108,7 +113,8 @@ def require_confirmation_spec(practice: Any) -> dict:
             raise error
         if not isinstance(option.get("question_id"), str) or option["question_id"] not in group_ids or not isinstance(option.get("is_correct"), bool):
             raise error
-        if option.get("label") not in tuple("ABCDEF"):
+        allowed_labels = tuple("ABCDEFGHIJ") if spec["selection_mode"] == "multiple" else tuple("ABCDEF")
+        if option.get("label") not in allowed_labels:
             raise error
         kind = option.get("misconception_type")
         if kind not in (None, "M1", "M3", "unknown") or option["is_correct"] != (kind is None):
@@ -129,15 +135,22 @@ def require_confirmation_spec(practice: Any) -> dict:
         raise error
     for question_id in group_ids:
         roles = Counter("correct" if o["is_correct"] else o["misconception_type"] for o in options if o["question_id"] == question_id)
-        if roles not in (Counter(ROLES), SPLIT_ROLE_COUNTS):
+        if roles not in (Counter(ROLES), SPLIT_ROLE_COUNTS, Counter({"correct": 3, "M1": 3, "M3": 3, "unknown": 1})):
             raise error
+    if spec["selection_mode"] == "multiple" and (
+        len(groups) != 1
+        or spec.get("min_selections") != 3
+        or spec.get("max_selections") != 3
+        or len(options) != 10
+    ):
+        raise error
     if practice.get("questions") != groups or practice.get("options") != [choice for _, choice in displayed]:
         raise error
     return spec
 
 
 def uses_split(participant: Any) -> bool:
-    return participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43}
+    return participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44}
 
 
 @lru_cache
@@ -161,6 +174,20 @@ def split_bank(bank_version: str = "split-actions-v5") -> dict:
 
 
 def split_specs(term_slug: str, round_key: str, bank_version: str | None = None) -> list[dict]:
+    if bank_version == FOUR_TOPIC_BANK_VERSION:
+        term = next((item for item in four_topic_terms() if item["slug"] == term_slug), None)
+        if term is None or round_key not in {"pretest_v1", "retest_v1", "retest_v2"}:
+            raise ValueError("unsupported four-topic assessment term or round")
+        return [{
+            "variant_key": f"{round_key}_q1",
+            "question_number": 1,
+            "body": term["question"],
+            "question_type": "multi_select",
+            "options": [
+                (option["label"], option["body"], option["role"] == "correct", None if option["role"] == "correct" else option["role"])
+                for option in term["options"]
+            ],
+        }]
     section = split_bank(bank_version or ASSESSMENT_BANK_VERSIONS[STANDARD])[round_key][term_slug]
     def choices_for(
         question: dict,
@@ -233,6 +260,10 @@ def learning_spec(db: Any, participant: Any, term: Any) -> dict:
         for option in source:
             options.append({"option_id": option.id, "label": option.option_label, "body": option.body, "is_correct": option.is_correct, "misconception_type": option.misconception_type, "question_id": question.id})
         groups.append({"question_id": question.id, "body": attempt.question_body_snapshot or question.body, "options": displayed})
+    if getattr(participant, "test_content_mode", None) == "four_topic_fundamentals":
+        if len(groups) != 1 or len(options) != 10:
+            raise split_data_error("split_confirmation_snapshot_unavailable")
+        return {"body": groups[0]["body"], "question_type": "split_confirmation_multi_select", "selection_mode": "multiple", "min_selections": 3, "max_selections": 3, "questions": groups, "options": options, "expected_answer": "", "variant_key": "split_confirmation"}
     return {"body": "\n\n".join(g["body"] for g in groups), "question_type": "split_confirmation", "selection_mode": "grouped_single", "min_selections": len(groups), "max_selections": len(groups), "questions": groups, "options": options, "expected_answer": "", "variant_key": "split_confirmation"}
 
 
@@ -259,6 +290,20 @@ def generation_scope(db: Any, participant: Any, term: Any) -> tuple[dict, list[d
     questions = split_questions_for_attempts(db, failed)
     for attempt in failed:
         question = questions[attempt.question_id]
+        if getattr(participant, "test_content_mode", None) == "four_topic_fundamentals":
+            topic = question.body
+            topics.append(topic)
+            if kind == "unknown":
+                continue
+            for option in _selected_options(db, attempt):
+                if option.is_correct or option.misconception_type not in {"M1", "M3"}:
+                    continue
+                metadata = teaching_target_for_option(term.slug, option.option_label)
+                if not metadata:
+                    raise split_data_error("split_correction_unavailable")
+                history.append({"source_type": "test", "phase": attempt.phase, "test_round": attempt.test_round, "question_body": topic, "is_correct": False, "selected_options": [{"label": option.option_label, "body": option.body}]})
+                targets.append({"claim_id": f"{question.id}:{option.id}", "term_slug": term.slug, "option_label": option.option_label, "observed_claim": option.body, **metadata, "misconception_type": option.misconception_type, "evidence_source": "latest_test_selected_option", "interpretation": "observed_choice_not_confirmed_belief"})
+            continue
         correction_draft = CORRECTION_DRAFTS.get((term.slug, parse_split_variant(question.variant_key)[1]))
         if correction_draft is None:
             raise split_data_error("split_correction_unavailable")

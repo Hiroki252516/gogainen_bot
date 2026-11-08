@@ -86,7 +86,7 @@ from app.services.option_order import current_option_order_mode, save_option_ord
 from app.services.test_content_mode import current_mode as current_test_content_mode, mode_label as test_content_mode_label, save_mode as save_test_content_mode
 from app.services.learning_glossary import load_learning_glossary, public_glossary
 from app.services import identity_mapping
-from app.services.research_protocol import PresurveyPayload, SurveyPayload, presurvey_context, survey_context, record_material_view
+from app.services.research_protocol import FourTopicPresurveyPayload, PresurveyPayload, SurveyPayload, presurvey_context, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
 from app.services.prefetch import prefetch_coordinator, schedule_prefetch
 
@@ -136,7 +136,7 @@ def _public_practice_question(question: object) -> dict | None:
                 for option in options
                 if isinstance(option, dict)
             ]
-        if isinstance(item.get("questions"), list):
+        if isinstance(item.get("questions"), list) and item.get("selection_mode") != "multiple":
             result["questions"] = [public_item(group, {"question_id", "body", "options"}) for group in item["questions"]]
         return result
 
@@ -322,7 +322,7 @@ class OptionOrderPayload(BaseModel):
 
 class TestContentModePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    mode: Literal["application", "basic_understanding"]
+    mode: Literal["application", "basic_understanding", "four_topic_fundamentals"]
 
 
 DATABASE_UNAVAILABLE_DETAIL = "データベースに接続できません。管理者に確認してください。"
@@ -621,7 +621,7 @@ def api_presurvey_context(participant_id: str, db: Session = Depends(get_db)) ->
 @app.post("/api/participants/{participant_id}/presurvey")
 async def api_submit_presurvey(
     participant_id: str,
-    payload: PresurveyPayload,
+    payload: PresurveyPayload | FourTopicPresurveyPayload,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:

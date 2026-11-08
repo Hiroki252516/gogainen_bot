@@ -265,7 +265,7 @@ export default function LearningPage() {
     const isMultiple = practiceQuestion.selection_mode === "multiple";
     const requiredSelections = practiceQuestion.min_selections ?? 3;
     const selectionState = multipleSelectionState(options, selectedOptionIds, requiredSelections);
-    if (practiceQuestion.questions?.some((q) => q.options.filter((o) => selectedOptionIds.includes(o.option_id)).length !== 1)) {
+    if (!isMultiple && practiceQuestion.questions?.some((q) => q.options.filter((o) => selectedOptionIds.includes(o.option_id)).length !== 1)) {
       setError("各設問の選択肢を1つずつ選んでください。"); return;
     }
     if (isMultiple && !selectionState.isComplete) {
@@ -358,7 +358,7 @@ export default function LearningPage() {
   const progress = questionProgress || (turn ? progressForNewQuestion(termSlug, turn) : null);
   const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;
   const practiceQuestion = turn?.practice_question ?? null;
-  const confirmationQuestions = practiceQuestion?.questions;
+  const confirmationQuestions = practiceQuestion?.selection_mode === "multiple" ? undefined : practiceQuestion?.questions;
   const practiceOptions = practiceQuestion?.options ?? [];
   const hasAnswerableQuestion = Boolean(confirmationQuestions?.length || practiceOptions.length);
   const questionBody = practiceQuestion?.body || turn?.learner_prompt || "";

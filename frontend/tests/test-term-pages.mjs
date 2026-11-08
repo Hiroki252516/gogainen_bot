@@ -23,6 +23,7 @@ const questions = ["llm_knowledge", "multi_agent", "memory_process"].flatMap((te
   test_round: "test",
   answer_status: term_index === 0 && number === 1 ? "submitted" : "unanswered",
   submitted_answer: term_index === 0 && number === 1 ? { selected_option_ids: ["chosen"] } : null,
+  options: [{ option_id: "chosen", label: "A", body: "fixture choice" }],
   glossary: {
     version: "fixture-v1",
     entries: [
@@ -38,6 +39,13 @@ assert.ok(q1Pages.every((page) => page.questions.length === 1));
 assert.equal(initialTestTermPageIndex(q1Pages), 1, "Q1-only pages resume at the next unsaved term");
 assert.equal(groupTestQuestionsByTerm([...q1Questions, questions[1]]), null, "mixed page widths are rejected");
 assert.equal(groupTestQuestionsByTerm(q1Questions.map((question, index) => index === 1 ? { ...question, test_round: "retest_1" } : question)), null);
+const fourTopicQuestions = ["transformer", "llm_training_stages", "multi_agent_four_topic", "memory_process_four_topic"].map((term_slug) => ({
+  question_id: `${term_slug}-1`, term_slug, term_label: term_slug, test_round: "test", selection_mode: "multiple", min_selections: 3, max_selections: 3,
+  options: [..."ABCDEFGHI"].map((label) => ({ option_id: `${term_slug}-${label}`, label, body: label })),
+})).map((question) => ({ ...question, options: [...question.options, { option_id: `${question.term_slug}-J`, label: "J", body: "わからない。", exclusive: true }] }));
+const fourTopicPages = groupTestQuestionsByTerm(fourTopicQuestions);
+assert.equal(fourTopicPages.length, 4, "four-topic tests create four single-question term pages");
+assert.equal(initialTestTermPageIndex(fourTopicPages), 0);
 const original = structuredClone(questions);
 const pages = groupTestQuestionsByTerm(questions);
 
@@ -58,7 +66,16 @@ assert.equal(groupTestQuestionsByTerm(questions.map((question, index) => index =
 
 const runnerSource = fs.readFileSync(new URL("../components/QuestionRunner.tsx", import.meta.url), "utf8");
 const validatorSource = runnerSource.slice(runnerSource.indexOf("function isPageSubmissionFor("), runnerSource.indexOf("function TermPageQuestionRunner("));
-const validate = vm.runInNewContext(ts.transpile(validatorSource + "; isPageSubmissionFor", { target: ts.ScriptTarget.ES2022 }), { sameTestRound });
+const multipleSelectionState = (options, selectedIds, required = 3) => {
+  const selected = options.filter((option) => selectedIds.includes(option.option_id));
+  const hasUnknown = selected.some((option) => option.exclusive);
+  const count = selected.filter((option) => !option.exclusive).length;
+  return { hasUnknown, isComplete: hasUnknown ? selected.length === 1 : count === required };
+};
+const hasCompleteSelection = (question, selectedIds) => question.selection_mode === "multiple"
+  ? multipleSelectionState(question.options, selectedIds, question.min_selections ?? 3).isComplete && selectedIds.length <= (question.max_selections ?? 3)
+  : selectedIds.length === 1;
+const validate = vm.runInNewContext(ts.transpile(validatorSource + "; isPageSubmissionFor", { target: ts.ScriptTarget.ES2022 }), { sameTestRound, hasCompleteSelection });
 for (const page of [pages[0], q1Pages[0]]) {
   const saved = {
     participant_id: "p", phase: "pretest", term_slug: page.term_slug, test_round: "test",
@@ -70,4 +87,13 @@ for (const page of [pages[0], q1Pages[0]]) {
   assert.equal(validate({ ...saved, answers: [...saved.answers, saved.answers[0]] }, "p", "pretest", page), false);
   assert.equal(validate({ ...saved, answers: [{ question_id: "outside-page", selected_option_ids: ["chosen"] }] }, "p", "pretest", page), false);
 }
+const fourTopicSaved = {
+  participant_id: "p", phase: "pretest", term_slug: fourTopicPages[0].term_slug, test_round: "test",
+  page_id: "frozen-multiple-page", question_shown_at: "2026-11-03T00:00:00Z", answered_at: "2026-11-03T00:00:01Z",
+  elapsed_time_sec: 1,
+  answers: [{ question_id: fourTopicPages[0].questions[0].question_id, selected_option_ids: ["transformer-A", "transformer-B", "transformer-C"] }],
+};
+assert.equal(validate(fourTopicSaved, "p", "pretest", fourTopicPages[0]), true, "three selections restore for a multi-select question");
+assert.equal(validate({ ...fourTopicSaved, answers: [{ ...fourTopicSaved.answers[0], selected_option_ids: ["transformer-J"] }] }, "p", "pretest", fourTopicPages[0]), true, "unknown alone restores for a multi-select question");
+assert.equal(validate({ ...fourTopicSaved, answers: [{ ...fourTopicSaved.answers[0], selected_option_ids: ["transformer-A", "transformer-J"] }] }, "p", "pretest", fourTopicPages[0]), false, "unknown cannot be combined with other choices");
 console.log("term-page grouping, pending submission restoration, and glossary deduplication passed");

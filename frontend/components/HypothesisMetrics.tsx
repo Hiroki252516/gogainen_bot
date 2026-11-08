@@ -18,9 +18,14 @@ const CENSORING_REASONS: Record<string, string> = {
 const TEST_CONTENT_MODES: Record<string, string> = {
   application: "現行版（場面応用）",
   basic_understanding: "基礎理解版",
+  four_topic_fundamentals: "4用語版",
 };
 function format(value: number | null | undefined, rate = false) {
   return value == null ? "対象データなし" : rate ? `${(value * 100).toFixed(1)}%` : value.toFixed(2);
+}
+function testCountLabel(data: any) {
+  if (data.test_content_mode === "four_topic_fundamentals") return "4問・4用語";
+  return data.first_question_only ? "設問1のみ（3問）" : "設問1・2（6問）";
 }
 function StatsTable({ groups }: { groups: any[] }) {
   return <div style={{ overflowX: "auto" }}><table>
@@ -39,7 +44,7 @@ export function HypothesisMetrics({ data }: { data: any }) {
   const titleId = `hypotheses-title-${data.test_content_mode || "application"}-${data.first_question_only ? "q1" : "q12"}`;
   return <section className="panel stack" aria-labelledby={titleId}>
     <h2 id={titleId}>6仮説の記述集計：{data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）"}</h2>
-    <p>集計対象: {data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）"}／{data.first_question_only ? "設問1のみ（3問）" : "設問1・2（6問）"}</p>
+    <p>集計対象: {data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）"}／{testCountLabel(data)}</p>
     <p>新プロトコル登録者のみ。統計検定・仮説支持の自動判定は行いません。欠測は補完しません。</p>
     <StatsTable groups={data.groups} />
     <p className="muted">仮説2は満点到達者のみの条件付き集計です。仮説2の未観測は満点までの総回数が未確定の人数であり、表示済みセッションの記録欠落を意味しません。仮説3は用語内平均→参加者内平均、仮説4は参加者ごとの率の平均です。</p>
@@ -88,7 +93,7 @@ export function ParticipantHypothesisMetrics({ data }: { data: any }) {
   if (!data) return null;
   return <section className="notice stack"><h3>参加者の6仮説対応値</h3>
     <p>テスト問題モード：{data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）"}</p>
-    <p>出題設問：{data.first_question_only ? "設問1のみ（3問）" : "設問1・2（6問）"}</p>
+    <p>出題設問：{testCountLabel(data)}</p>
     <p>経路：{data.route}／教材表示：{data.has_viewed_material ? "あり" : "なし"}</p>
     {data.h2.censoring_reason && <p>満点未達の終了状況：{CENSORING_REASONS[data.h2.censoring_reason]}</p>}
     <ul>{Object.entries(LABELS).map(([key, label]) => <li key={key}>{label}：{format(data[key].value, key === "h4" || key === "h6")}（{data[key].status || "observed"}）</li>)}</ul>
