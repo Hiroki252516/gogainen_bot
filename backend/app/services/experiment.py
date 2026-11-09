@@ -73,6 +73,7 @@ from app.core.question_sets import (
     historical_assessment_bank_versions_for,
 )
 from app.services.test_content_mode import (
+    FOUR_TOPIC_FUNDAMENTALS,
     current_mode as current_test_content_mode,
     mode_label as test_content_mode_label,
     participant_mode as participant_test_content_mode,
@@ -637,7 +638,10 @@ def _assert_phase_available(participant: Participant, phase: str) -> None:
     elif phase == "retest":
         _assert_retest_available(participant)
     elif phase == "final_test":
-        if participant.current_step != "final_test":
+        if (
+            participant_test_content_mode(participant) == FOUR_TOPIC_FUNDAMENTALS
+            or participant.current_step != "final_test"
+        ):
             raise HTTPException(status_code=409, detail=FINAL_TEST_NOT_AVAILABLE_DETAIL)
 
 
@@ -1910,7 +1914,12 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
     participant.current_step = "learning_targets" if remaining else "final_test"
     if uses_split(participant):
         remaining = len(_reset_test_learning_targets(db, participant, scored_attempts))
-        participant.current_step = "learning_targets" if remaining else "final_test"
+        if participant_test_content_mode(participant) == FOUR_TOPIC_FUNDAMENTALS:
+            if remaining == 0:
+                remaining = len(_set_four_topic_learning_targets(db, participant))
+            participant.current_step = "learning_targets"
+        else:
+            participant.current_step = "learning_targets" if remaining else "final_test"
     _commit(db)
     return remaining
 
@@ -3373,11 +3382,22 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
     achieved_mastery = _is_mastery_test_batch(db, attempts)
     if phase == "retest":
         participant.retest_cycles_completed = (participant.retest_cycles_completed or 0) + 1
+    four_topic_mode = participant_test_content_mode(participant) == FOUR_TOPIC_FUNDAMENTALS
+    tests_completed = post_pretest_tests_completed(db, participant)
+    if (
+        four_topic_mode
+        and phase == "retest"
+        and tests_completed < MAX_POST_PRETEST_TESTS
+        and not learning_target_slugs
+    ):
+        learning_target_slugs = _set_four_topic_learning_targets(db, participant)
     retest_limit_reached = (
         not achieved_mastery
-        and post_pretest_tests_completed(db, participant) >= MAX_POST_PRETEST_TESTS
+        and tests_completed >= MAX_POST_PRETEST_TESTS
     )
-    if achieved_mastery or retest_limit_reached:
+    if (four_topic_mode and tests_completed >= MAX_POST_PRETEST_TESTS) or (
+        not four_topic_mode and (achieved_mastery or retest_limit_reached)
+    ):
         participant.current_step = "survey"
         next_url = _next_url(participant.current_step)
     else:
@@ -3490,6 +3510,59 @@ def _reset_test_learning_targets(db: Session, participant: Participant, attempts
 
     db.flush()
     return [row["term_slug"] for row in learning_targets(db, participant.id)]
+
+
+def _set_four_topic_learning_targets(db: Session, participant: Participant) -> list[str]:
+    """Schedule the standard learning round when a four-topic test is perfect."""
+    if participant_test_content_mode(participant) != FOUR_TOPIC_FUNDAMENTALS:
+        return []
+
+    active_terms = _active_test_terms(db, participant)
+    states = {
+        state.term_id
+        for state in db.query(LearnerState)
+        .filter(LearnerState.participant_id == participant.id)
+        .all()
+    }
+    if {term.id for term in active_terms} - states:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": "learning_navigation_unavailable",
+                "message": "学習対象と進行状態に不整合があります。管理者に連絡してください。",
+            },
+        )
+
+    assignments = {
+        row.term_id: row
+        for row in db.query(TermAssignment)
+        .filter_by(participant_id=participant.id)
+        .all()
+    }
+    for term in active_terms:
+        assignment = assignments.get(term.id)
+        if assignment is None:
+            assignment = TermAssignment(
+                participant_id=participant.id,
+                term_id=term.id,
+                group_condition=participant.group_condition,
+            )
+            db.add(assignment)
+        assignment.is_learning_target = True
+        assignment.priority_score = 0
+        assignment.selection_reason = "4用語版の固定学習周回"
+
+    db.flush()
+    targets = learning_targets(db, participant.id)
+    if [row["term_slug"] for row in targets] != [term.slug for term in active_terms]:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": "learning_navigation_unavailable",
+                "message": "学習対象と進行状態に不整合があります。管理者に連絡してください。",
+            },
+        )
+    return [row["term_slug"] for row in targets]
 
 
 def _latest_retest_mastery_attempts(db: Session, attempts: list[Attempt]) -> list[Attempt]:

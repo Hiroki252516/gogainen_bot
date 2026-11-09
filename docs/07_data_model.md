@@ -1,5 +1,9 @@
 # 現行データと履歴互換
 
+## 仕様版45の4用語版進行
+
+仕様版45 / `experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1`では、4用語版のみ満点でも事前テスト後と再テスト1後に学習へ進む。誤答対象がない満点回は4用語すべてを学習対象にし、再テスト2の採点後は正誤にかかわらずアンケートへ進む。既存の`retest_cycles_completed`と問題・回答snapshotを使い、新しいDB列や問題データの書換えは行わない。通常版・基礎理解版の満点時早期終了は維持する。仕様版44以下は閲覧専用とし、保存記録を変更しない。
+
 ## 仕様版44の問題モードsnapshot
 
 既存の`Participant.test_content_mode` / `RuntimeSetting.test_content_mode`を再利用し、新しい列は追加しない。許容値に`four_topic_fundamentals`を加える。RuntimeSettingの既定値は`application`のまま。登録時にParticipantへ保存し、既存ParticipantのNULLを補完せず、管理設定変更を遡及させない。仕様版44の4用語問題は独立したconstruct key・問題IDで保存し、Attemptおよび学習確認の表示snapshotから当時の本文・選択肢順を復元する。ログ・参加者CSV/Excel・仮説指標には既存の`test_content_mode`を含め、4用語版の分母は4問・4用語とする。[詳細](51_four_topic_foundation_mode.md)。
@@ -36,7 +40,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 ## 現行の保存契約
 
-モデルの正本は backend/app/models/__init__.py。現行コードは仕様版43 / `experiment-plan-2026-11-08-basic-understanding-question-mode-v1`を使用する。新規参加者の`test_content_mode`は登録時のRuntimeSetting値をsnapshotし、`application`は通常バンクv5、`basic_understanding`は独立バンク`split-actions-basic-v1`で結果を復元する。既存行のNULLはv5として扱い、補完しない。辞書v4・アンケートのphase/version別保存・既存JSON snapshotは保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36〜42の結果復元は通常split-actions-v5を使い、仕様版41の`split-actions-v6-q1-only-v1` protocolはprotocol IDに基づきV6から復元する。`question_options.rationale`は内部メタデータであり、表示APIへ含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材の文字数目標と言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
+モデルの正本は backend/app/models/__init__.py。現行コードは仕様版45 / `experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1`を使用する。新規参加者の`test_content_mode`は登録時のRuntimeSetting値をsnapshotし、`application`は通常バンクv5、`basic_understanding`は独立バンク`split-actions-basic-v1`、`four_topic_fundamentals`は独立バンク`split-actions-four-topic-v1`で結果を復元する。既存行のNULLは該当する履歴版の通常バンクv5として扱い、補完しない。辞書v4・アンケートのphase/version別保存・既存JSON snapshotは保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36〜44の結果復元は当時の問題モード・バンクから行い、仕様版41の`split-actions-v6-q1-only-v1` protocolはprotocol IDに基づきV6から復元する。`question_options.rationale`は内部メタデータであり、表示APIへ含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材の文字数目標と言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 学籍番号はSQLAlchemyの研究DBへ追加しない。IDENTITY_MAPPING_PATHが指す別SQLiteへ、学籍番号・参加者ID・表示コード・作成日時・再送処理用キーを保存する。研究用エクスポート・AI入力・AIログ・冪等性のrequest_hash/response_jsonには学籍番号を含めない。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、登録は対応表を先行保存してから研究DBを確定し、通常の失敗では補償削除する。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
@@ -45,7 +49,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規参加者だけ仕様版43と現行protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、問題モード、`retest_cycles_completed=0`を固定する。仕様版42以下・異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版45と現行protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、問題モード、`retest_cycles_completed=0`を固定する。仕様版44以下・異なるprotocol_idの記録は変更しない。旧試用は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 
@@ -73,10 +77,10 @@ interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み
 
 現在のPython/API名 `attainment_correct_rate` は物理列 `l0_correct_rate` にマッピングする。新規計算はAttempt.is_correctだけを使う。旧保存値は `legacy_fields` 内にも表示できるが再計算しない。
 
-生AIログと問題snapshotは過去内容もそのまま閲覧・CSV出力可能。統合ログCSVは仕様版43で`test_content_mode`列を追加し、それ以外の既存列と過去値を保持する。詳細な旧テーブル仕様は [履歴資料](history/2026-10-06/07_data_model.md)。
+生AIログと問題snapshotは過去内容もそのまま閲覧・CSV出力可能。統合ログCSVは仕様版43で`test_content_mode`列を追加し、それ以外の既存列と過去値を保持する。仕様版45の固定2回進行も既存の回数列で表し、DB構造を変更しない。詳細な旧テーブル仕様は [履歴資料](history/2026-10-06/07_data_model.md)。
 
 旧回答の問題文・選択肢本文は保存時snapshotを優先する。旧自由回答採点のexpected_keywords列もlegacy_*マッピングとして保持し、新しいseedから更新しない。
 
 ## 問題版の保存
 
-仕様版43の新規登録・出題・採点・確認問題復元は、Participant.test_content_modeに対応する問題バンクを使う。`application`は`split-actions-v5`、`basic_understanding`は`split-actions-basic-v1`であり、旧`question_set_mode`のeasy-mode整理とは別の機能である。旧列削除処理は新しい`test_content_mode`や問題資産を削除しない。過去の問題は版付きconstruct_keyと回答snapshotから復元し、別バンクへフォールバックしない。
+仕様版45の新規登録・出題・採点・確認問題復元は、Participant.test_content_modeに対応する問題バンクを使う。`application`は`split-actions-v5`、`basic_understanding`は`split-actions-basic-v1`、`four_topic_fundamentals`は`split-actions-four-topic-v1`である。過去の問題は版付きconstruct_keyと回答snapshotから復元し、別バンクへフォールバックしない。旧`question_set_mode`の整理は別の履歴変更であり、通常版の問題資産や`test_content_mode`を削除しない。

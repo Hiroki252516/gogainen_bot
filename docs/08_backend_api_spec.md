@@ -62,7 +62,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版43 / `experiment-plan-2026-11-08-basic-understanding-question-mode-v1`で進行可否を判定し、仕様版42以下は閲覧専用とする。管理認証付きGET/PUT `/api/admin/test-content-mode`は新規参加者用の問題モードを設定する。教材本文の目標800文字化による公開API構造の変更はない。問題モードは[50](50_basic_understanding_question_mode.md)、教材モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、辞書更新は[43](43_glossary_definition_paraphrase.md)、RAG注釈は[49](49_rag_glossary.md)を参照する。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版45 / `experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1`で進行可否を判定し、仕様版44以下は閲覧専用とする。管理認証付きGET/PUT `/api/admin/test-content-mode`は新規参加者用の問題モードを設定する。4用語版の満点時進行も既存の診断・採点API応答を使い、公開API構造は変更しない。問題モードは[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)、教材モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、辞書更新は[43](43_glossary_definition_paraphrase.md)、RAG注釈は[49](49_rag_glossary.md)を参照する。
 
 事前アンケートはGET/POST `/api/participants/{id}/presurvey`を使い、`presurvey-baseline-v2`の厳密なpayloadを受け付ける。`prior_term_knowledge`の6項目は`unknown`、`heard_of`、`knows_meaning`、`can_explain`のいずれかを必須とし、AI利用頻度・自己評価も1〜10整数で必須とする。`phase=presurvey`のParticipantSurveyとして冪等に保存する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版36の`presurvey-baseline-v1`回答はBoolean形式のまま履歴保全し、新形式へ変換しない。
 

@@ -54,6 +54,7 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     41: {STANDARD: "split-actions-v5"},
     42: {STANDARD: "split-actions-v5"},
     43: {STANDARD: "split-actions-v5"},
+    44: {STANDARD: "split-actions-v5"},
 }
 
 # Version 41 was used by parallel protocols. Keep the v5 default for the two
@@ -98,7 +99,7 @@ def assessment_bank_for_participant(participant: object) -> str:
         mode = getattr(participant, "test_content_mode", None)
     if mode in ASSESSMENT_MODE_BANK_VERSIONS:
         return ASSESSMENT_MODE_BANK_VERSIONS[mode]
-    if experiment_spec_version is not None and experiment_spec_version <= 43:
+    if experiment_spec_version is not None and experiment_spec_version <= 44:
         return "split-actions-v5"
     raise ValueError("participant has no supported test content mode")
 
