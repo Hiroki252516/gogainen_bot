@@ -32,7 +32,7 @@ def test_v14_changes_only_the_four_requested_locations_and_keeps_v13():
     assert load_learning_content(content_version=14)["version"] == 14
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[22] == {"standard": "scenario-actions-v6"}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[21] == HISTORICAL_ASSESSMENT_BANK_VERSIONS[22]
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[CURRENT_EXPERIMENT_SPEC_VERSION] == {"standard": "split-actions-four-topic-v1"}
+    assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     assert hashlib.sha256(content_loader.LEARNING_V13_CONTENT_PATH.read_bytes()).hexdigest() == "78fe46d82b29ab5cfcaab969def2410732d19e7306dfd96244a6325d4de78c57"
     expected = deepcopy(load_learning_content(content_version=13))
     expected["version"] = 14

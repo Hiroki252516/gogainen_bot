@@ -22,7 +22,9 @@
 
 - 仕様版45には「現行版既定・4用語版のみ固定2回フロー」と「RuntimeSetting未設定時に4用語版を既定」の二つのprotocolがあるため、両条件を仕様版46 / `experiment-plan-2026-11-09-four-topic-default-two-retests-v1`に統合した。新規登録では保存済み問題モードを尊重し、未設定時は4用語版とする。
 - 仕様版46は4用語版を満点でも2回の再テストまで進行させ、満点時は4用語すべてを学習対象にする。他モードの満点時早期終了を維持する。仕様版45以下は閲覧専用とし、各protocol・保存済みモード・問題snapshotの復元を維持する。
-- 版46のモードsnapshot欠落時に4用語版バンクを復元するため、旧バンク改訂テスト6件の「現行版は履歴表にない」という前提を、版46が`split-actions-four-topic-v1`へ解決される確認に更新した。関連Backendテストは`197 passed`。Backend全体は初回`1753 passed, 6 failed`で、失敗した6件を修正後に再実行して`6 passed`となった（全1759件を複数回に分けて確認）。Frontend `npm test`とproduction build、`git diff --check`も成功した。研究DB・3000番環境・実AIは使わず、マージコミットは作成しない。
+- PR #312のレビューに伴い、仕様版46を履歴バンク表から除外した。現行バンクはParticipantの保存済み`test_content_mode`から解決し、snapshot欠落・不正値は別バンクへフォールバックせず503にする。仕様版45以下のprotocol別・版別復元は維持した。従来の6テストは現行版が履歴表にないことを検証する形へ戻し、現在のsnapshot欠落エラーも追加した。
+- 4用語版の固定学習対象設定前に既存割当の対象フラグを解除し、対象集合を順序に依存せず検証する回帰ケースを追加した。関連Backendテスト730件と、最終変更を含む重点テスト7件が通過した。
+- Backend全体は`1758 passed, 1 failed`。失敗は今回変更していない`tests/test_tutoring_prompt_yaml.py::test_rendered_prompt_matches_expected_contract_hashes`で、固定期待hashとレンダリングpromptの不一致。Frontendは変更していない。`git diff --check`は成功。研究DB・3000番環境・実AIは使用していない。
 
 ## 2026-11-09 4用語版の選択肢別正誤表示（fix/issue-303）
 

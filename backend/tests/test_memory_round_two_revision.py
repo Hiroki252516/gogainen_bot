@@ -151,7 +151,7 @@ def test_natural_memory_round_two_grading_feedback_replay_and_prefetch(group, la
 
 
 def test_current_spec_resolves_without_historical_mapping():
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[CURRENT_EXPERIMENT_SPEC_VERSION] == {"standard": "split-actions-four-topic-v1"}
+    assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     client = TestClient(app)
     created = _ok(client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "CURRENT-BANK-SYNTHETIC"}))
     complete_presurvey(client, created["participant_id"])

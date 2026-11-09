@@ -4,7 +4,7 @@
 
 ## 共通の追加学習支援
 
-仕様版26で両群共通の固定辞書を導入した。現行v4はRAGを含む17語で、回答後解説・事前/再テスト・教材注釈へ適用する。仕様版39で新規参加者の教材モードを教材内解説に固定し、現行仕様版46でも維持する。教材モードと問題モードを提示条件として記録し、仕様版44以下は閲覧専用とする。旧辞書25語・テスト注釈なしの試用や、注釈導入前の試用と混ぜず、研究者の内容確認・予備調査を経て収集する。[辞書](24_learning_glossary.md)、[教材モード](41_learning_glossary_material_mode.md)、[文字数契約](42_learning_glossary_material_length.md)、[辞書定義と言い換え](43_glossary_definition_paraphrase.md)、[RAG注釈](49_rag_glossary.md)。
+仕様版26で両群共通の固定辞書を導入した。現行v4はRAGを含む17語で、回答後解説・事前/再テスト・教材注釈へ適用する。仕様版39で新規参加者の教材モードを教材内解説に固定し、現行仕様版46でも維持する。教材モードと問題モードを提示条件として記録し、仕様版45以下は閲覧専用とする。旧辞書25語・テスト注釈なしの試用や、注釈導入前の試用と混ぜず、研究者の内容確認・予備調査を経て収集する。[辞書](24_learning_glossary.md)、[教材モード](41_learning_glossary_material_mode.md)、[文字数契約](42_learning_glossary_material_length.md)、[辞書定義と言い換え](43_glossary_definition_paraphrase.md)、[RAG注釈](49_rag_glossary.md)。
 
 2026-10-18確認の実験計画書を目標仕様の根拠とする。現行実装との差分を実装済みとしない。[対応・未対応・要確認事項](20_experiment_plan_alignment.md) を併読する。
 

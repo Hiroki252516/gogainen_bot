@@ -2102,7 +2102,19 @@ def _test_result_question(
         .order_by(Question.created_at.desc(), Question.variant_key)
     )
     if uses_scenario_bank:
-        bank_version = (historical_banks or ASSESSMENT_BANK_VERSIONS).get("standard")
+        if participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION:
+            try:
+                bank_version = assessment_bank_for_participant(participant)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error_code": "assessment_bank_unavailable",
+                        "message": "参加者の問題版を確認できません。管理者に連絡してください。",
+                    },
+                ) from exc
+        else:
+            bank_version = (historical_banks or {}).get("standard")
         if bank_version is None:
             return None
         query = query.filter(Question.construct_key == assessment_construct_key(term.slug, phase, bank_version=bank_version))
@@ -3539,6 +3551,9 @@ def _set_four_topic_learning_targets(db: Session, participant: Participant) -> l
         .filter_by(participant_id=participant.id)
         .all()
     }
+    for assignment in assignments.values():
+        assignment.is_learning_target = False
+
     for term in active_terms:
         assignment = assignments.get(term.id)
         if assignment is None:
@@ -3554,7 +3569,9 @@ def _set_four_topic_learning_targets(db: Session, participant: Participant) -> l
 
     db.flush()
     targets = learning_targets(db, participant.id)
-    if [row["term_slug"] for row in targets] != [term.slug for term in active_terms]:
+    target_slugs = [row["term_slug"] for row in targets]
+    expected_slugs = {term.slug for term in active_terms}
+    if len(target_slugs) != len(expected_slugs) or set(target_slugs) != expected_slugs:
         raise HTTPException(
             status_code=503,
             detail={
@@ -3562,7 +3579,7 @@ def _set_four_topic_learning_targets(db: Session, participant: Participant) -> l
                 "message": "学習対象と進行状態に不整合があります。管理者に連絡してください。",
             },
         )
-    return [row["term_slug"] for row in targets]
+    return [term.slug for term in active_terms]
 
 
 def _latest_retest_mastery_attempts(db: Session, attempts: list[Attempt]) -> list[Attempt]:

@@ -34,7 +34,7 @@ def test_v25_exact_banks_and_unchanged_content():
     assert ASSESSMENT_BANK_VERSIONS == {"standard": "split-actions-v5"}
     assert LEARNING_CONTENT_VERSIONS == {"standard": 15}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[24] == {"standard": "scenario-actions-v8"}
-    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[CURRENT_EXPERIMENT_SPEC_VERSION] == {"standard": "split-actions-four-topic-v1"}
+    assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     for path, digest in (
         (content_loader.SCENARIO_ACTIONS_V8_CONTENT_PATH, "c07ac0de45d78abba642107842bc14d510ace7751a369d9a12a171fb0141c9ed"),
         (content_loader.LEARNING_V14_CONTENT_PATH, "72d37e3ae983758718020ddac5e95ee51fa4e3aade63e4b1936d54f2a8428d0d"),

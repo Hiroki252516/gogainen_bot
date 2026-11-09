@@ -61,7 +61,7 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 ## 教材契約と仕様版42からの継承（版26の基準契約・版29で維持）
 
-仕様版42 / `experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`で定めた教材条件は現行仕様版46でも引き継ぐ。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教材本文は800文字程度を目安とし、文字数による合否判定は行わない。統制群に群別自然言語方略指示を加えず、提案群だけに教授方略の自然言語指示を追加する。出力SchemaとBackend検証は変更せず、統制群のstrategy値は`general_explanation`に固定する。仕様版43で問題モードの登録時固定とモード別仮説集計を追加し、仕様版45では4用語版の進行だけを固定2回に変更する。仕様版44以下は閲覧専用。
+仕様版42 / `experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`で定めた教材条件は現行仕様版46でも引き継ぐ。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教材本文は800文字程度を目安とし、文字数による合否判定は行わない。統制群に群別自然言語方略指示を加えず、提案群だけに教授方略の自然言語指示を追加する。出力SchemaとBackend検証は変更せず、統制群のstrategy値は`general_explanation`に固定する。仕様版43で問題モードの登録時固定とモード別仮説集計を追加し、仕様版45では4用語版の進行だけを固定2回に変更する。仕様版45以下は閲覧専用。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 

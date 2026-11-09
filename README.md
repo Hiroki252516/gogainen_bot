@@ -287,8 +287,14 @@ bridge構成を選ぶ場合のapp-server接続例は`CODEX_APP_SERVER_URL=ws://h
 ```text
 GET /api/admin/logs/overview
 GET /api/admin/logs/overview.csv
+GET /api/admin/logs/overview.xlsx
 GET /api/admin/participants/{participant_id}/logs
 GET /api/admin/participants/{participant_id}/logs.csv
+GET /api/admin/participants/{participant_id}/logs.xlsx
+GET /api/admin/export/hypothesis_metrics.csv
+GET /api/admin/export/hypothesis_metrics.xlsx
+GET /api/admin/export/hypothesis_group_summary.csv
+GET /api/admin/export/hypothesis_group_summary.xlsx
 ```
 
 CSVは `record_type, source_type, participant_id, display_code, phase, test_round, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。

@@ -56,7 +56,6 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     43: {STANDARD: "split-actions-v5"},
     44: {STANDARD: "split-actions-v5"},
     45: {STANDARD: "split-actions-v5"},
-    46: {STANDARD: "split-actions-four-topic-v1"},
 }
 
 # Version 41 was used by parallel protocols. Keep the v5 default for the two
@@ -73,9 +72,6 @@ HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
     },
     (45, "experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1"): {
         STANDARD: "split-actions-v5",
-    },
-    (46, "experiment-plan-2026-11-09-four-topic-default-two-retests-v1"): {
-        STANDARD: "split-actions-four-topic-v1",
     },
 }
 
@@ -104,7 +100,7 @@ def historical_assessment_bank_versions_for(participant: object) -> dict[str, st
 
 
 def assessment_bank_for_participant(participant: object) -> str:
-    """Resolve a saved mode, using the legacy default bank when its snapshot is absent."""
+    """Resolve a saved mode, allowing historical fallback only for legacy specs."""
     if isinstance(participant, dict):
         experiment_spec_version = participant.get("experiment_spec_version")
         mode = participant.get("test_content_mode")
@@ -113,11 +109,10 @@ def assessment_bank_for_participant(participant: object) -> str:
         mode = getattr(participant, "test_content_mode", None)
     if mode in ASSESSMENT_MODE_BANK_VERSIONS:
         return ASSESSMENT_MODE_BANK_VERSIONS[mode]
-    if experiment_spec_version is not None and experiment_spec_version <= 46:
+    if experiment_spec_version is not None and experiment_spec_version <= 45:
         historical_banks = historical_assessment_bank_versions_for(participant)
         if historical_banks is not None:
             return historical_banks[STANDARD]
-        return "split-actions-v5"
     raise ValueError("participant has no supported test content mode")
 
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-import pytest
 from collections import Counter
 from uuid import uuid4
+
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
@@ -12,6 +14,7 @@ from app.core.question_sets import (
     ASSESSMENT_BANK_VERSIONS,
     ASSESSMENT_MODE_BANK_VERSIONS,
     HISTORICAL_ASSESSMENT_BANK_VERSIONS,
+    HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS,
     LEARNING_CONTENT_VERSIONS,
     STANDARD,
     assessment_bank_for_participant,
@@ -19,7 +22,7 @@ from app.core.question_sets import (
 )
 from app.db.session import get_db
 from app.main import app
-from app.models import Attempt, Base, Participant, ParticipantSurvey, Question, QuestionOption, Term
+from app.models import Attempt, Base, Participant, ParticipantSurvey, Question, QuestionOption, Term, TermAssignment
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS, assessment_question_spec, four_topic_terms, learning_question_spec, load_content, load_learning_content
 from app.seed.seed_questions import seed_database
 from app.services.hypothesis_metrics import group_metrics, metrics_export_rows
@@ -140,18 +143,48 @@ def test_version_44_restores_its_saved_mode(mode, expected_bank):
     assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
 
 
-def test_current_version_without_mode_restores_protocol_default_bank():
+def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map():
     participant = {
         "experiment_spec_version": 46,
         "protocol_id": "experiment-plan-2026-11-09-four-topic-default-two-retests-v1",
         "test_content_mode": None,
     }
 
+    assert 46 not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
+    assert (46, participant["protocol_id"]) not in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS
+    assert historical_assessment_bank_versions_for(participant) is None
+    with pytest.raises(ValueError, match="no supported test content mode"):
+        assessment_bank_for_participant(participant)
+    assert participant["test_content_mode"] is None
+
+    participant["test_content_mode"] = "four_topic_fundamentals"
     assert assessment_bank_for_participant(participant) == "split-actions-four-topic-v1"
     assert historical_assessment_bank_versions_for(participant) == {
         STANDARD: "split-actions-four-topic-v1"
     }
-    assert participant["test_content_mode"] is None
+
+
+def test_current_result_restoration_rejects_missing_mode_snapshot(isolated):
+    _client, factory, _engine = isolated
+    from app.services.experiment import _test_result_question
+
+    with factory() as db:
+        participant = Participant(
+            display_code="MISSING-MODE-SNAPSHOT",
+            group_condition="control",
+            experiment_spec_version=46,
+            protocol_id="experiment-plan-2026-11-09-four-topic-default-two-retests-v1",
+            test_content_mode=None,
+        )
+        db.add(participant)
+        db.flush()
+        term = db.query(Term).filter_by(slug="memory_process").one()
+
+        with pytest.raises(HTTPException) as error:
+            _test_result_question(db, participant, term, "test", "pretest")
+
+    assert error.value.status_code == 503
+    assert error.value.detail["error_code"] == "assessment_bank_unavailable"
 
 
 def test_version_44_without_mode_restores_historical_default_bank():
@@ -444,6 +477,21 @@ def test_four_topic_mode_always_runs_learning_and_two_retests(isolated, wrong_by
     participant_id = created.json()["participant_id"]
     complete_presurvey(client, participant_id)
 
+    stale_assignment_id = None
+    if not wrong_by_round[0]:
+        with factory() as db:
+            stale_term = db.query(Term).filter_by(slug="llm_knowledge").one()
+            stale_assignment = TermAssignment(
+                participant_id=participant_id,
+                term_id=stale_term.id,
+                group_condition="control",
+                is_learning_target=True,
+                selection_reason="stale target from a previous round",
+            )
+            db.add(stale_assignment)
+            db.commit()
+            stale_assignment_id = stale_assignment.id
+
     def answer_round(phase: str, wrong_slugs: set[str]) -> list[str]:
         path_phase = phase.replace("_", "-")
         questions_response = client.get(f"/api/experiment/{participant_id}/{path_phase}")
@@ -498,6 +546,11 @@ def test_four_topic_mode_always_runs_learning_and_two_retests(isolated, wrong_by
         pretest_wrong = answer_round("pretest", wrong_by_round[0])
         diagnosed = client.post(f"/api/participants/{participant_id}/diagnose-pretest", json={})
         assert diagnosed.status_code == 200, diagnosed.text
+        if stale_assignment_id is not None:
+            with factory() as db:
+                stale_assignment = db.get(TermAssignment, stale_assignment_id)
+                assert stale_assignment is not None
+                assert stale_assignment.is_learning_target is False
         diagnosis = diagnosed.json()
         pretest_targets = pretest_wrong or list(FOUR_TOPIC_TERM_SLUGS)
         assert diagnosis["next_step"] == "learning_targets"
