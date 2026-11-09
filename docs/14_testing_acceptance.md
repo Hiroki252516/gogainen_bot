@@ -1,6 +1,14 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-09 4用語版を未設定時の既定値にする（仕様版45・fix/issue-309）
+## 2026-11-09 4用語版の固定2回フロー（仕様版45・fix/issue-300・履歴）
+
+- 新規参加者を仕様版45 / `experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1`へ固定した。4用語版だけ事前テスト後・再テスト1後の満点時にも学習へ進み、対象がない場合は4用語すべてを通常学習対象とする。再テスト2採点後は正誤にかかわらずsurveyへ進む。他モードの早期満点終了、2回の再テスト上限、問題バンク・採点・DB構造は変更しない。
+- 隔離DBの統合テストで、事前テスト・再テスト1・再テスト2の満点／誤答ケースを組み合わせ、誤答がある回は誤答用語だけ、満点回は4用語すべてを対象とすることを確認した。各対象の通常`tutor-sessions`作成、final_test拒否、3回目のテスト拒否、再テスト2後のsurvey遷移を確認した。仕様版44の通常バンク復元と保存snapshotを変更しないことも確認した。
+- 対象Backendテスト`83 passed`。Backend全体`1751 passed`（591.76秒、警告6件）。Frontendテスト一式とNext.js production build/TypeScript検査も通過した。
+- Playwright依存がFrontendにないため、実ブラウザでのPC・スマートフォン画面遷移確認は未実施。研究DB・既存3000番環境・実AIは使用していない。
+- 文書追記後の`git diff --check`も成功した。
+
+## 2026-11-09 4用語版を未設定時の既定値にする（仕様版45・fix/issue-309・履歴）
 
 - 仕様版45 / `experiment-plan-2026-11-09-four-topic-foundation-default-v1`を新規参加者へ適用する。未設定時の既定値を`four_topic_fundamentals`にし、管理画面の3モード切替は維持する。
 - RuntimeSettingに`application`または`basic_understanding`などの保存値がある場合は尊重し、設定値の自動書換え・DB移行を行わない。新規Participantには登録時選択値をsnapshotする。
@@ -10,11 +18,13 @@
 - Frontend `npm test`、Next.js production build/TypeScript検査が成功した。Backendに既存のDeprecationWarningが2件ある。
 - `git diff --check`が成功した。研究DB、3000番環境、実AIは使用していない。
 
-## 2026-11-09 現行仕様書の実装照合（docs/issue-307、origin/main merge前）
+## 2026-11-09 main統合：4用語版既定と固定2回フロー（仕様版46）
 
-- 作業時点の仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`、現行YAML、Backend/FrontendコードにREADME、AGENTS.md、運用・API・画面・評価・プロンプト・データ仕様を照合した。
-- 3問題モードと登録時snapshot、モード別アンケート・仮説集計、設問別回答確認と全体結果非表示、用語ページ単位の時間、CSV/XLSX出力を当時の現行説明へ反映した。仕様版43以下、仕様版25〜48の採用記録、docs/historyは履歴として保持し、現行仕様と混同し得る文書には適用範囲の注記を置いた。
-- その時点ではMarkdown文書だけを変更し、アプリコード・実験条件・保存データは変更していない。Backend/Frontendの動作テストは文書のみの変更のため実施対象外。変更したMarkdownのローカルリンク先検査と`git diff --check`は成功し、検査で見つけた存在しない仕様版34文書への参照を実在するv4期待値fixtureへ修正した。
+- 仕様版45には「現行版既定・4用語版のみ固定2回フロー」と「RuntimeSetting未設定時に4用語版を既定」の二つのprotocolがあるため、両条件を仕様版46 / `experiment-plan-2026-11-09-four-topic-default-two-retests-v1`に統合した。新規登録では保存済み問題モードを尊重し、未設定時は4用語版とする。
+- 仕様版46は4用語版を満点でも2回の再テストまで進行させ、満点時は4用語すべてを学習対象にする。他モードの満点時早期終了を維持する。仕様版45以下は閲覧専用とし、各protocol・保存済みモード・問題snapshotの復元を維持する。
+- PR #312のレビューに伴い、仕様版46を履歴バンク表から除外した。現行バンクはParticipantの保存済み`test_content_mode`から解決し、snapshot欠落・不正値は別バンクへフォールバックせず503にする。仕様版45以下のprotocol別・版別復元は維持した。従来の6テストは現行版が履歴表にないことを検証する形へ戻し、現在のsnapshot欠落エラーも追加した。
+- 4用語版の固定学習対象設定前に既存割当の対象フラグを解除し、対象集合を順序に依存せず検証する回帰ケースを追加した。関連Backendテスト730件と、最終変更を含む重点テスト7件が通過した。
+- Backend全体は`1758 passed, 1 failed`。失敗は今回変更していない`tests/test_tutoring_prompt_yaml.py::test_rendered_prompt_matches_expected_contract_hashes`で、固定期待hashとレンダリングpromptの不一致。Frontendは変更していない。`git diff --check`は成功。研究DB・3000番環境・実AIは使用していない。
 
 ## 2026-11-09 4用語版の選択肢別正誤表示（fix/issue-303）
 
@@ -90,6 +100,12 @@
 - 仕様版41以下は閲覧専用。旧問題・回答・教材・snapshot・監査記録は書き換えない。仕様版41のmainline二protocolは問題バンクv5、`split-actions-v6-q1-only-v1` protocolはV6で結果を復元する。今回の競合解消ではテストを実行していないため、以下の件数はorigin/main統合時点の検証記録である。
 - Backend全体テストは隔離SQLiteで`1721 passed`。prompt設定・教材文字数・用語モード・問題履歴・固定テスト条件に関する重点テスト10ファイルも`217 passed`。最初の重点実行では固定条件テスト1件が統合前の仕様版41 protocolを期待して失敗したため、現行仕様版42 protocolへ期待値を更新して再実行した。
 - `git diff --check`と`git diff --cached --check`、競合マーカーの残存確認は通過した。PRにFrontendコードの差分はないため、Frontendテスト・buildとブラウザ確認は未実施。
+
+## 2026-11-09 現行仕様書の実装照合（docs/issue-307、仕様版44時点の履歴）
+
+- 作業時点の仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`、現行YAML、Backend/FrontendコードにREADME、AGENTS.md、運用・API・画面・評価・プロンプト・データ仕様を照合した。
+- 3問題モードと登録時snapshot、モード別アンケート・仮説集計、設問別回答確認と全体結果非表示、用語ページ単位の時間、CSV/XLSX出力を当時の現行説明へ反映した。仕様版43以下、仕様版25〜48の採用記録、docs/historyは履歴として保持し、現行仕様と混同し得る文書には適用範囲の注記を置いた。
+- その時点ではMarkdown文書だけを変更し、アプリコード・実験条件・保存データは変更していない。Backend/Frontendの動作テストは文書のみの変更のため実施対象外。Markdownのローカルリンク先検査と`git diff --check`は成功し、検査で見つけた存在しない仕様版34文書への参照を実在するv4期待値fixtureへ修正した。
 - 研究DB・localhost:3000・実AIは使用していない。マージコミットは作成しない。
 
 ## 統合前の仕様版40記録：目標800文字（fix/issue-278）

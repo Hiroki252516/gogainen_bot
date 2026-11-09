@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-import pytest
 from collections import Counter
+from uuid import uuid4
+
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
@@ -11,6 +14,7 @@ from app.core.question_sets import (
     ASSESSMENT_BANK_VERSIONS,
     ASSESSMENT_MODE_BANK_VERSIONS,
     HISTORICAL_ASSESSMENT_BANK_VERSIONS,
+    HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS,
     LEARNING_CONTENT_VERSIONS,
     STANDARD,
     assessment_bank_for_participant,
@@ -18,7 +22,7 @@ from app.core.question_sets import (
 )
 from app.db.session import get_db
 from app.main import app
-from app.models import Attempt, Base, Participant, ParticipantSurvey, Question, QuestionOption, Term
+from app.models import Attempt, Base, Participant, ParticipantSurvey, Question, QuestionOption, Term, TermAssignment
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS, assessment_question_spec, four_topic_terms, learning_question_spec, load_content, load_learning_content
 from app.seed.seed_questions import seed_database
 from app.services.hypothesis_metrics import group_metrics, metrics_export_rows
@@ -139,9 +143,73 @@ def test_version_44_restores_its_saved_mode(mode, expected_bank):
     assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
 
 
-def test_current_version_without_mode_does_not_silently_fall_back():
+def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map():
+    participant = {
+        "experiment_spec_version": 46,
+        "protocol_id": "experiment-plan-2026-11-09-four-topic-default-two-retests-v1",
+        "test_content_mode": None,
+    }
+
+    assert 46 not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
+    assert (46, participant["protocol_id"]) not in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS
+    assert historical_assessment_bank_versions_for(participant) is None
     with pytest.raises(ValueError, match="no supported test content mode"):
-        assessment_bank_for_participant({"experiment_spec_version": 45, "test_content_mode": None})
+        assessment_bank_for_participant(participant)
+    assert participant["test_content_mode"] is None
+
+    participant["test_content_mode"] = "four_topic_fundamentals"
+    assert assessment_bank_for_participant(participant) == "split-actions-four-topic-v1"
+    assert historical_assessment_bank_versions_for(participant) == {
+        STANDARD: "split-actions-four-topic-v1"
+    }
+
+
+def test_current_result_restoration_rejects_missing_mode_snapshot(isolated):
+    _client, factory, _engine = isolated
+    from app.services.experiment import _test_result_question
+
+    with factory() as db:
+        participant = Participant(
+            display_code="MISSING-MODE-SNAPSHOT",
+            group_condition="control",
+            experiment_spec_version=46,
+            protocol_id="experiment-plan-2026-11-09-four-topic-default-two-retests-v1",
+            test_content_mode=None,
+        )
+        db.add(participant)
+        db.flush()
+        term = db.query(Term).filter_by(slug="memory_process").one()
+
+        with pytest.raises(HTTPException) as error:
+            _test_result_question(db, participant, term, "test", "pretest")
+
+    assert error.value.status_code == 503
+    assert error.value.detail["error_code"] == "assessment_bank_unavailable"
+
+
+def test_version_44_without_mode_restores_historical_default_bank():
+    participant = {"experiment_spec_version": 44, "test_content_mode": None}
+
+    assert assessment_bank_for_participant(participant) == "split-actions-v5"
+    assert historical_assessment_bank_versions_for(participant) == {STANDARD: "split-actions-v5"}
+
+
+@pytest.mark.parametrize(
+    "protocol_id,expected_bank",
+    [
+        ("experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1", "split-actions-v5"),
+        ("experiment-plan-2026-11-09-four-topic-foundation-default-v1", "split-actions-four-topic-v1"),
+    ],
+)
+def test_version_45_without_mode_restores_protocol_specific_bank(protocol_id, expected_bank):
+    participant = {
+        "experiment_spec_version": 45,
+        "protocol_id": protocol_id,
+        "test_content_mode": None,
+    }
+
+    assert assessment_bank_for_participant(participant) == expected_bank
+    assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
 
 
 def test_question_set_admin_api_is_removed_and_legacy_aggregate_filters_reject(isolated):
@@ -192,8 +260,8 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         with factory() as db:
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
-            assert default_participant.experiment_spec_version == 45
-            assert default_participant.protocol_id == "experiment-plan-2026-11-09-four-topic-foundation-default-v1"
+            assert default_participant.experiment_spec_version == 46
+            assert default_participant.protocol_id == "experiment-plan-2026-11-09-four-topic-default-two-retests-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()
@@ -242,10 +310,10 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         assert all(len(question["options"]) == 10 for question in four_questions)
         assert all(question["selection_mode"] == "multiple" and question["min_selections"] == 3 and question["max_selections"] == 3 for question in four_questions)
         assert all(question["options"][-1]["exclusive"] for question in four_questions)
-        for phase in ("retest", "final-test"):
+        for phase in ("retest",):
             with factory() as db:
                 participant = db.get(Participant, four_id)
-                participant.current_step = "retest" if phase == "retest" else "final_test"
+                participant.current_step = "retest"
                 participant.retest_cycles_completed = 0
                 db.commit()
             round_questions = client.get(f"/api/experiment/{four_id}/{phase}").json()["questions"]
@@ -256,6 +324,11 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
             assert [set(option["body"] for option in question["options"]) for question in round_questions] == [
                 set(option["body"] for option in question["options"]) for question in four_questions
             ]
+        with factory() as db:
+            participant = db.get(Participant, four_id)
+            participant.current_step = "final_test"
+            db.commit()
+        assert client.get(f"/api/experiment/{four_id}/final-test").status_code == 409
 
         with factory() as db:
             participant = db.get(Participant, four_id)
@@ -380,6 +453,148 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         for participant_id in created_ids:
             response = client.delete(f"/api/admin/participants/{participant_id}")
             assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize(
+    "wrong_by_round",
+    [
+        (set(), set(), set()),
+        ({FOUR_TOPIC_TERM_SLUGS[0]}, {FOUR_TOPIC_TERM_SLUGS[1]}, {FOUR_TOPIC_TERM_SLUGS[2]}),
+        (set(), {FOUR_TOPIC_TERM_SLUGS[3]}, set()),
+        ({FOUR_TOPIC_TERM_SLUGS[2]}, set(), {FOUR_TOPIC_TERM_SLUGS[0]}),
+    ],
+)
+def test_four_topic_mode_always_runs_learning_and_two_retests(isolated, wrong_by_round):
+    client, factory, _engine = isolated
+    mode = client.put("/api/admin/test-content-mode", json={"mode": "four_topic_fundamentals"})
+    assert mode.status_code == 200, mode.text
+    created = client.post("/api/participants", json={
+        "assignment_code": "A",
+        "consent_checked": True,
+        "student_number": f"FOUR-ROUND-{uuid4().hex[:12]}",
+    })
+    assert created.status_code == 200, created.text
+    participant_id = created.json()["participant_id"]
+    complete_presurvey(client, participant_id)
+
+    stale_assignment_id = None
+    if not wrong_by_round[0]:
+        with factory() as db:
+            stale_term = db.query(Term).filter_by(slug="llm_knowledge").one()
+            stale_assignment = TermAssignment(
+                participant_id=participant_id,
+                term_id=stale_term.id,
+                group_condition="control",
+                is_learning_target=True,
+                selection_reason="stale target from a previous round",
+            )
+            db.add(stale_assignment)
+            db.commit()
+            stale_assignment_id = stale_assignment.id
+
+    def answer_round(phase: str, wrong_slugs: set[str]) -> list[str]:
+        path_phase = phase.replace("_", "-")
+        questions_response = client.get(f"/api/experiment/{participant_id}/{path_phase}")
+        assert questions_response.status_code == 200, questions_response.text
+        questions = questions_response.json()["questions"]
+        assert [question["term_slug"] for question in questions] == list(FOUR_TOPIC_TERM_SLUGS)
+        for question in questions:
+            with factory() as db:
+                options = db.query(QuestionOption).filter_by(question_id=question["question_id"]).all()
+                correct = [option for option in options if option.is_correct]
+                selected = correct
+                if question["term_slug"] in wrong_slugs:
+                    m1 = next(option for option in options if option.misconception_type == "M1")
+                    selected = [*correct[:2], m1]
+                selected_ids = [str(option.id) for option in selected]
+            payload = {
+                "participant_id": participant_id,
+                "phase": phase,
+                "term_slug": question["term_slug"],
+                "test_round": question["test_round"],
+                "page_id": str(uuid4()),
+                "answers": [{"question_id": question["question_id"], "selected_option_ids": selected_ids}],
+                "question_shown_at": "2026-11-09T00:00:00Z",
+                "answered_at": "2026-11-09T00:00:02Z",
+                "elapsed_time_sec": 2,
+            }
+            saved = client.post(
+                "/api/attempts/term-page",
+                json=payload,
+                headers={"Idempotency-Key": f"{phase}-{question['question_id']}-{uuid4().hex}"},
+            )
+            assert saved.status_code == 200, saved.text
+            review = client.get(f"/api/experiment/{participant_id}/{path_phase}").json()["pending_question_review"]
+            if review:
+                acknowledged = client.post(
+                    f"/api/participants/{participant_id}/question-review-acknowledgements",
+                    json={"phase": phase, "term_slug": question["term_slug"]},
+                )
+                assert acknowledged.status_code == 200, acknowledged.text
+        return [slug for slug in FOUR_TOPIC_TERM_SLUGS if slug in wrong_slugs]
+
+    def assert_learning_sessions_available(target_slugs: list[str]) -> None:
+        for term_slug in target_slugs:
+            session = client.post(
+                "/api/tutor-sessions",
+                json={"participant_id": participant_id, "term_slug": term_slug},
+            )
+            assert session.status_code == 200, session.text
+            assert session.json()["tutor_session_id"]
+
+    try:
+        pretest_wrong = answer_round("pretest", wrong_by_round[0])
+        diagnosed = client.post(f"/api/participants/{participant_id}/diagnose-pretest", json={})
+        assert diagnosed.status_code == 200, diagnosed.text
+        if stale_assignment_id is not None:
+            with factory() as db:
+                stale_assignment = db.get(TermAssignment, stale_assignment_id)
+                assert stale_assignment is not None
+                assert stale_assignment.is_learning_target is False
+        diagnosis = diagnosed.json()
+        pretest_targets = pretest_wrong or list(FOUR_TOPIC_TERM_SLUGS)
+        assert diagnosis["next_step"] == "learning_targets"
+        assert diagnosis["learning_target_slugs"] == pretest_targets
+        assert diagnosis["learning_target_count"] == len(pretest_targets)
+        targets = client.get(f"/api/participants/{participant_id}/learning-targets")
+        assert targets.status_code == 200, targets.text
+        assert [row["term_slug"] for row in targets.json()["targets"]] == pretest_targets
+        assert_learning_sessions_available(pretest_targets)
+        assert client.get(f"/api/experiment/{participant_id}/final-test").status_code == 409
+        assert client.post(f"/api/participants/{participant_id}/give-up-learning", json={}).status_code == 200
+
+        first_wrong = answer_round("retest", wrong_by_round[1])
+        first_score = client.post(f"/api/participants/{participant_id}/score-retest", json={})
+        assert first_score.status_code == 200, first_score.text
+        first_result = first_score.json()
+        first_targets = first_wrong or list(FOUR_TOPIC_TERM_SLUGS)
+        assert first_result["retest_cycles_completed"] == 1
+        assert first_result["post_pretest_tests_completed"] == 1
+        assert first_result["next_step"] == "learning_targets"
+        assert first_result["learning_target_slugs"] == first_targets
+        targets = client.get(f"/api/participants/{participant_id}/learning-targets")
+        assert targets.status_code == 200, targets.text
+        assert [row["term_slug"] for row in targets.json()["targets"]] == first_targets
+        assert_learning_sessions_available(first_targets)
+        assert client.get(f"/api/experiment/{participant_id}/final-test").status_code == 409
+        assert client.post(f"/api/participants/{participant_id}/give-up-learning", json={}).status_code == 200
+
+        answer_round("retest", wrong_by_round[2])
+        second_score = client.post(f"/api/participants/{participant_id}/score-retest", json={})
+        assert second_score.status_code == 200, second_score.text
+        second_result = second_score.json()
+        assert second_result["retest_cycles_completed"] == 2
+        assert second_result["post_pretest_tests_completed"] == 2
+        assert second_result["next_step"] == "survey"
+        assert second_result["retest_cycle_limit_reached"] is bool(wrong_by_round[2])
+        assert client.get(f"/api/experiment/{participant_id}/retest").status_code == 409
+        assert client.get(f"/api/experiment/{participant_id}/final-test").status_code == 409
+        current = client.get(f"/api/participants/{participant_id}/current-step")
+        assert current.status_code == 200, current.text
+        assert current.json()["step"] == "survey"
+    finally:
+        deleted = client.delete(f"/api/admin/participants/{participant_id}")
+        assert deleted.status_code == 200, deleted.text
 
 
 def test_hypothesis_metrics_are_partitioned_by_test_content_mode():

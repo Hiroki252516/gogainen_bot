@@ -1,6 +1,10 @@
 # 現行データと履歴互換
 
-## 仕様版45の問題モードsnapshot
+## 仕様版46の4用語版進行
+
+仕様版46 / `experiment-plan-2026-11-09-four-topic-default-two-retests-v1`では、未設定時の問題モードを4用語版とし、4用語版のみ満点でも事前テスト後と再テスト1後に学習へ進む。誤答対象がない満点回は4用語すべてを学習対象にし、再テスト2の採点後は正誤にかかわらずアンケートへ進む。既存の`retest_cycles_completed`と問題・回答snapshotを使い、新しいDB列や問題データの書換えは行わない。RuntimeSettingの保存済みモードと、通常版・基礎理解版の満点時早期終了は維持する。仕様版45以下は閲覧専用とし、保存記録を変更しない。
+
+## 仕様版44・45の問題モードsnapshot（履歴）
 
 既存の`Participant.test_content_mode` / `RuntimeSetting.test_content_mode`を再利用し、新しい列は追加しない。許容値に`four_topic_fundamentals`を加える。RuntimeSettingに保存済みの値は維持し、値が未設定の場合の既定値を`four_topic_fundamentals`とする。登録時にParticipantへ保存し、既存ParticipantのNULLやモードを補完せず、管理設定変更を遡及させない。仕様版44で導入した4用語問題は独立したconstruct key・問題IDで保存し、Attemptおよび学習確認の表示snapshotから当時の本文・選択肢順を復元する。ログ・参加者CSV/Excel・仮説指標には既存の`test_content_mode`を含め、4用語版の分母は4問・4用語とする。[詳細](51_four_topic_foundation_mode.md)。
 
@@ -18,11 +22,11 @@
 
 ## 仕様版28の答え合わせ保存
 
-RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnullableで保存する。Attempt.question_review_acknowledged_atもnullableで、現行仕様版45の新規参加者は用語ページで最後に確認する設問のAttemptへ答え合わせ確認時刻を保存する。通常2モードは各用語の設問1、4用語版は各用語の1問である。新規参加者はtrueへ固定する。旧行は補完しない。participant logs APIとparticipants CSVにshow_question_reviewsを含め、管理画面の一覧・個別ログ表示からは除く。確認時刻は既存のvalue_json形式で記録する。統合ログCSVは仕様版43で`test_content_mode`列を追加し、従来列を維持する。実装契約は[40](40_question_pair_answer_review.md)。
+RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnullableで保存する。Attempt.question_review_acknowledged_atもnullableで、仕様版43の新規参加者は出題する設問1のAttemptに答え合わせ確認時刻を保存する。新規参加者はtrueへ固定する。旧行は補完しない。participant logs APIとparticipants CSVにshow_question_reviewsを含め、管理画面の一覧・個別ログ表示からは除く。確認時刻は既存のvalue_json形式で記録する。統合ログCSVは仕様版43で`test_content_mode`列を追加し、従来列を維持する。実装契約は[40](40_question_pair_answer_review.md)。
 
 ## テスト結果表示snapshot（issue-233）
 
-`Participant.show_pretest_results`と`Participant.show_retest_results`はnullable Boolean。仕様版45の新規参加者は両方falseへ固定する。旧RuntimeSetting設定APIは廃止するが、RuntimeSettingの各列は履歴保全のため残し、新規登録では参照しない。既存参加者の値は補完・更新しない。旧snapshotのNULLは従来どおり表示ありとして扱う。participant logs API・participants CSVに両方の設定値を出すが、参加者一覧・個別ログ画面には表示しない。
+`Participant.show_pretest_results`と`Participant.show_retest_results`はnullable Boolean。仕様版43の新規参加者は両方falseへ固定する。旧RuntimeSetting設定APIは廃止するが、RuntimeSettingの各列は履歴保全のため残し、新規登録では参照しない。既存参加者の値は補完・更新しない。旧snapshotのNULLは従来どおり表示ありとして扱う。participant logs API・participants CSVに両方の設定値を出すが、参加者一覧・個別ログ画面には表示しない。
 
 ## 用語注釈snapshot（仕様版26）
 
@@ -32,11 +36,11 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 計画書では参加者・群・用語・フェーズ/回次、問題と選択内容、全体正誤とunknown区分、誤答タイプ・再発、時刻/時間、段階・方略、完了/中断、AI実行状態、アンケートを収集する。正誤のboolとunknown分類は別の記録であり、保存型を文書だけで三値へ変更しない。
 
-事前アンケートはParticipantSurveyの`phase=presurvey`へ保存し、通常の2モードでは4段階の用語知識6項目とAI利用2評定、4用語版では4用語の知識項目とAI利用2評定を登録時モードに対応するversionで保存する。事後phaseはシステム評価2・教材評価6・任意自由記述。既存ParticipantSurvey.phase、survey_version、responses_jsonを使い、新DB列は追加しない。旧`presurvey-baseline-v1`のBoolean回答、posttest v1/v2、旧尺度は変換しない。H5はposttest phaseだけを参照する。詳細は[12](12_evaluation_metrics.md)・[49](49_presurvey_baseline.md)・[51](51_four_topic_foundation_mode.md)。
+仕様版37のアンケートは、事前phaseの4段階カテゴリによる用語事前知識6項目・AI利用2評定と、事後phaseのシステム評価2・教材評価6・任意自由記述に分ける。既存ParticipantSurvey.phase、survey_version、responses_jsonへ保存し、新DB列は追加しない。仕様版36のBoolean形式`presurvey-baseline-v1`回答や旧posttest v1/v2・旧5段階列は新規入力に使わず、既存JSONを変換しない。H5はposttest phaseだけを参照する。詳細は[12](12_evaluation_metrics.md)・[49](49_presurvey_baseline.md)。
 
 ## 現行の保存契約
 
-モデルの正本はbackend/app/models/__init__.py。現行コードは仕様版45 / `experiment-plan-2026-11-09-four-topic-foundation-default-v1`を使用する。新規参加者の`test_content_mode`はRuntimeSettingの保存値を登録時にsnapshotし、未設定時は`four_topic_fundamentals`を使う。`application`は通常バンクv5、`basic_understanding`は独立バンク`split-actions-basic-v1`、4用語版は`split-actions-four-topic-v1`で結果を復元する。既存行のNULLは当時の仕様に基づいて扱い、補完しない。辞書v4・アンケートのphase/version別保存・既存JSON snapshotは保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36〜44の結果復元は保存済みモードと当時のsnapshotを使い、仕様版41の`split-actions-v6-q1-only-v1` protocolはprotocol IDに基づきV6から復元する。`question_options.rationale`は内部メタデータであり、表示APIへ含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材の文字数目標と言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
+モデルの正本は backend/app/models/__init__.py。現行コードは仕様版46 / `experiment-plan-2026-11-09-four-topic-default-two-retests-v1`を使用する。新規参加者の`test_content_mode`はRuntimeSettingの保存値を登録時にsnapshotし、未設定時は`four_topic_fundamentals`を使う。`application`は通常バンクv5、`basic_understanding`は独立バンク`split-actions-basic-v1`、4用語版は`split-actions-four-topic-v1`で結果を復元する。既存行のNULLは当時の仕様・protocolに基づいて扱い、補完しない。辞書v4・アンケートのphase/version別保存・既存JSON snapshotは保持する。PRETEST改訂はversioned construct keyとYAMLバンクで分離し、旧問題と回答snapshotを保持する。仕様版36〜45の結果復元は保存済みモード・protocolと当時のsnapshotを使い、仕様版41の`split-actions-v6-q1-only-v1` protocolはprotocol IDに基づきV6から復元する。`question_options.rationale`は内部メタデータであり、表示APIへ含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[教材モード](41_learning_glossary_material_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[RAG注釈](49_rag_glossary.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。教材の文字数目標と言い換え条件は[42](42_learning_glossary_material_length.md)・[43](43_glossary_definition_paraphrase.md)を参照。参加者のoption_order_mode nullable列は既存DBへ軽量移行で追加し、既存行はNULLのままdebug_fixedとして扱う。その他の版付き列に尺度変換や旧行のprotocol_id補完は行わない。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 学籍番号はSQLAlchemyの研究DBへ追加しない。IDENTITY_MAPPING_PATHが指す別SQLiteへ、学籍番号・参加者ID・表示コード・作成日時・再送処理用キーを保存する。研究用エクスポート・AI入力・AIログ・冪等性のrequest_hash/response_jsonには学籍番号を含めない。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、登録は対応表を先行保存してから研究DBを確定し、通常の失敗では補償削除する。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
@@ -45,13 +49,13 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規参加者だけ仕様版45と現行protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、問題モード、`retest_cycles_completed=0`を固定する。RuntimeSettingに保存済みのテスト問題モードは維持し、未設定時に限り4用語版を適用する。仕様版44以下・異なるprotocol_idの記録は変更しない。旧参加者は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版46と現行protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、問題モード、`retest_cycles_completed=0`を固定する。RuntimeSettingの保存済みテスト問題モードは維持し、未設定時のみ4用語版を適用する。仕様版45以下・異なるprotocol_idの記録は変更しない。旧参加者は進行・採点・完了更新・削除・評価再計算を禁止する。起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 
-- Participant: 群、同意、進捗、開始・完了時刻、終了理由、実験仕様版、開始時に確定した選択肢配置・教材用語解説モード・問題モード・テスト表示方式・全体結果表示条件・設問別確認条件、学習後retestの採点済み回数。
+- Participant: 群、同意、進捗、開始・完了時刻、終了理由、実験仕様版、開始時に確定した選択肢配置・教材用語解説モード、学習後retestの採点済み回数。
 - RuntimeSetting: ID=1の単一行に、今後作成する参加者へ適用する選択肢配置を保存する。未設定時の配置既定値は `debug_fixed`。教材用語解説モード列は旧値保全のため残すが、現行コードは参照・更新しない。
-- Attempt: 問題ID、複数選択ID、フェーズ・周回、正誤・M1/M3/unknown、問題/選択肢snapshot、時刻。選択肢snapshotには参加者に表示したラベル・本文・順序を保存する。用語ページ回答では`test_page_timing_json`へ共通page_id・計測版・ページ経過秒を記録し、同じページの複数Attemptへ同じ値が入る場合も合計時間ではpage_idごとに一度だけ加算する。新形式のページ時間を設問別`response_time_sec`へ複製しない。
+- Attempt: 問題ID、複数選択ID、フェーズ・周回、正誤・M1/M3/unknown、問題/選択肢snapshot、時刻。選択肢snapshotには参加者に表示したラベル・本文・順序を保存する。
 - LearnerState: 現在状態、主分類、方略、正答記録数、再発数、最終回答ID。
 - TutorSession / TutorTurn: 教材・固定問題snapshot、回答・解説、採点JSON、生成契約・版・検証・先行生成監査。学習確認問題snapshotにも表示時の選択肢ラベル・本文・順序を保存する。
 - AICallLog: 実送信prompt・Schema・モデル・推論設定、RAG指紋、試行・検証結果、生応答。
@@ -73,10 +77,10 @@ interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み
 
 現在のPython/API名 `attainment_correct_rate` は物理列 `l0_correct_rate` にマッピングする。新規計算はAttempt.is_correctだけを使う。旧保存値は `legacy_fields` 内にも表示できるが再計算しない。
 
-生AIログと問題snapshotは過去内容もそのまま閲覧・CSV出力可能。統合ログCSVは仕様版43で`test_content_mode`列を追加し、それ以外の既存列と過去値を保持する。全体ログ・参加者ログと仮説集計にはCSVに対応した個別`.xlsx`出力もあり、各ブックは同じ列・行の1シート構成である。詳細な旧テーブル仕様は [履歴資料](history/2026-10-06/07_data_model.md)。
+生AIログと問題snapshotは過去内容もそのまま閲覧・CSV出力可能。統合ログCSVは仕様版43で`test_content_mode`列を追加し、それ以外の既存列と過去値を保持する。全体ログ・参加者ログと仮説集計にはCSVに対応した個別`.xlsx`出力もあり、各ブックは同じ列・行の1シート構成である。仕様版45の固定2回進行も既存の回数列で表し、DB構造を変更しない。詳細な旧テーブル仕様は [履歴資料](history/2026-10-06/07_data_model.md)。
 
 旧回答の問題文・選択肢本文は保存時snapshotを優先する。旧自由回答採点のexpected_keywords列もlegacy_*マッピングとして保持し、新しいseedから更新しない。
 
 ## 問題版の保存
 
-仕様版45の新規登録・出題・採点・確認問題復元は、Participant.test_content_modeに対応する問題バンクを使う。`application`は`split-actions-v5`、`basic_understanding`は`split-actions-basic-v1`、`four_topic_fundamentals`は`split-actions-four-topic-v1`であり、旧`question_set_mode`のeasy-mode整理とは別の機能である。旧列削除処理は新しい`test_content_mode`や問題資産を削除しない。過去の問題は版付きconstruct_keyと回答snapshotから復元し、別バンクへフォールバックしない。
+仕様版46の新規登録・出題・採点・確認問題復元は、Participant.test_content_modeに対応する問題バンクを使う。`application`は`split-actions-v5`、`basic_understanding`は`split-actions-basic-v1`、`four_topic_fundamentals`は`split-actions-four-topic-v1`である。過去の問題は版付きconstruct_keyと回答snapshotから復元し、別バンクへフォールバックしない。旧`question_set_mode`の整理は別の履歴変更であり、通常版の問題資産や`test_content_mode`を削除しない。

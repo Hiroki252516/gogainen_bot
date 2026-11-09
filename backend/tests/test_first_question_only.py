@@ -86,8 +86,8 @@ def test_new_registration_uses_fixed_defaults_and_removes_settings_apis():
             assert participant.show_retest_results is False
             assert participant.show_question_reviews is True
             assert participant.first_question_only is True
-            assert participant.experiment_spec_version == 45
-            assert participant.protocol_id == "experiment-plan-2026-11-09-four-topic-foundation-default-v1"
+            assert participant.experiment_spec_version == 46
+            assert participant.protocol_id == "experiment-plan-2026-11-09-four-topic-default-two-retests-v1"
             rows = experiment.question_payloads(db, participant_id, "pretest")
             assert len(rows) == 3
             q1 = db.get(Question, rows[0]["question_id"])

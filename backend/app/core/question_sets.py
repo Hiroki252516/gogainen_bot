@@ -54,6 +54,8 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
     41: {STANDARD: "split-actions-v5"},
     42: {STANDARD: "split-actions-v5"},
     43: {STANDARD: "split-actions-v5"},
+    44: {STANDARD: "split-actions-v5"},
+    45: {STANDARD: "split-actions-v5"},
 }
 
 # Version 41 was used by parallel protocols. Keep the v5 default for the two
@@ -61,6 +63,15 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
 HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
     (41, "experiment-plan-2026-11-07-split-actions-v6-q1-only-v1"): {
         STANDARD: "split-actions-v6",
+    },
+    (44, "experiment-plan-2026-11-09-four-topic-foundation-v1"): {
+        STANDARD: "split-actions-four-topic-v1",
+    },
+    (45, "experiment-plan-2026-11-09-four-topic-foundation-default-v1"): {
+        STANDARD: "split-actions-four-topic-v1",
+    },
+    (45, "experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1"): {
+        STANDARD: "split-actions-v5",
     },
 }
 
@@ -89,7 +100,7 @@ def historical_assessment_bank_versions_for(participant: object) -> dict[str, st
 
 
 def assessment_bank_for_participant(participant: object) -> str:
-    """Resolve a saved mode, using the legacy default bank when its snapshot is absent."""
+    """Resolve a saved mode, allowing historical fallback only for legacy specs."""
     if isinstance(participant, dict):
         experiment_spec_version = participant.get("experiment_spec_version")
         mode = participant.get("test_content_mode")
@@ -98,8 +109,10 @@ def assessment_bank_for_participant(participant: object) -> str:
         mode = getattr(participant, "test_content_mode", None)
     if mode in ASSESSMENT_MODE_BANK_VERSIONS:
         return ASSESSMENT_MODE_BANK_VERSIONS[mode]
-    if experiment_spec_version is not None and experiment_spec_version <= 43:
-        return "split-actions-v5"
+    if experiment_spec_version is not None and experiment_spec_version <= 45:
+        historical_banks = historical_assessment_bank_versions_for(participant)
+        if historical_banks is not None:
+            return historical_banks[STANDARD]
     raise ValueError("participant has no supported test content mode")
 
 
