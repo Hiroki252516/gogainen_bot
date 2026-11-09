@@ -1,6 +1,6 @@
 # 研究計画と仕様・実装の対応
 
-用語注釈はservices/learning_glossary、固定YAML、LearningGlossary表示コンポーネントで処理し、教材・解説はTutorTurnの既存JSON、テストはnullableなAttempt.glossary_snapshotへ保存し、統合CSVのvalue_jsonにもsnapshotを保持する。AI契約版はv7を維持し、実験仕様版26・共通固定辞書v2として区別する。[24](24_learning_glossary.md)。
+現行実装は仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`。用語注釈はservices/learning_glossary、固定YAML、LearningGlossary表示コンポーネントで処理し、教材・解説はTutorTurnの既存JSON、テストはnullableなAttempt.glossary_snapshotへ保存し、統合CSVのvalue_jsonにもsnapshotを保持する。現行辞書はv4であり、AI契約版や仕様版26の説明は導入時の履歴として扱う。[24](24_learning_glossary.md)。
 
 出典・採用判断は[20](20_experiment_plan_alignment.md)、式と欠測定義は[12](12_evaluation_metrics.md)を正本とする。
 
@@ -11,14 +11,14 @@
 | H3：用語内の反復 | 回答済みTutorTurn.grading_json、h3.term_means/sessions | 用語内・参加者内平均、不正解0〜3 |
 | H4：同種再選択 | 事前M1/M3と初回再テストの分類、h4分子/分母 | 参加者率平均と参考件数比 |
 | H5：教材評価 | 表示ログ、新ParticipantSurvey.responses_json、h5 | 6項目別と6項目平均 |
-| H6：満点到達割合 | 採点済み3問全正解、h6、現行登録者 | 到達人数/登録人数。completedとは別 |
+| H6：満点到達割合 | モード別の採点済み全問正解、h6、現行登録者 | 3用語モードは3問、4用語モードは4問が分母。到達人数/登録人数。completedとは別 |
 | 共通履歴・群別入力 | services/interaction_history、ai/interaction_history | 実送信入力・指紋監査 |
 | 教授と証拠 | tutoring_prompt、mandatory_elements、teaching_contract | v7契約、unknownの定義・仕組み・適用確認 |
 | AI設定 | config、環境low、runtime_config | 不一致警告・実送信model/effort |
-| アンケート | `presurvey-baseline-v2` / `posttest-10point-v3`、phase別ParticipantSurvey | 4段階の事前知識6＋AI利用2、事後システム評価2＋教材評価6＋任意自由記述。H5はposttestのみ。仕様版36のv1は不変で保全 |
+| アンケート | `presurvey-baseline-v2` / `presurvey-four-topic-baseline-v1` / `posttest-10point-v3`、phase別ParticipantSurvey | 通常2モードは事前知識6＋AI利用2、4用語モードは知識4＋AI利用2。事後はシステム評価2＋教材評価6＋任意自由記述。H5はposttestのみ。旧回答は不変で保全 |
 | テスト上限・回次 | 学習後回数＋採点済みfinal_testから全体回次を導出 | 事前後最大2回、事前込み最大3回。未達を維持してsurvey |
 | 行動選択型問題 | scenario-actions-v9、9固有問、版付きconstruct_key | 旧問題非active保全、分類根拠は21 |
-| 仕様版43問題モード | `RuntimeSetting.test_content_mode`をParticipantへ登録時snapshot、2つの独立bankをseedし同じモードで採点・学習確認を復元 | 管理API/画面、参加者ログ・CSV/Excel、モード別H1〜H6集計。難易度同等性・研究承認は未検証 |
+| 問題モード・時間 | `RuntimeSetting.test_content_mode`をParticipantへ登録時snapshotし、3つの独立bankから出題・採点・学習確認を復元。用語ページ単位の`test_page_timing_json`を保持 | 3問/4問をモード別に集計し、回答時間の測定単位をログ・CSV/Excelに表示。全体ログ・参加者ログ・仮説集計に個別`.xlsx`を提供。難易度同等性・研究承認は未確認 |
 | 旧記録保護 | 仕様版26＋protocol_id、API/worker/補修ガード | 旧版25以下も閲覧専用・新集計から除外 |
 | 割付・アクセス・正答配置 | 既存A/Bコード・デバッグ問題を維持 | 自動割付・認証・位置復旧は今回対象外 |
 

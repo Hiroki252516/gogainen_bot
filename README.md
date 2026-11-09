@@ -1,6 +1,6 @@
 # 学習ログ駆動型AIチューター
 
-2026-11-09現行条件：新規参加者は仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`で登録します。管理画面では「現行版（場面応用）」「基礎理解版」「4用語版」を選べ、登録時に参加者ごとに固定します。既定値は現行版です。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスを各1問・10択で出題し、A〜CまたはJ単独で回答します。事前テスト・再テスト・確認問題は同じ問題と選択肢を使い、問題回答・学習確認は複数選択対応です。事前知識と普段のAI利用を4用語版専用の事前アンケートで取得します。仮説集計・CSV/XLSXは問題モード別で、異なるモードを合算しません。仕様版43以下・旧protocolは閲覧専用とし既存記録は変更しません。繰り返しによる練習効果、モード間の難易度・測定特性の同等性、研究上の承認は未検証・未確認です。[4用語版](docs/51_four_topic_foundation_mode.md)、[基礎理解版](docs/50_basic_understanding_question_mode.md)、[AI指示](docs/10_ai_prompt_contracts.md)、[受入記録](docs/14_testing_acceptance.md)を参照してください。
+2026-11-09現行条件：新規参加者は仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`で登録します。管理画面では「現行版（場面応用）」「基礎理解版」「4用語版」を選べ、登録時に参加者ごとに固定します。既定値は現行版です。現行版・基礎理解版は3用語各1問（計3問）、4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセス各1問（計4問）を出題します。通常の2モードは各問単一選択、4用語版は正解3つまたはJ単独の複数選択です。4用語版は事前・再テスト・学習確認で同じ問題と選択肢を使います。全体のテスト結果確認は新規参加者には表示しませんが、回答後の設問別確認は表示します。事前知識と普段のAI利用は、登録snapshotに応じた事前アンケートで取得します。仮説集計・CSV/XLSXは問題モード別で、異なるモードを合算しません。仕様版43以下・旧protocolは閲覧専用とし既存記録は変更しません。繰り返しによる練習効果、モード間の難易度・測定特性の同等性、研究上の承認は未検証・未確認です。[4用語版](docs/51_four_topic_foundation_mode.md)、[基礎理解版](docs/50_basic_understanding_question_mode.md)、[AI指示](docs/10_ai_prompt_contracts.md)、[受入記録](docs/14_testing_acceptance.md)を参照してください。
 
 2026-11-07履歴：仕様版41には`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`と`experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`の異なるprotocolがありました。仕様版42では両方の変更を統合し、仕様版41の両protocolは閲覧専用です。2026-11-03履歴：仕様版35では管理画面の「設問1のみ出題」で各用語1問（計3問）と設問1・2（計6問）を切り替えていました。仕様版40で計3問に固定し、設定UI/APIを廃止しています。導入時の記録は[docs/48](docs/48_first_question_only.md)を参照してください。以下の過去版の説明は採用時の記録です。
 
@@ -66,7 +66,7 @@
 
 教材・事前テスト・再テストの注釈は、広い画面では右側の追従欄に、狭い画面では開閉パネルに表示します。回答後解説の注釈は解説の下に表示します。確認問題自体・結果確認画面は対象外です。未登録語・除外語には注釈が付きません。現行の教材内解説モードでは辞書を意味参照として教材生成入力へ渡し、本文800文字程度を目安に生成します。文字数の上下限による合否判定や長さを理由にした再生成は行いません。過去のモード別文字数契約は履歴として保持します。[辞書全文・保存と運用](docs/24_learning_glossary.md)、[文字数目標と履歴](docs/42_learning_glossary_material_length.md)を参照してください。
 
-仕様版39で新規参加者の教材モードを教材内解説に固定しました。仕様版44でも維持します。管理画面の教材モード切替UIとモード管理APIはなく、教材右側の注釈欄を隠し、回答後解説・テストの注釈と保存snapshotは維持します。辞書定義を意味の参照として文脈に合わせて言い換えます。教材本文は800文字程度を目安にし、文字数の上下限検証と長さを理由にした再生成は行いません。[AI指示](docs/10_ai_prompt_contracts.md)、[仕様・条件差](docs/41_learning_glossary_material_mode.md)、[文字数目標](docs/42_learning_glossary_material_length.md)、[辞書言い換え](docs/43_glossary_definition_paraphrase.md)。
+仕様版39で新規参加者の教材モードを教材内解説に固定しました。現行仕様版44でも維持します。管理画面の教材モード切替UIとモード管理APIはなく、教材右側の注釈欄を隠し、回答後解説・テストの注釈と保存snapshotは維持します。辞書定義を意味の参照として文脈に合わせて言い換えます。教材本文は800文字程度を目安にし、文字数の上下限検証と長さを理由にした再生成は行いません。[AI指示](docs/10_ai_prompt_contracts.md)、[仕様・条件差](docs/41_learning_glossary_material_mode.md)、[文字数目標](docs/42_learning_glossary_material_length.md)、[辞書言い換え](docs/43_glossary_definition_paraphrase.md)。
 
 2026-10-21追加: 同意画面に提示された同意書と必須の学籍番号入力を追加しました。学籍番号は研究DB・AI入力・研究ログへ含めず、分離した対応表に保存します。管理画面下部で対応表CSVをダウンロードし、USBへの保存を確認してから個別/全件削除できます。対応表だけを削除しても研究データは残ります。撤回時の参加者削除は、研究DBの削除と対応表の削除待ちを先に確定し、対応表を別処理で削除します。削除待ちが残った場合は起動時または同じ削除操作の再試行で回復します。既出力CSV・USB・バックアップ等は研究者が別途処理してください。
 
@@ -285,10 +285,16 @@ bridge構成を選ぶ場合のapp-server接続例は`CODEX_APP_SERVER_URL=ws://h
 ```text
 GET /api/admin/logs/overview
 GET /api/admin/logs/overview.csv
+GET /api/admin/logs/overview.xlsx
 GET /api/admin/participants/{participant_id}/logs
 GET /api/admin/participants/{participant_id}/logs.csv
+GET /api/admin/participants/{participant_id}/logs.xlsx
+GET /api/admin/export/hypothesis_metrics.xlsx
+GET /api/admin/export/hypothesis_group_summary.xlsx
 ```
 
 CSVは `record_type, source_type, participant_id, display_code, phase, test_round, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。
+
+全体ログ、被験者ログ、6仮説の参加者別・群別出力には個別の`.xlsx`ダウンロードもあります。各ブックは対応するCSVと同じ列・行の1シート構成です。Excel互換CSV（BOM付きCSV）は`.xlsx`とは別形式です。
 
 現行サマリーはpretest_score、retest_score、attainment_correct_rate、同種誤答/M1/M3別再発率を保存します。これらを新6仮説の確定した評価値と同一視しません。到達率の物理保存先だけ旧列を維持し、計算はis_correctを使います。周回名とfinal_score_sourceで測定経路を区別します。旧試用は保存値の閲覧/CSVだけとし、再計算や現行群集計には混ぜません。[評価指標と未確定条件](docs/12_evaluation_metrics.md) を参照してください。
