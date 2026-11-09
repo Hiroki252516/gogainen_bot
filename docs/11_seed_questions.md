@@ -4,6 +4,8 @@
 
 新規参加者は登録時snapshotした`test_content_mode`に応じて問題バンクを選ぶ。未設定時は4用語版を適用し、保存済みRuntimeSetting値は変更しない。第3モード`four_topic_fundamentals`は独立バンク`split-actions-four-topic-v1`（`four_topic_fundamentals_v1.yml`）を使い、Transformer、LLMの学習段階、マルチエージェント、記憶プロセスを各1問・10択で出題する。A〜C正解、D〜F=M1、G〜I=M3、J=unknownとし、3択またはJ単独で採点する。事前・再テスト1/2・内部final_testは同一問題・選択肢を使用し、学習確認は直前テストで誤答した問題のsnapshotを再利用する。役割メタデータ・教授対象は参加者向けAPIへ含めない。問題構成と研究上の注意は[51](51_four_topic_foundation_mode.md)。
 
+現行仕様版45では`application`と`basic_understanding`も維持する。両モードは3用語各1問・計3問で、登録時snapshotに対応する問題バンクから出題・採点・確認問題を復元する。3用語モードと4用語モードの問題・集計は混在させない。
+
 ## 仕様版43の問題モード（導入時）
 
 新規参加者は管理設定を登録時に固定し、現行`split-actions-v5`または基礎理解`split-actions-basic-v1`を使う。仕様版43の新規出題は両モードとも各用語の設問1のみ計3問で、再テスト1/2・内部final_test・学習確認も参加者の選択モードを維持する。基礎理解版YAMLには3回次×3用語の計9問を保持し、各問に正解1・M1二つ・M3二つ・unknown一つを置く。問題ID・construct keyは別にseedし、保存snapshotを優先する。問題の全文と研究上の注意は[50](50_basic_understanding_question_mode.md)。
@@ -22,17 +24,17 @@
 
 仕様版26当時は問題本文・問題IDを変更せず版25のバンクを維持した。旧仕様版25の結果復元にもscenario-actions-v9を指定した。
 
-通常版のテスト・学習確認は`backend/app/seed/content/standard/`を使う。旧30問バンクは`backend/app/seed/content/archive/learning_questions_v2_unused.yml`へ保存し、通常の問題としては使用しない。
+`application`・`basic_understanding`のテスト・学習確認は`backend/app/seed/content/standard/`を使う。4用語版は独立した`four_topic_fundamentals_v1.yml`を使う。旧30問バンクは`backend/app/seed/content/archive/learning_questions_v2_unused.yml`へ保存し、通常の問題としては使用しない。
 
-3用語ごとに事前1・再2のテスト問題をactiveなYAMLへ保持する。内部final_testは独立問題を持たず、retest_v1を使用する。retest_v4・v5と旧final_test_v1はアーカイブとして保全する。
+`application`・`basic_understanding`では3用語ごとに事前1・再2のテスト問題をactiveなYAMLへ保持する。内部final_testは独立問題を持たず、retest_v1を使用する。4用語版は4用語共通の問題を全テスト回で使う。retest_v4・v5と旧final_test_v1はアーカイブとして保全する。
 
 仕様版25の通常版テストは、3用語の再テストV2を改訂したscenario-actions-v9を使用した。LLMは大学・教職員版を採用していた。事前・再テストV1・内部final_testと訂正情報も当時の条件を維持した。旧v8はarchive/learning_content_scenario_actions_v8.ymlへ保全し、旧仕様版24の結果はv8から復元する。[全文と保存契約](38_round_two_revision.md)。
 
-旧学習確認v15は履歴復元用に保持する。現行版の新規ターンはテストバンクのpretest_v1/retest_v1（確認3はretest_v2）を使うため、学習用の独立した本文・選択肢は参照しない。旧v14以前も保持する。[学習v14の採用時記録](35_multi_memory_round_one_revision.md)・[版25の採用時記録](38_round_two_revision.md)。
+通常2モードの旧学習確認v15は履歴復元用に保持する。`application`・`basic_understanding`の現行新規ターンはテストバンクのpretest_v1/retest_v1（確認3はretest_v2）を使うため、学習用の独立した本文・選択肢は参照しない。4用語版は専用バンクと直前テストの回答snapshotに基づく。旧v14以前も保持する。[学習v14の採用時記録](35_multi_memory_round_one_revision.md)・[版25の採用時記録](38_round_two_revision.md)。
 
 現行の学習確認は各用語でセッション1をpretest_v1、セッション2をretest_v1へ対応させる。enrichmentとconceptual_changeは同じ問題本文・選択肢を使い、教材生成プロンプトだけが変わる。同一セッションの各用語について確認問題への回答は1回とし、誤答後も解説を表示して次へ進む。現行の上限では3セッション目に到達しない。確認3は隔離検証・復元互換のためretest_v2へ対応させる。
 
-通常経路の最大はテスト9問＋学習6問＝15固有問題、採点回答イベントはテスト9＋学習18＝27回。事前満点経路では学習が最大1周となり、テスト9＋学習3＝12固有問題、採点回答イベント18回である。
+通常経路の最大数（テスト9問＋学習6問＝15固有問題、採点回答イベント27回）と事前満点経路（テスト9問＋学習3問＝12固有問題、採点回答イベント18回）は、3用語の`application`・`basic_understanding`に関する従来の算定である。4用語版は4問分母の別モードとして扱い、これらの件数を流用しない。
 
 問題バンクのcanonicalな内部ラベルは、A〜C正解・D〜F=M1・G〜I=M3・J=unknownのデバッグ配置で管理する。管理画面のdebug_fixedではこの並びを表示する。randomizedでも「わからない」は最後のJへ固定し、残る9択をA〜Iへ決定的に再配置する。再配置は問題ごとに固定され、全参加者・両群で共通、アプリ再起動後も変わらない。学習確認にも同じテストバンクの選択肢配置規則を適用し、旧学習YAMLのsnapshotは書き換えない。
 
