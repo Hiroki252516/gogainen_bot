@@ -120,7 +120,7 @@ EXPECTED = {
 
 
 def test_assessment_v6_only_changes_four_retests_and_preserves_banks():
-    assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[CURRENT_EXPERIMENT_SPEC_VERSION] == {"standard": "split-actions-four-topic-v1"}
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[19]["standard"] == "scenario-actions-v5"
     assert hashlib.sha256(content_loader.SCENARIO_ACTIONS_V5_CONTENT_PATH.read_bytes()).hexdigest() == "e9022f40a5b4f6f8b56a8468e6feb9169a9889155702363701497c3cd11ee8d6"
     assert hashlib.sha256(content_loader.LEARNING_V12_CONTENT_PATH.read_bytes()).hexdigest() == "87dc5c40081f113350b9b7ffabef5f46fe6fe0fd0e68949eb68755c68de6eb4b"

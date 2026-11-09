@@ -4,7 +4,7 @@
 
 採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。新6仮説はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧記録保護は仕様版とprotocol_idで限定する。
 
-現行仕様版45では新規参加者のsnapshotされた問題モードに応じて通常版・基礎理解版・4用語版の独立バンクを使う。現行版と基礎理解版は各用語の設問1、4用語版は4用語各1問を出題し、回答後に設問ごとの正誤を表示する。4用語版のみ、満点でも2回の再テストまで学習を続ける。AIサービスは回答採点に呼ばない。管理画面の初期値は現行版で、登録後の変更は既存参加者へ遡及しない。仮説集計はモード別に分離する。仕様版44以下の問題は当時のバンクから復元する。仕様版41の`split-actions-v6-q1-only-v1` protocolは履歴復元用に保全し、protocol IDを使ってV6から復元する。旧設問1・2契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、問題モードは[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)。
+現行仕様版46では新規参加者のsnapshotされた問題モードに応じて`split-actions-v5`、`split-actions-basic-v1`、`split-actions-four-topic-v1`を使う。RuntimeSetting保存値を尊重し、未設定時は4用語版を既定とする。application/basic_understandingは各用語の設問1、four_topic_fundamentalsは4用語各1問を出題する。保存済み回答の選択内容と正誤を同じテスト画面内に表示し、AIサービスは回答採点に呼ばない。4用語版のみ満点でも2回の再テストまで学習を続け、登録後の設定変更は既存参加者へ遡及しない。仮説集計はモード別に分離する。仕様版45以下の問題は当時のバンクとsnapshotから復元する。仕様版41の`split-actions-v6-q1-only-v1` protocolは履歴復元用に保全し、protocol IDを使ってV6から復元する。旧設問1・2契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、問題モードは[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)。
 
 ## 現行MVPの実装
 

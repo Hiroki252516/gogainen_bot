@@ -1,12 +1,28 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-09 4用語版の固定2回フロー（仕様版45・fix/issue-300）
+## 2026-11-09 4用語版の固定2回フロー（仕様版45・fix/issue-300・履歴）
 
 - 新規参加者を仕様版45 / `experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1`へ固定した。4用語版だけ事前テスト後・再テスト1後の満点時にも学習へ進み、対象がない場合は4用語すべてを通常学習対象とする。再テスト2採点後は正誤にかかわらずsurveyへ進む。他モードの早期満点終了、2回の再テスト上限、問題バンク・採点・DB構造は変更しない。
 - 隔離DBの統合テストで、事前テスト・再テスト1・再テスト2の満点／誤答ケースを組み合わせ、誤答がある回は誤答用語だけ、満点回は4用語すべてを対象とすることを確認した。各対象の通常`tutor-sessions`作成、final_test拒否、3回目のテスト拒否、再テスト2後のsurvey遷移を確認した。仕様版44の通常バンク復元と保存snapshotを変更しないことも確認した。
 - 対象Backendテスト`83 passed`。Backend全体`1751 passed`（591.76秒、警告6件）。Frontendテスト一式とNext.js production build/TypeScript検査も通過した。
 - Playwright依存がFrontendにないため、実ブラウザでのPC・スマートフォン画面遷移確認は未実施。研究DB・既存3000番環境・実AIは使用していない。
 - 文書追記後の`git diff --check`も成功した。
+
+## 2026-11-09 4用語版を未設定時の既定値にする（仕様版45・fix/issue-309・履歴）
+
+- 仕様版45 / `experiment-plan-2026-11-09-four-topic-foundation-default-v1`を新規参加者へ適用する。未設定時の既定値を`four_topic_fundamentals`にし、管理画面の3モード切替は維持する。
+- RuntimeSettingに`application`または`basic_understanding`などの保存値がある場合は尊重し、設定値の自動書換え・DB移行を行わない。新規Participantには登録時選択値をsnapshotする。
+- 仕様版44以下は読み取り専用。保存済み`test_content_mode`から当時の問題バンクを復元し、問題・回答・snapshotを変更しない。
+- 未設定時の管理API応答、新規Participantのモード・仕様版・protocol・4用語事前アンケート・4問の出題をBackendテストで確認する。保存済み各モードの切替・snapshotと、仕様版44各モードのバンク復元も確認する。
+- 関連Backendテスト8ファイルは隔離SQLiteで`188 passed`。管理API未設定時の4用語版、仕様版45 Participant snapshot、4問出題、保存済み3モードのsnapshot、仕様版44の3バンク復元・読み取り専用を含む。
+- Frontend `npm test`、Next.js production build/TypeScript検査が成功した。Backendに既存のDeprecationWarningが2件ある。
+- `git diff --check`が成功した。研究DB、3000番環境、実AIは使用していない。
+
+## 2026-11-09 main統合：4用語版既定と固定2回フロー（仕様版46）
+
+- 仕様版45には「現行版既定・4用語版のみ固定2回フロー」と「RuntimeSetting未設定時に4用語版を既定」の二つのprotocolがあるため、両条件を仕様版46 / `experiment-plan-2026-11-09-four-topic-default-two-retests-v1`に統合した。新規登録では保存済み問題モードを尊重し、未設定時は4用語版とする。
+- 仕様版46は4用語版を満点でも2回の再テストまで進行させ、満点時は4用語すべてを学習対象にする。他モードの満点時早期終了を維持する。仕様版45以下は閲覧専用とし、各protocol・保存済みモード・問題snapshotの復元を維持する。
+- 版46のモードsnapshot欠落時に4用語版バンクを復元するため、旧バンク改訂テスト6件の「現行版は履歴表にない」という前提を、版46が`split-actions-four-topic-v1`へ解決される確認に更新した。関連Backendテストは`197 passed`。Backend全体は初回`1753 passed, 6 failed`で、失敗した6件を修正後に再実行して`6 passed`となった（全1759件を複数回に分けて確認）。Frontend `npm test`とproduction build、`git diff --check`も成功した。研究DB・3000番環境・実AIは使わず、マージコミットは作成しない。
 
 ## 2026-11-09 4用語版の選択肢別正誤表示（fix/issue-303）
 

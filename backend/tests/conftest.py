@@ -18,11 +18,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db.session import init_db, SessionLocal
 from app.seed.seed_questions import seed_database
+from app.models import RuntimeSetting
 import pytest
 
 init_db()
 db = SessionLocal()
 try:
     seed_database(db)
+    # Existing flow tests use the original three-topic bank unless they explicitly
+    # opt into the four-topic default behavior in an isolated database.
+    setting = db.get(RuntimeSetting, 1)
+    if setting is None:
+        setting = RuntimeSetting(id=1)
+        db.add(setting)
+    setting.test_content_mode = "application"
+    db.commit()
 finally:
     db.close()

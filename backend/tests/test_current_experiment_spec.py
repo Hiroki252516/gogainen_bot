@@ -118,6 +118,9 @@ def trial_snapshot(db, pid):
         (15, 41, "experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1"),
         (15, 41, "experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1"),
         (15, 39, "experiment-plan-2026-11-06-learning-glossary-integrated-default-v1"),
+        (15, 44, "experiment-plan-2026-11-09-four-topic-foundation-v1"),
+        (15, 45, "experiment-plan-2026-11-09-four-topic-foundation-default-v1"),
+        (15, 45, "experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1"),
     ],
 )
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):

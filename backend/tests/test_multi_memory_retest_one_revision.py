@@ -39,7 +39,7 @@ OLD_PROTOCOL = "experiment-plan-2026-10-27-llm-retest1-v1"
 
 def test_v8_changes_only_five_retest_choices_and_preserves_banks():
     assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[23] == {"standard": "scenario-actions-v7"}
-    assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
+    assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[CURRENT_EXPERIMENT_SPEC_VERSION] == {"standard": "split-actions-four-topic-v1"}
     for path, digest in (
         (content_loader.SCENARIO_ACTIONS_V7_CONTENT_PATH, "315455197bc0b5833dea365845dff6e41c1b47a28db4ad0dcc033545a105cfe4"),
         (content_loader.LEARNING_V14_CONTENT_PATH, "72d37e3ae983758718020ddac5e95ee51fa4e3aade63e4b1936d54f2a8428d0d"),

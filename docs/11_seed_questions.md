@@ -1,12 +1,12 @@
 # 現行問題バンク
 
-## 仕様版45の4用語版進行
+## 仕様版46の4用語版
 
-問題バンクは仕様版44と同じ`four_topic_fundamentals_v1.yml`を使う。仕様版45では問題本文・選択肢・分類・正答を変更せず、4用語版だけ満点後も学習を続ける。事前・再テスト1後に誤答対象がない場合は4用語すべてを通常学習の対象にし、再テスト2の採点後は正誤にかかわらずsurveyへ進む。他の問題モードは従来どおり満点時に早期終了できる。保存済みsnapshotは変更しない。
+問題バンクは既存の`four_topic_fundamentals_v1.yml`を使う。問題本文・選択肢・分類・正答は変更せず、4用語版だけ満点後も学習を続ける。事前・再テスト1後に誤答対象がない場合は4用語すべてを通常学習の対象にし、再テスト2の採点後は正誤にかかわらずsurveyへ進む。他の問題モードは従来どおり満点時に早期終了できる。RuntimeSettingの保存済みモードは維持し、未設定時は4用語版を適用する。保存済みsnapshotは変更しない。
 
-## 仕様版44の4用語版（導入時・履歴）
+## 仕様版44・45の4用語版（導入・既定値変更の履歴）
 
-新規参加者は登録時snapshotした`test_content_mode`に応じて問題バンクを選ぶ。第3モード`four_topic_fundamentals`は独立バンク`split-actions-four-topic-v1`（`four_topic_fundamentals_v1.yml`）を使い、Transformer、LLMの学習段階、マルチエージェント、記憶プロセスを各1問・10択で出題する。A〜C正解、D〜F=M1、G〜I=M3、J=unknownとし、3択またはJ単独で採点する。事前・再テスト1/2・内部final_testは同一問題・選択肢を使用し、学習確認は直前テストで誤答した問題のsnapshotを再利用する。役割メタデータ・教授対象は参加者向けAPIへ含めない。問題構成と研究上の注意は[51](51_four_topic_foundation_mode.md)。
+新規参加者は登録時snapshotした`test_content_mode`に応じて問題バンクを選ぶ。未設定時は4用語版を適用し、保存済みRuntimeSetting値は変更しない。第3モード`four_topic_fundamentals`は独立バンク`split-actions-four-topic-v1`（`four_topic_fundamentals_v1.yml`）を使い、Transformer、LLMの学習段階、マルチエージェント、記憶プロセスを各1問・10択で出題する。A〜C正解、D〜F=M1、G〜I=M3、J=unknownとし、3択またはJ単独で採点する。仕様版46では事前・再テスト1/2が同一問題・選択肢を使用し、4用語版に内部final_testはない。学習確認は直前テストで誤答した問題のsnapshotを再利用する。役割メタデータ・教授対象は参加者向けAPIへ含めない。問題構成と研究上の注意は[51](51_four_topic_foundation_mode.md)。
 
 ## 仕様版43の問題モード（導入時・履歴）
 
