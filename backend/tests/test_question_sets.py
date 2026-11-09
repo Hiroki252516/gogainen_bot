@@ -14,6 +14,7 @@ from app.core.question_sets import (
     LEARNING_CONTENT_VERSIONS,
     STANDARD,
     assessment_bank_for_participant,
+    historical_assessment_bank_versions_for,
 )
 from app.db.session import get_db
 from app.main import app
@@ -105,6 +106,23 @@ def test_old_participant_without_mode_keeps_application_bank():
         test_content_mode = None
 
     assert assessment_bank_for_participant(ParticipantSnapshot()) == "split-actions-v5"
+
+
+def test_version_43_without_mode_restores_default_bank_without_mutating_snapshot():
+    participant = {
+        "experiment_spec_version": 43,
+        "protocol_id": "experiment-plan-2026-11-08-basic-understanding-question-mode-v1",
+        "test_content_mode": None,
+    }
+
+    assert assessment_bank_for_participant(participant) == "split-actions-v5"
+    assert historical_assessment_bank_versions_for(participant) == {STANDARD: "split-actions-v5"}
+    assert participant["test_content_mode"] is None
+
+
+def test_current_version_without_mode_does_not_silently_fall_back():
+    with pytest.raises(ValueError, match="no supported test content mode"):
+        assessment_bank_for_participant({"experiment_spec_version": 44, "test_content_mode": None})
 
 
 def test_question_set_admin_api_is_removed_and_legacy_aggregate_filters_reject(isolated):

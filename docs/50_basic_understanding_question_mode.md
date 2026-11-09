@@ -6,7 +6,7 @@
 
 新規参加者は管理画面の登録前設定に従い、`application`（現行版・場面応用）または`basic_understanding`（基礎理解版）のどちらかで開始する。既定値は`application`。値は登録時に`Participant.test_content_mode`へ保存し、その後の管理設定変更では既存参加者の問題・回答・確認問題を切り替えない。RuntimeSettingの設定APIは管理認証を必須とし、適用範囲は新規参加者のみ。
 
-仕様版43のprotocolは`experiment-plan-2026-11-08-basic-understanding-question-mode-v1`。仕様版42以下・旧protocolは閲覧専用で記録を保持し、既存Participantのspec/protocol、問題snapshot、回答、教材、評価を移行・補完しない。NULLの旧`test_content_mode`は従来の`split-actions-v5`として復元する。
+仕様版43のprotocolは`experiment-plan-2026-11-08-basic-understanding-question-mode-v1`。仕様版42以下・旧protocolは閲覧専用で記録を保持し、既存Participantのspec/protocol、問題snapshot、回答、教材、評価を移行・補完しない。NULLの`test_content_mode`は`split-actions-v5`（application既定バンク）として復元する。仕様版43では登録時snapshotが通常保存される想定だが、欠落したNULL値に対しても復元用の既定値を適用し、保存済みsnapshot自体は変更しない。
 
 ## 問題バンク
 
