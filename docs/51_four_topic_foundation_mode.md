@@ -1,8 +1,8 @@
-# 4用語版テスト問題モード（仕様版44）
+# 4用語版テスト問題モード（仕様版44導入、仕様版45既定化）
 
 ## 現行条件
 
-仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`で追加した新規参加者向けの第3モードである。管理画面の「テスト問題モード」では従来の「現行版（場面応用）」「基礎理解版」を維持し、「4用語版」を選べる。既定値は現行版であり、選択値は登録時に`Participant.test_content_mode`へsnapshotする。登録済み参加者には遡及しない。
+仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`で追加した新規参加者向けの第3モードである。仕様版44では管理画面の「テスト問題モード」で従来の「現行版（場面応用）」「基礎理解版」を維持し、「4用語版」を選べた。仕様版45 / `experiment-plan-2026-11-09-four-topic-foundation-default-v1`では、RuntimeSettingに保存済みの値を維持したまま、未設定時の既定値を`four_topic_fundamentals`へ変更する。管理画面の3モード切替は維持し、選択値を登録時に`Participant.test_content_mode`へsnapshotする。設定変更は登録済み参加者へ遡及しない。仕様版44以下の参加者は既存方針に従い閲覧専用となる。
 
 対象用語と順序は`Transformer` (`transformer`)、`LLMの学習段階` (`llm_training_stages`)、`マルチエージェント` (`multi_agent_four_topic`)、`記憶プロセス` (`memory_process_four_topic`)である。従来2モードの3用語セットや保存済みParticipantの対象用語・回答は変更しない。
 
@@ -30,6 +30,6 @@ Transformerの教材検索は`rag_ready_教材`の節`1.1.2.4`を、LLMの学習
 
 ## 互換性・研究上の注意
 
-問題ID・construct key・問題バンク`split-actions-four-topic-v1`は既存モードと独立している。旧回答は保存時の問題・選択肢snapshotを優先する。起動時seed補修は現行仕様版とprotocolに限定し、仕様43以下の既存記録・問題・回答・教材・snapshot・評価は変更しない。仕様43以下と旧protocolは閲覧専用である。
+問題ID・construct key・問題バンク`split-actions-four-topic-v1`は既存モードと独立している。旧回答は保存時の問題・選択肢snapshotを優先する。起動時seed補修は現行仕様版とprotocolに限定し、仕様44以下の既存記録・問題・回答・教材・snapshot・評価は変更しない。仕様44以下と旧protocolは閲覧専用である。
 
 同じ問題を事前・再テスト・確認で繰り返すため、練習効果が生じる可能性がある。現行版・基礎理解版との難易度や測定特性、回次間の同等性は実証済みではない。この実装・受入試験は研究上の承認を意味しない。収集開始前に研究者が問題内容・事前アンケート・運用条件を確認する。

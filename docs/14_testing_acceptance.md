@@ -1,10 +1,20 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-09 現行仕様書の実装照合（docs/issue-307）
+## 2026-11-09 4用語版を未設定時の既定値にする（仕様版45・fix/issue-309）
 
-- README、AGENTS.mdおよび現行運用・API・画面・評価・プロンプト・データ仕様を仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`、現行YAML、Backend/Frontendコードと照合した。
-- 3問題モードと登録時snapshot、モード別アンケート・仮説集計、設問別回答確認と全体結果非表示、用語ページ単位の時間、CSV/XLSX出力を現行説明へ反映した。仕様版43以下、仕様版25〜48の採用記録、docs/historyは履歴として保持し、現行仕様と混同し得る文書には適用範囲の注記を置いた。
-- 今回はMarkdown文書だけを変更し、アプリコード・実験条件・保存データは変更していない。Backend/Frontendの動作テストは文書のみの変更のため実施対象外。変更したMarkdownのローカルリンク先検査と`git diff --check`は成功し、検査で見つけた存在しない仕様版34文書への参照を実在するv4期待値fixtureへ修正した。
+- 仕様版45 / `experiment-plan-2026-11-09-four-topic-foundation-default-v1`を新規参加者へ適用する。未設定時の既定値を`four_topic_fundamentals`にし、管理画面の3モード切替は維持する。
+- RuntimeSettingに`application`または`basic_understanding`などの保存値がある場合は尊重し、設定値の自動書換え・DB移行を行わない。新規Participantには登録時選択値をsnapshotする。
+- 仕様版44以下は読み取り専用。保存済み`test_content_mode`から当時の問題バンクを復元し、問題・回答・snapshotを変更しない。
+- 未設定時の管理API応答、新規Participantのモード・仕様版・protocol・4用語事前アンケート・4問の出題をBackendテストで確認する。保存済み各モードの切替・snapshotと、仕様版44各モードのバンク復元も確認する。
+- 関連Backendテスト8ファイルは隔離SQLiteで`188 passed`。管理API未設定時の4用語版、仕様版45 Participant snapshot、4問出題、保存済み3モードのsnapshot、仕様版44の3バンク復元・読み取り専用を含む。
+- Frontend `npm test`、Next.js production build/TypeScript検査が成功した。Backendに既存のDeprecationWarningが2件ある。
+- `git diff --check`が成功した。研究DB、3000番環境、実AIは使用していない。
+
+## 2026-11-09 現行仕様書の実装照合（docs/issue-307、origin/main merge前）
+
+- 作業時点の仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`、現行YAML、Backend/FrontendコードにREADME、AGENTS.md、運用・API・画面・評価・プロンプト・データ仕様を照合した。
+- 3問題モードと登録時snapshot、モード別アンケート・仮説集計、設問別回答確認と全体結果非表示、用語ページ単位の時間、CSV/XLSX出力を当時の現行説明へ反映した。仕様版43以下、仕様版25〜48の採用記録、docs/historyは履歴として保持し、現行仕様と混同し得る文書には適用範囲の注記を置いた。
+- その時点ではMarkdown文書だけを変更し、アプリコード・実験条件・保存データは変更していない。Backend/Frontendの動作テストは文書のみの変更のため実施対象外。変更したMarkdownのローカルリンク先検査と`git diff --check`は成功し、検査で見つけた存在しない仕様版34文書への参照を実在するv4期待値fixtureへ修正した。
 
 ## 2026-11-09 4用語版の選択肢別正誤表示（fix/issue-303）
 
