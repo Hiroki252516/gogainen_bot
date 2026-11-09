@@ -6,7 +6,7 @@ import { type Glossary } from "@/components/LearningGlossary";
 import { GlossarySidebar } from "@/components/GlossarySidebar";
 import { prepareGroupedQuestionDisplay } from "@/lib/learning-question-display";
 import { combineTestGlossaries, groupTestQuestionsByTerm, initialTestTermPageIndex, normalizeTestRound, sameTestRound } from "@/lib/test-term-pages";
-import { optionAnswerClass } from "@/lib/option-answer-display";
+import { optionAnswerClass, optionCorrectnessForReview } from "@/lib/option-answer-display";
 import { ApiError, api, clearPendingIdempotency, getPendingIdempotentBody, postIdempotent, requireParticipant } from "@/lib/api";
 
 type Option = { option_id: string; label: string; body: string; exclusive?: boolean };
@@ -37,7 +37,7 @@ type PendingQuestionReview = {
   results: Array<{
     question_number: 1 | 2;
     selected_option: { label: string; body: string };
-    selected_options?: Array<{ label: string; body: string }>;
+    selected_options?: Array<{ option_id: string; label: string; body: string; is_correct: boolean }>;
     is_correct: boolean;
   }>;
 };
@@ -843,6 +843,7 @@ function TermPageQuestionRunner({
             const reviewResult = pendingQuestionReview?.term_slug === page.term_slug
               ? pendingQuestionReview.results.find((result) => result.question_number === questionIndex + 1)
               : undefined;
+            const selectedOptionReviews = reviewResult?.selected_options || [];
             return (
               <section className="stack term-page-question" key={question.question_id} aria-label={`設問${questionIndex + 1}`}>
                 <p className="preserve-lines term-page-question-body">{questionBodies[questionIndex]}</p>
@@ -863,10 +864,23 @@ function TermPageQuestionRunner({
                     </div>
                   ) : <div className="selection-status">最も適切なものを1つ選んでください。</div>
                 ) : null}
+                {reviewResult && isMultiple ? (
+                  <div className={`selection-status ${reviewResult.is_correct ? "ok" : "incorrect"}`} role="status">
+                    <strong>設問全体：{reviewResult.is_correct ? "正解" : "不正解"}</strong>
+                  </div>
+                ) : null}
                 {question.options.length ? (
                   <div className="options">
                     {question.options.map((option) => {
                       const selected = selectedIds.includes(option.option_id);
+                      const selectedOptionReview = selectedOptionReviews.find((item) => item.option_id === option.option_id);
+                      const optionIsCorrect = reviewResult
+                        ? optionCorrectnessForReview(
+                            isMultiple ? "multiple" : "single",
+                            selectedOptionReview?.is_correct,
+                            reviewResult.is_correct,
+                          )
+                        : false;
                       const isUnknown = Boolean(option.exclusive);
                       const disabledBySelection = isMultiple && !selected && (
                         (selectionState.hasUnknown && !isUnknown)
@@ -874,7 +888,7 @@ function TermPageQuestionRunner({
                         || (isUnknown && selectionState.normalSelectedCount > 0)
                       );
                       const answerClass = selected && reviewResult
-                        ? optionAnswerClass(true, reviewResult.is_correct)
+                        ? optionAnswerClass(true, optionIsCorrect)
                         : "";
                       return (
                         <label className={`option ${disabledBySelection ? "option-disabled" : ""} ${isAnswered && selected && !reviewResult ? "option-selected-locked" : ""} ${isUnknown ? "option-unknown" : ""} ${answerClass}`} key={option.option_id}>
@@ -893,7 +907,7 @@ function TermPageQuestionRunner({
                           />
                           <span>
                             {selected && reviewResult ? (
-                              <strong className="option-verdict">{reviewResult.is_correct ? "正解" : "不正解"}</strong>
+                              <strong className="option-verdict">{optionIsCorrect ? "正解" : "不正解"}</strong>
                             ) : null}
                             <strong>{option.label}.</strong> {option.body}
                           </span>

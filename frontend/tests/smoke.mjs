@@ -62,6 +62,13 @@ const testRunner = fs.readFileSync(new URL("../components/QuestionRunner.tsx", i
 for (const text of ['glossary?: Glossary | null', 'glossary={current.glossary}', 'label="テストの用語の補足"']) {
   if (!testRunner.includes(text)) throw new Error(`test glossary placement missing: ${text}`);
 }
+for (const text of [
+  "optionCorrectnessForReview(",
+  "selectedOptionReviews.find((item) => item.option_id === option.option_id)",
+  "設問全体：{reviewResult.is_correct ? \"正解\" : \"不正解\"}",
+]) {
+  if (!testRunner.includes(text)) throw new Error(`per-option answer review missing: ${text}`);
+}
 const termPageRunner = testRunner.slice(testRunner.indexOf("function TermPageQuestionRunner"));
 if (!termPageRunner.includes('<div className="actions corner-primary">') || termPageRunner.includes("term-page-primary")) {
   throw new Error("term-page test navigation must use the shared fixed primary action style");

@@ -199,6 +199,11 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         four_questions = client.get(f"/api/experiment/{four_id}/pretest").json()["questions"]
         assert [question["term_slug"] for question in four_questions] == list(FOUR_TOPIC_TERM_SLUGS)
         assert len(four_questions) == 4
+        assert all(
+            "is_correct" not in option and "misconception_type" not in option
+            for question in four_questions
+            for option in question["options"]
+        )
         assert all(len(question["options"]) == 10 for question in four_questions)
         assert all(question["selection_mode"] == "multiple" and question["min_selections"] == 3 and question["max_selections"] == 3 for question in four_questions)
         assert all(question["options"][-1]["exclusive"] for question in four_questions)
@@ -222,7 +227,7 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
             participant.current_step = "pretest"
             participant.retest_cycles_completed = 0
             db.commit()
-        desired_roles = ["mixed_m3", "unknown", "correct", "correct"]
+        desired_roles = ["mixed_m3", "unknown", "c_e_h", "correct"]
         for question, desired in zip(four_questions, desired_roles, strict=True):
             with factory() as db:
                 source_options = db.query(QuestionOption).filter_by(question_id=question["question_id"]).all()
@@ -230,6 +235,8 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
                     selected_ids = {option.id for option in source_options if option.is_correct}
                 elif desired == "unknown":
                     selected_ids = {option.id for option in source_options if option.misconception_type == "unknown"}
+                elif desired == "c_e_h":
+                    selected_ids = {option.id for option in source_options if option.option_label in {"C", "E", "H"}}
                 else:
                     selected_ids = {option.id for option in source_options if option.is_correct}
                     selected_ids.remove(next(iter(selected_ids)))
@@ -262,6 +269,24 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
             assert review["term_slug"] == question["term_slug"]
             assert review["results"][0]["is_correct"] is (desired == "correct")
             assert len(review["results"][0]["selected_options"]) == len(displayed_ids)
+            selected_review = review["results"][0]["selected_options"]
+            assert [option["option_id"] for option in selected_review] == [str(option_id) for option_id in displayed_ids]
+            assert all({"option_id", "label", "body", "is_correct"} <= set(option) for option in selected_review)
+            with factory() as db:
+                correct_by_id = {
+                    str(option.id): bool(option.is_correct)
+                    for option in db.query(QuestionOption).filter_by(question_id=question["question_id"]).all()
+                }
+            assert {option["option_id"]: option["is_correct"] for option in selected_review} == {
+                str(option_id): correct_by_id[str(option_id)] for option_id in displayed_ids
+            }
+            if desired == "c_e_h":
+                assert {option["label"]: option["is_correct"] for option in selected_review} == {
+                    "C": True,
+                    "E": False,
+                    "H": False,
+                }
+                assert review["results"][0]["is_correct"] is False
             ack = client.post(f"/api/participants/{four_id}/question-review-acknowledgements", json={"phase": "pretest", "term_slug": question["term_slug"]})
             assert ack.status_code == 200, ack.text
         diagnosed = client.post(f"/api/participants/{four_id}/diagnose-pretest", json={})
@@ -270,7 +295,7 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
             participant = db.get(Participant, four_id)
             assert participant.test_content_mode == "four_topic_fundamentals"
             assert participant.current_step == "learning_targets"
-            assert db.query(Attempt).filter_by(participant_id=four_id, phase="pretest", is_correct=True).count() == 2
+            assert db.query(Attempt).filter_by(participant_id=four_id, phase="pretest", is_correct=True).count() == 1
             transformer = db.query(Term).filter_by(slug="transformer").one()
             confirmation = learning_spec(db, participant, transformer)
             assert confirmation["selection_mode"] == "multiple"
