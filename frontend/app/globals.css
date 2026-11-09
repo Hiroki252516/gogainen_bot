@@ -499,6 +499,15 @@ button:disabled {
   background: #f0fdf6;
 }
 
+.selection-status.incorrect {
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.selection-status.incorrect strong {
+  color: var(--danger);
+}
+
 .option.option-disabled {
   opacity: 0.5;
   cursor: not-allowed;

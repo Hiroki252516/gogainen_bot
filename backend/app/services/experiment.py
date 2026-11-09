@@ -1261,8 +1261,25 @@ def pending_question_review(
             "is_correct": _classify_selected_options(selected_options)[0],
         }
         if participant_test_content_mode(participant) == "four_topic_fundamentals":
+            selected_correctness = {
+                str(option.id): bool(option.is_correct)
+                for option in selected_options
+            }
+            if any(
+                str(option["option_id"]) not in selected_correctness
+                for option in selected_snapshot_options
+            ):
+                raise HTTPException(
+                    status_code=503,
+                    detail={"error_code": "question_review_snapshot_unavailable", "message": "回答表示の保存情報が見つかりません。管理者に連絡してください。"},
+                )
             result["selected_options"] = [
-                {"label": option["label"], "body": option["body"]}
+                {
+                    "option_id": str(option["option_id"]),
+                    "label": option["label"],
+                    "body": option["body"],
+                    "is_correct": selected_correctness[str(option["option_id"])],
+                }
                 for option in selected_snapshot_options
             ]
         grouped.setdefault(row["term_slug"], {})[number] = result
