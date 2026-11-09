@@ -98,6 +98,12 @@
 - 仕様版41以下は閲覧専用。旧問題・回答・教材・snapshot・監査記録は書き換えない。仕様版41のmainline二protocolは問題バンクv5、`split-actions-v6-q1-only-v1` protocolはV6で結果を復元する。今回の競合解消ではテストを実行していないため、以下の件数はorigin/main統合時点の検証記録である。
 - Backend全体テストは隔離SQLiteで`1721 passed`。prompt設定・教材文字数・用語モード・問題履歴・固定テスト条件に関する重点テスト10ファイルも`217 passed`。最初の重点実行では固定条件テスト1件が統合前の仕様版41 protocolを期待して失敗したため、現行仕様版42 protocolへ期待値を更新して再実行した。
 - `git diff --check`と`git diff --cached --check`、競合マーカーの残存確認は通過した。PRにFrontendコードの差分はないため、Frontendテスト・buildとブラウザ確認は未実施。
+
+## 2026-11-09 現行仕様書の実装照合（docs/issue-307、仕様版44時点の履歴）
+
+- 作業時点の仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`、現行YAML、Backend/FrontendコードにREADME、AGENTS.md、運用・API・画面・評価・プロンプト・データ仕様を照合した。
+- 3問題モードと登録時snapshot、モード別アンケート・仮説集計、設問別回答確認と全体結果非表示、用語ページ単位の時間、CSV/XLSX出力を当時の現行説明へ反映した。仕様版43以下、仕様版25〜48の採用記録、docs/historyは履歴として保持し、現行仕様と混同し得る文書には適用範囲の注記を置いた。
+- その時点ではMarkdown文書だけを変更し、アプリコード・実験条件・保存データは変更していない。Backend/Frontendの動作テストは文書のみの変更のため実施対象外。Markdownのローカルリンク先検査と`git diff --check`は成功し、検査で見つけた存在しない仕様版34文書への参照を実在するv4期待値fixtureへ修正した。
 - 研究DB・localhost:3000・実AIは使用していない。マージコミットは作成しない。
 
 ## 統合前の仕様版40記録：目標800文字（fix/issue-278）

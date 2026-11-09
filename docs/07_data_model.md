@@ -77,7 +77,7 @@ interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み
 
 現在のPython/API名 `attainment_correct_rate` は物理列 `l0_correct_rate` にマッピングする。新規計算はAttempt.is_correctだけを使う。旧保存値は `legacy_fields` 内にも表示できるが再計算しない。
 
-生AIログと問題snapshotは過去内容もそのまま閲覧・CSV出力可能。統合ログCSVは仕様版43で`test_content_mode`列を追加し、それ以外の既存列と過去値を保持する。仕様版45の固定2回進行も既存の回数列で表し、DB構造を変更しない。詳細な旧テーブル仕様は [履歴資料](history/2026-10-06/07_data_model.md)。
+生AIログと問題snapshotは過去内容もそのまま閲覧・CSV出力可能。統合ログCSVは仕様版43で`test_content_mode`列を追加し、それ以外の既存列と過去値を保持する。全体ログ・参加者ログと仮説集計にはCSVに対応した個別`.xlsx`出力もあり、各ブックは同じ列・行の1シート構成である。仕様版45の固定2回進行も既存の回数列で表し、DB構造を変更しない。詳細な旧テーブル仕様は [履歴資料](history/2026-10-06/07_data_model.md)。
 
 旧回答の問題文・選択肢本文は保存時snapshotを優先する。旧自由回答採点のexpected_keywords列もlegacy_*マッピングとして保持し、新しいseedから更新しない。
 

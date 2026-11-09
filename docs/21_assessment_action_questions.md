@@ -1,5 +1,7 @@
 # 行動選択型テスト問題と分類根拠
 
+> **適用範囲:** 本書は通常版問題バンク`scenario-actions-v9`の採用履歴・設計根拠を記録した資料であり、現行の全問題モードの完全な問題一覧ではない。現行仕様版46では、登録時snapshotに応じて`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v1`（4用語版）を使用する。問題の現行条件は[基礎理解版](50_basic_understanding_question_mode.md)・[4用語版](51_four_topic_foundation_mode.md)、現行YAMLは各バンクを正本とする。
+
 ## 適用範囲
 
 実験仕様版26 / `experiment-plan-2026-10-27-test-glossary-v2`。問題本文・判定は版25から変更しない。通常版問題バンク識別子は `scenario-actions-v9`。3用語×3回次＝9固有問題で、各回に3問を出題する。内部final_testは事前後1回目のretest_v1を共用し、その後はretest_v2へ進む。両経路とも事前テストを含め最大3回である。
