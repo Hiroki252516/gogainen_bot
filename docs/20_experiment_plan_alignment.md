@@ -24,7 +24,7 @@
 
 ## 仕様版39の履歴：教材内解説モードを新規参加者の標準に固定
 
-当時の新規参加者へ仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を適用し、教材モードを`integrated_material`に固定した。管理画面の切替UIとモードAPIはなく、仕様版38以下は閲覧専用。教材生成は辞書v4を意味参照として使用し、目標1000・許容600〜1200文字だった。仕様版40〜42の各protocolおよび仕様版44への更新後も、仕様版39以下の保存記録を維持する。履歴・表示契約は[41](41_learning_glossary_material_mode.md)、当時の文字数条件は[42](42_learning_glossary_material_length.md)を参照する。
+当時の新規参加者へ仕様版39 / `experiment-plan-2026-11-06-learning-glossary-integrated-default-v1`を適用し、教材モードを`integrated_material`に固定した。管理画面の切替UIとモードAPIはなく、仕様版38以下は閲覧専用。教材生成は辞書v4を意味参照として使用し、目標1000・許容600〜1200文字だった。仕様版40〜42の各protocolおよび仕様版44・45への更新後も、仕様版39以下の保存記録を維持する。履歴・表示契約は[41](41_learning_glossary_material_mode.md)、当時の文字数条件は[42](42_learning_glossary_material_length.md)を参照する。
 
 ## 仕様版38の履歴：事前アンケートv2とRAG用語注釈の統合
 
