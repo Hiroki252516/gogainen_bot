@@ -199,7 +199,13 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
     assert all(row["legacy_read_only"] for row in overview["recent_answer_history"] if row["participant_id"] == pid)
     with SessionLocal() as db:
         for group in summary["groups"]:
-            assert group["participant_count"] == db.query(Participant).filter_by(group_condition=group["group_condition"], experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID).count()
+            assert group["participant_count"] == db.query(Participant).filter_by(
+                group_condition=group["group_condition"],
+                experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
+                protocol_id=CURRENT_PROTOCOL_ID,
+                test_content_mode=group["test_content_mode"],
+                first_question_only=group["first_question_only"],
+            ).count()
     exported = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert exported.status_code == 200
     assert next(csv.reader(exported.text.splitlines())) == experiment.LOG_CSV_COLUMNS
@@ -220,8 +226,8 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
     Base.metadata.create_all(isolated)
     with Session(isolated) as db:
         seed_database(db)
-        assert db.query(Question).count() == 18
-        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 6, "retest": 12, "final_test": 0}
+        assert db.query(Question).count() == 27
+        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 9, "retest": 18, "final_test": 0}
         participant = Participant(display_code="OLD", group_condition="proposed", current_step="finish", completion_reason=None)
         db.add(participant)
         db.flush()
@@ -239,8 +245,8 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
         pid = participant.id
         seed_database(db)
         seed_database(db)
-        assert db.query(Question).count() == 21
-        assert db.query(Question).filter_by(is_active=True).count() == 18
+        assert db.query(Question).count() == 30
+        assert db.query(Question).filter_by(is_active=True).count() == 27
         assert not old_question.is_active and not transfer.is_active
         db.refresh(retired_variant)
         assert not retired_variant.is_active

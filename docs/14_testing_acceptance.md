@@ -1,5 +1,13 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-08 基礎理解版問題モード（仕様版43・feature/issue-295）
+
+- 管理画面の問題モードを新規参加者の登録時にsnapshotし、`application`と`basic_understanding`で問題取得・回答保存・復元・仮説集計を分離した。旧仕様版42以下の記録とNULLモードの履歴解釈を保持する。
+- 基礎理解版の問題バンクは3回次×3用語の9問を持ち、各問題に正解1・M1誤答2・M3誤答2・unknown1を格納する。現行の設問1のみ出題条件に従い、各テストではモードごとの3問を出題する。研究者向け分類理由は参加者用問題バンクに含めない。
+- Backend全テストは隔離SQLiteで`1743 passed`。FrontendテストとNext.js production build/TypeScript検査、`git diff --check`も通過した。Frontend smoke testの管理画面期待値は、内部バンクIDではなく実際の表示名を検証するよう更新した。
+- 基礎理解版が易しいこと、現行版との難易度・測定特性・回次間の同等性、および研究上の承認は検証・確認していない。実験開始前の研究者確認が必要。
+- 研究DB・localhost:3000・実AIは使用していない。ブラウザでの参加者一連の実操作は未実施。
+
 ## 2026-11-07 Codex Fast mode切替（feature/issue-293）
 
 - 管理APIに厳密なBooleanのFast mode更新を追加した。初期値はOFFで、プロセス内の一時設定として保持し、再起動後はOFFへ戻す。Mock backendでは状態をONにできず、HTTP 409で拒否する。

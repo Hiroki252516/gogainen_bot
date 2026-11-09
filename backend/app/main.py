@@ -83,6 +83,7 @@ from app.services.identity_mapping_cleanup import (
     recover_pending_identity_mapping_cleanups,
 )
 from app.services.option_order import current_option_order_mode, save_option_order_mode
+from app.services.test_content_mode import current_mode as current_test_content_mode, mode_label as test_content_mode_label, save_mode as save_test_content_mode
 from app.services.learning_glossary import load_learning_glossary, public_glossary
 from app.services import identity_mapping
 from app.services.research_protocol import PresurveyPayload, SurveyPayload, presurvey_context, survey_context, record_material_view
@@ -317,6 +318,11 @@ class FastModePayload(BaseModel):
 class OptionOrderPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mode: Literal["debug_fixed", "randomized"]
+
+
+class TestContentModePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["application", "basic_understanding"]
 
 
 DATABASE_UNAVAILABLE_DETAIL = "データベースに接続できません。管理者に確認してください。"
@@ -858,6 +864,24 @@ def api_set_admin_option_order(payload: OptionOrderPayload, db: Session = Depend
     return {"mode": mode, "applies_to": "new_participants_only"}
 
 
+@app.get("/api/admin/test-content-mode")
+def api_admin_test_content_mode(db: Session = Depends(get_db)) -> dict:
+    try:
+        mode = current_test_content_mode(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail="テスト問題モード設定を読み取れません。管理者に連絡してください。") from exc
+    return {"mode": mode, "label": test_content_mode_label(mode), "applies_to": "new_participants_only"}
+
+
+@app.put("/api/admin/test-content-mode")
+def api_set_admin_test_content_mode(payload: TestContentModePayload, db: Session = Depends(get_db)) -> dict:
+    try:
+        mode = save_test_content_mode(db, payload.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="未対応のテスト問題モードです。") from exc
+    return {"mode": mode, "label": test_content_mode_label(mode), "applies_to": "new_participants_only"}
+
+
 @app.get("/api/admin/participants")
 def api_admin_participants(db: Session = Depends(get_db)) -> dict:
     from app.models import Participant
@@ -872,6 +896,8 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
                 "show_retest_results": pretest_display.enabled(row.show_retest_results),
                 "show_question_reviews": row.show_question_reviews,
                 "first_question_only": row.first_question_only,
+                "test_content_mode": row.test_content_mode,
+                "test_content_mode_label": test_content_mode_label(row.test_content_mode),
                 "learning_material_glossary_mode": row.learning_material_glossary_mode,
                 "display_code": row.display_code,
                 "group_condition": row.group_condition,

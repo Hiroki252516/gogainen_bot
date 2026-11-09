@@ -14,6 +14,7 @@ from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import taxonomy_for_prompt
 from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
+from app.core.question_sets import ASSESSMENT_MODE_BANK_VERSIONS
 from app.db import session as database
 from app.db.session import SessionLocal
 from app.main import app
@@ -82,10 +83,14 @@ def test_history_merges_all_rounds_and_sessions_using_snapshots_without_diagnost
             ("final_test", "retest_3", "retest_v1_q1", ["A"], True),
         )
         for index, (phase, round_name, variant_key, labels, is_correct) in enumerate(rounds, 1):
-            question = db.query(Question).filter_by(term_id=term.id, variant_key=variant_key).one()
+            question = db.query(Question).filter_by(term_id=term.id, variant_key=variant_key).filter(
+                Question.construct_key.endswith(ASSESSMENT_MODE_BANK_VERSIONS["application"])
+            ).one()
             options = db.query(QuestionOption).filter(QuestionOption.question_id == question.id, QuestionOption.option_label.in_(labels)).order_by(QuestionOption.default_order).all()
             db.add(Attempt(participant_id=pid, term_id=term.id, question_id=question.id, phase=phase, test_round=round_name, selected_option_ids=[row.id for row in options], is_correct=is_correct, answered_at=base + timedelta(days=index), misconception_type="M3", natural_language_diagnosis="PRIVATE_REASON"))
-        ungraded_question = db.query(Question).filter_by(term_id=term.id, variant_key="retest_v1_q2").one()
+        ungraded_question = db.query(Question).filter_by(term_id=term.id, variant_key="retest_v1_q2").filter(
+            Question.construct_key.endswith(ASSESSMENT_MODE_BANK_VERSIONS["application"])
+        ).one()
         db.add(Attempt(participant_id=pid, term_id=term.id, question_id=ungraded_question.id, phase="retest", test_round="retest_1", is_correct=None))
         db.add(Attempt(participant_id=pid, term_id=term.id, question_id=pretest.question_id, phase="l0_check", is_correct=True))
         spec = learning_question_spec(term.slug, "conceptual_change", 1)
@@ -282,7 +287,7 @@ def test_startup_repairs_only_current_version_and_preserves_old_trials(tmp_path,
         assert db.query(Attempt).filter_by(participant_id=current_id).one().test_round is None
         assert db.query(TutorSession).filter_by(participant_id=current_id).one().prefetch_state == "none"
         assert db.query(EvaluationSummary).filter_by(participant_id=current_id).one().completed is True
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 42
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 43
     pid = create_trial()
     with SessionLocal() as db:
         assert db.get(Participant, pid).experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION

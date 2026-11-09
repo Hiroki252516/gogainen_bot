@@ -18,6 +18,7 @@
 | アンケート | `presurvey-baseline-v2` / `posttest-10point-v3`、phase別ParticipantSurvey | 4段階の事前知識6＋AI利用2、事後システム評価2＋教材評価6＋任意自由記述。H5はposttestのみ。仕様版36のv1は不変で保全 |
 | テスト上限・回次 | 学習後回数＋採点済みfinal_testから全体回次を導出 | 事前後最大2回、事前込み最大3回。未達を維持してsurvey |
 | 行動選択型問題 | scenario-actions-v9、9固有問、版付きconstruct_key | 旧問題非active保全、分類根拠は21 |
+| 仕様版43問題モード | `RuntimeSetting.test_content_mode`をParticipantへ登録時snapshot、2つの独立bankをseedし同じモードで採点・学習確認を復元 | 管理API/画面、参加者ログ・CSV/Excel、モード別H1〜H6集計。難易度同等性・研究承認は未検証 |
 | 旧記録保護 | 仕様版26＋protocol_id、API/worker/補修ガード | 旧版25以下も閲覧専用・新集計から除外 |
 | 割付・アクセス・正答配置 | 既存A/Bコード・デバッグ問題を維持 | 自動割付・認証・位置復旧は今回対象外 |
 

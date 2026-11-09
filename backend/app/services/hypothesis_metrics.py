@@ -13,11 +13,12 @@ from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSessi
 from app.services.split_assessment import uses_split, split_item_keys
 from app.services.first_question_only import enabled as first_question_enabled, question_numbers
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SUPPORTED_SURVEY_VERSIONS
+from app.services.test_content_mode import mode_label as test_content_mode_label, participant_mode as participant_test_content_mode
 
-METRICS_VERSION = "six-hypotheses-v4-question-selection"
+METRICS_VERSION = "six-hypotheses-v5-test-content-mode"
 TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
 METRICS_CSV_COLUMNS = [
-    "metrics_version", "protocol_id", "group_condition", "participant_id", "display_code", "route",
+    "metrics_version", "protocol_id", "test_content_mode", "group_condition", "participant_id", "display_code", "route",
     "metric", "value", "n", "mean", "median", "numerator", "denominator", "missing_count",
     "not_applicable_count", "status", "details_json",
 ]
@@ -143,6 +144,8 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         "participant_id": participant.id, "display_code": participant.display_code,
         "scoring_unit": "subquestion" if split else "term", "questions_per_test": expected_count,
         "first_question_only": first_question_enabled(participant),
+        "test_content_mode": participant_test_content_mode(participant),
+        "test_content_mode_label": test_content_mode_label(participant_test_content_mode(participant)),
         "group_condition": participant.group_condition, "completion_reason": participant.completion_reason,
         "route": "initial_perfect_final_test" if pre_score == 1 else "learning_retest" if pre_complete else "pretest_incomplete",
         "has_viewed_material": bool(displayed), "rounds": rounds,
@@ -203,18 +206,32 @@ def _group(rows):
 
 def group_metrics(rows: list[dict]) -> dict:
     conditions = sorted({row.get("first_question_only", False) is True for row in rows}) or [True]
-    if len(conditions) > 1:
+    modes = sorted({row.get("test_content_mode") or "application" for row in rows}) or ["application"]
+    if len(conditions) > 1 or len(modes) > 1:
+        strata_keys = sorted({
+            (row.get("first_question_only") is True, row.get("test_content_mode") or "application")
+            for row in rows
+        }) or [(True, "application")]
         return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
                 "groups": [], "routes": {},
                 "differences_proposed_minus_control": {}, "material_item_differences": {},
-                "strata": [group_metrics([row for row in rows if (row.get("first_question_only") is True) == condition]) for condition in conditions],
+                "strata": [
+                    group_metrics([
+                        row for row in rows
+                        if (row.get("first_question_only") is True) == condition
+                        and (row.get("test_content_mode") or "application") == mode
+                    ])
+                    for condition, mode in strata_keys
+                ],
                 "descriptive_only": True}
     first_only = conditions[0] if conditions else False
+    mode = modes[0] if modes else "application"
     groups = [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group])} for group in ("control", "proposed")]
     differences = {key: groups[1][key]["mean"] - groups[0][key]["mean"] if all(g[key]["mean"] is not None for g in groups) else None for key in ("h1", "h2", "h3", "h4", "h5", "h6")}
     item_differences = {k: groups[1]["h5"]["items"][k]["mean"] - groups[0]["h5"]["items"][k]["mean"] if all(g["h5"]["items"][k]["mean"] is not None for g in groups) else None for k in MATERIAL_RATING_KEYS}
     routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("initial_perfect_final_test", "learning_retest", "pretest_incomplete")}
     return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "groups": groups,
+            "test_content_mode": mode, "test_content_mode_label": test_content_mode_label(mode),
             "first_question_only": first_only, "questions_per_test": 3 if first_only else 6,
             "differences_proposed_minus_control": differences, "material_item_differences": item_differences,
             "routes": routes, "descriptive_only": True}
@@ -228,23 +245,26 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
     source = group_metrics(rows)
     if grouped and source.get("strata"):
         return [record for stratum in source["strata"] for record in metrics_export_rows(
-            [row for row in rows if (row.get("first_question_only") is True) == stratum["first_question_only"]],
+            [row for row in rows
+             if (row.get("first_question_only") is True) == stratum["first_question_only"]
+             and (row.get("test_content_mode") or "application") == stratum["test_content_mode"]],
             grouped=True,
         )]
     if grouped:
         for group in source["groups"]:
             for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
                 stats = group[key]
-                records.append({"group_condition": group["group_condition"], "metric": key, **{k: v for k, v in stats.items() if k in METRICS_CSV_COLUMNS}, "details_json": json.dumps(stats, ensure_ascii=False)})
+                records.append({"test_content_mode": source["test_content_mode"], "group_condition": group["group_condition"], "metric": key, **{k: v for k, v in stats.items() if k in METRICS_CSV_COLUMNS}, "details_json": json.dumps(stats, ensure_ascii=False)})
             for item, stats in group["h5"]["items"].items():
-                records.append({"group_condition": group["group_condition"], "metric": f"h5.{item}", **stats})
+                records.append({"test_content_mode": source["test_content_mode"], "group_condition": group["group_condition"], "metric": f"h5.{item}", **stats})
         for key, value in source["differences_proposed_minus_control"].items():
-            records.append({"group_condition": "proposed_minus_control", "metric": key, "value": value})
+            records.append({"test_content_mode": source["test_content_mode"], "group_condition": "proposed_minus_control", "metric": key, "value": value})
         # Includes route-specific and round-specific denominators without changing fixed log CSVs.
-        records.append({"metric": "group_details", "details_json": json.dumps(source, ensure_ascii=False)})
+        records.append({"test_content_mode": source["test_content_mode"], "metric": "group_details", "details_json": json.dumps(source, ensure_ascii=False)})
     else:
         for row in rows:
             base = {k: row[k] for k in ("group_condition", "participant_id", "display_code", "route")}
+            base["test_content_mode"] = row.get("test_content_mode") or "application"
             base["first_question_only"] = row.get("first_question_only") is True
             for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
                 metric = row[key]
@@ -256,7 +276,8 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
     for record in records:
         details = json.loads(record.get("details_json") or "{}")
         first_only = record.pop("first_question_only", source.get("first_question_only", False))
-        record["details_json"] = json.dumps({**details, "first_question_only": first_only, "questions_per_test": 3 if first_only else 6}, ensure_ascii=False)
+        mode = record.get("test_content_mode") or source.get("test_content_mode", "application")
+        record["details_json"] = json.dumps({**details, "test_content_mode": mode, "first_question_only": first_only, "questions_per_test": 3 if first_only else 6}, ensure_ascii=False)
         output.append({"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, **record})
     return output
 

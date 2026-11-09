@@ -137,7 +137,7 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 
 def uses_split(participant: Any) -> bool:
-    return participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42}
+    return participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43}
 
 
 @lru_cache
@@ -149,6 +149,7 @@ def split_bank(bank_version: str = "split-actions-v5") -> dict:
         "split-actions-v4": "split_assessment_v4.yml",
         "split-actions-v5": "split_assessment_v5.yml",
         "split-actions-v6": "split_assessment_v6.yml",
+        "split-actions-basic-v1": "split_assessment_basic_v1.yml",
     }
     filename = bank_paths.get(bank_version)
     if filename is None:
@@ -180,7 +181,11 @@ def split_specs(term_slug: str, round_key: str, bank_version: str | None = None)
         ]
     return [
         {"variant_key": f"{round_key}_q{q['number']}", "question_number": q["number"],
-         "body": f"{section['scenario']}\n\n設問{q['number']}：{q['title']}\n\n{q['task']}",
+         "body": "\n\n".join(part for part in (
+             section["scenario"].strip(),
+             f"設問{q['number']}：{q['title']}",
+             q["task"],
+         ) if part),
          "options": choices_for(q)}
         for q in section["questions"] if q["number"] in {1, 2}
     ]

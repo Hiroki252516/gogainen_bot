@@ -1,12 +1,22 @@
 # 現行API
 
-## 仕様版42の固定設定
+## テスト問題モード（仕様版43）
+
+- `GET /api/admin/test-content-mode`: `{mode, label, applies_to: "new_participants_only"}`を返す。RuntimeSetting未保存時は`application`を返す。
+- `PUT /api/admin/test-content-mode`: `{mode: "application" | "basic_understanding"}`のみ受け付け、DBへ保存する。未知キー・値は拒否する。
+- 両endpointは既存の管理認証を適用する。設定は新規参加者の登録時だけ`Participant.test_content_mode`へ固定し、登録済み参加者へ遡及しない。
+- 参加者向けの出題・採点API契約は変えず、保存済みParticipantのモードに対応するbank construct keyを選ぶ。問題本文や判定情報を追加公開しない。
+- 管理ログ・参加者CSVにモードを含める。仮説集計と群サマリーはモードで分離する。
+
+問題バンク・互換性は[50](50_basic_understanding_question_mode.md)。
+
+## 仕様版42の固定設定（履歴）
 
 新規登録はRuntimeSettingの旧表示設定を参照せず、結果表示false・設問ごとの答え合わせtrue・設問1のみ出題true・教材内解説モードをParticipantへ固定保存する。管理API `/api/admin/pretest-result-display`、`/api/admin/question-review-display`、`/api/admin/first-question-only`、`/api/admin/learning-material-glossary-mode` は提供しない。RuntimeSettingとParticipantの履歴値はparticipant log API・CSVに保持するが、管理画面の一覧・個別ログ表示からは除く。出題条件は現行の3問のみであり、集計の条件指定API/UIは設けない。仕様版41以下は閲覧専用。
 
 ## 設問1のみ出題APIの廃止（仕様版35で導入した履歴）
 
-過去には管理認証付きGET/PUT `/api/admin/first-question-only` で条件を切り替えていた。仕様版40から当該APIを廃止し、仕様版42でも新規参加者を各用語1問・計3問へ固定する。旧参加者の記録復元には保存snapshotと版対応を使う。詳細は[48](48_first_question_only.md)。
+過去には管理認証付きGET/PUT `/api/admin/first-question-only` で条件を切り替えていた。仕様版40から当該APIを廃止し、仕様版43でも新規参加者を各用語1問・計3問へ固定する。問題バンクは登録時snapshotされた問題モードで選ぶ。旧参加者の記録復元には保存snapshotと版対応を使う。詳細は[48](48_first_question_only.md)・[50](50_basic_understanding_question_mode.md)。
 
 ## 教材用語解説モード（仕様版39導入・42現行）
 
@@ -48,7 +58,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版42 / `experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`で進行可否を判定する。仕様版41以下は閲覧専用とする。教材本文の目標800文字化による公開API構造の変更はない。教材モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、辞書更新は[43](43_glossary_definition_paraphrase.md)、RAG注釈は[49](49_rag_glossary.md)を参照する。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版43 / `experiment-plan-2026-11-08-basic-understanding-question-mode-v1`で進行可否を判定し、仕様版42以下は閲覧専用とする。管理認証付きGET/PUT `/api/admin/test-content-mode`は新規参加者用の問題モードを設定する。教材本文の目標800文字化による公開API構造の変更はない。問題モードは[50](50_basic_understanding_question_mode.md)、教材モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、辞書更新は[43](43_glossary_definition_paraphrase.md)、RAG注釈は[49](49_rag_glossary.md)を参照する。
 
 事前アンケートはGET/POST `/api/participants/{id}/presurvey`を使い、`presurvey-baseline-v2`の厳密なpayloadを受け付ける。`prior_term_knowledge`の6項目は`unknown`、`heard_of`、`knows_meaning`、`can_explain`のいずれかを必須とし、AI利用頻度・自己評価も1〜10整数で必須とする。`phase=presurvey`のParticipantSurveyとして冪等に保存する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版36の`presurvey-baseline-v1`回答はBoolean形式のまま履歴保全し、新形式へ変換しない。
 
@@ -113,7 +123,7 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 
 事前・再テスト・内部final_testの取得APIは`test_page_mode`を返す。新規参加者は`per_term`で同一用語の設問1・2を一括保存する。`POST /api/attempts/term-page`はparticipant_id、phase、term_slug、test_round、page_id、各設問のquestion_idと選択肢1件、共通表示/回答時刻、正のelapsed_time_secを受け、`Idempotency-Key`を必須とする。現在の2問であること、同じ用語・回次であることを検証し、同一トランザクションで確定する。既存回答は変更せず、異なる回答との競合は409。応答に正答・正誤・分類情報を含めない。従来の`POST /api/attempts`は旧記録の互換読出しに残す。
 
-用語ページ時間は`Attempt.test_page_timing_json`（nullable JSON）へpage_id、`measurement_version=term_page_v1`、elapsed_time_secを記録し、新形式の設問別`response_time_sec`はNULLとする。2問には同じpage_id・時間を保存し、合計時間ではpage_idを一度だけ数える。従来記録は設問ごとのresponse_time_secで計算する。統合ログCSVの列は増やさず、JSON値・summary・表示単位フィールドで区別する。詳細は[設問分割仕様](39_split_assessment.md#テスト画面と時間計測issue-208)。
+用語ページ時間は`Attempt.test_page_timing_json`（nullable JSON）へpage_id、`measurement_version=term_page_v1`、elapsed_time_secを記録し、新形式の設問別`response_time_sec`はNULLとする。2問には同じpage_id・時間を保存し、合計時間ではpage_idを一度だけ数える。従来記録は設問ごとのresponse_time_secで計算する。統合ログCSVでは仕様版43で`test_content_mode`列だけを追加し、時間情報は従来どおりJSON値・summary・表示単位フィールドで区別する。詳細は[設問分割仕様](39_split_assessment.md#テスト画面と時間計測issue-208)。
 
 NULL・版1〜25・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。新規版26＋現行protocol_idのみcan_resume=true。
 
@@ -129,4 +139,4 @@ NULL・版1〜25・未対応版・旧protocol_idは、本文検証・冪等再�
 
 AIモデル・推論レベル設定はDBへ保存しないbackendプロセス内の一時設定であり、両群・進行中参加者にも次のAI呼び出しから適用する。状態/更新応答は有効値と選択肢を返す。モデル選択はcodex_app_serverでのみ適用でき、Mockでは409で拒否する。実際に使ったモデル・推論レベルと標準条件への一致はAI監査JSONに残る。環境変数の明示値は既定値より優先し、backend再起動後に管理上書きは消える。
 
-`/api/admin/question-set`は廃止し、GET/PUTとも404を返す。集計・ログ一覧・仮説CSV/Excelに`question_set_mode`を含む旧フィルターを指定した要求は422で拒否する。管理画面と新規Participantは通常版固定であり、版別の応答項目・集計切替は提供しない。旧モード列と専用問題資産は保守用削除処理の対象とし、通常版の保存snapshotと履歴バンクは維持する。
+`/api/admin/question-set`は廃止し、GET/PUTとも404を返す。集計・ログ一覧・仮説CSV/Excelに旧`question_set_mode`を含むフィルターを指定した要求は422で拒否する。これは仕様版43の独立した`test_content_mode`設定を無効にするものではない。新規参加者は管理認証付き`/api/admin/test-content-mode`で選んだモードを登録時にsnapshotし、出題・採点・復元は対応するconstruct keyを使う。旧easy-mode列削除手順は新しい列・問題資産を削除せず、過去のsnapshotと履歴バンクは維持する。

@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, can_resume
-from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD
+from app.core.question_sets import ASSESSMENT_MODE_BANK_VERSIONS, LEARNING_CONTENT_VERSIONS, STANDARD
 from app.main import app
 from app.db import session as database
 from app.db.session import SessionLocal
@@ -39,7 +39,7 @@ def study(tmp_path):
 
 def participant(db, code="T", group="proposed", protocol=CURRENT_PROTOCOL_ID):
     row = Participant(display_code=code, group_condition=group, protocol_id=protocol,
-                      experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD], consent_checked=True, current_step="learning")
+                      experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD], test_content_mode="application", consent_checked=True, current_step="learning")
     db.add(row)
     db.flush()
     return row
@@ -52,7 +52,9 @@ def test_round(db, p, number, types, *, phase=None, repeat=1):
         source_phase = "pretest" if phase == "pretest" else "retest"
         prefix = "pretest_v1" if number == 0 else f"retest_v{min(number, 2)}"
         for item in (1, 2):
-            question = db.query(Question).filter_by(term_id=term.id, phase=source_phase, variant_key=f"{prefix}_q{item}").one()
+            question = db.query(Question).filter_by(term_id=term.id, phase=source_phase, variant_key=f"{prefix}_q{item}").filter(
+                Question.construct_key.endswith(ASSESSMENT_MODE_BANK_VERSIONS["application"])
+            ).one()
             db.add(Attempt(participant_id=p.id, term_id=term.id, question_id=question.id, phase=phase,
                            test_round="test" if number == 0 else f"retest_{number}", attempt_index=repeat,
                            is_correct=None if kind == "unscored" else kind == "correct", misconception_type=kind if kind in {"M1", "M3", "unknown"} else None,

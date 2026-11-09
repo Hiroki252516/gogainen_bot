@@ -65,13 +65,18 @@ from app.core.runtime_config import (
     current_ai_runtime_settings,
 )
 from app.core.question_sets import (
-    ASSESSMENT_BANK_VERSION,
     ASSESSMENT_BANK_VERSIONS,
     HISTORICAL_ASSESSMENT_BANK_VERSIONS,
     HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS,
     LEARNING_CONTENT_VERSION,
     assessment_construct_key,
+    assessment_bank_for_participant,
     historical_assessment_bank_versions_for,
+)
+from app.services.test_content_mode import (
+    current_mode as current_test_content_mode,
+    mode_label as test_content_mode_label,
+    participant_mode as participant_test_content_mode,
 )
 from app.services.split_assessment import (
     uses_split,
@@ -746,6 +751,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         show_question_reviews=True,
         first_question_only=True,
         learning_material_glossary_mode=INTEGRATED_MATERIAL,
+        test_content_mode=current_test_content_mode(db),
         group_condition=group_condition,
         assignment_method="admin_code",
         consent_checked=consent_checked,
@@ -1031,7 +1037,8 @@ def _question_query_for_phase(db: Session, participant: Participant, phase: str)
     source_phase = "retest" if uses_split(participant) and phase == "final_test" else _source_question_phase(phase)
     query = db.query(Question).join(Term, Question.term_id == Term.id).filter(Question.phase == source_phase, Question.is_active.is_(True), Term.is_active.is_(True))
     query = query.filter(Question.construct_key.in_([
-        assessment_construct_key(slug, phase) for slug in PRETEST_TERM_SLUGS
+        assessment_construct_key(slug, phase, bank_version=assessment_bank_for_participant(participant))
+        for slug in PRETEST_TERM_SLUGS
     ]))
     if phase == "pretest":
         query = query.filter(Term.slug.in_(PRETEST_TERM_SLUGS))
@@ -1368,7 +1375,9 @@ def submit_attempt(db: Session, payload: dict[str, Any], idempotency_key: str | 
     term = db.get(Term, question.term_id)
     if not question.is_active or not term or not term.is_active:
         raise HTTPException(status_code=404, detail="question not found")
-    if question.construct_key != assessment_construct_key(term.slug, phase):
+    if question.construct_key != assessment_construct_key(
+        term.slug, phase, bank_version=assessment_bank_for_participant(participant)
+    ):
         raise HTTPException(status_code=409, detail="この問題は現在のテスト問題と一致しません。")
     if phase in TEST_PHASES and term.slug not in PRETEST_TERM_SLUGS:
         raise HTTPException(status_code=400, detail="question is outside the active experiment terms")
@@ -2334,7 +2343,7 @@ def _tutoring_generation_context(
             payload["diagnostic_evidence"] = {"selected_options": [{"label": t["option_label"], "body": t["observed_claim"]} for t in targets], "diagnosed_type": active_misconception_type, "pretest_targets": targets}
     instruction_route = "shared_history_diagnostic" if participant.group_condition == "proposed" else "shared_history_general"
     payload["_generation_audit"] = {
-        "assessment_bank_version": ASSESSMENT_BANK_VERSION,
+        "assessment_bank_version": assessment_bank_for_participant(participant),
         "origin": generation_origin,
         "prefetch": prefetch_audit,
         "instruction_route": instruction_route,
@@ -3263,7 +3272,9 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
                 },
             )
         valid_variants = {f"{expected_variant}_q{number}" for number in question_numbers(participant)} if uses_split(participant) else {expected_variant}
-        if not question.is_active or question.variant_key not in valid_variants or question.construct_key != assessment_construct_key(term.slug, phase):
+        if not question.is_active or question.variant_key not in valid_variants or question.construct_key != assessment_construct_key(
+            term.slug, phase, bank_version=assessment_bank_for_participant(participant)
+        ):
             raise HTTPException(status_code=409, detail="この問題は今回のテスト対象ではありません。")
         result = _fixed_attempt_result(_selected_options(db, attempt))
         attempt.is_correct = result["is_correct"]
@@ -3818,8 +3829,19 @@ def admin_summary(db: Session) -> dict[str, Any]:
     terms = _term_map(db)
     rows = []
     conditions = sorted({first_question_enabled(p) for p in participants}) or [True]
-    for condition, group in ((condition, group) for condition in conditions for group in ("control", "proposed")):
-        group_participants = [p for p in participants if p.group_condition == group and first_question_enabled(p) == condition]
+    modes = ("application", "basic_understanding")
+    for condition, mode, group in (
+        (condition, mode, group)
+        for condition in conditions
+        for mode in modes
+        for group in ("control", "proposed")
+    ):
+        group_participants = [
+            p for p in participants
+            if p.group_condition == group
+            and first_question_enabled(p) == condition
+            and participant_test_content_mode(p) == mode
+        ]
         latest_summaries = []
         for p in group_participants:
             s = _ensure_evaluation_summary(db, p)
@@ -3841,6 +3863,8 @@ def admin_summary(db: Session) -> dict[str, Any]:
         rows.append(
             {
                 "group_condition": group,
+                "test_content_mode": mode,
+                "test_content_mode_label": test_content_mode_label(mode),
                 "participant_count": len(group_participants),
                 "first_question_only": condition,
                 "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
@@ -3853,7 +3877,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "show_pretest_results", "show_retest_results", "show_question_reviews", "first_question_only", "learning_material_glossary_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
+    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "test_content_mode", "show_pretest_results", "show_retest_results", "show_question_reviews", "first_question_only", "learning_material_glossary_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "test_page_timing_json", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "question_review_acknowledged_at", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "legacy_scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "legacy_l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),
@@ -3902,6 +3926,8 @@ def _attempt_log_row(
     return {
         "attempt_id": attempt.id,
         "learning_material_glossary_mode": participant.learning_material_glossary_mode if participant else None,
+        "test_content_mode": participant.test_content_mode if participant else None,
+        "test_content_mode_label": test_content_mode_label(participant.test_content_mode) if participant else None,
         "test_page_mode": participant.test_page_mode if participant else None,
         "test_timing_unit": "term_page" if participant and effective_test_page_mode(participant) == "per_term" else "per_question",
         **({"legacy_fields": legacy_fields(attempt)} if participant and not can_resume(participant) else {}),
@@ -3945,6 +3971,8 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         "tutor_session_id": turn.tutor_session_id,
         "participant_id": session.participant_id,
         "display_code": participant.display_code if participant else None,
+        "test_content_mode": participant.test_content_mode if participant else None,
+        "test_content_mode_label": test_content_mode_label(participant.test_content_mode) if participant else None,
         "legacy_read_only": bool(participant and not can_resume(participant)),
         "group_condition": session.group_condition,
         "term_slug": term.slug if term else None,
@@ -4091,6 +4119,8 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
                 "display_code": row.display_code,
                 "experiment_spec_version": row.experiment_spec_version,
                 "test_page_mode": row.test_page_mode,
+                "test_content_mode": row.test_content_mode,
+                "test_content_mode_label": test_content_mode_label(row.test_content_mode),
                 "effective_test_page_mode": effective_test_page_mode(row),
                 "test_timing_unit": "term_page" if effective_test_page_mode(row) == "per_term" else "per_question",
                 "protocol_id": row.protocol_id,
@@ -4232,6 +4262,8 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     turn_rows = [turn for session in tutor_sessions for turn in session["turns"]]
     return {
         "participant": {
+            "test_content_mode": participant.test_content_mode,
+            "test_content_mode_label": test_content_mode_label(participant.test_content_mode),
             "show_pretest_results": participant.show_pretest_results is not False,
             "show_retest_results": participant.show_retest_results is not False,
             "show_question_reviews": participant.show_question_reviews,
@@ -4379,6 +4411,7 @@ LOG_CSV_COLUMNS = [
     "source_type",
     "participant_id",
     "display_code",
+    "test_content_mode",
     "phase",
     "test_round",
     "term_slug",
@@ -4402,7 +4435,11 @@ def _csv_value(value: Any) -> str:
 def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, Any]]:
     participant = logs["participant"]
     rows: list[dict[str, Any]] = []
-    base = {"participant_id": participant["participant_id"], "display_code": participant["display_code"]}
+    base = {
+        "participant_id": participant["participant_id"],
+        "display_code": participant["display_code"],
+        "test_content_mode": participant.get("test_content_mode"),
+    }
     rows.append({**base, "record_type": "participant", "phase": "registration", "event_time": participant.get("created_at"), "summary": "participant protocol and completion metadata", "value_json": _csv_value(participant)})
     for answer in logs["answer_history"]:
         if answer["source_type"] == "test_attempt":

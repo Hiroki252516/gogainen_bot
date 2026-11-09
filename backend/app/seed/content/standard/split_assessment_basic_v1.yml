@@ -1,0 +1,131 @@
+# 基礎理解版の参加者向け問題文のみを収録する。研究者向けreview情報は含めない。
+rounds:
+  pretest_v1:
+    llm_knowledge:
+      scenario: ""
+      presentation: standalone
+      questions:
+        - number: 1
+          title: RAGとモデルの重み
+          task: RAGで外部の資料を回答に利用するとき、モデルの重みはどのように扱われますか。最も適切な説明を1つ選びなさい。
+          choices:
+            - {role: correct, label: A, body: 検索した資料は回答時に参照する情報であり、その参照だけではモデルの重みは変わらない。}
+            - {role: M1, label: B, body: 検索対象の資料を新しい内容に差し替えると、モデルの重みもその内容に合わせて更新される。}
+            - {role: M1, label: C, body: 検索した資料を一度モデルに渡すと、その内容が重みに保存され、次の回答にも残る。}
+            - {role: M3, label: D, body: 質問に合う資料を検索して回答の入力へ加える処理は、モデルの重みを変える追加訓練の一種である。}
+            - {role: M3, label: E, body: モデルの重みは、RAGで参照する資料の本文を文書として保存し、検索で取り出すための保存先である。}
+            - {role: unknown, label: F, body: わからない。}
+    multi_agent:
+      scenario: ""
+      presentation: standalone
+      questions:
+        - number: 1
+          title: マルチエージェントの役割分担
+          task: 複数のエージェントが役割を分担するとは、どのような関係で仕事をすることですか。最も適切な説明を1つ選びなさい。
+          choices:
+            - {role: correct, label: A, body: 複数のエージェントが目的に応じた仕事を受け持ち、必要な結果を受け渡して協力する。}
+            - {role: M1, label: B, body: 複数のエージェントが協力するには、担当する仕事の内容を同じにそろえる必要がある。}
+            - {role: M1, label: C, body: 役割が異なるエージェントは、他の担当の結果を使うと、自分の役割を失う。}
+            - {role: M3, label: D, body: 一つのエージェントの回答を複数の見出しに分けると、各見出しが別の担当エージェントになる。}
+            - {role: M3, label: E, body: 一つのエージェントが順番に行う作業を複数の手順に分けると、各手順が別の担当エージェントになる。}
+            - {role: unknown, label: F, body: わからない。}
+    memory_process:
+      scenario: ""
+      presentation: standalone
+      questions:
+        - number: 1
+          title: 会話を越えた記憶の保存と利用
+          task: AIが別の会話で以前の情報を使うとき、情報の保存と利用はどのようにつながりますか。最も適切な説明を1つ選びなさい。
+          choices:
+            - {role: correct, label: A, body: 必要な情報を利用者ごとの記録として残し、別の会話で関係する記録を取り出して、その回答に使う。}
+            - {role: M1, label: B, body: 利用者ごとの記録に情報を残せば、その記録をAIに参照させずに別の会話の回答へ反映できる。}
+            - {role: M1, label: C, body: 一度の会話で情報をAIに伝えれば、保存の仕組みを用意しなくても、その情報が別の会話へ引き継がれる。}
+            - {role: M3, label: D, body: 利用者の情報を追加訓練でモデルの重みに覚えさせることは、利用者別の記録の保存・取得と同じ処理である。}
+            - {role: M3, label: E, body: 同じ会話の発言を参照するだけの機能は、別の会話へ情報を残して取り出す長期記憶と同じ仕組みである。}
+            - {role: unknown, label: F, body: わからない。}
+  retest_v1:
+    llm_knowledge:
+      scenario: ""
+      presentation: standalone
+      questions:
+        - number: 1
+          title: RAGとモデルの重みの関係
+          task: RAGで検索した資料とAIモデルの重みの関係について、最も適切な説明を1つ選びなさい。
+          choices:
+            - {role: correct, label: A, body: 検索した資料を回答の入力として参照する処理は、モデルの重みを変える追加訓練とは異なる。}
+            - {role: M1, label: B, body: 検索に使う資料が更新されると、モデルの重みも、その更新内容を取り込んだ状態になる。}
+            - {role: M1, label: C, body: 一度検索した資料をモデルに読ませれば、重みに記録されたその資料を次回の回答でも使える。}
+            - {role: M3, label: D, body: 質問に合う資料を検索して入力へ加える処理は、その資料でモデルを追加訓練する処理と同じである。}
+            - {role: M3, label: E, body: RAGが参照する資料の本文は、モデルの重みに文書として保管され、検索によって読み出される。}
+            - {role: unknown, label: F, body: わからない。}
+    multi_agent:
+      scenario: ""
+      presentation: standalone
+      questions:
+        - number: 1
+          title: マルチエージェントの担当と協力
+          task: 複数のエージェントが仕事を分担して協力する仕組みについて、最も適切な説明を1つ選びなさい。
+          choices:
+            - {role: correct, label: A, body: 複数のエージェントがそれぞれの役割に応じて仕事を進め、必要な情報や結果をやり取りする。}
+            - {role: M1, label: B, body: 協力する担当どうしは、役割を分けても、同じ内容の仕事を行う必要がある。}
+            - {role: M1, label: C, body: 各エージェントが他の担当の結果を利用すると、担当ごとに役割を分けた状態ではなくなる。}
+            - {role: M3, label: D, body: 一つのエージェントの回答を分けた複数の表示欄が、それぞれ独立した担当エージェントに当たる。}
+            - {role: M3, label: E, body: 一つのエージェントが行う仕事を複数の処理段階に分けたものが、そのまま複数の担当エージェントに当たる。}
+            - {role: unknown, label: F, body: わからない。}
+    memory_process:
+      scenario: ""
+      presentation: standalone
+      questions:
+        - number: 1
+          title: 会話を越えた情報の保持と取得
+          task: 前の会話で得た情報を別の会話の回答に使うための仕組みとして、最も適切な説明を1つ選びなさい。
+          choices:
+            - {role: correct, label: A, body: 残しておく情報を利用者ごとに記録し、別の会話で必要になった記録を取得して、その内容をAIに参照させる。}
+            - {role: M1, label: B, body: 過去の会話を利用者ごとに保存すれば、その記録をAIが読み取らなくても、別の会話の回答に内容が反映される。}
+            - {role: M1, label: C, body: 一度の会話でAIに伝えた内容は、会話を越える保存の仕組みがなくても、新しい会話へそのまま残る。}
+            - {role: M3, label: D, body: 追加訓練でモデルの重みを調整する処理は、利用者別の記録を保存して取り出す記憶管理そのものである。}
+            - {role: M3, label: E, body: 現在の会話に含まれる発言を読むだけの機能が、別の会話に情報を保存して取り出す長期記憶そのものである。}
+            - {role: unknown, label: F, body: わからない。}
+  retest_v2:
+    llm_knowledge:
+      scenario: ""
+      presentation: standalone
+      questions:
+        - number: 1
+          title: RAGとモデルの重みの働き
+          task: RAGで回答を作る際の資料の使われ方について、最も適切な説明を1つ選びなさい。
+          choices:
+            - {role: correct, label: A, body: 資料は回答時の参考情報として入力に加えるものであり、その操作だけで重みに記憶されるわけではない。}
+            - {role: M1, label: B, body: 検索対象の文書を改訂版に置き換えると、モデルの重みも、改訂された内容を反映するように書き換わる。}
+            - {role: M1, label: C, body: 資料の内容を一度モデルの入力に含めると、その内容は重みの中に残り、次の回答でも取り出せる。}
+            - {role: M3, label: D, body: RAGで必要な資料を探して回答に使う操作は、学習用データでモデルを追加訓練する操作と同じである。}
+            - {role: M3, label: E, body: RAGで使うモデルの重みは、資料の原文を文書ごとに保存し、必要な箇所を検索するための保存先である。}
+            - {role: unknown, label: F, body: わからない。}
+    multi_agent:
+      scenario: ""
+      presentation: standalone
+      questions:
+        - number: 1
+          title: マルチエージェントの役割と結果の利用
+          task: マルチエージェントで役割を分けた担当どうしの関係として、最も適切な説明を1つ選びなさい。
+          choices:
+            - {role: correct, label: A, body: それぞれのエージェントが役割に合う仕事を担当し、他の担当が得た結果も利用しながら協力する。}
+            - {role: M1, label: B, body: 複数のエージェントが一つの課題で協力するときは、全ての担当が同じ仕事を受け持つ必要がある。}
+            - {role: M1, label: C, body: 別のエージェントの結果を自分の仕事に取り入れると、担当の区別がなくなり、役割分担は成り立たなくなる。}
+            - {role: M3, label: D, body: 一つのエージェントが出した文章の複数の見出しは、それぞれが仕事を担当する複数のエージェントである。}
+            - {role: M3, label: E, body: 一つのエージェントの作業を分けた複数の処理手順は、それぞれが仕事を担当する複数のエージェントである。}
+            - {role: unknown, label: F, body: わからない。}
+    memory_process:
+      scenario: ""
+      presentation: standalone
+      questions:
+        - number: 1
+          title: 会話を越えた記録の保存と参照
+          task: 新しい会話でも以前の情報を回答に反映する記憶機能について、最も適切な説明を1つ選びなさい。
+          choices:
+            - {role: correct, label: A, body: 利用者ごとの情報を記録に残し、新しい会話で関係する内容を取り出して、AIが回答の参考にできるようにする。}
+            - {role: M1, label: B, body: 利用者別の保存先に情報が残っていれば、AIにその内容を読み取らせなくても、新しい会話の回答へ反映される。}
+            - {role: M1, label: C, body: 会話中に一度AIへ伝えた情報は、会話を越える保存機能を設けなくても、別の会話で使う情報として保持される。}
+            - {role: M3, label: D, body: 利用者の情報を追加訓練でモデルの重みに学習させる仕組みと、利用者別の保存記録を検索する仕組みは同じである。}
+            - {role: M3, label: E, body: 今の会話の履歴を参照するだけの機能と、別の会話にも情報を残して取り出す長期記憶は、同じ仕組みである。}
+            - {role: unknown, label: F, body: わからない。}

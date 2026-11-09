@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app import main as main_module
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
+from app.core.question_sets import ASSESSMENT_MODE_BANK_VERSIONS
 from app.ai.mock_backend import MockAIBackend
 from app.ai.teaching_contract import tutoring_material_length_metrics, validate_teaching_contract
 from app.models import Attempt, Base, LearnerState, Participant, Question, Term, TutorSession, TutorTurn
@@ -43,7 +44,9 @@ def build_history(db, first_post="retest", last_round=2, latest_correct=False):
         phase = "pretest" if round_number == 0 else first_post if round_number == 1 else "retest"
         variant = "pretest_v1" if round_number == 0 else f"retest_v{round_number}"
         for number in (1, 2):
-            question = db.query(Question).filter_by(term_id=term.id, variant_key=f"{variant}_q{number}").one()
+            question = db.query(Question).filter_by(term_id=term.id, variant_key=f"{variant}_q{number}").filter(
+                Question.construct_key.endswith(ASSESSMENT_MODE_BANK_VERSIONS["application"])
+            ).one()
             correct = number == 2 or (latest_correct and round_number == last_round) or (round_number == 0 and first_post == "final_test")
             attempt = Attempt(
                 participant_id=participant.id, term_id=term.id, question_id=question.id, phase=phase,

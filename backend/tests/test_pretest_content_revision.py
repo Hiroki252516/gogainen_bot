@@ -222,6 +222,7 @@ def test_q1_rationales_are_seeded_as_internal_metadata_not_participant_options(t
                 current_step="pretest",
                 experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
                 protocol_id=CURRENT_PROTOCOL_ID,
+                test_content_mode="application",
                 learning_content_version=15,
                 option_order_mode="debug_fixed",
             )
@@ -235,6 +236,7 @@ def test_q1_rationales_are_seeded_as_internal_metadata_not_participant_options(t
                     question = db.query(Question).filter_by(
                         term_id=term.id,
                         phase=phase,
+                        construct_key=assessment_construct_key(term.slug, phase),
                         variant_key=f"{round_key}_q1",
                     ).one()
                     stored = {
@@ -370,14 +372,14 @@ def test_spec_41_v6_protocol_restores_question_and_latest_result(tmp_path):
         engine.dispose()
 
 
-def test_spec_42_keeps_v5_and_preserves_previous_read_only_snapshots(tmp_path):
+def test_spec_43_keeps_mode_banks_and_preserves_previous_read_only_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 42
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 43
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-08-basic-understanding-question-mode-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"

@@ -4,7 +4,7 @@
 
 「設問1のみ出題」がONの参加者は、その用語の設問1を保存後に答え合わせを表示し、設問1のAttemptへ確認時刻を保存する。OFF/旧NULLは従来どおり設問1・2を保存後に表示し、設問2へ確認時刻を保存する。以下の2設問前提の記述にはこの条件を優先する。詳細は[48](48_first_question_only.md)。
 
-> 状態: 仕様版28で導入し、現行仕様版36でも維持。PRETEST問題文の更新は版32の履歴[44](44_pretest_content_revision.md)、版33の差分[45](45_pretest_memory_distractors.md)、仕様版27の採用時記録 [39](39_split_assessment.md) は当時の根拠として保持する。現在の問題バンクは`split-actions-v5`。受入検証状況は[14](14_testing_acceptance.md)を参照。
+> 状態: 仕様版28で導入した過去の設問ペア答え合わせ契約。仕様版43の現行出題は各モードの設問1のみで、登録時snapshotに応じて問題バンクを選ぶ。現在のバンク・出題・復元契約は[50](50_basic_understanding_question_mode.md)を参照する。PRETEST問題文の更新は版32の履歴[44](44_pretest_content_revision.md)、版33の差分[45](45_pretest_memory_distractors.md)、仕様版27の採用時記録 [39](39_split_assessment.md) は当時の根拠として保持する。受入検証状況は[14](14_testing_acceptance.md)を参照。
 
 ## 対象と表示
 
@@ -32,7 +32,7 @@ PRETESTのペア確認後の全体結果画面は、当初は「事前テスト�
 
 仕様版28では新規登録だけ protocol_id=experiment-plan-2026-10-30-question-review-v1 を保存する。RuntimeSetting.show_question_reviews と Participant.show_question_reviews をnullableで追加し、Attempt.question_review_acknowledged_at もnullableで追加する。管理設定の初期値はtrue。新規参加者は登録時のtrue/falseをsnapshotへ保存する。既存行には値を補完しない。
 
-仕様版27以下、旧protocol_id、NULL・未対応版は既存方針どおり閲覧専用とし、進行・回答・評価・回数・設定snapshotを更新しない。過去の結果・問題・画面snapshotは書き換えない。仕様版27の通常版設問分割・問題本文・選択肢・採点規則・回数上限・教授内容・AI契約・6仮説の式は変更しない。正誤の表示条件だけを新しい参加者設定として記録し、異なる表示条件が混在する場合は研究条件として識別する。Participants CSVと参加者ログにはshow_question_reviewsを保持し、統合ログCSVの固定ヘッダーは変更せず、確認時刻は既存のvalue_json形式で記録する。
+仕様版27以下、旧protocol_id、NULL・未対応版は既存方針どおり閲覧専用とし、進行・回答・評価・回数・設定snapshotを更新しない。過去の結果・問題・画面snapshotは書き換えない。仕様版27の通常版設問分割・問題本文・選択肢・採点規則・回数上限・教授内容・AI契約・6仮説の式は変更しない。正誤の表示条件だけを新しい参加者設定として記録し、異なる表示条件が混在する場合は研究条件として識別する。Participants CSVと参加者ログにはshow_question_reviewsを保持し、確認時刻は既存のvalue_json形式で記録する。仕様版43では統合ログCSVに`test_content_mode`列を追加し、他の従来列は維持する。
 
 ## 受け入れ条件（実装済み・検証待ち）
 
