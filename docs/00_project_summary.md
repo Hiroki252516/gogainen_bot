@@ -1,8 +1,8 @@
 # 実験の概要と現行仕様
 
-## 仕様版44の現行コード（2026-11-09）
+## 仕様版45の現行コード（2026-11-09）
 
-新規参加者は`experiment-plan-2026-11-09-four-topic-foundation-v1`で登録する。従来の`application`（現行版・既定）と`basic_understanding`を維持し、新しく`four_topic_fundamentals`（4用語版）を登録時に固定できる。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスの4問を各10択・3つまたはJ単独で出題し、確認問題も誤答した問題の保存snapshotを使う複数選択式とする。事前アンケートは4用語とAI利用2項目の専用版を使う。問題・集計はモードごとに分け、異なるモードを合算しない。仕様版43以下・旧protocolは閲覧専用で既存データは変更しない。問題の反復による練習効果、モード間の難易度同等性、研究上の承認は未検証・未確認。[仕様](51_four_topic_foundation_mode.md)。
+新規参加者は`experiment-plan-2026-11-09-four-topic-foundation-default-v1`で登録する。従来の`application`と`basic_understanding`を維持し、`four_topic_fundamentals`（4用語版）を登録時に固定する。RuntimeSetting未設定時は4用語版を既定とし、保存済みモード設定は自動変更しない。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスの4問を各10択・3つまたはJ単独で出題し、確認問題も誤答した問題の保存snapshotを使う複数選択式とする。事前アンケートは4用語とAI利用2項目の専用版を使う。問題・集計はモードごとに分け、異なるモードを合算しない。仕様版44以下・旧protocolは閲覧専用で既存データは変更しない。問題の反復による練習効果、モード間の難易度同等性、研究上の承認は未検証・未確認。[仕様](51_four_topic_foundation_mode.md)。
 
 ## 仕様版43当時のコード（履歴・2026-11-08）
 
@@ -34,11 +34,11 @@
 
 通常版のPRETEST・RETEST・内部final_testで、設問1・2の両方を保存した後に同じテスト画面内で選択内容と正誤を示し、続行で次の用語へ進む。設定・API・保存・受入条件は[40](40_question_pair_answer_review.md)を参照する。
 
-当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。設問ペア確認の契約は現行仕様版43でも維持するが、新規参加者は選択した問題モードの設問1のみを出題し、回答後に1問を確認する。過去に存在した設定UI/APIは廃止した。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
+当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。設問ペア確認の契約は現行仕様版45でも維持するが、新規参加者は選択した問題モードに応じて出題し、各問の回答後に確認する。過去に存在した答え合わせ設定UI/APIは廃止した。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
 
 ## 仕様版26で採用した共通の用語注釈辞書（現行版43でも維持）
 
-以下は採用時点の記録を含む。現在の保存版・readonly境界は冒頭の仕様版43の記述を正とする。
+以下は採用時点の記録を含む。現在の保存版・readonly境界は冒頭の仕様版45の記述を正とする。
 
 仕様版26で共通固定辞書learning-glossary-v2の16語を導入した。v1〜v3は履歴用に無変更で保持し、現行v4をテスト・回答後解説・教材注釈と教材内解説モードに使う。仕様版31で導入した教材内解説では辞書を意味参照として渡し、本文では定義を逐語転載せず自然に言い換える。仕様版36ではv1のRAG定義・別表記・出典をv4へ追加した。教材snapshotや回答後・テストの保存済みsnapshotは更新しない。AI、事前学習、ファインチューニング、プロンプトエンジニアリング、データベース、マルチエージェント、タスク、記憶プロセスの8語を注釈から除外する。長い除外語の一部からプロンプト・エージェントを抽出せず、独立して登場した場合は補足する。仕様版26の当時は新規だけprotocol_id=`experiment-plan-2026-10-27-test-glossary-v2`を保存し、版25以下を閲覧専用としていた。詳細は[24](24_learning_glossary.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、版25で採用した問題本文・分類理由は[38](38_round_two_revision.md)。
 
@@ -57,7 +57,7 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 ## 版・保存・フロー
 
-現行コードは新規参加者に仕様版43と`experiment-plan-2026-11-08-basic-understanding-question-mode-v1`を保存する。仕様版42以下、旧protocol_id、NULL・未対応版は閲覧専用で保全する。既存行へ版・protocol・答え合わせ設定・確認時刻・教材解説モード・問題モードを補完しない。教材内解説モードと問題モードを登録時に固定し、教材生成は本文800文字程度を目安とする。統制群に群別方略指示を加えず、提案群だけに診断・教授方略指示を追加する。詳細は[問題モード仕様](50_basic_understanding_question_mode.md)。
+現行コードは新規参加者に仕様版45と`experiment-plan-2026-11-09-four-topic-foundation-default-v1`を保存する。仕様版44以下、旧protocol_id、NULL・未対応版は閲覧専用で保全する。既存行へ版・protocol・答え合わせ設定・確認時刻・教材解説モード・問題モードを補完しない。教材内解説モードと問題モードを登録時に固定し、RuntimeSetting未設定時は4用語版を適用する。保存済みモードは変更しない。教材生成は本文800文字程度を目安とする。統制群に群別方略指示を加えず、提案群だけに診断・教授方略指示を追加する。詳細は[問題モード仕様](50_basic_understanding_question_mode.md)・[4用語版](51_four_topic_foundation_mode.md)。
 
 通常版テストは登録時snapshotされた問題モードにより、`split-actions-v5`または`split-actions-basic-v1`から各用語の設問1、計3問・各6択単一選択を出す。現行版の設問2・3と基礎理解版の事前/再テスト各回の問題データは保持するが、新規経路では出題・採点しない。内部final_testは各モードのretest1を使い、学習確認には直前テストで誤答した問題の保存済みsnapshotを使う。テスト上限・採点・回次は[39](39_split_assessment.md)、旧問題本文は[44](44_pretest_content_revision.md)以降の履歴を参照する。答え合わせはPRETEST・RETEST・内部final_testに適用し、各問の保存後に選択内容と正誤を示す。
 

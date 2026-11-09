@@ -378,8 +378,8 @@ def test_spec_44_keeps_mode_banks_and_preserves_previous_read_only_snapshots(tmp
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 44
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-09-four-topic-foundation-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 45
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-09-four-topic-foundation-default-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"

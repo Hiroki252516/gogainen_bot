@@ -120,9 +120,28 @@ def test_version_43_without_mode_restores_default_bank_without_mutating_snapshot
     assert participant["test_content_mode"] is None
 
 
+@pytest.mark.parametrize(
+    "mode,expected_bank",
+    [
+        ("application", "split-actions-v5"),
+        ("basic_understanding", "split-actions-basic-v1"),
+        ("four_topic_fundamentals", "split-actions-four-topic-v1"),
+    ],
+)
+def test_version_44_restores_its_saved_mode(mode, expected_bank):
+    participant = {
+        "experiment_spec_version": 44,
+        "protocol_id": "experiment-plan-2026-11-09-four-topic-foundation-v1",
+        "test_content_mode": mode,
+    }
+
+    assert assessment_bank_for_participant(participant) == expected_bank
+    assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
+
+
 def test_current_version_without_mode_does_not_silently_fall_back():
     with pytest.raises(ValueError, match="no supported test content mode"):
-        assessment_bank_for_participant({"experiment_spec_version": 44, "test_content_mode": None})
+        assessment_bank_for_participant({"experiment_spec_version": 45, "test_content_mode": None})
 
 
 def test_question_set_admin_api_is_removed_and_legacy_aggregate_filters_reject(isolated):
@@ -149,8 +168,8 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
     current = client.get("/api/admin/test-content-mode")
     assert current.status_code == 200
     assert current.json() == {
-        "mode": "application",
-        "label": "現行版（場面応用）",
+        "mode": "four_topic_fundamentals",
+        "label": "4用語版",
         "applies_to": "new_participants_only",
     }
     assert client.put("/api/admin/test-content-mode", json={"mode": "invalid"}).status_code == 422
@@ -169,6 +188,22 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         return participant_id
 
     try:
+        default_id = create_participant("FOUR-TOPIC-DEFAULT-SNAPSHOT-TEST")
+        with factory() as db:
+            default_participant = db.get(Participant, default_id)
+            assert default_participant.test_content_mode == "four_topic_fundamentals"
+            assert default_participant.experiment_spec_version == 45
+            assert default_participant.protocol_id == "experiment-plan-2026-11-09-four-topic-foundation-default-v1"
+            default_survey = db.query(ParticipantSurvey).filter_by(
+                participant_id=default_id, phase="presurvey"
+            ).one()
+            assert default_survey.survey_version == "presurvey-four-topic-baseline-v1"
+        default_response = client.get(f"/api/experiment/{default_id}/pretest")
+        assert default_response.status_code == 200, default_response.text
+        default_questions = default_response.json()["questions"]
+        assert [question["term_slug"] for question in default_questions] == list(FOUR_TOPIC_TERM_SLUGS)
+        assert len(default_questions) == 4
+
         saved = client.put("/api/admin/test-content-mode", json={"mode": "basic_understanding"})
         assert saved.status_code == 200
         assert saved.json()["mode"] == "basic_understanding"

@@ -1,5 +1,15 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-09 4用語版を未設定時の既定値にする（仕様版45・fix/issue-309）
+
+- 仕様版45 / `experiment-plan-2026-11-09-four-topic-foundation-default-v1`を新規参加者へ適用する。未設定時の既定値を`four_topic_fundamentals`にし、管理画面の3モード切替は維持する。
+- RuntimeSettingに`application`または`basic_understanding`などの保存値がある場合は尊重し、設定値の自動書換え・DB移行を行わない。新規Participantには登録時選択値をsnapshotする。
+- 仕様版44以下は読み取り専用。保存済み`test_content_mode`から当時の問題バンクを復元し、問題・回答・snapshotを変更しない。
+- 未設定時の管理API応答、新規Participantのモード・仕様版・protocol・4用語事前アンケート・4問の出題をBackendテストで確認する。保存済み各モードの切替・snapshotと、仕様版44各モードのバンク復元も確認する。
+- 関連Backendテスト8ファイルは隔離SQLiteで`188 passed`。管理API未設定時の4用語版、仕様版45 Participant snapshot、4問出題、保存済み3モードのsnapshot、仕様版44の3バンク復元・読み取り専用を含む。
+- Frontend `npm test`、Next.js production build/TypeScript検査が成功した。Backendに既存のDeprecationWarningが2件ある。
+- `git diff --check`が成功した。研究DB、3000番環境、実AIは使用していない。
+
 ## 2026-11-09 4用語版の選択肢別正誤表示（fix/issue-303）
 
 - 4用語版の回答後確認応答では選択済み選択肢だけにID・個別正誤を含め、設問全体の正誤は従来どおり別に保持する。出題中の問題データ、採点、保存、学習対象、進行は変更しない。

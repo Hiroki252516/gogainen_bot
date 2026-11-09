@@ -1,6 +1,6 @@
 # 六つの仮説の評価指標
 
-## 仕様版44：3問題モードの集計
+## 仕様版45：3問題モードの集計
 
 対象モードは`application`、`basic_understanding`、`four_topic_fundamentals`。参加者値、群集計、群間差、CSV/XLSXをモードごとに算出し、異なる問題モードの結果は合算しない。4用語版では対象4用語の完答・正答率・満点判定を分母4で扱う。既存6仮説の意味・式・欠測規則は維持し、教材評価は引き続き事後アンケートだけを参照する。指標版は`six-hypotheses-v6-four-topic-mode`。モード間の難易度・測定特性・回次間同等性は未検証。[4用語版](51_four_topic_foundation_mode.md)。
 
