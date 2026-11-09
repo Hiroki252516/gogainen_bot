@@ -1,6 +1,6 @@
 # 研究計画と仕様・実装の対応
 
-現行実装は仕様版44 / `experiment-plan-2026-11-09-four-topic-foundation-v1`。用語注釈はservices/learning_glossary、固定YAML、LearningGlossary表示コンポーネントで処理し、教材・解説はTutorTurnの既存JSON、テストはnullableなAttempt.glossary_snapshotへ保存し、統合CSVのvalue_jsonにもsnapshotを保持する。現行辞書はv4であり、AI契約版や仕様版26の説明は導入時の履歴として扱う。[24](24_learning_glossary.md)。
+現行実装は仕様版45 / `experiment-plan-2026-11-09-four-topic-foundation-default-v1`。用語注釈はservices/learning_glossary、固定YAML、LearningGlossary表示コンポーネントで処理し、教材・解説はTutorTurnの既存JSON、テストはnullableなAttempt.glossary_snapshotへ保存し、統合CSVのvalue_jsonにもsnapshotを保持する。現行辞書はv4であり、AI契約版や仕様版26の説明は導入時の履歴として扱う。[24](24_learning_glossary.md)。
 
 出典・採用判断は[20](20_experiment_plan_alignment.md)、式と欠測定義は[12](12_evaluation_metrics.md)を正本とする。
 

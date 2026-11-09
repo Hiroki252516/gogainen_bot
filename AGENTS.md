@@ -69,7 +69,7 @@
 - 現行コードでは新規だけ仕様版45 / `experiment-plan-2026-11-09-four-topic-foundation-default-v1`を保存し、仕様版44以下と旧protocolは閲覧専用とする。通常学習はv15、テスト問題モードはapplication・basic_understanding・four_topic_fundamentalsで、RuntimeSetting未設定時の新規既定は4用語版。保存済み設定は変更しない。基本の教材内解説、辞書v4、事前/事後Survey phase/version保存、設問別答え合わせ、全体結果非表示、旧バンク復元を維持する。6仮説・ログ・CSV/XLSXはモード別に分離する。教材本文800文字程度の目標と統制群の共通prompt/提案群の診断指示も維持する。既存ParticipantSurvey.phase/version/responses_jsonを使いDB列は増やさない。H5はposttest phaseだけを参照する。詳細はdocs/10・40〜44・47・48・docs/49_presurvey_baseline.md・docs/49_rag_glossary.md・docs/50_basic_understanding_question_mode.md・docs/51_four_topic_foundation_mode.md。
 
 - 通常版事前の版9〜11、過去のV1/V2/V3/V4改訂を保持する。仕様版34では`split-actions-v4`、仕様版35では`split-actions-v5`を追加し、選択肢本文・追加案を別バンクへ保存する。仕様版27〜31は`split-actions-v1`、32はv2、33はv3、34はv4で結果を復元する。保存snapshotは変更しない。
-- 全テスト・学習確認で、選択肢の文字数下限・文長比・文字数差による拒否はしない。非空・重複・役割数・教授対象の検査を維持する。教材は仕様版44で800文字程度を目安にするが、文字数による合否判定や再試行はしない。文長均一や難易度同等を保証しない。
+- 全テスト・学習確認で、選択肢の文字数下限・文長比・文字数差による拒否はしない。非空・重複・役割数・教授対象の検査を維持する。教材は現行仕様版45で800文字程度を目安にするが、文字数による合否判定や再試行はしない。文長均一や難易度同等を保証しない。
 
 - 新規参加者の出題・採点・確認問題復元はsnapshotされた`test_content_mode`に対応する問題バンクだけを使い、集計もモード別に分離する。旧`question_set_mode`設定APIとフィルターは廃止済みで、旧フィルター付き要求は422で拒否する。過去のeasy-mode削除手順は新しい`test_content_mode`・問題資産・記録を対象にせず、旧版へのフォールバックを実装しない。
 
@@ -80,7 +80,6 @@
 - 現行分類はM1/M3/unknownのみ。両群へ同じ用語の全フェーズの採点済み回答履歴を渡す。提案群だけに明示的な診断・対象主張・taxonomy・タイプ別教授方針を追加する。方略はbackendで固定する。
 - 確認問題の診断連動規則は両群共通。統制群のLLMへ分類・診断由来段階を渡さず、共通履歴内にも診断情報を混ぜない。統制群の自然な誤り訂正は許容する。
 - 被験者画面に内部分類、群名、教授方略を直接表示しない。
-- テスト回答中はチャット・ヒント・即時正解を表示しない。仕様版45のapplication/basic_understandingは各用語の設問1、four_topic_fundamentalsは4用語各1問を出題する。複数選択は正解3つまたはJ単独。回答後は同一画面内で本人の選択内容と正誤を示すが、正答選択肢は表示しない。過去の設問ペア表示契約はdocs/40を参照する。
 - テスト回答中はチャット・ヒント・即時正解を表示しない。仕様版45ではapplication/basic_understandingは3用語各1問、four_topic_fundamentalsは4用語各1問を用語ページで出題する。前2モードは単一選択、4用語版は正解3つまたはJ単独の複数選択。回答後は同一画面内で選択内容と正誤を示す。4用語版では選択済み各選択肢の個別正誤と設問全体の正誤を分け、未選択肢の正誤・解説・内部分類は表示しない。過去の設問ペア表示契約はdocs/40を参照する。
 - 学習確認は1用語・1セッションあたり最大3回答。事前テスト後のテストはfinal_testも含め最大2回、事前込み最大3回。未回答を含む採点済みバッチを1回とし、全問未回答は採点しない。1回目未達は学習、2回目未達は未達のままアンケートへ進める。満点ならいつでもアンケートへ進める。
 - 現行の新規テストはParticipant.test_content_modeに応じてapplication=`split-actions-v5`、basic_understanding=`split-actions-basic-v1`、four_topic_fundamentals=`split-actions-four-topic-v1`を使う。最初の2モードは各3用語・計3問、4用語モードは各1問・計4問。すべて各モードの設問1を出題し、applicationの設問2・3はバンクに保持する。4用語バンクはA〜C正解、D〜F=M1、G〜I=M3、J=unknownの10択。activeキーはpretest_v1、retest_v1/v2。final_testは各モードのretest_v1と同じ内容を使う。旧バンクは復元用に保持し、版付きconstruct_keyで既存本文・選択肢を上書きしない。学習確認は直前テストの保存snapshotを利用する。通常の学習v15と教材条件は維持する。

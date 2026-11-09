@@ -23,7 +23,7 @@
 
 ## 仕様版26の指標定義（採用時の詳細記録）
 
-以下の詳細は、6仮説の定義を最初に実装した仕様版26時点の対象・表示・運用記録である。現行仕様版44の対象モード、対象用語数、問題数、アンケート版、指標版は本書冒頭の現行条件を正とする。H1/H4/H6の出題単位・分母は参加者の現行問題モードに合わせる。過去の採用時記録は上書きしない。
+以下の詳細は、6仮説の定義を最初に実装した仕様版26時点の対象・表示・運用記録である。現行仕様版45の対象モード、対象用語数、問題数、アンケート版、指標版は本書冒頭の現行条件を正とする。H1/H4/H6の出題単位・分母は参加者の現行問題モードに合わせる。過去の採用時記録は上書きしない。
 
 ## 対象と版（仕様版26の履歴）
 
@@ -55,7 +55,7 @@
 
 ## アンケートの目標
 
-現行仕様版44では、`application`/`basic_understanding`の事前アンケート`presurvey-baseline-v2`、`four_topic_fundamentals`の`presurvey-four-topic-baseline-v1`、共通事後アンケート`posttest-10point-v3`を別phase/versionで保存する。仕様版36の`presurvey-baseline-v1`（Boolean形式）および旧posttest v1/v2の保存済み回答・旧5段階列は変換・補完しない。仮説5の教材評価6評定はposttest phaseだけから読み出す。6仮説の式・比較回次は変更しない。
+現行仕様版45では、`application`/`basic_understanding`の事前アンケート`presurvey-baseline-v2`、`four_topic_fundamentals`の`presurvey-four-topic-baseline-v1`、共通事後アンケート`posttest-10point-v3`を別phase/versionで保存する。仕様版36の`presurvey-baseline-v1`（Boolean形式）および旧posttest v1/v2の保存済み回答・旧5段階列は変換・補完しない。仮説5の教材評価6評定はposttest phaseだけから読み出す。6仮説の式・比較回次は変更しない。
 
 - 通常2モードの事前知識6項目：事前学習、ファインチューニング、RAG、プロンプトエンジニアリング、マルチエージェント、記憶プロセス。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスの4項目。いずれも「知らない／聞いたことがある／意味を知っている／説明できる」の4択で回答する。`prior_term_knowledge`には順に`unknown`／`heard_of`／`knows_meaning`／`can_explain`を保存し、全項目必須。通常2モードの版は`presurvey-baseline-v2`、4用語版は`presurvey-four-topic-baseline-v1`。仕様版36の回答は`presurvey-baseline-v1`のBooleanのまま保全し、尺度変換しない。
 - 事前の一般2項目：普段のAI利用頻度、AIを使いこなせているかの自己評価。各1〜10の整数で必須。

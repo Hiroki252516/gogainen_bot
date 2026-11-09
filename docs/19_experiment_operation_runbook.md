@@ -192,7 +192,6 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 - AI call logの失敗・未接続状態。手動診断修正UIと修正内容のAuditEvent書き込みは将来対応
 - app-server接続状態
 - 教材生成を監査する場合は、被験者別ログの`ai_call_logs.request_payload.effective_request`で実送信prompt、Schema、モデル・推論レベル、prompt/taxonomy版、RAG chunk情報、送信状態を確認する。仕様版45では本文800文字程度を目安とし、実文字数と目標値・段落数・箇条書き数・他の生成検証結果・試行数を確認する。文字数による範囲内外判定は新規ログに記録しない。
-- 教材生成を監査する場合は、被験者別ログの`ai_call_logs.request_payload.effective_request`で実送信prompt、Schema、モデル・推論レベル、prompt/taxonomy版、RAG chunk情報、送信状態を確認する。仕様版45では本文800文字程度を目安とし、実文字数と目標値・段落数・箇条書き数・他の生成検証結果・試行数を確認する。文字数による範囲内外判定は新規ログに記録しない。
 - 先行生成を監査する場合は、`tutor_sessions.prefetch_state`の遷移、`tutor_turns.diagnosis_json.generation_origin/prefetch`、`AICallLog.request_payload.generation_audit`と`response_payload.prefetch_audit`を用語順に照合する。`ready`のまま未回答のturnは回答履歴・学習負担へ含めない。
 - `failed`または`discarded`のセッションでも、参加者到達後に同期フォールバックのinteractive turnが保存されていれば実学習として継続中である。新周回・実験終了の未使用prefetch整理では、そのセッションを未使用教材として終了させない。
 - 両群の3AIタスクに用語・共通構成要素・共通RAG・interaction_historyが入る。履歴には同じ用語の全フェーズ/周回の採点済み問題・選択・全体正誤・時刻だけが入り、診断・教授・AI解説が混ざらない。controlには明示的診断・対象主張・taxonomy・教授方針・学習段階がないことを、input_projectionと実送信effective_requestで確認する。現在の未回答問題や正答キーは教材生成へ渡さず、回答後解説だけに現在問題・必要な選択・表示済み教材を加える。
