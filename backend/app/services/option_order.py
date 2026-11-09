@@ -4,7 +4,7 @@ import hashlib
 import uuid
 from typing import Any
 
-from app.seed.content_loader import ACTIVE_TERM_SLUGS, ASSESSMENT_VARIANT_COUNTS, LEARNING_SESSION_VARIANT_COUNT, LEARNING_STAGES
+from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS, ASSESSMENT_VARIANT_COUNTS, LEARNING_SESSION_VARIANT_COUNT, LEARNING_STAGES
 from app.models import RuntimeSetting
 
 
@@ -49,7 +49,7 @@ def assessment_bank_index(term_slug: str, phase: str, variant_key: str) -> int:
         if number not in {"1", "2"}:
             raise ValueError("reserved split question")
         return assessment_bank_index(term_slug, phase, round_key) * 2 + int(number) - 1
-    term_index = ACTIVE_TERM_SLUGS.index(term_slug)
+    term_index = (*ACTIVE_TERM_SLUGS, *FOUR_TOPIC_TERM_SLUGS).index(term_slug)
     phase_offsets = {"pretest": 0, "retest": 1, "final_test": 1}
     if phase not in phase_offsets:
         raise ValueError(f"unsupported assessment phase: {phase}")
@@ -68,7 +68,7 @@ def assessment_bank_index(term_slug: str, phase: str, variant_key: str) -> int:
 
 
 def learning_bank_index(term_slug: str, learning_stage: str, variant_index: int) -> int:
-    term_index = ACTIVE_TERM_SLUGS.index(term_slug)
+    term_index = (*ACTIVE_TERM_SLUGS, *FOUR_TOPIC_TERM_SLUGS).index(term_slug)
     if learning_stage not in LEARNING_STAGES:
         raise ValueError(f"unsupported learning stage: {learning_stage}")
     if not 1 <= variant_index <= LEARNING_VARIANTS_PER_SESSION:

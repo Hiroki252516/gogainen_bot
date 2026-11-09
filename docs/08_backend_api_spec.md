@@ -1,6 +1,10 @@
 # 現行API
 
-## テスト問題モード（仕様版43）
+## 仕様版44のテスト問題モード
+
+管理認証付きGET/PUT `/api/admin/test-content-mode`を維持し、`application`、`basic_understanding`、`four_topic_fundamentals`を受け付ける。未設定時の既定値は従来どおり`application`。設定は新規参加者の登録時だけsnapshotされる。参加者向け出題・採点APIのURLは変更せず、4用語モードでは選択肢IDの3択またはunknown単独を検証する。採点・保存形式は既存Attemptを使用し、問題本文・選択肢snapshotを維持する。4用語版事前アンケートは参加者モードに応じて既存presurvey endpointで版別検証・保存する。仮説APIとCSV/XLSXは`test_content_mode`でモード別集計を返す。[問題モード](51_four_topic_foundation_mode.md)。
+
+## テスト問題モード（仕様版43の契約）
 
 - `GET /api/admin/test-content-mode`: `{mode, label, applies_to: "new_participants_only"}`を返す。RuntimeSetting未保存時は`application`を返す。
 - `PUT /api/admin/test-content-mode`: `{mode: "application" | "basic_understanding"}`のみ受け付け、DBへ保存する。未知キー・値は拒否する。

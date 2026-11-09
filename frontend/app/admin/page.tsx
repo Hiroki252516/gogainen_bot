@@ -32,7 +32,7 @@ const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"],
 type AiModel = (typeof AI_MODELS)[number][0];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
-type TestContentMode = "application" | "basic_understanding";
+type TestContentMode = "application" | "basic_understanding" | "four_topic_fundamentals";
 type TestContentModeSetting = { mode: TestContentMode; label: string; applies_to: "new_participants_only" };
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
@@ -595,7 +595,8 @@ export default function AdminPage() {
               <div className="reasoning-effort-buttons option-order-buttons" role="group" aria-label="テスト問題モード">
                 {([
                   ["application", "現行版（場面応用）"],
-                  ["basic_understanding", "基礎理解版"]
+                  ["basic_understanding", "基礎理解版"],
+                  ["four_topic_fundamentals", "4用語版"]
                 ] as [TestContentMode, string][]).map(([mode, label]) => (
                   <button
                     key={mode}
@@ -609,7 +610,7 @@ export default function AdminPage() {
                   </button>
                 ))}
               </div>
-              <p className="muted">新規参加者の事前テスト・再テスト・確認問題に適用します。登録済みの参加者には反映されません。</p>
+              <p className="muted">新規参加者の事前テスト・学習・確認問題・再テストに適用します。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスを扱います。登録済みの参加者には反映されません。</p>
               {testContentModeSaving ? <p className="muted">保存中...</p> : null}
               {testContentModeError ? <p className="danger" role="alert">{testContentModeError}</p> : null}
             </div>

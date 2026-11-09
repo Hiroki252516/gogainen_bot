@@ -14,9 +14,10 @@ from app.services.split_assessment import uses_split, split_item_keys
 from app.services.first_question_only import enabled as first_question_enabled, question_numbers
 from app.services.research_protocol import MATERIAL_RATING_KEYS, SUPPORTED_SURVEY_VERSIONS
 from app.services.test_content_mode import mode_label as test_content_mode_label, participant_mode as participant_test_content_mode
+from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS
 
-METRICS_VERSION = "six-hypotheses-v5-test-content-mode"
-TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
+METRICS_VERSION = "six-hypotheses-v6-four-topic-mode"
+TERM_SLUGS = ACTIVE_TERM_SLUGS
 METRICS_CSV_COLUMNS = [
     "metrics_version", "protocol_id", "test_content_mode", "group_condition", "participant_id", "display_code", "route",
     "metric", "value", "n", "mean", "median", "numerator", "denominator", "missing_count",
@@ -42,12 +43,24 @@ def _round_number(attempt):
         return None
 
 
+def _mode_term_slugs(mode: str) -> tuple[str, ...]:
+    return FOUR_TOPIC_TERM_SLUGS if mode == "four_topic_fundamentals" else ACTIVE_TERM_SLUGS
+
+
+def _questions_per_test(mode: str, first_only: bool) -> int:
+    if mode == "four_topic_fundamentals":
+        return 4
+    return 3 if first_only else 6
+
+
 def participant_metrics(db: Session, participant: Participant) -> dict:
     assert_current_experiment(participant)
-    terms = {t.id: t.slug for t in db.query(Term).filter(Term.slug.in_(TERM_SLUGS)).all()}
+    mode = participant_test_content_mode(participant)
+    term_slugs = _mode_term_slugs(mode)
+    terms = {t.id: t.slug for t in db.query(Term).filter(Term.slug.in_(term_slugs)).all()}
     grouped = defaultdict(list)
     split = uses_split(participant)
-    expected_count = 3 * len(question_numbers(participant)) if split else 3
+    expected_count = len(term_slugs) * len(question_numbers(participant)) if split else len(term_slugs)
     attempts = db.query(Attempt).filter(
         Attempt.participant_id == participant.id,
         Attempt.term_id.in_(terms),
@@ -62,7 +75,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     expected_keys = {(term_id, number) for term_id in terms for number in question_numbers(participant)} if split else set(terms)
 
     def complete(items):
-        return len(terms) == 3 and len(items) == expected_count and {item_key(a) for a in items} == expected_keys and all(a.is_correct is not None for a in items)
+        return len(terms) == len(term_slugs) and len(items) == expected_count and {item_key(a) for a in items} == expected_keys and all(a.is_correct is not None for a in items)
 
     baseline = grouped.get(0, [])
     initial = grouped.get(1, [])
@@ -232,7 +245,7 @@ def group_metrics(rows: list[dict]) -> dict:
     routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("initial_perfect_final_test", "learning_retest", "pretest_incomplete")}
     return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "groups": groups,
             "test_content_mode": mode, "test_content_mode_label": test_content_mode_label(mode),
-            "first_question_only": first_only, "questions_per_test": 3 if first_only else 6,
+            "first_question_only": first_only, "questions_per_test": _questions_per_test(mode, first_only),
             "differences_proposed_minus_control": differences, "material_item_differences": item_differences,
             "routes": routes, "descriptive_only": True}
 
@@ -277,7 +290,7 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
         details = json.loads(record.get("details_json") or "{}")
         first_only = record.pop("first_question_only", source.get("first_question_only", False))
         mode = record.get("test_content_mode") or source.get("test_content_mode", "application")
-        record["details_json"] = json.dumps({**details, "test_content_mode": mode, "first_question_only": first_only, "questions_per_test": 3 if first_only else 6}, ensure_ascii=False)
+        record["details_json"] = json.dumps({**details, "test_content_mode": mode, "first_question_only": first_only, "questions_per_test": _questions_per_test(mode, first_only)}, ensure_ascii=False)
         output.append({"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, **record})
     return output
 

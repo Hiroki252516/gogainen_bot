@@ -149,13 +149,14 @@ def retrieve_rag_context(
     *,
     allowed_sections: list[str] | tuple[str, ...] | None = None,
     topic_slug: str | None = None,
+    rag_dir: str | None = None,
 ) -> dict[str, Any]:
-    rag_dir = _configured_rag_dir()
+    selected_rag_dir = (PROJECT_ROOT / rag_dir).resolve() if rag_dir else _configured_rag_dir()
     try:
-        chunks, vectors, vectorizer = _load_index(str(rag_dir))
+        chunks, vectors, vectorizer = _load_index(str(selected_rag_dir))
     except (FileNotFoundError, OSError, ValueError):
         return {
-            "source": rag_dir.name,
+            "source": selected_rag_dir.name,
             "topic_slug": topic_slug,
             "allowed_sections": list(allowed_sections or []),
             "query": query,
@@ -164,7 +165,7 @@ def retrieve_rag_context(
 
     if not query.strip() or not chunks:
         return {
-            "source": rag_dir.name,
+            "source": selected_rag_dir.name,
             "topic_slug": topic_slug,
             "allowed_sections": list(allowed_sections or []),
             "query": query,
@@ -199,7 +200,7 @@ def retrieve_rag_context(
         )
 
     return {
-        "source": rag_dir.name,
+        "source": selected_rag_dir.name,
         "topic_slug": topic_slug,
         "allowed_sections": list(allowed_sections or []),
         "query": query,

@@ -36,7 +36,9 @@ LEARNING_V12_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v12.yml"
 LEARNING_V13_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v13.yml"
 LEARNING_V14_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v14.yml"
 LEARNING_V15_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v15.yml"
+FOUR_TOPIC_FUNDAMENTALS_PATH = STANDARD_CONTENT_DIR / "four_topic_fundamentals_v1.yml"
 ACTIVE_TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
+FOUR_TOPIC_TERM_SLUGS = ("transformer", "llm_training_stages", "multi_agent_four_topic", "memory_process_four_topic")
 QUESTION_PHASES = ("pretest", "retest")
 LEARNING_STAGES = ("enrichment", "conceptual_change")
 LEARNING_SESSION_VARIANT_COUNT = 3
@@ -454,13 +456,38 @@ def load_content() -> dict[str, Any]:
 
 
 def content_term(term_slug: str) -> dict[str, Any]:
-    return next(term for term in load_content()["terms"] if term["slug"] == term_slug)
+    term = next((term for term in load_content()["terms"] if term["slug"] == term_slug), None)
+    if term is not None:
+        return term
+    return next(term for term in four_topic_terms() if term["slug"] == term_slug)
 
 
 def teaching_target_for_option(term_slug: str, option_label: str) -> dict[str, Any] | None:
     targets = (load_content().get("teaching_targets") or {}).get(term_slug) or {}
     target = targets.get(option_label)
+    if target is None:
+        term = next((item for item in four_topic_terms() if item["slug"] == term_slug), None)
+        target = (term or {}).get("teaching_targets", {}).get(option_label)
     return deepcopy(target) if isinstance(target, dict) else None
+
+
+@lru_cache(maxsize=1)
+def four_topic_terms() -> tuple[dict[str, Any], ...]:
+    with FOUR_TOPIC_FUNDAMENTALS_PATH.open("r", encoding="utf-8") as handle:
+        content = yaml.safe_load(handle)
+    terms = content.get("terms") if isinstance(content, dict) else None
+    if not isinstance(terms, list) or tuple(term.get("slug") for term in terms) != FOUR_TOPIC_TERM_SLUGS:
+        raise ValueError("four_topic_fundamentals_v1.yml has an invalid term catalog")
+    for term in terms:
+        question = term.get("question")
+        options = term.get("options")
+        if not isinstance(question, str) or not question.strip() or not isinstance(options, list) or len(options) != 10:
+            raise ValueError(f"invalid four-topic assessment content: {term.get('slug')}")
+        if [item.get("label") for item in options] != list("ABCDEFGHIJ"):
+            raise ValueError(f"invalid option labels for {term.get('slug')}")
+        if [item.get("role") for item in options] != ["correct"] * 3 + ["M1"] * 3 + ["M3"] * 3 + ["unknown"]:
+            raise ValueError(f"invalid option roles for {term.get('slug')}")
+    return tuple(deepcopy(term) for term in terms)
 
 
 def learning_question_spec(
@@ -479,7 +506,22 @@ def learning_question_spec(
     # as pretest/retest so the old learning YAML is no longer used for new
     # turns.  Historical versions below remain YAML-backed for read-only log
     # restoration.
-    if resolved_version == current_version and use_current_assessment_source is not False:
+    if term_slug in FOUR_TOPIC_TERM_SLUGS:
+        source = content_term(term_slug)
+        variant = {
+            "variant_key": f"learning_round_v{min(max(variant_index, 1), LEARNING_SESSION_VARIANT_COUNT)}",
+            "body": source["question"],
+            "options": [
+                {
+                    "label": option["label"],
+                    "body": option["body"],
+                    "is_correct": option["role"] == "correct",
+                    "misconception_type": None if option["role"] == "correct" else option["role"],
+                }
+                for option in source["options"]
+            ],
+        }
+    elif resolved_version == current_version and use_current_assessment_source is not False:
         source_phase, source_index = CURRENT_LEARNING_ASSESSMENT_SOURCES.get(
             min(max(variant_index, 1), len(CURRENT_LEARNING_ASSESSMENT_SOURCES)),
             CURRENT_LEARNING_ASSESSMENT_SOURCES[1],

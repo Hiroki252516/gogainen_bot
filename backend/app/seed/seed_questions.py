@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal, init_db
 from app.models import Question, QuestionOption, Term
 from app.seed.data import SEED_TERMS
+from app.seed.content_loader import four_topic_terms
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, ASSESSMENT_MODE_BANK_VERSIONS, STANDARD, assessment_construct_key
 
 
@@ -80,7 +81,8 @@ def _upsert_question(
 
 
 def seed_database(db: Session) -> None:
-    active_slugs = {item["slug"] for item in SEED_TERMS}
+    four_terms = list(four_topic_terms())
+    active_slugs = {item["slug"] for item in SEED_TERMS} | {item["slug"] for item in four_terms}
     active_question_ids = set()
     for index, item in enumerate(SEED_TERMS, start=1):
         term = db.query(Term).filter(Term.slug == item["slug"]).one_or_none()
@@ -99,7 +101,10 @@ def seed_database(db: Session) -> None:
         term.is_active = True
 
         from app.services.split_assessment import split_specs
-        bank_versions = set(ASSESSMENT_MODE_BANK_VERSIONS.values())
+        bank_versions = {
+            ASSESSMENT_MODE_BANK_VERSIONS["application"],
+            ASSESSMENT_MODE_BANK_VERSIONS["basic_understanding"],
+        }
         for bank_version in bank_versions:
             for phase, rounds in (("pretest", ["pretest_v1"]), ("retest", ["retest_v1", "retest_v2"])):
                 for round_key in rounds:
@@ -116,6 +121,39 @@ def seed_database(db: Session) -> None:
                             options=spec["options"],
                         )
                         active_question_ids.add(question.id)
+
+    from app.services.split_assessment import FOUR_TOPIC_BANK_VERSION, split_specs
+    for index, item in enumerate(four_terms, start=len(SEED_TERMS) + 1):
+        term = db.query(Term).filter(Term.slug == item["slug"]).one_or_none()
+        if not term:
+            term = Term(
+                slug=item["slug"],
+                label=item["label"],
+                description=item["description"],
+                display_order=index,
+            )
+            db.add(term)
+            db.flush()
+        term.label = item["label"]
+        term.description = item["description"]
+        term.display_order = index
+        term.is_active = True
+        for phase, rounds in (("pretest", ["pretest_v1"]), ("retest", ["retest_v1", "retest_v2"])):
+            for round_key in rounds:
+                for spec in split_specs(item["slug"], round_key, bank_version=FOUR_TOPIC_BANK_VERSION):
+                    correct_labels = [entry[0] for entry in spec["options"] if entry[2]]
+                    question = _upsert_question(
+                        db,
+                        term,
+                        phase=phase,
+                        question_type=spec["question_type"],
+                        body=spec["body"],
+                        expected_answer="、".join(correct_labels),
+                        construct_key=assessment_construct_key(item["slug"], phase, bank_version=FOUR_TOPIC_BANK_VERSION),
+                        variant_key=spec["variant_key"],
+                        options=spec["options"],
+                    )
+                    active_question_ids.add(question.id)
 
     for term in db.query(Term).all():
         if term.slug not in active_slugs:

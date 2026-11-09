@@ -1,6 +1,10 @@
 # 現行データと履歴互換
 
-## 仕様版43の問題モードsnapshot
+## 仕様版44の問題モードsnapshot
+
+既存の`Participant.test_content_mode` / `RuntimeSetting.test_content_mode`を再利用し、新しい列は追加しない。許容値に`four_topic_fundamentals`を加える。RuntimeSettingの既定値は`application`のまま。登録時にParticipantへ保存し、既存ParticipantのNULLを補完せず、管理設定変更を遡及させない。仕様版44の4用語問題は独立したconstruct key・問題IDで保存し、Attemptおよび学習確認の表示snapshotから当時の本文・選択肢順を復元する。ログ・参加者CSV/Excel・仮説指標には既存の`test_content_mode`を含め、4用語版の分母は4問・4用語とする。[詳細](51_four_topic_foundation_mode.md)。
+
+## 仕様版43の問題モードsnapshot（導入時）
 
 `Participant.test_content_mode`と`RuntimeSetting.test_content_mode`をnullable VARCHAR(32)で保持する。RuntimeSettingは登録前の既定選択を保存し、新規Participantへ登録時の値をsnapshotする。許容値は`application`と`basic_understanding`、未設定時は`application`。起動時列追加は再実行可能で、既存ParticipantのNULLは補完しない。42以下のNULLは従来`split-actions-v5`として結果を復元する。参加者一覧・個別ログ・管理ログAPIと参加者／回答CSVにはモードを含める。仕様版43の仮説集計はモード別で、モード間の合算をしない。詳細は[50](50_basic_understanding_question_mode.md)。
 
