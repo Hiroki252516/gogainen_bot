@@ -510,6 +510,8 @@ const presurveyPage = fs.readFileSync(new URL("../app/presurvey/page.tsx", impor
 for (const expectedText of ["実験前アンケート", "/presurvey", "term_items.map", "prior_term_exposure", "prior_term_understanding", "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "slightly", "moderately", "well", "覚えていない", "ある", "全く理解していない", "ある程度理解している", "ai_usage_frequency_30d", "0_days", "1_3_days", "4_8_days", "9_20_days", "21_30_days", "goal_aligned_output", "revise_instructions", "verify_with_sources", "評価できない", "回答を保存して事前テストへ", 'router.replace("/pretest")']) {
   if (!presurveyPage.includes(expectedText)) throw new Error(`presurvey page missing required baseline behavior: ${expectedText}`);
 }
+if (!presurveyPage.includes('className="panel stack presurvey-form"')) throw new Error("presurvey form must scope its single-column choices");
+if (!styles.includes(".presurvey-form .survey-choice-options {\n  grid-template-columns: minmax(0, 1fr);\n}")) throw new Error("presurvey choices must use a single column without changing other survey layouts");
 
 const finishPage = fs.readFileSync(new URL("../app/finish/page.tsx", import.meta.url), "utf8");
 for (const expectedText of ["clearParticipantSession", "新しい実験を開始", 'router.replace("/start")']) {
