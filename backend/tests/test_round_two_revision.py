@@ -209,10 +209,9 @@ def _learn(client, pid, slug, expected_index):
 @pytest.mark.parametrize("slug", list(EXPECTED["retest"]))
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
-@pytest.mark.parametrize("initial_perfect", [False, True])
 @pytest.mark.parametrize("labels,expected_type", [("ABC", None), ("DEF", "M1"), ("GHI", "M3"), ("ADH", "M3"), ("J", "unknown")])
-def test_natural_round2_routes_grading_replay_review_and_limit(slug, group, layout, initial_perfect, labels, expected_type):
-    assert_retest_flow(slug, group, layout, "final_test" if initial_perfect else "retest", labels, expected_type, round_two=True)
+def test_natural_round2_routes_grading_replay_review_and_limit(slug, group, layout, labels, expected_type):
+    assert_retest_flow(slug, group, layout, "retest", labels, expected_type, round_two=True)
 
 
 @pytest.mark.parametrize("slug", list(EXPECTED["retest"]))

@@ -22,7 +22,7 @@ from app.core.question_sets import (
 )
 from app.db.session import get_db
 from app.main import app
-from app.models import Attempt, Base, Participant, ParticipantSurvey, Question, QuestionOption, Term, TermAssignment
+from app.models import Attempt, Base, Participant, ParticipantSurvey, Question, QuestionOption, Term
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS, assessment_question_spec, four_topic_terms, learning_question_spec, load_content, load_learning_content
 from app.seed.seed_questions import seed_database
 from app.services.hypothesis_metrics import group_metrics, metrics_export_rows
@@ -145,13 +145,13 @@ def test_version_44_restores_its_saved_mode(mode, expected_bank):
 
 def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map():
     participant = {
-        "experiment_spec_version": 46,
-        "protocol_id": "experiment-plan-2026-11-09-four-topic-default-two-retests-v1",
+        "experiment_spec_version": 47,
+        "protocol_id": "experiment-plan-2026-11-10-pretest-perfect-early-exit-v1",
         "test_content_mode": None,
     }
 
-    assert 46 not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
-    assert (46, participant["protocol_id"]) not in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS
+    assert 47 not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
+    assert (47, participant["protocol_id"]) not in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS
     assert historical_assessment_bank_versions_for(participant) is None
     with pytest.raises(ValueError, match="no supported test content mode"):
         assessment_bank_for_participant(participant)
@@ -172,8 +172,8 @@ def test_current_result_restoration_rejects_missing_mode_snapshot(isolated):
         participant = Participant(
             display_code="MISSING-MODE-SNAPSHOT",
             group_condition="control",
-            experiment_spec_version=46,
-            protocol_id="experiment-plan-2026-11-09-four-topic-default-two-retests-v1",
+            experiment_spec_version=47,
+            protocol_id="experiment-plan-2026-11-10-pretest-perfect-early-exit-v1",
             test_content_mode=None,
         )
         db.add(participant)
@@ -260,8 +260,8 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         with factory() as db:
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
-            assert default_participant.experiment_spec_version == 46
-            assert default_participant.protocol_id == "experiment-plan-2026-11-09-four-topic-default-two-retests-v1"
+            assert default_participant.experiment_spec_version == 47
+            assert default_participant.protocol_id == "experiment-plan-2026-11-10-pretest-perfect-early-exit-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()
@@ -458,13 +458,11 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
 @pytest.mark.parametrize(
     "wrong_by_round",
     [
-        (set(), set(), set()),
         ({FOUR_TOPIC_TERM_SLUGS[0]}, {FOUR_TOPIC_TERM_SLUGS[1]}, {FOUR_TOPIC_TERM_SLUGS[2]}),
-        (set(), {FOUR_TOPIC_TERM_SLUGS[3]}, set()),
         ({FOUR_TOPIC_TERM_SLUGS[2]}, set(), {FOUR_TOPIC_TERM_SLUGS[0]}),
     ],
 )
-def test_four_topic_mode_always_runs_learning_and_two_retests(isolated, wrong_by_round):
+def test_four_topic_mode_runs_learning_and_two_retests_after_pretest_errors(isolated, wrong_by_round):
     client, factory, _engine = isolated
     mode = client.put("/api/admin/test-content-mode", json={"mode": "four_topic_fundamentals"})
     assert mode.status_code == 200, mode.text
@@ -476,21 +474,6 @@ def test_four_topic_mode_always_runs_learning_and_two_retests(isolated, wrong_by
     assert created.status_code == 200, created.text
     participant_id = created.json()["participant_id"]
     complete_presurvey(client, participant_id)
-
-    stale_assignment_id = None
-    if not wrong_by_round[0]:
-        with factory() as db:
-            stale_term = db.query(Term).filter_by(slug="llm_knowledge").one()
-            stale_assignment = TermAssignment(
-                participant_id=participant_id,
-                term_id=stale_term.id,
-                group_condition="control",
-                is_learning_target=True,
-                selection_reason="stale target from a previous round",
-            )
-            db.add(stale_assignment)
-            db.commit()
-            stale_assignment_id = stale_assignment.id
 
     def answer_round(phase: str, wrong_slugs: set[str]) -> list[str]:
         path_phase = phase.replace("_", "-")
@@ -546,13 +529,8 @@ def test_four_topic_mode_always_runs_learning_and_two_retests(isolated, wrong_by
         pretest_wrong = answer_round("pretest", wrong_by_round[0])
         diagnosed = client.post(f"/api/participants/{participant_id}/diagnose-pretest", json={})
         assert diagnosed.status_code == 200, diagnosed.text
-        if stale_assignment_id is not None:
-            with factory() as db:
-                stale_assignment = db.get(TermAssignment, stale_assignment_id)
-                assert stale_assignment is not None
-                assert stale_assignment.is_learning_target is False
         diagnosis = diagnosed.json()
-        pretest_targets = pretest_wrong or list(FOUR_TOPIC_TERM_SLUGS)
+        pretest_targets = pretest_wrong
         assert diagnosis["next_step"] == "learning_targets"
         assert diagnosis["learning_target_slugs"] == pretest_targets
         assert diagnosis["learning_target_count"] == len(pretest_targets)

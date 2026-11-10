@@ -57,7 +57,7 @@ def answer_test(client, pid, phase, count, *, wrong=False, reviews=True):
     return questions, result
 
 
-def test_new_registration_uses_fixed_defaults_and_removes_settings_apis():
+def test_new_registration_uses_fixed_defaults_and_pretest_perfect_exits_to_survey():
     client = AuthenticatedTestClient(app)
     previous_settings = None
     with SessionLocal() as db:
@@ -86,8 +86,8 @@ def test_new_registration_uses_fixed_defaults_and_removes_settings_apis():
             assert participant.show_retest_results is False
             assert participant.show_question_reviews is True
             assert participant.first_question_only is True
-            assert participant.experiment_spec_version == 46
-            assert participant.protocol_id == "experiment-plan-2026-11-09-four-topic-default-two-retests-v1"
+            assert participant.experiment_spec_version == 47
+            assert participant.protocol_id == "experiment-plan-2026-11-10-pretest-perfect-early-exit-v1"
             rows = experiment.question_payloads(db, participant_id, "pretest")
             assert len(rows) == 3
             q1 = db.get(Question, rows[0]["question_id"])
@@ -102,10 +102,9 @@ def test_new_registration_uses_fixed_defaults_and_removes_settings_apis():
         }).status_code == 409
         _, scored = answer_test(client, participant_id, "pretest", 3, reviews=True)
         assert scored["review_required"] is False
-        assert scored["next_url"] == "/final-test"
-        _, final = answer_test(client, participant_id, "final_test", 3, reviews=True)
-        assert final["review_required"] is False
-        assert final["next_url"] == "/survey"
+        assert scored["next_step"] == "survey"
+        assert scored["next_url"] == "/survey"
+        assert client.get(f"/api/experiment/{participant_id}/final-test").status_code == 409
         logs = ok(client.get(f"/api/admin/participants/{participant_id}/logs"))["participant"]
         assert logs["show_pretest_results"] is False
         assert logs["show_retest_results"] is False
@@ -131,7 +130,7 @@ def test_new_registration_uses_fixed_defaults_and_removes_settings_apis():
 
 @pytest.mark.parametrize("first_only", [False, True])
 @pytest.mark.parametrize("reviews", [False, True])
-def test_registration_snapshot_final_test_and_disabled_question_rejection(first_only, reviews):
+def test_registration_snapshot_pretest_perfect_exit_and_disabled_question_rejection(first_only, reviews):
     count = 3 if first_only else 6
     with create_trial(
         "A", "debug_fixed", first_question_only=first_only,
@@ -148,17 +147,20 @@ def test_registration_snapshot_final_test_and_disabled_question_rejection(first_
                     q2id = q2.id
             if first_only:
                 assert client.post("/api/attempts", json={"participant_id": pid, "phase": "pretest", "question_id": q2id, "selected_option_ids": []}).status_code == 409
-            answer_test(client, pid, "pretest", count, reviews=reviews)
-            answer_test(client, pid, "final_test", count, reviews=reviews)
+            _, scored = answer_test(client, pid, "pretest", count, reviews=reviews)
+            assert scored["next_step"] == "survey"
+            assert scored["next_url"] == "/survey"
+            assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
             with SessionLocal() as db:
                 participant = db.get(Participant, pid)
                 metric = participant_metrics(db, participant)
                 assert metric["questions_per_test"] == count
                 assert metric["first_question_only"] is first_only
-                assert metric["h1"]["value"] == 0
-                assert metric["h6"]["attained"] is True
+                assert metric["route"] == "pretest_perfect_early_exit"
+                assert metric["h1"]["value"] is None
+                assert metric["h6"]["attained"] is None
                 assert participant.current_step == "survey"
-                assert db.query(Attempt).filter_by(participant_id=pid).count() == count * 2
+                assert db.query(Attempt).filter_by(participant_id=pid).count() == count
                 assert experiment.participant_logs(db, pid)["participant"]["first_question_only"] is first_only
 
 
@@ -246,9 +248,11 @@ def test_metric_strata_and_fixed_csv_headers_identify_each_condition():
         ) as (client, pid):
                 count = 3 if first_only else 6
                 answer_test(client, pid, "pretest", count)
-                answer_test(client, pid, "final_test", count)
                 with SessionLocal() as db:
-                    rows.append(participant_metrics(db, db.get(Participant, pid)))
+                    metric = participant_metrics(db, db.get(Participant, pid))
+                    assert metric["route"] == "pretest_perfect_early_exit"
+                    assert metric["h1"]["value"] is None
+                    rows.append(metric)
     result = group_metrics(rows)
     assert result["groups"] == []
     assert len(result["strata"]) == 2

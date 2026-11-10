@@ -92,10 +92,16 @@ def test_split_maximum_rounds_and_mastery(pretest_perfect):
             ok(client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "phase": phase.replace("-", "_"), "selected_option_ids": [selected]}))
         acknowledge_all_question_reviews(client, pid, phase.replace("-", "_"))
     answer("pretest", pretest_perfect)
-    ok(client.post(f"/api/participants/{pid}/diagnose-pretest", json={}))
-    if not pretest_perfect:
-        ok(client.post(f"/api/participants/{pid}/give-up-learning", json={}))
-    phase = "final-test" if pretest_perfect else "retest"
+    diagnosed = ok(client.post(f"/api/participants/{pid}/diagnose-pretest", json={}))
+    if pretest_perfect:
+        assert diagnosed["next_step"] == "survey"
+        assert diagnosed["next_url"] == "/survey"
+        assert ok(client.get(f"/api/participants/{pid}/current-step"))["next_url"] == "/survey"
+        assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
+        assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+        return
+    ok(client.post(f"/api/participants/{pid}/give-up-learning", json={}))
+    phase = "retest"
     answer(phase, False)
     result = ok(client.post(f"/api/participants/{pid}/score-{phase}", json={}))
     assert result["next_step"] == "learning_targets"
@@ -110,34 +116,11 @@ def test_split_maximum_rounds_and_mastery(pretest_perfect):
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("slug", ["llm_knowledge", "multi_agent", "memory_process"])
-@pytest.mark.parametrize("role", ["M3", "unknown"])
-def test_initial_perfect_confirms_only_failed_final_item(group, layout, slug, role):
-    with create_trial(group, layout) as (client, pid):
-        answer_test(client, pid, "pretest", slug, (None, None))
-        questions, scored = answer_test(client, pid, "final_test", slug, (None, role))
-        assert scored["post_pretest_tests_completed"] == 1
-        target = [q for q in questions if q["term_slug"] == slug][1]
-        session = ok(client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": slug}))
-        turn = ok(client.post(f"/api/tutor-sessions/{session['tutor_session_id']}/turns", json={}))
-        practice = turn["practice_question"]
-        assert practice["learning_variant_index"] == 1
-        assert practice["questions"] == [{"question_id": target["question_id"], "body": target["body"], "options": target["options"]}]
-        assert "source_spec" not in practice
-        with SessionLocal() as db:
-            saved = db.get(TutorTurn, turn["turn_id"])
-            actual = saved.diagnosis_json["instruction_audit"]["actual_ai_input"]
-            assert len(actual["learning_scope"]["topics"]) == 1
-            assert len(actual["learning_scope"]["selected_errors"]) == (0 if role == "unknown" else 1)
-            assert len(saved.practice_question_json["source_spec"]["options"]) == 6
-        url = f"/api/tutor-turns/{turn['turn_id']}/respond"
-        assert client.post(url, json={"selected_option_ids": [o["option_id"] for o in target["options"][:2]]}).status_code == 400
-        payload = {"selected_option_ids": select_roles(target, [None])}
-        headers = {"Idempotency-Key": "one-failed-final-item"}
-        result = ok(client.post(url, json=payload, headers=headers))
-        assert result["is_sufficient"] and result["session_completed"]
-        assert ok(client.post(url, json=payload, headers=headers)) == result
-        with SessionLocal() as db:
-            grades = db.get(TutorTurn, turn["turn_id"]).grading_json["question_results"]
-            assert len(grades) == 1 and grades[0]["question_id"] == target["question_id"]
-        _, last = answer_test(client, pid, "retest", slug, (None, None))
-        assert last["post_pretest_tests_completed"] == 2 and last["next_step"] == "survey"
+def test_pretest_perfect_skips_learning_and_post_pretest_tests(group, layout, slug):
+    with create_trial(group, layout, test_content_mode="application") as (client, pid):
+        _questions, scored = answer_test(client, pid, "pretest", slug, (None, None))
+        assert scored["next_step"] == "survey"
+        assert ok(client.get(f"/api/participants/{pid}/current-step"))["next_url"] == "/survey"
+        assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
+        assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+        assert client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": slug}).status_code == 409

@@ -20,6 +20,11 @@ const TEST_CONTENT_MODES: Record<string, string> = {
   basic_understanding: "基礎理解版",
   four_topic_fundamentals: "4用語版",
 };
+const ROUTES: Record<string, string> = {
+  pretest_perfect_early_exit: "事前テスト満点・早期終了",
+  learning_retest: "学習・再テスト",
+  pretest_incomplete: "事前テスト未完了",
+};
 function format(value: number | null | undefined, rate = false) {
   return value == null ? "対象データなし" : rate ? `${(value * 100).toFixed(1)}%` : value.toFixed(2);
 }
@@ -29,10 +34,11 @@ function testCountLabel(data: any) {
 }
 function StatsTable({ groups }: { groups: any[] }) {
   return <div style={{ overflowX: "auto" }}><table>
-    <thead><tr><th>指標</th><th>群</th><th>対象人数</th><th>平均／割合</th><th>中央値</th><th>欠測・未観測</th><th>対象外</th></tr></thead>
+    <thead><tr><th>指標</th><th>群</th><th>観測人数</th><th>適用対象</th><th>平均／割合</th><th>中央値</th><th>欠測・未観測</th><th>対象外</th></tr></thead>
     <tbody>{Object.entries(LABELS).flatMap(([key, label]) => groups.map((group: any) => {
       const stat = group[key];
       return <tr key={`${group.group_condition}-${key}`}><th>{label}</th><td>{group.group_condition}</td><td>{stat.n}</td>
+        <td>{stat.eligible_count ?? Math.max(0, group.participant_count - (stat.not_applicable_count || 0))}</td>
         <td>{format(stat.mean, key === "h4" || key === "h6")}</td><td>{format(stat.median, key === "h4" || key === "h6")}</td>
         <td>{stat.missing_count}</td><td>{stat.not_applicable_count}</td></tr>;
     }))}</tbody>
@@ -45,7 +51,7 @@ export function HypothesisMetrics({ data }: { data: any }) {
   return <section className="panel stack" aria-labelledby={titleId}>
     <h2 id={titleId}>6仮説の記述集計：{data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）"}</h2>
     <p>集計対象: {data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）"}／{testCountLabel(data)}</p>
-    <p>新プロトコル登録者のみ。統計検定・仮説支持の自動判定は行いません。欠測は補完しません。</p>
+    <p>新プロトコル登録者のみ。統計検定・仮説支持の自動判定は行いません。欠測は補完しません。事前テスト満点者は早期終了として別集計し、仮説1・2・6の適用対象から除きます。</p>
     <StatsTable groups={data.groups} />
     <p className="muted">仮説2は満点到達者のみの条件付き集計です。仮説2の未観測は満点までの総回数が未確定の人数であり、表示済みセッションの記録欠落を意味しません。仮説3は用語内平均→参加者内平均、仮説4は参加者ごとの率の平均です。</p>
     <div className="actions">
@@ -66,8 +72,9 @@ export function HypothesisMetrics({ data }: { data: any }) {
         return <tr key={`${key}-${group.group_condition}`}><th>{label}</th><td>{group.group_condition}</td><td>{stat.n}</td><td>{format(stat.mean)}</td><td>{format(stat.median)}</td><td>{stat.missing_count}</td><td>{format(data.material_item_differences[key])}</td></tr>;
       }))}</tbody></table></div>
     {data.groups.map((group: any) => <div className="notice" key={group.group_condition}>
-      <strong>{group.group_condition}：登録 {group.participant_count}人</strong>
+      <strong>{group.group_condition}：登録 {group.participant_count}人、事前満点・早期終了 {group.pretest_perfect_early_exit_count}人</strong>
       <p>満点到達 {group.h6.numerator}/{group.h6.denominator}人、未達 {group.h2.not_attained_count}人、学習なし到達 {group.h2.attained_without_learning_count}人</p>
+      <p>仮説1・2・6の適用対象：H1 {group.h1.eligible_count}人、H2 {group.h2.eligible_count}人、H6 {group.h6.eligible_count}人。対象外数は各表の「対象外」を参照。</p>
       <p>未達者の観測セッション数：n={group.h2.observed_nonattainer_sessions.n}、平均 {format(group.h2.observed_nonattainer_sessions.mean)}、中央値 {format(group.h2.observed_nonattainer_sessions.median)}</p>
       <ul>{Object.entries(CENSORING_REASONS).map(([reason, label]) => {
         const stat = group.h2.censoring_breakdown[reason];
@@ -77,12 +84,12 @@ export function HypothesisMetrics({ data }: { data: any }) {
       <p>終了状況：{JSON.stringify(group.completion_reasons)}</p>
     </div>)}
     <details><summary>経路別集計（事前満点・通常学習・事前未完了）</summary>
-      {Object.entries(data.routes).map(([route, groups]) => <div key={route}><h3>{route}</h3><StatsTable groups={groups as any[]} /></div>)}
+      {Object.entries(data.routes).map(([route, groups]) => <div key={route}><h3>{ROUTES[route] || route}</h3><StatsTable groups={groups as any[]} /></div>)}
     </details>
     <details><summary>再テスト回次別の参考値</summary>
       <p>後半の回次は受験者が異なります。全回をまとめた平均を主指標にはしません。</p>
       {data.groups.map((group: any) => <div key={group.group_condition}><h3>{group.group_condition}</h3>
-        <ul>{group.rounds.map((round: any) => <li key={round.round}>再テスト{round.round}：伸び n={round.gain.n} 平均 {format(round.gain.mean)}／中央値 {format(round.gain.median)}／欠測 {round.gain.missing_count}、再選択率 n={round.recurrence.n} 平均 {format(round.recurrence.mean, true)}</li>)}</ul>
+        <ul>{group.rounds.map((round: any) => <li key={round.round}>再テスト{round.round}：伸び n={round.gain.n}／適用対象 {round.gain.eligible_count}人／対象外 {round.gain.not_applicable_count}人／欠測 {round.gain.missing_count}人、平均 {format(round.gain.mean)}・中央値 {format(round.gain.median)}；再選択率 n={round.recurrence.n}／適用対象 {round.recurrence.eligible_count}人／対象外 {round.recurrence.not_applicable_count}人／欠測 {round.recurrence.missing_count}人、平均 {format(round.recurrence.mean, true)}</li>)}</ul>
       </div>)}
     </details>
     <p className="muted">教材表示は読了・理解の証明ではありません。正答のデバッグ配置・管理アクセス対策は別途確認が必要です。</p>

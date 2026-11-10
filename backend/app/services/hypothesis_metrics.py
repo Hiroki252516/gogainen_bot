@@ -16,11 +16,11 @@ from app.services.research_protocol import MATERIAL_RATING_KEYS, SUPPORTED_SURVE
 from app.services.test_content_mode import mode_label as test_content_mode_label, participant_mode as participant_test_content_mode
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS
 
-METRICS_VERSION = "six-hypotheses-v6-four-topic-mode"
+METRICS_VERSION = "six-hypotheses-v7-pretest-perfect-exit"
 TERM_SLUGS = ACTIVE_TERM_SLUGS
 METRICS_CSV_COLUMNS = [
     "metrics_version", "protocol_id", "test_content_mode", "group_condition", "participant_id", "display_code", "route",
-    "metric", "value", "n", "mean", "median", "numerator", "denominator", "missing_count",
+    "metric", "value", "n", "mean", "median", "numerator", "denominator", "eligible_count", "missing_count",
     "not_applicable_count", "status", "details_json",
 ]
 
@@ -138,12 +138,13 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     ).order_by(ParticipantSurvey.created_at.desc(), ParticipantSurvey.id.desc()).first()
     ratings = ((survey.responses_json or {}).get("material_ratings") if survey else None) if displayed else None
     ratings = ratings if isinstance(ratings, dict) and all(type(ratings.get(k)) is int and 1 <= ratings[k] <= 10 for k in MATERIAL_RATING_KEYS) else None
+    pretest_perfect_early_exit = pre_complete and pre_score == 1
     reached = first_mastery_at is not None
     h2_value = sum(shown_at <= first_mastery_at for _, shown_at in displayed) if reached else None
     h1_value = next((r["gain_pt"] for r in rounds if r["round"] == 1), None) if paired_complete else None
     h3_value = mean(term_means.values()) if term_means else None
     censoring_reason = None
-    if not reached:
+    if not reached and not pretest_perfect_early_exit:
         if participant.completion_reason == "give_up":
             censoring_reason = "give_up"
         elif participant.completion_reason == "completed":
@@ -160,20 +161,26 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         "test_content_mode": participant_test_content_mode(participant),
         "test_content_mode_label": test_content_mode_label(participant_test_content_mode(participant)),
         "group_condition": participant.group_condition, "completion_reason": participant.completion_reason,
-        "route": "initial_perfect_final_test" if pre_score == 1 else "learning_retest" if pre_complete else "pretest_incomplete",
+        "route": "pretest_perfect_early_exit" if pretest_perfect_early_exit else "learning_retest" if pre_complete else "pretest_incomplete",
         "has_viewed_material": bool(displayed), "rounds": rounds,
-        "h1": {"value": h1_value, "status": "observed" if h1_value is not None else "missing_paired_tests", "pretest_score": pre_score},
-        "h2": {"value": h2_value, "status": "attained" if reached else "not_attained",
+        "pretest_perfect_early_exit": pretest_perfect_early_exit,
+        "h1": {"value": None if pretest_perfect_early_exit else h1_value,
+               "status": "not_applicable_pretest_mastery" if pretest_perfect_early_exit else "observed" if h1_value is not None else "missing_paired_tests",
+               "pretest_score": pre_score},
+        "h2": {"value": None if pretest_perfect_early_exit else h2_value,
+               "status": "not_applicable_pretest_mastery" if pretest_perfect_early_exit else "attained" if reached else "not_attained",
                "censoring_reason": censoring_reason,
                "observed_session_count": len(displayed), "first_mastery_round": first_mastery_round,
                "first_mastery_at": first_mastery_at.isoformat() if reached else None,
-               "attained_without_learning": reached and h2_value == 0},
+               "attained_without_learning": None if pretest_perfect_early_exit else reached and h2_value == 0},
         "h3": {"value": h3_value, "status": "observed" if term_means else "missing_no_learning_answers" if displayed else "not_applicable_no_learning",
                "term_means": term_means, "sessions": session_details},
         "h4": recurrence(initial),
         "h5": {"value": mean(ratings.values()) if ratings else None, "items": ratings,
                "status": "observed" if ratings else "missing_survey" if displayed else "not_applicable_not_viewed"},
-        "h6": {"value": int(reached), "attained": reached},
+        "h6": {"value": None if pretest_perfect_early_exit else int(reached),
+               "attained": None if pretest_perfect_early_exit else reached,
+               "status": "not_applicable_pretest_mastery" if pretest_perfect_early_exit else "observed"},
     }
 
 
@@ -185,20 +192,25 @@ def current_metrics(db: Session) -> list[dict]:
 
 def _group(rows):
     n = len(rows)
-    result = {"participant_count": n}
+    result = {
+        "participant_count": n,
+        "pretest_perfect_early_exit_count": sum(r.get("pretest_perfect_early_exit", r.get("route") == "pretest_perfect_early_exit") for r in rows),
+    }
     for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
         result[key] = _stats([r[key]["value"] for r in rows], n)
         result[key]["not_applicable_count"] = sum(r[key].get("status", "").startswith("not_applicable") for r in rows)
         result[key]["missing_count"] -= result[key]["not_applicable_count"]
-    nonattainers = [r["h2"] for r in rows if not r["h6"]["attained"]]
+        if key in {"h1", "h2", "h6"}:
+            result[key]["eligible_count"] = n - result[key]["not_applicable_count"]
+    nonattainers = [r["h2"] for r in rows if r["h6"]["attained"] is False]
     result["h2"].update({"not_attained_count": len(nonattainers),
                            "censored_count": len(nonattainers),
                            "censoring_breakdown": {
                                reason: _stats([r["observed_session_count"] for r in nonattainers if r["censoring_reason"] == reason])
                                for reason in ("give_up", "in_progress", "completed_without_mastery", "other")
                            },
-                           "observed_nonattainer_sessions": _stats([r["h2"]["observed_session_count"] for r in rows if not r["h6"]["attained"]]),
-                           "attained_without_learning_count": sum(r["h2"]["attained_without_learning"] for r in rows)})
+                           "observed_nonattainer_sessions": _stats([r["h2"]["observed_session_count"] for r in rows if r["h6"]["attained"] is False]),
+                           "attained_without_learning_count": sum(r["h2"]["attained_without_learning"] is True for r in rows)})
     eligible_h4 = [r["h4"] for r in rows if r["h4"]["value"] is not None]
     denom = sum(r["denominator"] for r in eligible_h4)
     numerator = sum(r["numerator"] for r in eligible_h4)
@@ -206,14 +218,31 @@ def _group(rows):
                            "pooled_rate": numerator / denom if denom else None})
     result["h5"].update({"viewed_count": sum(r["has_viewed_material"] for r in rows),
                            "items": {k: _stats([(r["h5"]["items"] or {}).get(k) for r in rows if r["has_viewed_material"]], sum(r["has_viewed_material"] for r in rows)) for k in MATERIAL_RATING_KEYS}})
-    result["h6"].update({"numerator": sum(r["h6"]["value"] for r in rows), "denominator": n,
-                           "rate": mean(r["h6"]["value"] for r in rows) if n else None})
+    h6_values = [r["h6"]["value"] for r in rows if r["h6"]["value"] is not None]
+    result["h6"].update({"numerator": sum(h6_values), "denominator": len(h6_values),
+                           "rate": mean(h6_values) if h6_values else None})
     result["completion_reasons"] = {reason: sum((r["completion_reason"] or "in_progress") == reason for r in rows) for reason in {r["completion_reason"] or "in_progress" for r in rows}}
-    result["rounds"] = [
-        {"round": number, "gain": _stats([next((rd["gain_pt"] for rd in r["rounds"] if rd["round"] == number), None) for r in rows], n),
-         "recurrence": _stats([next((rd["recurrence"]["value"] for rd in r["rounds"] if rd["round"] == number), None) for r in rows], n)}
-        for number in sorted({rd["round"] for r in rows for rd in r["rounds"]})
-    ]
+    round_numbers = sorted({rd["round"] for r in rows for rd in r["rounds"]})
+    result["rounds"] = []
+    for number in round_numbers:
+        round_items = [next((rd for rd in row["rounds"] if rd["round"] == number), None) for row in rows]
+        early_exit_count = sum(bool(row.get("pretest_perfect_early_exit")) for row in rows)
+        gain = _stats([rd["gain_pt"] if rd else None for rd in round_items], n)
+        gain["not_applicable_count"] = early_exit_count
+        gain["eligible_count"] = n - early_exit_count
+        gain["missing_count"] = n - early_exit_count - gain["n"]
+
+        recurrence_values = [rd["recurrence"]["value"] if rd else None for rd in round_items]
+        recurrence_na_count = sum(
+            bool(row.get("pretest_perfect_early_exit"))
+            or bool(round_item and round_item["recurrence"]["status"].startswith("not_applicable"))
+            for row, round_item in zip(rows, round_items)
+        )
+        recurrence = _stats(recurrence_values, n)
+        recurrence["not_applicable_count"] = recurrence_na_count
+        recurrence["eligible_count"] = n - recurrence_na_count
+        recurrence["missing_count"] = n - recurrence_na_count - recurrence["n"]
+        result["rounds"].append({"round": number, "gain": gain, "recurrence": recurrence})
     return result
 
 
@@ -242,7 +271,7 @@ def group_metrics(rows: list[dict]) -> dict:
     groups = [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group])} for group in ("control", "proposed")]
     differences = {key: groups[1][key]["mean"] - groups[0][key]["mean"] if all(g[key]["mean"] is not None for g in groups) else None for key in ("h1", "h2", "h3", "h4", "h5", "h6")}
     item_differences = {k: groups[1]["h5"]["items"][k]["mean"] - groups[0]["h5"]["items"][k]["mean"] if all(g["h5"]["items"][k]["mean"] is not None for g in groups) else None for k in MATERIAL_RATING_KEYS}
-    routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("initial_perfect_final_test", "learning_retest", "pretest_incomplete")}
+    routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("pretest_perfect_early_exit", "learning_retest", "pretest_incomplete")}
     return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "groups": groups,
             "test_content_mode": mode, "test_content_mode_label": test_content_mode_label(mode),
             "first_question_only": first_only, "questions_per_test": _questions_per_test(mode, first_only),

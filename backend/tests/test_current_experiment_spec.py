@@ -121,6 +121,7 @@ def trial_snapshot(db, pid):
         (15, 44, "experiment-plan-2026-11-09-four-topic-foundation-v1"),
         (15, 45, "experiment-plan-2026-11-09-four-topic-foundation-default-v1"),
         (15, 45, "experiment-plan-2026-11-09-four-topic-two-retest-rounds-v1"),
+        (15, 46, "experiment-plan-2026-11-09-four-topic-default-two-retests-v1"),
     ],
 )
 def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(bank_version, spec_version, protocol_id):
@@ -273,12 +274,14 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
     isolated.dispose()
 
 
-def test_l0_is_not_available_and_final_test_cannot_start_learning():
+def test_l0_is_not_available_and_pretest_mastery_skips_posttest():
     pid, _ = create_trial(labels="ABC")
     assert client.get(f"/api/experiment/{pid}/l0-check").status_code == 404
     assert client.post(f"/api/participants/{pid}/score-l0-check", json={}).status_code == 404
     assert client.post("/api/tutor-sessions", json={"participant_id": pid, "term_slug": "llm_knowledge"}).status_code == 409
-    assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "final_test"
+    assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "survey"
+    assert client.get(f"/api/participants/{pid}/current-step").json()["next_url"] == "/survey"
+    assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
 
 
 @pytest.mark.parametrize("retired", ["selected_option_id", "free_text_answer", "reason_text", "confidence", "selected_item_option_ids", "learner_response"])

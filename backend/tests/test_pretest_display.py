@@ -12,26 +12,31 @@ from split_api_support import acknowledge_all_question_reviews, create_trial, ok
 
 @pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("perfect", [False, True])
+@pytest.mark.parametrize("test_content_mode", ["application", "basic_understanding", "four_topic_fundamentals"])
 @pytest.mark.parametrize("group,layout", [("A", "debug_fixed"), ("B", "randomized")])
-def test_display_snapshot_and_navigation(enabled, perfect, group, layout):
+def test_display_snapshot_and_navigation(enabled, perfect, test_content_mode, group, layout):
     with create_trial(
         group, layout, first_question_only=False,
         show_pretest_results=enabled, show_retest_results=enabled,
+        test_content_mode=test_content_mode,
     ) as (client, pid):
         questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
         for index, question in enumerate(questions):
-            roles = [None]
+            roles = [None, None, None] if question.get("selection_mode") == "multiple" else [None]
             if index == 0 and not perfect:
-                roles = ["unknown"]
+                roles = [None, None, "M1"] if question.get("selection_mode") == "multiple" else ["unknown"]
             ok(client.post("/api/attempts", json={"participant_id": pid, "phase": "pretest", "question_id": question["question_id"], "selected_option_ids": select_roles(question, roles)}))
         acknowledge_all_question_reviews(client, pid, "pretest")
         url = f"/api/participants/{pid}/diagnose-pretest"
         response = ok(client.post(url, json={}, headers={"Idempotency-Key": "display-score"}))
         assert ok(client.post(url, json={}, headers={"Idempotency-Key": "display-score"})) == response
         assert response["review_required"] is enabled
-        action = "/final-test" if perfect else "/learning/llm_knowledge"
+        first_target = "transformer" if test_content_mode == "four_topic_fundamentals" else "llm_knowledge"
+        action = "/survey" if perfect else f"/learning/{first_target}"
         assert response["next_url"] == ("/learning-targets" if enabled else action)
         review = ok(client.get(f"/api/participants/{pid}/learning-targets"))
+        assert review["current_step"] == ("survey" if perfect else "learning_targets")
+        assert review["next_url"] == ("/learning-targets" if enabled and not perfect else action)
         assert review["review_required"] is enabled
         assert bool(review["pretest_results"]) is enabled
         assert bool(review["test_results"]["results"]) is enabled
@@ -46,27 +51,10 @@ def test_display_snapshot_and_navigation(enabled, perfect, group, layout):
         assert exported["show_pretest_results"] == str(enabled)
         assert exported["show_retest_results"] == str(enabled)
         if perfect:
-            final_questions = ok(client.get(f"/api/experiment/{pid}/final-test"))["questions"]
-            for question in final_questions:
-                roles = [None]
-                ok(client.post("/api/attempts", json={"participant_id": pid, "phase": "final_test", "question_id": question["question_id"], "selected_option_ids": select_roles(question, roles)}))
-            acknowledge_all_question_reviews(client, pid, "final_test")
-            final_score = ok(client.post(
-                f"/api/participants/{pid}/score-final-test",
-                json={},
-                headers={"Idempotency-Key": "final-score-display"},
-            ))
-            assert ok(client.post(
-                f"/api/participants/{pid}/score-final-test",
-                json={},
-                headers={"Idempotency-Key": "final-score-display"},
-            )) == final_score
-            assert final_score["review_required"] is enabled
-            assert final_score["next_url"] == ("/learning-targets" if enabled else "/survey")
-            reviewed = ok(client.get(f"/api/participants/{pid}/learning-targets"))
-            assert reviewed["review_required"] is enabled
-            assert bool(reviewed["test_results"]["results"]) is enabled
-            assert reviewed["current_step"] == "survey"
+            assert client.get(f"/api/experiment/{pid}/final-test").status_code == 409
+            assert client.get(f"/api/experiment/{pid}/retest").status_code == 409
+            assert client.get(f"/api/participants/{pid}/learning-targets").json()["targets"] == []
+            assert current["step"] == "survey"
 def test_removed_admin_setting_endpoints_return_not_found():
     client = TestClient(app)
     for endpoint in ("pretest-result-display", "question-review-display", "first-question-only"):

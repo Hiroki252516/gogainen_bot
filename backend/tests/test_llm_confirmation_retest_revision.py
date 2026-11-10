@@ -199,5 +199,5 @@ def test_natural_two_learning_rounds_feedback_history_and_retests(group, layout,
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("final_labels", ["ABC", "GHI"])
-def test_pretest_perfect_uses_revised_shared_final_test(group, layout, final_labels):
+def test_retained_internal_final_test_handler_in_synthetic_state(group, layout, final_labels):
     assert_retest_flow("llm_knowledge", group, layout, "final_test", final_labels, None if final_labels == "ABC" else "M3")
