@@ -1066,6 +1066,10 @@ button:disabled {
   gap: 8px;
 }
 
+.presurvey-form .survey-choice-options {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .survey-rating-options {
   grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 4px;
