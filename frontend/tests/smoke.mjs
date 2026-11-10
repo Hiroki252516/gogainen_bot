@@ -489,7 +489,7 @@ for (const expectedText of ["type ApiRequestInit", "AbortController", "timeoutMs
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
 const hypothesisMetrics = fs.readFileSync(new URL("../components/HypothesisMetrics.tsx", import.meta.url), "utf8");
-for (const expectedText of ["6仮説の記述集計", "hypothesis_metrics.csv", "hypothesis_metrics.xlsx", "hypothesis_group_summary.csv", "hypothesis_group_summary.xlsx", "6仮説・参加者別Excel (.xlsx)", "6仮説・群別Excel (.xlsx)", "observed_nonattainer_sessions", "pooled_denominator", "material_item_differences"]) {
+for (const expectedText of ["6仮説の記述集計", "hypothesis_metrics.csv", "hypothesis_metrics.xlsx", "hypothesis_group_summary.csv", "hypothesis_group_summary.xlsx", "6仮説・参加者別Excel (.xlsx)", "6仮説・群別Excel (.xlsx)", "observed_nonattainer_sessions", "pooled_denominator", "material_item_differences", "H5_ITEMS", "DISTRIBUTION_ITEMS", "評価できない", "未回答"]) {
   if (!hypothesisMetrics.includes(expectedText)) throw new Error(`hypothesis display/export contract is missing: ${expectedText}`);
 }
 for (const expectedText of ["欠測・未観測", "censoring_breakdown", "censoring_reason", "途中中断", "継続中", "完了・満点未達", "終了状況不明", "表示済みセッションの記録欠落を意味しません"]) {
@@ -498,7 +498,7 @@ for (const expectedText of ["欠測・未観測", "censoring_breakdown", "censor
 for (const expectedText of ["material-view", "visibilitychange", "materialViewError"]) {
   if (!learningPage.includes(expectedText)) throw new Error(`material display recording is missing: ${expectedText}`);
 }
-for (const expectedText of ["実験後アンケート", "/survey", "system_usability", "system_clarity", "general_ratings", "material_ratings_required", "length: 10", "自由記述（任意）", "教材評価6項目は対象外", "回答を保存して終了", 'router.replace("/finish")']) {
+for (const expectedText of ["実験後アンケート", "/survey", "system_usability", "system_clarity", "general_ratings", "material_ratings_required", "posttest-5point-v1", "NOT_APPLICABLE_OPTION", "AGREEMENT_OPTIONS", "DIFFICULTY_OPTIONS", "AMOUNT_OPTIONS", "非常にそう思う", "必要な操作をスムーズに行えた", "画面を見て、次に何をすればよいか分かった", "自由記述（任意）", "教材評価6項目は対象外", "回答を保存して終了", 'router.replace("/finish")']) {
   if (!surveyPage.includes(expectedText)) {
     throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
   }

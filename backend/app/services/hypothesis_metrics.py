@@ -12,12 +12,14 @@ from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PR
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
 from app.services.split_assessment import uses_split, split_item_keys
 from app.services.first_question_only import enabled as first_question_enabled, question_numbers
-from app.services.research_protocol import MATERIAL_RATING_KEYS, SUPPORTED_SURVEY_VERSIONS
+from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION
 from app.services.test_content_mode import mode_label as test_content_mode_label, participant_mode as participant_test_content_mode
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS
 
-METRICS_VERSION = "six-hypotheses-v7-pretest-perfect-exit"
+METRICS_VERSION = "six-hypotheses-v8-posttest-five-point-evaluation"
 TERM_SLUGS = ACTIVE_TERM_SLUGS
+H5_COMPOSITE_KEYS = ("clarity", "readability", "japanese_clarity", "learning_usefulness")
+CENTERED_RATING_KEYS = ("difficulty_appropriateness", "amount_appropriateness")
 METRICS_CSV_COLUMNS = [
     "metrics_version", "protocol_id", "test_content_mode", "group_condition", "participant_id", "display_code", "route",
     "metric", "value", "n", "mean", "median", "numerator", "denominator", "eligible_count", "missing_count",
@@ -134,10 +136,34 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     survey = db.query(ParticipantSurvey).filter(
         ParticipantSurvey.participant_id == participant.id,
         ParticipantSurvey.phase == "posttest",
-        ParticipantSurvey.survey_version.in_(SUPPORTED_SURVEY_VERSIONS),
+        ParticipantSurvey.survey_version == SURVEY_VERSION,
     ).order_by(ParticipantSurvey.created_at.desc(), ParticipantSurvey.id.desc()).first()
-    ratings = ((survey.responses_json or {}).get("material_ratings") if survey else None) if displayed else None
-    ratings = ratings if isinstance(ratings, dict) and all(type(ratings.get(k)) is int and 1 <= ratings[k] <= 10 for k in MATERIAL_RATING_KEYS) else None
+    raw_ratings = ((survey.responses_json or {}).get("material_ratings") if survey else None) if displayed else None
+    ratings = None
+    if isinstance(raw_ratings, dict):
+        ratings = {
+            key: raw_ratings.get(key)
+            if (type(raw_ratings.get(key)) is int and 1 <= raw_ratings[key] <= 5)
+            or raw_ratings.get(key) == "not_applicable"
+            else None
+            for key in MATERIAL_RATING_KEYS
+        }
+    composite_values = [ratings.get(key) for key in H5_COMPOSITE_KEYS if ratings and type(ratings.get(key)) is int]
+    composite_not_evaluable = sum(bool(ratings) and ratings.get(key) == "not_applicable" for key in H5_COMPOSITE_KEYS)
+    composite_missing = (
+        len(H5_COMPOSITE_KEYS) - len(composite_values) - composite_not_evaluable
+        if displayed else 0
+    )
+    if not displayed:
+        h5_status = "not_applicable_not_viewed"
+    elif survey is None or ratings is None:
+        h5_status = "missing_survey"
+    elif composite_values:
+        h5_status = "observed"
+    elif composite_not_evaluable == len(H5_COMPOSITE_KEYS):
+        h5_status = "not_applicable_no_evaluable_ratings"
+    else:
+        h5_status = "missing_survey"
     pretest_perfect_early_exit = pre_complete and pre_score == 1
     reached = first_mastery_at is not None
     h2_value = sum(shown_at <= first_mastery_at for _, shown_at in displayed) if reached else None
@@ -176,8 +202,11 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         "h3": {"value": h3_value, "status": "observed" if term_means else "missing_no_learning_answers" if displayed else "not_applicable_no_learning",
                "term_means": term_means, "sessions": session_details},
         "h4": recurrence(initial),
-        "h5": {"value": mean(ratings.values()) if ratings else None, "items": ratings,
-               "status": "observed" if ratings else "missing_survey" if displayed else "not_applicable_not_viewed"},
+        "h5": {"value": mean(composite_values) if composite_values else None, "items": ratings,
+               "valid_item_count": len(composite_values),
+               "not_evaluable_item_count": composite_not_evaluable,
+               "missing_item_count": composite_missing,
+               "status": h5_status},
         "h6": {"value": None if pretest_perfect_early_exit else int(reached),
                "attained": None if pretest_perfect_early_exit else reached,
                "status": "not_applicable_pretest_mastery" if pretest_perfect_early_exit else "observed"},
@@ -216,8 +245,31 @@ def _group(rows):
     numerator = sum(r["numerator"] for r in eligible_h4)
     result["h4"].update({"pooled_numerator": numerator, "pooled_denominator": denom,
                            "pooled_rate": numerator / denom if denom else None})
-    result["h5"].update({"viewed_count": sum(r["has_viewed_material"] for r in rows),
-                           "items": {k: _stats([(r["h5"]["items"] or {}).get(k) for r in rows if r["has_viewed_material"]], sum(r["has_viewed_material"] for r in rows)) for k in MATERIAL_RATING_KEYS}})
+    viewed_rows = [r for r in rows if r["has_viewed_material"]]
+    item_stats = {}
+    for key in MATERIAL_RATING_KEYS:
+        values = [(row["h5"].get("items") or {}).get(key) for row in viewed_rows]
+        numeric_values = [value for value in values if type(value) is int and 1 <= value <= 5]
+        not_evaluable_count = sum(value == "not_applicable" for value in values)
+        distribution = {str(value): sum(item == value for item in numeric_values) for value in range(1, 6)}
+        distribution["not_applicable"] = not_evaluable_count
+        distribution["missing"] = len(viewed_rows) - len(numeric_values) - not_evaluable_count
+        stats = _stats(numeric_values, len(viewed_rows))
+        stats["not_applicable_count"] = not_evaluable_count
+        stats["missing_count"] = distribution["missing"]
+        stats["distribution"] = distribution
+        if key in CENTERED_RATING_KEYS:
+            stats["mean"] = None
+            stats["median"] = None
+        item_stats[key] = stats
+    result["h5"].update({
+        "viewed_count": len(viewed_rows),
+        "eligible_count": result["h5"]["n"],
+        "valid_response_count": result["h5"]["n"],
+        "not_evaluable_count": sum(r["h5"]["status"] == "not_applicable_no_evaluable_ratings" for r in rows),
+        "not_viewed_count": sum(r["h5"]["status"] == "not_applicable_not_viewed" for r in rows),
+        "items": item_stats,
+    })
     h6_values = [r["h6"]["value"] for r in rows if r["h6"]["value"] is not None]
     result["h6"].update({"numerator": sum(h6_values), "denominator": len(h6_values),
                            "rate": mean(h6_values) if h6_values else None})
@@ -270,7 +322,7 @@ def group_metrics(rows: list[dict]) -> dict:
     mode = modes[0] if modes else "application"
     groups = [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group])} for group in ("control", "proposed")]
     differences = {key: groups[1][key]["mean"] - groups[0][key]["mean"] if all(g[key]["mean"] is not None for g in groups) else None for key in ("h1", "h2", "h3", "h4", "h5", "h6")}
-    item_differences = {k: groups[1]["h5"]["items"][k]["mean"] - groups[0]["h5"]["items"][k]["mean"] if all(g["h5"]["items"][k]["mean"] is not None for g in groups) else None for k in MATERIAL_RATING_KEYS}
+    item_differences = {k: groups[1]["h5"]["items"][k]["mean"] - groups[0]["h5"]["items"][k]["mean"] if k not in CENTERED_RATING_KEYS and all(g["h5"]["items"][k]["mean"] is not None for g in groups) else None for k in MATERIAL_RATING_KEYS}
     routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("pretest_perfect_early_exit", "learning_retest", "pretest_incomplete")}
     return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "groups": groups,
             "test_content_mode": mode, "test_content_mode_label": test_content_mode_label(mode),
@@ -298,7 +350,11 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
                 stats = group[key]
                 records.append({"test_content_mode": source["test_content_mode"], "group_condition": group["group_condition"], "metric": key, **{k: v for k, v in stats.items() if k in METRICS_CSV_COLUMNS}, "details_json": json.dumps(stats, ensure_ascii=False)})
             for item, stats in group["h5"]["items"].items():
-                records.append({"test_content_mode": source["test_content_mode"], "group_condition": group["group_condition"], "metric": f"h5.{item}", **stats})
+                records.append({"test_content_mode": source["test_content_mode"], "group_condition": group["group_condition"], "metric": f"h5.{item}",
+                                "n": stats["n"], "mean": stats["mean"], "median": stats["median"],
+                                "missing_count": stats["missing_count"], "not_applicable_count": stats["not_applicable_count"],
+                                "status": "observed" if stats["n"] else "no_numeric_responses",
+                                "details_json": json.dumps(stats, ensure_ascii=False)})
         for key, value in source["differences_proposed_minus_control"].items():
             records.append({"test_content_mode": source["test_content_mode"], "group_condition": "proposed_minus_control", "metric": key, "value": value})
         # Includes route-specific and round-specific denominators without changing fixed log CSVs.
@@ -312,7 +368,8 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
                 metric = row[key]
                 records.append({**base, "metric": key, **{k: v for k, v in metric.items() if k in METRICS_CSV_COLUMNS}, "details_json": json.dumps(metric, ensure_ascii=False)})
             for item, value in (row["h5"]["items"] or {}).items():
-                records.append({**base, "metric": f"h5.{item}", "value": value, "status": "observed"})
+                status = "not_applicable" if value == "not_applicable" else "observed" if type(value) is int else "missing"
+                records.append({**base, "metric": f"h5.{item}", "value": value if type(value) is int or value == "not_applicable" else None, "status": status})
 
     output = []
     for record in records:

@@ -1067,8 +1067,8 @@ button:disabled {
 }
 
 .survey-rating-options {
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 4px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .survey-choice-button,
@@ -1092,7 +1092,18 @@ button:disabled {
 }
 
 .survey-rating-button {
-  padding: 10px 0;
+  display: grid;
+  min-height: 78px;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  overflow-wrap: anywhere;
+}
+
+.survey-rating-value {
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .survey-choice-button:hover,
@@ -1381,6 +1392,10 @@ button:disabled {
 }
 
 @media (max-width: 760px) {
+  .survey-rating-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .app-topbar {
     flex-wrap: wrap;
   }
