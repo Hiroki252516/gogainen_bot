@@ -4,44 +4,74 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import update
 
 from app.core.experiment_spec import assert_current_experiment
 from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
-PRESURVEY_VERSION = "presurvey-baseline-v2"
-FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v1"
+PRESURVEY_VERSION = "presurvey-baseline-v3"
+FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v2"
 SURVEY_VERSION = "posttest-10point-v3"
 SUPPORTED_SURVEY_VERSIONS = ("posttest-10point-v1", "posttest-10point-v2", SURVEY_VERSION)
 Rating = Annotated[int, Field(strict=True, ge=1, le=10)]
+ProficiencyRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
 Comment = Annotated[str, StringConstraints(strip_whitespace=True)]
+EXPOSURE_VALUES = ("experienced", "not_experienced", "cannot_recall")
+UNDERSTANDING_VALUES = ("not_at_all", "slightly", "moderately", "well")
+AI_FREQUENCY_VALUES = ("0_days", "1_3_days", "4_8_days", "9_20_days", "21_30_days")
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class PriorTermKnowledge(StrictModel):
-    pretraining: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
-    fine_tuning: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
-    rag: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
-    prompt_engineering: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
-    multi_agent: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
-    memory_process: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+class PriorTermExposure(StrictModel):
+    pretraining: Literal["experienced", "not_experienced", "cannot_recall"]
+    fine_tuning: Literal["experienced", "not_experienced", "cannot_recall"]
+    rag: Literal["experienced", "not_experienced", "cannot_recall"]
+    prompt_engineering: Literal["experienced", "not_experienced", "cannot_recall"]
+    multi_agent: Literal["experienced", "not_experienced", "cannot_recall"]
+    memory_process: Literal["experienced", "not_experienced", "cannot_recall"]
 
 
-class FourTopicPriorTermKnowledge(StrictModel):
-    transformer: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
-    llm_training_stages: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
-    multi_agent: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
-    memory_process: Literal["unknown", "heard_of", "knows_meaning", "can_explain"]
+class PriorTermUnderstanding(StrictModel):
+    pretraining: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    fine_tuning: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    rag: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    prompt_engineering: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    multi_agent: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    memory_process: Literal["not_at_all", "slightly", "moderately", "well"] | None
+
+
+class FourTopicPriorTermExposure(StrictModel):
+    transformer: Literal["experienced", "not_experienced", "cannot_recall"]
+    pretraining: Literal["experienced", "not_experienced", "cannot_recall"]
+    instruction_tuning: Literal["experienced", "not_experienced", "cannot_recall"]
+    human_feedback_post_training: Literal["experienced", "not_experienced", "cannot_recall"]
+    multi_agent: Literal["experienced", "not_experienced", "cannot_recall"]
+    memory_process: Literal["experienced", "not_experienced", "cannot_recall"]
+
+
+class FourTopicPriorTermUnderstanding(StrictModel):
+    transformer: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    pretraining: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    instruction_tuning: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    human_feedback_post_training: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    multi_agent: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    memory_process: Literal["not_at_all", "slightly", "moderately", "well"] | None
+
+
+class AIProficiencyRatings(StrictModel):
+    goal_aligned_output: ProficiencyRating
+    revise_instructions: ProficiencyRating
+    verify_with_sources: ProficiencyRating
 
 
 class BaselineRatings(StrictModel):
-    ai_usage_frequency: Rating
-    self_rated_ai_proficiency: Rating
+    ai_usage_frequency_30d: Literal["0_days", "1_3_days", "4_8_days", "9_20_days", "21_30_days"]
+    ai_proficiency: AIProficiencyRatings
 
 
 class PosttestRatings(StrictModel):
@@ -59,18 +89,55 @@ class MaterialRatings(StrictModel):
 
 
 MATERIAL_RATING_KEYS = tuple(MaterialRatings.model_fields)
+PRESURVEY_TERM_ITEMS = (
+    {"key": "pretraining", "label": "事前学習"},
+    {"key": "fine_tuning", "label": "ファインチューニング"},
+    {"key": "rag", "label": "RAG"},
+    {"key": "prompt_engineering", "label": "プロンプトエンジニアリング"},
+    {"key": "multi_agent", "label": "マルチエージェント"},
+    {"key": "memory_process", "label": "記憶プロセス"},
+)
+FOUR_TOPIC_PRESURVEY_TERM_ITEMS = (
+    {"key": "transformer", "label": "Transformer"},
+    {"key": "pretraining", "label": "事前学習"},
+    {"key": "instruction_tuning", "label": "指示チューニング"},
+    {"key": "human_feedback_post_training", "label": "人の評価・好みを用いる事後学習"},
+    {"key": "multi_agent", "label": "マルチエージェント"},
+    {"key": "memory_process", "label": "記憶プロセス"},
+)
 
 
 class PresurveyPayload(StrictModel):
-    survey_version: Literal["presurvey-baseline-v2"] = PRESURVEY_VERSION
-    prior_term_knowledge: PriorTermKnowledge
+    survey_version: Literal["presurvey-baseline-v3"] = PRESURVEY_VERSION
+    prior_term_exposure: PriorTermExposure
+    prior_term_understanding: PriorTermUnderstanding
     general_ratings: BaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
 
 
 class FourTopicPresurveyPayload(StrictModel):
-    survey_version: Literal["presurvey-four-topic-baseline-v1"] = FOUR_TOPIC_PRESURVEY_VERSION
-    prior_term_knowledge: FourTopicPriorTermKnowledge
+    survey_version: Literal["presurvey-four-topic-baseline-v2"] = FOUR_TOPIC_PRESURVEY_VERSION
+    prior_term_exposure: FourTopicPriorTermExposure
+    prior_term_understanding: FourTopicPriorTermUnderstanding
     general_ratings: BaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
+
+
+def _validate_understanding_branch(exposure: StrictModel, understanding: StrictModel) -> None:
+    for key, exposure_value in exposure.model_dump().items():
+        understanding_value = getattr(understanding, key)
+        if exposure_value == "experienced" and understanding_value is None:
+            raise ValueError(f"{key}: understanding is required when exposure is experienced")
+        if exposure_value != "experienced" and understanding_value is not None:
+            raise ValueError(f"{key}: understanding must be null when exposure is not experienced")
 
 
 class SurveyPayload(StrictModel):
@@ -102,12 +169,10 @@ def presurvey_context(participant: Participant) -> dict:
     assert_current_experiment(participant)
     if participant.current_step != "presurvey":
         raise HTTPException(status_code=409, detail="この参加者は事前アンケート対象ではありません。")
-    survey_version = (
-        FOUR_TOPIC_PRESURVEY_VERSION
-        if participant.test_content_mode == "four_topic_fundamentals"
-        else PRESURVEY_VERSION
-    )
-    return {"survey_version": survey_version}
+    four_topic = participant.test_content_mode == "four_topic_fundamentals"
+    survey_version = FOUR_TOPIC_PRESURVEY_VERSION if four_topic else PRESURVEY_VERSION
+    terms = FOUR_TOPIC_PRESURVEY_TERM_ITEMS if four_topic else PRESURVEY_TERM_ITEMS
+    return {"survey_version": survey_version, "term_items": list(terms)}
 
 
 def validate_presurvey_payload(payload: dict, test_content_mode: str | None = None) -> dict:

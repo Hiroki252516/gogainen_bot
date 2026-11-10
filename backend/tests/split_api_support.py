@@ -22,26 +22,19 @@ def ok(response):
 
 def complete_presurvey(client, pid):
     context = ok(client.get(f"/api/participants/{pid}/presurvey"))
-    if context["survey_version"] == "presurvey-four-topic-baseline-v1":
-        prior_terms = {
-            "transformer": "unknown",
-            "llm_training_stages": "unknown",
-            "multi_agent": "unknown",
-            "memory_process": "unknown",
-        }
-    else:
-        prior_terms = {
-            "pretraining": "unknown",
-            "fine_tuning": "unknown",
-            "rag": "unknown",
-            "prompt_engineering": "unknown",
-            "multi_agent": "unknown",
-            "memory_process": "unknown",
-        }
+    term_keys = [item["key"] for item in context["term_items"]]
     payload = {
         "survey_version": context["survey_version"],
-        "prior_term_knowledge": prior_terms,
-        "general_ratings": {"ai_usage_frequency": 1, "self_rated_ai_proficiency": 1},
+        "prior_term_exposure": dict.fromkeys(term_keys, "not_experienced"),
+        "prior_term_understanding": dict.fromkeys(term_keys, None),
+        "general_ratings": {
+            "ai_usage_frequency_30d": "0_days",
+            "ai_proficiency": {
+                "goal_aligned_output": "not_applicable",
+                "revise_instructions": "not_applicable",
+                "verify_with_sources": "not_applicable",
+            },
+        },
     }
     return ok(client.post(f"/api/participants/{pid}/presurvey", json=payload))
 

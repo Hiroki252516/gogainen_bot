@@ -145,13 +145,13 @@ def test_version_44_restores_its_saved_mode(mode, expected_bank):
 
 def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map():
     participant = {
-        "experiment_spec_version": 47,
-        "protocol_id": "experiment-plan-2026-11-10-pretest-perfect-early-exit-v1",
+        "experiment_spec_version": 48,
+        "protocol_id": "experiment-plan-2026-11-10-presurvey-exposure-understanding-split-v1",
         "test_content_mode": None,
     }
 
-    assert 47 not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
-    assert (47, participant["protocol_id"]) not in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS
+    assert 48 not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
+    assert (48, participant["protocol_id"]) not in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS
     assert historical_assessment_bank_versions_for(participant) is None
     with pytest.raises(ValueError, match="no supported test content mode"):
         assessment_bank_for_participant(participant)
@@ -172,8 +172,8 @@ def test_current_result_restoration_rejects_missing_mode_snapshot(isolated):
         participant = Participant(
             display_code="MISSING-MODE-SNAPSHOT",
             group_condition="control",
-            experiment_spec_version=47,
-            protocol_id="experiment-plan-2026-11-10-pretest-perfect-early-exit-v1",
+            experiment_spec_version=48,
+            protocol_id="experiment-plan-2026-11-10-presurvey-exposure-understanding-split-v1",
             test_content_mode=None,
         )
         db.add(participant)
@@ -244,6 +244,7 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
     assert client.put("/api/admin/test-content-mode", json={"mode": "application", "extra": True}).status_code == 422
 
     created_ids = []
+    presurvey_contexts = {}
 
     def create_participant(student_number: str) -> str:
         response = client.post("/api/participants", json={
@@ -252,6 +253,9 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         assert response.status_code == 200, response.text
         participant_id = response.json()["participant_id"]
         created_ids.append(participant_id)
+        presurvey_contexts[participant_id] = client.get(
+            f"/api/participants/{participant_id}/presurvey"
+        ).json()
         complete_presurvey(client, participant_id)
         return participant_id
 
@@ -260,22 +264,32 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         with factory() as db:
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
-            assert default_participant.experiment_spec_version == 47
-            assert default_participant.protocol_id == "experiment-plan-2026-11-10-pretest-perfect-early-exit-v1"
+            assert default_participant.experiment_spec_version == 48
+            assert default_participant.protocol_id == "experiment-plan-2026-11-10-presurvey-exposure-understanding-split-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()
-            assert default_survey.survey_version == "presurvey-four-topic-baseline-v1"
+            assert default_survey.survey_version == "presurvey-four-topic-baseline-v2"
         default_response = client.get(f"/api/experiment/{default_id}/pretest")
         assert default_response.status_code == 200, default_response.text
         default_questions = default_response.json()["questions"]
         assert [question["term_slug"] for question in default_questions] == list(FOUR_TOPIC_TERM_SLUGS)
         assert len(default_questions) == 4
+        default_context = presurvey_contexts[default_id]
+        assert default_context["survey_version"] == "presurvey-four-topic-baseline-v2"
+        assert [item["key"] for item in default_context["term_items"]] == [
+            "transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process",
+        ]
 
         saved = client.put("/api/admin/test-content-mode", json={"mode": "basic_understanding"})
         assert saved.status_code == 200
         assert saved.json()["mode"] == "basic_understanding"
         basic_id = create_participant("BASIC-MODE-SNAPSHOT-TEST")
+        basic_context = presurvey_contexts[basic_id]
+        assert basic_context["survey_version"] == "presurvey-baseline-v3"
+        assert [item["key"] for item in basic_context["term_items"]] == [
+            "pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process",
+        ]
         with factory() as db:
             db.get(Participant, basic_id).first_question_only = False
             db.commit()
@@ -287,6 +301,8 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         saved = client.put("/api/admin/test-content-mode", json={"mode": "application"})
         assert saved.status_code == 200
         application_id = create_participant("APPLICATION-MODE-SNAPSHOT-TEST")
+        application_context = presurvey_contexts[application_id]
+        assert application_context == basic_context
         application_questions = client.get(f"/api/experiment/{application_id}/pretest").json()["questions"]
         assert len(application_questions) == 3
         assert "最新の取扱説明書を参照する方法" in application_questions[0]["body"]
@@ -298,7 +314,7 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
             presurvey_record = db.query(ParticipantSurvey).filter_by(
                 participant_id=four_id, phase="presurvey"
             ).one()
-            assert presurvey_record.survey_version == "presurvey-four-topic-baseline-v1"
+            assert presurvey_record.survey_version == "presurvey-four-topic-baseline-v2"
         four_questions = client.get(f"/api/experiment/{four_id}/pretest").json()["questions"]
         assert [question["term_slug"] for question in four_questions] == list(FOUR_TOPIC_TERM_SLUGS)
         assert len(four_questions) == 4

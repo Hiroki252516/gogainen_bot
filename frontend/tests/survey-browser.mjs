@@ -23,11 +23,18 @@ async function prepareFixture(request, fixture) {
     student_number: "SURVEY-SYNTHETIC-" + fixture.width + "-" + fixture.viewed + "-" + Date.now(),
   });
   const pid = record.participant_id;
-  const baseline = await api(request, "/api/participants/" + pid + "/presurvey", "POST", {
-    survey_version: "presurvey-baseline-v2",
-    prior_term_knowledge: { pretraining: "unknown", fine_tuning: "unknown", rag: "unknown", prompt_engineering: "unknown", multi_agent: "unknown", memory_process: "unknown" },
-    general_ratings: { ai_usage_frequency: 3, self_rated_ai_proficiency: 4 },
-  });
+  const presurveyContext = await api(request, "/api/participants/" + pid + "/presurvey");
+  const termKeys = presurveyContext.term_items.map(({ key }) => key);
+  const presurveyPayload = {
+    survey_version: presurveyContext.survey_version,
+    prior_term_exposure: Object.fromEntries(termKeys.map((key) => [key, "not_experienced"])),
+    prior_term_understanding: Object.fromEntries(termKeys.map((key) => [key, null])),
+    general_ratings: {
+      ai_usage_frequency_30d: "4_8_days",
+      ai_proficiency: { goal_aligned_output: 3, revise_instructions: 4, verify_with_sources: "not_applicable" },
+    },
+  };
+  const baseline = await api(request, "/api/participants/" + pid + "/presurvey", "POST", presurveyPayload);
   assert.equal(baseline.next_url, "/pretest");
   const questions = (await api(request, "/api/experiment/" + pid + "/pretest")).questions;
   assert.equal(questions.length, 3);
@@ -62,7 +69,7 @@ async function prepareFixture(request, fixture) {
   }
   const ended = await api(request, "/api/participants/" + pid + "/give-up", "POST", {});
   assert.equal(ended.next_step, "survey");
-  return record;
+  return { ...record, presurveyPayload };
 }
 
 try {
@@ -127,11 +134,13 @@ try {
     assert.equal(survey.length, 2);
     const presurvey = survey.find((row) => row.phase === "presurvey");
     const posttest = survey.find((row) => row.phase === "posttest");
-    assert.equal(presurvey.survey_version, "presurvey-baseline-v2");
-    assert.deepEqual(presurvey.responses.prior_term_knowledge, { pretraining: "unknown", fine_tuning: "unknown", rag: "unknown", prompt_engineering: "unknown", multi_agent: "unknown", memory_process: "unknown" });
-    assert.equal(presurvey.responses.general_ratings.ai_usage_frequency, 3);
+    assert.equal(presurvey.survey_version, fixture.presurveyPayload.survey_version);
+    assert.deepEqual(presurvey.responses.prior_term_exposure, fixture.presurveyPayload.prior_term_exposure);
+    assert.deepEqual(presurvey.responses.prior_term_understanding, fixture.presurveyPayload.prior_term_understanding);
+    assert.deepEqual(presurvey.responses.general_ratings, fixture.presurveyPayload.general_ratings);
     assert.equal(posttest.survey_version, "posttest-10point-v3");
-    assert(!("prior_term_knowledge" in posttest.responses));
+    assert(!("prior_term_exposure" in posttest.responses));
+    assert(!("prior_term_understanding" in posttest.responses));
     assert.equal(posttest.free_comment, "");
     assert.deepEqual(errors, []);
     console.log("survey saved without comment:", fixture.width, fixture.viewed ? "material viewed" : "not viewed");
