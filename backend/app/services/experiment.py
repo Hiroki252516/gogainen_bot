@@ -1911,10 +1911,13 @@ async def diagnose_pretest(db: Session, participant_id: str) -> int:
         latest_attempt = latest_attempt_by_term.get(assignment.term_id)
         assignment.is_learning_target = bool(latest_attempt and not latest_attempt.is_correct and index < get_settings().max_learning_targets)
     remaining = sum(1 for assignment in assignments if assignment.is_learning_target)
-    participant.current_step = "learning_targets" if remaining else "final_test"
+    pretest_is_perfect = bool(scored_attempts) and all(attempt.is_correct is True for attempt in scored_attempts)
+    participant.current_step = "survey" if pretest_is_perfect else "learning_targets" if remaining else "final_test"
     if uses_split(participant):
         remaining = len(_reset_test_learning_targets(db, participant, scored_attempts))
-        if participant_test_content_mode(participant) == FOUR_TOPIC_FUNDAMENTALS:
+        if pretest_is_perfect:
+            participant.current_step = "survey"
+        elif participant_test_content_mode(participant) == FOUR_TOPIC_FUNDAMENTALS:
             if remaining == 0:
                 remaining = len(_set_four_topic_learning_targets(db, participant))
             participant.current_step = "learning_targets"

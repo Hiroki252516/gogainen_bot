@@ -49,7 +49,8 @@ def complete_presurvey(client, pid):
 def acknowledge_all_question_reviews(client, pid, phase):
     """Complete the in-page reviews before exercising phase scoring or learning."""
     path = f"/api/experiment/{pid}/{phase.replace('_', '-')}"
-    for _ in range(3):
+    question_count = len(ok(client.get(path)).get("questions", []))
+    for _ in range(question_count):
         pending = ok(client.get(path)).get("pending_question_review")
         if pending is None:
             return
@@ -57,7 +58,7 @@ def acknowledge_all_question_reviews(client, pid, phase):
             f"/api/participants/{pid}/question-review-acknowledgements",
             json={"phase": phase, "term_slug": pending["term_slug"]},
         ))
-    assert ok(client.get(path)).get("pending_question_review") is None, "all three term reviews must be acknowledged"
+    assert ok(client.get(path)).get("pending_question_review") is None, "all term reviews must be acknowledged"
 
 
 def case_roles(labels):
@@ -106,11 +107,15 @@ def create_trial(
     show_pretest_results=True,
     show_retest_results=True,
     show_question_reviews=True,
+    test_content_mode=None,
 ):
     """Create a flow fixture with explicit snapshots for legacy behavior tests."""
     client = AuthenticatedTestClient(app)
     previous = ok(client.get("/api/admin/option-order"))["mode"]
+    previous_content_mode = ok(client.get("/api/admin/test-content-mode"))["mode"]
     ok(client.put("/api/admin/option-order", json={"mode": layout}))
+    if test_content_mode is not None:
+        ok(client.put("/api/admin/test-content-mode", json={"mode": test_content_mode}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "SPLIT-CI-SYNTHETIC"}))["participant_id"]
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
@@ -126,6 +131,8 @@ def create_trial(
         wait_for_prefetch_tasks()
         ok(client.delete(f"/api/admin/participants/{pid}"))
         ok(client.put("/api/admin/option-order", json={"mode": previous}))
+        if test_content_mode is not None:
+            ok(client.put("/api/admin/test-content-mode", json={"mode": previous_content_mode}))
 
 
 def answer_test(client, pid, phase, slug, roles):
@@ -208,6 +215,12 @@ def assert_retest_flow(slug, group, layout, phase, labels, expected_type, *, rou
     with create_trial(group, layout) as (client, pid):
         initial = (None, None) if phase == "final_test" else ("unknown", "unknown")
         answer_test(client, pid, "pretest", slug, initial)
+        if phase == "final_test":
+            # Synthetic regression coverage for the retained internal endpoint;
+            # new participants no longer route from a perfect pretest to it.
+            with SessionLocal() as db:
+                db.get(Participant, pid).current_step = "final_test"
+                db.commit()
         if phase != "final_test":
             ok(client.post(f"/api/participants/{pid}/give-up-learning", json={}))
         if round_two:

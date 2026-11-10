@@ -167,19 +167,53 @@ def test_incomplete_or_unscored_tests_are_not_mastery_or_zero_missing(study, typ
     assert row["h6"]["attained"] is False
 
 
-def test_initial_perfect_final_test_route_counts_zero_learning(study):
+def test_pretest_perfect_early_exit_is_not_applicable_to_h1_h2_h6(study, tmp_path):
     p = participant(study)
     test_round(study, p, 0, ["correct"] * 3)
-    test_round(study, p, 1, ["correct"] * 3, phase="final_test")
+    p.current_step = "survey"
     row = participant_metrics(study, p)
-    assert row["route"] == "initial_perfect_final_test"
-    assert row["h1"]["value"] == 0
-    assert row["h2"]["value"] == 0
-    assert row["h2"]["attained_without_learning"]
+    assert row["route"] == "pretest_perfect_early_exit"
+    assert row["pretest_perfect_early_exit"] is True
+    assert row["h1"]["value"] is None
+    assert row["h1"]["status"] == "not_applicable_pretest_mastery"
+    assert row["h2"]["value"] is None
+    assert row["h2"]["status"] == "not_applicable_pretest_mastery"
     assert row["h4"]["value"] is None
     assert row["h4"]["status"].startswith("not_applicable")
     assert row["h5"]["items"] is None
-    assert row["h6"]["value"] == 1
+    assert row["h6"]["value"] is None
+    assert row["h6"]["status"] == "not_applicable_pretest_mastery"
+
+    grouped = group_metrics([row])
+    proposed = grouped["groups"][1]
+    assert proposed["participant_count"] == 1
+    assert proposed["pretest_perfect_early_exit_count"] == 1
+    for key in ("h1", "h2", "h6"):
+        assert proposed[key]["eligible_count"] == 0
+        assert proposed[key]["not_applicable_count"] == 1
+        assert proposed[key]["missing_count"] == 0
+    assert proposed["h6"]["denominator"] == 0
+    assert proposed["h6"]["numerator"] == 0
+    assert grouped["routes"]["pretest_perfect_early_exit"][1]["participant_count"] == 1
+    exported = write_metrics_csv(tmp_path / "early-exit.csv", [row], grouped=True)
+    records = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
+    h6 = next(record for record in records if record["metric"] == "h6" and record["group_condition"] == "proposed")
+    assert h6["eligible_count"] == "0"
+    assert h6["not_applicable_count"] == "1"
+    assert json.loads(h6["details_json"])["denominator"] == 0
+    assert proposed["rounds"] == []
+
+    learner = participant(study, "LEARNER")
+    test_round(study, learner, 0, ["M1"] * 3)
+    test_round(study, learner, 1, ["M1"] * 3)
+    mixed_group = group_metrics([row, participant_metrics(study, learner)])
+    retest_one = mixed_group["groups"][1]["rounds"][0]
+    assert retest_one["gain"]["eligible_count"] == 1
+    assert retest_one["gain"]["not_applicable_count"] == 1
+    assert retest_one["gain"]["missing_count"] == 0
+    assert retest_one["recurrence"]["eligible_count"] == 1
+    assert retest_one["recurrence"]["not_applicable_count"] == 1
+    assert retest_one["recurrence"]["missing_count"] == 0
 
 
 def test_mastery_does_not_depend_on_survey_completion_and_is_first_not_latest(study):
@@ -235,7 +269,7 @@ def test_h2_distinguishes_nonattainer_outcomes_without_changing_h6(study, tmp_pa
     for index, reason in enumerate(("completed", "give_up")):
         p = participant(study, f"ATTAINED-{index}")
         p.completion_reason = reason
-        test_round(study, p, 0, ["correct"] * 3)
+        test_round(study, p, 0, ["M1"] * 3)
         test_round(study, p, 1, ["correct"] * 3, phase="final_test")
     rows = current_metrics(study)
     by_code = {row["display_code"]: row for row in rows}

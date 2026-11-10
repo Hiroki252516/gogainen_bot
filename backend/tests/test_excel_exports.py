@@ -21,7 +21,7 @@ from app.services.excel_export import write_xlsx
 
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 METRIC_NUMERIC_COLUMNS = {
-    "value", "n", "mean", "median", "numerator", "denominator", "missing_count", "not_applicable_count",
+    "value", "n", "mean", "median", "numerator", "denominator", "eligible_count", "missing_count", "not_applicable_count",
 }
 
 
