@@ -21,7 +21,19 @@ from app.seed.seed_questions import seed_database
 from app.services import experiment
 from app.services.hypothesis_metrics import current_metrics, group_metrics, participant_metrics, write_metrics_csv
 from app.services.hypothesis_metrics import METRICS_VERSION
-from app.services.research_protocol import MATERIAL_RATING_KEYS, PRESURVEY_VERSION, SURVEY_VERSION, PresurveyPayload, SurveyPayload, record_material_view, survey_context, validate_survey_for_participant
+from app.services.research_protocol import (
+    FOUR_TOPIC_PRESURVEY_TERM_ITEMS,
+    MATERIAL_RATING_KEYS,
+    PRESURVEY_TERM_ITEMS,
+    PRESURVEY_VERSION,
+    SURVEY_VERSION,
+    FourTopicPresurveyPayload,
+    PresurveyPayload,
+    SurveyPayload,
+    record_material_view,
+    survey_context,
+    validate_survey_for_participant,
+)
 
 client = TestClient(app)
 AT = datetime(2026, 10, 18, 1)
@@ -89,10 +101,28 @@ def questionnaire(viewed=False):
             "free_comment": "  特になし  "}
 
 
-def baseline_questionnaire():
-    return {"survey_version": PRESURVEY_VERSION,
-            "prior_term_knowledge": {"pretraining": "can_explain", "fine_tuning": "unknown", "rag": "heard_of", "prompt_engineering": "knows_meaning", "multi_agent": "unknown", "memory_process": "can_explain"},
-            "general_ratings": {"ai_usage_frequency": 1, "self_rated_ai_proficiency": 10}}
+def baseline_questionnaire(survey_version=PRESURVEY_VERSION, term_keys=None):
+    term_keys = term_keys or [item["key"] for item in PRESURVEY_TERM_ITEMS]
+    exposure = {
+        key: ("experienced" if index % 3 == 0 else "not_experienced" if index % 3 == 1 else "cannot_recall")
+        for index, key in enumerate(term_keys)
+    }
+    return {
+        "survey_version": survey_version,
+        "prior_term_exposure": exposure,
+        "prior_term_understanding": {
+            key: ("moderately" if exposure[key] == "experienced" else None)
+            for key in term_keys
+        },
+        "general_ratings": {
+            "ai_usage_frequency_30d": "9_20_days",
+            "ai_proficiency": {
+                "goal_aligned_output": 4,
+                "revise_instructions": 2,
+                "verify_with_sources": "not_applicable",
+            },
+        },
+    }
 
 
 def test_spec_36_boolean_presurvey_record_remains_unchanged_and_read_only(study):
@@ -369,9 +399,9 @@ def test_required_knowledge_and_material_fields():
         mutate(payload)
         with pytest.raises(ValidationError):
             SurveyPayload.model_validate(payload)
-    for mutate in (lambda p: p.pop("prior_term_knowledge"),
-                   lambda p: p["prior_term_knowledge"].update(pretraining="yes"),
-                   lambda p: p["general_ratings"].pop("ai_usage_frequency")):
+    for mutate in (lambda p: p.pop("prior_term_exposure"),
+                   lambda p: p["prior_term_exposure"].update(pretraining="yes"),
+                   lambda p: p["general_ratings"].pop("ai_usage_frequency_30d")):
         payload = baseline_questionnaire()
         mutate(payload)
         with pytest.raises(ValidationError):
@@ -392,22 +422,67 @@ def test_every_displayed_survey_item_requires_an_explicit_answer(section, keys):
 
 
 @pytest.mark.parametrize("section,keys", [
-    ("prior_term_knowledge", ("pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process")),
-    ("general_ratings", ("ai_usage_frequency", "self_rated_ai_proficiency")),
+    ("prior_term_exposure", ("pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process")),
+    ("prior_term_understanding", ("pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process")),
+    ("ai_proficiency", ("goal_aligned_output", "revise_instructions", "verify_with_sources")),
 ])
 def test_every_displayed_presurvey_item_requires_an_explicit_answer(section, keys):
     for key in keys:
         payload = baseline_questionnaire()
-        payload[section].pop(key)
+        target = payload["general_ratings"][section] if section == "ai_proficiency" else payload[section]
+        target.pop(key)
         with pytest.raises(ValidationError):
             PresurveyPayload.model_validate(payload)
+
+
+def test_presurvey_exposure_conditioned_understanding_and_scales_are_strict():
     payload = baseline_questionnaire()
-    for category in ("unknown", "heard_of", "knows_meaning", "can_explain"):
-        payload["prior_term_knowledge"] = dict.fromkeys(payload["prior_term_knowledge"], category)
-        assert set(PresurveyPayload.model_validate(payload).prior_term_knowledge.model_dump().values()) == {category}
-    payload["prior_term_knowledge"]["pretraining"] = "yes"
+    assert PresurveyPayload.model_validate(payload)
+
+    for exposure in ("not_experienced", "cannot_recall"):
+        invalid = baseline_questionnaire()
+        invalid["prior_term_exposure"]["pretraining"] = exposure
+        invalid["prior_term_understanding"]["pretraining"] = "moderately"
+        with pytest.raises(ValidationError):
+            PresurveyPayload.model_validate(invalid)
+        invalid["prior_term_understanding"]["pretraining"] = None
+        assert PresurveyPayload.model_validate(invalid)
+
+    invalid = baseline_questionnaire()
+    invalid["prior_term_understanding"]["pretraining"] = None
     with pytest.raises(ValidationError):
-        PresurveyPayload.model_validate(payload)
+        PresurveyPayload.model_validate(invalid)
+
+    for exposure in ("experienced", "not_experienced", "cannot_recall"):
+        invalid = baseline_questionnaire()
+        invalid["prior_term_exposure"]["pretraining"] = exposure
+        invalid["prior_term_understanding"]["pretraining"] = "unknown"
+        with pytest.raises(ValidationError):
+            PresurveyPayload.model_validate(invalid)
+
+    invalid = baseline_questionnaire()
+    invalid["prior_term_exposure"]["unexpected"] = "experienced"
+    with pytest.raises(ValidationError):
+        PresurveyPayload.model_validate(invalid)
+    invalid = baseline_questionnaire()
+    invalid["general_ratings"]["ai_usage_frequency_30d"] = 31
+    with pytest.raises(ValidationError):
+        PresurveyPayload.model_validate(invalid)
+    invalid = baseline_questionnaire()
+    invalid["general_ratings"]["ai_proficiency"]["goal_aligned_output"] = 6
+    with pytest.raises(ValidationError):
+        PresurveyPayload.model_validate(invalid)
+
+
+def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation():
+    keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
+    assert keys == ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"]
+    payload = baseline_questionnaire("presurvey-four-topic-baseline-v2", keys)
+    parsed = FourTopicPresurveyPayload.model_validate(payload)
+    assert set(parsed.prior_term_exposure.model_dump()) == set(keys)
+    payload["prior_term_exposure"]["transformer"] = "cannot_recall"
+    with pytest.raises(ValidationError):
+        FourTopicPresurveyPayload.model_validate(payload)
 
 
 @pytest.mark.parametrize("comment", [None, "", "   ", "  感想  "])
@@ -524,18 +599,23 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     assert created.json()["current_step"] == "presurvey"
     assert client.get(f"/api/participants/{pid}/current-step").json()["next_url"] == "/presurvey"
     assert client.get(f"/api/experiment/{pid}/pretest").status_code == 409
-    assert client.get(f"/api/participants/{pid}/presurvey").json() == {"survey_version": PRESURVEY_VERSION}
-    invalid_baseline = baseline_questionnaire()
-    invalid_baseline["prior_term_knowledge"].pop("rag")
+    presurvey_context = client.get(f"/api/participants/{pid}/presurvey").json()
+    assert presurvey_context["survey_version"] in {PRESURVEY_VERSION, "presurvey-four-topic-baseline-v2"}
+    assert len(presurvey_context["term_items"]) == 6
+    baseline = baseline_questionnaire(
+        presurvey_context["survey_version"],
+        [item["key"] for item in presurvey_context["term_items"]],
+    )
+    invalid_baseline = json.loads(json.dumps(baseline))
+    invalid_baseline["prior_term_exposure"].pop("rag" if "rag" in invalid_baseline["prior_term_exposure"] else "transformer")
     assert client.post(f"/api/participants/{pid}/presurvey", json=invalid_baseline).status_code == 422
-    baseline = baseline_questionnaire()
     saved_baseline = client.post(f"/api/participants/{pid}/presurvey", json=baseline, headers={"Idempotency-Key": f"presurvey-{pid}"})
     assert saved_baseline.status_code == 200, saved_baseline.text
     assert saved_baseline.json()["next_url"] == "/pretest"
     assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "pretest"
     assert client.post(f"/api/participants/{pid}/presurvey", json=baseline, headers={"Idempotency-Key": f"presurvey-{pid}"}).json() == saved_baseline.json()
-    changed_baseline = baseline_questionnaire()
-    changed_baseline["general_ratings"]["ai_usage_frequency"] = 2
+    changed_baseline = json.loads(json.dumps(baseline))
+    changed_baseline["general_ratings"]["ai_usage_frequency_30d"] = "21_30_days"
     assert client.post(f"/api/participants/{pid}/presurvey", json=changed_baseline).status_code == 409
     assert client.get(f"/api/participants/{pid}/survey").json()["material_ratings_required"] is False
     with SessionLocal() as db:
@@ -552,22 +632,26 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     replay = client.post(f"/api/participants/{pid}/survey", json=payload, headers={"Idempotency-Key": f"survey-{pid}"})
     assert replay.json() == saved.json()
     logs = client.get(f"/api/admin/participants/{pid}/logs").json()
-    assert [(row["phase"], row["survey_version"]) for row in logs["surveys"]] == [("presurvey", PRESURVEY_VERSION), ("posttest", SURVEY_VERSION)]
+    assert [(row["phase"], row["survey_version"]) for row in logs["surveys"]] == [("presurvey", presurvey_context["survey_version"]), ("posttest", SURVEY_VERSION)]
     baseline_log, posttest_log = logs["surveys"]
-    assert baseline_log["responses"]["prior_term_knowledge"] == baseline["prior_term_knowledge"]
+    assert baseline_log["responses"]["prior_term_exposure"] == baseline["prior_term_exposure"]
+    assert baseline_log["responses"]["prior_term_understanding"] == baseline["prior_term_understanding"]
+    assert baseline_log["responses"]["general_ratings"] == baseline["general_ratings"]
     assert posttest_log["responses"]["material_rating_status"] == "not_applicable_not_viewed"
     assert posttest_log["ai_experience_level"] is None
     assert posttest_log["free_comment"] is None
-    assert "prior_term_knowledge" not in posttest_log["responses"]
+    assert "prior_term_exposure" not in posttest_log["responses"]
+    assert "prior_term_understanding" not in posttest_log["responses"]
     assert "experiences" not in posttest_log["responses"]
     csv_response = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert next(csv.reader(csv_response.text.splitlines())) == experiment.LOG_CSV_COLUMNS
     assert CURRENT_PROTOCOL_ID in csv_response.text
     records = csv.DictReader(csv_response.text.splitlines())
     exported_surveys = [json.loads(row["value_json"]) for row in records if row["record_type"] == "survey"]
-    assert [row["survey_version"] for row in exported_surveys] == [PRESURVEY_VERSION, SURVEY_VERSION]
-    assert exported_surveys[0]["responses"]["prior_term_knowledge"] == baseline["prior_term_knowledge"]
-    assert "prior_term_knowledge" not in exported_surveys[1]["responses"]
+    assert [row["survey_version"] for row in exported_surveys] == [presurvey_context["survey_version"], SURVEY_VERSION]
+    assert exported_surveys[0]["responses"]["prior_term_exposure"] == baseline["prior_term_exposure"]
+    assert exported_surveys[0]["responses"]["prior_term_understanding"] == baseline["prior_term_understanding"]
+    assert "prior_term_exposure" not in exported_surveys[1]["responses"]
     assert exported_surveys[1]["free_comment"] is None
     for name in ("hypothesis_metrics", "hypothesis_group_summary"):
         assert client.get(f"/api/admin/export/{name}.csv").status_code == 200

@@ -1,6 +1,6 @@
 # 出典と設計判断
 
-> このファイルは採用判断と出典の履歴を含む。現行コードの状態は[現行フロー](02_experiment_flow.md)を参照する。現行仕様版は38 / `experiment-plan-2026-11-05-presurvey-baseline-v2-rag-glossary-v1`。
+> このファイルは採用判断と出典の履歴を含む。現行コードの状態は[現行フロー](02_experiment_flow.md)と[現行アンケート](49_presurvey_baseline.md)を参照する。以下の版番号は各項目が記録された時点の履歴である。
 
 ## 2026-11-04 事前知識尺度の変更
 

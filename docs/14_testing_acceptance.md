@@ -1,5 +1,15 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-10 事前アンケートの見聞き経験・理解度分離（仕様版48・feature/issue-315-true）
+
+- 新規参加者の同意後、事前テスト前にモード別版の事前アンケートを必須化した。通常2モードは`presurvey-baseline-v3`、4用語版は`presurvey-four-topic-baseline-v2`を使う。
+- 各6用語の見聞き経験を「ある／ない／覚えていない」で取得し、「ある」の場合だけ4段階理解度を必須表示する。「ない／覚えていない」は理解度をnullで保存する。直近30日AI利用頻度と3項目のAI活用自己評価（5段階・評価できない）を取得する。定義や正答説明は提示しない。
+- 旧事前アンケート回答を移行せず、事後アンケート・仮説式は変更しない。回答は`phase=presurvey`と版を付けて既存ParticipantSurveyへ保存し、ログ・CSV/Excelで区別する。仕様版47以下は閲覧専用で保全する。
+- Backend全体テストは`1706 passed`、警告5件（既存のNumPy/joblib・SQLite日時adapter DeprecationWarning）。変更関連テストはBackendの既存テスト一式に含めて確認した。
+- Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。
+- 専用のPlaywrightブラウザテストおよびPC・スマートフォンの実ブラウザ表示確認は未実施。環境にPlaywrightがなく、専用テストは隔離Mock backendとブラウザ依存の準備が必要なため、画面検証を完了した扱いにはしない。
+- 研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。尺度の妥当性、回想誤差、回答負担、問題モード間の比較可能性、研究上の承認は未確認。
+
 ## 2026-11-10 事前テスト満点時の早期終了（仕様版47・feature/issue-315）
 
 - 新規参加者の仕様を47 / `experiment-plan-2026-11-10-pretest-perfect-early-exit-v1`へ更新した。3つの問題モードすべてで事前テスト全問正解なら、保存済み結果表示snapshotに応じて結果確認後または直接surveyへ進み、学習・内部`final_test`・再テストは開始しない。未達時の学習・モード別再テスト経路と既存結果表示設定は維持する。

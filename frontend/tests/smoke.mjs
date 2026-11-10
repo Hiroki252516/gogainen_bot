@@ -503,11 +503,11 @@ for (const expectedText of ["実験後アンケート", "/survey", "system_usabi
     throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
   }
 }
-for (const excludedText of ["prior_term_knowledge", "ai_usage_frequency", "self_rated_ai_proficiency", "pretraining"]) {
+for (const excludedText of ["prior_term_knowledge", "prior_term_exposure", "prior_term_understanding", "ai_usage_frequency_30d", "ai_proficiency", "pretraining"]) {
   if (surveyPage.includes(excludedText)) throw new Error(`baseline item must not remain in post survey: ${excludedText}`);
 }
 const presurveyPage = fs.readFileSync(new URL("../app/presurvey/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["実験前アンケート", "/presurvey", "prior_term_knowledge", "pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process", "unknown", "heard_of", "knows_meaning", "can_explain", "知らない", "聞いたことがある", "意味を知っている", "説明できる", "ai_usage_frequency", "self_rated_ai_proficiency", "length: 10", "回答を保存して事前テストへ", 'router.replace("/pretest")']) {
+for (const expectedText of ["実験前アンケート", "/presurvey", "term_items.map", "prior_term_exposure", "prior_term_understanding", "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "slightly", "moderately", "well", "覚えていない", "ある", "全く理解していない", "ある程度理解している", "ai_usage_frequency_30d", "0_days", "1_3_days", "4_8_days", "9_20_days", "21_30_days", "goal_aligned_output", "revise_instructions", "verify_with_sources", "評価できない", "回答を保存して事前テストへ", 'router.replace("/pretest")']) {
   if (!presurveyPage.includes(expectedText)) throw new Error(`presurvey page missing required baseline behavior: ${expectedText}`);
 }
 

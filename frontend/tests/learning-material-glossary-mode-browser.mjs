@@ -37,10 +37,16 @@ async function createParticipant(request, group, serial) {
   });
   const participantId = created.participant_id;
 
+  const presurvey = await api(request, `/api/participants/${participantId}/presurvey`);
+  const termKeys = presurvey.term_items.map(({ key }) => key);
   await api(request, `/api/participants/${participantId}/presurvey`, "POST", {
-    survey_version: "presurvey-baseline-v2",
-    prior_term_knowledge: { pretraining: "unknown", fine_tuning: "unknown", rag: "unknown", prompt_engineering: "unknown", multi_agent: "unknown", memory_process: "unknown" },
-    general_ratings: { ai_usage_frequency: 1, self_rated_ai_proficiency: 1 },
+    survey_version: presurvey.survey_version,
+    prior_term_exposure: Object.fromEntries(termKeys.map((key) => [key, "not_experienced"])),
+    prior_term_understanding: Object.fromEntries(termKeys.map((key) => [key, null])),
+    general_ratings: {
+      ai_usage_frequency_30d: "0_days",
+      ai_proficiency: { goal_aligned_output: "not_applicable", revise_instructions: "not_applicable", verify_with_sources: "not_applicable" },
+    },
   });
 
   const log = await api(request, `/api/admin/participants/${participantId}/logs`);

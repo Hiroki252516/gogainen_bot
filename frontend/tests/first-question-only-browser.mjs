@@ -40,10 +40,16 @@ async function register() {
     assignment_code: "A", consent_checked: true, student_number: "Q1-BROWSER-SYNTHETIC-" + Date.now(),
   });
   participants.push(record.participant_id);
+  const context = await ok(`/api/participants/${record.participant_id}/presurvey`);
+  const termKeys = context.term_items.map(({ key }) => key);
   const baseline = await ok(`/api/participants/${record.participant_id}/presurvey`, "POST", {
-    survey_version: "presurvey-baseline-v2",
-    prior_term_knowledge: { pretraining: "unknown", fine_tuning: "unknown", rag: "unknown", prompt_engineering: "unknown", multi_agent: "unknown", memory_process: "unknown" },
-    general_ratings: { ai_usage_frequency: 1, self_rated_ai_proficiency: 1 },
+    survey_version: context.survey_version,
+    prior_term_exposure: Object.fromEntries(termKeys.map((key) => [key, "not_experienced"])),
+    prior_term_understanding: Object.fromEntries(termKeys.map((key) => [key, null])),
+    general_ratings: {
+      ai_usage_frequency_30d: "0_days",
+      ai_proficiency: { goal_aligned_output: "not_applicable", revise_instructions: "not_applicable", verify_with_sources: "not_applicable" },
+    },
   });
   assert.equal(baseline.next_url, "/pretest");
   return record;
