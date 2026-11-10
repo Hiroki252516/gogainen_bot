@@ -68,6 +68,7 @@ try {
       await page.goto(new URL("/presurvey", base).href);
       const save = page.getByRole("button", { name: "回答を保存して事前テストへ", exact: true });
       await page.getByRole("heading", { name: "実験前アンケート", exact: true }).waitFor();
+      assert.equal(await page.locator(".presurvey-form .survey-choice-options").first().evaluate((group) => getComputedStyle(group).gridTemplateColumns.trim().split(/\s+/).length), 1);
       await save.click();
       assert.match(await page.locator("form").getByRole("alert").innerText(), /未選択/);
 
@@ -114,6 +115,15 @@ try {
         await group.getByRole("button", { name: chosen, exact: true }).click();
     proficiency[key] = chosen === "評価できない" ? "not_applicable" : Number(chosen);
       }
+      const choiceLayouts = await page.locator(".presurvey-form .survey-choice-options").evaluateAll((groups) => groups.map((group) => {
+        const buttons = [...group.querySelectorAll("button")].map((button) => button.getBoundingClientRect());
+        return {
+          columns: getComputedStyle(group).gridTemplateColumns.trim().split(/\s+/).length,
+          stacked: buttons.every((button, index) => index === 0 || button.top > buttons[index - 1].top),
+        };
+      }));
+      assert(choiceLayouts.length > 0);
+      assert(choiceLayouts.every(({ columns, stacked }) => columns === 1 && stacked), `choices must be one column at ${width}px`);
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `horizontal overflow at ${width}px`);
 
       const responsePromise = page.waitForResponse((response) => response.url().endsWith(`/api/participants/${pid}/presurvey`) && response.request().method() === "POST");

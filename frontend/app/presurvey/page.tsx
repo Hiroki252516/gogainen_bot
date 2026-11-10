@@ -110,7 +110,7 @@ export default function PresurveyPage() {
 
   return <ParticipantFlowGuard allowedSteps={PRESURVEY_STEPS}>
     <AppShell step="事前アンケート">
-      <form className="panel stack" onSubmit={submit}>
+      <form className="panel stack presurvey-form" onSubmit={submit}>
         <h1>実験前アンケート</h1>
         <p>今回の実験を始める前の状態について回答してください。表示される項目はすべて必須です。</p>
         {!context ? <p>回答項目を確認しています。</p> : <>
