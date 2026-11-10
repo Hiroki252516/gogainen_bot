@@ -39,6 +39,8 @@
 
 `not_applicable`は平均から除外し、平均に使った有効項目数と評価不能項目数を記録する。数値回答が1件以上あればその平均を使う。4項目すべてが`not_applicable`ならH5値を作らず、評価不能として対象外にする。未閲覧は未閲覧、posttest欠落は欠測として別々に記録する。
 
+群集計では、`eligible_count`を「教材閲覧者数 − 4項目すべて評価不能の人数」とする。`valid_response_count`はH5数値を持つ参加者数、`missing_count`は`eligible_count - valid_response_count`とし、教材未閲覧者・全項目評価不能者を未回答に数えない。
+
 難易度（`difficulty_appropriateness`）と学習時間に対する分量（`amount_appropriateness`）はH5へ含めず、群別の回答分布を別に報告する。分布は1〜5、`not_applicable`、未回答を区別し、平均・中央値やH5の群間差を計算しない。集計・CSV／Excelの詳細JSONには各値の件数、閲覧者分母、対象外・未回答の内訳を含める。
 
 旧指標`six-hypotheses-v7-pretest-perfect-exit`と旧10段階アンケートは履歴として保持し、新指標へ合算しない。尺度の妥当性、質問理解、H5構成の研究上の妥当性、研究上の承認はこの実装では確認していない。

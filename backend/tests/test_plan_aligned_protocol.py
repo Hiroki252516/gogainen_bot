@@ -19,7 +19,13 @@ from app.db.session import SessionLocal
 from app.models import Attempt, AuditEvent, Base, EvaluationSummary, Participant, ParticipantSurvey, Question, Term, TutorSession, TutorTurn
 from app.seed.seed_questions import seed_database
 from app.services import experiment
-from app.services.hypothesis_metrics import current_metrics, group_metrics, participant_metrics, write_metrics_csv
+from app.services.hypothesis_metrics import (
+    H5_COMPOSITE_KEYS,
+    current_metrics,
+    group_metrics,
+    participant_metrics,
+    write_metrics_csv,
+)
 from app.services.hypothesis_metrics import METRICS_VERSION
 from app.services.research_protocol import (
     FOUR_TOPIC_PRESURVEY_TERM_ITEMS,
@@ -579,6 +585,50 @@ def test_h5_all_core_items_not_evaluable_is_not_applicable(study):
     assert metric["value"] is None
     assert metric["status"] == "not_applicable_no_evaluable_ratings"
     assert metric["not_evaluable_item_count"] == 4
+
+
+def test_h5_group_counts_separate_eligible_missing_not_viewed_and_not_evaluable(study, tmp_path):
+    observed = participant(study, "OBSERVED")
+    session(study, observed, "llm_knowledge", 1)
+    study.add(ParticipantSurvey(participant_id=observed.id, phase="posttest", survey_version=SURVEY_VERSION,
+                                responses_json=questionnaire(True)))
+
+    missing = participant(study, "MISSING")
+    session(study, missing, "llm_knowledge", 1)
+
+    not_evaluable = participant(study, "NOT-EVALUABLE")
+    session(study, not_evaluable, "llm_knowledge", 1)
+    responses = questionnaire(True)
+    for key in H5_COMPOSITE_KEYS:
+        responses["material_ratings"][key] = "not_applicable"
+    study.add(ParticipantSurvey(participant_id=not_evaluable.id, phase="posttest", survey_version=SURVEY_VERSION,
+                                responses_json=responses))
+
+    not_viewed = participant(study, "NOT-VIEWED")
+    session(study, not_viewed, "llm_knowledge", 1, displayed=False)
+    study.flush()
+
+    rows = [participant_metrics(study, p) for p in (observed, missing, not_evaluable, not_viewed)]
+    group = group_metrics(rows)["groups"][1]
+    grouped = group["h5"]
+    assert group["participant_count"] == 4
+    assert grouped["viewed_count"] == 3
+    assert grouped["eligible_count"] == 2
+    assert grouped["valid_response_count"] == grouped["n"] == 1
+    assert grouped["missing_count"] == 1
+    assert grouped["not_applicable_count"] == 2
+    assert grouped["not_evaluable_count"] == 1
+    assert grouped["not_viewed_count"] == 1
+
+    exported = write_metrics_csv(tmp_path / "h5-denominators.csv", rows, grouped=True)
+    records = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
+    summary = next(record for record in records if record["metric"] == "h5" and record["group_condition"] == "proposed")
+    assert summary["eligible_count"] == "2"
+    assert summary["missing_count"] == "1"
+    details = json.loads(summary["details_json"])
+    assert details["valid_response_count"] == 1
+    assert details["not_evaluable_count"] == 1
+    assert details["not_viewed_count"] == 1
 
 
 def test_display_is_idempotent_and_controls_survey_eligibility(study):

@@ -262,12 +262,19 @@ def _group(rows):
             stats["mean"] = None
             stats["median"] = None
         item_stats[key] = stats
+    h5_not_evaluable_count = sum(
+        row["h5"]["status"] == "not_applicable_no_evaluable_ratings"
+        for row in viewed_rows
+    )
+    h5_eligible_count = len(viewed_rows) - h5_not_evaluable_count
+    h5_valid_response_count = result["h5"]["n"]
     result["h5"].update({
         "viewed_count": len(viewed_rows),
-        "eligible_count": result["h5"]["n"],
-        "valid_response_count": result["h5"]["n"],
-        "not_evaluable_count": sum(r["h5"]["status"] == "not_applicable_no_evaluable_ratings" for r in rows),
+        "eligible_count": h5_eligible_count,
+        "valid_response_count": h5_valid_response_count,
+        "not_evaluable_count": h5_not_evaluable_count,
         "not_viewed_count": sum(r["h5"]["status"] == "not_applicable_not_viewed" for r in rows),
+        "missing_count": max(0, h5_eligible_count - h5_valid_response_count),
         "items": item_stats,
     })
     h6_values = [r["h6"]["value"] for r in rows if r["h6"]["value"] is not None]
