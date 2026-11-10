@@ -9,20 +9,40 @@ import { api, postIdempotent, requireParticipant } from "@/lib/api";
 
 const SURVEY_STEPS = ["survey"] as const;
 const GENERAL = [
-  ["system_usability", "システムは操作しやすかった", ""],
-  ["system_clarity", "システムの使い方はわかりやすかった", ""],
+  ["system_usability", "必要な操作をスムーズに行えた"],
+  ["system_clarity", "画面を見て、次に何をすればよいか分かった"],
 ] as const;
 const MATERIAL = [
-  ["clarity", "教材の内容はわかりやすかった"],
-  ["readability", "教材は読みやすかった"],
-  ["japanese_clarity", "教材の日本語はわかりやすかった"],
-  ["difficulty_appropriateness", "教材の難易度は適切だった"],
-  ["learning_usefulness", "教材は学習に役立った"],
-  ["amount_appropriateness", "教材の量は適切だった"],
+  ["clarity", "教材で説明された内容を理解できた", "agreement"],
+  ["readability", "教材は読みやすかった", "agreement"],
+  ["japanese_clarity", "教材の日本語表現は分かりやすかった", "agreement"],
+  ["difficulty_appropriateness", "教材の難易度はどの程度でしたか", "difficulty"],
+  ["learning_usefulness", "教材は、用語や仕組みを正しく理解するために役立った", "agreement"],
+  ["amount_appropriateness", "今回の学習時間に対する教材の量はどの程度でしたか", "amount"],
 ] as const;
-const AGREEMENT_ANCHORS = "1：全くそう思わない ／ 10：非常にそう思う";
-const RATING_VALUES = Array.from({ length: 10 }, (_, index) => String(index + 1));
-type Context = { survey_version: string; has_viewed_material: boolean; material_ratings_required: boolean };
+const AGREEMENT_OPTIONS = [
+  ["1", "全くそう思わない"],
+  ["2", "あまりそう思わない"],
+  ["3", "どちらともいえない"],
+  ["4", "ややそう思う"],
+  ["5", "非常にそう思う"],
+] as const;
+const DIFFICULTY_OPTIONS = [
+  ["1", "簡単すぎた"],
+  ["2", "やや簡単"],
+  ["3", "ちょうどよい"],
+  ["4", "やや難しい"],
+  ["5", "難しすぎた"],
+] as const;
+const AMOUNT_OPTIONS = [
+  ["1", "少なすぎた"],
+  ["2", "やや少ない"],
+  ["3", "ちょうどよい"],
+  ["4", "やや多い"],
+  ["5", "多すぎた"],
+] as const;
+const NOT_APPLICABLE_OPTION = ["not_applicable", "評価できない"] as const;
+type Context = { survey_version: "posttest-5point-v1"; has_viewed_material: boolean; material_ratings_required: boolean };
 
 export default function SurveyPage() {
   const router = useRouter();
@@ -55,10 +75,11 @@ export default function SurveyPage() {
     setError("");
     try {
       const participantId = requireParticipant();
+      const ratingValue = (value: string) => value === "not_applicable" ? value : Number(value);
       await postIdempotent(`/api/participants/${participantId}/survey`, {
         survey_version: context.survey_version,
-        general_ratings: Object.fromEntries(GENERAL.map(([key]) => [key, Number(values[key])])),
-        material_ratings: context.material_ratings_required ? Object.fromEntries(MATERIAL.map(([key]) => [key, Number(values[key])])) : null,
+        general_ratings: Object.fromEntries(GENERAL.map(([key]) => [key, ratingValue(values[key])])),
+        material_ratings: context.material_ratings_required ? Object.fromEntries(MATERIAL.map(([key]) => [key, ratingValue(values[key])])) : null,
         free_comment: comment.trim(),
       }, `survey:${participantId}`);
       router.replace("/finish");
@@ -72,14 +93,14 @@ export default function SurveyPage() {
         <p>自由記述以外の表示される項目はすべて必須です。各質問について回答してください。</p>
         {!context ? <p>回答項目を確認しています。</p> : <>
           <h2>システムについて</h2>
-          {GENERAL.map(([key, label, anchors]) => <RatingButtons key={key} label={label} anchors={anchors || AGREEMENT_ANCHORS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
+          {GENERAL.map(([key, label]) => <RatingButtons key={key} label={label} options={AGREEMENT_OPTIONS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
           <h2>教材について</h2>
           {context.material_ratings_required
-            ? MATERIAL.map(([key, label]) => <RatingButtons key={key} label={label} anchors={AGREEMENT_ANCHORS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)
+            ? MATERIAL.map(([key, label, scale]) => <RatingButtons key={key} label={label} options={scale === "difficulty" ? DIFFICULTY_OPTIONS : scale === "amount" ? AMOUNT_OPTIONS : AGREEMENT_OPTIONS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)
             : <p>教材の表示記録がないため、教材評価6項目は対象外です。</p>}
           <label>自由記述（任意）
             <textarea value={comment} disabled={submitting} onChange={(event) => setComment(event.target.value)} rows={5} />
-            <span className="muted">感想や改善点があれば記入してください。空欄のまま送信できます。</span>
+            <span className="muted">操作で迷った点、教材で分かりにくかった点、改善してほしい点などがあれば記入してください。空欄のまま送信できます。</span>
           </label>
         </>}
         {error ? <div className="danger" role="alert">{error}</div> : null}
@@ -106,19 +127,21 @@ function ChoiceButtons({ label, value, disabled, onChange }: { label: string; va
   </div>;
 }
 
-function RatingButtons({ label, anchors, value, disabled, onChange }: { label: string; anchors: string; value: string; disabled: boolean; onChange: (value: string) => void }) {
+function RatingButtons({ label, options, value, disabled, onChange }: { label: string; options: readonly (readonly [string, string])[]; value: string; disabled: boolean; onChange: (value: string) => void }) {
+  const choices = [...options, NOT_APPLICABLE_OPTION];
   return <div className="survey-rating">
     <div className="survey-rating-label"><span>{label}</span><span className="required-indicator">必須</span></div>
-    <span className="muted">{anchors}</span>
     <div className="survey-rating-options" role="group" aria-label={label}>
-      {RATING_VALUES.map((rating) => <button
+      {choices.map(([rating, optionLabel]) => <button
         key={rating}
         type="button"
         className={`survey-rating-button${value === rating ? " selected" : ""}`}
+        data-rating-value={rating}
+        aria-label={optionLabel}
         aria-pressed={value === rating}
         disabled={disabled}
         onClick={() => onChange(rating)}
-      >{rating}</button>)}
+      ><span className="survey-rating-value">{rating === "not_applicable" ? "評価不能" : rating}</span><span>{optionLabel}</span></button>)}
     </div>
   </div>;
 }

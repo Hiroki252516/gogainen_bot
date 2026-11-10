@@ -19,7 +19,13 @@ from app.db.session import SessionLocal
 from app.models import Attempt, AuditEvent, Base, EvaluationSummary, Participant, ParticipantSurvey, Question, Term, TutorSession, TutorTurn
 from app.seed.seed_questions import seed_database
 from app.services import experiment
-from app.services.hypothesis_metrics import current_metrics, group_metrics, participant_metrics, write_metrics_csv
+from app.services.hypothesis_metrics import (
+    H5_COMPOSITE_KEYS,
+    current_metrics,
+    group_metrics,
+    participant_metrics,
+    write_metrics_csv,
+)
 from app.services.hypothesis_metrics import METRICS_VERSION
 from app.services.research_protocol import (
     FOUR_TOPIC_PRESURVEY_TERM_ITEMS,
@@ -96,8 +102,8 @@ def session(db, p, slug, index, wrong=0, *, displayed=True, answered=True, ended
 
 def questionnaire(viewed=False):
     return {"survey_version": SURVEY_VERSION,
-            "general_ratings": {"system_usability": 9, "system_clarity": 8},
-            "material_ratings": {key: 7 for key in MATERIAL_RATING_KEYS} if viewed else None,
+            "general_ratings": {"system_usability": 4, "system_clarity": 5},
+            "material_ratings": {key: 4 for key in MATERIAL_RATING_KEYS} if viewed else None,
             "free_comment": "  特になし  "}
 
 
@@ -176,7 +182,7 @@ def test_six_metrics_use_first_round_and_nested_term_means(study):
     assert row["h3"]["value"] == 1
     assert row["h4"]["value"] == 0.5
     assert row["h4"]["denominator"] == 4
-    assert row["h5"]["value"] == 7
+    assert row["h5"]["value"] == 4
     assert row["h6"]["attained"] is True
     assert row["rounds"][1]["gain_pt"] == 100
 
@@ -382,7 +388,7 @@ def test_rounds_remain_distinct_after_variant_five_is_reused(study):
     assert row["h2"]["first_mastery_round"] == 6
 
 
-@pytest.mark.parametrize("field,value", [("system_usability", 0), ("system_usability", 11), ("system_usability", True), ("system_clarity", 5.5), ("system_clarity", "5")])
+@pytest.mark.parametrize("field,value", [("system_usability", 0), ("system_usability", 6), ("system_usability", True), ("system_clarity", 3.5), ("system_clarity", "4")])
 def test_rating_validation_is_strict_and_bounded(field, value):
     payload = questionnaire()
     payload["general_ratings"][field] = value
@@ -505,8 +511,8 @@ def test_old_questionnaire_cannot_be_written_as_the_new_version():
         SurveyPayload.model_validate(payload)
 
 
-@pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", SURVEY_VERSION])
-def test_h5_keeps_saved_ratings_from_both_survey_versions_without_rewriting(study, version):
+@pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", SURVEY_VERSION])
+def test_h5_uses_only_current_survey_version_without_rewriting_history(study, version):
     p = participant(study)
     session(study, p, "llm_knowledge", 1)
     responses = questionnaire(True)
@@ -527,10 +533,102 @@ def test_h5_keeps_saved_ratings_from_both_survey_versions_without_rewriting(stud
                                responses_json=responses, free_comment=None)
     study.add(survey)
     study.commit()
-    assert participant_metrics(study, p)["h5"]["value"] == 7
+    metrics = participant_metrics(study, p)["h5"]
+    assert metrics["value"] == (4 if version == SURVEY_VERSION else None)
+    assert metrics["status"] == ("observed" if version == SURVEY_VERSION else "missing_survey")
     study.refresh(survey)
     assert survey.responses_json == original
     assert survey.survey_version == version
+
+
+def test_h5_excludes_not_applicable_and_reports_centered_scales_as_distributions(study, tmp_path):
+    p = participant(study)
+    session(study, p, "llm_knowledge", 1)
+    responses = questionnaire(True)
+    responses["material_ratings"] = {
+        "clarity": 2,
+        "readability": "not_applicable",
+        "japanese_clarity": 4,
+        "difficulty_appropriateness": 5,
+        "learning_usefulness": 3,
+        "amount_appropriateness": "not_applicable",
+    }
+    study.add(ParticipantSurvey(participant_id=p.id, phase="posttest", survey_version=SURVEY_VERSION,
+                                responses_json=responses))
+    study.flush()
+    row = participant_metrics(study, p)
+    assert row["h5"]["value"] == pytest.approx(3)
+    assert row["h5"]["valid_item_count"] == 3
+    assert row["h5"]["not_evaluable_item_count"] == 1
+
+    groups = group_metrics([row])["groups"][1]["h5"]
+    assert groups["items"]["difficulty_appropriateness"]["mean"] is None
+    assert groups["items"]["difficulty_appropriateness"]["distribution"]["5"] == 1
+    assert groups["items"]["amount_appropriateness"]["distribution"]["not_applicable"] == 1
+    exported = write_metrics_csv(tmp_path / "survey-metrics.csv", [row], grouped=True)
+    records = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
+    difficulty = next(record for record in records if record["metric"] == "h5.difficulty_appropriateness" and record["group_condition"] == "proposed")
+    assert difficulty["mean"] == ""
+    assert json.loads(difficulty["details_json"])["distribution"]["5"] == 1
+
+
+def test_h5_all_core_items_not_evaluable_is_not_applicable(study):
+    p = participant(study)
+    session(study, p, "llm_knowledge", 1)
+    responses = questionnaire(True)
+    for key in ("clarity", "readability", "japanese_clarity", "learning_usefulness"):
+        responses["material_ratings"][key] = "not_applicable"
+    study.add(ParticipantSurvey(participant_id=p.id, phase="posttest", survey_version=SURVEY_VERSION,
+                                responses_json=responses))
+    study.flush()
+    metric = participant_metrics(study, p)["h5"]
+    assert metric["value"] is None
+    assert metric["status"] == "not_applicable_no_evaluable_ratings"
+    assert metric["not_evaluable_item_count"] == 4
+
+
+def test_h5_group_counts_separate_eligible_missing_not_viewed_and_not_evaluable(study, tmp_path):
+    observed = participant(study, "OBSERVED")
+    session(study, observed, "llm_knowledge", 1)
+    study.add(ParticipantSurvey(participant_id=observed.id, phase="posttest", survey_version=SURVEY_VERSION,
+                                responses_json=questionnaire(True)))
+
+    missing = participant(study, "MISSING")
+    session(study, missing, "llm_knowledge", 1)
+
+    not_evaluable = participant(study, "NOT-EVALUABLE")
+    session(study, not_evaluable, "llm_knowledge", 1)
+    responses = questionnaire(True)
+    for key in H5_COMPOSITE_KEYS:
+        responses["material_ratings"][key] = "not_applicable"
+    study.add(ParticipantSurvey(participant_id=not_evaluable.id, phase="posttest", survey_version=SURVEY_VERSION,
+                                responses_json=responses))
+
+    not_viewed = participant(study, "NOT-VIEWED")
+    session(study, not_viewed, "llm_knowledge", 1, displayed=False)
+    study.flush()
+
+    rows = [participant_metrics(study, p) for p in (observed, missing, not_evaluable, not_viewed)]
+    group = group_metrics(rows)["groups"][1]
+    grouped = group["h5"]
+    assert group["participant_count"] == 4
+    assert grouped["viewed_count"] == 3
+    assert grouped["eligible_count"] == 2
+    assert grouped["valid_response_count"] == grouped["n"] == 1
+    assert grouped["missing_count"] == 1
+    assert grouped["not_applicable_count"] == 2
+    assert grouped["not_evaluable_count"] == 1
+    assert grouped["not_viewed_count"] == 1
+
+    exported = write_metrics_csv(tmp_path / "h5-denominators.csv", rows, grouped=True)
+    records = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
+    summary = next(record for record in records if record["metric"] == "h5" and record["group_condition"] == "proposed")
+    assert summary["eligible_count"] == "2"
+    assert summary["missing_count"] == "1"
+    details = json.loads(summary["details_json"])
+    assert details["valid_response_count"] == 1
+    assert details["not_evaluable_count"] == 1
+    assert details["not_viewed_count"] == 1
 
 
 def test_display_is_idempotent_and_controls_survey_eligibility(study):

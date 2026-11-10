@@ -7,7 +7,10 @@ const base = new URL(process.env.SURVEY_UI_BASE_URL);
 assert(base.hostname === "survey-v2-frontend-check" || (["localhost", "127.0.0.1"].includes(base.hostname) && base.port && base.port !== "3000"));
 const { chromium } = await import(process.env.SURVEY_PLAYWRIGHT_MODULE);
 const fixtures = [1440, 390].flatMap((width) => [true, false].map((viewed) => ({ width, viewed })));
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  ...(process.env.SURVEY_CHROMIUM_EXECUTABLE ? { executablePath: process.env.SURVEY_CHROMIUM_EXECUTABLE } : {}),
+});
 if (process.env.SURVEY_SCREENSHOT_DIR) await mkdir(process.env.SURVEY_SCREENSHOT_DIR, { recursive: true });
 
 async function api(request, path, method = "GET", data) {
@@ -17,6 +20,8 @@ async function api(request, path, method = "GET", data) {
 }
 
 async function prepareFixture(request, fixture) {
+  await api(request, "/api/admin/auth/login", "POST", { password: "abc" });
+  await api(request, "/api/admin/test-content-mode", "PUT", { mode: "application" });
   await api(request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
   const record = await api(request, "/api/registrations", "POST", {
     assignment_code: "A", consent_checked: true,
@@ -65,10 +70,12 @@ async function prepareFixture(request, fixture) {
     await api(request, "/api/tutor-turns/" + turn.turn_id + "/material-view", "POST", {});
     await api(request, "/api/participants/" + pid + "/give-up-learning", "POST", {});
   } else {
-    assert.equal(diagnosis.next_step, "final_test");
+    assert.equal(diagnosis.next_step, "survey");
   }
-  const ended = await api(request, "/api/participants/" + pid + "/give-up", "POST", {});
-  assert.equal(ended.next_step, "survey");
+  if (fixture.viewed) {
+    const ended = await api(request, "/api/participants/" + pid + "/give-up", "POST", {});
+    assert.equal(ended.next_step, "survey");
+  }
   return { ...record, presurveyPayload };
 }
 
@@ -103,12 +110,14 @@ try {
     assert.equal(await page.getByText("事前学習", { exact: true }).count(), 0);
     const ratings = page.locator(".survey-rating-options");
     assert.equal(await ratings.count(), fixture.viewed ? 8 : 2);
+    assert(await page.getByText("教材で説明された内容を理解できた", { exact: true }).count() === Number(fixture.viewed));
     for (let index = 0; index < await ratings.count() - 1; index++) {
-      await ratings.nth(index).getByRole("button", { name: "7", exact: true }).click();
+      const value = fixture.viewed && index === 2 ? "not_applicable" : "4";
+      await ratings.nth(index).locator(`[data-rating-value="${value}"]`).click();
     }
     await save.click();
     assert.match(await page.locator("form").getByRole("alert").innerText(), /未選択/);
-    await ratings.last().getByRole("button", { name: "7", exact: true }).click();
+    await ratings.last().locator(`[data-rating-value="${fixture.viewed ? "not_applicable" : "4"}"]`).click();
     const textarea = page.locator("textarea");
     assert.equal(await textarea.getAttribute("required"), null);
     assert.equal(await textarea.inputValue(), "");
@@ -117,15 +126,20 @@ try {
     const saved = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/survey"));
     await save.click();
     const body = (await posted).postDataJSON();
-    assert.equal(body.survey_version, "posttest-10point-v3");
+    assert.equal(body.survey_version, "posttest-5point-v1");
     assert(!("prior_term_knowledge" in body));
-    assert.equal(body.general_ratings.system_usability, 7);
-    assert.equal(body.general_ratings.system_clarity, 7);
+    assert.equal(body.general_ratings.system_usability, 4);
+    assert.equal(body.general_ratings.system_clarity, 4);
     assert(!("ai_usage_frequency" in body.general_ratings));
     assert(!("experiences" in body));
     assert(!("self_rated_ai_knowledge" in body.general_ratings));
     assert.equal(body.free_comment, "");
     assert.equal(body.material_ratings === null, !fixture.viewed);
+    if (fixture.viewed) {
+      assert.equal(body.material_ratings.clarity, "not_applicable");
+      assert.equal(body.material_ratings.amount_appropriateness, "not_applicable");
+      assert.equal(body.material_ratings.readability, 4);
+    }
     assert((await saved).ok());
     await page.waitForURL(new URL("/finish", base).href);
     const logs = await context.request.get(new URL("/api/admin/participants/" + fixture.participant_id + "/logs", base).href);
@@ -138,7 +152,7 @@ try {
     assert.deepEqual(presurvey.responses.prior_term_exposure, fixture.presurveyPayload.prior_term_exposure);
     assert.deepEqual(presurvey.responses.prior_term_understanding, fixture.presurveyPayload.prior_term_understanding);
     assert.deepEqual(presurvey.responses.general_ratings, fixture.presurveyPayload.general_ratings);
-    assert.equal(posttest.survey_version, "posttest-10point-v3");
+    assert.equal(posttest.survey_version, "posttest-5point-v1");
     assert(!("prior_term_exposure" in posttest.responses));
     assert(!("prior_term_understanding" in posttest.responses));
     assert.equal(posttest.free_comment, "");

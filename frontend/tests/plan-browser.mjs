@@ -62,7 +62,7 @@ try {
     for (let index = 0; index < count; index++) {
       const group = optionGroups.nth(index);
       assert.notEqual(await group.getAttribute("aria-label"), null);
-      await group.getByRole("button", { name: "8", exact: true }).click();
+      await group.locator('[data-rating-value="4"]').click();
     }
     const comment = page.getByRole("textbox", { name: "自由記述（任意）", exact: false });
     await comment.fill("画面検証用の合成回答です。特になし。");
@@ -75,7 +75,7 @@ try {
     assert.equal(logs.surveys[1].phase, "posttest");
     assert.equal(logs.surveys[1].responses.has_viewed_material, viewed);
     assert.equal(logs.surveys[1].responses.material_ratings === null, !viewed);
-    if (viewed) assert.equal(logs.latest_evaluation_summary.hypothesis_metrics.h5.value, 8);
+    if (viewed) assert.equal(logs.latest_evaluation_summary.hypothesis_metrics.h5.value, 4);
     await page.goto(new URL("/admin", base).href);
     await page.getByRole("heading", { name: "6仮説の記述集計", exact: true }).waitFor();
     assert.equal(await page.getByRole("link", { name: "6仮説・群別CSV", exact: true }).count(), 1);
@@ -84,7 +84,7 @@ try {
     }
     assert(await page.getByText("表示済みセッションの記録欠落を意味しません", { exact: false }).isVisible());
     const summary = await (await page.request.get(new URL("/api/admin/evaluation-summary", base).href)).json();
-    assert.equal(summary.hypotheses.metrics_version, "six-hypotheses-v4-question-selection");
+    assert.equal(summary.hypotheses.metrics_version, "six-hypotheses-v8-posttest-five-point-evaluation");
     for (const group of summary.hypotheses.groups) {
       assert.equal(group.h2.missing_count, group.h2.not_attained_count);
       assert.equal(Object.values(group.h2.censoring_breakdown).reduce((count, stat) => count + stat.n, 0), group.h2.not_attained_count);

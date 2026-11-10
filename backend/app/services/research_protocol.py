@@ -13,9 +13,9 @@ from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
 PRESURVEY_VERSION = "presurvey-baseline-v3"
 FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v2"
-SURVEY_VERSION = "posttest-10point-v3"
-SUPPORTED_SURVEY_VERSIONS = ("posttest-10point-v1", "posttest-10point-v2", SURVEY_VERSION)
-Rating = Annotated[int, Field(strict=True, ge=1, le=10)]
+SURVEY_VERSION = "posttest-5point-v1"
+SUPPORTED_SURVEY_VERSIONS = ("posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", SURVEY_VERSION)
+PosttestRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
 ProficiencyRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
 Comment = Annotated[str, StringConstraints(strip_whitespace=True)]
 EXPOSURE_VALUES = ("experienced", "not_experienced", "cannot_recall")
@@ -75,17 +75,17 @@ class BaselineRatings(StrictModel):
 
 
 class PosttestRatings(StrictModel):
-    system_usability: Rating
-    system_clarity: Rating
+    system_usability: PosttestRating
+    system_clarity: PosttestRating
 
 
 class MaterialRatings(StrictModel):
-    clarity: Rating
-    readability: Rating
-    japanese_clarity: Rating
-    difficulty_appropriateness: Rating
-    learning_usefulness: Rating
-    amount_appropriateness: Rating
+    clarity: PosttestRating
+    readability: PosttestRating
+    japanese_clarity: PosttestRating
+    difficulty_appropriateness: PosttestRating
+    learning_usefulness: PosttestRating
+    amount_appropriateness: PosttestRating
 
 
 MATERIAL_RATING_KEYS = tuple(MaterialRatings.model_fields)
@@ -141,7 +141,7 @@ def _validate_understanding_branch(exposure: StrictModel, understanding: StrictM
 
 
 class SurveyPayload(StrictModel):
-    survey_version: Literal["posttest-10point-v3"] = SURVEY_VERSION
+    survey_version: Literal["posttest-5point-v1"] = SURVEY_VERSION
     general_ratings: PosttestRatings
     material_ratings: MaterialRatings | None
     free_comment: Comment | None = None

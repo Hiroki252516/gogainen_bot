@@ -120,7 +120,7 @@ try {
       const optionGroups = page.locator("form .survey-rating-options");
       await optionGroups.first().waitFor();
       assert.equal(await optionGroups.count(), 8);
-      for (let index = 0; index < 8; index++) await optionGroups.nth(index).getByRole("button", { name: "8", exact: true }).click();
+      for (let index = 0; index < 8; index++) await optionGroups.nth(index).locator('[data-rating-value="4"]').click();
       await page.getByRole("textbox", { name: "自由記述（任意）", exact: false }).fill("隔離DBでの上限確認用の合成回答です。");
       await page.getByRole("button", { name: "回答を保存して終了", exact: true }).click();
       await page.getByRole("heading", { name: "実験は終了です", exact: true }).waitFor();
