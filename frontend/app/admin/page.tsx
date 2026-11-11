@@ -660,6 +660,14 @@ export default function AdminPage() {
           </div>
         </section>
         <section className="panel stack">
+          <h2>アンケートのデバッグ</h2>
+          <p>参加者データへ保存しないプレビューを操作できます。事前アンケートは4用語版、事後アンケートは教材評価ありの表示です。</p>
+          <div className="actions">
+            <Link className="button secondary" href="/admin/survey-preview/presurvey">事前アンケートを試す</Link>
+            <Link className="button secondary" href="/admin/survey-preview/posttest">事後アンケートを試す</Link>
+          </div>
+        </section>
+        <section className="panel stack">
           <h2>全体ログ</h2>
           <p><strong>集計対象: 全参加者</strong>。有効な現行仕様の参加者を対象に、設定された設問数と単一選択の回答を集計します。</p>
           {summaryError ? <p className="danger" role="alert">{summaryError}</p> : null}
