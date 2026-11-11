@@ -40,7 +40,7 @@ async function request(context, path, method = "GET", data) {
 
 try {
   for (const mode of modes) {
-    for (const width of [1440, 390]) {
+    for (const width of [1440, 768, 390]) {
       const context = await browser.newContext({ viewport: { width, height: 950 } });
       const page = await context.newPage();
       const errors = [];
@@ -68,7 +68,6 @@ try {
       await page.goto(new URL("/presurvey", base).href);
       const save = page.getByRole("button", { name: "回答を保存して事前テストへ", exact: true });
       await page.getByRole("heading", { name: "実験前アンケート", exact: true }).waitFor();
-      assert.equal(await page.locator(".presurvey-form .survey-choice-options").first().evaluate((group) => getComputedStyle(group).gridTemplateColumns.trim().split(/\s+/).length), 1);
       await save.click();
       assert.match(await page.locator("form").getByRole("alert").innerText(), /未選択/);
 
@@ -117,13 +116,21 @@ try {
       }
       const choiceLayouts = await page.locator(".presurvey-form .survey-choice-options").evaluateAll((groups) => groups.map((group) => {
         const buttons = [...group.querySelectorAll("button")].map((button) => button.getBoundingClientRect());
+        const elements = [...group.querySelectorAll("button")];
         return {
           columns: getComputedStyle(group).gridTemplateColumns.trim().split(/\s+/).length,
-          stacked: buttons.every((button, index) => index === 0 || button.top > buttons[index - 1].top),
+          optionCount: buttons.length,
+          rows: new Set(buttons.map((button) => Math.round(button.top))).size,
+          overflowingButtons: elements.some((button) => button.scrollWidth > button.clientWidth + 1),
         };
       }));
       assert(choiceLayouts.length > 0);
-      assert(choiceLayouts.every(({ columns, stacked }) => columns === 1 && stacked), `choices must be one column at ${width}px`);
+      const narrow = width <= 760;
+      assert(choiceLayouts.every(({ columns, optionCount, rows, overflowingButtons }) =>
+        columns === (narrow ? 2 : optionCount)
+        && rows === (narrow ? Math.ceil(optionCount / 2) : 1)
+        && !overflowingButtons
+      ), `choices must match the responsive horizontal layout at ${width}px`);
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `horizontal overflow at ${width}px`);
 
       const responsePromise = page.waitForResponse((response) => response.url().endsWith(`/api/participants/${pid}/presurvey`) && response.request().method() === "POST");
