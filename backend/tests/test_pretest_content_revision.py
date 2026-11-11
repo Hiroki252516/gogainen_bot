@@ -379,7 +379,11 @@ def test_spec_50_keeps_mode_banks_and_preserves_previous_read_only_snapshots(tmp
         with Session(engine) as db:
             seed_database(db)
             assert CURRENT_EXPERIMENT_SPEC_VERSION == 50
+<<<<<<< HEAD
             assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1"
+=======
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-11-posttest-material-amount-wording-v1"
+>>>>>>> 9a9cae1
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"

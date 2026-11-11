@@ -8,7 +8,11 @@ from app.core.question_sets import LEARNING_CONTENT_VERSION
 
 
 CURRENT_EXPERIMENT_SPEC_VERSION = 50
+<<<<<<< HEAD
 CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1"
+=======
+CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-11-posttest-material-amount-wording-v1"
+>>>>>>> 9a9cae1
 MAX_POST_PRETEST_TESTS = 2
 MAX_LEARNING_CONFIRMATION_ATTEMPTS = 1
 

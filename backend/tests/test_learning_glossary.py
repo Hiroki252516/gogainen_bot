@@ -192,7 +192,11 @@ def test_material_and_feedback_snapshots_replays_and_audit(group, labels, restor
     with SessionLocal() as db:
         p = db.get(Participant, pid)
         assert p.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 50
+<<<<<<< HEAD
         assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1"
+=======
+        assert p.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-11-posttest-material-amount-wording-v1"
+>>>>>>> 9a9cae1
         assert p.learning_material_glossary_mode == "integrated_material"
         stored = db.get(TutorTurn, turn["turn_id"])
         assert stored.diagnosis_json["material_glossary"] == expected_material

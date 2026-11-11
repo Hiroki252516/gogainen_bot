@@ -151,6 +151,7 @@ def test_version_44_restores_its_saved_mode(mode, expected_bank):
 
 def test_version_49_restores_the_historical_four_topic_bank():
     participant = {
+<<<<<<< HEAD
         "experiment_spec_version": 49,
         "protocol_id": "experiment-plan-2026-11-10-posttest-five-point-evaluation-v1",
         "test_content_mode": "four_topic_fundamentals",
@@ -166,6 +167,10 @@ def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map()
     participant = {
         "experiment_spec_version": 50,
         "protocol_id": "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1",
+=======
+        "experiment_spec_version": 50,
+        "protocol_id": "experiment-plan-2026-11-11-posttest-material-amount-wording-v1",
+>>>>>>> 9a9cae1
         "test_content_mode": None,
     }
 
@@ -192,7 +197,11 @@ def test_current_result_restoration_rejects_missing_mode_snapshot(isolated):
             display_code="MISSING-MODE-SNAPSHOT",
             group_condition="control",
             experiment_spec_version=50,
+<<<<<<< HEAD
             protocol_id="experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1",
+=======
+            protocol_id="experiment-plan-2026-11-11-posttest-material-amount-wording-v1",
+>>>>>>> 9a9cae1
             test_content_mode=None,
         )
         db.add(participant)
@@ -284,7 +293,11 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
             assert default_participant.experiment_spec_version == 50
+<<<<<<< HEAD
             assert default_participant.protocol_id == "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1"
+=======
+            assert default_participant.protocol_id == "experiment-plan-2026-11-11-posttest-material-amount-wording-v1"
+>>>>>>> 9a9cae1
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()

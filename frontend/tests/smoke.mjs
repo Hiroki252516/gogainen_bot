@@ -491,7 +491,7 @@ for (const expectedText of ["type ApiRequestInit", "AbortController", "timeoutMs
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
 const hypothesisMetrics = fs.readFileSync(new URL("../components/HypothesisMetrics.tsx", import.meta.url), "utf8");
-for (const expectedText of ["6仮説の記述集計", "hypothesis_metrics.csv", "hypothesis_metrics.xlsx", "hypothesis_group_summary.csv", "hypothesis_group_summary.xlsx", "6仮説・参加者別Excel (.xlsx)", "6仮説・群別Excel (.xlsx)", "observed_nonattainer_sessions", "pooled_denominator", "material_item_differences", "H5_ITEMS", "DISTRIBUTION_ITEMS", "評価できない", "未回答"]) {
+for (const expectedText of ["6仮説の記述集計", "hypothesis_metrics.csv", "hypothesis_metrics.xlsx", "hypothesis_group_summary.csv", "hypothesis_group_summary.xlsx", "6仮説・参加者別Excel (.xlsx)", "6仮説・群別Excel (.xlsx)", "observed_nonattainer_sessions", "pooled_denominator", "material_item_differences", "H5_ITEMS", "DISTRIBUTION_ITEMS", "今回の教材の量", "教材量の回答分布（H5対象外）", "評価できない", "未回答"]) {
   if (!hypothesisMetrics.includes(expectedText)) throw new Error(`hypothesis display/export contract is missing: ${expectedText}`);
 }
 for (const expectedText of ["欠測・未観測", "censoring_breakdown", "censoring_reason", "途中中断", "継続中", "完了・満点未達", "終了状況不明", "表示済みセッションの記録欠落を意味しません"]) {
@@ -500,7 +500,7 @@ for (const expectedText of ["欠測・未観測", "censoring_breakdown", "censor
 for (const expectedText of ["material-view", "visibilitychange", "materialViewError"]) {
   if (!learningPage.includes(expectedText)) throw new Error(`material display recording is missing: ${expectedText}`);
 }
-for (const expectedText of ["/survey", "PosttestQuestionnaire", "material_ratings_required", 'router.replace("/finish")']) {
+for (const expectedText of ["/survey", "PosttestQuestionnaire", "material_ratings_required", "posttest-5point-v2", 'router.replace("/finish")']) {
   if (!surveyPage.includes(expectedText)) {
     throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
   }
@@ -513,7 +513,11 @@ for (const expectedText of ["/presurvey", "PresurveyQuestionnaire", 'router.repl
   if (!presurveyPage.includes(expectedText)) throw new Error(`presurvey page missing required baseline behavior: ${expectedText}`);
 }
 const surveyForms = fs.readFileSync(new URL("../components/SurveyForms.tsx", import.meta.url), "utf8");
+<<<<<<< HEAD
 for (const expectedText of ["実験前アンケート", "termItems.map", "prior_term_exposure", "prior_term_understanding", "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "slightly", "moderately", "well", "覚えていない", "全く理解していない", "基本的な意味や働きをどの程度理解していますか。", "ai_usage_frequency_30d", "21_30_days", "goal_aligned_output", "verify_with_sources", "実験後アンケート", "posttest-5point-v1", "教材について", "教材評価6項目は対象外", "自由記述（任意）", "もう一度入力する", "入力を確認する（保存なし）"]) {
+=======
+for (const expectedText of ["実験前アンケート", "termItems.map", "prior_term_exposure", "prior_term_understanding", "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "slightly", "moderately", "well", "覚えていない", "全く理解していない", "ai_usage_frequency_30d", "21_30_days", "goal_aligned_output", "verify_with_sources", "実験後アンケート", "posttest-5point-v2", "今回の教材の量はどの程度でしたか", "教材について", "教材評価6項目は対象外", "自由記述（任意）", "もう一度入力する", "入力を確認する（保存なし）"]) {
+>>>>>>> 9a9cae1
   if (!surveyForms.includes(expectedText)) throw new Error(`shared survey form behavior missing: ${expectedText}`);
 }
 if (!styles.includes(".presurvey-form .survey-choice-options {\n  grid-template-columns: repeat(var(--survey-choice-option-count), minmax(0, 1fr));\n}")) throw new Error("presurvey choices must display options in one row on wide screens");
