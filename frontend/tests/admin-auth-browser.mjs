@@ -30,6 +30,7 @@ try {
   await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
   await page.getByRole("button", { name: "管理画面をロック", exact: true }).waitFor();
   await page.getByRole("heading", { name: "学籍番号と参加者IDの対応表", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "研究用コードと参加者IDの対応表", exact: true }).waitFor();
   await page.getByRole("alert").getByText("AI接続状態を取得できませんでした: status unavailable", { exact: true }).waitFor();
   await page.getByText("取得できません", { exact: true }).waitFor();
   await page.unroute("**/api/admin/ai/status");
@@ -52,9 +53,11 @@ try {
   await logoutStarted;
   await popup.waitFor();
   assert.equal(await page.getByRole("heading", { name: "学籍番号と参加者IDの対応表", exact: true }).count(), 0, "data must disappear before logout completes");
+  assert.equal(await page.getByRole("heading", { name: "研究用コードと参加者IDの対応表", exact: true }).count(), 0, "research codes must disappear before logout completes");
   releaseLogout();
   await page.getByText("画面はロックしましたが、認証解除を確認できません。接続を確認して再試行してください。", { exact: true }).waitFor();
   assert.equal(await page.getByRole("heading", { name: "学籍番号と参加者IDの対応表", exact: true }).count(), 0);
+  assert.equal(await page.getByRole("heading", { name: "研究用コードと参加者IDの対応表", exact: true }).count(), 0);
   assert.equal(await page.getByRole("button", { name: "管理画面を開く", exact: true }).isDisabled(), true);
   assert.equal((await page.request.get(new URL("/api/admin/participants", base).href)).status(), 200, "failed logout must not be reported as server-side revocation");
   await page.unroute("**/api/admin/auth/logout");
@@ -62,6 +65,7 @@ try {
   await page.getByRole("button", { name: "管理画面を開く", exact: true }).waitFor({ state: "visible" });
   await page.waitForFunction(() => !document.querySelector('button[type="submit"]')?.disabled);
   assert.equal((await page.request.get(new URL("/api/admin/identity-mappings.csv", base).href)).status(), 401);
+  assert.equal((await page.request.get(new URL("/api/admin/research-code-mappings.csv", base).href)).status(), 401);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: `${process.env.CYCLE_SCREENSHOT_DIR}/password-mobile.png` });
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));

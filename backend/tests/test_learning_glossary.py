@@ -11,7 +11,7 @@ from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PR
 from app.db.session import SessionLocal
 from app.main import app
 from app.models import AICallLog, Participant, TutorTurn
-from split_api_support import acknowledge_all_question_reviews, complete_presurvey, select_roles
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey, new_research_code, select_roles
 from app.services import experiment
 from app.services.learning_glossary import (
     GLOSSARY_PATH, GLOSSARY_VERSION, glossary_snapshot, load_learning_glossary,
@@ -156,10 +156,10 @@ def restore_settings():
         client.put(f"/api/admin/{name}", json={"mode": mode})
 
 
-def start_learning(group, student_number=None, labels="DEF"):
+def start_learning(group, research_code=None, labels="DEF"):
     client.put("/api/admin/option-order", json={"mode": "debug_fixed"})
-    student_number = student_number or f"GLOSSARY-TEST-{uuid4().hex}"
-    participant_response = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": student_number})
+    research_code = research_code or new_research_code()
+    participant_response = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "research_code": research_code})
     assert participant_response.status_code == 200, participant_response.text
     pid = participant_response.json()["participant_id"]
     complete_presurvey(client, pid)
@@ -249,7 +249,7 @@ def test_integrated_material_mode_is_common_to_both_groups_and_snapshotted(resto
     projections = {}
     participant_ids = []
     for group in ("A", "B"):
-        pid, _url, turn = start_learning(group, student_number=f"GLOSSARY-MODE-{group}")
+        pid, _url, turn = start_learning(group, research_code=new_research_code())
         participant_ids.append(pid)
         assert turn["show_material_glossary"] is False
         assert turn["glossary"]["entries"]

@@ -1,5 +1,6 @@
 // Run only against a disposable backend with synthetic participants.
 import assert from "node:assert/strict";
+import { newResearchCode } from "./research-code.mjs";
 
 assert.equal(process.env.PRESURVEY_VERIFY_ISOLATED, "1");
 const base = new URL(process.env.PRESURVEY_UI_BASE_URL);
@@ -50,7 +51,7 @@ try {
       const configured = await request(context, "/api/admin/test-content-mode", "PUT", { mode: mode.mode });
       assert.equal(configured.status(), 200, await configured.text());
       const registration = await request(context, "/api/registrations", "POST", {
-        data: { assignment_code: "A", consent_checked: true, student_number: `PRESURVEY-${mode.mode}-${width}-${Date.now()}` },
+        data: { assignment_code: "A", consent_checked: true, research_code: newResearchCode() },
       });
       assert.equal(registration.status(), 200, await registration.text());
       const { participant_id: pid, display_code: displayCode } = await registration.json();

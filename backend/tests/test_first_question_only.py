@@ -15,7 +15,7 @@ from app.models import Attempt, Base, Participant, Question, RuntimeSetting, Tut
 from app.services import experiment
 from app.services.first_question_only import enabled
 from app.services.hypothesis_metrics import group_metrics, metrics_export_rows, participant_metrics
-from split_api_support import complete_presurvey, create_trial, ok, select_roles
+from split_api_support import complete_presurvey, create_trial, new_research_code, ok, select_roles
 
 
 def answer_page(client, pid, phase, questions, *, wrong=False):
@@ -77,7 +77,7 @@ def test_new_registration_uses_fixed_defaults_and_pretest_perfect_exits_to_surve
             assert client.get(f"/api/admin/{endpoint}").status_code == 404
             assert client.put(f"/api/admin/{endpoint}", json={"enabled": False}).status_code == 404
         participant_id = ok(client.post("/api/registrations", json={
-            "assignment_code": "A", "consent_checked": True, "student_number": "Q1-FIXED-SYNTHETIC"
+            "assignment_code": "A", "consent_checked": True, "research_code": new_research_code()
         }))["participant_id"]
         complete_presurvey(client, participant_id)
         with SessionLocal() as db:

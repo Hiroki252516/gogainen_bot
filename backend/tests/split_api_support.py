@@ -5,6 +5,7 @@ cases use these helpers because confirmation now repeats failed test items.
 """
 
 from contextlib import contextmanager
+from secrets import randbelow
 
 from admin_client import AuthenticatedTestClient
 
@@ -91,6 +92,10 @@ def select_roles(question, roles):
     return [option["option_id"] for option in question["options"] if option["option_id"] in ids]
 
 
+def new_research_code() -> str:
+    return str(10**15 + randbelow(9 * 10**15))
+
+
 @contextmanager
 def create_trial(
     group,
@@ -109,7 +114,7 @@ def create_trial(
     ok(client.put("/api/admin/option-order", json={"mode": layout}))
     if test_content_mode is not None:
         ok(client.put("/api/admin/test-content-mode", json={"mode": test_content_mode}))
-    pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "SPLIT-CI-SYNTHETIC"}))["participant_id"]
+    pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()}))["participant_id"]
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.first_question_only = first_question_only

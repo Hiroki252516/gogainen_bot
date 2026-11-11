@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { newResearchCode } from "./research-code.mjs";
 
 if (process.env.CYCLE_VERIFY_ISOLATED !== "1" || !process.env.CYCLE_UI_BASE_URL || !process.env.CYCLE_PLAYWRIGHT_MODULE) {
   throw new Error("Use an isolated Mock backend and an explicit non-study UI URL.");
@@ -29,7 +30,7 @@ try {
   ]) assert.equal((await page.request.get(new URL(path, base).href)).status(), 422, path);
 
   const registration = await page.request.post(new URL("/api/registrations", base).href, {
-    data: { assignment_code: "B", consent_checked: true, student_number: "9876543210" },
+    data: { assignment_code: "B", consent_checked: true, research_code: newResearchCode() },
   });
   assert.equal(registration.status(), 200);
   const participant = await registration.json();

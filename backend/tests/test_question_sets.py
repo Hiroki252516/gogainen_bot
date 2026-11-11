@@ -27,7 +27,7 @@ from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS, as
 from app.seed.seed_questions import seed_database
 from app.services.hypothesis_metrics import group_metrics, metrics_export_rows
 from app.services.split_assessment import learning_spec, split_bank
-from split_api_support import complete_presurvey
+from split_api_support import complete_presurvey, new_research_code
 
 
 @pytest.fixture
@@ -246,9 +246,9 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
     created_ids = []
     presurvey_contexts = {}
 
-    def create_participant(student_number: str) -> str:
+    def create_participant(_fixture_label: str) -> str:
         response = client.post("/api/participants", json={
-            "assignment_code": "A", "consent_checked": True, "student_number": student_number,
+            "assignment_code": "A", "consent_checked": True, "research_code": new_research_code(),
         })
         assert response.status_code == 200, response.text
         participant_id = response.json()["participant_id"]
@@ -485,7 +485,7 @@ def test_four_topic_mode_runs_learning_and_two_retests_after_pretest_errors(isol
     created = client.post("/api/participants", json={
         "assignment_code": "A",
         "consent_checked": True,
-        "student_number": f"FOUR-ROUND-{uuid4().hex[:12]}",
+        "research_code": new_research_code(),
     })
     assert created.status_code == 200, created.text
     participant_id = created.json()["participant_id"]
@@ -646,7 +646,7 @@ def test_basic_mode_routes_each_round_and_reuses_failed_question_snapshot(isolat
     client, factory, _engine = isolated
     assert client.put("/api/admin/test-content-mode", json={"mode": "basic_understanding"}).status_code == 200
     created = client.post("/api/participants", json={
-        "assignment_code": "A", "consent_checked": True, "student_number": "BASIC-ROUND-SNAPSHOT-TEST",
+        "assignment_code": "A", "consent_checked": True, "research_code": new_research_code(),
     })
     assert created.status_code == 200, created.text
     participant_id = created.json()["participant_id"]

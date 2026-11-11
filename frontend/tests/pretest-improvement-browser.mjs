@@ -1,6 +1,7 @@
 // Use an isolated Mock backend only; never submit synthetic responses to the study instance.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { newResearchCode } from "./research-code.mjs";
 
 const { PRETEST_VERIFY_ISOLATED, PRETEST_UI_BASE_URL, PRETEST_PLAYWRIGHT_MODULE, PRETEST_SCREENSHOT_DIR } = process.env;
 assert.equal(PRETEST_VERIFY_ISOLATED, "1");
@@ -21,7 +22,7 @@ async function api(request, path, method = "GET", data) {
 async function create(request, layout) {
   await api(request, "/api/admin/option-order", "PUT", { mode: layout });
   return api(request, "/api/registrations", "POST", {
-    assignment_code: "A", consent_checked: true, student_number: "PRETEST-BROWSER-SYNTHETIC",
+    assignment_code: "A", consent_checked: true, research_code: newResearchCode(),
   });
 }
 

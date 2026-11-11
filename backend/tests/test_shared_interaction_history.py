@@ -23,7 +23,7 @@ from app.seed.content_loader import learning_question_spec
 from app.seed.seed_questions import seed_database
 from app.services import experiment
 from app.services.interaction_history import build_interaction_history
-from split_api_support import acknowledge_all_question_reviews, complete_presurvey, select_roles
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey, new_research_code, select_roles
 from app.services.prefetch import wait_for_prefetch_tasks
 
 
@@ -31,7 +31,7 @@ client = TestClient(app)
 
 
 def create_trial(group="A", labels="DEF"):
-    participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "TEST-0001"}).json()
+    participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()}).json()
     pid = participant["participant_id"]
     # This suite exercises the historical two-question interaction-history path.
     with SessionLocal() as db:

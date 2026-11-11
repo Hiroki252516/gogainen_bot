@@ -1,6 +1,7 @@
 // Run against disposable survey fixtures in an isolated Mock backend.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { newResearchCode } from "./research-code.mjs";
 
 assert.equal(process.env.SURVEY_VERIFY_ISOLATED, "1");
 const base = new URL(process.env.SURVEY_UI_BASE_URL);
@@ -25,7 +26,7 @@ async function prepareFixture(request, fixture) {
   await api(request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
   const record = await api(request, "/api/registrations", "POST", {
     assignment_code: "A", consent_checked: true,
-    student_number: "SURVEY-SYNTHETIC-" + fixture.width + "-" + fixture.viewed + "-" + Date.now(),
+    research_code: newResearchCode(),
   });
   const pid = record.participant_id;
   const presurveyContext = await api(request, "/api/participants/" + pid + "/presurvey");

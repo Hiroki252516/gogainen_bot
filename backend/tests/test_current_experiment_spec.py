@@ -24,14 +24,14 @@ from app.services import experiment
 from app.services.idempotency import request_fingerprint
 from app.models import IdempotencyRecord
 from app.services.prefetch import wait_for_prefetch_tasks
-from split_api_support import acknowledge_all_question_reviews, case_roles, complete_presurvey, select_roles
+from split_api_support import acknowledge_all_question_reviews, case_roles, complete_presurvey, new_research_code, select_roles
 
 
 client = TestClient(app)
 
 
 def create_trial(group="A", labels="DEF"):
-    result = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "student_number": "TEST-0001"})
+    result = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()})
     assert result.status_code == 200, result.text
     pid = result.json()["participant_id"]
     complete_presurvey(client, pid)
@@ -215,7 +215,7 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
     assert next(csv.reader(exported.text.splitlines())) == experiment.LOG_CSV_COLUMNS
     with SessionLocal() as db:
         assert trial_snapshot(db, pid) == before
-    new = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"}).json()
+    new = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "research_code": new_research_code()}).json()
     assert new["participant_id"] != pid
     with SessionLocal() as db:
         new_participant = db.get(Participant, new["participant_id"])

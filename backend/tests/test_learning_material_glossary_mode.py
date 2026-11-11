@@ -7,6 +7,7 @@ from app.db.session import SessionLocal
 from app.main import app
 from app.models import Participant, RuntimeSetting
 from app.services.learning_material_glossary_mode import ANNOTATION_ONLY, INTEGRATED_MATERIAL, normalize_mode
+from split_api_support import new_research_code
 
 
 client = AuthenticatedTestClient(app)
@@ -29,11 +30,11 @@ def restore_legacy_runtime_mode():
             db.commit()
 
 
-def create_participant(code: str, student_number: str):
+def create_participant(code: str, _fixture_label: str):
     response = client.post("/api/participants", json={
         "assignment_code": code,
         "consent_checked": True,
-        "student_number": student_number,
+        "research_code": new_research_code(),
     })
     assert response.status_code == 200, response.text
     return response.json()["participant_id"]

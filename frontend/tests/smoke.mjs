@@ -15,6 +15,7 @@ const required = [
   "components/GiveUpButton.tsx",
   "components/ExperimentProgress.tsx",
   "components/ParticipantFlowGuard.tsx",
+  "components/ResearchCodeMappings.tsx",
   "components/MarkdownText.tsx",
   "components/LearningGlossary.tsx",
   "components/GlossarySidebar.tsx"
@@ -473,10 +474,14 @@ for (const forbiddenText of ["pending_group_condition", "group_condition", "提�
   }
 }
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/presurvey")', "同意して事前アンケートへ", "ConsentDocument", "student_number", "timeoutMs: 15000", 'role="alert"', 'inputMode="numeric"', 'pattern="[0-9]*"', 'replace(/[^0-9]/g, "")', '/^[0-9]{1,64}$/']) {
+for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/presurvey")', "同意して事前アンケートへ", "ConsentDocument", "research_code", "伝えられた番号を入力してください（必須）", "研究用コード", "timeoutMs: 15000", 'role="alert"', 'inputMode="numeric"', 'pattern="[0-9]*"', 'replace(/[^0-9]/g, "")', '/^[0-9]{1,64}$/']) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
   }
+}
+const researchMappings = fs.readFileSync(new URL("../components/ResearchCodeMappings.tsx", import.meta.url), "utf8");
+for (const expectedText of ["/api/admin/research-code-mappings", "研究用コード対応表を表示・更新", "研究用コード対応表CSVをダウンロード", "研究用コード対応表を全件削除", "research_code"]) {
+  if (!researchMappings.includes(expectedText)) throw new Error(`research-code mapping UI missing: ${expectedText}`);
 }
 for (const forbiddenText of ["GROUP_LABELS", "pending_group_condition", "group_condition", "提案群", "統制群"]) {
   if (consentPage.includes(forbiddenText)) {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { IdentityMappings } from "@/components/IdentityMappings";
+import { ResearchCodeMappings } from "@/components/ResearchCodeMappings";
 import { HypothesisMetrics, ParticipantHypothesisMetrics } from "@/components/HypothesisMetrics";
 import { API_BASE, ApiError, api, clearParticipantSession, participantId } from "@/lib/api";
 
@@ -809,6 +810,7 @@ export default function AdminPage() {
           )}
         </section>
         <IdentityMappings key={participants.length} />
+        <ResearchCodeMappings key={`research-code-${participants.length}`} />
       </div>
     </AppShell>
   );
