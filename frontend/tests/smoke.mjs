@@ -513,11 +513,7 @@ for (const expectedText of ["/presurvey", "PresurveyQuestionnaire", 'router.repl
   if (!presurveyPage.includes(expectedText)) throw new Error(`presurvey page missing required baseline behavior: ${expectedText}`);
 }
 const surveyForms = fs.readFileSync(new URL("../components/SurveyForms.tsx", import.meta.url), "utf8");
-<<<<<<< HEAD
-for (const expectedText of ["実験前アンケート", "termItems.map", "prior_term_exposure", "prior_term_understanding", "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "slightly", "moderately", "well", "覚えていない", "全く理解していない", "基本的な意味や働きをどの程度理解していますか。", "ai_usage_frequency_30d", "21_30_days", "goal_aligned_output", "verify_with_sources", "実験後アンケート", "posttest-5point-v1", "教材について", "教材評価6項目は対象外", "自由記述（任意）", "もう一度入力する", "入力を確認する（保存なし）"]) {
-=======
-for (const expectedText of ["実験前アンケート", "termItems.map", "prior_term_exposure", "prior_term_understanding", "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "slightly", "moderately", "well", "覚えていない", "全く理解していない", "ai_usage_frequency_30d", "21_30_days", "goal_aligned_output", "verify_with_sources", "実験後アンケート", "posttest-5point-v2", "今回の教材の量はどの程度でしたか", "教材について", "教材評価6項目は対象外", "自由記述（任意）", "もう一度入力する", "入力を確認する（保存なし）"]) {
->>>>>>> 9a9cae1
+for (const expectedText of ["実験前アンケート", "termItems.map", "prior_term_exposure", "prior_term_understanding", "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "slightly", "moderately", "well", "覚えていない", "全く理解していない", "基本的な意味や働きをどの程度理解していますか。", "ai_usage_frequency_30d", "21_30_days", "goal_aligned_output", "verify_with_sources", "実験後アンケート", "posttest-5point-v2", "今回の教材の量はどの程度でしたか", "教材について", "教材評価6項目は対象外", "自由記述（任意）", "もう一度入力する", "入力を確認する（保存なし）"]) {
   if (!surveyForms.includes(expectedText)) throw new Error(`shared survey form behavior missing: ${expectedText}`);
 }
 if (!styles.includes(".presurvey-form .survey-choice-options {\n  grid-template-columns: repeat(var(--survey-choice-option-count), minmax(0, 1fr));\n}")) throw new Error("presurvey choices must display options in one row on wide screens");

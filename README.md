@@ -1,12 +1,6 @@
 # 学習ログ駆動型AIチューター
 
-<<<<<<< HEAD
-2026-11-11現行条件：新規参加者は仕様版50 / `experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`で登録します。全モードの事前アンケートでは、理解度の質問を「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、実験前の時点を明示する文言を除きます。4用語版は問題バンク`split-actions-four-topic-v2`と事前アンケート`presurvey-four-topic-baseline-v3`を使い、「指示チューニング」を「ファインチューニング」に改めます。標準2モードの事前アンケートは`presurvey-baseline-v4`です。仕様49以下の参加者・回答・問題snapshotは当時の形式で保持し、新しい形式へ遡及変更しません。教材原資料のインストラクションチューニングはファインチューニングの一種として扱いますが、共通RAG資料は変更していません。この更新は研究上の承認を意味しません。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[受入記録](docs/14_testing_acceptance.md)。
-
-仕様版49 / `experiment-plan-2026-11-10-posttest-five-point-evaluation-v1`は履歴条件です。事後アンケート`posttest-5point-v1`、システム評価2項目・教材評価6項目、H5の集計方法などは仕様版50でも維持します。尺度・H5の妥当性や研究上の承認は未確認です。[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[評価指標](docs/12_evaluation_metrics.md)を参照してください。
-=======
-2026-11-11現行条件：新規参加者は仕様版50 / `experiment-plan-2026-11-11-posttest-material-amount-wording-v1`で登録します。仕様版49の問題モード、事前アンケート、テスト・学習経路、事後アンケート版`posttest-5point-v1`を引き継ぎ、教材量の質問を「今回の教材の量はどの程度でしたか」に変更した`posttest-5point-v2`を使います。システム評価2項目・教材評価6項目を1〜5または「評価できない」で回答し、未閲覧者の教材評価はnullです。H5は教材内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の数値回答平均で、難易度・教材量は別分布として報告します。仕様版49以下の回答・集計は変換せず読み取り専用で保全します。尺度・H5の妥当性や研究上の承認は未確認です。[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[評価指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)を参照してください。
->>>>>>> 9a9cae1
+2026-11-11現行条件：新規参加者は仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`で登録します。仕様版49の進行・採点・表示条件に、全モードの事前アンケート理解度質問の表現変更、4用語版のファインチューニング表記と問題バンクv2、事後アンケート教材量設問文の変更を統合しています。標準2モードの事前アンケートは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`、事後アンケートは`posttest-5point-v2`です。教材量以外の保存キー・回答選択肢は維持し、H5は教材評価の中核4項目の数値回答平均、難易度・教材量は別分布として扱います。仕様版50で先行した二つのprotocol（`experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`、`experiment-plan-2026-11-11-posttest-material-amount-wording-v1`）と仕様版49以下の参加者は閲覧専用で、各記録の問題・アンケート版を保持します。教材原資料のインストラクションチューニングはファインチューニングの一種として扱いますが、共通RAG資料は変更していません。尺度・H5の妥当性や研究上の承認は未確認です。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[評価指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
 
 仕様版48では事前アンケートを経験・理解度の条件付き回答へ改訂し、仕様版49では事後アンケートを5段階化しました。仕様版50では教材量の設問文を変更します。各変更は導入版以降の新規参加者に適用し、それ以前の保存済み回答には遡及しません。
 
@@ -82,11 +76,7 @@
 
 Wordと承認された実装計画に沿い、教材・low設定・新アンケート・6仮説の記述集計を実装しています。[採用判断と残課題](docs/20_experiment_plan_alignment.md)と[評価定義](docs/12_evaluation_metrics.md)を先に確認してください。
 
-<<<<<<< HEAD
-現行の新規参加者には仕様版50 / `experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`を保存します。仕様版49以下、NULL、旧protocol_idの参加者は閲覧・CSV出力専用で、進行・削除・補修・再計算・現行集計をしません。既存の版・回数・注釈・教材解説モード・問題モードを補完しません。Participantの教材モード・問題モードとRuntimeSettingの設定列はnullableのまま保持し、既存行を変更しません。
-=======
-現行の新規参加者には仕様版50 / `experiment-plan-2026-11-11-posttest-material-amount-wording-v1`を保存します。仕様版49以下、NULL、旧protocol_idの参加者は閲覧・CSV出力専用で、進行・削除・補修・再計算・現行集計をしません。既存の版・回数・注釈・教材解説モード・問題モードを補完しません。Participantの教材モード・問題モードとRuntimeSettingの設定列はnullableのまま保持し、既存行を変更しません。
->>>>>>> 9a9cae1
+現行の新規参加者には仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`を保存します。仕様版50の旧protocol、仕様版49以下、NULL・未対応版の参加者は閲覧・CSV出力専用です。進行・削除・補修・再計算・現行集計を行わず、版・回数・注釈・教材解説モード・問題モードを補完しません。ParticipantとRuntimeSettingのnullable設定列や保存済み記録は書き換えません。
 
 このリポジトリは、卒業研究で使う「誤概念タイプと学習ステージに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 

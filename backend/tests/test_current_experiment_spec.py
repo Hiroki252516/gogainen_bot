@@ -250,7 +250,7 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
         seed_database(db)
         seed_database(db)
         assert db.query(Question).count() == 54
-        assert db.query(Question).filter_by(is_active=True).count() == 51
+        assert db.query(Question).filter_by(is_active=True).count() == 39
         assert not old_question.is_active and not transfer.is_active
         db.refresh(retired_variant)
         assert not retired_variant.is_active

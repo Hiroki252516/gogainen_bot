@@ -154,7 +154,8 @@ def seed_database(db: Session) -> None:
                             variant_key=spec["variant_key"],
                             options=spec["options"],
                         )
-                        active_question_ids.add(question.id)
+                        if bank_version == FOUR_TOPIC_BANK_VERSION:
+                            active_question_ids.add(question.id)
 
     for term in db.query(Term).all():
         if term.slug not in active_slugs:

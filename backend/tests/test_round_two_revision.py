@@ -281,7 +281,7 @@ def test_old_spec24_v8_records_survive_seed_repair_and_missing_snapshot_restore(
             ).filter(Question.variant_key.in_(["retest_v2", "retest_v2_q1", "retest_v2_q2"])).all()
             assert len(active) == 2 and all(row.id != question.id for row in active)
             assert db.query(Question).count() == 63
-            assert db.query(Question).filter_by(is_active=True).count() == 51
+            assert db.query(Question).filter_by(is_active=True).count() == 39
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)
             assert record["question_body"] == ("保存時の問題" if snapshot else question.body)

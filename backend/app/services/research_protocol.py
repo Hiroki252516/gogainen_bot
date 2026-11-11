@@ -11,20 +11,13 @@ from sqlalchemy import update
 from app.core.experiment_spec import assert_current_experiment
 from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
-<<<<<<< HEAD
 PRESURVEY_VERSION = "presurvey-baseline-v4"
 FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v3"
-SURVEY_VERSION = "posttest-5point-v1"
-SUPPORTED_SURVEY_VERSIONS = ("posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", SURVEY_VERSION)
-=======
-PRESURVEY_VERSION = "presurvey-baseline-v3"
-FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v2"
 SURVEY_VERSION = "posttest-5point-v2"
 SUPPORTED_SURVEY_VERSIONS = (
     "posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3",
     "posttest-5point-v1", SURVEY_VERSION,
 )
->>>>>>> 9a9cae1
 PosttestRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
 ProficiencyRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
 Comment = Annotated[str, StringConstraints(strip_whitespace=True)]

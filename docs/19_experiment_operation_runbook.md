@@ -1,36 +1,12 @@
 # 19. Experiment Operation Runbook
 
-<<<<<<< HEAD
-## 仕様版50の用語・事前アンケート確認
+## 仕様版50の現行アンケート運用
 
-新規参加者は仕様版50 / `experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`で登録する。`/presurvey`で標準2モードは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`が返ることを確認する。全モードで理解度質問が「{用語}の基本的な意味や働きをどの程度理解していますか。」と表示され、「実験前の時点で」を含まないことを確認する。見聞き経験質問の「実験の説明を受ける前に」は維持する。
+現行protocolは`experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`。新規参加者の`/presurvey`では標準2モードに`presurvey-baseline-v4`、4用語版に`presurvey-four-topic-baseline-v3`が返る。全モードの理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」で、「実験前の時点で」を含まない。見聞き経験質問の「実験の説明を受ける前に」は維持する。各用語の見聞き経験は必須で、「ある」の場合だけ理解度4段階を表示・必須にする。「ない／覚えていない」では理解度を表示せず、nullを保存する。直近30日のAI利用日数とAI活用3項目も必須回答である。送信後に事前テストへ進むことを確認する。
 
-4用語版では「ファインチューニング」と表示され、問題・確認問題・教材情報が`split-actions-four-topic-v2`に一致することを確認する。確認問題は誤答問題の保存snapshotを使う。仕様版49以下は当時の事前アンケート・問題バンク・回答snapshotを維持する。元教材のインストラクションチューニングはファインチューニングの一種として説明し、共通RAG資料は変更しない。この仕様更新は研究上の承認を意味しない。
+4用語版は「ファインチューニング」と表示し、問題・確認問題・教材情報に`split-actions-four-topic-v2`を使う。確認問題は誤答問題の保存snapshotを再利用する。元教材のインストラクションチューニングはファインチューニングの一種として説明し、共通RAG資料は変更しない。
 
-## 仕様版49で導入した事後アンケート運用（仕様版50でも継続）
-
-現行仕様版50の新規参加者も事後アンケート`posttest-5point-v1`を使用する。システム評価2項目・教材評価6項目・任意自由記述を含み、各評定は整数1〜5または`not_applicable`。教材閲覧者は6項目すべて数値または評価不能を回答し、未閲覧者の教材回答はnullである。回答送信後、管理ログとアンケートCSV/Excelでphase、survey_version、保存値を確認する。
-
-H5は内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の4項目のみを対象に、数値回答の参加者内平均を算出する。評価不能は平均から除き、有効回答数を確認する。4項目すべて評価不能ならH5は対象外。難易度・分量はH5に含めず、回答分布を別に確認する。旧posttest v1〜v3と仕様版49以下の保存済み回答・評価は換算・上書きしない。尺度とH5の妥当性および研究上の承認は未確認であり、本書の更新・テスト合格を承認とみなさない。詳細は[事後アンケート仕様](52_posttest_five_point_evaluation.md)と[評価指標](12_evaluation_metrics.md)。
-
-## 仕様版48で導入した事前アンケート運用（仕様版50で更新）
-
-新規参加者は仕様版50のprotocolで登録する。`/presurvey`のGET応答に含まれる`survey_version`と`term_items`を基準に、参加者モードに対応する6用語が表示されることを確認する。各用語の見聞き経験は必須で、「ある」の場合だけ理解度4段階が表示・必須になる。「ない／覚えていない」では理解度が非表示で、保存値はnullとなる。直近30日のAI利用日数とAI活用3項目も必須回答である。
-
-標準2モードでは`presurvey-baseline-v4`、4用語版では`presurvey-four-topic-baseline-v3`を用いる。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、「実験前の時点で」を除く。経験質問の「実験の説明を受ける前に」は維持する。アンケート送信成功後に事前テストへ進むことを確認する。旧版のParticipantSurveyを新しい形式へ変換・補完しない。新方式で取得する事前回答を事後アンケートの仮説指標に混入させない。仕様版49以下の回答・評価は変更せず、閲覧・記録出力のみとする。現行仕様版50のH5は`posttest-5point-v1`の中核4項目を使う。文面・保存形式は[事前アンケート仕様](49_presurvey_baseline.md)を参照する。
-=======
-## 仕様版50の事後アンケート運用
-
-新規参加者は仕様版50 / `experiment-plan-2026-11-11-posttest-material-amount-wording-v1`を使用する。事後アンケートは`posttest-5point-v2`で、システム評価2項目・教材評価6項目・任意自由記述を含む。各評定は整数1〜5または`not_applicable`。教材閲覧者は6項目すべて数値または評価不能を回答し、未閲覧者の教材回答はnullである。回答送信後、管理ログとアンケートCSV/Excelでphase、survey_version、保存値を確認する。
-
-H5は内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の4項目のみを対象に、数値回答の参加者内平均を算出する。評価不能は平均から除き、有効回答数を確認する。4項目すべて評価不能ならH5は対象外。難易度・教材量はH5に含めず、回答分布を別に確認する。旧`posttest-10point-v1/v2/v3`と`posttest-5point-v1`、仕様版49以下の保存済み回答・評価は換算・上書きしない。尺度とH5の妥当性および研究上の承認は未確認であり、本書の更新・テスト合格を承認とみなさない。詳細は[事後アンケート仕様](52_posttest_five_point_evaluation.md)と[評価指標](12_evaluation_metrics.md)。
-
-## 仕様版48で導入した事前アンケート運用（仕様版50でも継続）
-
-新規参加者は仕様版50のprotocolで登録する。`/presurvey`のGET応答に含まれる`survey_version`と`term_items`を基準に、参加者モードに対応する6用語が表示されることを確認する。各用語の見聞き経験は必須で、「ある」の場合だけ理解度4段階が表示・必須になる。「ない／覚えていない」では理解度が非表示で、保存値はnullとなる。直近30日のAI利用日数とAI活用3項目も必須回答である。
-
-標準2モードでは`presurvey-baseline-v3`、4用語版では`presurvey-four-topic-baseline-v2`を用いる。アンケート送信成功後に事前テストへ進むことを確認する。旧版のParticipantSurveyを新しい形式へ変換・補完しない。新方式で取得する事前回答を事後アンケートの仮説指標に混入させない。仕様版49以下の回答・評価は変更せず、閲覧・記録出力のみとする。仕様版50のH5は`posttest-5point-v2`の中核4項目を使う。文面・保存形式は[事前アンケート仕様](49_presurvey_baseline.md)を参照する。
->>>>>>> 9a9cae1
+事後アンケートは`posttest-5point-v2`。システム評価2項目・教材評価6項目・任意自由記述を含み、各評定は整数1〜5または`not_applicable`。教材閲覧者は6項目すべて数値または評価不能を回答し、未閲覧者の教材回答はnullである。教材量の設問は「今回の教材の量はどの程度でしたか」。H5は内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の数値回答平均で、評価不能を除き、有効回答数を記録する。4項目すべて評価不能なら対象外。難易度・教材量はH5に含めず分布を別に確認する。ログとCSV/XLSXでphase、survey_version、回答値を確認する。仕様版50の旧protocol、仕様版49以下および過去survey版の回答・評価は換算・上書きしない。尺度と研究上の妥当性・承認は未確認である。詳細は[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
 
 ## 仕様版47の新規参加者フロー（履歴）
 
@@ -157,11 +133,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 
 **実験開始前の必須確認:** テスト系・現行学習確認ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
 
-<<<<<<< HEAD
-現行コードでは仕様版50 / `experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`だけを新規参加者の進行・補修・集計に使う。仕様版49以下、旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。旧参加者の問題は保存時の仕様版・protocol・snapshotから復元し、新規参加者はsnapshotのテスト問題モードで`split-actions-v5`、`split-actions-basic-v1`、`split-actions-four-topic-v2`のバンクを使う（仕様版49以下はv1）。過去protocolは登録時の問題モード・protocolに基づいて復元する。仕様版41の`split-actions-v6-q1-only-v1` protocolはprotocol IDに応じてV6を使う。RuntimeSetting未設定時は4用語版を適用し、保存済み設定は変更しない。旧行を付け替えず、`retest_cycles_completed`も保存値のままにする。全モードで事前テスト満点者は学習・内部`final_test`・再テストを行わずsurveyへ進む。事前未達の4用語版は再テスト1後も学習し、再テスト2の採点後にsurveyへ進む。事前アンケート版は問題モードごとに固定し、事後は`posttest-5point-v1`を使う。回答・phase・survey_versionをログと出力で確認する。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで動作を確認してから配布する。
-=======
-現行コードでは仕様版50 / `experiment-plan-2026-11-11-posttest-material-amount-wording-v1`だけを新規参加者の進行・補修・集計に使う。仕様版49以下、旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。旧参加者の問題は保存時の仕様版・protocol・snapshotから復元し、新規参加者はsnapshotのテスト問題モードで`split-actions-v5`、`split-actions-basic-v1`、`split-actions-four-topic-v1`のバンクを使う。過去protocolは登録時の問題モード・protocolに基づいて復元する。仕様版41の`split-actions-v6-q1-only-v1` protocolはprotocol IDに応じてV6を使う。RuntimeSetting未設定時は4用語版を適用し、保存済み設定は変更しない。旧行を付け替えず、`retest_cycles_completed`も保存値のままにする。全モードで事前テスト満点者は学習・内部`final_test`・再テストを行わずsurveyへ進む。事前未達の4用語版は再テスト1後も学習し、再テスト2の採点後にsurveyへ進む。事前アンケート版は問題モードごとに固定し、事後は`posttest-5point-v2`を使う。回答・phase・survey_versionをログと出力で確認する。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで動作を確認してから配布する。
->>>>>>> 9a9cae1
+現行コードでは仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`だけを新規参加者の進行・補修・集計に使う。仕様版50の旧protocol、仕様版49以下、旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。旧参加者の問題は保存時の仕様版・protocol・snapshotから復元する。新規参加者は問題モードsnapshotに対応する`split-actions-v5`、`split-actions-basic-v1`、`split-actions-four-topic-v2`を使う。仕様版50の旧protocolでは`four-topic-finetuning-terminology-v1`がv2、`posttest-material-amount-wording-v1`がv1を復元する。仕様版49以下も登録時protocol・snapshotに従い、旧問題を再配置しない。仕様版41の`split-actions-v6-q1-only-v1` protocolはprotocol IDに応じてV6を使う。RuntimeSetting未設定時は4用語版を適用し、保存済み設定は変更しない。旧行を付け替えず、`retest_cycles_completed`も保存値のままにする。全モードで事前テスト満点者は学習・内部`final_test`・再テストを行わずsurveyへ進む。事前未達の4用語版は再テスト1後も学習し、再テスト2の採点後にsurveyへ進む。事前・事後アンケート版は問題モード・現行protocolに応じて固定し、phaseとsurvey_versionをログ・CSV/XLSXで確認する。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで動作を確認してから配布する。
 
 **管理アクセスの確認:** 管理画面はパスワード入力ポップアップで保護する（既定abc、READMEに記載）。管理API・CSV・対応表・seed・管理用再計算もbackend認証が必要。30分で失効し、ロック・backend再起動でも失効する。実配布環境で匿名アクセスの401と認証後の取得を確認し、参加者へ端末を渡す前に「管理画面をロック」を押す。共通パスワードのため研究者だけが扱う環境で運用する。詳細は [セキュリティ仕様](15_security_privacy.md) を参照する。
 
@@ -220,11 +192,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 - ブラウザの戻るボタンやマウスのサイドボタンで同意書、診断、再テスト結果、完了済み学習画面へ戻った場合は、画面が現在の正規フェーズへ自動的に戻るまで操作しない。これは現在位置を確認するGETであり、回答や実験状態を変更しない。409が表示されても実験終了ではないため、画面を閉じずに現在の正規画面で続行する。
 - 回答済み問題へ戻った場合は、保存済みの選択肢が選択済みで表示され、入力は変更できない。「次の問題へ」で続行する。
 
-<<<<<<< HEAD
-仕様版50のPRETEST・RETESTは、登録時に固定した問題モードに対応するバンクから出題する。`application`と`basic_understanding`は3用語の設問1（計3問）を、`four_topic_fundamentals`は4用語を各1問（計4問）で出題する。各問回答後に設問別答え合わせを表示し、全体結果確認の表示は登録時snapshotに従う。事前テスト満点者は結果表示ONなら結果確認後、OFFなら直接surveyへ進み、学習・内部`final_test`・再テストを行わない。事前未達者は誤答した設問の保存snapshotを学習確認に使い、従来の問題モード別フローを進む。RuntimeSetting未設定時の問題モード既定値は4用語版で、保存済み値は変更せず登録済み参加者へ遡及しない。仕様版27〜31は`split-actions-v1`、32はv2、33はv3、34はv4、仕様版35〜49はprotocolまたは保存済みモードに基づいて復元し、仕様版49以下は閲覧専用とする。[問題・保存・採点](39_split_assessment.md)、[答え合わせ](40_question_pair_answer_review.md)、[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[RAG注釈](49_rag_glossary.md)。
-=======
-仕様版50のPRETEST・RETESTは、登録時に固定した問題モードに対応するバンクから出題する。`application`と`basic_understanding`は3用語の設問1（計3問）を、`four_topic_fundamentals`は4用語を各1問（計4問）で出題する。各問回答後に設問別答え合わせを表示し、全体結果確認の表示は登録時snapshotに従う。事前テスト満点者は結果表示ONなら結果確認後、OFFなら直接surveyへ進み、学習・内部`final_test`・再テストを行わない。事前未達者は誤答した設問の保存snapshotを学習確認に使い、従来の問題モード別フローを進む。RuntimeSetting未設定時の問題モード既定値は4用語版で、保存済み値は変更せず登録済み参加者へ遡及しない。仕様版27〜31は`split-actions-v1`、32はv2、33はv3、34はv4、仕様版35〜48はprotocolまたは保存済みモードに基づいて復元し、仕様版49以下は閲覧専用とする。[問題・保存・採点](39_split_assessment.md)、[答え合わせ](40_question_pair_answer_review.md)、[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[RAG注釈](49_rag_glossary.md)。
->>>>>>> 9a9cae1
+仕様版50のPRETEST・RETESTは、登録時に固定した問題モードに対応するバンクから出題する。`application`と`basic_understanding`は3用語の設問1（計3問）を、`four_topic_fundamentals`は4用語を各1問（計4問）で出題する。各問回答後に設問別答え合わせを表示し、全体結果確認の表示は登録時snapshotに従う。事前テスト満点者は結果表示ONなら結果確認後、OFFなら直接surveyへ進み、学習・内部`final_test`・再テストを行わない。事前未達者は誤答した設問の保存snapshotを学習確認に使い、従来の問題モード別フローを進む。RuntimeSetting未設定時の問題モード既定値は4用語版で、保存済み値は変更せず登録済み参加者へ遡及しない。仕様版27〜31は`split-actions-v1`、32はv2、33はv3、34はv4、仕様版35〜48はprotocolまたは保存済みモードに基づいて復元し、仕様版49以下は閲覧専用とする。仕様版50の旧protocolでは、`four-topic-finetuning-terminology-v1`にv2、`posttest-material-amount-wording-v1`にv1の4用語バンクを対応させる。現行protocolはv2を使用する。[問題・保存・採点](39_split_assessment.md)、[答え合わせ](40_question_pair_answer_review.md)、[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[RAG注釈](49_rag_glossary.md)。
 
 通常版のactiveな問題variantはpretest_v1とretest_v1/v2。内部final_testはretest_v1を共用し、その後はretest_v2へ進む。回次は全用語共通とし、未回答から推測しない。問題・採点の保全条件は[39](39_split_assessment.md)を参照する。設問1の回答後に同じテスト画面内で答え合わせを行い、続行時の確認時刻を記録する。問題内容、個別フィードバックの非公開情報、画面遷移の検証条件は[40](40_question_pair_answer_review.md)。
 

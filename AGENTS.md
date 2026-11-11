@@ -1,15 +1,7 @@
 # Repository Instructions for Codex
 
 ## 仕様版50の現行条件（2026-11-11）
-<<<<<<< HEAD
-
-新規参加者は仕様版50 / `experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`で登録する。仕様版49の進行・採点・5段階事後アンケートを引き継ぎ、全モードの事前アンケートの理解度質問から「実験前の時点で」を除く。4用語版は`split-actions-four-topic-v2`と`presurvey-four-topic-baseline-v3`を使い、用語「指示チューニング」を「ファインチューニング」に更新する。標準2モードは`presurvey-baseline-v4`を使う。4用語版の旧問題`split-actions-four-topic-v1`・旧アンケートv2と、仕様版49以下の全回答・snapshotを履歴として維持し、書き換えない。教材の指示チューニングはファインチューニングの一種として説明する。共通RAG資料は変更しない。仕様更新・テスト合格は研究上の承認を意味しない。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[受入記録](docs/14_testing_acceptance.md)。
-
-## 仕様版49の履歴条件（2026-11-10）
-=======
->>>>>>> 9a9cae1
-
-新規参加者は仕様版50 / `experiment-plan-2026-11-11-posttest-material-amount-wording-v1`で登録する。仕様版49の問題モード、snapshot、事前アンケート、テスト・学習進行、採点、満点早期終了条件を引き継ぎ、事後アンケート版を`posttest-5point-v2`へ更新する。教材量の設問は「今回の教材の量はどの程度でしたか」。回答選択肢、`amount_appropriateness`、回答形式は維持する。事後アンケートはシステム2項目・教材6項目と任意自由記述を保ち、各評価は厳密な整数1〜5または`not_applicable`。教材未閲覧者の`material_ratings`はnull、閲覧者は6項目必須。旧`posttest-10point-v1`〜`v3`と`posttest-5point-v1`は変換しない。H5は教材の内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の数値回答を参加者内平均し、評価不能を除く。有効回答数を保持する。全4項目が評価不能なら対象外。難易度・教材量はH5に入れず分布のみ集計する。仕様版49以下の参加者・回答・評価サマリーは閲覧専用で保全する。尺度・H5の妥当性や研究上の承認は未確認。[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
+新規参加者は仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`で登録する。仕様版49の進行・採点・表示条件に、事前アンケート表現と4用語版ファインチューニング表記・問題バンクv2、事後アンケート`posttest-5point-v2`の教材量設問文を統合した。標準2モードの事前アンケートは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`。事後はシステム評価2項目・教材評価6項目・任意自由記述を保ち、数値評価は整数1〜5または`not_applicable`。教材未閲覧者の`material_ratings`はnull、閲覧者は6項目必須。H5は教材の内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の数値回答平均で、評価不能を除外し有効回答数を保持する。難易度・教材量はH5に含めず分布のみ集計する。仕様版50の先行protocol二つと仕様版49以下の参加者・回答・snapshotは履歴として保持し、書き換えない。この記述や受入検証は研究上の承認を意味しない。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
 
 ## 仕様版48の履歴条件（2026-11-10）
 
@@ -74,11 +66,7 @@
 - 現行の共通固定辞書はlearning-glossary-v4の17語で、RAG（検索拡張生成）も注釈対象にする。v1〜v3は履歴として不変で保持する。AI、事前学習、ファインチューニング、プロンプトエンジニアリング、データベース、マルチエージェント、タスク、記憶プロセスの8語を注釈から除外する。長い除外語の一部からプロンプト・エージェントを抽出せず、独立して登場した場合は補足する。確認問題自体と結果確認画面は対象外。辞書・保存・移行はdocs/24・docs/49_rag_glossary.mdを参照する。
 - 注釈は表示用JSONとして保存し、現行の教材内解説では辞書を両群共通の意味参照として教材本文の生成入力に渡す。現行仕様版50は本文800文字程度を目安にするだけで、文字数による合否判定・再試行は行わない。旧版のモード別文字数契約とログは履歴として保持する。教授契約版v7は維持する。再表示はsnapshotを使い、旧教材へ後付けしない。登録語しか扱わず、AIで未知語を補わない。
 
-<<<<<<< HEAD
-このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は50 / `experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`です。仕様版49以下は閲覧専用です。受入検証と実験開始承認は別に扱ってください。
-=======
-このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は50 / `experiment-plan-2026-11-11-posttest-material-amount-wording-v1`です。仕様版49以下は閲覧専用です。受入検証と実験開始承認は別に扱ってください。
->>>>>>> 9a9cae1
+このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`です。仕様版50の先行protocolおよび仕様版49以下は閲覧専用です。受入検証と実験開始承認は別に扱ってください。
 
 ## Authoritative Documents
 
@@ -94,29 +82,17 @@
 - 新規参加者の出題・採点・確認問題復元はsnapshotされた`test_content_mode`に対応する問題バンクだけを使い、集計もモード別に分離する。旧`question_set_mode`設定APIとフィルターは廃止済みで、旧フィルター付き要求は422で拒否する。過去のeasy-mode削除手順は新しい`test_content_mode`・問題資産・記録を対象にせず、旧版へのフォールバックを実装しない。
 
 - 研究仮説は計画書の6つ。番号はdocs/01・12・17で統一し、比較回次・集計単位・欠測の未指定部分を独断で決めない。
-<<<<<<< HEAD
-- 目標は大学生40名/各群20名、原則無作為割付。low設定・事前知識6項目・事前AI利用2領域・事後システム評価2/教材評価6の5段階（仕様版49で導入、50で維持）・任意自由記述・6仮説の記述集計は実装済み。自動割付・人数上限は対象外。式・対象はdocs/12・20の承認済み定義を守る。
-=======
-- 目標は大学生40名/各群20名、原則無作為割付。low設定・事前知識6項目・事前AI利用2領域・事後システム評価2/教材評価6の5段階（仕様版50、教材量の設問文を更新）・任意自由記述・6仮説の記述集計は実装済み。自動割付・人数上限は対象外。式・対象はdocs/12・20の承認済み定義を守る。
->>>>>>> 9a9cae1
+- 目標は大学生40名/各群20名、原則無作為割付。low設定・事前知識6項目・事前AI利用2領域・事後システム評価2/教材評価6の5段階（仕様版49で導入し、仕様版50で教材量の設問文を更新）・任意自由記述・6仮説の記述集計は実装済み。自動割付・人数上限は対象外。式・対象はdocs/12・20の承認済み定義を守る。
 - 共通説明とunknownは意味や仕組みを扱う。unknownの証拠はmandatory_elements.definitionとteaching_contract.mechanism_explanation/transfer_check。旧6項目を必須に戻さない。
 - 比較対象は「AIあり/なし」ではなく、「通常AIチューター」と「ログ適応型AIチューター」。
 - 現行分類はM1/M3/unknownのみ。両群へ同じ用語の全フェーズの採点済み回答履歴を渡す。提案群だけに明示的な診断・対象主張・taxonomy・タイプ別教授方針を追加する。方略はbackendで固定する。
 - 確認問題の診断連動規則は両群共通。統制群のLLMへ分類・診断由来段階を渡さず、共通履歴内にも診断情報を混ぜない。統制群の自然な誤り訂正は許容する。
 - 被験者画面に内部分類、群名、教授方略を直接表示しない。
-<<<<<<< HEAD
-- テスト回答中はチャット・ヒント・即時正解を表示しない。現行仕様版50のapplication/basic_understandingは各用語の設問1、four_topic_fundamentalsは4用語各1問を出題する。複数選択は正解3つまたはJ単独。回答後は同一画面内で本人の選択内容と正誤を示すが、正答選択肢は表示しない。過去の設問ペア表示契約はdocs/40を参照する。
-=======
 - テスト回答中はチャット・ヒント・即時正解を表示しない。仕様版50のapplication/basic_understandingは各用語の設問1、four_topic_fundamentalsは4用語各1問を出題する。複数選択は正解3つまたはJ単独。回答後は同一画面内で本人の選択内容と正誤を示すが、正答選択肢は表示しない。過去の設問ペア表示契約はdocs/40を参照する。
->>>>>>> 9a9cae1
 - 学習確認は1用語・1セッションあたり最大3回答。4用語版では事前テスト後と再テスト1後に学習し、満点時は4用語すべてを学習対象にする。再テスト2の採点後は正誤にかかわらずsurveyへ進む。application/basic_understandingは既存の満点時早期終了条件を維持する。採点済みバッチは1回とし、全問未回答は採点しない。
 - 現行の新規テストはParticipant.test_content_modeに応じてapplication=`split-actions-v5`、basic_understanding=`split-actions-basic-v1`、four_topic_fundamentals=`split-actions-four-topic-v2`を使う。最初の2モードは各3用語・計3問、4用語モードは各1問・計4問。すべて各モードの設問1を出題し、applicationの設問2・3はバンクに保持する。4用語バンクはA〜C正解、D〜F=M1、G〜I=M3、J=unknownの10択。activeキーはpretest_v1、retest_v1/v2。application/basic_understandingは既存の終了条件に従い、必要時に内部final_testへ進む。4用語版ではfinal_testを使わない。v1は仕様版49以下の復元用に保持し、版付きconstruct_keyで既存本文・選択肢を上書きしない。学習確認は直前テストの保存snapshotを利用する。通常の学習v15と教材条件は維持する。
 - 選択肢配置は管理画面のDB保存設定で切り替える。既定値は`debug_fixed`で、新規参加者だけに適用する。実験データ収集前に`randomized`へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
-<<<<<<< HEAD
-- 現行コードでは新規だけ仕様版50 / `experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数える。通常2モードの事前アンケートは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`を保存し、用語の見聞き経験・条件付き理解度、AI利用頻度と3項目の自己評価を取得する。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、経験質問の実験説明前という文言は維持する。事後アンケートは`posttest-5point-v1`で6項目の整数1〜5または`not_applicable`を保存し、H5は中核4項目の数値回答平均を使う。4用語版問題はv2、仕様49以下はv1で復元する。事前満点者・再テスト経路は仕様49から維持する。旧回答、旧問題snapshot、版、進行を変更・補完しない。
-=======
-- 現行コードでは新規だけ仕様版50 / `experiment-plan-2026-11-11-posttest-material-amount-wording-v1`を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数える。事前アンケートは問題モード別の版を保存し、各6用語の見聞き経験と条件付き理解度、AI利用頻度と3項目の自己評価を取得する。事後アンケートは`posttest-5point-v2`で6項目の整数1〜5または`not_applicable`を保存し、教材量の設問文のみを更新する。H5は中核4項目の数値回答平均を使う。4用語版ではfinal_testを使わず、事前満点者はすべてのモードで学習・final_test・retestを行わずsurveyへ進む。4用語版の事前未達者は再テスト1・2まで既存フローで進む。RuntimeSettingの保存済み問題モードをParticipantへ固定し、未設定時のみ4用語版を使う。共通回数用DB列は追加しない。旧RuntimeSetting設定列は履歴保全のため残し、廃止済み設定は参照・更新しない。仕様版49以下、旧protocol_id/NULL・未対応版は閲覧専用。旧行の版・進行・回答・評価・回数を更新/削除せず、補修も版とprotocol_idで限定する。
->>>>>>> 9a9cae1
+- 現行コードでは新規だけ仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数える。通常2モードの事前アンケートは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`、事後アンケートは`posttest-5point-v2`を使う。事前アンケートは各6用語の見聞き経験と条件付き理解度、AI利用頻度と3項目の自己評価を取得し、理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とする。教材量の設問文は現行版で更新し、H5は中核4項目の数値回答平均を使う。4用語版問題は現行のv2、先行spec50 protocolではそれぞれ保存時のv2/v1、仕様版49以下ではv1から復元する。4用語版ではfinal_testを使わず、事前満点者は学習・再テストを行わずsurveyへ進む。4用語版の事前未達者は再テスト1・2まで進む。RuntimeSettingの保存済み問題モードをParticipantへ固定し、未設定時のみ4用語版を使う。仕様版50の先行protocol、仕様版49以下、NULL・未対応版は閲覧専用。旧行の版・進行・回答・評価・回数を更新・削除・補完せず、補修も版とprotocol_idで限定する。
 - 両群の教材の小見出し・数・順序・まとめ方はAIが決める。冒頭の##用語名と非空の###セクションだけを要求し、実験群の必須教授内容・transfer_checkは本文内証拠で検証する。固定見出しから証拠文を自動補正しない。
 - 教材内のtransfer_checkは維持するが、独立した追加テスト・旧支援量・自由回答処理を戻さない。
 - application/basic_understandingの対象は`llm_knowledge`、`multi_agent`、`memory_process`。four_topic_fundamentalsの対象は`transformer`、`llm_training_stages`、`multi_agent_four_topic`、`memory_process_four_topic`。

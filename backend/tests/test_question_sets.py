@@ -91,6 +91,16 @@ def test_mode_banks_are_separate_and_have_expected_question_roles(isolated):
     with factory() as db:
         assert db.query(Question).count() == 51
         assert db.query(QuestionOption).count() == 402
+        historical_questions = db.query(Question).filter(
+            Question.construct_key.endswith("split-actions-four-topic-v1")
+        ).all()
+        current_four_topic_questions = db.query(Question).filter(
+            Question.construct_key.endswith("split-actions-four-topic-v2")
+        ).all()
+        assert len(historical_questions) == 12
+        assert all(not question.is_active for question in historical_questions)
+        assert len(current_four_topic_questions) == 12
+        assert all(question.is_active for question in current_four_topic_questions)
         for mode, bank in ASSESSMENT_MODE_BANK_VERSIONS.items():
             questions = db.query(Question).filter(Question.construct_key.contains(bank)).all()
             expected_questions = {
@@ -151,7 +161,6 @@ def test_version_44_restores_its_saved_mode(mode, expected_bank):
 
 def test_version_49_restores_the_historical_four_topic_bank():
     participant = {
-<<<<<<< HEAD
         "experiment_spec_version": 49,
         "protocol_id": "experiment-plan-2026-11-10-posttest-five-point-evaluation-v1",
         "test_content_mode": "four_topic_fundamentals",
@@ -163,14 +172,28 @@ def test_version_49_restores_the_historical_four_topic_bank():
     }
 
 
+@pytest.mark.parametrize(
+    "protocol_id,expected_bank",
+    [
+        ("experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1", "split-actions-four-topic-v2"),
+        ("experiment-plan-2026-11-11-posttest-material-amount-wording-v1", "split-actions-four-topic-v1"),
+    ],
+)
+def test_spec_50_protocol_variants_restore_their_saved_four_topic_bank(protocol_id, expected_bank):
+    participant = {
+        "experiment_spec_version": 50,
+        "protocol_id": protocol_id,
+        "test_content_mode": "four_topic_fundamentals",
+    }
+
+    assert assessment_bank_for_participant(participant) == expected_bank
+    assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
+
+
 def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map():
     participant = {
         "experiment_spec_version": 50,
-        "protocol_id": "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1",
-=======
-        "experiment_spec_version": 50,
-        "protocol_id": "experiment-plan-2026-11-11-posttest-material-amount-wording-v1",
->>>>>>> 9a9cae1
+        "protocol_id": "experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1",
         "test_content_mode": None,
     }
 
@@ -197,11 +220,7 @@ def test_current_result_restoration_rejects_missing_mode_snapshot(isolated):
             display_code="MISSING-MODE-SNAPSHOT",
             group_condition="control",
             experiment_spec_version=50,
-<<<<<<< HEAD
-            protocol_id="experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1",
-=======
-            protocol_id="experiment-plan-2026-11-11-posttest-material-amount-wording-v1",
->>>>>>> 9a9cae1
+            protocol_id="experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1",
             test_content_mode=None,
         )
         db.add(participant)
@@ -293,11 +312,7 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
             assert default_participant.experiment_spec_version == 50
-<<<<<<< HEAD
-            assert default_participant.protocol_id == "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1"
-=======
-            assert default_participant.protocol_id == "experiment-plan-2026-11-11-posttest-material-amount-wording-v1"
->>>>>>> 9a9cae1
+            assert default_participant.protocol_id == "experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()
