@@ -5,7 +5,7 @@ const base = new URL(process.env.SURVEY_PREVIEW_UI_BASE_URL);
 assert(["localhost", "127.0.0.1"].includes(base.hostname) && base.port && base.port !== "3000");
 const { chromium } = await import(process.env.SURVEY_PREVIEW_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
-const terms = ["Transformer", "事前学習", "指示チューニング", "人の評価・好みを用いる事後学習", "マルチエージェント", "記憶プロセス"];
+const terms = ["Transformer", "事前学習", "ファインチューニング", "人の評価・好みを用いる事後学習", "マルチエージェント", "記憶プロセス"];
 const proficiencyItems = [
   "目的を伝えて、目的に合った回答を得る",
   "期待と違う回答のとき、指示や条件を修正する",
@@ -46,7 +46,7 @@ try {
       assert.equal(await group.count(), 1);
       if (index === 0) {
         await group.getByRole("button", { name: "ある", exact: true }).click();
-        const understanding = page.getByRole("group", { name: `実験前の時点で、${term}の基本的な意味や働きをどの程度理解していましたか。`, exact: true });
+        const understanding = page.getByRole("group", { name: `${term}の基本的な意味や働きをどの程度理解していますか。`, exact: true });
         assert.equal(await understanding.count(), 1);
       } else {
         await group.getByRole("button", { name: index % 2 ? "ない" : "覚えていない", exact: true }).click();
@@ -58,7 +58,7 @@ try {
     }
     await presurveySubmit.click();
     await page.getByRole("alert").getByText("未選択の項目があります。必須の各項目を選択してください。", { exact: true }).waitFor();
-    await page.getByRole("group", { name: `実験前の時点で、${terms[0]}の基本的な意味や働きをどの程度理解していましたか。`, exact: true }).getByRole("button", { name: "全く理解していない", exact: true }).click();
+    await page.getByRole("group", { name: `${terms[0]}の基本的な意味や働きをどの程度理解していますか。`, exact: true }).getByRole("button", { name: "全く理解していない", exact: true }).click();
     await presurveySubmit.click();
     await page.getByRole("heading", { name: "事前アンケートの入力確認", exact: true }).waitFor();
     await page.getByText("デバッグプレビューのため、回答は保存されていません。", { exact: false }).waitFor();
@@ -74,7 +74,7 @@ try {
     for (let index = 0; index < await ratingGroups.count(); index += 1) {
       await ratingGroups.nth(index).getByRole("button").nth(2).click();
     }
-    await page.getByLabel("自由記述（任意）").locator("textarea").fill("プレビュー確認");
+    await page.locator("textarea").fill("プレビュー確認");
     await posttestSubmit.click();
     await page.getByRole("heading", { name: "事後アンケートの入力確認", exact: true }).waitFor();
     assert.deepEqual(participantRequests, [], "preview must not call participant or experiment APIs");

@@ -8,7 +8,7 @@ from app.core.question_sets import LEARNING_CONTENT_VERSION
 
 
 CURRENT_EXPERIMENT_SPEC_VERSION = 50
-CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-11-posttest-material-amount-wording-v1"
+CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1"
 MAX_POST_PRETEST_TESTS = 2
 MAX_LEARNING_CONFIRMATION_ATTEMPTS = 1
 

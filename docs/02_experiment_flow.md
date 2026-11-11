@@ -1,8 +1,8 @@
 # 実験フロー
 
-## 仕様版50の現行フロー
+## 仕様版50の現行フロー（2026-11-11）
 
-仕様版50 / `experiment-plan-2026-11-11-posttest-material-amount-wording-v1`では、新規参加者の既存進行を維持し、事後アンケートを`posttest-5point-v2`へ更新して教材量の質問を「今回の教材の量はどの程度でしたか」とする。システム2項目・教材6項目は5段階と「評価できない」を使い、教材未閲覧の場合は教材回答をnullで保存する。結果・回答の保全、問題モード別集計、事前満点の早期終了条件は変えない。H5は教材の中核4項目の数値平均で、難易度と教材量は別の回答分布として扱う。仕様版49以下は当時の表示・回答のまま読み取り専用で保全する。[アンケート仕様](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
+新規参加者は仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`を使う。登録時snapshotされた問題モード・テスト進行・採点・結果表示を仕様版49から維持し、事前アンケート理解度質問文、4用語版の表記・問題バンクv2、事後アンケート`posttest-5point-v2`の教材量設問文を統合する。標準2モードは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`と`split-actions-four-topic-v2`を使う。事後はシステム評価2項目・教材評価6項目で、教材未閲覧時は教材回答をnullで保存する。結果・回答の保全、問題モード別集計、事前満点の早期終了条件は変えない。H5は教材の中核4項目の数値平均で、難易度と教材量は別の回答分布として扱う。仕様版50の先行protocolと仕様版49以下は当時の回答・問題を保ち、読み取り専用で扱う。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
 
 ## 仕様版48のフロー（履歴）
 
@@ -18,7 +18,7 @@
 
 計画書の手順は、事前テスト、必要な用語の学習、再テスト、未達用語の再学習、満点または中断後のアンケートという流れ。6仮説の測定上の回数・対象経路は[01](01_research_requirements.md)と[12](12_evaluation_metrics.md)に定め、画面表示の変更で評価式は変更しない。
 
-仕様版48で導入した事前アンケートと4用語版の条件は、それぞれ[事前アンケート](49_presurvey_baseline.md)と[4用語版フロー](51_four_topic_foundation_mode.md)を参照する。現行仕様版50では教材量の設問文と事後アンケート版だけを更新し、その他の進行条件を維持する。事前満点者はsurveyへ直行または結果確認後にsurveyへ進み、独立した早期終了経路として記録する。
+仕様版48で導入した事前アンケートと4用語版の条件は、それぞれ[事前アンケート](49_presurvey_baseline.md)と[4用語版フロー](51_four_topic_foundation_mode.md)を参照する。仕様版50の統合protocolでは、理解度質問の表現、4用語版の用語・問題バンク、事後アンケートの教材量設問文を更新し、その他の進行条件を維持する。事前満点者はsurveyへ直行または結果確認後にsurveyへ進み、独立した早期終了経路として記録する。
 
 仕様版42では新規登録・出題・学習・集計は通常版だけを扱い、問題バンクの切替経路はなかった。旧条件の保存データ削除は通常の起動・seedから分離し、[専用削除手順](../backend/scripts/purge_easy_mode_data.py)で明示実行する。
 

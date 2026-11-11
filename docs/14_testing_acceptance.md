@@ -1,12 +1,31 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-11 事後アンケート教材量の設問文更新（仕様版50・fix/issue-329）
+## 2026-11-11 仕様版50の事前アンケート・問題バンク更新（fix/issue-323の検証記録）
+
+- 事前アンケートの理解度質問から「実験前の時点で」を外し、全モードで「{用語}の基本的な意味や働きをどの程度理解していますか。」に統一した。実験の説明前に見聞きした経験を尋ねる質問と、回答分岐・保存形式は維持する。
+- 4用語版は新しい問題バンク`split-actions-four-topic-v2`を追加し、ファインチューニング表記へ更新した。インストラクションチューニングはファインチューニングの一種として教材情報を説明する。旧バンクと仕様版49参加者のアンケート・問題snapshotは変更しない。共通RAG資料も変更しない。
+- 通常モードの事前アンケート版は`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`。この変更単独時のprotocolは`experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`。仕様版49の再開・読取では従来のアンケートschemaと問題バンクを使う。
+- Backend全テストは`1712 passed`（警告6件）。Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。
+- 隔離SQLite・別ポートのブラウザ環境で、現行版・基礎理解版・4用語版を1440pxと390pxで確認した。質問文、見聞き経験に応じた理解度表示、全項目入力、保存後の事前テスト遷移、管理ログ・CSV/XLSX、横はみ出しなしを確認した。
+- `git diff --check`を実施。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。質問文・用語表記の研究上の承認や尺度の妥当性は確認していない。
+
+## 2026-11-11 事後アンケート教材量の設問文更新（fix/issue-329の検証記録）
 
 - 新規参加者の事後アンケートを`posttest-5point-v2`へ更新し、設問文を「今回の教材の量はどの程度でしたか」に変更した。回答選択肢、`amount_appropriateness`、5段階の回答形式、教材量をH5対象外として分布のみ集計する契約は維持する。
 - 仕様版を50、protocolを`experiment-plan-2026-11-11-posttest-material-amount-wording-v1`へ更新した。仕様版49以前の参加者・回答は読み取り専用で保全し、変換・上書きしない。
 - `backend/tests/test_plan_aligned_protocol.py`: `44 passed`、`backend/tests/test_current_experiment_spec.py`: `76 passed`（計2件のDeprecationWarning）。仕様版49の旧回答・読取専用性、v1の新規送信拒否、H5の現行版限定、登録時の仕様版・protocolを確認した。
 - Frontend `npm test`と`npm run build`（TypeScriptを含む）が成功した。テストでは事後画面の新設問文と管理画面の教材量分布ラベルを確認した。
 - `git -c core.whitespace=cr-at-eol diff --check`が成功した。実ブラウザでの画面確認は未実施。研究上の承認を意味しない。
+
+上記2件は、それぞれ別の仕様版50 protocolで検証した履歴であり、統合protocol全体の検証記録ではない。統合後の検証結果は以下に追記する。
+
+## 2026-11-11 PR #334 review対応・仕様版50 protocol統合
+
+- 仕様版50の現行protocolを`experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`へ統合した。既存の二つの仕様版50 protocolと仕様版49以下は進行不可の履歴として保持し、四用語問題の復元は保存時protocolに応じてv1/v2を選ぶ。
+- 問題seedでは履歴バンク`split-actions-four-topic-v1`の12問をinactiveに保ち、現行`split-actions-four-topic-v2`の12問だけactiveであることをテストした。
+- 問題バンク・履歴復元などのBackend回帰テスト12ファイルは`524 passed`（警告2件）、計画protocol関連テストは`45 passed`（警告1件）。Frontend `npm test`と`npm run build`が成功した。
+- リポジトリ内の競合マーカー検索で残存なし。`git diff --check`が成功した。
+- この検証は統合範囲の自動テスト結果であり、実ブラウザ全経路の再確認や研究上の承認を意味しない。研究DB、既存3000番環境、実AI、コミット・pushは対象外。
 
 ## 2026-11-10 H5集計分母の整合性修正（PR #322 review follow-up）
 

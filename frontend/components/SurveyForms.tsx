@@ -7,7 +7,7 @@ export type SurveyTermItem = { key: string; label: string };
 export const FOUR_TOPIC_PRESURVEY_TERM_ITEMS: readonly SurveyTermItem[] = [
   { key: "transformer", label: "Transformer" },
   { key: "pretraining", label: "事前学習" },
-  { key: "instruction_tuning", label: "指示チューニング" },
+  { key: "fine_tuning", label: "ファインチューニング" },
   { key: "human_feedback_post_training", label: "人の評価・好みを用いる事後学習" },
   { key: "multi_agent", label: "マルチエージェント" },
   { key: "memory_process", label: "記憶プロセス" },
@@ -184,7 +184,7 @@ export function PresurveyQuestionnaire({
     {termItems.map(({ key, label }) => {
       const exposure = values[`exposure:${key}`] || "";
       const experienceQuestion = `${label}という用語を、実験の説明を受ける前に見たり聞いたりしたことがありますか。`;
-      const understandingQuestion = `実験前の時点で、${label}の基本的な意味や働きをどの程度理解していましたか。`;
+      const understandingQuestion = `${label}の基本的な意味や働きをどの程度理解していますか。`;
       return <section className="stack" key={key} aria-label={label}>
         <ChoiceButtons
           label={experienceQuestion}
