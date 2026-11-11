@@ -1067,7 +1067,7 @@ button:disabled {
 }
 
 .presurvey-form .survey-choice-options {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(var(--survey-choice-option-count), minmax(0, 1fr));
 }
 
 .survey-rating-options {
@@ -1093,6 +1093,7 @@ button:disabled {
 
 .survey-choice-button {
   padding: 12px 10px;
+  overflow-wrap: anywhere;
 }
 
 .survey-rating-button {
@@ -1397,6 +1398,10 @@ button:disabled {
 
 @media (max-width: 760px) {
   .survey-rating-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .presurvey-form .survey-choice-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
