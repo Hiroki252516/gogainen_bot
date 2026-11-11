@@ -56,7 +56,7 @@ const MATERIAL = [
   ["japanese_clarity", "教材の日本語表現は分かりやすかった", "agreement"],
   ["difficulty_appropriateness", "教材の難易度はどの程度でしたか", "difficulty"],
   ["learning_usefulness", "教材は、用語や仕組みを正しく理解するために役立った", "agreement"],
-  ["amount_appropriateness", "今回の学習時間に対する教材の量はどの程度でしたか", "amount"],
+  ["amount_appropriateness", "今回の教材の量はどの程度でしたか", "amount"],
 ] as const;
 const AGREEMENT_OPTIONS = [
   ["1", "全くそう思わない"],
@@ -96,7 +96,7 @@ export type PresurveySubmission = {
 };
 
 export type PosttestSubmission = {
-  survey_version: "posttest-5point-v1";
+  survey_version: "posttest-5point-v2";
   general_ratings: Record<string, RatingValue>;
   material_ratings: Record<string, RatingValue> | null;
   free_comment: string;
@@ -258,7 +258,7 @@ export function PosttestQuestionnaire({
     try {
       const ratingValue = (value: string): RatingValue => value === "not_applicable" ? value : Number(value);
       const payload: PosttestSubmission = {
-        survey_version: "posttest-5point-v1",
+        survey_version: "posttest-5point-v2",
         general_ratings: Object.fromEntries(GENERAL.map(([key]) => [key, ratingValue(values[key])])),
         material_ratings: materialRatingsRequired
           ? Object.fromEntries(MATERIAL.map(([key]) => [key, ratingValue(values[key])]))

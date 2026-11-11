@@ -15,7 +15,7 @@ const ITEMS: Record<string, string> = {
 const H5_ITEMS = ["clarity", "readability", "japanese_clarity", "learning_usefulness"];
 const DISTRIBUTION_ITEMS: Record<string, { label: string; options: string[] }> = {
   difficulty_appropriateness: { label: "教材の難易度", options: ["簡単すぎた", "やや簡単", "ちょうどよい", "やや難しい", "難しすぎた"] },
-  amount_appropriateness: { label: "学習時間に対する教材の量", options: ["少なすぎた", "やや少ない", "ちょうどよい", "やや多い", "多すぎた"] },
+  amount_appropriateness: { label: "今回の教材の量", options: ["少なすぎた", "やや少ない", "ちょうどよい", "やや多い", "多すぎた"] },
 };
 const CENSORING_REASONS: Record<string, string> = {
   give_up: "途中中断", in_progress: "継続中", completed_without_mastery: "完了・満点未達", other: "終了状況不明",
@@ -78,7 +78,7 @@ export function HypothesisMetrics({ data }: { data: any }) {
         const stat = group.h5.items[key];
         return <tr key={`${key}-${group.group_condition}`}><th>{label}</th><td>{group.group_condition}</td><td>{stat.n}</td><td>{format(stat.mean)}</td><td>{format(stat.median)}</td><td>{stat.not_applicable_count}</td><td>{stat.missing_count}</td><td>{format(data.material_item_differences[key])}</td></tr>;
       }))}</tbody></table></div>
-    <h3>難易度・分量の回答分布（H5対象外）</h3>
+    <h3>難易度・教材量の回答分布（H5対象外）</h3>
     <p>各割合の分母は教材閲覧者数です。未回答と「評価できない」は別に表示します。</p>
     <div style={{ overflowX: "auto" }}><table><thead><tr><th>項目</th><th>群</th><th>閲覧者数</th><th>回答</th><th>人数</th><th>割合</th></tr></thead>
       <tbody>{Object.entries(DISTRIBUTION_ITEMS).flatMap(([key, item]) => data.groups.flatMap((group: any) => {
