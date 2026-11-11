@@ -56,7 +56,7 @@ def complete_identity_mapping_cleanup(db: Session, event: AuditEvent) -> bool:
         return False
 
     try:
-        identity_mapping.delete_mapping(event.entity_id)
+        identity_mapping.delete_participant_mappings(event.entity_id)
     except Exception:
         db.rollback()
         logger.exception("Identity mapping cleanup failed for a deleted participant")

@@ -1,6 +1,7 @@
 // Run only against an isolated Mock backend, never the study instance.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { newResearchCode } from "./research-code.mjs";
 
 if (process.env.GLOSSARY_VERIFY_ISOLATED !== "1" || !process.env.GLOSSARY_UI_BASE_URL || !process.env.GLOSSARY_PLAYWRIGHT_MODULE || !process.env.GLOSSARY_SCREENSHOT_DIR || !process.env.ADMIN_PASSWORD) throw new Error("Set isolated UI, browser, screenshot directory and test admin password.");
 const base = new URL(process.env.GLOSSARY_UI_BASE_URL);
@@ -104,7 +105,7 @@ try {
     await api(page.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
     assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
     await api(page.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
-    const record = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, student_number: `GLOSSARY-POSITION-SYNTHETIC-${width}` });
+    const record = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, research_code: newResearchCode() });
     await page.addInitScript((p) => { localStorage.setItem("participant_id", p.participant_id); localStorage.setItem("display_code", p.display_code); }, record);
     const questions = (await api(page.request, `/api/experiment/${record.participant_id}/pretest`)).questions;
     await page.goto(new URL("/pretest", base).href);
@@ -134,7 +135,7 @@ try {
     const context = await browser.newContext({ viewport: { width, height: 720 } });
     const page = await context.newPage();
     await api(page.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
-    const record = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, student_number: `GLOSSARY-LONG-SYNTHETIC-${width}` });
+    const record = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, research_code: newResearchCode() });
     await page.addInitScript((p) => localStorage.setItem("participant_id", p.participant_id), record);
     await page.route("**/api/experiment/*/pretest", async (route) => {
       const response = await route.fetch();

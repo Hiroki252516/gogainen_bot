@@ -36,6 +36,7 @@ def test_login_cookie_csv_logout_and_revocation():
     assert client.get("/api/admin/participants").status_code == 200
     assert client.get("/api/admin/logs/overview.csv").status_code == 200
     assert client.get("/api/admin/identity-mappings.csv").status_code == 200
+    assert client.get("/api/admin/research-code-mappings.csv").status_code == 200
     logout = client.post("/api/admin/auth/logout")
     assert logout.status_code == 200
     assert "Secure" not in logout.headers["set-cookie"]

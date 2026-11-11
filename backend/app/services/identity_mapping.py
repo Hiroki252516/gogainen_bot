@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import sqlite3
 import unicodedata
 from contextlib import contextmanager
@@ -26,6 +27,12 @@ def validate_student_number(value: str) -> str:
     return normalized
 
 
+def validate_research_code(value: str) -> str:
+    if re.fullmatch(r"[0-9]{1,64}", value) is None:
+        raise HTTPException(400, "伝えられた番号は半角数字1〜64桁で入力してください。")
+    return value
+
+
 @contextmanager
 def connection():
     path = Path(get_settings().identity_mapping_path).resolve()
@@ -44,6 +51,10 @@ def connection():
         db.execute("""CREATE TABLE IF NOT EXISTS identity_mappings (
             participant_id TEXT PRIMARY KEY, display_code TEXT NOT NULL,
             student_number TEXT NOT NULL, created_at TEXT NOT NULL,
+            registration_key TEXT NOT NULL UNIQUE)""")
+        db.execute("""CREATE TABLE IF NOT EXISTS research_code_mappings (
+            participant_id TEXT PRIMARY KEY, research_code TEXT NOT NULL UNIQUE,
+            display_code TEXT NOT NULL, created_at TEXT NOT NULL,
             registration_key TEXT NOT NULL UNIQUE)""")
         db.commit()
         yield db
@@ -88,3 +99,58 @@ def mapping_csv(rows: list[dict]) -> str:
     for row in rows:
         writer.writerow([safe(str(row[key])) for key in keys])
     return "\ufeff" + output.getvalue()
+
+
+def save_research_code_mapping(participant_id: str, display_code: str, research_code: str,
+                               created_at: str, registration_key: str) -> None:
+    try:
+        with connection() as db, db:
+            db.execute("DELETE FROM research_code_mappings WHERE registration_key = ?", (registration_key,))
+            db.execute(
+                "INSERT INTO research_code_mappings VALUES (?, ?, ?, ?, ?)",
+                (participant_id, research_code, display_code, created_at, registration_key),
+            )
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(409, "この番号は既に使用されています。研究者から伝えられた番号を確認してください。") from exc
+
+
+def list_research_code_mappings() -> list[dict]:
+    with connection() as db:
+        return [dict(row) for row in db.execute(
+            "SELECT participant_id, research_code, display_code, created_at "
+            "FROM research_code_mappings ORDER BY created_at, participant_id")]
+
+
+def research_code_for_registration_key(registration_key: str) -> str | None:
+    with connection() as db:
+        row = db.execute(
+            "SELECT research_code FROM research_code_mappings WHERE registration_key = ?",
+            (registration_key,),
+        ).fetchone()
+        return row["research_code"] if row else None
+
+
+def research_code_mapping_csv(rows: list[dict]) -> str:
+    def safe(value: str) -> str:
+        return "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    keys = ("research_code", "participant_id", "display_code", "created_at")
+    writer.writerow(keys)
+    for row in rows:
+        writer.writerow([safe(str(row[key])) for key in keys])
+    return "\ufeff" + output.getvalue()
+
+
+def delete_research_code_mapping(participant_id: str | None = None) -> int:
+    with connection() as db, db:
+        if participant_id is None:
+            return db.execute("DELETE FROM research_code_mappings").rowcount
+        return db.execute("DELETE FROM research_code_mappings WHERE participant_id = ?", (participant_id,)).rowcount
+
+
+def delete_participant_mappings(participant_id: str) -> int:
+    with connection() as db, db:
+        legacy_count = db.execute("DELETE FROM identity_mappings WHERE participant_id = ?", (participant_id,)).rowcount
+        research_count = db.execute("DELETE FROM research_code_mappings WHERE participant_id = ?", (participant_id,)).rowcount
+        return legacy_count + research_count

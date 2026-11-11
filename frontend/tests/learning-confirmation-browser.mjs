@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { newResearchCode } from "./research-code.mjs";
 
 const { LEARNING_VERIFY_ISOLATED, LEARNING_UI_BASE_URL, LEARNING_PLAYWRIGHT_MODULE, LEARNING_SCREENSHOT_DIR, LEARNING_TERM_SLUG, LEARNING_VARIANT_INDEX, LEARNING_FIXTURE_DB_URL } = process.env;
 assert.equal(LEARNING_VERIFY_ISOLATED, "1");
@@ -141,12 +142,12 @@ try {
     const page = await context.newPage();
     assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
     await api(page.request, "/api/admin/option-order", "PUT", { mode: layout });
-    const created = await api(page.request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "LEARNING-BROWSER-SYNTHETIC" });
+    const created = await api(page.request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, research_code: newResearchCode() });
     const questions = (await api(page.request, `/api/experiment/${created.participant_id}/pretest`)).questions;
     const pretestLabels = role === "unknown" ? "J" : role === "M1" ? "DEF" : "GHI";
     // Get the source option bodies from a separate debug-fixed participant, not from public correctness metadata.
     await api(page.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
-    const reference = await api(page.request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "LEARNING-BROWSER-REFERENCE" });
+    const reference = await api(page.request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, research_code: newResearchCode() });
     const canonical = (await api(page.request, `/api/experiment/${reference.participant_id}/pretest`)).questions;
     for (const [index, question] of questions.entries()) {
       const labels = question.term_slug === termSlug ? pretestLabels : "ABC";

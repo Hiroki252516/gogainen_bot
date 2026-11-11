@@ -60,7 +60,19 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 教材・回答後解説に加え、GET /api/experiment/{id}/pretest、/retest、/final-testの各questions項目へ`glossary: {version, entries: [{id, term, definition}]}`を返す。テストは用語見出し・問題文・全選択肢から抽出し、選択・正誤・診断を使わない。未回答GETはDBへ保存せず、回答時に同じ不変辞書からAttempt.glossary_snapshotへ保存する。回答済みの再取得・再送は保存値を使い、欠落は後付けしない。該当語なしは空配列、snapshot欠落時はnull。指紋・出典・正答・分類情報は公開しない。新規ルート・管理設定は追加せず、nullable JSON列を1つ追加する。AI入力・共通履歴には含めない。[保存仕様](24_learning_glossary.md)。
 
-## 2026-10-21 同意・分離対応表
+## 2026-11-11 現行: 研究用コード登録（fix/issue-317）
+
+- POST /api/registrations（互換URL /api/participants）: `assignment_code`、`consent_checked`、`research_code`を受け取る。`research_code`は半角数字1〜64桁を厳密に検証し、先頭ゼロを保持する。旧`student_number`フィールドなど余分なキーは拒否し、登録入力の検証応答では受信値を返さない。
+- 研究用コードは研究DBではなく、`IDENTITY_MAPPING_PATH`の分離SQLiteにある`research_code_mappings`へ保存する。研究DB、AI入力・AIログ、通常の研究用CSV/XLSX、登録応答には含めない。研究用コードの重複は409とし、エラーに入力値を含めない。
+- Idempotency-Keyによる同じ登録要求の再送は保存済み登録結果を返し、管理者が削除済みの対応表を再作成しない。既存の登録冪等性レコードに研究用コードそのものは保存しない。
+- GET /api/admin/research-code-mappings: 現行参加者に対応する研究用コードの対応表を返す。GET /api/admin/research-code-mappings.csvはBOM付きUTF-8 CSVをダウンロードする。両方とも認証必須・`Cache-Control: no-store`。
+- DELETE /api/admin/research-code-mappings/{participant_id}、DELETE /api/admin/research-code-mappings: 研究用コード対応表を個別または全件削除する。研究データは残る。
+- 旧`/api/admin/identity-mappings`系は学籍番号対応表用として残し、研究用コード対応表とは別に動作する。既存行を移行・変更せず、旧APIの削除操作も研究用コード表へ波及しない。
+- DELETE /api/admin/participants/{participant_id}: 研究DB削除後の再試行可能なcleanupで、旧学籍番号表と研究用コード表の両方から当該参加者の行を削除する。
+
+この登録入力と同意文書は現時点で一致していない。別担当者の同意文書更新が統合され、研究計画・倫理手続き上の必要な確認を終えるまでは、本変更を実参加者の募集・登録に使用しない。UI/API変更は承認取得を意味しない。
+
+## 2026-10-21 同意・学籍番号対応表（履歴）
 
 - POST /api/registrations（互換URL /api/participants）: assignment_code、consent_checked、student_numberを受け取る。学籍番号は必須・trim後1〜64文字・改行/制御文字不可。同意なしは400、不正な型は識別情報を返さない422。研究DBには学籍番号もそのハッシュも保存しない。Idempotency-Keyの再送は登録結果だけを返し、削除済み対応表を再作成しない。
 - GET /api/admin/identity-mappings: アプリ内の対応表を返す。

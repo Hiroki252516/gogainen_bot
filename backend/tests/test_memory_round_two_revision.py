@@ -6,7 +6,7 @@ import pytest
 from admin_client import AuthenticatedTestClient as TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from split_api_support import assert_learning_flow, complete_presurvey
+from split_api_support import assert_learning_flow, complete_presurvey, new_research_code
 
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.core.question_sets import LEARNING_CONTENT_VERSIONS, STANDARD, HISTORICAL_ASSESSMENT_BANK_VERSIONS
@@ -153,7 +153,7 @@ def test_natural_memory_round_two_grading_feedback_replay_and_prefetch(group, la
 def test_current_spec_resolves_without_historical_mapping():
     assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
     client = TestClient(app)
-    created = _ok(client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "CURRENT-BANK-SYNTHETIC"}))
+    created = _ok(client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "research_code": new_research_code()}))
     complete_presurvey(client, created["participant_id"])
     questions = _ok(client.get(f"/api/experiment/{created['participant_id']}/pretest"))["questions"]
     assert len(questions) == 3

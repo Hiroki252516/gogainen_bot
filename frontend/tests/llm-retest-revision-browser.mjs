@@ -1,6 +1,7 @@
 // Use only a temporary Mock backend; never submit synthetic answers to the study instance.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { newResearchCode } from "./research-code.mjs";
 
 const { RETEST_VERIFY_ISOLATED, RETEST_UI_BASE_URL, RETEST_PLAYWRIGHT_MODULE, RETEST_SCREENSHOT_DIR, RETEST_TERM_SLUG } = process.env;
 assert.equal(RETEST_VERIFY_ISOLATED, "1");
@@ -165,7 +166,7 @@ async function api(request, path, method = "GET", data) {
 
 async function register(request, group, layout) {
   await api(request, "/api/admin/option-order", "PUT", { mode: layout });
-  return api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "LLM-RETEST-BROWSER-SYNTHETIC" });
+  return api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, research_code: newResearchCode() });
 }
 
 async function answerApiPhase(request, records, phase, labels) {

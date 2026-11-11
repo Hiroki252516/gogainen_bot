@@ -1,6 +1,7 @@
 // Run only against an isolated Mock backend, never the study instance.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { newResearchCode } from "./research-code.mjs";
 
 if (process.env.WIDTH_VERIFY_ISOLATED !== "1" || !process.env.WIDTH_UI_BASE_URL || !process.env.WIDTH_PLAYWRIGHT_MODULE || !process.env.WIDTH_SCREENSHOT_DIR || !process.env.ADMIN_PASSWORD) {
   throw new Error("Set isolated UI, browser, screenshot directory and test admin password.");
@@ -105,7 +106,7 @@ try {
     await api(page.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
     assert.equal((await api(page.request, "/api/admin/ai/status")).ai_backend, "mock");
     await api(page.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
-    const participant = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, student_number: `WIDTH-TEST-SYNTHETIC-${width}` });
+    const participant = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, research_code: newResearchCode() });
     const pid = participant.participant_id;
     await page.addInitScript((p) => {
       localStorage.setItem("participant_id", p.participant_id);
@@ -194,7 +195,7 @@ try {
     page.setDefaultTimeout(30000);
     await api(page.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
     await api(page.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
-    const record = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, student_number: `WIDTH-FINAL-SYNTHETIC-${width}` });
+    const record = await api(page.request, "/api/registrations", "POST", { assignment_code: "B", consent_checked: true, research_code: newResearchCode() });
     const questions = (await api(page.request, `/api/experiment/${record.participant_id}/pretest`)).questions;
     for (const question of questions) {
       const correctOption = question.options.find((option) => option.label === "A");

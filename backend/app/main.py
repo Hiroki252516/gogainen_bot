@@ -247,9 +247,10 @@ def api_admin_logout(request: Request, response: Response) -> dict:
 
 
 class ParticipantCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     assignment_code: str | None = None
     consent_checked: bool = False
-    student_number: str = ""
+    research_code: str
 
 
 class AttemptPayload(BaseModel):
@@ -368,11 +369,15 @@ async def api_create_participant(
 ) -> dict:
     if not payload.consent_checked:
         raise HTTPException(400, "同意書への同意が必要です。")
-    student_number = identity_mapping.validate_student_number(payload.student_number)
+    research_code = identity_mapping.validate_research_code(payload.research_code)
     normalized_key = normalize_idempotency_key(idempotency_key)
     registration_key = normalized_key or str(uuid4())
     if normalized_key and registration_key_was_deleted(db, normalized_key):
         raise HTTPException(409, "この参加登録は削除されています。再送による再登録はできません。")
+    if normalized_key:
+        existing_research_code = identity_mapping.research_code_for_registration_key(registration_key)
+        if existing_research_code is not None and existing_research_code != research_code:
+            raise HTTPException(409, "同じ登録要求キーには別の入力値を使用できません。")
     staged_id: str | None = None
 
     def operation() -> dict:
@@ -380,8 +385,8 @@ async def api_create_participant(
         try:
             participant = create_participant(db, payload.assignment_code, payload.consent_checked)
             staged_id = participant.id
-            identity_mapping.save_mapping(participant.id, participant.display_code, student_number,
-                                          participant.consented_at.isoformat(), registration_key)
+            identity_mapping.save_research_code_mapping(participant.id, participant.display_code, research_code,
+                                                        participant.consented_at.isoformat(), registration_key)
         except OperationalError as exc:
             _raise_database_unavailable(db, exc)
         return {
@@ -405,7 +410,7 @@ async def api_create_participant(
         # Do not remove a mapping if the research commit succeeded but the response failed.
         db.rollback()
         if staged_id and db.query(Participant.id).filter_by(id=staged_id).first() is None:
-            identity_mapping.delete_mapping(staged_id)
+            identity_mapping.delete_participant_mappings(staged_id)
         if isinstance(exc, OperationalError):
             _raise_database_unavailable(db, exc)
         raise
@@ -962,6 +967,11 @@ def _visible_identity_mappings(db: Session) -> list[dict]:
     return [row for row in identity_mapping.list_mappings() if row["participant_id"] in current_ids]
 
 
+def _visible_research_code_mappings(db: Session) -> list[dict]:
+    current_ids = {row[0] for row in db.query(Participant.id).all()}
+    return [row for row in identity_mapping.list_research_code_mappings() if row["participant_id"] in current_ids]
+
+
 @app.get("/api/admin/identity-mappings")
 def api_identity_mappings(db: Session = Depends(get_db)):
     return JSONResponse({"mappings": _visible_identity_mappings(db)}, headers={"Cache-Control": "no-store"})
@@ -981,6 +991,28 @@ def api_delete_all_identity_mappings():
 @app.delete("/api/admin/identity-mappings/{participant_id}")
 def api_delete_identity_mapping(participant_id: str):
     return JSONResponse({"deleted_count": identity_mapping.delete_mapping(participant_id)}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/admin/research-code-mappings")
+def api_research_code_mappings(db: Session = Depends(get_db)):
+    return JSONResponse({"mappings": _visible_research_code_mappings(db)}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/admin/research-code-mappings.csv")
+def api_research_code_mapping_csv(db: Session = Depends(get_db)):
+    rows = _visible_research_code_mappings(db)
+    return Response(identity_mapping.research_code_mapping_csv(rows), media_type="text/csv; charset=utf-8",
+                    headers={"Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="research-code-mappings.csv"'})
+
+
+@app.delete("/api/admin/research-code-mappings")
+def api_delete_all_research_code_mappings():
+    return JSONResponse({"deleted_count": identity_mapping.delete_research_code_mapping()}, headers={"Cache-Control": "no-store"})
+
+
+@app.delete("/api/admin/research-code-mappings/{participant_id}")
+def api_delete_research_code_mapping(participant_id: str):
+    return JSONResponse({"deleted_count": identity_mapping.delete_research_code_mapping(participant_id)}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/admin/logs/overview")

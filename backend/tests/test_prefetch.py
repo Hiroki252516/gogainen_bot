@@ -16,7 +16,7 @@ import app.services.experiment as experiment_service
 from app.services.prefetch import PrefetchCoordinator, wait_for_prefetch_tasks
 from app.services.tutor_prefetch import TutorPrefetchRegistry
 from app.services.learning_glossary import glossary_snapshot, public_glossary
-from split_api_support import acknowledge_all_question_reviews, case_roles, complete_presurvey, select_roles
+from split_api_support import acknowledge_all_question_reviews, case_roles, complete_presurvey, new_research_code, select_roles
 
 
 client = TestClient(app)
@@ -91,7 +91,7 @@ def _ids_for_labels(question: dict, labels: list[str]) -> list[str]:
 def _create_participant_with_pretest() -> str:
     participant = client.post(
         "/api/participants",
-        json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"},
+        json={"assignment_code": "A", "consent_checked": True, "research_code": new_research_code()},
     )
     assert participant.status_code == 200, participant.text
     pid = participant.json()["participant_id"]

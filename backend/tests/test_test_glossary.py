@@ -20,7 +20,7 @@ from app.services.interaction_history import _test_record
 from app.services.learning_glossary import (
     GLOSSARY_PATH, GLOSSARY_VERSION, glossary_snapshot, parse_learning_glossary, public_glossary,
 )
-from split_api_support import complete_presurvey
+from split_api_support import complete_presurvey, new_research_code
 
 
 client = TestClient(app)
@@ -108,7 +108,7 @@ def restore_settings():
 @pytest.mark.parametrize("phase,completed", [("pretest", 0), ("retest", 0), ("retest", 1), ("final_test", 0)])
 def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(layout, group, phase, completed, restore_settings, monkeypatch):
     client.put("/api/admin/option-order", json={"mode": layout})
-    registration = client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "GLOSSARY-SYNTHETIC"})
+    registration = client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()})
     assert registration.status_code == 200, registration.text
     pid = registration.json()["participant_id"]
     complete_presurvey(client, pid)

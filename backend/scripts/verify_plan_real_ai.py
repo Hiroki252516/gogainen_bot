@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from uuid import uuid4
 
 import httpx
 
@@ -35,7 +36,7 @@ async def main():
 
     async def case(group, kind, labels):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://isolated-verification", timeout=600) as client:
-            participant = await post(client, "/api/participants", {"assignment_code": group, "consent_checked": True, "student_number": "VERIFY-SYNTHETIC"})
+            participant = await post(client, "/api/participants", {"assignment_code": group, "consent_checked": True, "research_code": str(uuid4().int)})
             pid = participant["participant_id"]
             questions = (await client.get(f"/api/experiment/{pid}/pretest")).json()["questions"]
             for question in questions:

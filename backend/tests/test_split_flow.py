@@ -5,7 +5,7 @@ from app.db.session import SessionLocal
 from app.models import QuestionOption, TutorTurn, Participant, Attempt
 from app.seed.seed_questions import seed_database
 from app.services.hypothesis_metrics import participant_metrics
-from split_api_support import acknowledge_all_question_reviews, complete_presurvey, create_trial, answer_test, select_roles
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey, create_trial, answer_test, new_research_code, select_roles
 
 
 def ok(response):
@@ -20,7 +20,7 @@ def ok(response):
 def test_split_flow(group, layout, first_role, target_slug):
     client = AuthenticatedTestClient(app)
     ok(client.put("/api/admin/option-order", json={"mode": layout}))
-    pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "student_number": "SPLIT-SYNTHETIC"}))["participant_id"]
+    pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()}))["participant_id"]
     # Keep this paired-assessment integration test on its explicit legacy fixture.
     with SessionLocal() as db:
         db.get(Participant, pid).first_question_only = False
@@ -81,7 +81,7 @@ def test_split_flow(group, layout, first_role, target_slug):
 @pytest.mark.parametrize("pretest_perfect", [False, True])
 def test_split_maximum_rounds_and_mastery(pretest_perfect):
     client = AuthenticatedTestClient(app)
-    pid = ok(client.post("/api/registrations", json={"assignment_code": "B", "consent_checked": True, "student_number": "SPLIT-LIMIT"}))["participant_id"]
+    pid = ok(client.post("/api/registrations", json={"assignment_code": "B", "consent_checked": True, "research_code": new_research_code()}))["participant_id"]
     complete_presurvey(client, pid)
     def answer(phase, correct):
         questions = ok(client.get(f"/api/experiment/{pid}/{phase}"))["questions"]

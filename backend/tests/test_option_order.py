@@ -30,6 +30,7 @@ from app.services.option_order import (
 )
 from app.services.interaction_history import build_interaction_history
 from app.services import experiment as experiment_service
+from split_api_support import new_research_code
 
 
 def _assert_role_balance(bank: str, items: list[tuple[int, list[dict]]]) -> None:
@@ -140,7 +141,7 @@ def isolated_api(tmp_path):
 def _create(client: TestClient, assignment_code: str) -> str:
     response = client.post(
         "/api/participants",
-        json={"assignment_code": assignment_code, "consent_checked": True, "student_number": "TEST-OPTION-ORDER"},
+        json={"assignment_code": assignment_code, "consent_checked": True, "research_code": new_research_code()},
     )
     assert response.status_code == 200, response.text
     return response.json()["participant_id"]

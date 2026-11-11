@@ -1,6 +1,7 @@
 // Disposable acceptance fixtures only; never point this at a study deployment.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { newResearchCode } from "./research-code.mjs";
 
 assert.equal(process.env.Q1_VERIFY_ISOLATED, "1");
 const base = new URL(process.env.Q1_UI_BASE_URL);
@@ -37,7 +38,7 @@ async function ok(path, method = "GET", data) {
 
 async function register() {
   const record = await ok("/api/registrations", "POST", {
-    assignment_code: "A", consent_checked: true, student_number: "Q1-BROWSER-SYNTHETIC-" + Date.now(),
+    assignment_code: "A", consent_checked: true, research_code: newResearchCode(),
   });
   participants.push(record.participant_id);
   const context = await ok(`/api/participants/${record.participant_id}/presurvey`);

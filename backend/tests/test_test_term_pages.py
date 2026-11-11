@@ -14,7 +14,7 @@ from app.db.session import SessionLocal
 from app.main import app
 from app.models import Attempt, Base, Participant
 from app.services.experiment import LOG_CSV_COLUMNS, _learning_burden
-from split_api_support import complete_presurvey, create_trial, ok, select_roles
+from split_api_support import complete_presurvey, create_trial, new_research_code, ok, select_roles
 
 
 def _page_payload(participant_id, page_questions, *, selected_ids=None, page_id=None):
@@ -42,7 +42,7 @@ def test_registration_freezes_test_page_mode_for_new_participants():
         participant_id = ok(client.post("/api/registrations", json={
             "assignment_code": "A",
             "consent_checked": True,
-            "student_number": f"TERM-PAGE-{uuid4().hex}",
+            "research_code": new_research_code(),
         }))["participant_id"]
         complete_presurvey(client, participant_id)
         with SessionLocal() as db:

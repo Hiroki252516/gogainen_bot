@@ -1,6 +1,7 @@
 // Run only against an isolated Mock backend, never the study instance.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { newResearchCode } from "./research-code.mjs";
 
 if (process.env.GLOSSARY_MODE_VERIFY_ISOLATED !== "1" || !process.env.GLOSSARY_MODE_UI_BASE_URL || !process.env.GLOSSARY_MODE_PLAYWRIGHT_MODULE || !process.env.GLOSSARY_MODE_SCREENSHOT_DIR) {
   throw new Error("Set GLOSSARY_MODE_VERIFY_ISOLATED=1, GLOSSARY_MODE_UI_BASE_URL, GLOSSARY_MODE_PLAYWRIGHT_MODULE, and GLOSSARY_MODE_SCREENSHOT_DIR.");
@@ -33,7 +34,7 @@ async function createParticipant(request, group, serial) {
   const created = await api(request, "/api/registrations", "POST", {
     assignment_code: group,
     consent_checked: true,
-    student_number: `GLOSSARY-MODE-SYNTHETIC-${serial}-${Date.now()}`,
+    research_code: newResearchCode(),
   });
   const participantId = created.participant_id;
 

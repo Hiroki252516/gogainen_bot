@@ -18,7 +18,7 @@ from app.main import app
 from app.models import Attempt, Base, Participant, Question, QuestionOption, RuntimeSetting, Term, now
 from app.seed.seed_questions import seed_database
 from app.services import experiment
-from split_api_support import complete_presurvey, create_trial, ok, select_roles
+from split_api_support import complete_presurvey, create_trial, new_research_code, ok, select_roles
 
 @contextmanager
 def set_question_reviews(enabled: bool):
@@ -104,7 +104,7 @@ def _register(client: AuthenticatedTestClient, suffix: str) -> str:
         json={
             "assignment_code": "A",
             "consent_checked": True,
-            "student_number": f"QR-{suffix}-{uuid4().hex[:8]}",
+            "research_code": new_research_code(),
         },
     ))
     complete_presurvey(client, response["participant_id"])

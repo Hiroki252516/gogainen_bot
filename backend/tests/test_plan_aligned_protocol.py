@@ -19,6 +19,7 @@ from app.db.session import SessionLocal
 from app.models import Attempt, AuditEvent, Base, EvaluationSummary, Participant, ParticipantSurvey, Question, Term, TutorSession, TutorTurn
 from app.seed.seed_questions import seed_database
 from app.services import experiment
+from split_api_support import new_research_code
 from app.services.hypothesis_metrics import (
     H5_COMPOSITE_KEYS,
     current_metrics,
@@ -736,7 +737,7 @@ def test_additive_migration_does_not_relabel_or_convert_legacy_rows(study, monke
 
 
 def test_new_api_survey_context_persistence_and_legacy_protection():
-    created = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "student_number": "TEST-0001"})
+    created = client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "research_code": new_research_code()})
     assert created.status_code == 200
     pid = created.json()["participant_id"]
     assert created.json()["current_step"] == "presurvey"

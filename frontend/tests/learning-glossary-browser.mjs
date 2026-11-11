@@ -1,6 +1,7 @@
 // Run only against an isolated Mock backend, never the study instance.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { newResearchCode } from "./research-code.mjs";
 
 if (process.env.GLOSSARY_VERIFY_ISOLATED !== "1" || !process.env.GLOSSARY_UI_BASE_URL || !process.env.GLOSSARY_PLAYWRIGHT_MODULE || !process.env.GLOSSARY_SCREENSHOT_DIR) {
   throw new Error("Set GLOSSARY_VERIFY_ISOLATED=1, GLOSSARY_UI_BASE_URL, GLOSSARY_PLAYWRIGHT_MODULE, and GLOSSARY_SCREENSHOT_DIR.");
@@ -22,7 +23,7 @@ async function participant(request, group) {
   await api(request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD || "abc" });
   assert.equal((await api(request, "/api/admin/ai/status")).ai_backend, "mock");
   await api(request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
-  const created = await api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, student_number: "GLOSSARY-BROWSER-SYNTHETIC" });
+  const created = await api(request, "/api/registrations", "POST", { assignment_code: group, consent_checked: true, research_code: newResearchCode() });
   const pid = created.participant_id;
   const questions = (await api(request, `/api/experiment/${pid}/pretest`)).questions;
   for (const question of questions) {

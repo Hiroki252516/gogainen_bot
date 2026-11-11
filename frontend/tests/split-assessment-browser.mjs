@@ -1,6 +1,7 @@
 // Requires a separate Mock backend and temporary database.
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import { newResearchCode } from "./research-code.mjs";
 
 assert.equal(process.env.SPLIT_VERIFY_ISOLATED, "1");
 const base = new URL(process.env.SPLIT_UI_URL);
@@ -136,7 +137,7 @@ try {
   await api(baseline.request, "/api/admin/auth/login", "POST", { password: process.env.ADMIN_PASSWORD });
   await api(baseline.request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
   const reference = await api(baseline.request, "/api/registrations", "POST", {
-    assignment_code: "A", consent_checked: true, student_number: `SPLIT-MODE-REFERENCE-${Date.now()}`,
+    assignment_code: "A", consent_checked: true, research_code: newResearchCode(),
   });
   const referenceQuestions = (await api(baseline.request, `/api/experiment/${reference.participant_id}/pretest`)).questions;
   const m1ChoiceIds = new Map(referenceQuestions.map((question) => [question.question_id, question.options.find((option) => option.label === "B")?.option_id]));
@@ -155,7 +156,7 @@ try {
         const participant = await api(page.request, "/api/registrations", "POST", {
           assignment_code,
           consent_checked: true,
-          student_number: `SPLIT-BROWSER-${assignment_code}-${optionOrder}-${width}`,
+          research_code: newResearchCode(),
         });
         await page.addInitScript((p) => { localStorage.setItem("participant_id", p.participant_id); localStorage.setItem("display_code", p.display_code); }, participant);
         await answerTermPages(page, participant, "pretest", m1ChoiceIds, width, assignment_code, optionOrder);
