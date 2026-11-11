@@ -516,7 +516,9 @@ const surveyForms = fs.readFileSync(new URL("../components/SurveyForms.tsx", imp
 for (const expectedText of ["実験前アンケート", "termItems.map", "prior_term_exposure", "prior_term_understanding", "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "slightly", "moderately", "well", "覚えていない", "全く理解していない", "ai_usage_frequency_30d", "21_30_days", "goal_aligned_output", "verify_with_sources", "実験後アンケート", "posttest-5point-v1", "教材について", "教材評価6項目は対象外", "自由記述（任意）", "もう一度入力する", "入力を確認する（保存なし）"]) {
   if (!surveyForms.includes(expectedText)) throw new Error(`shared survey form behavior missing: ${expectedText}`);
 }
-if (!styles.includes(".presurvey-form .survey-choice-options {\n  grid-template-columns: minmax(0, 1fr);\n}")) throw new Error("presurvey choices must use a single column without changing other survey layouts");
+if (!styles.includes(".presurvey-form .survey-choice-options {\n  grid-template-columns: repeat(var(--survey-choice-option-count), minmax(0, 1fr));\n}")) throw new Error("presurvey choices must display options in one row on wide screens");
+if (!styles.includes(".presurvey-form .survey-choice-options {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }")) throw new Error("presurvey choices must wrap to two columns on narrow screens");
+if (!surveyForms.includes("--survey-choice-option-count")) throw new Error("presurvey choice grid must use the number of options for its desktop columns");
 const previewPage = fs.readFileSync(new URL("../app/admin/survey-preview/[phase]/page.tsx", import.meta.url), "utf8");
 for (const expectedText of ["FOUR_TOPIC_PRESURVEY_TERM_ITEMS", "presurvey-four-topic-baseline-v2", "PresurveyQuestionnaire", "PosttestQuestionnaire", "materialRatingsRequired", "preview", "入力と必須チェックを試せます", "/admin/survey-preview/presurvey", "/admin/survey-preview/posttest"]) {
   if (!previewPage.includes(expectedText)) throw new Error(`admin survey preview missing: ${expectedText}`);
