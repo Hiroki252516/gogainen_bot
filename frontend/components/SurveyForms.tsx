@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 
 export type SurveyTermItem = { key: string; label: string };
 
@@ -319,7 +319,12 @@ function ChoiceButtons({
   return <div className="survey-choice-question">
     <div className="survey-rating-label"><span className="survey-question-label">{label}</span><span className="required-indicator">必須</span></div>
     {anchors ? <span className="muted">{anchors}</span> : null}
-    <div className="survey-choice-options" role="group" aria-label={label}>
+    <div
+      className="survey-choice-options"
+      role="group"
+      aria-label={label}
+      style={{ "--survey-choice-option-count": options.length } as CSSProperties}
+    >
       {options.map(([optionValue, optionLabel]) => <button
         key={optionValue}
         type="button"

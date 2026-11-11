@@ -13,7 +13,7 @@ const proficiencyItems = [
 ];
 
 try {
-  for (const width of [1440, 390]) {
+  for (const width of [1440, 768, 390]) {
     const context = await browser.newContext({ viewport: { width, height: 950 } });
     const page = await context.newPage();
     const participantRequests = [];
@@ -30,6 +30,12 @@ try {
     await page.getByRole("button", { name: "管理画面を開く", exact: true }).click();
     await page.getByRole("button", { name: "管理画面をロック", exact: true }).waitFor();
     await page.getByRole("heading", { name: "実験前アンケート", exact: true }).waitFor();
+    const presurveyChoiceLayouts = await page.locator(".presurvey-form .survey-choice-options").evaluateAll((groups) => groups.map((group) => ({
+      columns: getComputedStyle(group).gridTemplateColumns.trim().split(/\s+/).length,
+      optionCount: group.querySelectorAll("button").length,
+    })));
+    assert(presurveyChoiceLayouts.length > 0);
+    assert(presurveyChoiceLayouts.every(({ columns, optionCount }) => columns === (width <= 760 ? 2 : optionCount)));
 
     const presurveySubmit = page.getByRole("button", { name: "入力を確認する（保存なし）", exact: true });
     await presurveySubmit.click();
