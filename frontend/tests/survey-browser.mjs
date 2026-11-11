@@ -100,6 +100,7 @@ try {
       console.error("page URL:", page.url(), "page errors:", errors, "body:", await page.locator("body").innerText());
       throw error;
     });
+    assert.equal(await page.getByText("今回の教材の量はどの程度でしたか", { exact: true }).count(), Number(fixture.viewed));
     const save = page.getByRole("button", { name: "回答を保存して終了", exact: true });
     if (process.env.SURVEY_SCREENSHOT_DIR) {
       await page.screenshot({ path: process.env.SURVEY_SCREENSHOT_DIR + "/" + fixture.width + "-" + fixture.viewed + ".png", fullPage: true });
@@ -126,7 +127,7 @@ try {
     const saved = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/survey"));
     await save.click();
     const body = (await posted).postDataJSON();
-    assert.equal(body.survey_version, "posttest-5point-v1");
+    assert.equal(body.survey_version, "posttest-5point-v2");
     assert(!("prior_term_knowledge" in body));
     assert.equal(body.general_ratings.system_usability, 4);
     assert.equal(body.general_ratings.system_clarity, 4);
@@ -152,7 +153,7 @@ try {
     assert.deepEqual(presurvey.responses.prior_term_exposure, fixture.presurveyPayload.prior_term_exposure);
     assert.deepEqual(presurvey.responses.prior_term_understanding, fixture.presurveyPayload.prior_term_understanding);
     assert.deepEqual(presurvey.responses.general_ratings, fixture.presurveyPayload.general_ratings);
-    assert.equal(posttest.survey_version, "posttest-5point-v1");
+    assert.equal(posttest.survey_version, "posttest-5point-v2");
     assert(!("prior_term_exposure" in posttest.responses));
     assert(!("prior_term_understanding" in posttest.responses));
     assert.equal(posttest.free_comment, "");

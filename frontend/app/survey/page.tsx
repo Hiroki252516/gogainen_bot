@@ -18,7 +18,7 @@ const MATERIAL = [
   ["japanese_clarity", "教材の日本語表現は分かりやすかった", "agreement"],
   ["difficulty_appropriateness", "教材の難易度はどの程度でしたか", "difficulty"],
   ["learning_usefulness", "教材は、用語や仕組みを正しく理解するために役立った", "agreement"],
-  ["amount_appropriateness", "今回の学習時間に対する教材の量はどの程度でしたか", "amount"],
+  ["amount_appropriateness", "今回の教材の量はどの程度でしたか", "amount"],
 ] as const;
 const AGREEMENT_OPTIONS = [
   ["1", "全くそう思わない"],
@@ -42,7 +42,7 @@ const AMOUNT_OPTIONS = [
   ["5", "多すぎた"],
 ] as const;
 const NOT_APPLICABLE_OPTION = ["not_applicable", "評価できない"] as const;
-type Context = { survey_version: "posttest-5point-v1"; has_viewed_material: boolean; material_ratings_required: boolean };
+type Context = { survey_version: "posttest-5point-v2"; has_viewed_material: boolean; material_ratings_required: boolean };
 
 export default function SurveyPage() {
   const router = useRouter();
