@@ -7,9 +7,9 @@ assert(["localhost", "127.0.0.1"].includes(base.hostname) && base.port && base.p
 const { chromium } = await import(process.env.PRESURVEY_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
 const modes = [
-  { mode: "application", version: "presurvey-baseline-v3", keys: ["pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process"] },
-  { mode: "basic_understanding", version: "presurvey-baseline-v3", keys: ["pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process"] },
-  { mode: "four_topic_fundamentals", version: "presurvey-four-topic-baseline-v2", keys: ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"] },
+  { mode: "application", version: "presurvey-baseline-v4", keys: ["pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process"] },
+  { mode: "basic_understanding", version: "presurvey-baseline-v4", keys: ["pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process"] },
+  { mode: "four_topic_fundamentals", version: "presurvey-four-topic-baseline-v3", keys: ["transformer", "pretraining", "fine_tuning", "human_feedback_post_training", "multi_agent", "memory_process"] },
 ];
 const experienceChoices = [
   ["experienced", "ある"],
@@ -50,7 +50,7 @@ try {
       const configured = await request(context, "/api/admin/test-content-mode", "PUT", { mode: mode.mode });
       assert.equal(configured.status(), 200, await configured.text());
       const registration = await request(context, "/api/registrations", "POST", {
-        data: { assignment_code: "A", consent_checked: true, student_number: `PRESURVEY-${mode.mode}-${width}-${Date.now()}` },
+        assignment_code: "A", consent_checked: true, student_number: `PRESURVEY-${mode.mode}-${width}-${Date.now()}`,
       });
       assert.equal(registration.status(), 200, await registration.text());
       const { participant_id: pid, display_code: displayCode } = await registration.json();
@@ -83,7 +83,7 @@ try {
         await group.getByRole("button", { name: selected[1], exact: true }).click();
         exposure[key] = selected[0];
 
-        const comprehensionLabel = `実験前の時点で、${label}の基本的な意味や働きをどの程度理解していましたか。`;
+        const comprehensionLabel = `${label}の基本的な意味や働きをどの程度理解していますか。`;
         const comprehensionGroup = page.getByRole("group", { name: comprehensionLabel, exact: true });
         if (selected[0] === "experienced") {
           assert.equal(await comprehensionGroup.count(), 1);

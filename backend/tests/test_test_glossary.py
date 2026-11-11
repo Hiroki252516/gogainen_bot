@@ -114,8 +114,8 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     complete_presurvey(client, pid)
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 49
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-10-posttest-five-point-evaluation-v1"
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 50
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1"
         participant.current_step = phase
         participant.retest_cycles_completed = completed
         db.commit()
@@ -232,7 +232,7 @@ def test_nullable_migration_and_repeated_seed_preserve_v25_records(tmp_path, mon
         database.init_db()
         with Session(isolated) as db:
             seed_database(db)
-            assert db.query(Question).filter_by(is_active=True).count() == 39
+            assert db.query(Question).filter_by(is_active=True).count() == 51
     assert next(column for column in inspect(isolated).get_columns("attempts") if column["name"] == "glossary_snapshot")["nullable"]
     with isolated.connect() as connection:
         after = dict(connection.execute(text("SELECT * FROM attempts")).mappings().one())

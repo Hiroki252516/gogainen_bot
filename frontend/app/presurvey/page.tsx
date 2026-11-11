@@ -119,7 +119,7 @@ export default function PresurveyPage() {
           {context.term_items.map(({ key, label }) => {
             const exposure = values[`exposure:${key}`] || "";
             const experienceQuestion = `${label}という用語を、実験の説明を受ける前に見たり聞いたりしたことがありますか。`;
-            const understandingQuestion = `実験前の時点で、${label}の基本的な意味や働きをどの程度理解していましたか。`;
+            const understandingQuestion = `${label}の基本的な意味や働きをどの程度理解していますか。`;
             return <section className="stack" key={key} aria-label={label}>
               <ChoiceButtons
                 label={experienceQuestion}

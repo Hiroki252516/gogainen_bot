@@ -1,6 +1,12 @@
 # 現行API
 
-## 仕様版49の現行条件
+## 仕様版50の現行条件
+
+新規参加者は仕様版50 / `experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`を使う。仕様版49以下は保存済み問題・回答・snapshotを維持して閲覧専用とする。GET `/api/participants/{id}/presurvey`は新規参加者の固定`test_content_mode`に応じ、標準2モードでは`presurvey-baseline-v4`、4用語版では`presurvey-four-topic-baseline-v3`と6件の`term_items`を返す。理解度質問の表示文はフロントエンドで「{用語}の基本的な意味や働きをどの程度理解していますか。」と組み立てる。見聞き経験の質問にある「実験の説明を受ける前に」は維持する。POSTの回答キー・保存構造・経験に応じた理解度検証は従来どおり。
+
+4用語版は問題バンク`split-actions-four-topic-v2`から出題する。仕様版49以下の参加者の復元では`split-actions-four-topic-v1`を使用する。問題内容の取得・採点・回答後確認のAPI契約、問題snapshot、役割構成は変わらない。詳細は[事前アンケート](49_presurvey_baseline.md)と[4用語版](51_four_topic_foundation_mode.md)。
+
+## 仕様版49の履歴条件
 
 新規参加者は仕様版49 / `experiment-plan-2026-11-10-posttest-five-point-evaluation-v1`を使う。事後アンケートGET `/api/participants/{id}/survey`は版`posttest-5point-v1`と教材閲覧状態を返し、POST同URLはシステム評価2項目、教材評価6項目、任意自由記述を受け付ける。数値回答は厳密な整数1〜5、または各項目独立の`not_applicable`。教材閲覧者は6項目すべて回答し、未閲覧者は`material_ratings: null`を送る。旧posttest回答は変換・上書きしない。
 
@@ -8,7 +14,7 @@ H5は4つの中核教材項目の有効な数値回答の参加者内平均と�
 
 ## 仕様版48の条件（履歴）
 
-管理認証付きGET/PUT `/api/admin/test-content-mode`を維持し、`application`、`basic_understanding`、`four_topic_fundamentals`を受け付ける。RuntimeSettingの保存値はそのまま使い、未設定時の既定値を`four_topic_fundamentals`とする。設定は新規参加者の登録時だけsnapshotされる。参加者向け出題・採点API、4用語の3択またはunknown単独、Attemptと問題snapshot、モード別集計は維持する。現行protocolは仕様版48 / `experiment-plan-2026-11-10-presurvey-exposure-understanding-split-v1`。
+管理認証付きGET/PUT `/api/admin/test-content-mode`を維持し、`application`、`basic_understanding`、`four_topic_fundamentals`を受け付ける。RuntimeSettingの保存値はそのまま使い、未設定時の既定値を`four_topic_fundamentals`とする。設定は新規参加者の登録時だけsnapshotされる。参加者向け出題・採点API、4用語の3択またはunknown単独、Attemptと問題snapshot、モード別集計は維持する。この時点のprotocolは仕様版48 / `experiment-plan-2026-11-10-presurvey-exposure-understanding-split-v1`。
 
 事前採点APIは全問正解時に`current_step=survey`と`next_url=/survey`を返す。`review_required`は既存の事前結果表示snapshotに従い、ONなら結果確認後の続行先をsurveyにし、OFFなら直接surveyへ遷移する。未達時の`next_url`と学習対象は従来どおり。現在位置API、結果表示、再読み込み、直接URLもこの保存済み状態を参照し、事前満点時に学習対象・内部`final_test`・retestは開始できない。仕様版48以下は読み取り専用で、既存回答の再評価・書換えはしない。[画面フロー](09_frontend_ux_flow.md)、[指標](12_evaluation_metrics.md)。
 
@@ -28,7 +34,7 @@ H5は4つの中核教材項目の有効な数値回答の参加者内平均と�
 
 ## 設問1のみ出題APIの廃止（仕様版35で導入した履歴）
 
-過去には管理認証付きGET/PUT `/api/admin/first-question-only` で条件を切り替えていた。仕様版40から当該APIを廃止した。現行仕様版49では現行版・基礎理解版を各3問、4用語版を4問とし、いずれも参加者の問題モードと登録snapshotに従う。旧参加者の記録復元には保存snapshotと版対応を使う。詳細は[48](48_first_question_only.md)・[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)。
+過去には管理認証付きGET/PUT `/api/admin/first-question-only` で条件を切り替えていた。仕様版40から当該APIを廃止した。現行仕様版50では現行版・基礎理解版を各3問、4用語版を4問とし、いずれも参加者の問題モードと登録snapshotに従う。旧参加者の記録復元には保存snapshotと版対応を使う。詳細は[48](48_first_question_only.md)・[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)。
 
 ## 教材用語解説モード（仕様版39導入・42現行）
 
@@ -36,17 +42,17 @@ H5は4つの中核教材項目の有効な数値回答の参加者内平均と�
 
 教材生成応答は`show_material_glossary`を返す。`false`は教材内解説モードであることを示し、Frontendは教材用GlossarySidebarのみ隠す。既存の`glossary` snapshotは返却・保存を継続し、回答後解説の注釈APIは変更しない。教材内解説モードの教材生成入力には両群共通の任意項目`glossary_reference`を含める。辞書は共通回答履歴ではなく、診断情報とも独立する。
 
-## 設問ごとの答え合わせAPI（現行仕様版49）
+## 設問ごとの答え合わせAPI（現行仕様版50）
 
-設定GET/PUT `/api/admin/question-review-display` は仕様版40で廃止した。現行仕様版49の新規参加者にも設問別確認を常に有効とし、問題モードに応じて回答済みの設問を確認する。これはテスト全体の結果画面とは別の確認である。事前テスト後の全体結果画面は`show_pretest_results` snapshotに従って表示し、事前満点者は確認後または非表示で事後アンケートへ進む。
+設定GET/PUT `/api/admin/question-review-display` は仕様版40で廃止した。現行仕様版50の新規参加者にも設問別確認を常に有効とし、問題モードに応じて回答済みの設問を確認する。これはテスト全体の結果画面とは別の確認である。事前テスト後の全体結果画面は`show_pretest_results` snapshotに従って表示し、事前満点者は確認後または非表示で事後アンケートへ進む。
 
 回答保存後の各テスト取得APIは、現在ページの回答を保存した後に`pending_question_review`を返す。確認内容にはphase、term_slug、問題・設問番号、選択済み選択肢のlabel/body、設問全体のis_correctを含め、正答キー・未選択肢・解説・診断情報は含めない。4用語版では回答後確認に限り、選択済み選択肢へ個別の正誤を含める。未選択肢の正誤は公開しない。回答未保存の出題データには正誤を含めない。
 
-POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slugを受け取り、確認時刻をその用語ページの最後の設問Attemptへ保存する。確認済みの再送は冪等とし、必要な回答がそろっていない用語や現在表示中ではない確認は拒否する。現行仕様版49は1用語ページ1問だが、旧記録の設問ペア契約も復元互換性のため維持する。詳細と受入条件は[40](40_question_pair_answer_review.md)。
+POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slugを受け取り、確認時刻をその用語ページの最後の設問Attemptへ保存する。確認済みの再送は冪等とし、必要な回答がそろっていない用語や現在表示中ではない確認は拒否する。現行仕様版50は1用語ページ1問だが、旧記録の設問ペア契約も復元互換性のため維持する。詳細と受入条件は[40](40_question_pair_answer_review.md)。
 
-## テスト結果表示（issue-204・issue-233の履歴と仕様版49の現行条件）
+## テスト結果表示（issue-204・issue-233の履歴と現行条件）
 
-現行仕様版49の新規Participantは`show_pretest_results=false`、`show_retest_results=false`を登録時にsnapshotする。事前テスト後の全体結果確認は`show_pretest_results`に従う。事前満点者は表示ONなら確認後、OFFなら直接surveyへ進む。事前未達者は表示ONなら確認後に学習へ、OFFなら学習へ直接進む。再テスト結果確認は`show_retest_results`に従い、事前満点者は再テスト自体を行わない。旧設定GET/PUT APIは廃止し、RuntimeSetting列は履歴互換のため残すが参照・更新しない。既存Participantの値は補完・更新せず、NULLは従来どおり表示ありと解釈する。
+現行仕様版50の新規Participantは`show_pretest_results=false`、`show_retest_results=false`を登録時にsnapshotする。事前テスト後の全体結果確認は`show_pretest_results`に従う。事前満点者は表示ONなら確認後、OFFなら直接surveyへ進む。事前未達者は表示ONなら確認後に学習へ、OFFなら学習へ直接進む。再テスト結果確認は`show_retest_results`に従い、事前満点者は再テスト自体を行わない。旧設定GET/PUT APIは廃止し、RuntimeSetting列は履歴互換のため残すが参照・更新しない。既存Participantの値は補完・更新せず、NULLは従来どおり表示ありと解釈する。
 
 採点・診断APIは`review_required`と遷移先`next_url`を返し、表示を省略する場合は学習・次テスト・アンケートへ直接進む。採点結果と正誤判定は保存する。学習対象APIは表示を省略する場合に全体結果配列を空にし、現在位置API・直接URL・再開でも同じ遷移を適用する。古い冪等応答に`review_required`がない場合は既存の従来表示へフォールバックする。設問別確認は全体結果表示とは独立して実施する。
 
@@ -70,9 +76,9 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版49 / `experiment-plan-2026-11-10-posttest-five-point-evaluation-v1`で進行可否を判定し、仕様版48以下は閲覧専用とする。管理認証付きGET/PUT `/api/admin/test-content-mode`は新規参加者用の問題モードを設定する。RuntimeSetting未設定時の既定値は4用語版で、保存済みの値は変更しない。事前満点者は既存の採点結果を保持したままsurveyへ進み、未達者は従来の問題モード別経路を使う。問題モードは[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)、アンケートは[事前](49_presurvey_baseline.md)・[事後](52_posttest_five_point_evaluation.md)、評価指標は[12](12_evaluation_metrics.md)を参照する。
+現行APIは[承認済み実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版50 / `experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`で進行可否を判定し、仕様版49以下は閲覧専用とする。管理認証付きGET/PUT `/api/admin/test-content-mode`は新規参加者用の問題モードを設定する。RuntimeSetting未設定時の既定値は4用語版で、保存済みの値は変更しない。事前満点者は既存の採点結果を保持したままsurveyへ進み、未達者は従来の問題モード別経路を使う。問題モードは[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)、アンケートは[事前](49_presurvey_baseline.md)・[事後](52_posttest_five_point_evaluation.md)、評価指標は[12](12_evaluation_metrics.md)を参照する。
 
-GET `/api/participants/{id}/presurvey`は参加者の固定済み`test_content_mode`に応じて`survey_version`と6件の`term_items`（`key`・`label`）を返す。標準2モードは`presurvey-baseline-v3`、4用語版は`presurvey-four-topic-baseline-v2`。POST同URLは、6用語の`prior_term_exposure`（`experienced`／`not_experienced`／`cannot_recall`）と`prior_term_understanding`（`not_at_all`／`slightly`／`moderately`／`well`またはnull）、`general_ratings.ai_usage_frequency_30d`（5区分）および3項目の`ai_proficiency`（1〜5または`not_applicable`）を受け付ける。経験が`experienced`なら理解度を必須とし、それ以外は理解度nullを要求する。欠落・余分な用語キー、不正な選択値、条件分岐に反する値は422。固定版に対応したPydantic modelで検証し、phase=presurveyのParticipantSurveyとして冪等保存する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版48以下の保存済み回答は変換しない。
+GET `/api/participants/{id}/presurvey`は参加者の固定済み`test_content_mode`に応じて`survey_version`と6件の`term_items`（`key`・`label`）を返す。標準2モードは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`。POST同URLは、6用語の`prior_term_exposure`（`experienced`／`not_experienced`／`cannot_recall`）と`prior_term_understanding`（`not_at_all`／`slightly`／`moderately`／`well`またはnull）、`general_ratings.ai_usage_frequency_30d`（5区分）および3項目の`ai_proficiency`（1〜5または`not_applicable`）を受け付ける。経験が`experienced`なら理解度を必須とし、それ以外は理解度nullを要求する。欠落・余分な用語キー、不正な選択値、条件分岐に反する値は422。固定版に対応したPydantic modelで検証し、phase=presurveyのParticipantSurveyとして冪等保存する。理解度質問文は全モードで「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、見聞き経験質問の「実験の説明を受ける前に」は維持する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版49以下の保存済み回答は変換しない。
 
 事後SurveyPayloadは`backend/app/services/research_protocol.py`で定義する。現行の新規送信`posttest-5point-v1`は、`general_ratings`（`system_usability`、`system_clarity`）と`material_ratings`（`clarity`、`readability`、`japanese_clarity`、`difficulty_appropriateness`、`learning_usefulness`、`amount_appropriateness`）の各項目に、厳密な整数1〜5または`not_applicable`を受け付ける。自由記述は任意。`material_ratings`は未閲覧者のみnull、閲覧者は6項目すべて必須。余分なキー・旧フォーム・範囲外や小数の数値を新規送信として拒否する。旧`posttest-10point-v1/v2/v3`の保存済み回答は変換せず保持する。H5は現行版の中核4項目について数値回答の参加者内平均を算出し、評価不能を除外する。難易度・分量は平均に含めず分布を別集計する。事後アンケートの詳細は[仕様書](52_posttest_five_point_evaluation.md)、H5は[指標](12_evaluation_metrics.md)を参照する。
 
@@ -133,11 +139,11 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 
 回答は `selected_option_ids` と時刻情報（response_time_sec、question_shown_at、answered_at）。テストはparticipant_id/question_id/phaseも指定する。廃止入力項目は422。
 
-事前・再テスト・内部final_testの取得APIは`test_page_mode`を返す。現行仕様版49の新規参加者は`per_term`で、当該用語ページに表示された設問への回答をページ単位で保存する。通常の2モードは各用語の設問1、4用語版は各用語の1問を保存する。`POST /api/attempts/term-page`はparticipant_id、phase、term_slug、test_round、page_id、各回答のquestion_idと選択肢ID、共通表示/回答時刻、正のelapsed_time_secを受け、`Idempotency-Key`を必須とする。同一ページ・用語・回次の有効な問題と選択を検証し、未保存分を同一トランザクションで確定する。既存回答は変更せず、異なる回答との競合は409。応答に正答・正誤・分類情報を含めない。従来の`POST /api/attempts`は旧形式の回答保存と履歴互換に残す。
+事前・再テスト・内部final_testの取得APIは`test_page_mode`を返す。現行仕様版50の新規参加者は`per_term`で、当該用語ページに表示された設問への回答をページ単位で保存する。通常の2モードは各用語の設問1、4用語版は各用語の1問を保存する。`POST /api/attempts/term-page`はparticipant_id、phase、term_slug、test_round、page_id、各回答のquestion_idと選択肢ID、共通表示/回答時刻、正のelapsed_time_secを受け、`Idempotency-Key`を必須とする。同一ページ・用語・回次の有効な問題と選択を検証し、未保存分を同一トランザクションで確定する。既存回答は変更せず、異なる回答との競合は409。応答に正答・正誤・分類情報を含めない。従来の`POST /api/attempts`は旧形式の回答保存と履歴互換に残す。
 
 用語ページ時間は`Attempt.test_page_timing_json`（nullable JSON）へpage_id、`measurement_version=term_page_v1`、elapsed_time_secを記録し、新形式の設問別`response_time_sec`はNULLとする。集計ではpage_idごとに時間を一度だけ数える。従来記録は設問ごとのresponse_time_secで計算する。参加者ログとCSV/Excelの`test_page_mode`・`test_timing_unit`・ページ時間JSONで表示方式と測定単位を識別する。統合ログCSVの既存ヘッダは維持する。詳細は[設問分割仕様](39_split_assessment.md#テスト画面と時間計測issue-208)。
 
-仕様版48以下・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。現行の仕様版49とprotocol IDの組み合わせだけが進行可能であり、既存行の仕様版・protocol_idを補完しない。
+仕様版49以下・未対応版・旧protocol_idは、本文検証・冪等再送・先行生成より前に409 legacy_experiment_read_only。current-stepは保存状態を変えずstep=legacy_read_only/can_resume=falseを返す。現行の仕様版50とprotocol IDの組み合わせだけが進行可能であり、既存行の仕様版・protocol_idを補完しない。
 
 参加者の出題APIに正答や分類メタデータを公開しない。回答後の結果確認では問題・選択内容・正誤を返す。Idempotency-Keyの再送、回答済みロックは維持する。旧試用の管理者閲覧・CSVは許可し、再計算は拒否する。
 

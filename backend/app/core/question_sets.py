@@ -3,7 +3,7 @@ ASSESSMENT_BANK_VERSIONS = {STANDARD: "split-actions-v5"}
 ASSESSMENT_MODE_BANK_VERSIONS = {
     "application": "split-actions-v5",
     "basic_understanding": "split-actions-basic-v1",
-    "four_topic_fundamentals": "split-actions-four-topic-v1",
+    "four_topic_fundamentals": "split-actions-four-topic-v2",
 }
 ASSESSMENT_MODE_LABELS = {
     "application": "現行版（場面応用）",
@@ -61,6 +61,9 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
 # Version 41 was used by parallel protocols. Keep the v5 default for the two
 # mainline protocols and restore the branch-specific v6 bank by protocol ID.
 HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
+    (49, "experiment-plan-2026-11-10-posttest-five-point-evaluation-v1"): {
+        STANDARD: "split-actions-four-topic-v1",
+    },
     (41, "experiment-plan-2026-11-07-split-actions-v6-q1-only-v1"): {
         STANDARD: "split-actions-v6",
     },
@@ -88,6 +91,8 @@ def historical_assessment_bank_versions_for(participant: object) -> dict[str, st
         protocol_id = getattr(participant, "protocol_id", None)
         test_content_mode = getattr(participant, "test_content_mode", None)
     if test_content_mode is not None:
+        if test_content_mode == "four_topic_fundamentals" and experiment_spec_version is not None and experiment_spec_version <= 49:
+            return {STANDARD: "split-actions-four-topic-v1"}
         bank_version = ASSESSMENT_MODE_BANK_VERSIONS.get(test_content_mode)
         return {STANDARD: bank_version} if bank_version else None
     if experiment_spec_version is None:
@@ -107,6 +112,8 @@ def assessment_bank_for_participant(participant: object) -> str:
     else:
         experiment_spec_version = getattr(participant, "experiment_spec_version", None)
         mode = getattr(participant, "test_content_mode", None)
+    if mode == "four_topic_fundamentals" and experiment_spec_version is not None and experiment_spec_version <= 49:
+        return "split-actions-four-topic-v1"
     if mode in ASSESSMENT_MODE_BANK_VERSIONS:
         return ASSESSMENT_MODE_BANK_VERSIONS[mode]
     if experiment_spec_version is not None and experiment_spec_version <= 45:
