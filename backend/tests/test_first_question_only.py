@@ -86,8 +86,8 @@ def test_new_registration_uses_fixed_defaults_and_pretest_perfect_exits_to_surve
             assert participant.show_retest_results is False
             assert participant.show_question_reviews is True
             assert participant.first_question_only is True
-            assert participant.experiment_spec_version == 50
-            assert participant.protocol_id == "experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1"
+            assert participant.experiment_spec_version == 51
+            assert participant.protocol_id == "experiment-plan-2026-11-12-perfect-test-early-exit-v1"
             rows = experiment.question_payloads(db, participant_id, "pretest")
             assert len(rows) == 3
             q1 = db.get(Question, rows[0]["question_id"])

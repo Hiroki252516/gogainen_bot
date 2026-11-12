@@ -1,6 +1,6 @@
 # 研究計画と仕様・実装の対応
 
-現行実装は仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`。事前テスト満点者は`pretest_perfect_early_exit`経路で学習・再テストを行わずsurveyへ進む。H1/H2/H6はこの経路を対象外として、適用分母と対象外数を記録する。事前アンケートは問題モード別の6用語について見聞き経験を取得し、経験ありの用語に限って理解度を尋ねる。事後アンケートは`posttest-5point-v2`で、教材量の設問文を変更する。H5は中核4教材項目の参加者内平均とし、難易度・教材量は分布を別集計する。現行辞書はv4。仕様版50の先行protocolと仕様版49以下は読み取り専用。[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)、[辞書](24_learning_glossary.md)。
+現行実装は仕様版51 / `experiment-plan-2026-11-12-perfect-test-early-exit-v1`。必要な全設問が採点済みで全問正解した場合、事前・再テスト・内部`final_test`の全モードで後続の学習・テストを行わずsurveyへ進む。再テスト1の満点後も4用語版の学習対象を設定しない。結果表示は参加者の事前・再テスト結果表示snapshotに従う。H1/H2/H6に対する事前満点経路の既存対象外扱いは維持し、新しい評価式や指標区分は追加しない。事前アンケート、事後アンケート、H5、現行辞書v4も変わらない。仕様版50以下は保存済み内容を保全し閲覧専用。[実験フロー](02_experiment_flow.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)、[辞書](24_learning_glossary.md)。
 
 出典・採用判断は[20](20_experiment_plan_alignment.md)、式と欠測定義は[12](12_evaluation_metrics.md)を正本とする。
 
@@ -16,9 +16,9 @@
 | 教授と証拠 | tutoring_prompt、mandatory_elements、teaching_contract | v7契約、unknownの定義・仕組み・適用確認 |
 | AI設定 | config、環境low、runtime_config | 不一致警告・実送信model/effort |
 | アンケート | `presurvey-baseline-v4` / `presurvey-four-topic-baseline-v3` / `posttest-5point-v2`、phase別ParticipantSurvey | 事前はモード別6用語の見聞き経験、経験ありの場合の理解度、直近30日AI利用頻度、AI活用3評定。事後はシステム2＋教材6＋任意自由記述。旧回答は不変で保全 |
-| テスト上限・回次 | 学習後回数＋採点済みfinal_testから全体回次を導出 | 事前後最大2回、事前込み最大3回。未達を維持してsurvey |
+| テスト上限・回次 | 学習後回数＋採点済みfinal_testから全体回次を導出 | 事前後最大2回、事前込み最大3回。満点時はその場でsurvey、未達上限では未達を記録してsurvey |
 | 行動選択型問題 | scenario-actions-v9、9固有問、版付きconstruct_key | 旧問題非active保全、分類根拠は21 |
-| 問題モード・時間 | 仕様版50で`RuntimeSetting.test_content_mode`をParticipantへ登録時snapshotし、3つの独立bankから出題・採点・学習確認を復元。用語ページ単位の`test_page_timing_json`を保持 | 3問/4問をモード別に集計し、4用語版の事前未達経路は固定2回フローとする。事前満点は早期終了routeとして別集計。回答時間の測定単位をログ・CSV/Excelに表示。個別`.xlsx`を提供。難易度同等性・研究承認は未確認 |
+| 問題モード・時間 | 仕様版51で`RuntimeSetting.test_content_mode`をParticipantへ登録時snapshotし、3つの独立bankから出題・採点・学習確認を復元。用語ページ単位の`test_page_timing_json`を保持 | 3問/4問をモード別に集計し、満点なら後続学習・テストを省略する。事前満点の既存対象外扱いを維持。回答時間の測定単位をログ・CSV/Excelに表示。個別`.xlsx`を提供。難易度同等性・研究承認は未確認 |
 | 旧記録保護 | 仕様版26＋protocol_id、API/worker/補修ガード | 旧版25以下も閲覧専用・新集計から除外 |
 | 割付・アクセス・正答配置 | 既存A/Bコード・デバッグ問題を維持 | 自動割付・認証・位置復旧は今回対象外 |
 

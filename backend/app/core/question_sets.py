@@ -61,9 +61,11 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
 # Version 41 was used by parallel protocols. Keep the v5 default for the two
 # mainline protocols and restore the branch-specific v6 bank by protocol ID.
 HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
-    # Two protocol variants used spec 50 before the changes were integrated.
-    # Their saved participants are read-only but their results still need the
-    # exact bank used when they were registered.
+    # Spec 50 protocols are read-only after the spec 51 update, but their
+    # saved results still need the exact bank used at registration.
+    (50, "experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1"): {
+        STANDARD: "split-actions-four-topic-v2",
+    },
     (50, "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1"): {
         STANDARD: "split-actions-four-topic-v2",
     },

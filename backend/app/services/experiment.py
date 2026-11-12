@@ -3399,23 +3399,21 @@ async def score_phase(db: Session, participant_id: str, phase: str) -> dict[str,
         participant.retest_cycles_completed = (participant.retest_cycles_completed or 0) + 1
     four_topic_mode = participant_test_content_mode(participant) == FOUR_TOPIC_FUNDAMENTALS
     tests_completed = post_pretest_tests_completed(db, participant)
-    if (
-        four_topic_mode
-        and phase == "retest"
-        and tests_completed < MAX_POST_PRETEST_TESTS
-        and not learning_target_slugs
-    ):
-        learning_target_slugs = _set_four_topic_learning_targets(db, participant)
     retest_limit_reached = (
         not achieved_mastery
         and tests_completed >= MAX_POST_PRETEST_TESTS
     )
-    if (four_topic_mode and tests_completed >= MAX_POST_PRETEST_TESTS) or (
-        not four_topic_mode and (achieved_mastery or retest_limit_reached)
-    ):
+    if achieved_mastery or retest_limit_reached:
         participant.current_step = "survey"
         next_url = _next_url(participant.current_step)
     else:
+        if (
+            four_topic_mode
+            and phase == "retest"
+            and tests_completed < MAX_POST_PRETEST_TESTS
+            and not learning_target_slugs
+        ):
+            learning_target_slugs = _set_four_topic_learning_targets(db, participant)
         participant.current_step = "learning_targets"
         next_url = f"/learning/{learning_target_slugs[0]}" if learning_target_slugs else _next_url(participant.current_step)
     _commit(db)

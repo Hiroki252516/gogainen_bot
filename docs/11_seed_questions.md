@@ -1,8 +1,8 @@
 # 現行問題バンクと履歴
 
-## 現行条件（仕様版50）
+## 現行条件（仕様版51）
 
-新規参加者はParticipantに固定された`test_content_mode`に応じて、`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v2`（4用語版）を使う。4用語版v2ではLLM学習段階の用語をファインチューニングに統一し、問題文・選択肢・提案群の教材生成用情報も合わせる。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。v1は仕様版49以下の復元用に保持し、別のconstruct keyで両バンクをseedする。詳細は[51](51_four_topic_foundation_mode.md)。
+新規参加者はParticipantに固定された`test_content_mode`に応じて、`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v2`（4用語版）を使う。4用語版v2ではLLM学習段階の用語をファインチューニングに統一し、問題文・選択肢・提案群の教材生成用情報も合わせる。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。仕様版51では、必要な全設問を採点し全問正解したテスト後は、結果表示設定に応じて結果確認後または直接surveyへ進み、後続の学習・テストを行わない。v1は仕様版49以下の復元用に保持し、別のconstruct keyで両バンクをseedする。仕様版50以下は閲覧専用。詳細は[51](51_four_topic_foundation_mode.md)。
 
 ## 仕様版48の条件（履歴）
 
