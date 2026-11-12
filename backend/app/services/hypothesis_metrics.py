@@ -1,4 +1,4 @@
-"""Descriptive metrics for the six hypotheses; no imputation or significance tests."""
+"""Descriptive metrics for the four current hypotheses; no imputation or significance tests."""
 from __future__ import annotations
 
 import csv
@@ -16,9 +16,9 @@ from app.services.research_protocol import MATERIAL_RATING_KEYS, SURVEY_VERSION
 from app.services.test_content_mode import mode_label as test_content_mode_label, participant_mode as participant_test_content_mode
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS
 
-METRICS_VERSION = "six-hypotheses-v8-posttest-five-point-evaluation"
+METRICS_VERSION = "four-hypotheses-v1"
 TERM_SLUGS = ACTIVE_TERM_SLUGS
-H5_COMPOSITE_KEYS = ("clarity", "readability", "japanese_clarity", "learning_usefulness")
+H4_NUMERIC_KEYS = ("clarity", "readability", "japanese_clarity", "learning_usefulness")
 CENTERED_RATING_KEYS = ("difficulty_appropriateness", "amount_appropriateness")
 METRICS_CSV_COLUMNS = [
     "metrics_version", "protocol_id", "test_content_mode", "group_condition", "participant_id", "display_code", "route",
@@ -84,15 +84,20 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     pre_complete = complete(baseline)
     paired_complete = pre_complete and complete(initial)
     pre_score = sum(a.is_correct is True for a in baseline) / expected_count if pre_complete else None
-    initial_error_terms = {item_key(a): a.misconception_type for a in baseline if a.misconception_type in {"M1", "M3"}}
+    pretest_perfect_early_exit = pre_complete and pre_score == 1
+    initial_error_items = {item_key(a): a.misconception_type for a in baseline if a.misconception_type in {"M1", "M3"}}
 
-    def recurrence(items):
-        if pre_complete and not initial_error_terms:
+    def same_type_reselection(items):
+        if pretest_perfect_early_exit:
+            return {"status": "not_applicable_pretest_mastery", "value": None, "numerator": 0, "denominator": 0}
+        if not pre_complete:
+            return {"status": "missing_pretest", "value": None, "numerator": None, "denominator": None}
+        if not initial_error_items:
             return {"status": "not_applicable_no_initial_m1_m3", "value": None, "numerator": 0, "denominator": 0}
         if not (pre_complete and complete(items)):
-            return {"status": "missing_paired_tests", "value": None, "numerator": None, "denominator": len(initial_error_terms)}
-        numerator = sum(a.misconception_type == initial_error_terms.get(item_key(a)) for a in items if item_key(a) in initial_error_terms)
-        denominator = len(initial_error_terms)
+            return {"status": "missing_paired_tests", "value": None, "numerator": None, "denominator": len(initial_error_items)}
+        numerator = sum(a.misconception_type == initial_error_items.get(item_key(a)) for a in items if item_key(a) in initial_error_items)
+        denominator = len(initial_error_items)
         return {"status": "observed" if denominator else "not_applicable_no_initial_m1_m3",
                 "value": numerator / denominator if denominator else None,
                 "numerator": numerator, "denominator": denominator}
@@ -106,33 +111,15 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         score = sum(a.is_correct is True for a in items) / expected_count if done else None
         rounds.append({"round": number, "phase": items[0].phase, "complete": done,
                        "score_rate": score, "gain_pt": (score - pre_score) * 100 if done and pre_complete else None,
-                       "recurrence": recurrence(items)})
+                       "same_type_reselection": same_type_reselection(items)})
         if first_mastery_at is None and score == 1:
             first_mastery_at = max(a.updated_at for a in items)
             first_mastery_round = number
 
-    sessions = db.query(TutorSession).filter_by(participant_id=participant.id).all()
-    session_ids = [s.id for s in sessions]
-    turns_by_session = defaultdict(list)
-    for turn in db.query(TutorTurn).filter(TutorTurn.tutor_session_id.in_(session_ids)).all() if session_ids else []:
-        turns_by_session[turn.tutor_session_id].append(turn)
-    displayed = []
-    repetitions = defaultdict(list)
-    session_details = []
-    for session in sessions:
-        turns = turns_by_session[session.id]
-        display_times = [t.material_viewed_at for t in turns if t.material_viewed_at is not None]
-        if display_times:
-            displayed.append((session.id, min(display_times)))
-        answered = [t for t in turns if t.learner_response is not None and isinstance((t.grading_json or {}).get("is_sufficient"), bool)]
-        if answered and session.term_id in terms:
-            wrong = sum((t.grading_json or {})["is_sufficient"] is False for t in answered)
-            repetitions[terms[session.term_id]].append(wrong)
-            session_details.append({"session_id": session.id, "term_slug": terms[session.term_id],
-                                    "wrong_count": wrong, "answered_count": len(answered),
-                                    "ended": session.ended_at is not None})
-    term_means = {slug: mean(counts) for slug, counts in repetitions.items()}
-
+    displayed = db.query(TutorSession.id).join(TutorTurn).filter(
+        TutorSession.participant_id == participant.id,
+        TutorTurn.material_viewed_at.is_not(None),
+    ).distinct().all()
     survey = db.query(ParticipantSurvey).filter(
         ParticipantSurvey.participant_id == participant.id,
         ParticipantSurvey.phase == "posttest",
@@ -148,37 +135,17 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
             else None
             for key in MATERIAL_RATING_KEYS
         }
-    composite_values = [ratings.get(key) for key in H5_COMPOSITE_KEYS if ratings and type(ratings.get(key)) is int]
-    composite_not_evaluable = sum(bool(ratings) and ratings.get(key) == "not_applicable" for key in H5_COMPOSITE_KEYS)
-    composite_missing = (
-        len(H5_COMPOSITE_KEYS) - len(composite_values) - composite_not_evaluable
-        if displayed else 0
-    )
-    if not displayed:
-        h5_status = "not_applicable_not_viewed"
-    elif survey is None or ratings is None:
-        h5_status = "missing_survey"
-    elif composite_values:
-        h5_status = "observed"
-    elif composite_not_evaluable == len(H5_COMPOSITE_KEYS):
-        h5_status = "not_applicable_no_evaluable_ratings"
-    else:
-        h5_status = "missing_survey"
-    pretest_perfect_early_exit = pre_complete and pre_score == 1
     reached = first_mastery_at is not None
-    h2_value = sum(shown_at <= first_mastery_at for _, shown_at in displayed) if reached else None
     h1_value = next((r["gain_pt"] for r in rounds if r["round"] == 1), None) if paired_complete else None
-    h3_value = mean(term_means.values()) if term_means else None
-    censoring_reason = None
-    if not reached and not pretest_perfect_early_exit:
-        if participant.completion_reason == "give_up":
-            censoring_reason = "give_up"
-        elif participant.completion_reason == "completed":
-            censoring_reason = "completed_without_mastery"
-        elif participant.completion_reason is None and participant.completed_at is None and participant.current_step != "finish":
-            censoring_reason = "in_progress"
-        else:
-            censoring_reason = "other"
+    h2 = same_type_reselection(initial)
+    h3_applicable = pre_complete and not pretest_perfect_early_exit
+    h3_value = int(reached) if h3_applicable else None
+    if not displayed:
+        h4_status = "not_applicable_not_viewed"
+    elif survey is None or ratings is None:
+        h4_status = "missing_survey"
+    else:
+        h4_status = "observed"
     return {
         "metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
         "participant_id": participant.id, "display_code": participant.display_code,
@@ -192,24 +159,18 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         "pretest_perfect_early_exit": pretest_perfect_early_exit,
         "h1": {"value": None if pretest_perfect_early_exit else h1_value,
                "status": "not_applicable_pretest_mastery" if pretest_perfect_early_exit else "observed" if h1_value is not None else "missing_paired_tests",
-               "pretest_score": pre_score},
-        "h2": {"value": None if pretest_perfect_early_exit else h2_value,
-               "status": "not_applicable_pretest_mastery" if pretest_perfect_early_exit else "attained" if reached else "not_attained",
-               "censoring_reason": censoring_reason,
-               "observed_session_count": len(displayed), "first_mastery_round": first_mastery_round,
+               "pretest_score": pre_score,
+               "first_retest_score": next((r["score_rate"] for r in rounds if r["round"] == 1), None)},
+        "h2": h2,
+        "h3": {"value": h3_value,
+               "attained": bool(h3_value) if h3_value is not None else None,
+               "status": "observed" if h3_applicable else "not_applicable_pretest_mastery" if pretest_perfect_early_exit else "not_applicable_pretest_incomplete",
+               "pretest_score": pre_score,
+               "first_mastery_round": first_mastery_round,
                "first_mastery_at": first_mastery_at.isoformat() if reached else None,
-               "attained_without_learning": None if pretest_perfect_early_exit else reached and h2_value == 0},
-        "h3": {"value": h3_value, "status": "observed" if term_means else "missing_no_learning_answers" if displayed else "not_applicable_no_learning",
-               "term_means": term_means, "sessions": session_details},
-        "h4": recurrence(initial),
-        "h5": {"value": mean(composite_values) if composite_values else None, "items": ratings,
-               "valid_item_count": len(composite_values),
-               "not_evaluable_item_count": composite_not_evaluable,
-               "missing_item_count": composite_missing,
-               "status": h5_status},
-        "h6": {"value": None if pretest_perfect_early_exit else int(reached),
-               "attained": None if pretest_perfect_early_exit else reached,
-               "status": "not_applicable_pretest_mastery" if pretest_perfect_early_exit else "observed"},
+               "retest_completed": bool(initial and complete(initial))},
+        "h4": {"status": h4_status, "items": ratings,
+               "viewed": bool(displayed), "survey_present": survey is not None},
     }
 
 
@@ -223,32 +184,40 @@ def _group(rows):
     n = len(rows)
     result = {
         "participant_count": n,
+        "pretest_incomplete_count": sum(r.get("route") == "pretest_incomplete" for r in rows),
         "pretest_perfect_early_exit_count": sum(r.get("pretest_perfect_early_exit", r.get("route") == "pretest_perfect_early_exit") for r in rows),
     }
-    for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
+    for key in ("h1", "h2", "h3"):
         result[key] = _stats([r[key]["value"] for r in rows], n)
         result[key]["not_applicable_count"] = sum(r[key].get("status", "").startswith("not_applicable") for r in rows)
         result[key]["missing_count"] -= result[key]["not_applicable_count"]
-        if key in {"h1", "h2", "h6"}:
-            result[key]["eligible_count"] = n - result[key]["not_applicable_count"]
-    nonattainers = [r["h2"] for r in rows if r["h6"]["attained"] is False]
-    result["h2"].update({"not_attained_count": len(nonattainers),
-                           "censored_count": len(nonattainers),
-                           "censoring_breakdown": {
-                               reason: _stats([r["observed_session_count"] for r in nonattainers if r["censoring_reason"] == reason])
-                               for reason in ("give_up", "in_progress", "completed_without_mastery", "other")
-                           },
-                           "observed_nonattainer_sessions": _stats([r["h2"]["observed_session_count"] for r in rows if r["h6"]["attained"] is False]),
-                           "attained_without_learning_count": sum(r["h2"]["attained_without_learning"] is True for r in rows)})
-    eligible_h4 = [r["h4"] for r in rows if r["h4"]["value"] is not None]
-    denom = sum(r["denominator"] for r in eligible_h4)
-    numerator = sum(r["numerator"] for r in eligible_h4)
-    result["h4"].update({"pooled_numerator": numerator, "pooled_denominator": denom,
-                           "pooled_rate": numerator / denom if denom else None})
+        result[key]["eligible_count"] = n - result[key]["not_applicable_count"]
+
+    h2_observed = [r["h2"] for r in rows if r["h2"]["value"] is not None]
+    h2_numerator = sum(r["numerator"] for r in h2_observed)
+    h2_denominator = sum(r["denominator"] for r in h2_observed)
+    result["h2"].update({
+        "participant_numerator": h2_numerator,
+        "participant_denominator": h2_denominator,
+        "pooled_rate": h2_numerator / h2_denominator if h2_denominator else None,
+        "paired_complete_count": len(h2_observed),
+        "no_initial_m1_m3_count": sum(r["h2"]["status"] == "not_applicable_no_initial_m1_m3" for r in rows),
+    })
+
+    h3_eligible = [r for r in rows if r["h3"]["status"] == "observed"]
+    h3_values = [r["h3"]["value"] for r in h3_eligible]
+    result["h3"].update({
+        "eligible_count": len(h3_eligible),
+        "numerator": sum(h3_values),
+        "denominator": len(h3_values),
+        "rate": mean(h3_values) if h3_values else None,
+        "pretest_incomplete_count": sum(r["h3"]["status"] == "not_applicable_pretest_incomplete" for r in rows),
+    })
+
     viewed_rows = [r for r in rows if r["has_viewed_material"]]
     item_stats = {}
     for key in MATERIAL_RATING_KEYS:
-        values = [(row["h5"].get("items") or {}).get(key) for row in viewed_rows]
+        values = [(row["h4"].get("items") or {}).get(key) for row in viewed_rows]
         numeric_values = [value for value in values if type(value) is int and 1 <= value <= 5]
         not_evaluable_count = sum(value == "not_applicable" for value in values)
         distribution = {str(value): sum(item == value for item in numeric_values) for value in range(1, 6)}
@@ -261,25 +230,20 @@ def _group(rows):
         if key in CENTERED_RATING_KEYS:
             stats["mean"] = None
             stats["median"] = None
+        stats["eligible_count"] = len(viewed_rows)
         item_stats[key] = stats
-    h5_not_evaluable_count = sum(
-        row["h5"]["status"] == "not_applicable_no_evaluable_ratings"
-        for row in viewed_rows
-    )
-    h5_eligible_count = len(viewed_rows) - h5_not_evaluable_count
-    h5_valid_response_count = result["h5"]["n"]
-    result["h5"].update({
+    result["h4"] = {
         "viewed_count": len(viewed_rows),
-        "eligible_count": h5_eligible_count,
-        "valid_response_count": h5_valid_response_count,
-        "not_evaluable_count": h5_not_evaluable_count,
-        "not_viewed_count": sum(r["h5"]["status"] == "not_applicable_not_viewed" for r in rows),
-        "missing_count": max(0, h5_eligible_count - h5_valid_response_count),
+        "not_viewed_count": sum(not r["has_viewed_material"] for r in rows),
+        "missing_survey_count": sum(r["h4"]["status"] == "missing_survey" for r in viewed_rows),
         "items": item_stats,
-    })
-    h6_values = [r["h6"]["value"] for r in rows if r["h6"]["value"] is not None]
-    result["h6"].update({"numerator": sum(h6_values), "denominator": len(h6_values),
-                           "rate": mean(h6_values) if h6_values else None})
+    }
+    for key, stats in item_stats.items():
+        stats["not_viewed_count"] = result["h4"]["not_viewed_count"]
+        stats["missing_survey_count"] = result["h4"]["missing_survey_count"]
+        stats["item_label"] = key
+    result["h4"]["numeric_items"] = list(H4_NUMERIC_KEYS)
+    result["h4"]["centered_items"] = list(CENTERED_RATING_KEYS)
     result["completion_reasons"] = {reason: sum((r["completion_reason"] or "in_progress") == reason for r in rows) for reason in {r["completion_reason"] or "in_progress" for r in rows}}
     round_numbers = sorted({rd["round"] for r in rows for rd in r["rounds"]})
     result["rounds"] = []
@@ -290,18 +254,17 @@ def _group(rows):
         gain["not_applicable_count"] = early_exit_count
         gain["eligible_count"] = n - early_exit_count
         gain["missing_count"] = n - early_exit_count - gain["n"]
-
-        recurrence_values = [rd["recurrence"]["value"] if rd else None for rd in round_items]
-        recurrence_na_count = sum(
+        reselection_values = [rd["same_type_reselection"]["value"] if rd else None for rd in round_items]
+        reselection_na_count = sum(
             bool(row.get("pretest_perfect_early_exit"))
-            or bool(round_item and round_item["recurrence"]["status"].startswith("not_applicable"))
+            or bool(round_item and round_item["same_type_reselection"]["status"].startswith("not_applicable"))
             for row, round_item in zip(rows, round_items)
         )
-        recurrence = _stats(recurrence_values, n)
-        recurrence["not_applicable_count"] = recurrence_na_count
-        recurrence["eligible_count"] = n - recurrence_na_count
-        recurrence["missing_count"] = n - recurrence_na_count - recurrence["n"]
-        result["rounds"].append({"round": number, "gain": gain, "recurrence": recurrence})
+        reselection = _stats(reselection_values, n)
+        reselection["not_applicable_count"] = reselection_na_count
+        reselection["eligible_count"] = n - reselection_na_count
+        reselection["missing_count"] = n - reselection_na_count - reselection["n"]
+        result["rounds"].append({"round": number, "gain": gain, "same_type_reselection": reselection})
     return result
 
 
@@ -315,7 +278,7 @@ def group_metrics(rows: list[dict]) -> dict:
         }) or [(True, "application")]
         return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
                 "groups": [], "routes": {},
-                "differences_proposed_minus_control": {}, "material_item_differences": {},
+                "differences_proposed_minus_control": {}, "h4_item_differences": {},
                 "strata": [
                     group_metrics([
                         row for row in rows
@@ -328,13 +291,18 @@ def group_metrics(rows: list[dict]) -> dict:
     first_only = conditions[0] if conditions else False
     mode = modes[0] if modes else "application"
     groups = [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group])} for group in ("control", "proposed")]
-    differences = {key: groups[1][key]["mean"] - groups[0][key]["mean"] if all(g[key]["mean"] is not None for g in groups) else None for key in ("h1", "h2", "h3", "h4", "h5", "h6")}
-    item_differences = {k: groups[1]["h5"]["items"][k]["mean"] - groups[0]["h5"]["items"][k]["mean"] if k not in CENTERED_RATING_KEYS and all(g["h5"]["items"][k]["mean"] is not None for g in groups) else None for k in MATERIAL_RATING_KEYS}
+    differences = {key: groups[1][key]["mean"] - groups[0][key]["mean"] if all(g[key]["mean"] is not None for g in groups) else None for key in ("h1", "h2", "h3")}
+    item_differences = {
+        key: groups[1]["h4"]["items"][key]["mean"] - groups[0]["h4"]["items"][key]["mean"]
+        if key in H4_NUMERIC_KEYS and all(g["h4"]["items"][key]["mean"] is not None for g in groups)
+        else None
+        for key in MATERIAL_RATING_KEYS
+    }
     routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("pretest_perfect_early_exit", "learning_retest", "pretest_incomplete")}
     return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "groups": groups,
             "test_content_mode": mode, "test_content_mode_label": test_content_mode_label(mode),
             "first_question_only": first_only, "questions_per_test": _questions_per_test(mode, first_only),
-            "differences_proposed_minus_control": differences, "material_item_differences": item_differences,
+            "differences_proposed_minus_control": differences, "h4_item_differences": item_differences,
             "routes": routes, "descriptive_only": True}
 
 
@@ -353,17 +321,21 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
         )]
     if grouped:
         for group in source["groups"]:
-            for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
+            for key in ("h1", "h2", "h3"):
                 stats = group[key]
                 records.append({"test_content_mode": source["test_content_mode"], "group_condition": group["group_condition"], "metric": key, **{k: v for k, v in stats.items() if k in METRICS_CSV_COLUMNS}, "details_json": json.dumps(stats, ensure_ascii=False)})
-            for item, stats in group["h5"]["items"].items():
-                records.append({"test_content_mode": source["test_content_mode"], "group_condition": group["group_condition"], "metric": f"h5.{item}",
+            records.append({"test_content_mode": source["test_content_mode"], "group_condition": group["group_condition"], "metric": "h4",
+                            "status": "item_level_summary", "details_json": json.dumps(group["h4"], ensure_ascii=False)})
+            for item, stats in group["h4"]["items"].items():
+                records.append({"test_content_mode": source["test_content_mode"], "group_condition": group["group_condition"], "metric": f"h4.{item}",
                                 "n": stats["n"], "mean": stats["mean"], "median": stats["median"],
                                 "missing_count": stats["missing_count"], "not_applicable_count": stats["not_applicable_count"],
                                 "status": "observed" if stats["n"] else "no_numeric_responses",
                                 "details_json": json.dumps(stats, ensure_ascii=False)})
         for key, value in source["differences_proposed_minus_control"].items():
             records.append({"test_content_mode": source["test_content_mode"], "group_condition": "proposed_minus_control", "metric": key, "value": value})
+        for key, value in source["h4_item_differences"].items():
+            records.append({"test_content_mode": source["test_content_mode"], "group_condition": "proposed_minus_control", "metric": f"h4.{key}", "value": value})
         # Includes route-specific and round-specific denominators without changing fixed log CSVs.
         records.append({"test_content_mode": source["test_content_mode"], "metric": "group_details", "details_json": json.dumps(source, ensure_ascii=False)})
     else:
@@ -371,12 +343,14 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
             base = {k: row[k] for k in ("group_condition", "participant_id", "display_code", "route")}
             base["test_content_mode"] = row.get("test_content_mode") or "application"
             base["first_question_only"] = row.get("first_question_only") is True
-            for key in ("h1", "h2", "h3", "h4", "h5", "h6"):
+            for key in ("h1", "h2", "h3"):
                 metric = row[key]
                 records.append({**base, "metric": key, **{k: v for k, v in metric.items() if k in METRICS_CSV_COLUMNS}, "details_json": json.dumps(metric, ensure_ascii=False)})
-            for item, value in (row["h5"]["items"] or {}).items():
-                status = "not_applicable" if value == "not_applicable" else "observed" if type(value) is int else "missing"
-                records.append({**base, "metric": f"h5.{item}", "value": value if type(value) is int or value == "not_applicable" else None, "status": status})
+            records.append({**base, "metric": "h4", "status": row["h4"]["status"], "details_json": json.dumps(row["h4"], ensure_ascii=False)})
+            for item in MATERIAL_RATING_KEYS:
+                value = (row["h4"]["items"] or {}).get(item)
+                status = "not_viewed" if not row["h4"]["viewed"] else "not_applicable" if value == "not_applicable" else "observed" if type(value) is int else "missing"
+                records.append({**base, "metric": f"h4.{item}", "value": value if type(value) is int or value == "not_applicable" else None, "status": status})
 
     output = []
     for record in records:

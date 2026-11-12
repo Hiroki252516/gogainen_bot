@@ -3818,7 +3818,6 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         final_score_source = "retest_mastery"
         final_test_skipped = True
     initial_m = [a for a in by_phase["pretest"] if a.misconception_type in {"M1", "M3"}]
-    same_rec = [a for a in by_phase["retest"] if a.recurrence_flag]
     metrics = participant_metrics(db, participant)
     split_keys = split_item_keys(db, [a for a in attempts if a.phase in TEST_PHASES]) if uses_split(participant) else {}
     def m_rate(m: str) -> float | None:
@@ -3850,7 +3849,7 @@ def recalculate_evaluation(db: Session, participant_id: str) -> EvaluationSummar
         pretest_score=_rate(by_phase["pretest"], lambda a: bool(a.is_correct)),
         retest_score=_rate(by_phase["retest"], lambda a: bool(a.is_correct)),
         attainment_correct_rate=_rate(final_items, final_score_value),
-        same_misconception_recurrence_rate=metrics["h4"]["value"] if uses_split(participant) else (len(same_rec) / len(initial_m)) if initial_m else None,
+        same_misconception_recurrence_rate=metrics["h2"]["value"],
         m1_recurrence_rate=m_rate("M1"),
         m3_recurrence_rate=m_rate("M3"),
         learning_target_count=db.query(func.count(TermAssignment.id)).filter_by(participant_id=participant.id, is_learning_target=True).scalar() or 0,

@@ -7,7 +7,7 @@
 
 現行事後アンケートGET `/api/participants/{id}/survey`は版`posttest-5point-v3`と教材閲覧状態を返し、POST同URLはシステム評価2項目、教材評価6項目、任意自由記述を受け付ける。教材量の設問は「教材の量はどの程度でしたか」。数値回答は厳密な整数1〜5、または各項目独立の`not_applicable`。教材閲覧者は6項目すべて回答し、未閲覧者は`material_ratings: null`を送る。旧版の保存済み回答は変換・上書きしない。
 
-H5は4つの中核教材項目の有効な数値回答の参加者内平均とし、`not_applicable`は除外する。難易度・教材量はH5外の回答分布として集計する。ログ・アンケートCSV／Excelにはphase、survey_version、保存回答を保持する。詳細は[事後アンケート仕様](52_posttest_five_point_evaluation.md)と[評価指標](12_evaluation_metrics.md)。
+現行評価版は`four-hypotheses-v1`。H1〜H3はテスト結果、H4は事後アンケートの6教材項目を個別に集計する。H4の内容理解・読みやすさ・日本語表現・有用性は数値回答を項目別に集計し、難易度・教材量は分布のみとする。ログ・アンケートCSV／Excelにはphase、survey_version、保存回答を保持する。詳細は[事後アンケート仕様](52_posttest_five_point_evaluation.md)と[評価指標](12_evaluation_metrics.md)。
 
 ## 仕様版48の条件（履歴）
 
@@ -90,9 +90,9 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 GET `/api/participants/{id}/presurvey`は参加者の固定済み`test_content_mode`に応じて`survey_version`と6件の`term_items`（`key`・`label`）を返す。標準2モードは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v4`で、4用語版の`instruction_tuning`は「インストラクションチューニング」と表示する。POST同URLは、6用語の`prior_term_exposure`（`experienced`／`not_experienced`／`cannot_recall`）と`prior_term_understanding`（`not_at_all`／`slightly`／`moderately`／`well`またはnull）、`general_ratings.ai_usage_frequency_30d`（5区分）および3項目の`ai_proficiency`（1〜5または`not_applicable`）を受け付ける。経験が`experienced`なら理解度を必須とし、それ以外は理解度nullを要求する。欠落・余分な用語キー、不正な選択値、条件分岐に反する値は422。固定版に対応したPydantic modelで検証し、phase=presurveyのParticipantSurveyとして冪等保存する。理解度質問文は全モードで「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、見聞き経験質問の「実験の説明を受ける前に」は維持する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版50以下の保存済み回答は記録時のschemaのまま復元し、変換しない。
 
-事後SurveyPayloadは`backend/app/services/research_protocol.py`で定義する。現行の新規送信`posttest-5point-v3`は、`general_ratings`（`system_usability`、`system_clarity`）と`material_ratings`（`clarity`、`readability`、`japanese_clarity`、`difficulty_appropriateness`、`learning_usefulness`、`amount_appropriateness`）の各項目に、厳密な整数1〜5または`not_applicable`を受け付ける。自由記述は任意。`material_ratings`は未閲覧者のみnull、閲覧者は6項目すべて必須。余分なキー・旧フォーム・範囲外や小数の数値を新規送信として拒否する。旧`posttest-10point-v1/v2/v3`と`posttest-5point-v1`の保存済み回答は変換せず保持する。H5は現行版の中核4項目について数値回答の参加者内平均を算出し、評価不能を除外する。難易度・教材量は平均に含めず分布を別集計する。事後アンケートの詳細は[仕様書](52_posttest_five_point_evaluation.md)、H5は[指標](12_evaluation_metrics.md)を参照する。
+事後SurveyPayloadは`backend/app/services/research_protocol.py`で定義する。現行の新規送信`posttest-5point-v3`は、`general_ratings`（`system_usability`、`system_clarity`）と`material_ratings`（`clarity`、`readability`、`japanese_clarity`、`difficulty_appropriateness`、`learning_usefulness`、`amount_appropriateness`）の各項目に、厳密な整数1〜5または`not_applicable`を受け付ける。自由記述は任意。`material_ratings`は未閲覧者のみnull、閲覧者は6項目すべて必須。余分なキー・旧フォーム・範囲外や小数の数値を新規送信として拒否する。旧`posttest-10point-v1/v2/v3`と`posttest-5point-v1`の保存済み回答は変換せず保持する。現行H4は6項目を個別集計し、肯定的評価4項目は数値回答の平均・中央値・群間差、難易度・教材量は分布を別集計する。総合点は作らない。事後アンケートの詳細は[仕様書](52_posttest_five_point_evaluation.md)、H4は[指標](12_evaluation_metrics.md)を参照する。
 
-GET /api/participants/{id}/surveyはアンケート版・表示判定・教材評価の必須/対象外を返す。POST /api/tutor-turns/{id}/material-viewは初回表示時刻を冪等に記録し、未利用の先行生成は拒否する。管理集計のhypothesesおよび/export/hypothesis_metrics.csv、/export/hypothesis_group_summary.csvは6仮説の専用指標である。
+GET /api/participants/{id}/surveyはアンケート版・表示判定・教材評価の必須/対象外を返す。POST /api/tutor-turns/{id}/material-viewは初回表示時刻を冪等に記録し、未利用の先行生成は拒否する。管理集計のhypothesesおよび/export/hypothesis_metrics.csv、/export/hypothesis_group_summary.csvは現行4仮説の専用指標を返す。指標版変更時は仕様版52の既存参加者にも新しい評価サマリーを作り、旧サマリーは保持する。
 
 ## 利用可能な現行契約
 
@@ -115,8 +115,8 @@ GET /api/participants/{id}/surveyはアンケート版・表示判定・教材�
 | 事前アンケート | GET/POST `/api/participants/{id}/presurvey` |
 | 事後アンケート対象判定・送信 | GET/POST `/api/participants/{id}/survey` |
 | 教材表示記録 | POST `/api/tutor-turns/{id}/material-view` |
-| 6仮説の群別集計 | GET `/api/admin/evaluation-summary` のhypotheses |
-| 6仮説CSV / Excel | GET `/api/admin/export/hypothesis_metrics.csv`, `/hypothesis_group_summary.csv`, `/hypothesis_metrics.xlsx`, `/hypothesis_group_summary.xlsx` |
+| 現行4仮説の群別集計 | GET `/api/admin/evaluation-summary` のhypotheses |
+| 現行4仮説CSV / Excel | GET `/api/admin/export/hypothesis_metrics.csv`, `/hypothesis_group_summary.csv`, `/hypothesis_metrics.xlsx`, `/hypothesis_group_summary.xlsx` |
 | AI設定状態 | GET `/api/admin/ai/status` |
 | 推論レベル設定 | POST `/api/admin/ai/reasoning-effort` (`reasoning_effort`: `low`, `medium`, `high`, `xhigh`, `max`) |
 | AIモデル設定 | POST `/api/admin/ai/model` (`model`: `gpt-6.1-sol`, `gpt-6-luna`, `gpt-6-astra`) |

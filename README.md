@@ -1,6 +1,6 @@
 # 学習ログ駆動型AIチューター
 
-2026-11-12現行条件：新規参加者は仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`で登録します。4用語版は`split-actions-four-topic-v3`と`presurvey-four-topic-baseline-v4`を使い、用語を「インストラクションチューニング」と表示します。通常2モードの事前アンケートは`presurvey-baseline-v4`。事後アンケートは`posttest-5point-v3`で、教材量の質問を「教材の量はどの程度でしたか」に更新します。H5は中核4項目の数値平均、難易度・教材量は別分布です。仕様版51の二つのprotocolと50以下の参加者は、当時の問題・アンケート版を保全し、記録を変換しません。尺度・H5の妥当性、問題の難易度・同等性、研究上の承認は未確認です。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[評価指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
+2026-11-12現行条件：新規参加者は仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`で登録します。現行の評価指標は`four-hypotheses-v1`で、H1正答率の伸び、H2同じ誤答タイプの再選択、H3再テスト満点率、H4教材6項目の個別評価です。仕様版52の既存参加者も保存済みデータから新しい評価サマリーを作成し、旧6仮説サマリーと生データは上書きしません。4用語版は`split-actions-four-topic-v3`と`presurvey-four-topic-baseline-v4`を使い、用語を「インストラクションチューニング」と表示します。通常2モードの事前アンケートは`presurvey-baseline-v4`。事後アンケートは`posttest-5point-v3`で、教材量の質問を「教材の量はどの程度でしたか」に更新します。仕様版・protocol・問題・回答・進行条件は変更しません。仕様版51の二つのprotocolと50以下の参加者は、当時の問題・アンケート版を保全し、記録を変換しません。尺度・指標の妥当性、問題の難易度・同等性、研究上の承認は未確認です。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[評価指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
 
 仕様版48では事前アンケートを経験・理解度の条件付き回答へ改訂し、仕様版49では事後アンケートを5段階化しました。仕様版50で事後質問文と事前理解度文を更新し、仕様版51で4用語版の問題・用語表記を更新、仕様版52で事後の教材量質問文を更新しました。各変更は導入版以降の新規参加者に適用し、それ以前の保存済み回答には遡及しません。
 
@@ -76,7 +76,7 @@
 
 責任者・保存場所・保管期間は保留のため動作確認用表示です。管理画面・管理APIには冒頭の共通パスワード認証を適用します。本実験開始前の課題は[対応表](docs/20_experiment_plan_alignment.md)と[運用手順](docs/19_experiment_operation_runbook.md)を参照してください。
 
-Wordと承認された実装計画に沿い、教材・low設定・新アンケート・6仮説の記述集計を実装しています。[採用判断と残課題](docs/20_experiment_plan_alignment.md)と[評価定義](docs/12_evaluation_metrics.md)を先に確認してください。
+Wordと承認された実装計画に沿い、教材・low設定・新アンケート・現行4仮説の記述集計を実装しています。旧6仮説は過去版の集計記録として保持します。[採用判断と残課題](docs/20_experiment_plan_alignment.md)と[評価定義](docs/12_evaluation_metrics.md)を先に確認してください。
 
 現行の新規参加者には仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`を保存します。仕様版51以下、NULL・未対応版の参加者は閲覧・CSV出力専用です。進行・削除・補修・再計算・現行集計を行わず、版・回数・注釈・教材解説モード・問題モードを補完しません。ParticipantとRuntimeSettingのnullable設定列や保存済み記録は書き換えません。
 
@@ -88,7 +88,7 @@ Wordと承認された実装計画に沿い、教材・low設定・新アンケ�
 
 ### 現行の問題
 
-新規参加者は管理画面で「現行版（場面応用）」「基礎理解版」「4用語版」を選べます。RuntimeSettingの保存済み値を登録時に参加者へ固定し、未設定時は4用語版を適用します。テストと学習確認は同じ問題モードを使い、6仮説・参加者別出力はモードごとに分離します。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスの4問を10択で出題し、3つ選択またはJ単独とします。仕様版52では全モードで事前テスト満点者が学習・再テストを省略してsurveyへ進みます。事前未達の4用語版は学習後に再テスト2まで進み、内部final_testは使いません。仕様版49以下の参加者記録は当時の問題・アンケート版で復元し、現行モードへ付け替えません。
+新規参加者は管理画面で「現行版（場面応用）」「基礎理解版」「4用語版」を選べます。RuntimeSettingの保存済み値を登録時に参加者へ固定し、未設定時は4用語版を適用します。テストと学習確認は同じ問題モードを使い、現行4仮説・参加者別出力はモードごとに分離します。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスの4問を10択で出題し、3つ選択またはJ単独とします。仕様版52では全モードで事前テスト満点者が学習・再テストを省略してsurveyへ進みます。事前未達の4用語版は学習後に再テスト2まで進み、内部final_testは使いません。仕様版49以下の参加者記録は当時の問題・アンケート版で復元し、現行モードへ付け替えません。
 
 研究の比較対象は「AIを使うかどうか」ではありません。両群とも同じ種類の学習履歴を参照する通常AIを使い、実験群だけにbackendの明示的な診断・修正対象・誤概念の定義・タイプ別教授方針を追加した効果を比較します。統制群が生の回答履歴から自然に誤りを訂正することは許容し、「誤概念対応全般の有無」の比較とは位置づけません。
 
@@ -109,7 +109,7 @@ Wordと承認された実装計画に沿い、教材・low設定・新アンケ�
 
 事前テスト後のテストは最大2回、事前を含め最大3回です。全モードで事前テスト満点者は学習・内部`final_test`・再テストを行わず、結果表示設定に応じて確認画面を経由または直接、事後アンケートへ進みます。事前未達のapplication/basic_understandingは誤答用語を学習し、既存の採点経路を使います。事前未達の4用語版は「事前→4用語の学習→再テスト1→学習→再テスト2→アンケート」に進み、満点でも既存条件どおり学習を続けます。再テスト2の採点後は未達でも再学習せずアンケートへ進みます。未回答を含む採点バッチも1回、全問未回答の採点は拒否します。
 
-問題YAMLは`backend/app/seed/content/standard/`（現行問題）と`archive/`（旧問題）に分けています。新規テストは登録時固定した`test_content_mode`に従い、`split_assessment_v5.yml`（現行版）、`split_assessment_basic_v1.yml`（基礎理解版）、`four_topic_fundamentals_v1.yml`（4用語版）を使います。前二者は各用語1問の計3問、4用語版は各用語1問の計4問を出題します。RuntimeSetting未設定時は4用語版を使い、保存済み設定値は変更しません。4用語版の事前・再テスト1/2は同じ問題と選択肢を使い、A〜Cの3つまたはJ単独を選びます。事前満点者はすべてのモードで学習を省略し、surveyへ進みます。事前未達の4用語版は満点でも学習を続け、再テスト2後にsurveyへ進みます。内部`final_test`は事前未達の現行版・基礎理解版の経路で使用し、事前満点者には実施しません。学習確認は直前テストで誤答した問題の保存snapshotを再利用します。旧問題・旧学習YAMLは履歴復元用に保持します。共有の現行用語辞書は`backend/app/seed/content/learning_glossary_v4.yml`に置きます。教材生成・学習進行・集計は参加者の登録モードに対応し、ログ・CSV/XLSX・6仮説はモード別に分けます。選択肢配置はデバッグ配置またはランダム配置で、ランダム配置では「わからない」を最後のJに固定します。保存済みの回答・学習問題snapshotは書き換えず、採点は表示ラベルではなく選択肢ID・内部メタデータに基づきます。[4用語版の詳細](docs/51_four_topic_foundation_mode.md)。
+問題YAMLは`backend/app/seed/content/standard/`（現行問題）と`archive/`（旧問題）に分けています。新規テストは登録時固定した`test_content_mode`に従い、`split_assessment_v5.yml`（現行版）、`split_assessment_basic_v1.yml`（基礎理解版）、`four_topic_fundamentals_v1.yml`（4用語版）を使います。前二者は各用語1問の計3問、4用語版は各用語1問の計4問を出題します。RuntimeSetting未設定時は4用語版を使い、保存済み設定値は変更しません。4用語版の事前・再テスト1/2は同じ問題と選択肢を使い、A〜Cの3つまたはJ単独を選びます。事前満点者はすべてのモードで学習を省略し、surveyへ進みます。事前未達の4用語版は満点でも学習を続け、再テスト2後にsurveyへ進みます。内部`final_test`は事前未達の現行版・基礎理解版の経路で使用し、事前満点者には実施しません。学習確認は直前テストで誤答した問題の保存snapshotを再利用します。旧問題・旧学習YAMLは履歴復元用に保持します。共有の現行用語辞書は`backend/app/seed/content/learning_glossary_v4.yml`に置きます。教材生成・学習進行・集計は参加者の登録モードに対応し、ログ・CSV/XLSX・現行4仮説はモード別に分けます。選択肢配置はデバッグ配置またはランダム配置で、ランダム配置では「わからない」を最後のJに固定します。保存済みの回答・学習問題snapshotは書き換えず、採点は表示ラベルではなく選択肢ID・内部メタデータに基づきます。[4用語版の詳細](docs/51_four_topic_foundation_mode.md)。
 
 教材生成・正答要約・誤答解説では、両群に共通用語・構成要素・RAG・`interaction_history`を渡します。履歴は同じ参加者・用語の全フェーズの採点済み回答で、問題・選択・全体正誤・時刻だけを含み、診断ラベルやAI解説は含めません。実験群だけに診断・対象主張・taxonomy・教授方針を追加します。確認問題は両群とも同じ診断連動規則を使いますが、統制群のLLMには診断・段階を渡しません。教授方略はbackendで固定し、実験群の教授契約と教材内transfer_checkを維持します。
 
@@ -301,4 +301,4 @@ GET /api/admin/export/hypothesis_group_summary.xlsx
 
 CSVは `record_type, source_type, participant_id, display_code, phase, test_round, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。
 
-現行サマリーはpretest_score、retest_score、attainment_correct_rate、同種誤答/M1/M3別再発率を保存します。これらを新6仮説の確定した評価値と同一視しません。到達率の物理保存先だけ旧列を維持し、計算はis_correctを使います。周回名とfinal_score_sourceで測定経路を区別します。旧試用は保存値の閲覧/CSVだけとし、再計算や現行群集計には混ぜません。[評価指標と未確定条件](docs/12_evaluation_metrics.md) を参照してください。
+現行評価サマリーは`four-hypotheses-v1`のH1〜H4を`hypothesis_metrics_json`へ保存します。旧6仮説サマリーは新しい評価版で上書きしません。`pretest_score`、`retest_score`、`attainment_correct_rate`等の従来列は互換性のため残しますが、現行4仮説の定義とは区別します。周回名と`final_score_source`で測定経路を区別します。旧試用は保存値の閲覧/CSVだけとし、再計算や現行群集計には混ぜません。[評価指標と未確定条件](docs/12_evaluation_metrics.md) を参照してください。

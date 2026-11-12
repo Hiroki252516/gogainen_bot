@@ -2,7 +2,7 @@
 
 ## 仕様版52の現行条件
 
-現行Participantは仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`を使用する。事前版は標準2モードで`presurvey-baseline-v4`、4用語版で`presurvey-four-topic-baseline-v4`。4用語版の回答キーは`instruction_tuning`。事後版は`posttest-5point-v3`で、教材量の質問文は「教材の量はどの程度でしたか」。アンケートは既存`ParticipantSurvey`の`phase`、`survey_version`、`responses_json`へ保存し、DB列は追加しない。旧版と保存値は変換せず保持する。教材評価は整数1〜5または`not_applicable`、未閲覧者は教材評価全体をJSON nullとする。H5はposttest phaseの現行版だけを使う。仕様版51の二つのprotocolと仕様版50以下は読み取り専用。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
+現行Participantは仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`を使用する。事前版は標準2モードで`presurvey-baseline-v4`、4用語版で`presurvey-four-topic-baseline-v4`。4用語版の回答キーは`instruction_tuning`。事後版は`posttest-5point-v3`で、教材量の質問文は「教材の量はどの程度でしたか」。アンケートは既存`ParticipantSurvey`の`phase`、`survey_version`、`responses_json`へ保存し、DB列は追加しない。旧版と保存値は変換せず保持する。教材評価は整数1〜5または`not_applicable`、未閲覧者は教材評価全体をJSON nullとする。現行H4は現行posttest phaseの教材評価6項目を個別に集計する。仕様版51の二つのprotocolと仕様版50以下は読み取り専用。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
 
 ## 仕様版48の条件（履歴）
 
@@ -44,7 +44,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 計画書では参加者・群・用語・フェーズ/回次、問題と選択内容、全体正誤とunknown区分、誤答タイプ・再発、時刻/時間、段階・方略、完了/中断、AI実行状態、アンケートを収集する。正誤のboolとunknown分類は別の記録であり、保存型を文書だけで三値へ変更しない。
 
-仕様版48でアンケートを事前・事後phaseに分け、仕様版49で事後版を5段階化し、仕様版50で事前質問文・4用語版用語を更新、仕様版51で教材量設問文を更新した。現行事前phaseは用語ごとの見聞き経験・条件付き理解度、直近30日のAI利用日数、3行動の使いこなし自己評価。現行事後phaseは`posttest-5point-v3`のシステム評価2・教材評価6・任意自由記述。問題モードごとに事前版を固定する。既存ParticipantSurvey.phase、survey_version、responses_jsonへ保存し、新DB列は追加しない。旧回答や旧posttest版は新規入力に使わず、既存JSONを変換しない。H5は現行posttest phaseだけを参照する。詳細は[12](12_evaluation_metrics.md)、[49](49_presurvey_baseline.md)、[52](52_posttest_five_point_evaluation.md)。
+仕様版48でアンケートを事前・事後phaseに分け、仕様版49で事後版を5段階化し、仕様版50で事前質問文・4用語版用語を更新、仕様版51で教材量設問文を更新した。現行事前phaseは用語ごとの見聞き経験・条件付き理解度、直近30日のAI利用日数、3行動の使いこなし自己評価。現行事後phaseは`posttest-5point-v3`のシステム評価2・教材評価6・任意自由記述。問題モードごとに事前版を固定する。既存ParticipantSurvey.phase、survey_version、responses_jsonへ保存し、新DB列は追加しない。旧回答や旧posttest版は新規入力に使わず、既存JSONを変換しない。現行H4は現行posttest phaseだけを参照する。詳細は[12](12_evaluation_metrics.md)、[49](49_presurvey_baseline.md)、[52](52_posttest_five_point_evaluation.md)。
 
 ## 現行の保存契約
 
@@ -59,7 +59,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規参加者だけ仕様版52と統合protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、問題モード、`retest_cycles_completed=0`を固定する。RuntimeSettingの保存済みテスト問題モードは維持し、未設定時のみ4用語版を適用する。事後アンケート版`posttest-5point-v3`を保存し、H5は中核4項目のみ、教材量は分布集計に限る。事前満点時の早期終了は既存の`current_step`・Attempt・結果表示snapshotを用い、列追加や旧行の補完は行わない。仕様版51の二つの先行protocol、仕様版50以下、異なるprotocol_idの記録は変更しない。旧参加者は進行・採点・完了更新・削除・評価再計算を禁止し、起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版52と統合protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、問題モード、`retest_cycles_completed=0`を固定する。RuntimeSettingの保存済みテスト問題モードは維持し、未設定時のみ4用語版を適用する。事後アンケート版`posttest-5point-v3`を保存する。現行H4では6項目を個別に集計し、教材量は分布だけを報告する。事前満点時の早期終了は既存の`current_step`・Attempt・結果表示snapshotを用い、列追加や旧行の補完は行わない。仕様版51の二つの先行protocol、仕様版50以下、異なるprotocol_idの記録は変更しない。旧参加者は進行・採点・完了更新・削除・評価再計算を禁止し、起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 

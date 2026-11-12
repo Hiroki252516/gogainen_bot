@@ -1,7 +1,7 @@
 # Repository Instructions for Codex
 
 ## 仕様版52の現行条件（2026-11-12）
-新規参加者は仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`で登録する。4用語版は問題バンク`split-actions-four-topic-v3`、事前アンケート`presurvey-four-topic-baseline-v4`を使い、項目`instruction_tuning`を「インストラクションチューニング」と表示する。標準2モードの事前アンケートは`presurvey-baseline-v4`。事後アンケートは`posttest-5point-v3`で、教材量の質問を「教材の量はどの程度でしたか」とする。尺度、保存キー、H5の中核4項目平均、難易度・教材量の別分布は維持する。仕様版51の二つのprotocolと仕様版50以下の参加者・問題・回答・アンケートsnapshotを当時の版で復元し、書き換えない。難易度・測定上の同等性や研究上の承認は未確認。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
+新規参加者は仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`で登録する。現行指標版は`four-hypotheses-v1`。仕様版52の参加者も既存データから新しい評価サマリーを作り、旧6仮説サマリーと生データを上書きしない。仕様版・protocol・参加者の進行条件は変更しない。現行指標はH1正答率の伸び、H2同じ誤答タイプの再選択、H3再テスト満点率、H4教材6項目の個別評価。4用語版は問題バンク`split-actions-four-topic-v3`、事前アンケート`presurvey-four-topic-baseline-v4`を使い、項目`instruction_tuning`を「インストラクションチューニング」と表示する。標準2モードの事前アンケートは`presurvey-baseline-v4`。事後アンケートは`posttest-5point-v3`で、教材量の質問を「教材の量はどの程度でしたか」とする。仕様版51の二つのprotocolと仕様版50以下の参加者・問題・回答・アンケートsnapshotを当時の版で復元し、書き換えない。指標・尺度・難易度の妥当性や研究上の承認は未確認。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
 
 ## 仕様版48の履歴条件（2026-11-10）
 
@@ -27,7 +27,7 @@
 
 仕様版42当時は`experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`を使用した。新規参加者は同意後に`presurvey-baseline-v2`の必須8項目へ回答する。事前・再テスト・内部final_testは各用語の設問1だけ（計3問）を出題し、各問回答後に設問ごとの答え合わせを行う。テスト全体の結果確認画面は表示しない。登録snapshotは`show_pretest_results=false`、`show_retest_results=false`、`show_question_reviews=true`、`first_question_only=true`、`learning_material_glossary_mode=integrated_material`で固定し、旧RuntimeSetting値は参照しない。これらの管理設定UI/API、教材モード表示、集計条件切替はなかった。仕様版43では問題モード設定が追加された。旧履歴値はDB・管理ログAPI・CSVに保持するが、参加者一覧・個別ログ画面には表示しない。
 
-事後アンケート`posttest-10point-v3`はシステム評価2項目・教材評価6項目・任意自由記述を保存し、H5はposttestだけを参照する。共通辞書v4（RAGを含む17語）を使い、教材内解説では定義を意味参照として渡して文脈に合わせて言い換える。教材本文は800文字程度を目安にし、文字数の上下限による検証・再生成は行わず、監査用に実文字数と目標だけを記録する。教材生成は共通ルールを両群に適用し、統制群に群別の自然言語方略指示を加えず、提案群だけに診断・タイプ別教授指示を加える。仕様版41以下と別protocolは閲覧専用で、既存回答・教材・snapshot・監査記録を更新しない。詳細は[AI指示](docs/10_ai_prompt_contracts.md)、[事前アンケート](docs/49_presurvey_baseline.md)、[教材モード](docs/41_learning_glossary_material_mode.md)、[文字数契約](docs/42_learning_glossary_material_length.md)、[受入記録](docs/14_testing_acceptance.md)。
+仕様版42の事後アンケート`posttest-10point-v3`はシステム評価2項目・教材評価6項目・任意自由記述を保存し、当時のH5はposttestだけを参照した（履歴）。共通辞書v4（RAGを含む17語）を使い、教材内解説では定義を意味参照として渡して文脈に合わせて言い換える。教材本文は800文字程度を目安にし、文字数の上下限による検証・再生成は行わず、監査用に実文字数と目標だけを記録する。教材生成は共通ルールを両群に適用し、統制群に群別の自然言語方略指示を加えず、提案群だけに診断・タイプ別教授指示を加える。仕様版41以下と別protocolは閲覧専用で、既存回答・教材・snapshot・監査記録を更新しない。詳細は[AI指示](docs/10_ai_prompt_contracts.md)、[事前アンケート](docs/49_presurvey_baseline.md)、[教材モード](docs/41_learning_glossary_material_mode.md)、[文字数契約](docs/42_learning_glossary_material_length.md)、[受入記録](docs/14_testing_acceptance.md)。
 
 ## 仕様版41の履歴条件（2026-11-07）
 
@@ -81,8 +81,8 @@
 
 - 新規参加者の出題・採点・確認問題復元はsnapshotされた`test_content_mode`に対応する問題バンクだけを使い、集計もモード別に分離する。旧`question_set_mode`設定APIとフィルターは廃止済みで、旧フィルター付き要求は422で拒否する。過去のeasy-mode削除手順は新しい`test_content_mode`・問題資産・記録を対象にせず、旧版へのフォールバックを実装しない。
 
-- 研究仮説は計画書の6つ。番号はdocs/01・12・17で統一し、比較回次・集計単位・欠測の未指定部分を独断で決めない。
-- 目標は大学生40名/各群20名、原則無作為割付。low設定・事前知識6項目・事前AI利用2領域・事後システム評価2/教材評価6の5段階（仕様版49で導入し、仕様版50で教材量の設問文を更新）・任意自由記述・6仮説の記述集計は実装済み。自動割付・人数上限は対象外。式・対象はdocs/12・20の承認済み定義を守る。
+- 現行の評価指標版は`four-hypotheses-v1`。H1は事前から初回再テストへの正答率差、H2は事前M1/M3項目に対する初回再テストでの同タイプ再選択率、H3は事前完了・非満点者を分母にした再テスト満点率、H4は教材評価6項目の個別集計。詳細な分母・欠測規則はdocs/12を正とし、現行API/UI/exportへ旧H5/H6を混ぜない。仕様版52参加者の新サマリーを作っても旧サマリー・生データは上書きしない。
+- 目標は大学生40名/各群20名、原則無作為割付。low設定・事前知識6項目・事前AI利用2領域・事後システム評価2/教材評価6の5段階（仕様版49で導入し、仕様版50で教材量の設問文を更新）・任意自由記述・現行4仮説の記述集計は実装済み。自動割付・人数上限は対象外。式・対象はdocs/12・20の定義を守る。
 - 共通説明とunknownは意味や仕組みを扱う。unknownの証拠はmandatory_elements.definitionとteaching_contract.mechanism_explanation/transfer_check。旧6項目を必須に戻さない。
 - 比較対象は「AIあり/なし」ではなく、「通常AIチューター」と「ログ適応型AIチューター」。
 - 現行分類はM1/M3/unknownのみ。両群へ同じ用語の全フェーズの採点済み回答履歴を渡す。提案群だけに明示的な診断・対象主張・taxonomy・タイプ別教授方針を追加する。方略はbackendで固定する。
@@ -92,7 +92,7 @@
 - 学習確認は1用語・1セッションあたり最大3回答。4用語版では事前テスト後と再テスト1後に学習し、満点時は4用語すべてを学習対象にする。再テスト2の採点後は正誤にかかわらずsurveyへ進む。application/basic_understandingは既存の満点時早期終了条件を維持する。採点済みバッチは1回とし、全問未回答は採点しない。
 - 現行の新規テストはParticipant.test_content_modeに応じてapplication=`split-actions-v5`、basic_understanding=`split-actions-basic-v1`、four_topic_fundamentals=`split-actions-four-topic-v3`を使う。最初の2モードは各3用語・計3問、4用語モードは各1問・計4問。すべて各モードの設問1を出題し、applicationの設問2・3はバンクに保持する。4用語バンクはA〜C正解、D〜F=M1、G〜I=M3、J=unknownの10択。activeキーはpretest_v1、retest_v1/v2。application/basic_understandingは既存の終了条件に従い、必要時に内部final_testへ進む。4用語版ではfinal_testを使わない。v1は仕様版49以下、v2は仕様版50の復元用に保持し、版付きconstruct_keyで既存本文・選択肢を上書きしない。学習確認は直前テストの保存snapshotを利用する。通常の学習v15と教材条件は維持する。
 - 選択肢配置は管理画面のDB保存設定で切り替える。既定値は`debug_fixed`で、新規参加者だけに適用する。実験データ収集前に`randomized`へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
-- 現行コードでは新規だけ仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数える。標準2モードの事前アンケートは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v4`、事後アンケートは`posttest-5point-v3`を使う。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」。4用語版は`instruction_tuning`／「インストラクションチューニング」、問題バンクv3。教材量の設問文は「教材の量はどの程度でしたか」。H5は中核4項目の数値回答平均とする。仕様版51の二つのprotocolにはそれぞれの問題・事前アンケート版を対応させ、issue336はバンクv3・事前アンケートv4、issue338はバンクv2・事前アンケートv3を復元する。仕様版50以下の記録も保存時の版で復元する。4用語版ではfinal_testを使わず、事前満点者は学習・再テストを行わずsurveyへ進む。問題モードは登録時に固定し、旧行の版・進行・回答・評価・回数を更新・削除・補完しない。
+- 現行コードでは新規だけ仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数える。標準2モードの事前アンケートは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v4`、事後アンケートは`posttest-5point-v3`を使う。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」。4用語版は`instruction_tuning`／「インストラクションチューニング」、問題バンクv3。教材量の設問文は「教材の量はどの程度でしたか」。現行指標は`four-hypotheses-v1`のH1〜H4。仕様版51の二つのprotocolにはそれぞれの問題・事前アンケート版を対応させ、issue336はバンクv3・事前アンケートv4、issue338はバンクv2・事前アンケートv3を復元する。仕様版50以下の記録も保存時の版で復元する。4用語版ではfinal_testを使わず、事前満点者は学習・再テストを行わずsurveyへ進む。問題モードは登録時に固定し、旧行の版・進行・回答・評価・回数を更新・削除・補完しない。
 - 両群の教材の小見出し・数・順序・まとめ方はAIが決める。冒頭の##用語名と非空の###セクションだけを要求し、実験群の必須教授内容・transfer_checkは本文内証拠で検証する。固定見出しから証拠文を自動補正しない。
 - 教材内のtransfer_checkは維持するが、独立した追加テスト・旧支援量・自由回答処理を戻さない。
 - application/basic_understandingの対象は`llm_knowledge`、`multi_agent`、`memory_process`。four_topic_fundamentalsの対象は`transformer`、`llm_training_stages`、`multi_agent_four_topic`、`memory_process_four_topic`。
@@ -122,6 +122,6 @@
 
 - 仕様整理の依頼ではMarkdownだけを編集する。
 - 文書更新だけでプロンプト・Schema・環境設定・API・DB・実行版を変更しない。実装開始は別途明示的な依頼を必要とする。
-- 目標プロンプトの引用と現行コードの送信原文を区別する。既存ログを新6仮説の確定済み評価値として扱わない。
+- 目標プロンプトの引用と現行コードの送信原文を区別する。旧6仮説サマリーを現行4仮説の確定済み評価値として扱わない。
 - 実装開始の依頼では、仕様にない独自判断を最小限にし、判断した内容はREADMEまたは該当docsに追記する。
 - 要確認事項はdocs/20で管理し、決定されていない分析方法・新しいunknownの検査項目を実装者が補完しない。その他の運用はdocs/19・99を参照する。

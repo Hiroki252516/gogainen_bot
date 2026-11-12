@@ -2,7 +2,7 @@
 
 ## 仕様版52の現行コード（2026-11-12）
 
-新規参加者は仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`で登録する。4用語版の問題バンクは`split-actions-four-topic-v3`、事前アンケートは`presurvey-four-topic-baseline-v4`で、項目`instruction_tuning`を「インストラクションチューニング」と表示する。標準2モードの事前アンケートは`presurvey-baseline-v4`。事後アンケートは`posttest-5point-v3`で、教材量の質問文を「教材の量はどの程度でしたか」とする。4問・10択・採点・確認問題snapshot再利用、教材検索先、共通RAG資料、H5の定義は維持する。仕様版51の二つのprotocolと仕様版50以下の参加者・回答・snapshotは当時の版で復元し、変更しない。難易度・測定上の同等性、尺度・H5の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+新規参加者は仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`で登録する。現行評価指標は`four-hypotheses-v1`。仕様版52の参加者にも保存済みデータから新しい評価サマリーを作成し、旧6仮説サマリー・生データを上書きしない。仕様版・protocol・問題・回答・進行条件は維持する。4用語版の問題バンクは`split-actions-four-topic-v3`、事前アンケートは`presurvey-four-topic-baseline-v4`で、項目`instruction_tuning`を「インストラクションチューニング」と表示する。標準2モードの事前アンケートは`presurvey-baseline-v4`。事後アンケートは`posttest-5point-v3`で、教材量の質問文を「教材の量はどの程度でしたか」とする。4問・10択・採点・確認問題snapshot再利用、教材検索先、共通RAG資料は維持する。仕様版51の二つのprotocolと仕様版50以下の参加者・回答・snapshotは当時の版で復元し、変更しない。難易度・測定上の同等性、尺度・指標の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版48の履歴条件（2026-11-10）
 
@@ -22,7 +22,7 @@
 
 ## 仕様版43当時のコード（履歴・2026-11-08）
 
-新規参加者は`experiment-plan-2026-11-08-basic-understanding-question-mode-v1`で登録する。管理画面の問題モード設定を登録時に固定し、現行版（場面応用、`split-actions-v5`）または基礎理解版（`split-actions-basic-v1`）を使用する。既定値は現行版。出題数、答え合わせ、結果表示、事前アンケート、教材・教授・採点条件は仕様版42のまま引き継ぐ。6仮説は問題モード別に集計し、モード間を合算しない。仕様版42以下と旧protocolは閲覧専用、既存記録は不変。基礎理解版の難易度低下・難易度同等性・研究上の承認は未検証・未確認。[詳細](50_basic_understanding_question_mode.md)。
+新規参加者は`experiment-plan-2026-11-08-basic-understanding-question-mode-v1`で登録する。管理画面の問題モード設定を登録時に固定し、現行版（場面応用、`split-actions-v5`）または基礎理解版（`split-actions-basic-v1`）を使用する。既定値は現行版。出題数、答え合わせ、結果表示、事前アンケート、教材・教授・採点条件は仕様版42のまま引き継ぐ。当時の旧6仮説は問題モード別に集計し、モード間を合算しなかった。仕様版42以下と旧protocolは閲覧専用、既存記録は不変。基礎理解版の難易度低下・難易度同等性・研究上の承認は未検証・未確認。[詳細](50_basic_understanding_question_mode.md)。
 
 ## 仕様版42の履歴コード
 
@@ -64,7 +64,7 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 - 比較は履歴を使う通常AIチューター（control）と、明示的診断・修正対象・訂正情報・taxonomy・タイプ別教授方針を追加するAIチューター（proposed）。統制群の自然な誤り訂正を許容する。
 - 対象3概念：llm_knowledge、multi_agent、memory_process。大学生40名/各群20名・原則無作為割付を目標とし、アプリは研究者のA/Bコードを使用する。
-- 6仮説：初回の正答率の伸び、満点までの用語別セッション数、用語内不正解数、同種誤答再選択率、教材評価、満点到達割合。記述集計のみ。
+- 現行4仮説（`four-hypotheses-v1`）：初回再テストへの正答率の伸び、同じ誤答タイプの再選択、再テスト満点率、教材評価6項目の個別集計。記述集計のみ。旧6仮説サマリーは履歴として保持する。
 - backendが固定採点・分類・方略決定を行う。M1/M3/unknown、M3優先。AIは教材・正答要約・誤答解説のみ。
 - 共通説明とunknownは意味や仕組みを説明する。unknownは定義・仕組み・教材内適用確認を本文証拠で検査し、旧6項目を必須としない。
 - 仕様版39までは本文を注釈欄のみで600〜800文字、教材内解説で600〜1200文字として検証した。仕様版42では目標800文字程度のみを指示し、上下限による合否判定を行わない。自由な章立て。実験群の本文証拠検査は意味的な正しさや理解の証明ではない。

@@ -2,7 +2,7 @@
 
 > 本文は仕様版43で導入した`basic_understanding`の条件と互換性を記録する。仕様版44で第3モード`four_topic_fundamentals`を追加し、仕様版50では事前アンケート文面と4用語版バンクを更新した。現行3モード共通条件と進行は[51](51_four_topic_foundation_mode.md)、現行アンケートは[49](49_presurvey_baseline.md)を参照する。
 
-## 現行条件
+## 仕様版52における現行互換条件
 
 新規参加者は管理画面の登録前設定に従い、`application`（現行版・場面応用）、`basic_understanding`（基礎理解版）、`four_topic_fundamentals`（4用語版）のいずれかで開始する。RuntimeSetting未設定時の現行既定値は`four_topic_fundamentals`。選択値は登録時に`Participant.test_content_mode`へ保存し、その後の管理設定変更では既存参加者の問題・回答・確認問題を切り替えない。RuntimeSettingの設定APIは管理認証を必須とし、適用範囲は新規参加者のみ。本書では最初の2モードの問題バンクと、仕様版43で導入した互換性を説明する。
 
@@ -21,7 +21,7 @@
 
 ## 集計と記録
 
-現行仕様版52の6仮説は3モードごとに集計し、異なるモード間の値を合算しない。`application`と`basic_understanding`は3問、4用語版は4問を分母とする。群別集計・参加者別集計・詳細JSONと専用CSV/XLSXにモードを記録する。参加者ログ、全体ログ、参加者テーブルCSVにも登録時の値を出す。統合ログCSVの`test_content_mode`列は仕様版43で追加した。事前アンケート版は[49](49_presurvey_baseline.md)を参照する。
+現行指標版`four-hypotheses-v1`は3モードごとに集計し、異なるモード間の値を合算しない。`application`と`basic_understanding`は3問、4用語版は4問を分母とする。群別集計・参加者別集計・詳細JSONと専用CSV/XLSXにモードを記録する。参加者ログ、全体ログ、参加者テーブルCSVにも登録時の値を出す。統合ログCSVの`test_content_mode`列は仕様版43で追加した。事前アンケート版は[49](49_presurvey_baseline.md)、評価指標は[12](12_evaluation_metrics.md)を参照する。
 
 ## 研究上の留意点
 
