@@ -107,7 +107,7 @@ def session(db, p, slug, index, wrong=0, *, displayed=True, answered=True, ended
 
 def questionnaire(viewed=False):
     return {"survey_version": SURVEY_VERSION,
-            "general_ratings": {"system_usability": 4, "system_clarity": 5},
+            "general_ratings": {"system_usability": 4},
             "material_ratings": {key: 4 for key in MATERIAL_RATING_KEYS} if viewed else None,
             "free_comment": "  特になし  "}
 
@@ -452,7 +452,7 @@ def test_rounds_remain_distinct_after_variant_five_is_reused(study):
     assert row["h2"]["first_mastery_round"] == 6
 
 
-@pytest.mark.parametrize("field,value", [("system_usability", 0), ("system_usability", 6), ("system_usability", True), ("system_clarity", 3.5), ("system_clarity", "4")])
+@pytest.mark.parametrize("field,value", [("system_usability", 0), ("system_usability", 6), ("system_usability", True), ("system_usability", 3.5), ("system_usability", "4")])
 def test_rating_validation_is_strict_and_bounded(field, value):
     payload = questionnaire()
     payload["general_ratings"][field] = value
@@ -469,6 +469,13 @@ def test_required_knowledge_and_material_fields():
         mutate(payload)
         with pytest.raises(ValidationError):
             SurveyPayload.model_validate(payload)
+
+
+def test_removed_system_clarity_is_rejected_for_new_survey_version():
+    payload = questionnaire()
+    payload["general_ratings"]["system_clarity"] = 4
+    with pytest.raises(ValidationError):
+        SurveyPayload.model_validate(payload)
     for mutate in (lambda p: p.pop("prior_term_exposure"),
                    lambda p: p["prior_term_exposure"].update(pretraining="yes"),
                    lambda p: p["general_ratings"].pop("ai_usage_frequency_30d")):
@@ -479,7 +486,7 @@ def test_required_knowledge_and_material_fields():
 
 
 @pytest.mark.parametrize("section,keys", [
-    ("general_ratings", ("system_usability", "system_clarity")),
+    ("general_ratings", ("system_usability",)),
     ("material_ratings", MATERIAL_RATING_KEYS),
 ])
 def test_every_displayed_survey_item_requires_an_explicit_answer(section, keys):
@@ -604,7 +611,7 @@ def test_old_questionnaire_cannot_be_written_as_the_new_version():
         SurveyPayload.model_validate(payload)
 
 
-@pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", "posttest-5point-v1", "posttest-5point-v2", SURVEY_VERSION])
+@pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", "posttest-5point-v1", "posttest-5point-v2", "posttest-5point-v3", SURVEY_VERSION])
 def test_h5_uses_only_current_survey_version_without_rewriting_history(study, version):
     p = participant(study)
     session(study, p, "llm_knowledge", 1)
@@ -621,6 +628,8 @@ def test_h5_uses_only_current_survey_version_without_rewriting_history(study, ve
             "system_usability": 9,
             "system_clarity": 8,
         }
+    elif version == "posttest-5point-v3":
+        responses["general_ratings"]["system_clarity"] = 5
     original = json.loads(json.dumps(responses))
     survey = ParticipantSurvey(participant_id=p.id, phase="posttest", survey_version=version,
                                responses_json=responses, free_comment=None)
@@ -809,7 +818,7 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     changed_baseline["general_ratings"]["ai_usage_frequency_30d"] = "21_30_days"
     assert client.post(f"/api/participants/{pid}/presurvey", json=changed_baseline).status_code == 409
     assert client.get(f"/api/participants/{pid}/survey").json()["material_ratings_required"] is False
-    assert client.get(f"/api/participants/{pid}/survey").json()["survey_version"] == "posttest-5point-v3"
+    assert client.get(f"/api/participants/{pid}/survey").json()["survey_version"] == "posttest-5point-v4"
     with SessionLocal() as db:
         p = db.get(Participant, pid)
         assert p.protocol_id == CURRENT_PROTOCOL_ID

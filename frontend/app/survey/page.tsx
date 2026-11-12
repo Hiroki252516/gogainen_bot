@@ -8,7 +8,7 @@ import { PosttestQuestionnaire, type PosttestSubmission } from "@/components/Sur
 import { api, postIdempotent, requireParticipant } from "@/lib/api";
 
 const SURVEY_STEPS = ["survey"] as const;
-type Context = { survey_version: "posttest-5point-v3"; material_ratings_required: boolean };
+type Context = { survey_version: "posttest-5point-v4"; material_ratings_required: boolean };
 
 export default function SurveyPage() {
   const router = useRouter();

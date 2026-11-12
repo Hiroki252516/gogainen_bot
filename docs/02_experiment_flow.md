@@ -1,8 +1,8 @@
 # 実験フロー
 
-## 仕様版52の現行フロー（2026-11-12）
+## 仕様版53の現行フロー（2026-11-12）
 
-新規参加者は仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`を使う。登録時snapshotされた進行・採点・表示条件は仕様版50から維持し、4用語版は問題バンクv3・事前アンケートv4、通常2モードは事前アンケートv4を使う。事後アンケートは`posttest-5point-v3`で、教材量の質問を「教材の量はどの程度でしたか」に更新する。4用語版の下位用語は「インストラクションチューニング」、通常2モードは従来どおり「ファインチューニング」。H5は中核4項目の数値平均、難易度・教材量は別分布。仕様版51の2つのprotocolと仕様版50以下は当時の問題・回答・アンケートを保全し、閲覧専用とする。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
+新規参加者は仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`を使う。登録時snapshotされた進行・採点・表示条件は維持し、4用語版は問題バンクv3・事前アンケートv4、標準2モードは事前アンケートv4を使う。4用語版の下位用語は「インストラクションチューニング」、標準2モードは「ファインチューニング」。事後アンケートは`posttest-5point-v4`で、システム評価を1項目とし、教材量の質問を「教材の量はどの程度でしたか」とする。教材評価6項目、H5の中核4項目と集計は維持する。仕様版52にはclarity削除前後の2 protocolがあり、保存時の問題・回答・アンケートsnapshotを保全する。仕様版52以下は閲覧専用。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
 
 ## 仕様版48のフロー（履歴）
 
@@ -33,7 +33,7 @@
 7. 事前テストで満点だった参加者は内部final_testへ進み、各用語の設問1だけ（計3問）へ回答後に本人の選択と正誤を確認する。採点結果に応じ、満点ならsurvey、不正解・未回答があれば既存の学習後retest_v2へ進む。
 8. survey（事後アンケート）保存後にfinish。
 
-事前アンケートはphase=presurvey、事後アンケートはphase=posttestで別々に記録する。事前はモード別の版付きで経験・条件付き理解度・AI利用回答を保存する。事後はシステム評価2項目・教材評価6項目（表示者のみ必須）・任意自由記述とし、仮説5はposttestだけを参照する。[画面仕様](09_frontend_ux_flow.md)、[評価定義](12_evaluation_metrics.md)、[保存契約](49_presurvey_baseline.md)を参照する。
+事前アンケートはphase=presurvey、事後アンケートはphase=posttestで別々に記録する。事前はモード別の版付きで経験・条件付き理解度・AI利用回答を保存する。現行事後版v4はシステム評価1項目・教材評価6項目（閲覧者のみ必須）・任意自由記述とし、H5は事後の教材評価だけを参照する。仕様版51のv3回答は当時の2項目を含めて保全する。[画面仕様](09_frontend_ux_flow.md)、[評価定義](12_evaluation_metrics.md)、[保存契約](49_presurvey_baseline.md)を参照する。
 
 事前後の問題variantは採点回次に対応して全用語共通に選ぶ。用語別の回答件数から回次を推測しない。学習後回数retest_cycles_completedはfinal_testを含めず、上限用のpost_pretest_tests_completedには採点済みfinal_testを加える。テスト回答中はチャット・ヒント・即時正解を表示しない。既存結果画面では従来どおり正誤を表示する。
 

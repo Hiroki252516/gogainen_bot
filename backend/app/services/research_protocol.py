@@ -13,10 +13,10 @@ from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
 PRESURVEY_VERSION = "presurvey-baseline-v4"
 FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v4"
-SURVEY_VERSION = "posttest-5point-v3"
+SURVEY_VERSION = "posttest-5point-v4"
 SUPPORTED_SURVEY_VERSIONS = (
     "posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3",
-    "posttest-5point-v1", "posttest-5point-v2", SURVEY_VERSION,
+    "posttest-5point-v1", "posttest-5point-v2", "posttest-5point-v3", SURVEY_VERSION,
 )
 PosttestRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
 ProficiencyRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
@@ -115,7 +115,6 @@ class BaselineRatings(StrictModel):
 
 class PosttestRatings(StrictModel):
     system_usability: PosttestRating
-    system_clarity: PosttestRating
 
 
 class MaterialRatings(StrictModel):
@@ -220,7 +219,7 @@ def _validate_understanding_branch(exposure: StrictModel, understanding: StrictM
 
 
 class SurveyPayload(StrictModel):
-    survey_version: Literal["posttest-5point-v3"] = SURVEY_VERSION
+    survey_version: Literal["posttest-5point-v4"] = SURVEY_VERSION
     general_ratings: PosttestRatings
     material_ratings: MaterialRatings | None
     free_comment: Comment | None = None
