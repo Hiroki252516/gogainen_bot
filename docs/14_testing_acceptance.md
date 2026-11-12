@@ -1,11 +1,21 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-12 テスト満点後の事後アンケート早期終了（仕様版51・fix/issue-337）
+## 2026-11-12 テスト満点後の事後アンケート早期終了（仕様版51・fix/issue-337、統合前の検証記録）
 
 - 新規参加者を仕様版51 / `experiment-plan-2026-11-12-perfect-test-early-exit-v1`へ更新した。事前・再テスト1/2・内部`final_test`で、必要な全設問が採点済みかつ全問正解の場合にsurveyへ進み、学習・後続テストを省略する。特に4用語版の再テスト1満点時は固定学習対象を設定しない。結果表示snapshot ON/OFF、未達経路、問題・採点・指標式は維持する。仕様版50以下の参加者記録は変更しない。
 - 3問題モード×事前・再テスト1・再テスト2の満点経路、後続テスト・学習APIの拒否、current-step復元、4用語版の結果表示ON/OFFと冪等再送を隔離環境の統合テストで確認した。既存の設問分割APIは仕様版51でも有効化し、仕様版50の保存protocolに対応する問題バンク復元も確認した。
-- Backend全テストは`1732 passed`（631.75秒、既存DeprecationWarning 6件）。Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。
-- 実ブラウザでのPC・スマートフォン確認は未実施。受入記録・運用手順の追記後に`git diff --check`が成功した。研究DB、既存3000番環境、実AI、コミット・pushは対象外。フロー変更の研究上の承認・測定特性は確認していない。
+## 2026-11-12 事後アンケート教材量の質問文更新（仕様版51・fix/issue-338、統合前の検証記録）
+
+- 新規参加者を仕様版51 / `experiment-plan-2026-11-12-posttest-material-amount-wording-v1`、事後アンケート版`posttest-5point-v3`へ更新した。質問文は「教材の量はどの程度でしたか」。選択肢、`amount_appropriateness`、集計は維持する。
+- 仕様版50 / `posttest-5point-v2`の質問文・保存済み回答は履歴として維持する。旧回答を変換せず、v2の新規送信は拒否する。
+- Backend全テストは`1722 passed`（警告6件）。Frontend `npm test`および`npm run build`が成功した。
+- `git diff --check`が成功した。隔離ブラウザ確認はPlaywrightランタイムが見つからず未実施。
+- この文言変更は研究上の承認を意味しない。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
+
+## 2026-11-12 仕様版52マージ統合
+
+- 仕様版51の二つのprotocolを変更せず、仕様版52 / `experiment-plan-2026-11-12-perfect-test-early-exit-posttest-material-amount-v1`として統合した。新規参加者は満点後にsurveyへ進み、事後アンケートv3を使う。仕様版51参加者のprotocol snapshotは個別に保全し、対応する質問文・進行条件で復元する。
+- `backend/tests/test_question_sets.py`に仕様版51の両protocolから4用語問題バンクを復元するテストを追加した。マージ後、関連Backend 11ファイル・306件、Frontend `npm test`、`npm run build`が成功した。`git diff --check`も成功した。隔離ブラウザでの画面確認とBackend全件テストは今回未実施。
 
 ## 2026-11-11 仕様版50の事前アンケート・問題バンク更新（fix/issue-323の検証記録）
 

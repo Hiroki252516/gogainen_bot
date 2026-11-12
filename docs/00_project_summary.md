@@ -1,8 +1,10 @@
 # 実験の概要と現行仕様
 
-## 仕様版51の現行コード（2026-11-12）
+## 仕様版52の現行コード（2026-11-12）
 
-新規参加者は仕様版51 / `experiment-plan-2026-11-12-perfect-test-early-exit-v1`で登録する。事前・再テスト・内部`final_test`で必要な全設問が採点済みかつ全問正解なら、問題モードを問わず事後アンケートへ進み、学習・後続テストを省略する。4用語版の再テスト1満点時も固定学習対象を作らない。結果表示設定がONなら結果確認後、OFFなら直接surveyへ進む。未達時の学習・再テスト経路は維持する。3モード、問題バンク、事前アンケート`presurvey-baseline-v4`／`presurvey-four-topic-baseline-v3`、事後アンケート`posttest-5point-v2`、H1〜H6の定義・分母・欠測規則は変更しない。仕様版50以下の記録は閲覧専用で保全する。測定特性や研究上の承認は未確認。[実験フロー](02_experiment_flow.md)、[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+新規参加者は仕様版52 / `experiment-plan-2026-11-12-perfect-test-early-exit-posttest-material-amount-v1`で登録する。事前・再テスト・内部`final_test`で必要な全設問が採点済みかつ全問正解なら、問題モードを問わず事後アンケートへ進み、学習・後続テストを省略する。4用語版の再テスト1満点時も固定学習対象を作らない。結果表示設定がONなら結果確認後、OFFなら直接surveyへ進む。未達時の学習・再テスト経路は維持する。事後アンケートは`posttest-5point-v3`で、教材量設問を「教材の量はどの程度でしたか」に更新する。3モード、問題バンク、事前アンケート`presurvey-baseline-v4`／`presurvey-four-topic-baseline-v3`、H1〜H6の定義・分母・欠測規則は維持する。仕様版51の二つのprotocolと仕様版50以下の記録は閲覧専用で保全する。尺度・測定特性や研究上の承認は未確認。[実験フロー](02_experiment_flow.md)、[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+
+仕様版51には、満点後早期終了を導入した`experiment-plan-2026-11-12-perfect-test-early-exit-v1`と、事後アンケート文言を更新した`experiment-plan-2026-11-12-posttest-material-amount-wording-v1`の二つのprotocolがある。仕様版52で両条件を統合し、仕様版51の参加者記録は各protocolと保存済み回答・問題snapshotのまま閲覧専用で保持する。
 
 ## 仕様版48の履歴条件（2026-11-10）
 
@@ -50,11 +52,11 @@
 
 通常版のPRETEST・RETEST・内部final_testで、設問1・2の両方を保存した後に同じテスト画面内で選択内容と正誤を示し、続行で次の用語へ進む。設定・API・保存・受入条件は[40](40_question_pair_answer_review.md)を参照する。
 
-当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。設問ペア確認の履歴契約は現行仕様版51でも復元互換性のため保持するが、新規参加者は選択した問題モードの対象設問を出題し、各問の回答後に確認する。過去に存在した設定UI/APIは廃止した。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
+当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。設問ペア確認の履歴契約は現行仕様版52でも復元互換性のため保持するが、新規参加者は選択した問題モードの対象設問を出題し、各問の回答後に確認する。過去に存在した設定UI/APIは廃止した。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
 
-## 仕様版26で採用した共通の用語注釈辞書（現行仕様版51でも維持）
+## 仕様版26で採用した共通の用語注釈辞書（現行仕様版52でも維持）
 
-以下は採用時点の記録を含む。現在の保存版・readonly境界は冒頭の仕様版51の記述を正とする。
+以下は採用時点の記録を含む。現在の保存版・readonly境界は冒頭の仕様版52の記述を正とする。
 
 仕様版26で共通固定辞書learning-glossary-v2の16語を導入した。v1〜v3は履歴用に無変更で保持し、現行v4をテスト・回答後解説・教材注釈と教材内解説モードに使う。仕様版31で導入した教材内解説では辞書を意味参照として渡し、本文では定義を逐語転載せず自然に言い換える。仕様版36ではv1のRAG定義・別表記・出典をv4へ追加した。教材snapshotや回答後・テストの保存済みsnapshotは更新しない。AI、事前学習、ファインチューニング、プロンプトエンジニアリング、データベース、マルチエージェント、タスク、記憶プロセスの8語を注釈から除外する。長い除外語の一部からプロンプト・エージェントを抽出せず、独立して登場した場合は補足する。仕様版26の当時は新規だけprotocol_id=`experiment-plan-2026-10-27-test-glossary-v2`を保存し、版25以下を閲覧専用としていた。詳細は[24](24_learning_glossary.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、版25で採用した問題本文・分類理由は[38](38_round_two_revision.md)。
 
@@ -73,7 +75,7 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 ## 版・保存・フロー
 
-現行コードは新規参加者に仕様版51のprotocolを保存し、仕様版50以下のprotocol・NULLや未対応版は閲覧専用で保全する。登録時snapshot、テスト・学習・採点・表示設定、教材条件は直前の現行条件を引き継ぐ。4用語版の現行問題バンクは`split-actions-four-topic-v2`、事前アンケートは標準2モードが`presurvey-baseline-v4`、4用語版が`presurvey-four-topic-baseline-v3`、事後アンケートは`posttest-5point-v2`。事前回答は事後アンケート・仮説指標へ合算しない。教材生成は本文800文字程度を目安とし、統制群に群別方略指示を加えず、提案群だけに診断・教授方略指示を追加する。
+現行コードは新規参加者に仕様版52の統合protocolを保存し、仕様版51以下のprotocol・NULLや未対応版は閲覧専用で保全する。登録時snapshot、テスト・学習・採点・表示設定、教材条件は仕様版51の条件を引き継ぐ。4用語版の現行問題バンクは`split-actions-four-topic-v2`、事前アンケートは標準2モードが`presurvey-baseline-v4`、4用語版が`presurvey-four-topic-baseline-v3`、事後アンケートは`posttest-5point-v3`。事前回答は事後アンケート・仮説指標へ合算しない。教材生成は本文800文字程度を目安とし、統制群に群別方略指示を加えず、提案群だけに診断・教授方略指示を追加する。
 
 現行版・基礎理解版は各用語の設問1、計3問・各6択単一選択、4用語版は4問・各10択で正解3つまたはJ単独を選択する。必要な全設問が採点済みで全問正解なら、全モードで事前・再テスト後に学習・後続テストを省略して事後アンケートへ進む。4用語版も再テスト1満点後は固定学習対象を設定しない。未達の場合は問題モードに応じた誤答用語を学習し、再テスト2まで進む。内部`final_test`は過去記録の復元用に維持し、新規参加者の通常経路では使用しない。学習確認には直前テストで誤答した問題の保存済みsnapshotを使う。回答後は選択内容と選択肢別・設問全体の正誤を表示する。テスト上限・採点・回次は[39](39_split_assessment.md)、旧問題本文は[44](44_pretest_content_revision.md)以降の履歴を参照する。詳細は[問題モード](50_basic_understanding_question_mode.md)・[4用語版](51_four_topic_foundation_mode.md)・[アンケート](49_presurvey_baseline.md)・[評価指標](12_evaluation_metrics.md)。
 
@@ -87,4 +89,4 @@ A〜C正解等の配置はデバッグ用であり収集に使わない。管理
 
 ## 旧問題版設定の廃止（履歴）
 
-以前のeasy-mode整理で旧`question_set_mode`列・APIを廃止した。これは現在の問題モードを廃止したものではない。仕様版51では新規参加者の`test_content_mode`に応じて通常版・基礎理解版・4用語版のバンクを使う。管理設定は新規参加者だけに適用し、登録済みParticipantの問題・回答・snapshotを切り替えない。版付きconstruct keyと保存snapshotから当時の問題を復元し、異なるバンクへフォールバックしない。研究DB内の旧条件に関するデータを削除する操作は、専用手順・明示設定を確認して扱い、起動や通常seedから削除しない。
+以前のeasy-mode整理で旧`question_set_mode`列・APIを廃止した。これは現在の問題モードを廃止したものではない。仕様版52では新規参加者の`test_content_mode`に応じて通常版・基礎理解版・4用語版のバンクを使う。管理設定は新規参加者だけに適用し、登録済みParticipantの問題・回答・snapshotを切り替えない。版付きconstruct keyと保存snapshotから当時の問題を復元し、異なるバンクへフォールバックしない。研究DB内の旧条件に関するデータを削除する操作は、専用手順・明示設定を確認して扱い、起動や通常seedから削除しない。
