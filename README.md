@@ -22,6 +22,14 @@
 
 これは指定された共通パスワードによるローカル実験用の保護です。READMEを読める人にもパスワードが分かるため、研究者だけが扱う環境で使用します。同意内容の確定・実AI確認等の本実験開始条件は別途確認してください
 
+## リリース運用
+
+`main`へのpushを契機にRelease PleaseがリリースPRを作成・更新します。機能PRのマージだけではタグやGitHub Releaseは作られません。リリースPRの変更内容と`CHANGELOG.md`を確認してマージすると、バージョン更新、`vX.Y.Z`タグ、GitHub Releaseが作成されます。デプロイや成果物の公開は行いません。
+
+バージョンはアプリ全体で管理し、初期値は`0.1.0`です。コミットはConventional Commits形式にします。`feat:`はminor、`fix:`はpatch、`feat!:`など`!`付きはmajorの更新になります。`docs:`や`chore:`だけの変更では通常リリースPRは作成されません。
+
+Release PleaseのworkflowにはGitHub Appのinstallation tokenを使います。Repository variable `APP_CLIENT_ID`とRepository secret `APP_PRIVATE_KEY`を設定し、Appをこのrepositoryへインストールしてください。AppにはContents、Issues、Pull requestsの書き込み権限が必要です。App tokenで作成したリリースPRでは既存のPR CIが実行されます。
+
 ## 確認問題・再テストV2の更新（仕様版25採用時の記録）
 
 通常版のLLM知識・記憶プロセスの確認V2と、3用語の再テストV2を指定文へ更新しました。LLM再テストは大学・教職員版を採用します。対象の確認V2はapplicationへ変更し、合意した3組だけ同文再使用を許可します。V1・内部final_test・マルチエージェント確認V2・採点・回数上限は維持します。
