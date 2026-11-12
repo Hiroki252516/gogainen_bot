@@ -1,6 +1,6 @@
 # 現行プロトコルの実装境界
 
-> この文書の版26に関する記述は当時の実装設計記録であり、現行状態ではない。現行仕様版51の問題モード、参加者snapshot、モード別集計は[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)を参照する。現行のコード・運用は[00](00_project_summary.md)、[02](02_experiment_flow.md)、[19](19_experiment_operation_runbook.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、[44](44_pretest_content_revision.md)、[45](45_pretest_memory_distractors.md)を参照。
+> この文書の版26に関する記述は当時の実装設計記録であり、現行状態ではない。現行仕様版52の問題モード、参加者snapshot、モード別集計は[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)を参照する。現行のコード・運用は[00](00_project_summary.md)、[02](02_experiment_flow.md)、[19](19_experiment_operation_runbook.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、[44](44_pretest_content_revision.md)、[45](45_pretest_memory_distractors.md)を参照。
 
 用語注釈はbackendの共通辞書処理へ分離し、教材生成・回答後解説の確定時と、テスト回答時に保存する。LLM・採点・診断の責務へ追加せず、frontendは保存された公開項目だけを表示する。新規登録は版26、旧版25以下は閲覧専用。[24](24_learning_glossary.md)。
 
