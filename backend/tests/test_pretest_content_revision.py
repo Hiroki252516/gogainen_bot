@@ -372,14 +372,14 @@ def test_spec_41_v6_protocol_restores_question_and_latest_result(tmp_path):
         engine.dispose()
 
 
-def test_spec_50_keeps_mode_banks_and_preserves_previous_read_only_snapshots(tmp_path):
+def test_spec_51_keeps_mode_banks_and_preserves_previous_read_only_snapshots(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'pretest-revision.db'}")
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
             seed_database(db)
-            assert CURRENT_EXPERIMENT_SPEC_VERSION == 50
-            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1"
+            assert CURRENT_EXPERIMENT_SPEC_VERSION == 51
+            assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-posttest-material-amount-wording-v1"
             assert ASSESSMENT_BANK_VERSIONS[STANDARD] == "split-actions-v5"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[31][STANDARD] == "split-actions-v1"
             assert HISTORICAL_ASSESSMENT_BANK_VERSIONS[32][STANDARD] == "split-actions-v2"
