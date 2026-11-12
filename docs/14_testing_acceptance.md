@@ -1,12 +1,13 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-12 origin/fix/issue-336統合（仕様版53）
+## 2026-11-12 仕様版54へのマージ統合（origin/fix/issue-328）
 
-- 仕様版51・52に存在した4用語版表記・問題バンク・アンケートのprotocol分岐を保持したまま、`experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-v1`を現行protocolとした。新規参加者は4用語版bank v3・presurvey v4、posttest v3を使い、全モードで事前・再テスト1/2・内部`final_test`の満点後は結果表示snapshotに従ってsurveyへ進む。
-- 仕様版52の4用語版二protocolをv2/v3の問題bankへ復元する回帰テストを追加した。split-assessment処理を仕様版53へ適用し、参加者の出題・採点・学習確認経路が旧処理へ流れないことを確認した。
-- Backend全体テストは隔離環境で`1741 passed`（DeprecationWarning 6件）。Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。
-- 仕様版53の現行説明を更新し、仕様版51・52およびそれ以前の記録は当時のprotocol・snapshotを保全する履歴として区別した。`git diff --check`はマージ解決後に確認する。
-- 研究DB、通常のlocalhost:3000環境、実AI、コミット・pushは使用・実施していない。マージコミットは作成しない。
+- 仕様版53にあった「全モードの事前・再テスト1/2・内部`final_test`で満点後に早期終了」と、事後アンケート`posttest-5point-v4`（`system_clarity`を除いたシステム評価1項目）を統合し、仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`を現行protocolとした。
+- 仕様版53の早期終了protocolは問題バンクv3・presurvey v4・posttest v3、同版のアンケート改訂protocolはバンクv3・presurvey v4・posttest v4として復元可能に保つ。仕様版51・52の各protocolと保存済み回答も当時の版で復元し、書き換えない。仕様版53以下は閲覧専用。
+- 仕様版54統合後に関連Backendテスト8ファイルを隔離SQLiteで実行し、`254 passed`（既存警告2件）。3モードの全テスト満点後遷移、仕様版51〜53の問題バンク復元、旧アンケート回答保全、新規事後v4の入力検証を含む。
+- Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。`frontend/tests/smoke.mjs`で削除項目が表示・送信されないことも確認した。
+- 新protocol ID（124文字）を保存できるようParticipant列の上限を160文字へ拡張し、PostgreSQL既存列の拡張DDLが冪等に生成されることを単体テストで確認した。実PostgreSQLへのDDL適用は未実施。SQLite隔離テストでは新protocolの参加者登録を確認した。
+- `git -c core.whitespace=cr-at-eol diff --check`が成功し、競合マーカーと未解決パスがないことを確認した。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
 
 ## 2026-11-12 4用語版のインストラクションチューニング表記への復帰（仕様版51・fix/issue-336）
 
@@ -17,7 +18,6 @@
 - `git diff --check`は成功。隔離した画面での実ブラウザ表示確認は未実施。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
 
 ## 2026-11-12 事後アンケート教材量の質問文更新（仕様版51・fix/issue-338、統合前の記録）
-## 2026-11-12 事後アンケート教材量の質問文更新（fix/issue-338）
 
 - 新規参加者を仕様版51 / `experiment-plan-2026-11-12-posttest-material-amount-wording-v1`、事後アンケート版`posttest-5point-v3`へ更新した。質問文は「教材の量はどの程度でしたか」。選択肢、`amount_appropriateness`、集計は維持する。
 - 仕様版50 / `posttest-5point-v2`の質問文・保存済み回答は履歴として維持する。旧回答を変換せず、v2の新規送信は拒否する。
@@ -25,7 +25,7 @@
 - `git diff --check`が成功した。隔離ブラウザ確認はPlaywrightランタイムが見つからず未実施。
 - この文言変更は研究上の承認を意味しない。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
 
-上記2件はそれぞれ独立した仕様版51 protocolで行った統合前の検証記録であり、仕様版53の統合protocol全体を検証した結果ではない。仕様版52の別protocol履歴と、仕様版53の統合後検証は、それぞれ該当する節に分けて記録する。
+上記の仕様版51・52・53に関する各変更は統合前の独立した検証記録であり、仕様版54の統合protocol全体を検証した結果ではない。仕様版54の統合後検証結果は本書冒頭の記録を参照する。
 
 ## 2026-11-11 仕様版50の事前アンケート・問題バンク更新（fix/issue-323の検証記録）
 

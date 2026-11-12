@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 from admin_client import AuthenticatedTestClient as TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import String, create_engine, text
 from sqlalchemy.orm import Session
 
 from app.ai.backend import AIBackend, strategy_for
@@ -16,7 +16,7 @@ from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
 from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION
 from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.db import session as database
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, _ensure_protocol_id_capacity
 from app.main import app
 from app.models import Attempt, Base, EvaluationSummary, LearnerState, Participant, Question, QuestionOption, Term, TutorSession, TutorTurn
 from app.seed.seed_questions import seed_database
@@ -28,6 +28,43 @@ from split_api_support import acknowledge_all_question_reviews, case_roles, comp
 
 
 client = TestClient(app)
+
+
+def test_current_protocol_id_fits_participant_schema():
+    protocol_column = Participant.__table__.c.protocol_id
+
+    assert len(CURRENT_PROTOCOL_ID) == 124
+    assert protocol_column.type.length >= len(CURRENT_PROTOCOL_ID)
+
+
+def test_postgres_protocol_id_width_migration_is_idempotent():
+    class Connection:
+        def __init__(self):
+            self.statements = []
+
+        def execute(self, statement):
+            self.statements.append(str(statement))
+
+    connection = Connection()
+    _ensure_protocol_id_capacity(
+        connection,
+        "postgresql",
+        [{"name": "protocol_id", "type": String(80)}],
+    )
+    _ensure_protocol_id_capacity(
+        connection,
+        "postgresql",
+        [{"name": "protocol_id", "type": String(160)}],
+    )
+    _ensure_protocol_id_capacity(
+        connection,
+        "sqlite",
+        [{"name": "protocol_id", "type": String(80)}],
+    )
+
+    assert connection.statements == [
+        "ALTER TABLE participants ALTER COLUMN protocol_id TYPE VARCHAR(160)"
+    ]
 
 
 def create_trial(group="A", labels="DEF"):

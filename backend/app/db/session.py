@@ -54,7 +54,7 @@ def _ensure_lightweight_schema_updates() -> None:
             ("completion_reason", "TEXT"),
             ("learning_content_version", "INTEGER"),
             ("experiment_spec_version", "INTEGER"),
-            ("protocol_id", "VARCHAR(80)"),
+            ("protocol_id", "VARCHAR(160)"),
             ("option_order_mode", "VARCHAR(32)"),
             ("retest_cycles_completed", "INTEGER"),
             ("consent_document_version", "VARCHAR(80)"),
@@ -111,9 +111,26 @@ def _ensure_lightweight_schema_updates() -> None:
             for name, column_type in columns:
                 if name not in existing_columns:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
+        if "participants" in existing_tables:
+            _ensure_protocol_id_capacity(
+                connection,
+                dialect_name,
+                inspect(connection).get_columns("participants"),
+            )
         _backfill_completion_reasons(connection)
         _backfill_evaluation_completion_flags(connection)
         _backfill_tutor_prefetch_states(connection)
+
+
+def _ensure_protocol_id_capacity(connection, dialect_name: str, participant_columns: list[dict]) -> None:
+    if dialect_name != "postgresql":
+        return
+    protocol_id = next((column for column in participant_columns if column["name"] == "protocol_id"), None)
+    current_length = getattr(protocol_id["type"], "length", None) if protocol_id else None
+    if current_length is not None and current_length < 160:
+        connection.execute(
+            text("ALTER TABLE participants ALTER COLUMN protocol_id TYPE VARCHAR(160)")
+        )
 
 
 def _backfill_completion_reasons(connection) -> None:

@@ -245,6 +245,7 @@ def test_spec_51_instruction_tuning_protocol_restores_its_saved_bank():
             "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1",
             "split-actions-four-topic-v3",
         ),
+        ("experiment-plan-2026-11-12-posttest-system-clarity-removal-v1", "split-actions-four-topic-v2"),
     ],
 )
 def test_spec_52_protocol_variants_restore_their_saved_four_topic_bank(protocol_id, expected_bank):
@@ -258,7 +259,27 @@ def test_spec_52_protocol_variants_restore_their_saved_four_topic_bank(protocol_
     assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
 
 
-def test_spec_53_uses_split_assessment_for_current_participants():
+@pytest.mark.parametrize(
+    "protocol_id",
+    [
+        "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-v1",
+        "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1",
+    ],
+)
+def test_spec_53_protocol_variants_restore_their_saved_four_topic_bank(protocol_id):
+    participant = {
+        "experiment_spec_version": 53,
+        "protocol_id": protocol_id,
+        "test_content_mode": "four_topic_fundamentals",
+    }
+
+    assert assessment_bank_for_participant(participant) == "split-actions-four-topic-v3"
+    assert historical_assessment_bank_versions_for(participant) == {
+        STANDARD: "split-actions-four-topic-v3"
+    }
+
+
+def test_current_spec_uses_split_assessment_for_current_participants():
     participant = Participant(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION)
 
     assert uses_split(participant)
@@ -433,9 +454,9 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         with factory() as db:
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
-            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 53
+            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 54
             assert uses_split(default_participant)
-            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-v1"
+            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()

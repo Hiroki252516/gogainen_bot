@@ -7,8 +7,8 @@ from fastapi import HTTPException
 from app.core.question_sets import LEARNING_CONTENT_VERSION
 
 
-CURRENT_EXPERIMENT_SPEC_VERSION = 53
-CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-v1"
+CURRENT_EXPERIMENT_SPEC_VERSION = 54
+CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1"
 MAX_POST_PRETEST_TESTS = 2
 MAX_LEARNING_CONFIRMATION_ATTEMPTS = 1
 
