@@ -5,7 +5,7 @@ const base = new URL(process.env.SURVEY_PREVIEW_UI_BASE_URL);
 assert(["localhost", "127.0.0.1"].includes(base.hostname) && base.port && base.port !== "3000");
 const { chromium } = await import(process.env.SURVEY_PREVIEW_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
-const terms = ["Transformer", "事前学習", "ファインチューニング", "人の評価・好みを用いる事後学習", "マルチエージェント", "記憶プロセス"];
+const terms = ["Transformer", "事前学習", "インストラクションチューニング", "人の評価・好みを用いる事後学習", "マルチエージェント", "記憶プロセス"];
 const proficiencyItems = [
   "目的を伝えて、目的に合った回答を得る",
   "期待と違う回答のとき、指示や条件を修正する",

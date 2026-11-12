@@ -1,8 +1,8 @@
 # 実験フロー
 
-## 仕様版52の現行フロー（2026-11-12）
+## 仕様版53の現行フロー（2026-11-12）
 
-新規参加者は仕様版52 / `experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`を使う。登録時snapshotされた問題モード・テスト進行・採点・結果表示を維持し、事後アンケートを`posttest-5point-v4`へ更新してシステム評価を1項目にする。削除した`system_clarity`は新規回答で受け付けず、仕様版51のv3回答・既存記録は書き換えない。事前アンケートは標準2モードが`presurvey-baseline-v4`、4用語版が`presurvey-four-topic-baseline-v3`、4用語版の問題バンクは`split-actions-four-topic-v2`を使う。教材評価6項目、教材未閲覧時のnull、H5の中核4項目・集計方法、教材量設問、事前満点の早期終了条件は変更しない。仕様版51以下は保存済み回答・問題・snapshotを保全し、読み取り専用で扱う。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
+新規参加者は仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`を使う。登録時snapshotされた進行・採点・表示条件は維持し、4用語版は問題バンクv3・事前アンケートv4、標準2モードは事前アンケートv4を使う。4用語版の下位用語は「インストラクションチューニング」、標準2モードは「ファインチューニング」。事後アンケートは`posttest-5point-v4`で、システム評価を1項目とし、教材量の質問を「教材の量はどの程度でしたか」とする。教材評価6項目、H5の中核4項目と集計は維持する。仕様版52にはclarity削除前後の2 protocolがあり、保存時の問題・回答・アンケートsnapshotを保全する。仕様版52以下は閲覧専用。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
 
 ## 仕様版48のフロー（履歴）
 
@@ -18,7 +18,7 @@
 
 計画書の手順は、事前テスト、必要な用語の学習、再テスト、未達用語の再学習、満点または中断後のアンケートという流れ。6仮説の測定上の回数・対象経路は[01](01_research_requirements.md)と[12](12_evaluation_metrics.md)に定め、画面表示の変更で評価式は変更しない。
 
-仕様版48で導入した事前アンケートと4用語版の条件は、それぞれ[事前アンケート](49_presurvey_baseline.md)と[4用語版フロー](51_four_topic_foundation_mode.md)を参照する。仕様版50の統合protocolでは理解度質問の表現と4用語版の用語・問題バンクを更新し、仕様版51では事後アンケートの教材量設問文だけを更新した。その他の進行条件は維持する。事前満点者はsurveyへ直行または結果確認後にsurveyへ進み、独立した早期終了経路として記録する。
+仕様版48で導入した事前アンケートと4用語版の条件は、それぞれ[事前アンケート](49_presurvey_baseline.md)と[4用語版フロー](51_four_topic_foundation_mode.md)を参照する。仕様版50で理解度質問・4用語版表記・教材量設問文を更新し、仕様版51で4用語版の問題とアンケートをインストラクションチューニング表記へ戻した。仕様版52で教材量設問文を再度簡潔化した。進行条件は維持する。事前満点者はsurveyへ直行または結果確認後にsurveyへ進み、独立した早期終了経路として記録する。
 
 仕様版42では新規登録・出題・学習・集計は通常版だけを扱い、問題バンクの切替経路はなかった。旧条件の保存データ削除は通常の起動・seedから分離し、[専用削除手順](../backend/scripts/purge_easy_mode_data.py)で明示実行する。
 

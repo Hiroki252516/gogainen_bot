@@ -122,8 +122,8 @@ def seed_database(db: Session) -> None:
                         )
                         active_question_ids.add(question.id)
 
-    from app.services.split_assessment import FOUR_TOPIC_BANK_VERSION, HISTORICAL_FOUR_TOPIC_BANK_VERSION, split_specs
-    for bank_version in (HISTORICAL_FOUR_TOPIC_BANK_VERSION, FOUR_TOPIC_BANK_VERSION):
+    from app.services.split_assessment import FOUR_TOPIC_BANK_VERSION, FOUR_TOPIC_BANK_VERSIONS, split_specs
+    for bank_version in FOUR_TOPIC_BANK_VERSIONS:
         for index, item in enumerate(four_topic_terms(bank_version), start=len(SEED_TERMS) + 1):
             term = db.query(Term).filter(Term.slug == item["slug"]).one_or_none()
             if not term:

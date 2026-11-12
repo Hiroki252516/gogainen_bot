@@ -1,14 +1,17 @@
 # 実験計画書との対応と実装判断
 
-## 仕様版52：事後アンケートのシステム評価項目を削除
+## 仕様版53：4用語版と事後アンケート改訂の統合
 
-現行protocolは`experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`。新規参加者だけ事後アンケート版を`posttest-5point-v4`へ進め、システム評価から「画面を見て、次に何をすればよいか分かった」を削除する。システム評価は「必要な操作をスムーズに行えた」のみとする。教材評価6項目、教材量の設問、回答キー、保存構造、H5の指標式・集計方法は変更しない。仕様版51以下の参加者・回答は保存済み版のまま保全し、閲覧専用とする。変更は研究上の承認を意味しない。詳細は[事後アンケート](52_posttest_five_point_evaluation.md)と[受入記録](14_testing_acceptance.md)。
+現行protocolは`experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`。新規参加者だけに適用し、仕様版52以下の参加者・回答・問題snapshot・アンケート回答は保存時の条件で保全する。4用語版は問題バンク`split-actions-four-topic-v3`と事前アンケート`presurvey-four-topic-baseline-v4`を使い、`instruction_tuning`／「インストラクションチューニング」を採用する。事後アンケートは`posttest-5point-v4`とし、システム評価は「必要な操作をスムーズに行えた」のみ、教材量の質問は「教材の量はどの程度でしたか」とする。4問・各10択、選択肢役割、確認問題snapshotの再利用、他の用語と教材RAG検索先、H1〜H6の式と対象は維持する。研究上の承認、問題難易度・測定特性の同等性は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+
+## 仕様版52（履歴）：独立して採用されたprotocol
+
+仕様版52には、4用語版バンクv3・事前アンケートv4・事後アンケートv3（教材量質問文更新）を使うprotocolと、4用語版バンクv2・事前アンケートv3・事後アンケートv4（system_clarity削除）を使うprotocolが独立して存在した。仕様版53で両変更を統合する。仕様版52の参加者は登録時protocolに対応する問題・アンケート版で保持し、既存記録を更新しない。
 
 ## 仕様版50（履歴）：事前アンケート・用語表記・事後教材量設問
 
-現行protocolは`experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`。この統合条件は新規参加者だけに適用し、仕様版50の旧protocolおよび仕様版49以下は読み取り専用で保全する。全モードの用語理解度質問から「実験前の時点で」を除き、「{用語}の基本的な意味や働きをどの程度理解していますか。」とする。見聞き経験の質問にある「実験の説明を受ける前に」は維持する。事前アンケート版は標準2モードが`presurvey-baseline-v4`、4用語版が`presurvey-four-topic-baseline-v3`。
+仕様版50では、問題バンクv2と事前アンケートv3（`fine_tuning`／「ファインチューニング」）を含むprotocolと、事後アンケートv2の教材量設問を「今回の教材の量はどの程度でしたか」とするprotocolが記録された。保存時のprotocolとsnapshotに従って復元し、回答・問題内容を変換しない。
 
-4用語版問題バンクは`split-actions-four-topic-v2`とし、LLMの学習段階の用語を「ファインチューニング」に更新する。指示と回答例を使う学習をファインチューニングの一種として教材情報で説明する。設問数・選択肢の役割・採点・配置・確認問題snapshotの再利用・学習進行は変更せず、共通RAG資料も変更しない。事後アンケートは`posttest-5point-v2`とし、教材量の設問を「今回の教材の量はどの程度でしたか」とした。未閲覧者の教材評価はnullとし、「未閲覧」「評価できない」「未回答」を区別する。設問・選択肢・尺度、H1〜H6、分母、欠測・対象外規則は仕様版49の条件を維持する。仕様版51の現行文言は冒頭に記載する。難易度・測定上の効果は未検証で、この変更は研究上の承認を意味しない。[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[4用語版](51_four_topic_foundation_mode.md)、[受入記録](14_testing_acceptance.md)。
 
 H5は内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の数値回答のみで参加者内平均を算出し、`not_applicable`を除外する。有効回答数を記録し、4項目すべてが評価不能なら対象外とする。難易度・教材量はH5に含めず、平均・中央値を計算しない回答分布として別に報告する。旧posttest回答・旧指標は変換・再集計しない。変更は研究上の承認を意味せず、尺度・H5の妥当性は未確認。[質問・保存契約](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
 
@@ -315,14 +318,14 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 | ID | 今回の対応 | 状態 |
 | --- | --- | --- |
 | D01 | 共通指示を意味や仕組みの解説へ変更。具体例・注意点の一律必須指定を撤廃 | 実装 |
-| D02 | 統制群の通常説明の追加指示を6.7.2へ一致。自然な誤り訂正を許容 | 仕様版39まで適用。仕様版40で群別指示を削除し、現行仕様版52でも共通指示のみ |
+| D02 | 統制群の通常説明の追加指示を6.7.2へ一致。自然な誤り訂正を許容 | 仕様版39まで適用。仕様版40で群別指示を削除し、現行仕様版53でも共通指示のみ |
 | D03 | unknownを意味・仕組み・適用確認へ変更。taxonomy/指針/Schema/検査/Mockを整合 | 実装 |
 | D04 | Word原本のモデル目標記載はgpt-5.6-luna / low。承認されたアプリ側標準はgpt-6-luna / lowとし、gpt-6.1-sol / gpt-6-luna / gpt-6-astraとlow/medium/high/xhigh/maxを管理画面から一時切替できる。両群に次回呼出しから適用し、再起動後は環境値へ戻す。監査に実値と標準基準を保存 | 実装。ただし2026-10-25の検証用ChatGPTアカウントでは、当時の2モデルともlow/medium/highの生成要求がmodel_not_foundで拒否された。追加したモデル・推論レベルを含む現在の接続先での生成成功は未確認。利用権限のあるアカウントで成功を確認するまで実験利用不可。このアプリ側変更はWord原本を改訂したことを意味しない |
 | D05 | 仕様版37で4段階の事前知識6・AI利用2評定と事後システム評価2・教材評価6・任意自由記述をphase/version別JSONに保存 | 実装 |
 | D06 | 6仮説を専用指標として保存・管理表示・CSV出力 | 実装。記述集計のみ |
 | D07 | 研究者のA/B割付を維持 | 自動無作為割付・20名上限は今回対象外 |
 | D08 | 事前後テストをfinal_test込み最大2回、事前込み最大3回に制限。2回目未達は未達のままアンケート | 実装。2026-10-24の追加判断 |
-| D09 | 仕様版28で通常版PRETEST/RETEST/final_testに用語ごとの設問別答え合わせを追加。現行仕様版52は問題モードごとの対象問で回答後に設問別確認を行い、事前満点者の全体結果確認は登録snapshotに従ってから、または省略してsurveyへ進む | 実装・受入検証状況は[14](14_testing_acceptance.md)、履歴契約は[40](40_question_pair_answer_review.md) |
+| D09 | 仕様版28で通常版PRETEST/RETEST/final_testに用語ごとの設問別答え合わせを追加。現行仕様版53は問題モードごとの対象問で回答後に設問別確認を行い、事前満点者の全体結果確認は登録snapshotに従ってから、または省略してsurveyへ進む | 実装・受入検証状況は[14](14_testing_acceptance.md)、履歴契約は[40](40_question_pair_answer_review.md) |
 
 ## 要確認事項
 
@@ -340,7 +343,7 @@ Q01〜Q07・Q09〜Q11は、Wordだけから補わずユーザーへの確認と�
 | Q08 | Chi本文2008/参考文献2009の版・ページ照合は未解決。引用年を無断訂正しない |
 | Q09 | 1用語あたり最大3回答/3回不正解終了を維持。これは参加者あたりの事前後テスト最大2回とは別の上限。測定は0〜3不正解として明文化 |
 | Q10 | unknownはmandatory_elements.definitionと既存teaching_contractのmechanism_explanation/transfer_checkを本文証拠として要求。旧6項目は撤廃 |
-| Q11 | （旧仕様）PRETEST/RETEST/final_testは1用語の設問1・2を保存後に同画面で本人の選択内容と正誤を表示。現行仕様版52はParticipant snapshotの問題モードで出題し、application/basic_understandingは各用語の設問1（計3問）、four_topic_fundamentalsは4用語各1問（計4問）を表示・採点する。回答後に設問別確認を行い、全体結果確認の表示は事前・再テスト別snapshotに従う。事前満点者は確認後または直接surveyへ進み、学習・内部final_test・再テストを行わない。事後アンケートは`posttest-5point-v4`でシステム評価を1項目とする。仕様版51のv3回答は2項目を保持したまま保全し、仕様版51以下は閲覧専用 |
+| Q11 | （旧仕様）PRETEST/RETEST/final_testは1用語の設問1・2を保存後に同画面で本人の選択内容と正誤を表示。現行仕様版53はParticipant snapshotの問題モードで出題し、application/basic_understandingは各用語の設問1（計3問）、four_topic_fundamentalsは4用語各1問（計4問）を表示・採点する。回答後に設問別確認を行い、全体結果確認の表示は事前・再テスト別snapshotに従う。事前満点者は確認後または直接surveyへ進み、学習・内部final_test・再テストを行わない。事後アンケートは`posttest-5point-v4`でシステム評価1項目とする。教材量質問文も仕様版53で更新した。仕様版52以下は登録時protocolとsnapshotを保全し閲覧専用 |
 
 PR #142の修正では、指標版v2として仮説2の未達人数を未観測として表示し、中断・継続中・完了時点で未達等の内訳と観測回数を追加した。到達者平均・仮説6の登録者分母・実験プロトコルは変えない。教材表示だけの離脱でも既存の更新時刻監視でキャッシュが更新されることを回帰テストで確認した。CSVは未作成の出力先ディレクトリにも出力できるようにした。
 
