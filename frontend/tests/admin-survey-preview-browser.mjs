@@ -5,7 +5,7 @@ const base = new URL(process.env.SURVEY_PREVIEW_UI_BASE_URL);
 assert(["localhost", "127.0.0.1"].includes(base.hostname) && base.port && base.port !== "3000");
 const { chromium } = await import(process.env.SURVEY_PREVIEW_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
-const terms = ["Transformer", "事前学習", "ファインチューニング", "人の評価・好みを用いる事後学習", "マルチエージェント", "記憶プロセス"];
+const terms = ["Transformer", "事前学習", "インストラクションチューニング", "人の評価・好みを用いる事後学習", "マルチエージェント", "記憶プロセス"];
 const proficiencyItems = [
   "目的を伝えて、目的に合った回答を得る",
   "期待と違う回答のとき、指示や条件を修正する",
@@ -14,7 +14,10 @@ const proficiencyItems = [
 
 try {
   for (const width of [1440, 768, 390]) {
-    const context = await browser.newContext({ viewport: { width, height: 950 } });
+    const context = await browser.newContext({
+      viewport: { width, height: 950 },
+      reducedMotion: width === 390 ? "reduce" : "no-preference",
+    });
     const page = await context.newPage();
     const participantRequests = [];
     const errors = [];
@@ -45,11 +48,41 @@ try {
       const group = page.getByRole("group", { name: `${term}という用語を、実験の説明を受ける前に見たり聞いたりしたことがありますか。`, exact: true });
       assert.equal(await group.count(), 1);
       if (index === 0) {
-        await group.getByRole("button", { name: "ある", exact: true }).click();
+        const experienced = group.getByRole("button", { name: "ある", exact: true });
+        await experienced.click();
         const understanding = page.getByRole("group", { name: `${term}の基本的な意味や働きをどの程度理解していますか。`, exact: true });
         assert.equal(await understanding.count(), 1);
+        const termItem = page.locator(".presurvey-term-item").filter({ has: group });
+        const followup = termItem.locator(".presurvey-followup");
+        assert.equal(await followup.count(), 1);
+        await followup.getByRole("heading", { name: "追加質問：理解度", exact: true }).waitFor();
+        assert.equal(await experienced.evaluate((button) => button === document.activeElement), true, "revealing the follow-up must not move focus");
+        const announcement = page.locator(".presurvey-announcement");
+        assert.equal(await announcement.getAttribute("role"), "status");
+        assert.equal(await announcement.getAttribute("aria-live"), "polite");
+        assert.match(await announcement.innerText(), new RegExp(`${term}.*表示`));
+        const followupStyle = await followup.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return { accent: style.borderLeftWidth, background: style.backgroundColor, animation: style.animationName };
+        });
+        assert.equal(followupStyle.accent, "4px");
+        assert.notEqual(followupStyle.background, "rgba(0, 0, 0, 0)");
+        assert.equal(followupStyle.animation, width === 390 ? "none" : "presurvey-followup-enter");
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, "follow-up must not cause horizontal overflow");
+        const chosenUnderstanding = understanding.getByRole("button", { name: "ある程度理解している", exact: true });
+        await chosenUnderstanding.click();
+        assert.equal(await chosenUnderstanding.getAttribute("aria-pressed"), "true");
+        await group.getByRole("button", { name: "ない", exact: true }).click();
+        assert.equal(await followup.count(), 0);
+        assert.match(await page.locator(".presurvey-announcement").innerText(), new RegExp(`${term}.*非表示`));
+        await group.getByRole("button", { name: "ある", exact: true }).click();
+        assert.equal(await followup.count(), 1);
+        assert.equal(await followup.getByRole("button", { name: "ある程度理解している", exact: true }).getAttribute("aria-pressed"), "false", "hidden follow-up answers must be cleared");
+        await understanding.getByRole("button", { name: "ある程度理解している", exact: true }).click();
       } else {
-        await group.getByRole("button", { name: index % 2 ? "ない" : "覚えていない", exact: true }).click();
+        const answer = index % 2 ? "ない" : "覚えていない";
+        await group.getByRole("button", { name: answer, exact: true }).click();
+        assert.equal(await page.getByRole("group", { name: `${term}の基本的な意味や働きをどの程度理解していますか。`, exact: true }).count(), 0);
       }
     }
     await page.getByRole("group", { name: "直近30日間のうち、AIを利用した日数", exact: true }).getByRole("button", { name: "0日", exact: true }).click();

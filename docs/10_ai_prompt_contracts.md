@@ -1,6 +1,6 @@
 # AI指示の目標と現行契約
 
-## 現行条件（仕様版51：満点後早期終了、教材内解説・目標800文字）
+## 現行条件（仕様版53：事前アンケート・4用語版表記更新、教材内解説・目標800文字）
 
 仕様版43では新規参加者を`integrated_material`に固定し、辞書v4のterm/definitionを`glossary_reference`として両群共通の教材生成入力に含める。定義文は転載用ではなく意味を確認する参照情報として扱い、教材文脈に合わせて自然に言い換え、実際に使う登録語だけを説明し、定義にない性質を加えないよう指示する。教材本文は800文字程度を目安とし、上下限を設けない。文字数だけを理由に生成を拒否・再試行しない。実文字数と目標だけを新しい監査記録に残す。
 
@@ -8,9 +8,9 @@
 
 ## 用語注釈と生成契約の境界（仕様版26導入・版48現行）
 
-実験仕様版26で導入した注釈はbackendの固定辞書処理である。現行仕様版51の新規参加者は教材内解説に固定されるため、辞書v4を両群共通の`glossary_reference`として教材生成へ渡す。教材注釈snapshotは保存するが、教材本文や回答後解説へ自動挿入せず、共通回答履歴にも加えない。生成Schemaと契約v7は維持する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
+実験仕様版26で導入した注釈はbackendの固定辞書処理である。現行仕様版53の新規参加者は教材内解説に固定されるため、辞書v4を両群共通の`glossary_reference`として教材生成へ渡す。教材注釈snapshotは保存するが、教材本文や回答後解説へ自動挿入せず、共通回答履歴にも加えない。生成Schemaと契約v7は維持する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
 
-Wordと実装判断を[20](20_experiment_plan_alignment.md)に記録する。仕様版39までは計画書6.7.2の統制群指示を送っていたが、仕様版40で削除し、現行仕様版51でも6.7.1の共通指示と6.7.3の提案群指示を適用する。unknownの証拠Schema・taxonomy・検査・Mockも維持する。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
+Wordと実装判断を[20](20_experiment_plan_alignment.md)に記録する。仕様版39までは計画書6.7.2の統制群指示を送っていたが、仕様版40で削除し、現行仕様版53でも6.7.1の共通指示と6.7.3の提案群指示を適用する。unknownの証拠Schema・taxonomy・検査・Mockも維持する。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
 
 ## 目標プロンプトと現行原文
 
@@ -61,7 +61,7 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 ## 教材契約と仕様版42からの継承（版26の基準契約・版29で維持）
 
-仕様版42 / `experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`で定めた教材条件は現行仕様版51でも引き継ぐ。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教材本文は800文字程度を目安とし、文字数による合否判定は行わない。統制群に群別自然言語方略指示を加えず、提案群だけに教授方略の自然言語指示を追加する。出力SchemaとBackend検証は変更せず、統制群のstrategy値は`general_explanation`に固定する。仕様版43で問題モードの登録時固定とモード別仮説集計を追加し、仕様版45では4用語版の進行だけを固定2回に変更する。仕様版49以下は閲覧専用。
+仕様版42 / `experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`で定めた教材条件は現行仕様版53でも引き継ぐ。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教材本文は800文字程度を目安とし、文字数による合否判定は行わない。統制群に群別自然言語方略指示を加えず、提案群だけに教授方略の自然言語指示を追加する。出力SchemaとBackend検証は変更せず、統制群のstrategy値は`general_explanation`に固定する。仕様版43で問題モードの登録時固定とモード別仮説集計を追加し、仕様版45では4用語版の進行だけを固定2回に変更する。仕様版52以下は閲覧専用。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 
@@ -77,13 +77,13 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 | pretest_target(s)、diagnostic_evidence、訂正メタデータ | なし | 追加 |
 | taxonomy、教授方針、必須教授要素、診断由来段階 | なし | 追加 |
 
-仕様版40で導入し、現行仕様版51でも維持する統制群では、`general_explanation`を通常説明として定義する自然言語の方略説明は送らない。これは出力JSONの`teaching_strategy`をSchema enumとBackend検証で固定する内部値である。統制群は共通履歴を利用し、回答から自然に誤りを見つけて訂正することが許容される。比較は明示的な誤概念対応の追加効果であり、統制群が誤概念に全く対応しないことを保証する設計ではない。
+仕様版40で導入し、現行仕様版53でも維持する統制群では、`general_explanation`を通常説明として定義する自然言語の方略説明は送らない。これは出力JSONの`teaching_strategy`をSchema enumとBackend検証で固定する内部値である。統制群は共通履歴を利用し、回答から自然に誤りを見つけて訂正することが許容される。比較は明示的な誤概念対応の追加効果であり、統制群が誤概念に全く対応しないことを保証する設計ではない。
 
 interaction_historyは同じ参加者・用語の採点済み事前/再/最終テストと学習確認を全周回から取得する。記録種別、phase/test_round、session_index/turn_index、問題本文、selected_optionsのlabel/body、全体is_correct、表示/回答時刻、回答時間だけを含む。snapshotを優先して復元し、回答時刻または記録時刻で時系列順にする。分類・理由・確信度・段階・方略・再発・訂正メタデータ・内部ID・選択肢別正誤・正答キーは除く。未回答・未利用prefetch・他用語・他参加者を含めない。全文を渡し、暗黙の履歴切り捨てはしない。
 
 AI教材・解説全文は履歴に入れず、過去問題/回答の自動prefix追記もしない。共通履歴と実験群専用情報を別allowlistで投影し、履歴のselected_options内もlabel/bodyだけに制限する。両群で履歴の取得規則は同じだが、参加者ごとの値まで同一にするわけではない。
 
-backend指定方略値はcontrol→general_explanation、M1→belief_revision、M3→category_reorientation、unknown→foundational_explanation。Schemaの`teaching_strategy` enumは当該1つに固定し、不一致を拒否する。仕様版40で値を説明する自然言語テンプレートを提案群だけに追加し、現行仕様版51でもその範囲を維持する。
+backend指定方略値はcontrol→general_explanation、M1→belief_revision、M3→category_reorientation、unknown→foundational_explanation。Schemaの`teaching_strategy` enumは当該1つに固定し、不一致を拒否する。仕様版40で値を説明する自然言語テンプレートを提案群だけに追加し、現行仕様版53でもその範囲を維持する。
 
 ## 出力検証
 

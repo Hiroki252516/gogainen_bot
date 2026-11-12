@@ -1,16 +1,16 @@
 # 現行問題バンクと履歴
 
-## 現行条件（仕様版51）
+## 現行条件（仕様版53）
 
-新規参加者はParticipantに固定された`test_content_mode`に応じて、`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v2`（4用語版）を使う。4用語版v2ではLLM学習段階の用語をファインチューニングに統一し、問題文・選択肢・提案群の教材生成用情報も合わせる。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。仕様版51では、必要な全設問を採点し全問正解したテスト後は、結果表示設定に応じて結果確認後または直接surveyへ進み、後続の学習・テストを行わない。v1は仕様版49以下の復元用に保持し、別のconstruct keyで両バンクをseedする。仕様版50以下は閲覧専用。詳細は[51](51_four_topic_foundation_mode.md)。
+新規参加者はParticipantに固定された`test_content_mode`に応じて、`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v3`（4用語版）を使う。4用語版v3ではLLM学習段階の用語を「インストラクションチューニング」とし、問題文・選択肢・提案群の教材生成用情報も合わせる。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。v1は仕様版49以下、v2は仕様版50の対応protocolと仕様版51/52のissue338系protocol、v3は仕様版51/52のissue336系protocolの復元用に保持し、別のconstruct keyで各バンクをseedする。現行仕様版53ではv3を使う。詳細は[51](51_four_topic_foundation_mode.md)。
 
 ## 仕様版48の条件（履歴）
 
-新規参加者はParticipantに固定された`test_content_mode`に応じて、`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v1`（4用語版）を使う。application/basic_understandingは各3問、four_topic_fundamentalsは4問を出題する。事前テスト満点者は全モードで学習と再テストを省略して事後アンケートへ進む。4用語版の事前未達者は再テスト1後も学習し、再テスト2へ進む。事前アンケートの対象用語は問題モードに応じて固定し、詳細は[49](49_presurvey_baseline.md)を参照する。
+仕様版48当時の参加者はParticipantに固定された`test_content_mode`に応じて、`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v1`（4用語版）を使った。application/basic_understandingは各3問、four_topic_fundamentalsは4問を出題した。事前テスト満点者は全モードで学習と再テストを省略して事後アンケートへ進んだ。4用語版の事前未達者は再テスト1後も学習し、再テスト2へ進んだ。事前アンケートの対象用語は問題モードに応じて固定していた。これは仕様版48の履歴であり、現行の出題条件は冒頭を参照する。
 
 ## 仕様版46の4用語版（履歴）
 
-問題バンクは既存の`four_topic_fundamentals_v1.yml`を使う。問題本文・選択肢・分類・正答は変更せず、4用語版だけ満点後も学習を続ける。事前・再テスト1後に誤答対象がない場合は4用語すべてを通常学習の対象にし、再テスト2の採点後は正誤にかかわらずsurveyへ進む。他の問題モードは従来どおり満点時に早期終了できる。RuntimeSettingの保存済みモードは維持し、未設定時は4用語版を適用する。保存済みsnapshotは変更しない。
+仕様版46の4用語版は`four_topic_fundamentals_v1.yml`を使った。問題本文・選択肢・分類・正答は変更せず、4用語版だけ満点後も学習を続けていた。事前・再テスト1後に誤答対象がない場合は4用語すべてを通常学習の対象にし、再テスト2の採点後は正誤にかかわらずsurveyへ進んだ。他の問題モードは満点時に早期終了できた。これは仕様版46の履歴である。
 
 ## 仕様版44・45の4用語版（導入・既定値変更の履歴）
 

@@ -7,7 +7,7 @@ export type SurveyTermItem = { key: string; label: string };
 export const FOUR_TOPIC_PRESURVEY_TERM_ITEMS: readonly SurveyTermItem[] = [
   { key: "transformer", label: "Transformer" },
   { key: "pretraining", label: "事前学習" },
-  { key: "fine_tuning", label: "ファインチューニング" },
+  { key: "instruction_tuning", label: "インストラクションチューニング" },
   { key: "human_feedback_post_training", label: "人の評価・好みを用いる事後学習" },
   { key: "multi_agent", label: "マルチエージェント" },
   { key: "memory_process", label: "記憶プロセス" },
@@ -117,12 +117,21 @@ export function PresurveyQuestionnaire({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [completed, setCompleted] = useState(false);
+  const [exposureAnnouncement, setExposureAnnouncement] = useState("");
   const update = (key: string, value: string) => setValues((previous) => ({ ...previous, [key]: value }));
-  const updateExposure = (termKey: string, value: string) => setValues((previous) => ({
-    ...previous,
-    [`exposure:${termKey}`]: value,
-    [`understanding:${termKey}`]: value === "experienced" ? previous[`understanding:${termKey}`] || "" : "",
-  }));
+  const updateExposure = (termKey: string, value: string) => {
+    const wasExperienced = values[`exposure:${termKey}`] === "experienced";
+    const isExperienced = value === "experienced";
+    setValues((previous) => ({
+      ...previous,
+      [`exposure:${termKey}`]: value,
+      [`understanding:${termKey}`]: isExperienced ? previous[`understanding:${termKey}`] || "" : "",
+    }));
+    if (wasExperienced !== isExperienced) {
+      const label = termItems.find((item) => item.key === termKey)?.label || termKey;
+      setExposureAnnouncement(`${label}の理解度に関する追加質問を${isExperienced ? "表示" : "非表示"}にしました。`);
+    }
+  };
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -179,13 +188,14 @@ export function PresurveyQuestionnaire({
   return <form className="panel stack presurvey-form" onSubmit={submit}>
     <h1>実験前アンケート</h1>
     <p>今回の実験を始める前の状態について回答してください。表示される項目はすべて必須です。</p>
+    <p className="visually-hidden presurvey-announcement" role="status" aria-live="polite" aria-atomic="true">{exposureAnnouncement}</p>
     <h2>用語について</h2>
     <p className="muted">まず見聞きした経験を回答してください。「ある」の場合に、理解度の項目が表示されます。</p>
     {termItems.map(({ key, label }) => {
       const exposure = values[`exposure:${key}`] || "";
       const experienceQuestion = `${label}という用語を、実験の説明を受ける前に見たり聞いたりしたことがありますか。`;
       const understandingQuestion = `${label}の基本的な意味や働きをどの程度理解していますか。`;
-      return <section className="stack" key={key} aria-label={label}>
+      return <section className="stack presurvey-term-item" key={key} aria-label={label}>
         <ChoiceButtons
           label={experienceQuestion}
           value={exposure}
@@ -193,13 +203,16 @@ export function PresurveyQuestionnaire({
           disabled={submitting}
           onChange={(value) => updateExposure(key, value)}
         />
-        {exposure === "experienced" ? <ChoiceButtons
-          label={understandingQuestion}
-          value={values[`understanding:${key}`] || ""}
-          options={UNDERSTANDING_OPTIONS}
-          disabled={submitting}
-          onChange={(value) => update(`understanding:${key}`, value)}
-        /> : null}
+        {exposure === "experienced" ? <div className="presurvey-followup">
+          <h3 className="presurvey-followup-heading">追加質問：理解度</h3>
+          <ChoiceButtons
+            label={understandingQuestion}
+            value={values[`understanding:${key}`] || ""}
+            options={UNDERSTANDING_OPTIONS}
+            disabled={submitting}
+            onChange={(value) => update(`understanding:${key}`, value)}
+          />
+        </div> : null}
       </section>;
     })}
     <h2>普段のAI利用について</h2>

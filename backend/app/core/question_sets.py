@@ -3,7 +3,7 @@ ASSESSMENT_BANK_VERSIONS = {STANDARD: "split-actions-v5"}
 ASSESSMENT_MODE_BANK_VERSIONS = {
     "application": "split-actions-v5",
     "basic_understanding": "split-actions-basic-v1",
-    "four_topic_fundamentals": "split-actions-four-topic-v2",
+    "four_topic_fundamentals": "split-actions-four-topic-v3",
 }
 ASSESSMENT_MODE_LABELS = {
     "application": "現行版（場面応用）",
@@ -61,24 +61,32 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
 # Version 41 was used by parallel protocols. Keep the v5 default for the two
 # mainline protocols and restore the branch-specific v6 bank by protocol ID.
 HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
-    # Spec 51 was deployed with two parallel protocols before they were
-    # integrated into spec 52. Preserve each participant's four-topic bank.
+    # Spec 51 and 52 each contain parallel protocol variants. Preserve the
+    # assessment bank fixed by each participant's protocol snapshot.
     (51, "experiment-plan-2026-11-12-perfect-test-early-exit-v1"): {
         STANDARD: "split-actions-four-topic-v2",
     },
     (51, "experiment-plan-2026-11-12-posttest-material-amount-wording-v1"): {
         STANDARD: "split-actions-four-topic-v2",
     },
-    # Spec 50 protocols are read-only after the spec 51 update, but their
-    # saved results still need the exact bank used at registration.
-    (50, "experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1"): {
+    (51, "experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1"): {
+        STANDARD: "split-actions-four-topic-v3",
+    },
+    (52, "experiment-plan-2026-11-12-perfect-test-early-exit-posttest-material-amount-v1"): {
         STANDARD: "split-actions-four-topic-v2",
     },
+    (52, "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1"): {
+        STANDARD: "split-actions-four-topic-v3",
+    },
+    # Spec 50 protocol variants retain their exact assessment banks.
     (50, "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1"): {
         STANDARD: "split-actions-four-topic-v2",
     },
     (50, "experiment-plan-2026-11-11-posttest-material-amount-wording-v1"): {
         STANDARD: "split-actions-four-topic-v1",
+    },
+    (50, "experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1"): {
+        STANDARD: "split-actions-four-topic-v2",
     },
     (49, "experiment-plan-2026-11-10-posttest-five-point-evaluation-v1"): {
         STANDARD: "split-actions-four-topic-v1",

@@ -1,10 +1,23 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-12 テスト満点後の事後アンケート早期終了（仕様版51・fix/issue-337、統合前の検証記録）
+## 2026-11-12 origin/fix/issue-336統合（仕様版53）
 
-- 新規参加者を仕様版51 / `experiment-plan-2026-11-12-perfect-test-early-exit-v1`へ更新した。事前・再テスト1/2・内部`final_test`で、必要な全設問が採点済みかつ全問正解の場合にsurveyへ進み、学習・後続テストを省略する。特に4用語版の再テスト1満点時は固定学習対象を設定しない。結果表示snapshot ON/OFF、未達経路、問題・採点・指標式は維持する。仕様版50以下の参加者記録は変更しない。
-- 3問題モード×事前・再テスト1・再テスト2の満点経路、後続テスト・学習APIの拒否、current-step復元、4用語版の結果表示ON/OFFと冪等再送を隔離環境の統合テストで確認した。既存の設問分割APIは仕様版51でも有効化し、仕様版50の保存protocolに対応する問題バンク復元も確認した。
-## 2026-11-12 事後アンケート教材量の質問文更新（仕様版51・fix/issue-338、統合前の検証記録）
+- 仕様版51・52に存在した4用語版表記・問題バンク・アンケートのprotocol分岐を保持したまま、`experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-v1`を現行protocolとした。新規参加者は4用語版bank v3・presurvey v4、posttest v3を使い、全モードで事前・再テスト1/2・内部`final_test`の満点後は結果表示snapshotに従ってsurveyへ進む。
+- 仕様版52の4用語版二protocolをv2/v3の問題bankへ復元する回帰テストを追加した。split-assessment処理を仕様版53へ適用し、参加者の出題・採点・学習確認経路が旧処理へ流れないことを確認した。
+- Backend全体テストは隔離環境で`1741 passed`（DeprecationWarning 6件）。Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。
+- 仕様版53の現行説明を更新し、仕様版51・52およびそれ以前の記録は当時のprotocol・snapshotを保全する履歴として区別した。`git diff --check`はマージ解決後に確認する。
+- 研究DB、通常のlocalhost:3000環境、実AI、コミット・pushは使用・実施していない。マージコミットは作成しない。
+
+## 2026-11-12 4用語版のインストラクションチューニング表記への復帰（仕様版51・fix/issue-336）
+
+- 4用語版に問題バンク`split-actions-four-topic-v3`を追加し、LLM学習段階の用語・設問・選択肢・教授情報をインストラクションチューニング表記に更新した。4問・各10択、正解/M1/M3/unknownの役割、採点と確認問題snapshot再利用は維持する。
+- 4用語版の事前アンケートを`presurvey-four-topic-baseline-v4`へ更新し、`instruction_tuning`／「インストラクションチューニング」を保存・表示する。標準2モードの`fine_tuning`／「ファインチューニング」は維持した。仕様版50の問題バンクv1/v2と事前アンケートv2/v3、および仕様版50以下の保存済み記録は変更しない。
+- 仕様版51 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1`を新規参加者向け現行条件とした。共通RAG資料、教材検索先、他の3用語、事後アンケート、採点・進行条件は変更しない。表記変更は研究上の承認や問題の難易度・測定同等性の検証を意味しない。
+- Backend全テストは`1722 passed`（既存警告6件）。変更に伴うseed件数の期待値更新を含む履歴・seedテストは`399 passed`（既存警告2件）。Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。
+- `git diff --check`は成功。隔離した画面での実ブラウザ表示確認は未実施。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
+
+## 2026-11-12 事後アンケート教材量の質問文更新（仕様版51・fix/issue-338、統合前の記録）
+## 2026-11-12 事後アンケート教材量の質問文更新（fix/issue-338）
 
 - 新規参加者を仕様版51 / `experiment-plan-2026-11-12-posttest-material-amount-wording-v1`、事後アンケート版`posttest-5point-v3`へ更新した。質問文は「教材の量はどの程度でしたか」。選択肢、`amount_appropriateness`、集計は維持する。
 - 仕様版50 / `posttest-5point-v2`の質問文・保存済み回答は履歴として維持する。旧回答を変換せず、v2の新規送信は拒否する。
@@ -12,10 +25,7 @@
 - `git diff --check`が成功した。隔離ブラウザ確認はPlaywrightランタイムが見つからず未実施。
 - この文言変更は研究上の承認を意味しない。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
 
-## 2026-11-12 仕様版52マージ統合
-
-- 仕様版51の二つのprotocolを変更せず、仕様版52 / `experiment-plan-2026-11-12-perfect-test-early-exit-posttest-material-amount-v1`として統合した。新規参加者は満点後にsurveyへ進み、事後アンケートv3を使う。仕様版51参加者のprotocol snapshotは個別に保全し、対応する質問文・進行条件で復元する。
-- `backend/tests/test_question_sets.py`に仕様版51の両protocolから4用語問題バンクを復元するテストを追加した。マージ後、関連Backend 11ファイル・306件、Frontend `npm test`、`npm run build`が成功した。`git diff --check`も成功した。隔離ブラウザでの画面確認とBackend全件テストは今回未実施。
+上記2件はそれぞれ独立した仕様版51 protocolで行った統合前の検証記録であり、仕様版53の統合protocol全体を検証した結果ではない。仕様版52の別protocol履歴と、仕様版53の統合後検証は、それぞれ該当する節に分けて記録する。
 
 ## 2026-11-11 仕様版50の事前アンケート・問題バンク更新（fix/issue-323の検証記録）
 
