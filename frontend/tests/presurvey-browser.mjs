@@ -10,7 +10,7 @@ const browser = await chromium.launch({ headless: true });
 const modes = [
   { mode: "application", version: "presurvey-baseline-v4", keys: ["pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process"] },
   { mode: "basic_understanding", version: "presurvey-baseline-v4", keys: ["pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process"] },
-  { mode: "four_topic_fundamentals", version: "presurvey-four-topic-baseline-v3", keys: ["transformer", "pretraining", "fine_tuning", "human_feedback_post_training", "multi_agent", "memory_process"] },
+  { mode: "four_topic_fundamentals", version: "presurvey-four-topic-baseline-v4", keys: ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"] },
 ];
 const experienceChoices = [
   ["experienced", "ある"],

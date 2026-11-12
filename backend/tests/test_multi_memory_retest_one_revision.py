@@ -199,7 +199,7 @@ def test_old_spec23_v7_records_survive_seed_repair_and_missing_snapshot_restore(
                 construct_key=assessment_construct_key(term.slug, "retest", bank_version=ASSESSMENT_BANK_VERSIONS["standard"]),
             ).filter(Question.variant_key.in_(["retest_v1", "retest_v1_q1", "retest_v1_q2"])).all()
             assert len(active) == 2 and all(row.id != question.id for row in active)
-            assert db.query(Question).count() == 63
+            assert db.query(Question).count() == 75
             assert db.query(Question).filter_by(is_active=True).count() == 39
             before_json = json.dumps([attempt.question_body_snapshot, attempt.option_order_snapshot], sort_keys=True)
             record = _test_record(db, attempt)

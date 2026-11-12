@@ -7,7 +7,7 @@ export type SurveyTermItem = { key: string; label: string };
 export const FOUR_TOPIC_PRESURVEY_TERM_ITEMS: readonly SurveyTermItem[] = [
   { key: "transformer", label: "Transformer" },
   { key: "pretraining", label: "事前学習" },
-  { key: "fine_tuning", label: "ファインチューニング" },
+  { key: "instruction_tuning", label: "インストラクションチューニング" },
   { key: "human_feedback_post_training", label: "人の評価・好みを用いる事後学習" },
   { key: "multi_agent", label: "マルチエージェント" },
   { key: "memory_process", label: "記憶プロセス" },

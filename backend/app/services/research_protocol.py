@@ -12,7 +12,7 @@ from app.core.experiment_spec import assert_current_experiment
 from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
 PRESURVEY_VERSION = "presurvey-baseline-v4"
-FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v3"
+FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v4"
 SURVEY_VERSION = "posttest-5point-v2"
 SUPPORTED_SURVEY_VERSIONS = (
     "posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3",
@@ -51,13 +51,31 @@ class PriorTermUnderstanding(StrictModel):
 class FourTopicPriorTermExposure(StrictModel):
     transformer: Literal["experienced", "not_experienced", "cannot_recall"]
     pretraining: Literal["experienced", "not_experienced", "cannot_recall"]
-    fine_tuning: Literal["experienced", "not_experienced", "cannot_recall"]
+    instruction_tuning: Literal["experienced", "not_experienced", "cannot_recall"]
     human_feedback_post_training: Literal["experienced", "not_experienced", "cannot_recall"]
     multi_agent: Literal["experienced", "not_experienced", "cannot_recall"]
     memory_process: Literal["experienced", "not_experienced", "cannot_recall"]
 
 
 class FourTopicPriorTermUnderstanding(StrictModel):
+    transformer: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    pretraining: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    instruction_tuning: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    human_feedback_post_training: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    multi_agent: Literal["not_at_all", "slightly", "moderately", "well"] | None
+    memory_process: Literal["not_at_all", "slightly", "moderately", "well"] | None
+
+
+class FourTopicPriorTermExposureV3(StrictModel):
+    transformer: Literal["experienced", "not_experienced", "cannot_recall"]
+    pretraining: Literal["experienced", "not_experienced", "cannot_recall"]
+    fine_tuning: Literal["experienced", "not_experienced", "cannot_recall"]
+    human_feedback_post_training: Literal["experienced", "not_experienced", "cannot_recall"]
+    multi_agent: Literal["experienced", "not_experienced", "cannot_recall"]
+    memory_process: Literal["experienced", "not_experienced", "cannot_recall"]
+
+
+class FourTopicPriorTermUnderstandingV3(StrictModel):
     transformer: Literal["not_at_all", "slightly", "moderately", "well"] | None
     pretraining: Literal["not_at_all", "slightly", "moderately", "well"] | None
     fine_tuning: Literal["not_at_all", "slightly", "moderately", "well"] | None
@@ -121,6 +139,14 @@ PRESURVEY_TERM_ITEMS = (
 FOUR_TOPIC_PRESURVEY_TERM_ITEMS = (
     {"key": "transformer", "label": "Transformer"},
     {"key": "pretraining", "label": "事前学習"},
+    {"key": "instruction_tuning", "label": "インストラクションチューニング"},
+    {"key": "human_feedback_post_training", "label": "人の評価・好みを用いる事後学習"},
+    {"key": "multi_agent", "label": "マルチエージェント"},
+    {"key": "memory_process", "label": "記憶プロセス"},
+)
+FOUR_TOPIC_PRESURVEY_V3_TERM_ITEMS = (
+    {"key": "transformer", "label": "Transformer"},
+    {"key": "pretraining", "label": "事前学習"},
     {"key": "fine_tuning", "label": "ファインチューニング"},
     {"key": "human_feedback_post_training", "label": "人の評価・好みを用いる事後学習"},
     {"key": "multi_agent", "label": "マルチエージェント"},
@@ -149,9 +175,21 @@ class PresurveyPayload(StrictModel):
 
 
 class FourTopicPresurveyPayload(StrictModel):
-    survey_version: Literal["presurvey-four-topic-baseline-v3"] = FOUR_TOPIC_PRESURVEY_VERSION
+    survey_version: Literal["presurvey-four-topic-baseline-v4"] = FOUR_TOPIC_PRESURVEY_VERSION
     prior_term_exposure: FourTopicPriorTermExposure
     prior_term_understanding: FourTopicPriorTermUnderstanding
+    general_ratings: BaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
+
+
+class FourTopicPresurveyPayloadV3(StrictModel):
+    survey_version: Literal["presurvey-four-topic-baseline-v3"] = "presurvey-four-topic-baseline-v3"
+    prior_term_exposure: FourTopicPriorTermExposureV3
+    prior_term_understanding: FourTopicPriorTermUnderstandingV3
     general_ratings: BaselineRatings
 
     @model_validator(mode="after")

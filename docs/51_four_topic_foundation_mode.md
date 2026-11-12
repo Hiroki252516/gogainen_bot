@@ -1,12 +1,12 @@
 # 4用語版テスト問題モード
 
-## 現行条件（仕様版50・2026-11-11）
+## 現行条件（仕様版51・2026-11-12）
 
-新規参加者は仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`で登録する。仕様版49の進行、結果表示、採点、対象用語、4問・各10択、回答後確認、確認問題への保存snapshot再利用を維持する。現行問題バンクは`split-actions-four-topic-v2`（[YAML](../backend/app/seed/content/standard/four_topic_fundamentals_v2.yml)）。LLMの学習段階について「指示チューニング」を「ファインチューニング」に改め、設問・選択肢・提案群の教授対象を同じ用語にそろえた。選択肢役割と正解3択またはJ単独の採点は変わらない。
+新規参加者は仕様版51 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1`で登録する。4用語・4問・各10択、進行、結果表示、採点、回答後確認、確認問題への保存snapshot再利用を維持し、LLMの学習段階の用語を「インストラクションチューニング」に戻す。現行問題バンクは`split-actions-four-topic-v3`（[YAML](../backend/app/seed/content/standard/four_topic_fundamentals_v3.yml)）。指示と対応する回答例で訓練し、指示に沿う応答を調整する内容へ設問・選択肢・提案群の教授対象をそろえた。選択肢役割と正解3択またはJ単独の採点、RAG検索節は変わらない。
 
-事前アンケートは`presurvey-four-topic-baseline-v3`を使用し、下位用語の表示名を「ファインチューニング」とする。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、「実験前の時点で」を外す。経験質問に含まれる「実験の説明を受ける前に」は維持する。元教材では指示と回答例を使う訓練をファインチューニングの一種として説明する。検索対象の共通RAG資料・節は変更しない。
+事前アンケートは`presurvey-four-topic-baseline-v4`を使用し、下位用語の表示名を「インストラクションチューニング」とする。保存キーは`instruction_tuning`。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、「実験前の時点で」を外す。経験質問に含まれる「実験の説明を受ける前に」は維持する。通常版・基礎理解版の事前アンケートは従来の`fine_tuning`項目を維持する。
 
-仕様版50の旧protocolでは、`experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`がv2、`experiment-plan-2026-11-11-posttest-material-amount-wording-v1`がv1を使った。仕様版49以下の4用語問題は`split-actions-four-topic-v1`、事前アンケートは`presurvey-four-topic-baseline-v2`を使用した。これらは記録時の内容として保持し、回答、表示順、snapshot、アンケート値を書き換えない。仕様版50の旧protocolと仕様版49以下は閲覧専用。尺度・問題の難易度や教育効果は未検証であり、この実装変更は研究上の承認を意味しない。
+仕様版50の現行protocol（`experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`）と先行protocolでは保存時のv2/v1を、仕様版49以下では`split-actions-four-topic-v1`を復元する。事前アンケートは仕様版50で`presurvey-four-topic-baseline-v3`（`fine_tuning`）、仕様版49以下で`presurvey-four-topic-baseline-v2`（`instruction_tuning`・表示「指示チューニング」）だった。これらは記録時の内容として保持し、回答、表示順、snapshot、アンケート値を書き換えない。仕様版50以下は閲覧専用。尺度・問題の難易度や教育効果は未検証であり、この実装変更は研究上の承認を意味しない。
 
 ## 仕様版48の履歴条件
 

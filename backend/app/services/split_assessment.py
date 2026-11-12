@@ -17,8 +17,14 @@ from app.seed.import_split_assessment_draft import validate
 
 
 TERMS = ("llm_knowledge", "multi_agent", "memory_process")
-FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v2"
+FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v3"
+PREVIOUS_FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v2"
 HISTORICAL_FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v1"
+FOUR_TOPIC_BANK_VERSIONS = (
+    HISTORICAL_FOUR_TOPIC_BANK_VERSION,
+    PREVIOUS_FOUR_TOPIC_BANK_VERSION,
+    FOUR_TOPIC_BANK_VERSION,
+)
 ROLES = ("correct", "M1", "M3", "unknown")
 SPLIT_ROLE_COUNTS = Counter({"correct": 1, "M1": 2, "M3": 2, "unknown": 1})
 
@@ -151,7 +157,7 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 
 def uses_split(participant: Any) -> bool:
-    return participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50}
+    return participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51}
 
 
 @lru_cache
@@ -175,7 +181,7 @@ def split_bank(bank_version: str = "split-actions-v5") -> dict:
 
 
 def split_specs(term_slug: str, round_key: str, bank_version: str | None = None) -> list[dict]:
-    if bank_version in {FOUR_TOPIC_BANK_VERSION, HISTORICAL_FOUR_TOPIC_BANK_VERSION}:
+    if bank_version in FOUR_TOPIC_BANK_VERSIONS:
         term = next((item for item in four_topic_terms(bank_version) if item["slug"] == term_slug), None)
         if term is None or round_key not in {"pretest_v1", "retest_v1", "retest_v2"}:
             raise ValueError("unsupported four-topic assessment term or round")

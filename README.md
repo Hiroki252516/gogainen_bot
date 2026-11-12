@@ -1,8 +1,8 @@
 # 学習ログ駆動型AIチューター
 
-2026-11-11現行条件：新規参加者は仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`で登録します。仕様版49の進行・採点・表示条件に、全モードの事前アンケート理解度質問の表現変更、4用語版のファインチューニング表記と問題バンクv2、事後アンケート教材量設問文の変更を統合しています。標準2モードの事前アンケートは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`、事後アンケートは`posttest-5point-v2`です。教材量以外の保存キー・回答選択肢は維持し、H5は教材評価の中核4項目の数値回答平均、難易度・教材量は別分布として扱います。仕様版50で先行した二つのprotocol（`experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1`、`experiment-plan-2026-11-11-posttest-material-amount-wording-v1`）と仕様版49以下の参加者は閲覧専用で、各記録の問題・アンケート版を保持します。教材原資料のインストラクションチューニングはファインチューニングの一種として扱いますが、共通RAG資料は変更していません。尺度・H5の妥当性や研究上の承認は未確認です。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[評価指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
+2026-11-12現行条件：新規参加者は仕様版51 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1`で登録します。仕様版50の進行・採点・表示・事後アンケート条件を維持し、4用語版だけ問題バンクを`split-actions-four-topic-v3`、事前アンケートを`presurvey-four-topic-baseline-v4`へ更新します。4用語版の項目キーは`instruction_tuning`、表示名は「インストラクションチューニング」です。通常2モードの事前アンケートは`presurvey-baseline-v4`、事後アンケートは`posttest-5point-v2`のままです。仕様版50の参加者には保存時のv1/v2問題バンクとv2/v3事前アンケートschemaを対応させ、問題・回答・アンケート記録は変更しません。共通RAG資料、教材検索先、他の3用語は維持します。難易度・測定上の同等性や研究上の承認は未確認です。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[評価指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
 
-仕様版48では事前アンケートを経験・理解度の条件付き回答へ改訂し、仕様版49では事後アンケートを5段階化しました。仕様版50では教材量の設問文を変更します。各変更は導入版以降の新規参加者に適用し、それ以前の保存済み回答には遡及しません。
+仕様版48では事前アンケートを経験・理解度の条件付き回答へ改訂し、仕様版49では事後アンケートを5段階化、仕様版50では教材量の設問文を変更しました。各変更は導入版以降の新規参加者に適用し、それ以前の保存済み回答には遡及しません。
 
 2026-11-07履歴：仕様版41には`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`と`experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`の異なるprotocolがありました。仕様版42では両方の変更を統合し、仕様版41の両protocolは閲覧専用です。2026-11-03履歴：仕様版35では管理画面の「設問1のみ出題」で各用語1問（計3問）と設問1・2（計6問）を切り替えていました。仕様版40で計3問に固定し、設定UI/APIを廃止しています。導入時の記録は[docs/48](docs/48_first_question_only.md)を参照してください。以下の過去版の説明は採用時の記録です。
 
@@ -68,7 +68,7 @@
 
 教材・事前テスト・再テストの注釈は、広い画面では右側の追従欄に、狭い画面では開閉パネルに表示します。回答後解説の注釈は解説の下に表示します。確認問題自体・結果確認画面は対象外です。未登録語・除外語には注釈が付きません。現行の教材内解説モードでは辞書を意味参照として教材生成入力へ渡し、本文800文字程度を目安に生成します。文字数の上下限による合否判定や長さを理由にした再生成は行いません。過去のモード別文字数契約は履歴として保持します。[辞書全文・保存と運用](docs/24_learning_glossary.md)、[文字数目標と履歴](docs/42_learning_glossary_material_length.md)を参照してください。
 
-仕様版39で新規参加者の教材モードを教材内解説に固定しました。現行仕様版50でも維持します。管理画面の教材モード切替UIとモード管理APIはなく、教材右側の注釈欄を隠し、回答後解説・テストの注釈と保存snapshotは維持します。辞書定義を意味の参照として文脈に合わせて言い換えます。教材本文は800文字程度を目安にし、文字数の上下限検証と長さを理由にした再生成は行いません。[AI指示](docs/10_ai_prompt_contracts.md)、[仕様・条件差](docs/41_learning_glossary_material_mode.md)、[文字数目標](docs/42_learning_glossary_material_length.md)、[辞書言い換え](docs/43_glossary_definition_paraphrase.md)。
+仕様版39で新規参加者の教材モードを教材内解説に固定しました。現行仕様版51でも維持します。管理画面の教材モード切替UIとモード管理APIはなく、教材右側の注釈欄を隠し、回答後解説・テストの注釈と保存snapshotは維持します。辞書定義を意味の参照として文脈に合わせて言い換えます。教材本文は800文字程度を目安にし、文字数の上下限検証と長さを理由にした再生成は行いません。[AI指示](docs/10_ai_prompt_contracts.md)、[仕様・条件差](docs/41_learning_glossary_material_mode.md)、[文字数目標](docs/42_learning_glossary_material_length.md)、[辞書言い換え](docs/43_glossary_definition_paraphrase.md)。
 
 2026-10-21履歴: 同意画面に学籍番号を必須入力する仕様を採用していた時期がある。旧対応表とAPIは保全されるが、新規登録では使用しない。
 
@@ -78,7 +78,7 @@
 
 Wordと承認された実装計画に沿い、教材・low設定・新アンケート・6仮説の記述集計を実装しています。[採用判断と残課題](docs/20_experiment_plan_alignment.md)と[評価定義](docs/12_evaluation_metrics.md)を先に確認してください。
 
-現行の新規参加者には仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`を保存します。仕様版50の旧protocol、仕様版49以下、NULL・未対応版の参加者は閲覧・CSV出力専用です。進行・削除・補修・再計算・現行集計を行わず、版・回数・注釈・教材解説モード・問題モードを補完しません。ParticipantとRuntimeSettingのnullable設定列や保存済み記録は書き換えません。
+現行の新規参加者には仕様版51 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1`を保存します。仕様版50以下、NULL・未対応版の参加者は閲覧・CSV出力専用です。進行・削除・補修・再計算・現行集計を行わず、版・回数・注釈・教材解説モード・問題モードを補完しません。ParticipantとRuntimeSettingのnullable設定列や保存済み記録は書き換えません。
 
 このリポジトリは、卒業研究で使う「誤概念タイプと学習ステージに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 

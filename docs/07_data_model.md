@@ -1,8 +1,8 @@
 # 現行データと履歴互換
 
-## 仕様版50の現行条件
+## 仕様版51の現行条件
 
-現行Participantは仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`を使用する。アンケートは既存`ParticipantSurvey`の`phase`、`survey_version`、`responses_json`へ保存し、DB列は追加しない。事前版は標準2モードで`presurvey-baseline-v4`、4用語版で`presurvey-four-topic-baseline-v3`。事後版は`posttest-5point-v2`で教材量の質問文を更新する。旧版と保存値は変換せず保持する。教材評価値には整数1〜5または文字列`not_applicable`を保存し、未閲覧者は教材評価全体をJSON nullとする。H5は現行posttestだけを使い、事前アンケートや旧版を混合しない。仕様版50の先行protocolと仕様版49以下は読み取り専用。[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
+現行Participantは仕様版51 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1`を使用する。事前版は標準2モードで`presurvey-baseline-v4`、4用語版で`presurvey-four-topic-baseline-v4`。4用語版の回答キーは`instruction_tuning`。事後版は引き続き`posttest-5point-v2`。アンケートは既存`ParticipantSurvey`の`phase`、`survey_version`、`responses_json`へ保存し、DB列は追加しない。問題モード・仕様版別の旧版と保存値は変換せず保持する。教材評価値には整数1〜5または文字列`not_applicable`を保存し、未閲覧者は教材評価全体をJSON nullとする。H5は現行posttestだけを使い、事前アンケートや旧版を混合しない。仕様版50以下は読み取り専用。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
 
 ## 仕様版48の条件（履歴）
 
@@ -48,7 +48,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 ## 現行の保存契約
 
-モデルの正本は backend/app/models/__init__.py。現行コードは仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`を使用する。新規参加者の`test_content_mode`はRuntimeSettingの保存値を登録時にsnapshotし、未設定時は`four_topic_fundamentals`を使う。`application`は通常バンクv5、`basic_understanding`は独立バンク`split-actions-basic-v1`、現行4用語版は`split-actions-four-topic-v2`。仕様版50の先行protocolではprotocol IDに従いv2またはv1、仕様版49以下はv1から結果を復元する。既存行のNULLは当時の仕様・protocolに基づいて扱い、補完しない。辞書v4・アンケートのphase/version別保存・既存JSON snapshotは保持する。仕様版50の先行protocolと仕様版49以下の記録はread-onlyとし、問題内容・回答・snapshotを変更しない。`question_options.rationale`は内部メタデータであり、表示APIへ含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。
+モデルの正本は backend/app/models/__init__.py。現行コードは仕様版51 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1`を使用する。新規参加者の`test_content_mode`はRuntimeSettingの保存値を登録時にsnapshotし、未設定時は`four_topic_fundamentals`を使う。`application`は通常バンクv5、`basic_understanding`は独立バンク`split-actions-basic-v1`、現行4用語版は`split-actions-four-topic-v3`。仕様版50のprotocolではprotocol IDに従いv1/v2、仕様版49以下はv1から結果を復元する。既存行のNULLは当時の仕様・protocolに基づいて扱い、補完しない。辞書v4・アンケートのphase/version別保存・既存JSON snapshotは保持する。仕様版50以下の記録はread-onlyとし、問題内容・回答・snapshotを変更しない。`question_options.rationale`は内部メタデータであり、表示APIへ含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[PRETEST履歴](44_pretest_content_revision.md)〜[追加選択肢](47_split_assessment_added_choices.md)。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 2026-10-21時点の履歴: 学籍番号はSQLAlchemyの研究DBへ追加せず、IDENTITY_MAPPING_PATHが指す別SQLiteの`identity_mappings`へ保存した。既存の行・APIは履歴保全のため残し、現在の登録には使わない。
@@ -93,4 +93,4 @@ interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み
 
 ## 問題版の保存
 
-仕様版50の新規登録・出題・採点・確認問題復元は、Participant.test_content_modeに対応する問題バンクを使う。`application`は`split-actions-v5`、`basic_understanding`は`split-actions-basic-v1`、現行protocolの`four_topic_fundamentals`は`split-actions-four-topic-v2`である。仕様版50の先行protocolはprotocol IDに応じてv2またはv1、仕様版49以下の4用語版はv1で復元する。過去の問題は版付きconstruct_keyと回答snapshotから復元し、別バンクへフォールバックしない。旧`question_set_mode`の整理は別の履歴変更であり、通常版の問題資産や`test_content_mode`を削除しない。
+仕様版51の新規登録・出題・採点・確認問題復元は、Participant.test_content_modeに対応する問題バンクを使う。`application`は`split-actions-v5`、`basic_understanding`は`split-actions-basic-v1`、現行protocolの`four_topic_fundamentals`は`split-actions-four-topic-v3`である。仕様版50のprotocolはprotocol IDに応じてv1またはv2、仕様版49以下の4用語版はv1で復元する。過去の問題は版付きconstruct_keyと回答snapshotから復元し、別バンクへフォールバックしない。旧`question_set_mode`の整理は別の履歴変更であり、通常版の問題資産や`test_content_mode`を削除しない。
