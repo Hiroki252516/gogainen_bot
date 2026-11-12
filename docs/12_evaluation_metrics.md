@@ -1,10 +1,8 @@
 # 六つの仮説の評価指標
 
-## 仕様版51：4用語版の用語表記更新
+## 仕様版52：4用語版表記と事後教材量設問（現行）
 
-新規参加者は`experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1`を使う。4用語版の問題バンクを`split-actions-four-topic-v3`、事前アンケートを`presurvey-four-topic-baseline-v4`とし、項目キーを`instruction_tuning`、表示名を「インストラクションチューニング」に戻す。通常2モードの事前アンケート`presurvey-baseline-v4`、事後アンケート`posttest-5point-v2`、H1〜H6の式・分母・欠測・対象外規則は変更しない。仕様版50以下の問題・回答・アンケート・指標は保存時の内容のまま復元し、変換・再分類・再計算しない。難易度・測定上の同等性や研究上の承認は未確認。
-
-仕様版50の`experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`では、4用語版の問題バンクv2と事前アンケートv3（`fine_tuning` / 「ファインチューニング」）を使った。仕様版50の先行protocolも各保存時の問題・アンケート版を維持する。事後アンケート教材量設問の更新とH5定義は以下の仕様版50採用記録のとおりで、仕様版51でも変更しない。
+新規参加者は`experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`を使う。4用語版の問題バンクはv3、事前アンケートはv4とし、`instruction_tuning`／「インストラクションチューニング」を使う。事後アンケートは`posttest-5point-v3`で、教材量質問を「教材の量はどの程度でしたか」にする。H1〜H6の式・分母・欠測・対象外規則は変更しない。仕様版51のissue336 protocolでは問題v3・事前v4、issue338 protocolでは問題v2・事前v3・事後v3を使い、両方とも仕様版52から閲覧専用となる。仕様版50以下の保存済み回答・指標は当時の内容のまま保全し、変換・再分類・再計算しない。難易度・測定上の同等性や研究上の承認は未確認。
 
 ## 仕様版50の先行protocol履歴：教材量設問
 
@@ -53,9 +51,9 @@ H3〜H5は既存の対象外・欠測規則を維持する。例えば、学習�
 
 2026-10-18の実装計画で確認した定義を採用する。計算の正本は `backend/app/services/hypothesis_metrics.py`。統計検定・仮説支持の自動判定・欠測補完は行わない。
 
-## 対象と版（現行仕様版51）
+## 対象と版（現行仕様版52）
 
-新規参加者は実験仕様版51 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1`を対象とし、仮説集計・群比較・CSV/XLSXは`test_content_mode`ごとに分ける。仕様版50以下、NULL・未対応版は閲覧・保存記録出力に限り、新指標へ付け替えたり再計算したりしない。現行指標版と仮説の式は仕様版49から変更しない。
+新規参加者は実験仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`を対象とし、仮説集計・群比較・CSV/XLSXは`test_content_mode`ごとに分ける。仕様版51以下、NULL・未対応版は閲覧・保存記録出力に限り、新指標へ付け替えたり再計算したりしない。現行指標版と仮説の式は仕様版49から変更しない。
 
 現行指標版は`six-hypotheses-v8-posttest-five-point-evaluation`。事前テストで全問正解した参加者は`pretest_perfect_early_exit`として分け、H1・H2・H6を対象外にする。実験版ごとの問題数は、現行版・基礎理解版が3問、4用語版が4問。参加者ごとのテスト完答は、当該モードの期待問題が重複なくそろい、全て採点済みであることとする。部分回答や未採点を0点・満点としない。
 
@@ -80,9 +78,9 @@ H3〜H5は既存の対象外・欠測規則を維持する。例えば、学習�
 
 教材が画面に描画され、ブラウザが可視状態になった後にmaterial-viewを送る。サーバーの初回受信時刻をTutorTurn.material_viewed_atに記録する。回答時にも未記録を防ぐため再送するが、時刻・イベントを重複保存しない。先行生成だけでは表示に数えず、各用語別セッションを一度だけ計上する。表示は読了・理解・滞在時間の証明ではない。
 
-## アンケートの目標（現行仕様版51）
+## アンケートの目標（現行仕様版52）
 
-現行仕様版51では、事前アンケートを`presurvey-baseline-v4`または`presurvey-four-topic-baseline-v4`として、事後アンケート`posttest-5point-v2`と別phaseで保存する。4用語版のみキー`instruction_tuning`、表示名「インストラクションチューニング」を使う。仕様版50以下と旧posttest版の保存済み回答は変換・補完しない。H5は現行posttest phaseだけを参照する。理解度の表示文は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、見聞き経験に関する質問の「実験の説明を受ける前に」は維持する。
+現行仕様版52では、事前アンケートを`presurvey-baseline-v4`または`presurvey-four-topic-baseline-v4`として、事後アンケート`posttest-5point-v3`と別phaseで保存する。4用語版のみ`instruction_tuning`／「インストラクションチューニング」を使う。仕様版51以下と旧posttest版の保存済み回答は変換・補完しない。H5は現行posttest phaseだけを参照する。理解度の表示文は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、見聞き経験に関する質問の「実験の説明を受ける前に」は維持する。
 
 - 用語の見聞き経験：通常2モードは事前学習、ファインチューニング、RAG、プロンプトエンジニアリング、マルチエージェント、記憶プロセス。4用語版はTransformer、事前学習、インストラクションチューニング、人の評価・好みを用いる事後学習、マルチエージェント、記憶プロセス。各用語で「ある／ない／覚えていない」を必須回答とする。保存値は`experienced`／`not_experienced`／`cannot_recall`。
 - 用語の理解度：見聞き経験が`experienced`の用語だけ、「全く理解していない／少し理解している／ある程度理解している／よく理解している」の4段階を必須回答とする。保存値は`not_at_all`／`slightly`／`moderately`／`well`。それ以外の経験回答ではnullを保存する。

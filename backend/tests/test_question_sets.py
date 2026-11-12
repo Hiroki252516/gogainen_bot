@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
 from admin_client import AuthenticatedTestClient
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
 from app.core.question_sets import (
     ASSESSMENT_BANK_VERSIONS,
     ASSESSMENT_MODE_BANK_VERSIONS,
@@ -200,15 +201,41 @@ def test_spec_50_protocol_variants_restore_their_saved_four_topic_bank(protocol_
     assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
 
 
-def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map():
+def test_spec_51_posttest_protocol_restores_the_pre_instruction_tuning_bank():
+    participant = {
+        "experiment_spec_version": 51,
+        "protocol_id": "experiment-plan-2026-11-12-posttest-material-amount-wording-v1",
+        "test_content_mode": "four_topic_fundamentals",
+    }
+
+    assert assessment_bank_for_participant(participant) == "split-actions-four-topic-v2"
+    assert historical_assessment_bank_versions_for(participant) == {
+        STANDARD: "split-actions-four-topic-v2"
+    }
+
+
+def test_spec_51_instruction_tuning_protocol_restores_its_saved_bank():
     participant = {
         "experiment_spec_version": 51,
         "protocol_id": "experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1",
+        "test_content_mode": "four_topic_fundamentals",
+    }
+
+    assert assessment_bank_for_participant(participant) == "split-actions-four-topic-v3"
+    assert historical_assessment_bank_versions_for(participant) == {
+        STANDARD: "split-actions-four-topic-v3"
+    }
+
+
+def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map():
+    participant = {
+        "experiment_spec_version": CURRENT_EXPERIMENT_SPEC_VERSION,
+        "protocol_id": CURRENT_PROTOCOL_ID,
         "test_content_mode": None,
     }
 
-    assert 51 not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
-    assert (51, participant["protocol_id"]) not in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS
+    assert CURRENT_EXPERIMENT_SPEC_VERSION not in HISTORICAL_ASSESSMENT_BANK_VERSIONS
+    assert (CURRENT_EXPERIMENT_SPEC_VERSION, participant["protocol_id"]) not in HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS
     assert historical_assessment_bank_versions_for(participant) is None
     with pytest.raises(ValueError, match="no supported test content mode"):
         assessment_bank_for_participant(participant)
@@ -229,8 +256,8 @@ def test_current_result_restoration_rejects_missing_mode_snapshot(isolated):
         participant = Participant(
             display_code="MISSING-MODE-SNAPSHOT",
             group_condition="control",
-            experiment_spec_version=51,
-            protocol_id="experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1",
+            experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
+            protocol_id=CURRENT_PROTOCOL_ID,
             test_content_mode=None,
         )
         db.add(participant)
@@ -321,8 +348,8 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         with factory() as db:
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
-            assert default_participant.experiment_spec_version == 51
-            assert default_participant.protocol_id == "experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1"
+            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 52
+            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()
