@@ -1,12 +1,12 @@
 # 19. Experiment Operation Runbook
 
-## 仕様版50の現行アンケート運用
+## 仕様版51の現行アンケート運用
 
-現行protocolは`experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`。新規参加者の`/presurvey`では標準2モードに`presurvey-baseline-v4`、4用語版に`presurvey-four-topic-baseline-v3`が返る。全モードの理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」で、「実験前の時点で」を含まない。見聞き経験質問の「実験の説明を受ける前に」は維持する。各用語の見聞き経験は必須で、「ある」の場合だけ理解度4段階を表示・必須にする。「ない／覚えていない」では理解度を表示せず、nullを保存する。直近30日のAI利用日数とAI活用3項目も必須回答である。送信後に事前テストへ進むことを確認する。
+現行protocolは`experiment-plan-2026-11-12-posttest-material-amount-wording-v1`。新規参加者の`/presurvey`では標準2モードに`presurvey-baseline-v4`、4用語版に`presurvey-four-topic-baseline-v3`が返る。全モードの理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」で、「実験前の時点で」を含まない。見聞き経験質問の「実験の説明を受ける前に」は維持する。各用語の見聞き経験は必須で、「ある」の場合だけ理解度4段階を表示・必須にする。「ない／覚えていない」では理解度を表示せず、nullを保存する。直近30日のAI利用日数とAI活用3項目も必須回答である。送信後に事前テストへ進むことを確認する。
 
 4用語版は「ファインチューニング」と表示し、問題・確認問題・教材情報に`split-actions-four-topic-v2`を使う。確認問題は誤答問題の保存snapshotを再利用する。元教材のインストラクションチューニングはファインチューニングの一種として説明し、共通RAG資料は変更しない。
 
-事後アンケートは`posttest-5point-v2`。システム評価2項目・教材評価6項目・任意自由記述を含み、各評定は整数1〜5または`not_applicable`。教材閲覧者は6項目すべて数値または評価不能を回答し、未閲覧者の教材回答はnullである。教材量の設問は「今回の教材の量はどの程度でしたか」。H5は内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の数値回答平均で、評価不能を除き、有効回答数を記録する。4項目すべて評価不能なら対象外。難易度・教材量はH5に含めず分布を別に確認する。ログとCSV/XLSXでphase、survey_version、回答値を確認する。仕様版50の旧protocol、仕様版49以下および過去survey版の回答・評価は換算・上書きしない。尺度と研究上の妥当性・承認は未確認である。詳細は[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
+事後アンケートは`posttest-5point-v3`。システム評価2項目・教材評価6項目・任意自由記述を含み、各評定は整数1〜5または`not_applicable`。教材閲覧者は6項目すべて数値または評価不能を回答し、未閲覧者の教材回答はnullである。教材量の設問は「教材の量はどの程度でしたか」。H5は内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の数値回答平均で、評価不能を除き、有効回答数を記録する。4項目すべて評価不能なら対象外。難易度・教材量はH5に含めず分布を別に確認する。ログとCSV/XLSXでphase、survey_version、回答値を確認する。仕様版50の旧protocol、仕様版49以下および過去survey版の回答・評価は換算・上書きしない。尺度と研究上の妥当性・承認は未確認である。詳細は[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
 
 ## 仕様版47の新規参加者フロー（履歴）
 
@@ -68,37 +68,37 @@
 
 ローカル`.local`成果物は研究DBと別処理である。対象パスを確認し、明示的な`--local-artifacts --execute --confirm-local-artifacts`なしに削除しない。
 
-## 教材の文字数目標（現行仕様版50）
+## 教材の文字数目標（現行仕様版51）
 
-教材生成を監査・受入確認するときは、仕様版50の新規参加者で`integrated_material`が固定されていることを確認する。教材本文は800文字程度を目安とし、辞書用語の説明も本文文字数に含む。上下限による合否判定や文字数だけを理由とした再生成は行わない。実際の文字数と目標値をログで確認し、生成拒否の有無は構造・教授契約など他の検証理由から切り分ける。仕様版49以下の既存教材・監査記録は変更・再生成しない。仕様版31の辞書定義は教材内で意味を保って言い換え、逐語転載しない。現行辞書v4ではRAGを含む17語を使う。[文字数目標と履歴](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)、[RAG注釈](49_rag_glossary.md)。
+教材生成を監査・受入確認するときは、仕様版51の新規参加者で`integrated_material`が固定されていることを確認する。教材本文は800文字程度を目安とし、辞書用語の説明も本文文字数に含む。上下限による合否判定や文字数だけを理由とした再生成は行わない。実際の文字数と目標値をログで確認し、生成拒否の有無は構造・教授契約など他の検証理由から切り分ける。仕様版49以下の既存教材・監査記録は変更・再生成しない。仕様版31の辞書定義は教材内で意味を保って言い換え、逐語転載しない。現行辞書v4ではRAGを含む17語を使う。[文字数目標と履歴](42_learning_glossary_material_length.md)、[辞書と言い換え](43_glossary_definition_paraphrase.md)、[RAG注釈](49_rag_glossary.md)。
 
 ## 仕様版39の文字数条件（履歴）
 
-仕様版39では教材内解説は目標1000文字・許容600〜1200文字、注釈欄のみは目標700文字・許容600〜800文字だった。仕様版50の生成・受入確認には適用しないが、保存済み教材と監査記録は当時の内容で保持する。
+仕様版39では教材内解説は目標1000文字・許容600〜1200文字、注釈欄のみは目標700文字・許容600〜800文字だった。仕様版51の生成・受入確認には適用しないが、保存済み教材と監査記録は当時の内容で保持する。
 
 ## テスト結果表示設定（旧管理設定の履歴）
 
 仕様版40の固定設定protocolで設定API/UIを廃止し、新規Participantを全体結果非表示へ固定した。仕様版47・48もこの登録時snapshotの既定を引き継ぐ。事前満点者は結果表示snapshotに従って、結果確認後または直接surveyへ進む。以下は過去条件・保存値の参照記録であり、設定変更の操作手順ではない。
 
-仕様版40の固定設定protocolと現行仕様版50の新規参加者は`show_pretest_results=false`と`show_retest_results=false`で登録される。仕様版50の事前満点者は保存された表示snapshotがONなら結果確認後、OFFなら直接surveyへ進み、学習・内部`final_test`・再テストを行わない。participant logs APIとparticipants CSVは履歴確認に使える。既存参加者の再テスト用NULLは表示ありとして扱い、生値はNULLのまま保持する。
+仕様版40の固定設定protocolと現行仕様版51の新規参加者は`show_pretest_results=false`と`show_retest_results=false`で登録される。仕様版50の事前満点者は保存された表示snapshotがONなら結果確認後、OFFなら直接surveyへ進み、学習・内部`final_test`・再テストを行わない。participant logs APIとparticipants CSVは履歴確認に使える。既存参加者の再テスト用NULLは表示ありとして扱い、生値はNULLのまま保持する。
 
 ## 設問ごとの答え合わせ設定（仕様版28の導入履歴）
 
 仕様版40の固定設定protocolで設定API/UIを廃止し、新規Participantを設問別答え合わせONへ固定した。仕様版47・48もこの条件を引き継ぐ。以下は過去の設定条件・履歴値の説明である。
 
-仕様版40の固定設定protocolと現行仕様版50の新規参加者は設問ごとの答え合わせをONで登録する。旧行のNULLをON/OFFへ補完しない。participant logs APIとCSVには履歴値を残すが、管理画面の一覧・個別ログでは表示しない。受入検証状況は[14](14_testing_acceptance.md)を参照する。
+仕様版40の固定設定protocolと現行仕様版51の新規参加者は設問ごとの答え合わせをONで登録する。旧行のNULLをON/OFFへ補完しない。participant logs APIとCSVには履歴値を残すが、管理画面の一覧・個別ログでは表示しない。受入検証状況は[14](14_testing_acceptance.md)を参照する。
 
-設問別答え合わせは現行仕様版50の新規参加者に常時適用する。全体結果表示は参加者のsnapshotに従い、現在の新規参加者は事前満点時に結果画面を省略してsurveyへ進む。参加者ログAPI・CSVは履歴確認に使えるが、管理画面では値を表示しない。再読み込み時の確認・保存契約は[40](40_question_pair_answer_review.md)を参照する。
+設問別答え合わせは現行仕様版51の新規参加者に常時適用する。全体結果表示は参加者のsnapshotに従い、現在の新規参加者は事前満点時に結果画面を省略してsurveyへ進む。参加者ログAPI・CSVは履歴確認に使えるが、管理画面では値を表示しない。再読み込み時の確認・保存契約は[40](40_question_pair_answer_review.md)を参照する。
 
 ## 用語注釈の配布確認（仕様版26導入、現行辞書v4）
 
-更新後は新しい参加者IDで開始する。仕様版49以下を途中再開しない。教材・正答要約・誤答解説の下に、その文章の登録語だけが出ることを両群で確認し、事前/再テストでは全選択肢の下にも一覧が出ることを確認する。確認問題自体・結果確認には追加しない。現行辞書v4ではRAG（検索拡張生成）を含む17語を使い、AI、事前学習、ファインチューニング、プロンプトエンジニアリング、データベース、マルチエージェント、タスク、記憶プロセスは引き続き除外する。辞書と表示snapshotは[24](24_learning_glossary.md)・[49](49_rag_glossary.md)を参照し、収集開始後に同じ辞書版の説明を差し替えない。教材snapshotの注釈欄は監査用に保持するが、仕様版50の教材では右側注釈欄を表示せず、本文に含める語義は本文文字数に含む。初心者に理解できるかは内容確認・予備調査で確認する。
+更新後は新しい参加者IDで開始する。仕様版49以下を途中再開しない。教材・正答要約・誤答解説の下に、その文章の登録語だけが出ることを両群で確認し、事前/再テストでは全選択肢の下にも一覧が出ることを確認する。確認問題自体・結果確認には追加しない。現行辞書v4ではRAG（検索拡張生成）を含む17語を使い、AI、事前学習、ファインチューニング、プロンプトエンジニアリング、データベース、マルチエージェント、タスク、記憶プロセスは引き続き除外する。辞書と表示snapshotは[24](24_learning_glossary.md)・[49](49_rag_glossary.md)を参照し、収集開始後に同じ辞書版の説明を差し替えない。教材snapshotの注釈欄は監査用に保持するが、仕様版51の教材では右側注釈欄を表示せず、本文に含める語義は本文文字数に含む。初心者に理解できるかは内容確認・予備調査で確認する。
 
-## 教材の用語解説モード（仕様版50の現行条件）
+## 教材の用語解説モード（仕様版51の現行条件）
 
-仕様版50では管理画面に教材モードの表示・切替UI/APIを置かない。新規参加者には`integrated_material`を登録時に保存し、辞書情報を両群共通の教材生成入力として渡す。教材に登場する登録語を本文内で説明するよう指示し、教材右側の注釈欄は表示しない。本文は800文字程度を目安とし、文字数による合否判定や再生成は行わず、実文字数と目標値を監査ログへ記録する。仕様版49以下の保存モード・教材・snapshot・生成監査記録は当時のまま保持する。回答後解説・テスト注釈とsnapshotも維持する。意味的な説明の正確さ・理解向上は研究者による内容確認や予備調査で検討する。[詳細](41_learning_glossary_material_mode.md)、[文字数目標と履歴](42_learning_glossary_material_length.md)。
+仕様版51では管理画面に教材モードの表示・切替UI/APIを置かない。新規参加者には`integrated_material`を登録時に保存し、辞書情報を両群共通の教材生成入力として渡す。教材に登場する登録語を本文内で説明するよう指示し、教材右側の注釈欄は表示しない。本文は800文字程度を目安とし、文字数による合否判定や再生成は行わず、実文字数と目標値を監査ログへ記録する。仕様版49以下の保存モード・教材・snapshot・生成監査記録は当時のまま保持する。回答後解説・テスト注釈とsnapshotも維持する。意味的な説明の正確さ・理解向上は研究者による内容確認や予備調査で検討する。[詳細](41_learning_glossary_material_mode.md)、[文字数目標と履歴](42_learning_glossary_material_length.md)。
 
-## 教材生成の群別指示（仕様版50でも維持）
+## 教材生成の群別指示（仕様版51でも維持）
 
 両群に共通の教材指示と共通入力を使う。統制群には群別の教授方略を説明する自然言語指示を追加せず、`teaching_strategy=general_explanation`は出力Schema・Backend検証上の内部値として維持する。提案群だけに診断情報・タイプ別教授方略を追加する。実送信promptの契約識別子は`tutoring-prompt-contract-v11-target-800-control-shared-prompt`で確認する。仕様版49以下の教材・監査記録は変更しない。実験条件の変更は研究者が記録し、文書更新や自動検証を研究上の承認とみなさない。[prompt契約](10_ai_prompt_contracts.md)、[仕様判断](20_experiment_plan_alignment.md)。
 
@@ -109,11 +109,11 @@
 - 大学生40名・各群20名を目標とし、説明と同意後に原則無作為割付する。A/B参加コードは群設定の手段であり、自動無作為割付・20名上限の機能ではない。割付方法と記録を確認する。
 - Word計画書原本のモデル目標記載はgpt-5.6-luna / lowだが、アプリ側標準はgpt-6-luna / low。管理画面からgpt-6.1-sol / gpt-6-luna / gpt-6-astraとlow/medium/high/xhigh/maxを一時選択できる。募集開始前に使用モデルと推論レベルを固定し、両群の実送信監査を照合する。実験途中の変更は同一参加者内でモデルを混在させ得る。管理上書きはbackend再起動で環境値へ戻る。
 - 2026-10-25の検証用ChatGPTアカウントでは、gpt-6.1-sol / gpt-6-lunaの両方がlow/medium/highで「このアカウントでは未対応」と拒否された。利用権限のあるアカウントで生成成功を確認するまで、この接続環境で実験データを収集しない。
-- 仕様版50の新規参加者はsnapshotした問題モードに対応する事前アンケートを回答してから事前テストへ進む。各モードで6用語の見聞き経験を尋ね、「ある」の場合のみ理解度を追加する。4用語版ではLLM学習段階を3つの下位用語に分けて質問する。直近30日のAI利用頻度と3項目の使いこなし自己評価も取得する。事後はシステム評価2、教材評価6、任意自由記述。教材未閲覧者の教材回答はnull。phaseと版をログで区別し、5段階の数値、評価不能、未閲覧、未回答を混同せず確認する。旧回答は変換しない。詳細は[49](49_presurvey_baseline.md)・[51](51_four_topic_foundation_mode.md)・[52](52_posttest_five_point_evaluation.md)。
+- 仕様版51の新規参加者はsnapshotした問題モードに対応する事前アンケートを回答してから事前テストへ進む。各モードで6用語の見聞き経験を尋ね、「ある」の場合のみ理解度を追加する。4用語版ではLLM学習段階を3つの下位用語に分けて質問する。直近30日のAI利用頻度と3項目の使いこなし自己評価も取得する。事後はシステム評価2、教材評価6、任意自由記述。教材未閲覧者の教材回答はnull。phaseと版をログで区別し、5段階の数値、評価不能、未閲覧、未回答を混同せず確認する。旧回答は変換しない。詳細は[49](49_presurvey_baseline.md)・[51](51_four_topic_foundation_mode.md)・[52](52_posttest_five_point_evaluation.md)。
 - 新6仮説は[12の承認済み定義](12_evaluation_metrics.md)で集計する。従来保存値を新指標と混同せず、専用CSVの対象人数・欠測・経路を確認する。
 - unknown、仕様版40での統制群指示の削除、仕様版46の800文字目標・固定条件・問題モード既定と4用語版固定2回進行、仕様版47の事前満点早期終了、仕様版48の事前アンケート回答分岐・入力型・保存・出力などD01〜D07の対応状況を確認する。
 
-計画書の予定は10月上旬〜中旬に承認・小規模事前実験、10月中旬に募集、10月下旬〜11月中旬に実験、11月中旬〜下旬に分析、11月下旬〜12月に執筆。承認・募集・収集が完了したとは扱わず、指導教員の承認と準備確認後に開始する。以下は現行コード仕様版50の操作説明である。
+計画書の予定は10月上旬〜中旬に承認・小規模事前実験、10月中旬に募集、10月下旬〜11月中旬に実験、11月中旬〜下旬に分析、11月下旬〜12月に執筆。承認・募集・収集が完了したとは扱わず、指導教員の承認と準備確認後に開始する。以下は現行コード仕様版51の操作説明である。
 
 ## Before Experiment
 
@@ -144,7 +144,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 
 **実験開始前の必須確認:** テスト系・現行学習確認ともA〜C正解、D〜F=M1、G〜I=M3、J=unknownのデバッグ配置である。この状態で研究データを収集しない。収集前に位置分散を復旧し、問題バンク・採点テスト・配布環境を再確認する。
 
-現行コードでは仕様版50 / `experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1`だけを新規参加者の進行・補修・集計に使う。仕様版50の旧protocol、仕様版49以下、旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。旧参加者の問題は保存時の仕様版・protocol・snapshotから復元する。新規参加者は問題モードsnapshotに対応する`split-actions-v5`、`split-actions-basic-v1`、`split-actions-four-topic-v2`を使う。仕様版50の旧protocolでは`four-topic-finetuning-terminology-v1`がv2、`posttest-material-amount-wording-v1`がv1を復元する。仕様版49以下も登録時protocol・snapshotに従い、旧問題を再配置しない。仕様版41の`split-actions-v6-q1-only-v1` protocolはprotocol IDに応じてV6を使う。RuntimeSetting未設定時は4用語版を適用し、保存済み設定は変更しない。旧行を付け替えず、`retest_cycles_completed`も保存値のままにする。全モードで事前テスト満点者は学習・内部`final_test`・再テストを行わずsurveyへ進む。事前未達の4用語版は再テスト1後も学習し、再テスト2の採点後にsurveyへ進む。事前・事後アンケート版は問題モード・現行protocolに応じて固定し、phaseとsurvey_versionをログ・CSV/XLSXで確認する。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで動作を確認してから配布する。
+現行コードでは仕様版51 / `experiment-plan-2026-11-12-posttest-material-amount-wording-v1`だけを新規参加者の進行・補修・集計に使う。仕様版50の旧protocol、仕様版49以下、旧protocol_id/NULL・未対応版は閲覧専用で再開・削除・再計算しない。旧参加者の問題は保存時の仕様版・protocol・snapshotから復元する。新規参加者は問題モードsnapshotに対応する`split-actions-v5`、`split-actions-basic-v1`、`split-actions-four-topic-v2`を使う。仕様版50の旧protocolでは`four-topic-finetuning-terminology-v1`がv2、`posttest-material-amount-wording-v1`がv1を復元する。仕様版49以下も登録時protocol・snapshotに従い、旧問題を再配置しない。仕様版41の`split-actions-v6-q1-only-v1` protocolはprotocol IDに応じてV6を使う。RuntimeSetting未設定時は4用語版を適用し、保存済み設定は変更しない。旧行を付け替えず、`retest_cycles_completed`も保存値のままにする。全モードで事前テスト満点者は学習・内部`final_test`・再テストを行わずsurveyへ進む。事前未達の4用語版は再テスト1後も学習し、再テスト2の採点後にsurveyへ進む。事前・事後アンケート版は問題モード・現行protocolに応じて固定し、phaseとsurvey_versionをログ・CSV/XLSXで確認する。バックアップ後に処理とworkerを停止して更新・再起動し、新規IDで動作を確認してから配布する。
 
 **管理アクセスの確認:** 管理画面はパスワード入力ポップアップで保護する（既定abc、READMEに記載）。管理API・CSV・対応表・seed・管理用再計算もbackend認証が必要。30分で失効し、ロック・backend再起動でも失効する。実配布環境で匿名アクセスの401と認証後の取得を確認し、参加者へ端末を渡す前に「管理画面をロック」を押す。共通パスワードのため研究者だけが扱う環境で運用する。詳細は [セキュリティ仕様](15_security_privacy.md) を参照する。
 
@@ -203,7 +203,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 - ブラウザの戻るボタンやマウスのサイドボタンで同意書、診断、再テスト結果、完了済み学習画面へ戻った場合は、画面が現在の正規フェーズへ自動的に戻るまで操作しない。これは現在位置を確認するGETであり、回答や実験状態を変更しない。409が表示されても実験終了ではないため、画面を閉じずに現在の正規画面で続行する。
 - 回答済み問題へ戻った場合は、保存済みの選択肢が選択済みで表示され、入力は変更できない。「次の問題へ」で続行する。
 
-仕様版50のPRETEST・RETESTは、登録時に固定した問題モードに対応するバンクから出題する。`application`と`basic_understanding`は3用語の設問1（計3問）を、`four_topic_fundamentals`は4用語を各1問（計4問）で出題する。各問回答後に設問別答え合わせを表示し、全体結果確認の表示は登録時snapshotに従う。事前テスト満点者は結果表示ONなら結果確認後、OFFなら直接surveyへ進み、学習・内部`final_test`・再テストを行わない。事前未達者は誤答した設問の保存snapshotを学習確認に使い、従来の問題モード別フローを進む。RuntimeSetting未設定時の問題モード既定値は4用語版で、保存済み値は変更せず登録済み参加者へ遡及しない。仕様版27〜31は`split-actions-v1`、32はv2、33はv3、34はv4、仕様版35〜48はprotocolまたは保存済みモードに基づいて復元し、仕様版49以下は閲覧専用とする。仕様版50の旧protocolでは、`four-topic-finetuning-terminology-v1`にv2、`posttest-material-amount-wording-v1`にv1の4用語バンクを対応させる。現行protocolはv2を使用する。[問題・保存・採点](39_split_assessment.md)、[答え合わせ](40_question_pair_answer_review.md)、[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[RAG注釈](49_rag_glossary.md)。
+仕様版51のPRETEST・RETESTは、登録時に固定した問題モードに対応するバンクから出題する。`application`と`basic_understanding`は3用語の設問1（計3問）を、`four_topic_fundamentals`は4用語を各1問（計4問）で出題する。各問回答後に設問別答え合わせを表示し、全体結果確認の表示は登録時snapshotに従う。事前テスト満点者は結果表示ONなら結果確認後、OFFなら直接surveyへ進み、学習・内部`final_test`・再テストを行わない。事前未達者は誤答した設問の保存snapshotを学習確認に使い、従来の問題モード別フローを進む。RuntimeSetting未設定時の問題モード既定値は4用語版で、保存済み値は変更せず登録済み参加者へ遡及しない。仕様版27〜31は`split-actions-v1`、32はv2、33はv3、34はv4、仕様版35〜48はprotocolまたは保存済みモードに基づいて復元し、仕様版49以下は閲覧専用とする。仕様版50の旧protocolでは、`four-topic-finetuning-terminology-v1`にv2、`posttest-material-amount-wording-v1`にv1の4用語バンクを対応させる。現行protocolはv2を使用する。[問題・保存・採点](39_split_assessment.md)、[答え合わせ](40_question_pair_answer_review.md)、[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[RAG注釈](49_rag_glossary.md)。
 
 通常版のactiveな問題variantはpretest_v1とretest_v1/v2。内部final_testはretest_v1を共用し、その後はretest_v2へ進む。回次は全用語共通とし、未回答から推測しない。問題・採点の保全条件は[39](39_split_assessment.md)を参照する。設問1の回答後に同じテスト画面内で答え合わせを行い、続行時の確認時刻を記録する。問題内容、個別フィードバックの非公開情報、画面遷移の検証条件は[40](40_question_pair_answer_review.md)。
 
@@ -215,7 +215,7 @@ Dockerでは専用volume identity_mappingsを使い、研究DBのvolume/バッ�
 - backendの固定採点・分類の結果と、問題・選択内容との対応
 - AI call logの失敗・未接続状態。手動診断修正UIと修正内容のAuditEvent書き込みは将来対応
 - app-server接続状態
-- 教材生成を監査する場合は、被験者別ログの`ai_call_logs.request_payload.effective_request`で実送信prompt、Schema、モデル・推論レベル、prompt/taxonomy版、RAG chunk情報、送信状態を確認する。仕様版50では本文800文字程度を目安とし、実文字数と目標値・段落数・箇条書き数・他の生成検証結果・試行数を確認する。文字数による範囲内外判定は新規ログに記録しない。
+- 教材生成を監査する場合は、被験者別ログの`ai_call_logs.request_payload.effective_request`で実送信prompt、Schema、モデル・推論レベル、prompt/taxonomy版、RAG chunk情報、送信状態を確認する。仕様版51では本文800文字程度を目安とし、実文字数と目標値・段落数・箇条書き数・他の生成検証結果・試行数を確認する。文字数による範囲内外判定は新規ログに記録しない。
 - 先行生成を監査する場合は、`tutor_sessions.prefetch_state`の遷移、`tutor_turns.diagnosis_json.generation_origin/prefetch`、`AICallLog.request_payload.generation_audit`と`response_payload.prefetch_audit`を用語順に照合する。`ready`のまま未回答のturnは回答履歴・学習負担へ含めない。
 - `failed`または`discarded`のセッションでも、参加者到達後に同期フォールバックのinteractive turnが保存されていれば実学習として継続中である。新周回・実験終了の未使用prefetch整理では、そのセッションを未使用教材として終了させない。
 - 両群の3AIタスクに用語・共通構成要素・共通RAG・interaction_historyが入る。履歴には同じ用語の全フェーズ/周回の採点済み問題・選択・全体正誤・時刻だけが入り、診断・教授・AI解説が混ざらない。controlには明示的診断・対象主張・taxonomy・教授方針・学習段階がないことを、input_projectionと実送信effective_requestで確認する。現在の未回答問題や正答キーは教材生成へ渡さず、回答後解説だけに現在問題・必要な選択・表示済み教材を加える。

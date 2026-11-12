@@ -192,6 +192,36 @@ def test_spec_49_posttest_answer_remains_read_only_without_migration(study):
     assert survey.responses_json == responses
 
 
+def test_spec_50_posttest_v2_answer_remains_read_only_without_migration(study):
+    old = Participant(
+        display_code="OLD-POSTTEST-50",
+        group_condition="control",
+        protocol_id="experiment-plan-2026-11-11-posttest-material-amount-wording-v1",
+        experiment_spec_version=50,
+        learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD],
+        consent_checked=True,
+        current_step="finish",
+    )
+    study.add(old)
+    study.flush()
+    responses = questionnaire(viewed=True)
+    responses["survey_version"] = "posttest-5point-v2"
+    responses["material_ratings"]["amount_appropriateness"] = 3
+    survey = ParticipantSurvey(
+        participant_id=old.id,
+        phase="posttest",
+        survey_version="posttest-5point-v2",
+        responses_json=responses,
+    )
+    study.add(survey)
+    study.commit()
+
+    assert can_resume(old) is False
+    study.refresh(survey)
+    assert survey.survey_version == "posttest-5point-v2"
+    assert survey.responses_json == responses
+
+
 def test_six_metrics_use_first_round_and_nested_term_means(study):
     p = participant(study)
     test_round(study, p, 0, ["M1", "M3", "unknown"])
@@ -552,12 +582,16 @@ def test_old_questionnaire_cannot_be_written_as_the_new_version():
     with pytest.raises(ValidationError):
         SurveyPayload.model_validate(payload)
     payload = questionnaire()
+    payload["survey_version"] = "posttest-5point-v2"
+    with pytest.raises(ValidationError):
+        SurveyPayload.model_validate(payload)
+    payload = questionnaire()
     payload["experiences"] = {"chat": True, "coding_assistance": False, "cli": False, "api": False}
     with pytest.raises(ValidationError):
         SurveyPayload.model_validate(payload)
 
 
-@pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", "posttest-5point-v1", SURVEY_VERSION])
+@pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", "posttest-5point-v1", "posttest-5point-v2", SURVEY_VERSION])
 def test_h5_uses_only_current_survey_version_without_rewriting_history(study, version):
     p = participant(study)
     session(study, p, "llm_knowledge", 1)
@@ -762,6 +796,7 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     changed_baseline["general_ratings"]["ai_usage_frequency_30d"] = "21_30_days"
     assert client.post(f"/api/participants/{pid}/presurvey", json=changed_baseline).status_code == 409
     assert client.get(f"/api/participants/{pid}/survey").json()["material_ratings_required"] is False
+    assert client.get(f"/api/participants/{pid}/survey").json()["survey_version"] == "posttest-5point-v3"
     with SessionLocal() as db:
         p = db.get(Participant, pid)
         assert p.protocol_id == CURRENT_PROTOCOL_ID
@@ -769,6 +804,9 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
         db.commit()
     invalid = questionnaire(True)
     assert client.post(f"/api/participants/{pid}/survey", json=invalid).status_code == 422
+    old_version_payload = questionnaire()
+    old_version_payload["survey_version"] = "posttest-5point-v2"
+    assert client.post(f"/api/participants/{pid}/survey", json=old_version_payload).status_code == 422
     payload = questionnaire()
     payload.pop("free_comment")
     saved = client.post(f"/api/participants/{pid}/survey", json=payload, headers={"Idempotency-Key": f"survey-{pid}"})
