@@ -80,13 +80,29 @@ try {
           assert.equal(await group.getByRole("button", { name: choiceLabel, exact: true }).count(), 1);
         }
         const selected = experienceChoices[index % experienceChoices.length];
-        await group.getByRole("button", { name: selected[1], exact: true }).click();
+        const selectedButton = group.getByRole("button", { name: selected[1], exact: true });
+        await selectedButton.click();
         exposure[key] = selected[0];
 
         const comprehensionLabel = `${label}の基本的な意味や働きをどの程度理解していますか。`;
         const comprehensionGroup = page.getByRole("group", { name: comprehensionLabel, exact: true });
         if (selected[0] === "experienced") {
           assert.equal(await comprehensionGroup.count(), 1);
+          const termItem = page.locator(".presurvey-term-item").filter({ has: group });
+          const followup = termItem.locator(".presurvey-followup");
+          assert.equal(await followup.count(), 1);
+          await followup.getByRole("heading", { name: "追加質問：理解度", exact: true }).waitFor();
+          assert.equal(await selectedButton.evaluate((button) => button === document.activeElement), true);
+          assert.equal(await page.locator(".presurvey-announcement").getAttribute("role"), "status");
+          assert.match(await page.locator(".presurvey-announcement").innerText(), new RegExp(`${label}.*表示`));
+          if (index === 0) {
+            const previouslySelected = comprehensionGroup.getByRole("button", { name: "よく理解している", exact: true });
+            await previouslySelected.click();
+            await group.getByRole("button", { name: "ない", exact: true }).click();
+            assert.equal(await followup.count(), 0);
+            await group.getByRole("button", { name: "ある", exact: true }).click();
+            assert.equal(await previouslySelected.getAttribute("aria-pressed"), "false");
+          }
           for (const choiceLabel of understandingScale) {
             assert.equal(await comprehensionGroup.getByRole("button", { name: choiceLabel, exact: true }).count(), 1);
           }
