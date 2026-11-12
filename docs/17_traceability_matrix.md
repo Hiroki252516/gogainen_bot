@@ -1,6 +1,6 @@
 # 研究計画と仕様・実装の対応
 
-現行実装は仕様版51 / `experiment-plan-2026-11-12-posttest-material-amount-wording-v1`。事前テスト満点者は`pretest_perfect_early_exit`経路で学習・再テストを行わずsurveyへ進む。H1/H2/H6はこの経路を対象外として、適用分母と対象外数を記録する。事前アンケートは問題モード別の6用語について見聞き経験を取得し、経験ありの用語に限って理解度を尋ねる。事後アンケートは`posttest-5point-v3`で、教材量の設問文を変更する。H5は中核4教材項目の参加者内平均とし、難易度・教材量は分布を別集計する。現行辞書はv4。仕様版50の先行protocolと仕様版49以下は読み取り専用。[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)、[辞書](24_learning_glossary.md)。
+現行実装は仕様版52 / `experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`。事前テスト満点者は`pretest_perfect_early_exit`経路で学習・再テストを行わずsurveyへ進む。H1/H2/H6はこの経路を対象外として、適用分母と対象外数を記録する。事前アンケートは問題モード別の6用語について見聞き経験を取得し、経験ありの用語に限って理解度を尋ねる。事後アンケートは`posttest-5point-v4`で、システム評価1項目・教材評価6項目・任意自由記述とする。仕様版51のv3回答は2項目のシステム評価を含めて保全する。H5は中核4教材項目の参加者内平均とし、難易度・教材量は分布を別集計する。現行辞書はv4。仕様版51以下の参加者・記録は読み取り専用。[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)、[辞書](24_learning_glossary.md)。
 
 出典・採用判断は[20](20_experiment_plan_alignment.md)、式と欠測定義は[12](12_evaluation_metrics.md)を正本とする。
 
@@ -10,12 +10,12 @@
 | H2：満点までのセッション | material_viewed_at、初回満点の採点記録、h2 | 到達者と未達者の観測回数を分離 |
 | H3：用語内の反復 | 回答済みTutorTurn.grading_json、h3.term_means/sessions | 用語内・参加者内平均、不正解0〜3 |
 | H4：同種再選択 | 事前M1/M3と初回再テストの分類、h4分子/分母 | 参加者率平均と参考件数比 |
-| H5：教材評価 | 表示ログ、`posttest-5point-v3`の中核4数値評定、h5 | 参加者内4項目平均。評価不能・欠測を区別し、難易度・教材量は分布を別掲 |
+| H5：教材評価 | 表示ログ、`posttest-5point-v4`の中核4数値評定、h5 | 参加者内4項目平均。評価不能・欠測を区別し、難易度・教材量は分布を別掲 |
 | H6：満点到達割合 | モード別の採点済み全問正解、h6 | 3用語モードは3問、4用語モードは4問。分子/分母は適用対象者のみ。事前満点早期終了は対象外として別計数し、完了人数とは別 |
 | 共通履歴・群別入力 | services/interaction_history、ai/interaction_history | 実送信入力・指紋監査 |
 | 教授と証拠 | tutoring_prompt、mandatory_elements、teaching_contract | v7契約、unknownの定義・仕組み・適用確認 |
 | AI設定 | config、環境low、runtime_config | 不一致警告・実送信model/effort |
-| アンケート | `presurvey-baseline-v4` / `presurvey-four-topic-baseline-v3` / `posttest-5point-v3`、phase別ParticipantSurvey | 事前はモード別6用語の見聞き経験、経験ありの場合の理解度、直近30日AI利用頻度、AI活用3評定。事後はシステム2＋教材6＋任意自由記述。旧回答は不変で保全 |
+| アンケート | `presurvey-baseline-v4` / `presurvey-four-topic-baseline-v3` / `posttest-5point-v4`、phase別ParticipantSurvey | 事前はモード別6用語の見聞き経験、経験ありの場合の理解度、直近30日AI利用頻度、AI活用3評定。事後はシステム1＋教材6＋任意自由記述。v3の既存2項目回答は不変で保全 |
 | テスト上限・回次 | 学習後回数＋採点済みfinal_testから全体回次を導出 | 事前後最大2回、事前込み最大3回。未達を維持してsurvey |
 | 行動選択型問題 | scenario-actions-v9、9固有問、版付きconstruct_key | 旧問題非active保全、分類根拠は21 |
 | 問題モード・時間 | 仕様版50で`RuntimeSetting.test_content_mode`をParticipantへ登録時snapshotし、3つの独立bankから出題・採点・学習確認を復元。用語ページ単位の`test_page_timing_json`を保持 | 3問/4問をモード別に集計し、4用語版の事前未達経路は固定2回フローとする。事前満点は早期終了routeとして別集計。回答時間の測定単位をログ・CSV/Excelに表示。個別`.xlsx`を提供。難易度同等性・研究承認は未確認 |

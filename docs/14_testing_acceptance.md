@@ -1,5 +1,12 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-12 事後アンケートのシステム評価項目削除（fix/issue-328）
+
+- 新規参加者の仕様を52 / `experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`、事後アンケートを`posttest-5point-v4`へ更新した。システム評価は「必要な操作をスムーズに行えた」のみとし、`system_clarity`はv4の送信画面・入力契約から除外した。v3の既存回答・記録は変更しない。
+- 対象Backendテストは9件成功し、v4の余分キー拒否、旧v3を含むH5の版別処理、survey APIの現行版を確認した。Frontend `npm test`と`npm run build`は成功した。
+- Backend全テストは`1051 failed, 650 passed, 23 errors`。多数のフローで問題バンクvariantが見つからず503となった。今回の変更との因果関係は特定できておらず、全Backendテストは成功扱いにしていない。
+- `git diff --check`は成功した。ブラウザの実画面確認は未実施。研究上の承認を意味しない。
+
 ## 2026-11-12 事後アンケート教材量の質問文更新（fix/issue-338）
 
 - 新規参加者を仕様版51 / `experiment-plan-2026-11-12-posttest-material-amount-wording-v1`、事後アンケート版`posttest-5point-v3`へ更新した。質問文は「教材の量はどの程度でしたか」。選択肢、`amount_appropriateness`、集計は維持する。

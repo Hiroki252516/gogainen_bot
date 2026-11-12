@@ -48,7 +48,6 @@ const PROFICIENCY_ANCHORS = "1：全くできない ／ 2：あまりできな�
 
 const GENERAL = [
   ["system_usability", "必要な操作をスムーズに行えた"],
-  ["system_clarity", "画面を見て、次に何をすればよいか分かった"],
 ] as const;
 const MATERIAL = [
   ["clarity", "教材で説明された内容を理解できた", "agreement"],
@@ -96,7 +95,7 @@ export type PresurveySubmission = {
 };
 
 export type PosttestSubmission = {
-  survey_version: "posttest-5point-v3";
+  survey_version: "posttest-5point-v4";
   general_ratings: Record<string, RatingValue>;
   material_ratings: Record<string, RatingValue> | null;
   free_comment: string;
@@ -271,7 +270,7 @@ export function PosttestQuestionnaire({
     try {
       const ratingValue = (value: string): RatingValue => value === "not_applicable" ? value : Number(value);
       const payload: PosttestSubmission = {
-        survey_version: "posttest-5point-v3",
+        survey_version: "posttest-5point-v4",
         general_ratings: Object.fromEntries(GENERAL.map(([key]) => [key, ratingValue(values[key])])),
         material_ratings: materialRatingsRequired
           ? Object.fromEntries(MATERIAL.map(([key]) => [key, ratingValue(values[key])]))

@@ -1,8 +1,8 @@
 # 実験フロー
 
-## 仕様版51の現行フロー（2026-11-12）
+## 仕様版52の現行フロー（2026-11-12）
 
-新規参加者は仕様版51 / `experiment-plan-2026-11-12-posttest-material-amount-wording-v1`を使う。登録時snapshotされた問題モード・テスト進行・採点・結果表示を仕様版50から維持し、事後アンケート`posttest-5point-v3`の教材量設問文を「教材の量はどの程度でしたか」に更新する。事前アンケート理解度質問文、4用語版の表記・問題バンクv2は仕様版50で導入済み。標準2モードは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v3`と`split-actions-four-topic-v2`を使う。事後はシステム評価2項目・教材評価6項目で、教材未閲覧時は教材回答をnullで保存する。結果・回答の保全、問題モード別集計、事前満点の早期終了条件は変えない。H5は教材の中核4項目の数値平均で、難易度と教材量は別の回答分布として扱う。仕様版50の先行protocolと仕様版49以下は当時の回答・問題を保ち、読み取り専用で扱う。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
+新規参加者は仕様版52 / `experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`を使う。登録時snapshotされた問題モード・テスト進行・採点・結果表示を維持し、事後アンケートを`posttest-5point-v4`へ更新してシステム評価を1項目にする。削除した`system_clarity`は新規回答で受け付けず、仕様版51のv3回答・既存記録は書き換えない。事前アンケートは標準2モードが`presurvey-baseline-v4`、4用語版が`presurvey-four-topic-baseline-v3`、4用語版の問題バンクは`split-actions-four-topic-v2`を使う。教材評価6項目、教材未閲覧時のnull、H5の中核4項目・集計方法、教材量設問、事前満点の早期終了条件は変更しない。仕様版51以下は保存済み回答・問題・snapshotを保全し、読み取り専用で扱う。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
 
 ## 仕様版48のフロー（履歴）
 
@@ -33,7 +33,7 @@
 7. 事前テストで満点だった参加者は内部final_testへ進み、各用語の設問1だけ（計3問）へ回答後に本人の選択と正誤を確認する。採点結果に応じ、満点ならsurvey、不正解・未回答があれば既存の学習後retest_v2へ進む。
 8. survey（事後アンケート）保存後にfinish。
 
-事前アンケートはphase=presurvey、事後アンケートはphase=posttestで別々に記録する。事前はモード別の版付きで経験・条件付き理解度・AI利用回答を保存する。事後はシステム評価2項目・教材評価6項目（表示者のみ必須）・任意自由記述とし、仮説5はposttestだけを参照する。[画面仕様](09_frontend_ux_flow.md)、[評価定義](12_evaluation_metrics.md)、[保存契約](49_presurvey_baseline.md)を参照する。
+事前アンケートはphase=presurvey、事後アンケートはphase=posttestで別々に記録する。事前はモード別の版付きで経験・条件付き理解度・AI利用回答を保存する。現行事後版v4はシステム評価1項目・教材評価6項目（閲覧者のみ必須）・任意自由記述とし、H5は事後の教材評価だけを参照する。仕様版51のv3回答は当時の2項目を含めて保全する。[画面仕様](09_frontend_ux_flow.md)、[評価定義](12_evaluation_metrics.md)、[保存契約](49_presurvey_baseline.md)を参照する。
 
 事前後の問題variantは採点回次に対応して全用語共通に選ぶ。用語別の回答件数から回次を推測しない。学習後回数retest_cycles_completedはfinal_testを含めず、上限用のpost_pretest_tests_completedには採点済みfinal_testを加える。テスト回答中はチャット・ヒント・即時正解を表示しない。既存結果画面では従来どおり正誤を表示する。
 
