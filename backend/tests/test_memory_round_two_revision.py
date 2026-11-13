@@ -156,12 +156,12 @@ def test_current_spec_resolves_without_historical_mapping():
     created = _ok(client.post("/api/participants", json={"assignment_code": "A", "consent_checked": True, "research_code": new_research_code()}))
     complete_presurvey(client, created["participant_id"])
     questions = _ok(client.get(f"/api/experiment/{created['participant_id']}/pretest"))["questions"]
-    assert len(questions) == 3
-    question = next(question for question in questions if question["term_slug"] == "memory_process")
+    assert len(questions) == 4
+    question = next(question for question in questions if question["term_slug"] == "memory_process_four_topic")
     with SessionLocal() as db:
         participant = db.get(Participant, created["participant_id"])
         assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
         assert participant.learning_content_version == 15
         restored = db.get(Question, question["question_id"])
         assert restored is not None and restored.id == question["question_id"]
-        assert restored.construct_key.endswith("split-actions-v5")
+        assert restored.construct_key.endswith("split-actions-four-topic-v3")

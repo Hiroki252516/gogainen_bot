@@ -2,7 +2,7 @@
 
 ## 仕様版53の現行条件
 
-現行Participantは仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`を使用する。アンケートは既存`ParticipantSurvey`の`phase`、`survey_version`、`responses_json`へ保存し、DB列は追加しない。事前版は標準2モードで`presurvey-baseline-v4`、4用語版で`presurvey-four-topic-baseline-v4`。4用語版の回答キーは`instruction_tuning`。事後版は`posttest-5point-v4`で、システム評価1項目・教材評価6項目・自由記述を保存し、教材量の質問文は「教材の量はどの程度でしたか」。仕様版52のprotocolごとの旧版と保存値は変換せず保持する。教材評価値には整数1〜5または文字列`not_applicable`を保存し、未閲覧者は教材評価全体をJSON nullとする。H5は現行posttestだけを使い、事前アンケートや旧版を混合しない。仕様版52以下は読み取り専用。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
+現行Participantは仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`を使用する。2026-11-12の登録運用変更後、新規Participantの`test_content_mode`は`four_topic_fundamentals`に固定するが、仕様版・protocolは更新しない。既存Participantのsnapshotは変更しない。アンケートは既存`ParticipantSurvey`の`phase`、`survey_version`、`responses_json`へ保存し、DB列は追加しない。事前版は4用語版`presurvey-four-topic-baseline-v4`、事後版は`posttest-5point-v4`で、システム評価1項目・教材評価6項目・自由記述を保存し、教材量の質問文は「教材の量はどの程度でしたか」。仕様版52のprotocolごとの旧版と保存値は変換せず保持する。教材評価値には整数1〜5または文字列`not_applicable`を保存し、未閲覧者は教材評価全体をJSON nullとする。H5は現行posttestだけを使い、事前アンケートや旧版を混合しない。仕様版52以下は読み取り専用。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
 
 ## 仕様版48の条件（履歴）
 
@@ -14,7 +14,7 @@
 
 ## 仕様版44・45の問題モードsnapshot（履歴）
 
-既存の`Participant.test_content_mode` / `RuntimeSetting.test_content_mode`を再利用し、新しい列は追加しない。許容値に`four_topic_fundamentals`を加える。RuntimeSettingに保存済みの値は維持し、値が未設定の場合の既定値を`four_topic_fundamentals`とする。登録時にParticipantへ保存し、既存ParticipantのNULLやモードを補完せず、管理設定変更を遡及させない。仕様版44で導入した4用語問題は独立したconstruct key・問題IDで保存し、Attemptおよび学習確認の表示snapshotから当時の本文・選択肢順を復元する。ログ・参加者CSV/Excel・仮説指標には既存の`test_content_mode`を含め、4用語版の分母は4問・4用語とする。[詳細](51_four_topic_foundation_mode.md)。
+（仕様版44・45採用時の履歴）`Participant.test_content_mode` / `RuntimeSetting.test_content_mode`を再利用し、新しい列は追加しない。RuntimeSettingの保存値を新規Participantへ登録時snapshotし、未設定時は`four_topic_fundamentals`とした。2026-11-12以降の新規登録ではRuntimeSettingを参照せず、4用語版に固定する。既存ParticipantのNULLやモードは補完せず、管理設定変更も遡及させない。仕様版44で導入した問題は独立したconstruct key・問題IDとAttempt snapshotから復元する。ログ・参加者CSV/Excel・仮説指標には既存の`test_content_mode`を含め、4用語版の分母は4問・4用語とする。[詳細](51_four_topic_foundation_mode.md)。
 
 ## 仕様版43の問題モードsnapshot（導入時・履歴）
 
@@ -48,18 +48,18 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 ## 現行の保存契約
 
-モデルの正本は`backend/app/models/__init__.py`。現行コードは仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`を使用する。新規参加者の`test_content_mode`はRuntimeSettingの保存値を登録時snapshotし、`application`=`split-actions-v5`、`basic_understanding`=`split-actions-basic-v1`、4用語版=`split-actions-four-topic-v3`を使う。仕様版52の二つのprotocolと仕様版50以下は記録時の対応バンクを復元し、既存のNULLは補完しない。アンケートのphase/version別保存とJSON snapshotを保持する。仕様版52以下はread-onlyで、問題・回答・snapshotを変更しない。`question_options.rationale`は内部メタデータで表示APIに含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)。
+モデルの正本は`backend/app/models/__init__.py`。現行コードは仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`を使用する。新規参加者の`test_content_mode`は`four_topic_fundamentals`に固定され、問題バンク`split-actions-four-topic-v3`と事前アンケート`presurvey-four-topic-baseline-v4`を使う。既存参加者は保存済みモード、仕様版、protocol、snapshotから当時の問題を復元し、既存NULLも補完しない。アンケートのphase/version別保存とJSON snapshotを保持する。仕様版52以下はread-onlyで、問題・回答・snapshotを変更しない。`question_options.rationale`は内部メタデータで表示APIに含めない。研究用コードは登録処理中に検証後破棄し、DB列を追加しない。外部対応表はアプリDBモデルに含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
-2026-10-21時点の履歴: 学籍番号はSQLAlchemyの研究DBへ追加せず、IDENTITY_MAPPING_PATHが指す別SQLiteの`identity_mappings`へ保存した。既存の行・APIは履歴保全のため残し、現在の登録には使わない。
+2026-10-21時点の履歴: 学籍番号はSQLAlchemyの研究DBへ追加せず、IDENTITY_MAPPING_PATHが指す別SQLiteの`identity_mappings`へ保存した。当時は対応表APIも存在した。現在は管理画面/APIを廃止し、既存SQLiteファイルと行は登録・通常起動では参照・移行・変更・削除しない。明示的な参加者削除時に限り、既存ファイル内の対象participant_idの旧行をcleanupする。
 
-現行の登録では、研究者から伝えられた半角数字1〜64桁の研究用コードを同じ分離SQLite内の専用`research_code_mappings`テーブルへ保存する。参加者ID・表示コード・日時・再送処理用キーと対応付け、研究用コードの一意制約により重複登録を拒否する。先頭ゼロを保持する。コードは研究DB・AI入力・AIログ・冪等性request_hash/response_json・通常のCSV/XLSXに含めず、管理画面の専用対応表と専用CSVだけで扱う。旧`identity_mappings`行を移行せず、学籍番号対応表の管理・削除APIと研究用コード対応表のAPIを分ける。ブラウザには再送キーだけを保存し、登録本文を永続保存しない。対応表SQLiteはsecure_deleteを有効にし、対応表の削除は研究データに影響しない。別DB間には分散トランザクションがないため、研究DB登録と対応表保存の失敗は補償削除で扱う。強制終了で残った未確定対応行は一覧/CSVに出さず、同じ登録キーの再試行で置換するか全件削除で消去する。
+2026-11-11までの旧登録方式では、研究用コードを分離SQLiteの`research_code_mappings`へ保存し、管理UI/APIから参照していた。この段落は履歴であり、現在の登録仕様ではない。現行登録は研究用コードを半角数字1〜64桁として検証するだけで、参加者作成後は値を保持しない。研究DB、冪等性request_hash/response_json、ログ、CSV/XLSX、AI入力、ブラウザ永続領域には保存しない。研究用コードと学籍番号はアプリで照合しない。対応表は研究者がアプリ外で作成・保管する。旧IDENTITY_MAPPING_PATHのSQLiteファイル・テーブル・既存行は登録・通常起動・管理APIから参照、移行、変更、削除しない。アプリ内管理API/UIは廃止済み。明示的に参加者を削除する場合のみ、既存SQLiteがあるとき当該participant_idに一致する旧行のcleanupを再試行可能な削除outbox経由で行う。
 
-参加者の撤回削除では、研究DB内の関連データ削除と`AuditEvent.after_json.identity_mapping_cleanup=pending`を同じトランザクションで確定してから、別SQLiteの学籍番号対応表と研究用コード対応表を削除する。両表の削除後に監査記録を`complete`へ更新する。途中停止・対応表DB障害時はpending記録を起動時に再試行し、同じ削除APIの再送でも完了できる。研究DBの確定に失敗した場合は対応表を削除しない。これは分散トランザクションではなく、研究DBに保存する再試行可能な削除outboxで障害窓を回復する方式である。
+参加者の明示的削除では、研究DB内の関連データ削除と`AuditEvent.after_json.identity_mapping_cleanup=pending`を同じトランザクションで確定してから、既存の別SQLiteが存在する場合に限り、旧学籍番号対応表・研究用コード対応表のうち当該participant_idの行だけを削除する。ファイルがない場合は新規作成しない。他の参加者の行と外部Excel対応表は変更しない。cleanup後に監査記録を`complete`へ更新する。途中停止時はpending記録を起動時または同じ削除APIの再送で再試行する。研究DBの確定に失敗した場合は旧ファイルに触れない。外部Excel対応表・USB・バックアップ上のデータは研究者が別途処理する。
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規参加者だけ仕様版53と統合protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、問題モード、`retest_cycles_completed=0`を固定する。RuntimeSettingの保存済みテスト問題モードを維持し、事後アンケート版`posttest-5point-v4`を保存する。システム評価は1項目、H5は中核4項目のみ、教材量は分布集計に限る。事前満点時の早期終了は既存の`current_step`・Attempt・結果表示snapshotを用い、列追加や旧行の補完は行わない。仕様版52の2 protocolと仕様版51以下の記録は変更しない。旧参加者は進行・採点・完了更新・削除・評価再計算を禁止し、起動時補修も仕様版とprotocol_idの両方へ限定する。
+現行コードでは新規参加者だけ仕様版53と統合protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、4用語の問題モード、`retest_cycles_completed=0`を固定する。RuntimeSettingの保存済みテスト問題モードは新規登録で参照せず、`test_content_mode=four_topic_fundamentals`を保存する。事後アンケート版`posttest-5point-v4`を保存する。システム評価は1項目、H5は中核4項目のみ、教材量は分布集計に限る。事前満点時の早期終了は既存の`current_step`・Attempt・結果表示snapshotを用い、列追加や旧行の補完は行わない。仕様版52の2 protocolと仕様版51以下の記録は変更しない。旧参加者は進行・採点・完了更新・削除・評価再計算を禁止し、起動時補修も仕様版とprotocol_idの両方へ限定する。
 
 現行の主な保存対象:
 

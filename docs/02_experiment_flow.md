@@ -2,7 +2,7 @@
 
 ## 仕様版53の現行フロー（2026-11-12）
 
-新規参加者は仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`を使う。登録時snapshotされた進行・採点・表示条件は維持し、4用語版は問題バンクv3・事前アンケートv4、標準2モードは事前アンケートv4を使う。4用語版の下位用語は「インストラクションチューニング」、標準2モードは「ファインチューニング」。事後アンケートは`posttest-5point-v4`で、システム評価を1項目とし、教材量の質問を「教材の量はどの程度でしたか」とする。教材評価6項目、H5の中核4項目と集計は維持する。仕様版52にはclarity削除前後の2 protocolがあり、保存時の問題・回答・アンケートsnapshotを保全する。仕様版52以下は閲覧専用。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)。
+新規参加者は仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`を使う。2026-11-12の同意・登録運用変更後、新規参加者の問題モードは4用語版に固定する。登録時snapshotされた進行・採点・表示条件は維持し、4用語版は問題バンクv3・事前アンケートv4を使う。4用語版の下位用語は「インストラクションチューニング」、標準2モードは「ファインチューニング」。事後アンケートは`posttest-5point-v4`で、システム評価を1項目とし、教材量の質問を「教材の量はどの程度でしたか」とする。教材評価6項目、H5の中核4項目と集計は維持する。仕様版52にはclarity削除前後の2 protocolがあり、保存時の問題・回答・アンケートsnapshotを保全する。仕様版52以下は閲覧専用。新規登録時の研究用コードは検証後に破棄し、対応表は研究者がアプリ外で管理する。仕様53の既存参加者にはこの運用変更を遡及しない。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版48のフロー（履歴）
 

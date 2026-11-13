@@ -20,8 +20,11 @@ from split_api_support import complete_presurvey, create_trial, new_research_cod
 
 def answer_page(client, pid, phase, questions, *, wrong=False):
     page_id = str(uuid4())
-    answers = [{"question_id": q["question_id"], "selected_option_ids": select_roles(q, ["M1" if wrong and index == 0 else None])}
-               for index, q in enumerate(questions)]
+    answers = []
+    for index, question in enumerate(questions):
+        role = "M1" if wrong and index == 0 else None
+        roles = [role, role, role] if question.get("selection_mode") == "multiple" else [role]
+        answers.append({"question_id": question["question_id"], "selected_option_ids": select_roles(question, roles)})
     payload = {"participant_id": pid, "phase": phase, "term_slug": questions[0]["term_slug"],
                "test_round": questions[0]["test_round"], "page_id": page_id, "answers": answers,
                "question_shown_at": "2026-11-03T00:00:00Z", "answered_at": "2026-11-03T00:00:10Z",
@@ -46,7 +49,13 @@ def answer_test(client, pid, phase, count, *, wrong=False, reviews=True):
             assert pending["term_slug"] == slug
             assert len(pending["results"]) == count // 3
             assert [r["question_number"] for r in pending["results"]] == list(range(1, count // 3 + 1))
-            assert all(set(r) == {"question_number", "selected_option", "is_correct"} for r in pending["results"])
+            assert all(
+                set(r) in (
+                    {"question_number", "selected_option", "is_correct"},
+                    {"question_number", "selected_option", "is_correct", "selected_options"},
+                )
+                for r in pending["results"]
+            )
             ack = f"/api/participants/{pid}/question-review-acknowledgements"
             ok(client.post(ack, json={"phase": phase, "term_slug": slug}))
             ok(client.post(ack, json={"phase": phase, "term_slug": slug}))
@@ -89,18 +98,11 @@ def test_new_registration_uses_fixed_defaults_and_pretest_perfect_exits_to_surve
             assert participant.experiment_spec_version == 53
             assert participant.protocol_id == "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1"
             rows = experiment.question_payloads(db, participant_id, "pretest")
-            assert len(rows) == 3
-            q1 = db.get(Question, rows[0]["question_id"])
-            q2 = db.query(Question).filter_by(
-                term_id=q1.term_id, construct_key=q1.construct_key, variant_key="pretest_v1_q2"
-            ).one()
-        assert client.post("/api/attempts", json={
-            "participant_id": participant_id,
-            "phase": "pretest",
-            "question_id": q2.id,
-            "selected_option_ids": [],
-        }).status_code == 409
-        _, scored = answer_test(client, participant_id, "pretest", 3, reviews=True)
+            assert len(rows) == 4
+            assert {row["term_slug"] for row in rows} == {
+                "transformer", "llm_training_stages", "multi_agent_four_topic", "memory_process_four_topic"
+            }
+        _, scored = answer_test(client, participant_id, "pretest", 4, reviews=True)
         assert scored["review_required"] is False
         assert scored["next_step"] == "survey"
         assert scored["next_url"] == "/survey"

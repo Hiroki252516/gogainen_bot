@@ -7,11 +7,11 @@ const base = new URL(process.env.PRESURVEY_UI_BASE_URL);
 assert(["localhost", "127.0.0.1"].includes(base.hostname) && base.port && base.port !== "3000");
 const { chromium } = await import(process.env.PRESURVEY_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
-const modes = [
-  { mode: "application", version: "presurvey-baseline-v4", keys: ["pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process"] },
-  { mode: "basic_understanding", version: "presurvey-baseline-v4", keys: ["pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process"] },
-  { mode: "four_topic_fundamentals", version: "presurvey-four-topic-baseline-v4", keys: ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"] },
-];
+const mode = {
+  mode: "four_topic_fundamentals",
+  version: "presurvey-four-topic-baseline-v4",
+  keys: ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"],
+};
 const experienceChoices = [
   ["experienced", "ある"],
   ["not_experienced", "ない"],
@@ -40,16 +40,16 @@ async function request(context, path, method = "GET", data) {
 }
 
 try {
-  for (const mode of modes) {
-    for (const width of [1440, 768, 390]) {
+  for (const width of [1440, 768, 390]) {
       const context = await browser.newContext({ viewport: { width, height: 950 } });
       const page = await context.newPage();
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       const login = await request(context, "/api/admin/auth/login", "POST", { password: "abc" });
       assert(login.ok(), await login.text());
-      const configured = await request(context, "/api/admin/test-content-mode", "PUT", { mode: mode.mode });
+      const configured = await request(context, "/api/admin/test-content-mode");
       assert.equal(configured.status(), 200, await configured.text());
+      assert.equal((await configured.json()).mode, mode.mode);
       const registration = await request(context, "/api/registrations", "POST", {
         assignment_code: "A", consent_checked: true, research_code: newResearchCode(),
       });
@@ -179,7 +179,6 @@ try {
       assert.deepEqual(errors, []);
       await context.close();
       console.log(`presurvey ${mode.mode} ${width}px passed`);
-    }
   }
 } finally {
   await browser.close();

@@ -2,7 +2,9 @@
 
 ## 仕様版53の現行コード（2026-11-12）
 
-新規参加者は仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`で登録する。4用語版の問題バンクは`split-actions-four-topic-v3`、事前アンケートは`presurvey-four-topic-baseline-v4`で、`instruction_tuning`を「インストラクションチューニング」と表示する。標準2モードの事前アンケートは`presurvey-baseline-v4`。事後アンケートは`posttest-5point-v4`で、システム評価は「必要な操作をスムーズに行えた」の1項目、教材量の質問文は「教材の量はどの程度でしたか」とする。4問・10択・採点・確認問題snapshot再利用、教材検索先、共通RAG資料、H5の定義は維持する。仕様版52にはclarity項目削除前後の2 protocolがあり、当時の問題・アンケートsnapshotで復元し、保存済み記録は変更しない。難易度・測定上の同等性、尺度・H5の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+新規参加者は仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`で登録する。2026-11-12の登録運用変更後、新規参加者の問題モードは4用語版に固定し、問題バンクは`split-actions-four-topic-v3`、事前アンケートは`presurvey-four-topic-baseline-v4`を使う。`instruction_tuning`を「インストラクションチューニング」と表示する。事後アンケートは`posttest-5point-v4`で、システム評価は「必要な操作をスムーズに行えた」の1項目、教材量の質問文は「教材の量はどの程度でしたか」とする。4問・10択・採点・確認問題snapshot再利用、教材検索先、共通RAG資料、H5の定義は維持する。仕様版52にはclarity項目削除前後の2 protocolがあり、当時の問題・アンケートsnapshotで復元し、保存済み記録は変更しない。難易度・測定上の同等性、尺度・H5の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+
+新規登録時は同意文書版`consent-2026-11-12-revised-v1`を記録する。半角数字の研究用コードは登録処理中に検証した後に破棄し、研究DB、冪等性記録、ログ、エクスポート、AI入力、ブラウザ保存には記録しない。学籍番号はアプリで取得しない。研究用コード・学籍番号・参加者IDの対応表は研究者がアプリ外で管理する。対応表管理UI/APIは廃止済みで、既存の別SQLiteファイルと行は変更せず保持し、参加者の明示削除時に限り当該IDの行をcleanupする。既存参加者の同意・設定・進行は変更しない。
 
 ## 仕様版48の履歴条件（2026-11-10）
 

@@ -142,7 +142,7 @@ def test_registration_snapshots_reviews_for_standard_only_and_preserves_legacy_n
             assert participant.first_question_only is True
             assert participant.show_pretest_results is False
             assert participant.show_retest_results is False
-            assert len(experiment.question_payloads(db, participant_id, "pretest")) == 3
+            assert len(experiment.question_payloads(db, participant_id, "pretest")) == 4
 
             legacy = Participant(
                 display_code=f"QR-OLD-{uuid4().hex[:8]}",

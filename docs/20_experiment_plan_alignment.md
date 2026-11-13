@@ -3,6 +3,11 @@
 ## 仕様版53：4用語版と事後アンケート改訂の統合
 
 現行protocolは`experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`。新規参加者だけに適用し、仕様版52以下の参加者・回答・問題snapshot・アンケート回答は保存時の条件で保全する。4用語版は問題バンク`split-actions-four-topic-v3`と事前アンケート`presurvey-four-topic-baseline-v4`を使い、`instruction_tuning`／「インストラクションチューニング」を採用する。事後アンケートは`posttest-5point-v4`とし、システム評価は「必要な操作をスムーズに行えた」のみ、教材量の質問は「教材の量はどの程度でしたか」とする。4問・各10択、選択肢役割、確認問題snapshotの再利用、他の用語と教材RAG検索先、H1〜H6の式と対象は維持する。研究上の承認、問題難易度・測定特性の同等性は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+### 2026-11-12 運用実装のみの同意・登録変更（fix/issue-344）
+
+仕様版53とprotocolは変更しない。新規参加者は既存の仕様版53条件に加え、登録時に`four_topic_fundamentals`へ固定する。登録画面の研究用コードは半角数字1〜64桁を検証する目的で一時受信するが、DB・冪等性記録・ログ・エクスポート・AI入力・ブラウザ永続領域へ保存しない。学籍番号はアプリで取得しない。研究用コード・学籍番号・participant IDの対応表は研究者が外部Excelで管理し、管理画面/APIから扱わない。過去の別SQLiteファイルと行はそのまま保持し、明示的な参加者削除の場合のみ当該participant_idの旧行をcleanupする。既存の仕様版53参加者の同意・問題モード・進行・回答は変更しない。
+
+現行同意文書版は`consent-2026-11-12-revised-v1`。文書には研究目的、取得データ、Codex app-server/OpenAIへの送信、撤回、保存場所、外部対応表、保管期間、参加負担、成果公表を記載する。連絡先・保存・運用情報はユーザー提示の内容を反映したものであり、コード変更は指導教員・研究倫理上の承認を意味しない。仕様版53の既存記録と旧仕様版の扱いは変更しない。[同意・運用](19_experiment_operation_runbook.md)、[個人情報](15_security_privacy.md)、[API](08_backend_api_spec.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版52（履歴）：独立して採用されたprotocol
 

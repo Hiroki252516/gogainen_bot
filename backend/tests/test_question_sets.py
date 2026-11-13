@@ -330,7 +330,7 @@ def test_question_set_admin_api_is_removed_and_legacy_aggregate_filters_reject(i
         assert client.get(path).status_code == 422
 
 
-def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isolated):
+def test_new_participants_are_fixed_to_four_topic_and_old_mode_snapshots_remain(isolated):
     client, factory, _engine = isolated
     unauthenticated = TestClient(app)
     assert unauthenticated.get("/api/admin/test-content-mode").status_code == 401
@@ -344,17 +344,25 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
     }
     assert client.put("/api/admin/test-content-mode", json={"mode": "invalid"}).status_code == 422
     assert client.put("/api/admin/test-content-mode", json={"mode": "application", "extra": True}).status_code == 422
+    assert client.put("/api/admin/test-content-mode", json={"mode": "application"}).status_code == 409
+    assert client.put("/api/admin/test-content-mode", json={"mode": "basic_understanding"}).status_code == 409
+    assert client.put("/api/admin/test-content-mode", json={"mode": "four_topic_fundamentals"}).status_code == 200
 
     created_ids = []
     presurvey_contexts = {}
 
-    def create_participant(_fixture_label: str) -> str:
+    def create_participant(_fixture_label: str, mode: str = "four_topic_fundamentals") -> str:
         response = client.post("/api/participants", json={
             "assignment_code": "A", "consent_checked": True, "research_code": new_research_code(),
         })
         assert response.status_code == 200, response.text
         participant_id = response.json()["participant_id"]
         created_ids.append(participant_id)
+        if mode != "four_topic_fundamentals":
+            # Emulate an already-snapshotted historical participant for restoration checks.
+            with factory() as db:
+                db.get(Participant, participant_id).test_content_mode = mode
+                db.commit()
         presurvey_contexts[participant_id] = client.get(
             f"/api/participants/{participant_id}/presurvey"
         ).json()
@@ -383,10 +391,7 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
             "transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process",
         ]
 
-        saved = client.put("/api/admin/test-content-mode", json={"mode": "basic_understanding"})
-        assert saved.status_code == 200
-        assert saved.json()["mode"] == "basic_understanding"
-        basic_id = create_participant("BASIC-MODE-SNAPSHOT-TEST")
+        basic_id = create_participant("BASIC-MODE-SNAPSHOT-TEST", "basic_understanding")
         basic_context = presurvey_contexts[basic_id]
         assert basic_context["survey_version"] == "presurvey-baseline-v4"
         assert [item["key"] for item in basic_context["term_items"]] == [
@@ -400,17 +405,13 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         assert all(len(question["options"]) == 6 for question in basic_questions)
         assert "RAGとモデルの重み" in basic_questions[0]["body"]
 
-        saved = client.put("/api/admin/test-content-mode", json={"mode": "application"})
-        assert saved.status_code == 200
-        application_id = create_participant("APPLICATION-MODE-SNAPSHOT-TEST")
+        application_id = create_participant("APPLICATION-MODE-SNAPSHOT-TEST", "application")
         application_context = presurvey_contexts[application_id]
         assert application_context == basic_context
         application_questions = client.get(f"/api/experiment/{application_id}/pretest").json()["questions"]
         assert len(application_questions) == 3
         assert "最新の取扱説明書を参照する方法" in application_questions[0]["body"]
 
-        saved = client.put("/api/admin/test-content-mode", json={"mode": "four_topic_fundamentals"})
-        assert saved.status_code == 200
         four_id = create_participant("FOUR-TOPIC-MODE-SNAPSHOT-TEST")
         with factory() as db:
             presurvey_record = db.query(ParticipantSurvey).filter_by(
@@ -553,7 +554,7 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
                     option["label"]: option["body"] for option in question["options"]
                 }
 
-        # Changing the runtime setting does not change the saved participant bank.
+        # The fixed registration mode does not change any existing snapshot.
         assert client.get(f"/api/experiment/{basic_id}/pretest").json()["questions"] == basic_questions
         with factory() as db:
             basic_participant = db.get(Participant, basic_id)
@@ -746,12 +747,15 @@ def test_four_topic_material_rag_uses_configured_directory_and_sections(monkeypa
 
 def test_basic_mode_routes_each_round_and_reuses_failed_question_snapshot(isolated):
     client, factory, _engine = isolated
-    assert client.put("/api/admin/test-content-mode", json={"mode": "basic_understanding"}).status_code == 200
+    assert client.put("/api/admin/test-content-mode", json={"mode": "basic_understanding"}).status_code == 409
     created = client.post("/api/participants", json={
         "assignment_code": "A", "consent_checked": True, "research_code": new_research_code(),
     })
     assert created.status_code == 200, created.text
     participant_id = created.json()["participant_id"]
+    with factory() as db:
+        db.get(Participant, participant_id).test_content_mode = "basic_understanding"
+        db.commit()
     try:
         complete_presurvey(client, participant_id)
         pretest = client.get(f"/api/experiment/{participant_id}/pretest").json()["questions"]

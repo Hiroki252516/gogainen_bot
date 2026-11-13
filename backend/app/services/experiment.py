@@ -74,7 +74,6 @@ from app.core.question_sets import (
 )
 from app.services.test_content_mode import (
     FOUR_TOPIC_FUNDAMENTALS,
-    current_mode as current_test_content_mode,
     mode_label as test_content_mode_label,
     participant_mode as participant_test_content_mode,
 )
@@ -771,7 +770,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         show_question_reviews=True,
         first_question_only=True,
         learning_material_glossary_mode=INTEGRATED_MATERIAL,
-        test_content_mode=current_test_content_mode(db),
+        test_content_mode=FOUR_TOPIC_FUNDAMENTALS,
         group_condition=group_condition,
         assignment_method="admin_code",
         consent_checked=consent_checked,
