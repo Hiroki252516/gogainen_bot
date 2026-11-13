@@ -30,6 +30,7 @@ from app.services.hypothesis_metrics import (
 from app.services.hypothesis_metrics import METRICS_VERSION
 from app.services.research_protocol import (
     FOUR_TOPIC_PRESURVEY_TERM_ITEMS,
+    FOUR_TOPIC_PRESURVEY_VERSION,
     FOUR_TOPIC_PRESURVEY_V2_TERM_ITEMS,
     FOUR_TOPIC_PRESURVEY_V3_TERM_ITEMS,
     MATERIAL_RATING_KEYS,
@@ -37,9 +38,11 @@ from app.services.research_protocol import (
     PRESURVEY_VERSION,
     SURVEY_VERSION,
     FourTopicPresurveyPayload,
+    FourTopicPresurveyPayloadV4,
     FourTopicPresurveyPayloadV2,
     FourTopicPresurveyPayloadV3,
     PresurveyPayload,
+    PresurveyPayloadV4,
     SurveyPayload,
     record_material_view,
     survey_context,
@@ -550,12 +553,55 @@ def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation(
     keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
     assert keys == ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"]
     assert FOUR_TOPIC_PRESURVEY_TERM_ITEMS[2]["label"] == "インストラクションチューニング"
-    payload = baseline_questionnaire("presurvey-four-topic-baseline-v4", keys)
+    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION, keys)
     parsed = FourTopicPresurveyPayload.model_validate(payload)
     assert set(parsed.prior_term_exposure.model_dump()) == set(keys)
     payload["prior_term_exposure"]["transformer"] = "cannot_recall"
     with pytest.raises(ValidationError):
         FourTopicPresurveyPayload.model_validate(payload)
+
+
+def test_presurvey_v4_schemas_remain_historical_and_are_not_current():
+    standard_v4 = baseline_questionnaire("presurvey-baseline-v4")
+    assert PresurveyPayloadV4.model_validate(standard_v4).survey_version == "presurvey-baseline-v4"
+    with pytest.raises(ValidationError):
+        PresurveyPayload.model_validate(standard_v4)
+
+    four_topic_keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
+    four_topic_v4 = baseline_questionnaire("presurvey-four-topic-baseline-v4", four_topic_keys)
+    assert FourTopicPresurveyPayloadV4.model_validate(four_topic_v4).survey_version == "presurvey-four-topic-baseline-v4"
+    with pytest.raises(ValidationError):
+        FourTopicPresurveyPayload.model_validate(four_topic_v4)
+
+
+def test_spec_54_presurvey_record_is_read_only_and_preserved(study):
+    old = Participant(
+        display_code="SPEC54-PRESURVEY",
+        group_condition="control",
+        protocol_id="experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1",
+        experiment_spec_version=54,
+        learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD],
+        test_content_mode="application",
+        consent_checked=True,
+        current_step="presurvey",
+    )
+    study.add(old)
+    study.flush()
+    responses = baseline_questionnaire("presurvey-baseline-v4")
+    saved_responses = {key: value for key, value in responses.items() if key != "survey_version"}
+    survey = ParticipantSurvey(
+        participant_id=old.id,
+        phase="presurvey",
+        survey_version="presurvey-baseline-v4",
+        responses_json=saved_responses,
+    )
+    study.add(survey)
+    study.flush()
+
+    assert not can_resume(old)
+    saved = study.get(ParticipantSurvey, survey.id)
+    assert saved.survey_version == "presurvey-baseline-v4"
+    assert saved.responses_json == saved_responses
 
 
 def test_four_topic_presurvey_v2_schema_remains_available_for_historical_records():
@@ -862,12 +908,15 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     assert client.get(f"/api/participants/{pid}/current-step").json()["next_url"] == "/presurvey"
     assert client.get(f"/api/experiment/{pid}/pretest").status_code == 409
     presurvey_context = client.get(f"/api/participants/{pid}/presurvey").json()
-    assert presurvey_context["survey_version"] in {PRESURVEY_VERSION, "presurvey-four-topic-baseline-v4"}
+    assert presurvey_context["survey_version"] in {PRESURVEY_VERSION, FOUR_TOPIC_PRESURVEY_VERSION}
     assert len(presurvey_context["term_items"]) == 6
     baseline = baseline_questionnaire(
         presurvey_context["survey_version"],
         [item["key"] for item in presurvey_context["term_items"]],
     )
+    legacy_baseline = json.loads(json.dumps(baseline))
+    legacy_baseline["survey_version"] = "presurvey-baseline-v4"
+    assert client.post(f"/api/participants/{pid}/presurvey", json=legacy_baseline).status_code == 422
     invalid_baseline = json.loads(json.dumps(baseline))
     invalid_baseline["prior_term_exposure"].pop("rag" if "rag" in invalid_baseline["prior_term_exposure"] else "transformer")
     assert client.post(f"/api/participants/{pid}/presurvey", json=invalid_baseline).status_code == 422

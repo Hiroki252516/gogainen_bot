@@ -1,8 +1,8 @@
 # Repository Instructions for Codex
 
-## 仕様版54の現行条件（2026-11-12）
+## 仕様版55の現行条件（2026-11-13）
 
-新規参加者は仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v3`、事前アンケートは`presurvey-four-topic-baseline-v4`、事後アンケートは`posttest-5point-v4`を使う。4用語版の`instruction_tuning`は「インストラクションチューニング」と表示する。事後はシステム評価1項目・教材評価6項目で、教材量の質問は「教材の量はどの程度でしたか」。全設問の採点後に満点なら結果表示snapshotに従って確認後または直接surveyへ進み、学習と後続テストを省略する。未達時の採点・学習経路・回数上限は維持する。現行指標は`four-hypotheses-v1`のH1〜H4で、旧6仮説は履歴として扱う。仕様版53以下の参加者操作は読み取り専用で記録を変更しないが、仕様版52の対応する2 protocolに限り、参加者の進行・回答・既存サマリーを変更せずH1〜H4評価サマリーを追加できる。仕様版51以下と未対応protocolは再計算しない。現行同意文書は`consent-2026-11-12-revised-v1`。研究用コードは登録時だけ受信して検証後に破棄し、DB・冪等性記録・ログ・エクスポート・AI入力・ブラウザ保存へ記録しない。学籍番号はアプリで取得せず、対応表は研究者がアプリ外で管理する。尺度・難易度・測定上の同等性・研究上の承認は未確認。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
+新規参加者は仕様版55 / `experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v3`、事前アンケートは`presurvey-four-topic-baseline-v5`、事後アンケートは`posttest-5point-v4`を使う。4用語版の`instruction_tuning`は「インストラクションチューニング」と表示する。事前のAI利用自己評価3項目には具体例を表示するが、回答キー・尺度・保存形式は変更しない。事後はシステム評価1項目・教材評価6項目で、教材量の質問は「教材の量はどの程度でしたか」。必要な全設問が採点済みかつ全問正解なら、事前・再テスト1/2・内部`final_test`後に結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略する。未達時の経路と採点・上限は維持する。現行指標は`four-hypotheses-v1`のH1〜H4で、旧6仮説は履歴とする。仕様版54以下は参加者操作を読み取り専用とし、保存済み記録を変更しない。例外として仕様版52の2つの対応protocolには参加者の進行・回答・既存サマリーを変えず評価サマリーだけを追加できる。仕様版51以下・未対応protocolは再計算対象外。現行同意文書は`consent-2026-11-12-revised-v1`。研究用コードは登録時に形式を検証した後に破棄し、DB・冪等性記録・ログ・エクスポート・AI入力・ブラウザ保存へ記録しない。学籍番号はアプリで取得せず、対応表は研究者がアプリ外で管理する。尺度・難易度・測定上の同等性・研究上の承認は未確認。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
 
 ## 仕様版48の履歴条件（2026-11-10）
 
@@ -36,27 +36,27 @@
 
 ## 仕様版39の履歴条件（2026-11-06）
 
-当時は教材内解説を新規参加者に固定し、仕様版38以下を閲覧専用とした。現行仕様版54では仕様版53以下を閲覧専用とする。
+当時は教材内解説を新規参加者に固定し、仕様版38以下を閲覧専用とした。現行仕様版55では仕様版54以下を閲覧専用とする。
 
 ## 仕様版37の履歴条件（2026-11-04）
 
-当時のコードは仕様版37 / `experiment-plan-2026-11-04-presurvey-baseline-v2`。仕様版38〜53を経て現行仕様版54となり、現行では仕様版53以下は閲覧専用。
+当時のコードは仕様版37 / `experiment-plan-2026-11-04-presurvey-baseline-v2`。仕様版38〜54を経て現行仕様版55となり、現行では仕様版54以下は閲覧専用。
 
 ## 仕様版36の履歴条件（2026-11-04）
 
-この番号には`experiment-plan-2026-11-04-presurvey-baseline-v1`と`experiment-plan-2026-11-04-rag-glossary-v1`の別protocol記録がある。どちらも閲覧専用で保持し、問題バンクv5で結果を復元する。辞書v4によるRAG注釈は現行仕様版54でも維持する。
+この番号には`experiment-plan-2026-11-04-presurvey-baseline-v1`と`experiment-plan-2026-11-04-rag-glossary-v1`の別protocol記録がある。どちらも閲覧専用で保持し、問題バンクv5で結果を復元する。辞書v4によるRAG注釈は現行仕様版55でも維持する。
 
 ## 仕様版35の履歴条件（2026-11-03）
 
-仕様版35当時は通常版`split-actions-v5`と学習内容v15を使用した。全27問はPR #260（507ea4a）適用後の本文で、各問は正解1・M1二つ・M3二つ・unknown一つの6択。設問1・2だけを出題・採点し、設問3は保持する。設問1のみ出題設定、ペア答え合わせ、教材用語解説モードは登録時に固定する。教材内解説モードでは当時の辞書v3を意味参照としてAIへ渡し、逐語転載せず文脈に合わせて言い換える。仕様版35の結果はv5で復元する。現行仕様版54では辞書v4、教材内解説、目標800文字、統制群の共通prompt、およびモード別の固定テスト設定を維持する。仕様版36〜52を含む旧protocolは閲覧専用である。詳細は[事前アンケート](docs/49_presurvey_baseline.md)、[教材モード](docs/41_learning_glossary_material_mode.md)、[文字数条件](docs/42_learning_glossary_material_length.md)、[AI指示](docs/10_ai_prompt_contracts.md)、[RAG注釈](docs/49_rag_glossary.md)、[辞書](docs/24_learning_glossary.md)、[テスト履歴](docs/44_pretest_content_revision.md)〜[docs/48](docs/48_first_question_only.md)を参照する。受入検証と実験開始承認は別に扱う。
+仕様版35当時は通常版`split-actions-v5`と学習内容v15を使用した。全27問はPR #260（507ea4a）適用後の本文で、各問は正解1・M1二つ・M3二つ・unknown一つの6択。設問1・2だけを出題・採点し、設問3は保持する。設問1のみ出題設定、ペア答え合わせ、教材用語解説モードは登録時に固定する。教材内解説モードでは当時の辞書v3を意味参照としてAIへ渡し、逐語転載せず文脈に合わせて言い換える。仕様版35の結果はv5で復元する。現行仕様版55では辞書v4、教材内解説、目標800文字、統制群の共通prompt、およびモード別の固定テスト設定を維持する。仕様版36〜54を含む旧protocolは閲覧専用である。詳細は[事前アンケート](docs/49_presurvey_baseline.md)、[教材モード](docs/41_learning_glossary_material_mode.md)、[文字数条件](docs/42_learning_glossary_material_length.md)、[AI指示](docs/10_ai_prompt_contracts.md)、[RAG注釈](docs/49_rag_glossary.md)、[辞書](docs/24_learning_glossary.md)、[テスト履歴](docs/44_pretest_content_revision.md)〜[docs/48](docs/48_first_question_only.md)を参照する。受入検証と実験開始承認は別に扱う。
 
 ## 設問1のみ出題する設定（導入時の履歴）
 
-仕様版35で管理設定として導入し、仕様版40で管理設定を廃止した。現行仕様版54の新規参加者は4用語版の各用語1問（計4問）に固定する。現行版・基礎理解版の計3問条件は旧参加者の記録復元用に保持する。保存済み回答と結果復元は変更しない。詳細は[docs/48](docs/48_first_question_only.md)・[docs/50](docs/50_basic_understanding_question_mode.md)・[docs/51](docs/51_four_topic_foundation_mode.md)。
+仕様版35で管理設定として導入し、仕様版40で設定UI/APIを廃止した。現行仕様版55の新規参加者は4用語版の各用語1問（計4問）に固定する。現行版・基礎理解版の計3問条件は既存参加者の記録復元用に保持する。保存済み回答と結果復元は変更しない。詳細は[docs/48](docs/48_first_question_only.md)・[docs/50](docs/50_basic_understanding_question_mode.md)・[docs/51](docs/51_four_topic_foundation_mode.md)。
 
 ## 仕様版28の答え合わせ（履歴）
 
-通常版のPRETEST・RETEST・内部final_testで、用語ごとの設問1・2を保存後に同じテスト画面内で本人の選択内容と正誤を示し、続行で次の用語へ進む。答え合わせ中はページ/URL遷移せず、正答・解説・内部分類を表示しない。これは仕様版28の採用時記録である。現行仕様版54の新規参加者は4用語版の各用語1問を出題し、回答後に設問ごとに確認する。現行版・基礎理解版の設問1のみ条件は過去の記録復元用に保持する。必要な全設問が採点済みで全問正解なら結果表示snapshotに応じて全体結果確認後または直接surveyへ進み、学習・後続テストを省略する。未達時は従来の経路を維持する。設定UI/APIは廃止した。受入条件、API・snapshot・条件は[docs/40](docs/40_question_pair_answer_review.md)を参照する。
+通常版のPRETEST・RETEST・内部final_testで、用語ごとの設問1・2を保存後に同じテスト画面内で本人の選択内容と正誤を示し、続行で次の用語へ進む。答え合わせ中はページ/URL遷移せず、正答・解説・内部分類を表示しない。これは仕様版28の採用時記録である。現行仕様版55の新規参加者は4用語版の各用語1問を出題し、回答後に設問ごとに確認する。現行版・基礎理解版の設問1のみ条件は既存記録の復元用に保持する。必要な全設問が採点済みで全問正解なら結果表示snapshotに応じて全体結果確認後または直接surveyへ進み、学習・後続テストを省略する。未達時は従来の経路を維持する。受入条件、API・snapshot・条件は[docs/40](docs/40_question_pair_answer_review.md)を参照する。
 
 ## 仕様版27の採用記録
 
@@ -65,9 +65,9 @@
 ## 用語注釈の不変条件
 
 - 現行の共通固定辞書はlearning-glossary-v4の17語で、RAG（検索拡張生成）も注釈対象にする。v1〜v3は履歴として不変で保持する。AI、事前学習、ファインチューニング、プロンプトエンジニアリング、データベース、マルチエージェント、タスク、記憶プロセスの8語を注釈から除外する。長い除外語の一部からプロンプト・エージェントを抽出せず、独立して登場した場合は補足する。確認問題自体と結果確認画面は対象外。辞書・保存・移行はdocs/24・docs/49_rag_glossary.mdを参照する。
-- 注釈は表示用JSONとして保存し、現行の教材内解説では辞書を両群共通の意味参照として教材本文の生成入力に渡す。現行仕様版54は本文800文字程度を目安にするだけで、文字数による合否判定・再試行は行わない。旧版のモード別文字数契約とログは履歴として保持する。教授契約版v7は維持する。再表示はsnapshotを使い、旧教材へ後付けしない。登録語しか扱わず、AIで未知語を補わない。
+- 注釈は表示用JSONとして保存し、現行の教材内解説では辞書を両群共通の意味参照として教材本文の生成入力に渡す。現行仕様版55は本文800文字程度を目安にするだけで、文字数による合否判定・再試行は行わない。旧版のモード別文字数契約とログは履歴として保持する。教授契約版v7は維持する。再表示はsnapshotを使い、旧教材へ後付けしない。登録語しか扱わず、AIで未知語を補わない。
 
-このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`です。仕様版53以下は閲覧専用です。2026-11-12の同意文書・識別対応の変更はアプリ内の文書・運用更新であり、研究倫理上の承認を意味しません。受入検証と実験開始承認は別に扱ってください。
+このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は55 / `experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1`です。仕様版54以下は閲覧専用です。2026-11-12の同意・登録方式の更新は、研究倫理上の承認を意味しません。受入検証と実験開始承認は別に扱ってください。
 
 ## Authoritative Documents
 
@@ -90,15 +90,14 @@
 - 現行分類はM1/M3/unknownのみ。両群へ同じ用語の全フェーズの採点済み回答履歴を渡す。提案群だけに明示的な診断・対象主張・taxonomy・タイプ別教授方針を追加する。方略はbackendで固定する。
 - 確認問題の診断連動規則は両群共通。統制群のLLMへ分類・診断由来段階を渡さず、共通履歴内にも診断情報を混ぜない。統制群の自然な誤り訂正は許容する。
 - 被験者画面に内部分類、群名、教授方略を直接表示しない。
+- テスト回答中はチャット・ヒント・即時正解を表示しない。新規参加者は4用語各1問を出題し、複数選択は正解3つまたはJ単独。回答後は選択肢別（本人が選んだ項目のみ）と設問全体の正誤を示す。未選択肢の正誤は表示しない。既存参加者は保存snapshotで復元する。過去の設問ペア表示契約はdocs/40を参照する。
+- 学習確認は1用語・1セッションあたり最大3回答。必要な全設問を採点して全問正解した事前・再テスト1/2・内部`final_test`の後はsurveyへ進み、学習・後続テストを省略する。未達時は誤答用語を学習する。再テスト2後は正誤にかかわらずsurveyへ進む。採点済みバッチは1回とし、全問未回答は採点しない。
+- 新規Participantのテストは`four_topic_fundamentals`=`split-actions-four-topic-v3`に固定し、4用語各1問・計4問を出題する。A〜Cは正解、D〜FはM1、G〜IはM3、Jはunknownの10択。内部`final_test` APIは履歴復元用に保持し、新規通常経路では使わない。既存Participantは保存済みモード・protocol・snapshotに基づいて当時の問題を復元し、版付きconstruct_keyで本文・選択肢を上書きしない。学習確認は直前テストの保存snapshotを利用する。通常の学習v15と教材条件は維持する。
 - 選択肢配置は管理画面のDB保存設定で切り替える。既定値は`debug_fixed`で、新規参加者だけに適用する。実験データ収集前に`randomized`へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
-- 現行コードでは新規だけ仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`を保存し、`retest_cycles_completed=0`で開始する。この列は学習後retestだけを数える。新規は`presurvey-four-topic-baseline-v4`、`posttest-5point-v4`、`split-actions-four-topic-v3`を使用する。事後はシステム評価1項目・教材評価6項目で、`system_clarity`は含めない。現行評価はH1〜H4。仕様版53以下の記録は保存時のprotocol・問題・アンケート版で復元し、既存行の設定・回数・回答・評価を補完・変更しない。仕様版52の対応2 protocolには参加者データや既存サマリーを変更せずH1〜H4評価サマリーだけを追加でき、仕様版51以下と未対応protocolは再計算しない。全問採点済みの満点後は結果表示snapshotに従ってsurveyへ進み、学習・後続テストを省略する。
+- 現行コードでは新規だけ仕様版55 / `experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1`を保存し、`retest_cycles_completed=0`で開始する。新規は`presurvey-four-topic-baseline-v5`、`posttest-5point-v4`、問題バンクv3を使用する。事前アンケートのAI利用自己評価例文は回答キー・尺度・保存payloadを変えない。事後はシステム評価1項目、教材評価6項目で、削除済み`system_clarity`は新規回答に含めない。教材量の質問文は「教材の量はどの程度でしたか」。現行指標は`four-hypotheses-v1`。仕様版54以下のprotocol・保存記録は当時の版で復元し、旧行の版・進行・回答・評価・回数を更新・削除・補完しない。仕様版52の対応2 protocolにはH1〜H4評価サマリーのみを追加し、参加者の回答・進行・既存サマリーを変更しない。仕様版51以下・未対応protocolは再計算対象外。
 - 両群の教材の小見出し・数・順序・まとめ方はAIが決める。冒頭の##用語名と非空の###セクションだけを要求し、実験群の必須教授内容・transfer_checkは本文内証拠で検証する。固定見出しから証拠文を自動補正しない。
 - 教材内のtransfer_checkは維持するが、独立した追加テスト・旧支援量・自由回答処理を戻さない。
 - 過去のapplication/basic_understandingの対象は`llm_knowledge`、`multi_agent`、`memory_process`。現行新規4用語版の対象は`transformer`、`llm_training_stages`、`multi_agent_four_topic`、`memory_process_four_topic`。
-- テスト回答中はチャット・ヒント・即時正解を表示しない。現行新規参加者は4用語各1問を出題し、複数選択は正解3つまたはJ単独。回答後は本人の選択した選択肢ごとの正誤と設問全体の正誤を示し、未選択肢の正誤は表示しない。既存Participantは保存snapshotのモード/問題で復元する。過去の設問ペア表示契約はdocs/40を参照する。
-- 学習確認は1用語・1セッションあたり最大3回答。必要な全設問を採点し全問正解した事前・再テスト1/2・内部`final_test`の後はsurveyへ進み、学習・後続テストを省略する。未達時はモード別の誤答用語を学習する。再テスト2の採点後は正誤にかかわらずsurveyへ進む。採点済みバッチは1回とし、全問未回答は採点しない。
-- 新規Participantのテストは`four_topic_fundamentals`=`split-actions-four-topic-v3`に固定し、4用語各1問・計4問を出題する。4用語バンクはA〜C正解、D〜F=M1、G〜I=M3、J=unknownの10択。activeキーはpretest_v1、retest_v1/v2。内部`final_test` APIと履歴復元契約は保持するが、新規4用語フローでは使わない。既存Participantは保存済み`test_content_mode`・protocol・snapshotから各時点のバンクを選ぶ。旧バンクは復元用に保持し、版付きconstruct_keyで既存本文・選択肢を上書きしない。学習確認は直前テストの保存snapshotを利用する。通常の学習v15と教材条件は維持する。
-- 選択肢配置は管理画面のDB保存設定で切り替える。既定値は`debug_fixed`で、新規参加者だけに適用する。実験データ収集前に`randomized`へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
 
 ## AI Backend Rules
 

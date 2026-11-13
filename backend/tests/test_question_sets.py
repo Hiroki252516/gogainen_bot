@@ -462,27 +462,27 @@ def test_new_participants_are_fixed_to_four_topic_and_old_mode_snapshots_remain(
         with factory() as db:
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
-            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 54
+            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 55
             assert uses_split(default_participant)
-            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1"
+            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()
-            assert default_survey.survey_version == "presurvey-four-topic-baseline-v4"
+            assert default_survey.survey_version == "presurvey-four-topic-baseline-v5"
         default_response = client.get(f"/api/experiment/{default_id}/pretest")
         assert default_response.status_code == 200, default_response.text
         default_questions = default_response.json()["questions"]
         assert [question["term_slug"] for question in default_questions] == list(FOUR_TOPIC_TERM_SLUGS)
         assert len(default_questions) == 4
         default_context = presurvey_contexts[default_id]
-        assert default_context["survey_version"] == "presurvey-four-topic-baseline-v4"
+        assert default_context["survey_version"] == "presurvey-four-topic-baseline-v5"
         assert [item["key"] for item in default_context["term_items"]] == [
             "transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process",
         ]
 
         basic_id = create_participant("BASIC-MODE-SNAPSHOT-TEST", "basic_understanding")
         basic_context = presurvey_contexts[basic_id]
-        assert basic_context["survey_version"] == "presurvey-baseline-v4"
+        assert basic_context["survey_version"] == "presurvey-baseline-v5"
         assert [item["key"] for item in basic_context["term_items"]] == [
             "pretraining", "fine_tuning", "rag", "prompt_engineering", "multi_agent", "memory_process",
         ]
@@ -506,7 +506,7 @@ def test_new_participants_are_fixed_to_four_topic_and_old_mode_snapshots_remain(
             presurvey_record = db.query(ParticipantSurvey).filter_by(
                 participant_id=four_id, phase="presurvey"
             ).one()
-            assert presurvey_record.survey_version == "presurvey-four-topic-baseline-v4"
+            assert presurvey_record.survey_version == "presurvey-four-topic-baseline-v5"
         four_questions = client.get(f"/api/experiment/{four_id}/pretest").json()["questions"]
         assert [question["term_slug"] for question in four_questions] == list(FOUR_TOPIC_TERM_SLUGS)
         assert len(four_questions) == 4

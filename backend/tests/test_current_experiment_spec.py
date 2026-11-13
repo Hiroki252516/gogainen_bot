@@ -33,7 +33,8 @@ client = TestClient(app)
 def test_current_protocol_id_fits_participant_schema():
     protocol_column = Participant.__table__.c.protocol_id
 
-    assert len(CURRENT_PROTOCOL_ID) == 124
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 55
+    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1"
     assert protocol_column.type.length >= len(CURRENT_PROTOCOL_ID)
 
 

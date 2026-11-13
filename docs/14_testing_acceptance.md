@@ -1,6 +1,15 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-13 fix/issue-344 と origin/main の統合検証
+## 2026-11-13 事前アンケートAI自己評価への具体例追加（仕様版55・ifx/issue-325）
+
+- 新規参加者向けprotocolを仕様版55 / `experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1`へ更新し、標準2モードを`presurvey-baseline-v5`、4用語版を`presurvey-four-topic-baseline-v5`とした。追加例は「週末の外食先を探すとき、希望を伝えて候補を提案してもらう」「候補が希望と違うとき、予算や移動時間などの条件を伝え直す」「候補の営業時間や料金を、施設の公式情報で確かめる」。
+- 普段のAI利用に関する3項目の見出し、尺度、回答キー、保存payloadは維持し、画面に指定の具体例を追加した。仕様版54以下とv4回答は保存時の版・内容で保全する。研究上の承認を意味しない。
+- Backendの事前アンケート関連テストは隔離DBで`10 passed`、protocol・列幅の重点テストは`2 passed`。v4歴史schema/API拒否、仕様版54記録の保全、新規v5 contextを含む選択テストは`4 passed`。
+- `test_plan_aligned_protocol.py`と`test_current_experiment_spec.py`の全実行は`56 passed, 74 failed`。失敗は指標fixtureの期待値と既存テストフローでの問題取得応答などにあり、今回の例文変更との因果は確認できていない。Backend全テスト通過とは扱わない。
+- Frontend `npm test`と`npm run build`（TypeScript検査を含む）は成功した。ブラウザテスト`presurvey-browser.mjs`はPlaywrightモジュールが環境になく未実施。
+- `git diff --check`は成功した。尺度の妥当性、具体例が回答へ与える影響、研究上の承認は未確認。
+
+## 2026-11-13 fix/issue-344 と origin/main の統合前検証記録（仕様版54時点）
 
 - 競合した9ファイルを、仕様版54の現行4用語版固定登録・研究用コードの非保存・対応表のアプリ外管理と、現行`four-hypotheses-v1`（H1〜H4）の条件が両立するように解消した。仕様版52の対応する2 protocolは、参加者の進行・回答・既存サマリーを変更せずH1〜H4評価サマリーのみ追加できる例外として記載した。
 - Backend全テストを隔離SQLiteで実行し、`1736 passed, 6 failed`（462.83秒、DeprecationWarning 6件）。失敗はすべて`test_question_sets.py::test_perfect_test_round_routes_to_survey_in_every_mode`の`application`／`basic_understanding`ケースで、4用語版固定の管理APIが設定変更を409で拒否する現行契約と、mainから自動マージされた旧3モード前提テストとの不一致だった。4用語版の該当ケースとその他のBackendテストは通過した。自動マージ済みテストファイルは変更していない。

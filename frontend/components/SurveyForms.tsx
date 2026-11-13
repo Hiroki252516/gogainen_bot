@@ -40,9 +40,9 @@ const PROFICIENCY_OPTIONS = [
   ["not_applicable", "評価できない"],
 ] as const;
 const PROFICIENCY_ITEMS = [
-  ["goal_aligned_output", "目的を伝えて、目的に合った回答を得る"],
-  ["revise_instructions", "期待と違う回答のとき、指示や条件を修正する"],
-  ["verify_with_sources", "AIの回答を他の資料・情報源で確認する"],
+  ["goal_aligned_output", "目的を伝えて、目的に合った回答を得る", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],
+  ["revise_instructions", "期待と違う回答のとき、指示や条件を修正する", "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。"],
+  ["verify_with_sources", "AIの回答を他の資料・情報源で確認する", "例：候補の営業時間や料金を、施設の公式情報で確かめる。"],
 ] as const;
 const PROFICIENCY_ANCHORS = "1：全くできない ／ 2：あまりできない ／ 3：少しできる ／ 4：ある程度できる ／ 5：よくできる";
 
@@ -223,9 +223,10 @@ export function PresurveyQuestionnaire({
       onChange={(value) => update("ai_usage_frequency_30d", value)}
     />
     <p className="muted">次の各行動をどの程度できるか回答してください。評価する機会がなかった場合は「評価できない」を選んでください。</p>
-    {PROFICIENCY_ITEMS.map(([key, label]) => <ChoiceButtons
+    {PROFICIENCY_ITEMS.map(([key, label, example]) => <ChoiceButtons
       key={key}
       label={label}
+      description={example}
       value={values[`proficiency:${key}`] || ""}
       anchors={PROFICIENCY_ANCHORS}
       options={PROFICIENCY_OPTIONS}
@@ -320,6 +321,7 @@ function ChoiceButtons({
   disabled,
   onChange,
   anchors,
+  description,
 }: {
   label: string;
   value: string;
@@ -327,9 +329,11 @@ function ChoiceButtons({
   disabled: boolean;
   onChange: (value: string) => void;
   anchors?: string;
+  description?: string;
 }) {
   return <div className="survey-choice-question">
     <div className="survey-rating-label"><span className="survey-question-label">{label}</span><span className="required-indicator">必須</span></div>
+    {description ? <p className="muted survey-choice-description">{description}</p> : null}
     {anchors ? <span className="muted">{anchors}</span> : null}
     <div
       className="survey-choice-options"

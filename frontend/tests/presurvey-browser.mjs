@@ -9,7 +9,7 @@ const { chromium } = await import(process.env.PRESURVEY_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
 const mode = {
   mode: "four_topic_fundamentals",
-  version: "presurvey-four-topic-baseline-v4",
+  version: "presurvey-four-topic-baseline-v5",
   keys: ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"],
 };
 const experienceChoices = [
@@ -27,9 +27,9 @@ const understandingScale = [
   "全く理解していない", "少し理解している", "ある程度理解している", "よく理解している",
 ];
 const proficiencyItems = [
-  ["goal_aligned_output", "目的を伝えて、目的に合った回答を得る"],
-  ["revise_instructions", "期待と違う回答のとき、指示や条件を修正する"],
-  ["verify_with_sources", "AIの回答を他の資料・情報源で確認する"],
+  ["goal_aligned_output", "目的を伝えて、目的に合った回答を得る", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],
+  ["revise_instructions", "期待と違う回答のとき、指示や条件を修正する", "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。"],
+  ["verify_with_sources", "AIの回答を他の資料・情報源で確認する", "例：候補の営業時間や料金を、施設の公式情報で確かめる。"],
 ];
 
 async function request(context, path, method = "GET", data) {
@@ -122,7 +122,8 @@ try {
       }
       await frequency.getByRole("button", { name: "9〜20日", exact: true }).click();
       const proficiency = {};
-      for (const [key, label] of proficiencyItems) {
+      for (const [key, label, example] of proficiencyItems) {
+        assert.equal(await page.getByText(example, { exact: true }).count(), 1);
         const group = page.getByRole("group", { name: label, exact: true });
         for (const choice of ["1", "2", "3", "4", "5", "評価できない"]) {
           assert.equal(await group.getByRole("button", { name: choice, exact: true }).count(), 1);

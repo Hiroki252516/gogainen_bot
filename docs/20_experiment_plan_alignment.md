@@ -1,16 +1,16 @@
 # 実験計画書との対応と実装判断
 
-## 現行仕様版54：4仮説評価と満点後早期終了
+## 仕様版55：事前アンケート自己評価への具体例追加（現行）
 
-現行protocolは`experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`。新規参加者だけに適用し、仕様版53以下の参加者・回答・問題snapshot・アンケート回答は当時の条件で保持する。仕様版52の対応2 protocolは参加者操作をread-onlyとし、既存サマリーを上書きせずH1〜H4評価サマリーのみ追加する。仕様版51以下・未対応protocolは再計算しない。
+現行protocolは`experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1`。仕様版55は新規参加者だけに適用し、標準2モードの事前アンケートを`presurvey-baseline-v5`、4用語版を`presurvey-four-topic-baseline-v5`とする。普段のAI利用に関する自己評価3項目の見出し・尺度・回答キー・payloadは維持し、指定の具体例を各項目の下に表示する。問題バンク、事後アンケート、満点後早期終了、評価式は変更しない。現行指標は`four-hypotheses-v1`のH1〜H4で、モード別に集計する。仕様版52の対応する2 protocolには、参加者の進行・回答・既存サマリーを変えず評価サマリーだけを追加する。仕様版51以下・未対応protocolは再計算しない。仕様版54以下の参加者・保存済みsnapshotは当時の内容を保持する。例示による回答への影響、尺度の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
 
-現行評価版は`four-hypotheses-v1`。H1は事前から初回再テストへの正答率差、H2は事前M1/M3項目の同タイプ再選択率、H3は事前完了かつ事前非満点の再テスト対象者における満点率、H4は事後教材評価6項目の個別集計である。難易度・分量は分布で報告し、教材評価を総合点にしない。定義と対象・欠測規則は[評価指標](12_evaluation_metrics.md)を正本とする。
+### 同意・登録運用（issue-344、現行）
 
-仕様版54では、4用語版に問題バンクv3・事前アンケートv4、事後アンケートに`posttest-5point-v4`を使う。事前・再テスト1/2・内部`final_test`で必要な全設問が採点済みかつ全問正解なら、結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略する。事後システム評価は1項目、教材評価は6項目。難易度・測定上の同等性や研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[受入記録](14_testing_acceptance.md)。
+現行同意文書版は`consent-2026-11-12-revised-v1`。研究用コードは登録時に半角数字1〜64桁を検証するため一時受信するが、その後はDB・冪等性記録・ログ・エクスポート・AI入力・ブラウザ永続領域へ保存しない。学籍番号はアプリで取得しない。研究用コード・学籍番号・participant IDの対応表は研究者が外部Excelで管理し、管理画面/APIから扱わない。旧SQLiteファイルと行は保持し、明示的な参加者削除時のみ当該participant_idの旧行をcleanupする。文書・実装更新は指導教員・研究倫理上の承認を意味しない。[同意・運用](19_experiment_operation_runbook.md)、[個人情報](15_security_privacy.md)、[API](08_backend_api_spec.md)、[受入記録](14_testing_acceptance.md)。
 
-### 同意・登録運用（issue-344）
+## 仕様版54（履歴）：満点後早期終了・事後アンケート改訂の統合
 
-現行同意文書版は`consent-2026-11-12-revised-v1`。文書には研究目的、取得データ、Codex app-server/OpenAIへの送信、撤回、保存場所、外部対応表、保管期間、参加負担、成果公表を記載する。登録画面の研究用コードは半角数字1〜64桁を検証する目的で一時受信するが、DB・冪等性記録・ログ・エクスポート・AI入力・ブラウザ永続領域へ保存しない。学籍番号はアプリで取得しない。研究用コード・学籍番号・participant IDの対応表は研究者が外部Excelで管理し、管理画面/APIから扱わない。過去の別SQLiteファイルと行は保持し、明示的な参加者削除の場合のみ当該participant_idの旧行をcleanupする。連絡先・保存・運用情報は提示内容を反映したもので、コード変更は指導教員・研究倫理上の承認を意味しない。[同意・運用](19_experiment_operation_runbook.md)、[個人情報](15_security_privacy.md)、[API](08_backend_api_spec.md)、[受入記録](14_testing_acceptance.md)。
+仕様版54は`experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`を使用した。4用語版は問題バンク`split-actions-four-topic-v3`、事前アンケート`presurvey-four-topic-baseline-v4`、事後アンケート`posttest-5point-v4`を使い、`instruction_tuning`／「インストラクションチューニング」を採用した。事後システム評価は1項目である。全モードの事前・再テスト1/2・内部`final_test`で必要な全設問が採点済みかつ全問正解なら、結果表示snapshotに応じて確認後または直接surveyへ進み、学習・後続テストを省略した。採用当時はH1〜H6を使っており、現行4仮説へ変換しない。過去の参加者・回答・評価サマリーは保存時の内容で保持する。研究上の承認、問題難易度・測定特性の同等性は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)。
 
 ## 仕様版52（履歴）：独立して採用されたprotocol
 
@@ -147,7 +147,7 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 
 > 現行変更: 学習確認は各用語・各セッション1回答とする。以下の過去の版や判断に記載された3回答・同一用語の再回答用先行生成は当時の記録である。
 
-> 仕様版38採用時の記録。現行版は冒頭の仕様版54節を参照する。仕様版43で新規参加者の問題モードを登録時に固定し、仕様版45で4用語版だけを固定2回の進行へ変更した。旧easy-mode条件の削除手順は現在の問題モード資産・Participant.test_content_modeとは別管理である。[運用手順](19_experiment_operation_runbook.md)、[検証](14_testing_acceptance.md)、[問題モード仕様](50_basic_understanding_question_mode.md)を参照する。
+> 仕様版38採用時の記録。現行版は冒頭の仕様版55節を参照する。仕様版43で新規参加者の問題モードを登録時に固定し、仕様版45で4用語版だけを固定2回の進行へ変更した。旧easy-mode条件の削除手順は現在の問題モード資産・Participant.test_content_modeとは別管理である。[運用手順](19_experiment_operation_runbook.md)、[検証](14_testing_acceptance.md)、[問題モード仕様](50_basic_understanding_question_mode.md)を参照する。
 
 ## 仕様版28の採用仕様（仕様版35でも維持）
 
@@ -326,14 +326,14 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 | ID | 今回の対応 | 状態 |
 | --- | --- | --- |
 | D01 | 共通指示を意味や仕組みの解説へ変更。具体例・注意点の一律必須指定を撤廃 | 実装 |
-| D02 | 統制群の通常説明の追加指示を6.7.2へ一致。自然な誤り訂正を許容 | 仕様版39まで適用。仕様版40で群別指示を削除し、現行仕様版54でも共通指示のみ |
+| D02 | 統制群の通常説明の追加指示を6.7.2へ一致。自然な誤り訂正を許容 | 仕様版39まで適用。仕様版40で群別指示を削除し、現行仕様版55でも共通指示のみ |
 | D03 | unknownを意味・仕組み・適用確認へ変更。taxonomy/指針/Schema/検査/Mockを整合 | 実装 |
 | D04 | Word原本のモデル目標記載はgpt-5.6-luna / low。承認されたアプリ側標準はgpt-6-luna / lowとし、gpt-6.1-sol / gpt-6-luna / gpt-6-astraとlow/medium/high/xhigh/maxを管理画面から一時切替できる。両群に次回呼出しから適用し、再起動後は環境値へ戻す。監査に実値と標準基準を保存 | 実装。ただし2026-10-25の検証用ChatGPTアカウントでは、当時の2モデルともlow/medium/highの生成要求がmodel_not_foundで拒否された。追加したモデル・推論レベルを含む現在の接続先での生成成功は未確認。利用権限のあるアカウントで成功を確認するまで実験利用不可。このアプリ側変更はWord原本を改訂したことを意味しない |
 | D05 | 仕様版37で4段階の事前知識6・AI利用2評定と事後システム評価2・教材評価6・任意自由記述をphase/version別JSONに保存 | 実装 |
 | D06 | 現行4仮説を専用指標として保存・管理表示・CSV/XLSX出力 | 実装。記述集計のみ。指標版`four-hypotheses-v1`、旧6仮説サマリーは履歴保持 |
 | D07 | 研究者のA/B割付を維持 | 自動無作為割付・20名上限は今回対象外 |
 | D08 | 事前後テストをfinal_test込み最大2回、事前込み最大3回に制限。2回目未達は未達のままアンケート | 実装。2026-10-24の追加判断 |
-| D09 | 仕様版28で通常版PRETEST/RETEST/final_testに用語ごとの設問別答え合わせを追加。現行仕様版54は問題モードごとの対象問で回答後に設問別確認を行い、事前満点者の全体結果確認は登録snapshotに従ってから、または省略してsurveyへ進む | 実装・受入検証状況は[14](14_testing_acceptance.md)、履歴契約は[40](40_question_pair_answer_review.md) |
+| D09 | 仕様版28で通常版PRETEST/RETEST/final_testに用語ごとの設問別答え合わせを追加。現行仕様版55は問題モードごとの対象問で回答後に設問別確認を行い、満点者の全体結果確認は登録snapshotに従ってから、または省略してsurveyへ進む | 実装・受入検証状況は[14](14_testing_acceptance.md)、履歴契約は[40](40_question_pair_answer_review.md) |
 
 ## 要確認事項
 
@@ -351,7 +351,7 @@ Q01〜Q07・Q09〜Q11は、Wordだけから補わずユーザーへの確認と�
 | Q08 | Chi本文2008/参考文献2009の版・ページ照合は未解決。引用年を無断訂正しない |
 | Q09 | 1用語あたり最大3回答/3回不正解終了を維持。これは参加者あたりの事前後テスト最大2回とは別の上限。測定は0〜3不正解として明文化 |
 | Q10 | unknownはmandatory_elements.definitionと既存teaching_contractのmechanism_explanation/transfer_checkを本文証拠として要求。旧6項目は撤廃 |
-| Q11 | （旧仕様）PRETEST/RETEST/final_testは1用語の設問1・2を保存後に同画面で本人の選択内容と正誤を表示。現行仕様版54の新規参加者は`four_topic_fundamentals`に固定し、4用語各1問（計4問）を表示・採点する。`application`/`basic_understanding`は既存参加者の記録復元用に保持する。回答後に設問別確認を行い、全体結果確認の表示はsnapshotに従う。必要な全設問が採点済みで全問正解なら、事前・再テスト1/2・内部final_test後に満点者は確認後または直接surveyへ進み、学習・後続テストを行わない。事後アンケートは`posttest-5point-v4`でシステム評価1項目、教材評価6項目。仕様版53以下は保存時protocolとsnapshotを保全し閲覧専用 |
+| Q11 | （旧仕様）PRETEST/RETEST/final_testは1用語の設問1・2を保存後に同画面で本人の選択内容と正誤を表示。現行仕様版55は新規参加者を`four_topic_fundamentals`に固定し、4用語各1問（計4問）を出題する。`application`/`basic_understanding`は既存参加者の記録復元用に保持する。回答後に設問別確認を行い、全体結果確認の表示はsnapshotに従う。必要な全設問が採点済みで全問正解なら、事前・再テスト1/2・内部final_test後に満点者は確認後または直接surveyへ進み、学習・後続テストを行わない。事前アンケートv5はAI利用自己評価の各項目に具体例を示し、回答形式は変えない。事後アンケートは`posttest-5point-v4`でシステム評価1項目、教材評価6項目。仕様版54以下は保存時protocolとsnapshotを保全し、参加者操作では変更しない |
 
 PR #142の修正では、指標版v2として仮説2の未達人数を未観測として表示し、中断・継続中・完了時点で未達等の内訳と観測回数を追加した。到達者平均・仮説6の登録者分母・実験プロトコルは変えない。教材表示だけの離脱でも既存の更新時刻監視でキャッシュが更新されることを回帰テストで確認した。CSVは未作成の出力先ディレクトリにも出力できるようにした。
 

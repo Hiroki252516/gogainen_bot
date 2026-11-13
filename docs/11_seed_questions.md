@@ -2,7 +2,7 @@
 
 ## 現行条件（仕様版54）
 
-新規参加者はParticipantに固定された`test_content_mode`に応じて、`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v3`（4用語版）を使う。4用語版v3ではLLM学習段階の用語を「インストラクションチューニング」とし、問題文・選択肢・提案群の教材生成用情報も合わせる。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。v1は仕様版49以下、v2は仕様版50の対応protocolと仕様版51/52のissue338系protocol、v3は仕様版51/52のissue336系protocolの復元用に保持し、別のconstruct keyで各バンクをseedする。現行仕様版54ではv3を使う。詳細は[51](51_four_topic_foundation_mode.md)。
+新規参加者はParticipantに固定された`test_content_mode`に応じて、`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v3`（4用語版）を使う。4用語版v3ではLLM学習段階の用語を「インストラクションチューニング」とし、問題文・選択肢・提案群の教材生成用情報も合わせる。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。v1は仕様版49以下、v2は仕様版50の対応protocolと仕様版51/52のissue338系protocol、v3は仕様版51/52のissue336系protocolの復元用に保持し、別のconstruct keyで各バンクをseedする。現行仕様版55ではv3を使う。詳細は[51](51_four_topic_foundation_mode.md)。
 
 ## 仕様版48の条件（履歴）
 

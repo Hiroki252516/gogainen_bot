@@ -114,12 +114,12 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     complete_presurvey(client, pid)
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 54
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1"
-        if phase == "final_test":
-            # The internal final_test remains available only to legacy three-topic participants.
-            participant.test_content_mode = "application"
-            participant.first_question_only = False
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 55
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1"
+        # This test verifies the legacy three-topic question bank and its
+        # glossary snapshots, not the current four-topic registration default.
+        participant.test_content_mode = "application"
+        participant.first_question_only = False
         participant.current_step = phase
         participant.retest_cycles_completed = completed
         db.commit()
@@ -127,7 +127,7 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     response = client.get(path)
     assert response.status_code == 200, response.text
     questions = response.json()["questions"]
-    assert len(questions) == (6 if phase == "final_test" else 4)
+    assert len(questions) == 6
     assert client.get(path).json() == response.json()
     for question in questions:
         expected = experiment._test_glossary(question["term_label"], question["body"], question["options"])
