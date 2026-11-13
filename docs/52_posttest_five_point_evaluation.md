@@ -1,8 +1,8 @@
 # 事後アンケート5段階評価
 
-## 現行条件（仕様版53）
+## 現行条件（仕様版54）
 
-新規参加者は仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`で、事後アンケート版`posttest-5point-v4`を使用する。システム評価は「必要な操作をスムーズに行えた」のみで、`system_clarity`は新規回答schemaから除く。教材量の質問文は「教材の量はどの程度でしたか」。適用範囲は新規参加者のみ。仕様版52以下の参加者・回答・評価サマリーは保存時の版を保全し、尺度変換・上書き・新指標への再集計を行わない。この変更は研究上の承認を意味しない。
+新規参加者は仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`で、事後アンケート版`posttest-5point-v4`を使用する。システム評価は「必要な操作をスムーズに行えた」のみで、`system_clarity`は新規回答schemaから除く。教材量の質問文は「教材の量はどの程度でしたか」。仕様版53以前の参加者・回答・評価サマリーは保存時の版を保全し、尺度変換・上書き・新指標への再集計を行わない。この変更は研究上の承認を意味しない。
 
 項目数はシステム評価1項目、教材評価6項目、任意の自由記述とする。表示文と回答値は以下のとおり。
 

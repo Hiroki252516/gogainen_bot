@@ -1,8 +1,8 @@
 # 事前アンケート
 
-## 事前アンケートの現行契約（仕様版48導入、仕様版53更新）
+## 事前アンケートの現行契約（仕様版48導入、仕様版54更新）
 
-新規参加者は仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`で同意後・事前テスト前に回答する。登録snapshotされた問題モードに応じてアンケート版と対象用語を固定する。標準2モードは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v4`を使う。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、「実験前の時点で」を含めない。見聞き経験の質問にある「実験の説明を受ける前に」は維持する。4用語版は`instruction_tuning` / 「インストラクションチューニング」とする。仕様版52の`experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`では問題バンクv3・事前アンケートv4・事後アンケートv3を、`experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`では問題バンクv2・事前アンケートv3・事後アンケートv4を復元し、保存済み回答を変換しない。仕様版52以下の参加者・回答は閲覧専用で保全し、新しい質問・用語への変換や遡及適用をしない。現行事後アンケートは[posttest-5point-v4](52_posttest_five_point_evaluation.md)。尺度の妥当性や研究上の承認はこの変更だけでは確認されない。
+新規参加者は仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`で同意後・事前テスト前に回答する。登録snapshotされた問題モードに応じてアンケート版と対象用語を固定する。標準2モードは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v4`を使う。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、「実験前の時点で」を含めない。見聞き経験の質問にある「実験の説明を受ける前に」は維持する。4用語版は対象の下位用語を`instruction_tuning` / 「インストラクションチューニング」とする。仕様版51〜53には問題バンク・事前アンケート・事後アンケート・早期終了条件の異なるprotocolがあり、それぞれ保存時の組み合わせで復元する。仕様版53以下の参加者・回答は閲覧専用で保全し、新しい質問・用語への変換や遡及適用をしない。現行事後アンケートは[posttest-5point-v4](52_posttest_five_point_evaluation.md)。尺度の妥当性や研究上の承認はこの変更だけでは確認されない。
 
 | 問題モード | アンケート版 | 対象用語 |
 | --- | --- | --- |
@@ -56,6 +56,6 @@ GET `/api/participants/{id}/presurvey`は参加者の保存済み問題モード
 - `presurvey-four-topic-baseline-v1`（仕様版44以降の旧4用語形式）: Transformer、LLMの学習段階、マルチエージェント、記憶プロセスの4項目を取得した。
 - `presurvey-baseline-v1`（仕様版36）: 用語ごとに「知っていた／知らない」のBooleanを保存した。
 
-これらの保存済み回答は新形式へ変換・補完しない。仕様版49では事後アンケート`posttest-5point-v1`でシステム評価2項目、教材評価6項目、任意自由記述を取得した。現行仕様版53の新規参加者は`posttest-5point-v4`を使用する。教材評価は閲覧者に限り全項目の回答を必須とし、現行H4は`phase=posttest`の教材評価6項目を個別に参照する。仕様版52のv3/v4回答は評価サマリー追加時にも保存時の内容を維持する。事前回答は事後アンケート・仮説指標へ合算しない。
+これらの保存済み回答は新形式へ変換・補完しない。仕様版49では事後アンケート`posttest-5point-v1`でシステム評価2項目、教材評価6項目、任意自由記述を取得した。現行仕様版54の新規参加者は`posttest-5point-v4`を使用する。教材評価は閲覧者に限り全項目の回答を必須とし、現行H4は`phase=posttest`にある教材評価6項目を個別に参照する。仕様版52の対応protocolの回答は評価サマリー追加時にも保存時の内容を維持する。事前回答は事後アンケート・仮説指標へ合算しない。
 
 アプリ内の同意説明を更新しても、研究倫理上の審査・承認を意味しない。尺度の妥当性、回想誤差、回答負担および各モード間の比較可能性は、この実装だけでは検証されていない。

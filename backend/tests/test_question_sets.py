@@ -27,8 +27,8 @@ from app.models import Attempt, Base, Participant, ParticipantSurvey, Question, 
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS, assessment_question_spec, four_topic_terms, learning_question_spec, load_content, load_learning_content
 from app.seed.seed_questions import seed_database
 from app.services.hypothesis_metrics import group_metrics, metrics_export_rows
-from app.services.split_assessment import learning_spec, split_bank, split_specs
-from split_api_support import complete_presurvey, new_research_code
+from app.services.split_assessment import learning_spec, split_bank, split_specs, uses_split
+from split_api_support import acknowledge_all_question_reviews, complete_presurvey, new_research_code
 
 
 @pytest.fixture
@@ -186,8 +186,8 @@ def test_version_49_restores_the_historical_four_topic_bank():
     "protocol_id,expected_bank",
     [
         ("experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1", "split-actions-four-topic-v2"),
-        ("experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1", "split-actions-four-topic-v2"),
         ("experiment-plan-2026-11-11-posttest-material-amount-wording-v1", "split-actions-four-topic-v1"),
+        ("experiment-plan-2026-11-11-presurvey-finetuning-posttest-material-amount-v1", "split-actions-four-topic-v2"),
     ],
 )
 def test_spec_50_protocol_variants_restore_their_saved_four_topic_bank(protocol_id, expected_bank):
@@ -201,10 +201,17 @@ def test_spec_50_protocol_variants_restore_their_saved_four_topic_bank(protocol_
     assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
 
 
-def test_spec_51_posttest_protocol_restores_the_pre_instruction_tuning_bank():
+@pytest.mark.parametrize(
+    "protocol_id",
+    [
+        "experiment-plan-2026-11-12-perfect-test-early-exit-v1",
+        "experiment-plan-2026-11-12-posttest-material-amount-wording-v1",
+    ],
+)
+def test_spec_51_protocol_variants_restore_their_saved_four_topic_bank(protocol_id):
     participant = {
         "experiment_spec_version": 51,
-        "protocol_id": "experiment-plan-2026-11-12-posttest-material-amount-wording-v1",
+        "protocol_id": protocol_id,
         "test_content_mode": "four_topic_fundamentals",
     }
 
@@ -230,7 +237,14 @@ def test_spec_51_instruction_tuning_protocol_restores_its_saved_bank():
 @pytest.mark.parametrize(
     "protocol_id,expected_bank",
     [
-        ("experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1", "split-actions-four-topic-v3"),
+        (
+            "experiment-plan-2026-11-12-perfect-test-early-exit-posttest-material-amount-v1",
+            "split-actions-four-topic-v2",
+        ),
+        (
+            "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1",
+            "split-actions-four-topic-v3",
+        ),
         ("experiment-plan-2026-11-12-posttest-system-clarity-removal-v1", "split-actions-four-topic-v2"),
     ],
 )
@@ -243,6 +257,32 @@ def test_spec_52_protocol_variants_restore_their_saved_four_topic_bank(protocol_
 
     assert assessment_bank_for_participant(participant) == expected_bank
     assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
+
+
+@pytest.mark.parametrize(
+    "protocol_id",
+    [
+        "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-v1",
+        "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1",
+    ],
+)
+def test_spec_53_protocol_variants_restore_their_saved_four_topic_bank(protocol_id):
+    participant = {
+        "experiment_spec_version": 53,
+        "protocol_id": protocol_id,
+        "test_content_mode": "four_topic_fundamentals",
+    }
+
+    assert assessment_bank_for_participant(participant) == "split-actions-four-topic-v3"
+    assert historical_assessment_bank_versions_for(participant) == {
+        STANDARD: "split-actions-four-topic-v3"
+    }
+
+
+def test_current_spec_uses_split_assessment_for_current_participants():
+    participant = Participant(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION)
+
+    assert uses_split(participant)
 
 
 def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map():
@@ -287,6 +327,54 @@ def test_current_result_restoration_rejects_missing_mode_snapshot(isolated):
 
     assert error.value.status_code == 503
     assert error.value.detail["error_code"] == "assessment_bank_unavailable"
+
+
+def _answer_mode_round(client, factory, participant_id, phase, *, wrong_first=False):
+    path_phase = phase.replace("_", "-")
+    response = client.get(f"/api/experiment/{participant_id}/{path_phase}")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    questions = data["questions"]
+    answers_by_term = {}
+    for index, question in enumerate(questions):
+        with factory() as db:
+            options = db.query(QuestionOption).filter_by(question_id=question["question_id"]).all()
+            correct = [option for option in options if option.is_correct]
+            selected = correct
+            if wrong_first and index == 0:
+                m1 = next(option for option in options if option.misconception_type == "M1")
+                selected = [*correct[:2], m1] if len(correct) > 1 else [m1]
+            selected_ids = [str(option.id) for option in selected]
+        answers_by_term.setdefault(question["term_slug"], []).append({
+            "question_id": question["question_id"],
+            "selected_option_ids": selected_ids,
+        })
+
+    if data["test_page_mode"] == "per_term":
+        for term_slug, answers in answers_by_term.items():
+            first_question = next(row for row in questions if row["term_slug"] == term_slug)
+            saved = client.post("/api/attempts/term-page", json={
+                "participant_id": participant_id,
+                "phase": phase,
+                "term_slug": term_slug,
+                "test_round": first_question["test_round"],
+                "page_id": str(uuid4()),
+                "answers": answers,
+                "question_shown_at": "2026-11-12T00:00:00Z",
+                "answered_at": "2026-11-12T00:00:02Z",
+                "elapsed_time_sec": 2,
+            }, headers={"Idempotency-Key": f"issue-337-{phase}-{term_slug}-{uuid4().hex}"})
+            assert saved.status_code == 200, saved.text
+    else:
+        for answer in (answer for term_answers in answers_by_term.values() for answer in term_answers):
+            saved = client.post("/api/attempts", json={
+                "participant_id": participant_id,
+                "phase": phase,
+                **answer,
+            })
+            assert saved.status_code == 200, saved.text
+    acknowledge_all_question_reviews(client, participant_id, phase)
+    return questions
 
 
 def test_version_44_without_mode_restores_historical_default_bank():
@@ -366,8 +454,9 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         with factory() as db:
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
-            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 53
-            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1"
+            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 54
+            assert uses_split(default_participant)
+            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()
@@ -577,7 +666,7 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
     "wrong_by_round",
     [
         ({FOUR_TOPIC_TERM_SLUGS[0]}, {FOUR_TOPIC_TERM_SLUGS[1]}, {FOUR_TOPIC_TERM_SLUGS[2]}),
-        ({FOUR_TOPIC_TERM_SLUGS[2]}, set(), {FOUR_TOPIC_TERM_SLUGS[0]}),
+        ({FOUR_TOPIC_TERM_SLUGS[2]}, {FOUR_TOPIC_TERM_SLUGS[0]}, set()),
     ],
 )
 def test_four_topic_mode_runs_learning_and_two_retests_after_pretest_errors(isolated, wrong_by_round):
@@ -688,6 +777,120 @@ def test_four_topic_mode_runs_learning_and_two_retests_after_pretest_errors(isol
         current = client.get(f"/api/participants/{participant_id}/current-step")
         assert current.status_code == 200, current.text
         assert current.json()["step"] == "survey"
+    finally:
+        deleted = client.delete(f"/api/admin/participants/{participant_id}")
+        assert deleted.status_code == 200, deleted.text
+
+
+@pytest.mark.parametrize("mode", ["application", "basic_understanding", "four_topic_fundamentals"])
+@pytest.mark.parametrize("mastery_phase", ["pretest", "retest_1", "retest_2"])
+def test_perfect_test_round_routes_to_survey_in_every_mode(isolated, mode, mastery_phase):
+    client, factory, _engine = isolated
+    configured = client.put("/api/admin/test-content-mode", json={"mode": mode})
+    assert configured.status_code == 200, configured.text
+    created = client.post("/api/registrations", json={
+        "assignment_code": "A",
+        "consent_checked": True,
+        "research_code": new_research_code(),
+    })
+    assert created.status_code == 200, created.text
+    participant_id = created.json()["participant_id"]
+    complete_presurvey(client, participant_id)
+
+    try:
+        pretest = _answer_mode_round(
+            client, factory, participant_id, "pretest", wrong_first=mastery_phase != "pretest"
+        )
+        assert len(pretest) == (4 if mode == "four_topic_fundamentals" else 3)
+        diagnosed = client.post(f"/api/participants/{participant_id}/diagnose-pretest", json={})
+        assert diagnosed.status_code == 200, diagnosed.text
+        if mastery_phase == "pretest":
+            result = diagnosed.json()
+            assert result["next_step"] == "survey"
+            assert result["next_url"] == "/survey"
+        else:
+            assert diagnosed.json()["next_step"] == "learning_targets"
+            skipped = client.post(f"/api/participants/{participant_id}/give-up-learning", json={})
+            assert skipped.status_code == 200, skipped.text
+
+            if mastery_phase == "retest_2":
+                _answer_mode_round(client, factory, participant_id, "retest", wrong_first=True)
+                first_score = client.post(f"/api/participants/{participant_id}/score-retest", json={})
+                assert first_score.status_code == 200, first_score.text
+                assert first_score.json()["next_step"] == "learning_targets"
+                skipped = client.post(f"/api/participants/{participant_id}/give-up-learning", json={})
+                assert skipped.status_code == 200, skipped.text
+
+            retest = _answer_mode_round(client, factory, participant_id, "retest")
+            assert {question["test_round"] for question in retest} == {mastery_phase}
+            result_response = client.post(f"/api/participants/{participant_id}/score-retest", json={})
+            assert result_response.status_code == 200, result_response.text
+            result = result_response.json()
+            assert result["next_step"] == "survey"
+            assert result["next_url"] == "/survey"
+            assert result["learning_target_slugs"] == []
+
+        assert client.get(f"/api/participants/{participant_id}/current-step").json()["next_url"] == "/survey"
+        assert client.get(f"/api/experiment/{participant_id}/retest").status_code == 409
+        assert client.get(f"/api/experiment/{participant_id}/final-test").status_code == 409
+        assert client.post("/api/tutor-sessions", json={
+            "participant_id": participant_id,
+            "term_slug": "llm_knowledge",
+        }).status_code == 409
+        assert client.get(f"/api/participants/{participant_id}/survey").status_code == 200
+    finally:
+        deleted = client.delete(f"/api/admin/participants/{participant_id}")
+        assert deleted.status_code == 200, deleted.text
+
+
+@pytest.mark.parametrize("show_results", [False, True])
+def test_four_topic_retest_mastery_preserves_result_display_setting(isolated, show_results):
+    client, factory, _engine = isolated
+    configured = client.put("/api/admin/test-content-mode", json={"mode": "four_topic_fundamentals"})
+    assert configured.status_code == 200, configured.text
+    created = client.post("/api/registrations", json={
+        "assignment_code": "A",
+        "consent_checked": True,
+        "research_code": new_research_code(),
+    })
+    assert created.status_code == 200, created.text
+    participant_id = created.json()["participant_id"]
+    complete_presurvey(client, participant_id)
+    with factory() as db:
+        db.get(Participant, participant_id).show_retest_results = show_results
+        db.commit()
+
+    try:
+        _answer_mode_round(client, factory, participant_id, "pretest", wrong_first=True)
+        diagnosed = client.post(f"/api/participants/{participant_id}/diagnose-pretest", json={})
+        assert diagnosed.status_code == 200, diagnosed.text
+        assert diagnosed.json()["next_step"] == "learning_targets"
+        skipped = client.post(f"/api/participants/{participant_id}/give-up-learning", json={})
+        assert skipped.status_code == 200, skipped.text
+        questions = _answer_mode_round(client, factory, participant_id, "retest")
+        headers = {"Idempotency-Key": "issue-337-four-topic-perfect-retest"}
+        scored = client.post(f"/api/participants/{participant_id}/score-retest", json={}, headers=headers)
+        assert scored.status_code == 200, scored.text
+        result = scored.json()
+        assert result["next_step"] == "survey"
+        assert result["review_required"] is show_results
+        assert result["next_url"] == ("/learning-targets" if show_results else "/survey")
+        retried = client.post(f"/api/participants/{participant_id}/score-retest", json={}, headers=headers)
+        assert retried.status_code == 200, retried.text
+        assert retried.json() == result
+
+        review = client.get(f"/api/participants/{participant_id}/learning-targets")
+        assert review.status_code == 200, review.text
+        review_data = review.json()
+        assert review_data["current_step"] == "survey"
+        assert review_data["targets"] == []
+        if show_results:
+            assert review_data["review_required"] is True
+            assert len(review_data["test_results"]["results"]) == len(questions) == 4
+        else:
+            assert review_data["review_required"] is False
+            assert review_data["next_url"] == "/survey"
+            assert review_data["test_results"]["results"] == []
     finally:
         deleted = client.delete(f"/api/admin/participants/{participant_id}")
         assert deleted.status_code == 200, deleted.text
