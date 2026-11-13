@@ -1,21 +1,31 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-12 同意文書更新と対応表のアプリ管理廃止（fix/issue-344）
+## 2026-11-12 同意文書更新と対応表のアプリ管理廃止（fix/issue-344、統合前の検証記録）
 
 - 同意文書を`consent-2026-11-12-revised-v1`へ更新し、4用語版、記録項目、Codex app-server/OpenAIへの送信、撤回、外部Excel対応表、保存場所、10年間の保管、負担・リスク、公表を明記した。学籍番号入力欄と未確定項目警告は表示しない。
 - 研究用コードの形式検証、登録処理後の非保存、冪等性記録・アプリログ・参加者ログ・CSV/XLSX・AI入力・ブラウザ永続領域への非混入を確認するBackendテストを実施した。既存の外部SQLite対応表は通常登録で開かず、既存行を維持する。明示的な参加者削除時は当該参加者の旧行だけをcleanupする。
-- 新規登録は4用語版に固定され、管理画面のモード切替と対応表管理UI/APIは廃止した。仕様版53の既存参加者は保存snapshotで継続し、既存同意記録・進行・問題・回答は変更しない。
+- 新規登録は4用語版に固定され、管理画面のモード切替と対応表管理UI/APIは廃止した。当時は仕様版53の既存参加者が保存snapshotで継続できる条件だったが、origin/mainとの統合後、仕様版53以下は閲覧専用となる。既存同意記録・進行・問題・回答は変更しない。
 - Backend全テストは`1720 passed`（警告6件）。登録・対応表・管理API・新規登録モード固定と、既存仕様の復元を含む回帰を確認した。Frontend `npm test`と`npm run build`は成功。
 - `git -c core.whitespace=cr-at-eol diff --check`が成功した。手動の実ブラウザ確認は未実施。実験用3000番環境、研究DB、実AIは使用していない。文書更新は研究倫理上の承認を意味しない。
 
-## 2026-11-12 事後アンケートのシステム評価項目削除（fix/issue-328、統合前）
+## 2026-11-12 仕様版54へのマージ統合（origin/mainとfix/issue-344）
 
-- 新規参加者の仕様を52 / `experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`、事後アンケートを`posttest-5point-v4`へ更新した。システム評価は「必要な操作をスムーズに行えた」のみとし、`system_clarity`はv4の送信画面・入力契約から除外した。v3の既存回答・記録は変更しない。
-- 対象Backendテストは9件成功し、v4の余分キー拒否、旧v3を含むH5の版別処理、survey APIの現行版を確認した。Frontend `npm test`と`npm run build`は成功した。
-- Backend全テストは`1051 failed, 650 passed, 23 errors`。多数のフローで問題バンクvariantが見つからず503となった。今回の変更との因果関係は特定できておらず、全Backendテストは成功扱いにしていない。
-- `git diff --check`は成功した。ブラウザの実画面確認は未実施。研究上の承認を意味しない。
+- 仕様版53にあった「全モードの事前・再テスト1/2・内部`final_test`で満点後に早期終了」と、事後アンケート`posttest-5point-v4`（`system_clarity`を除いたシステム評価1項目）を統合し、仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`を現行protocolとした。
+- 仕様版53の早期終了protocolは問題バンクv3・presurvey v4・posttest v3、同版のアンケート改訂protocolはバンクv3・presurvey v4・posttest v4として復元可能に保つ。仕様版51・52の各protocolと保存済み回答も当時の版で復元し、書き換えない。仕様版53以下は閲覧専用。
+- 仕様版54統合後に関連Backendテスト8ファイルを隔離SQLiteで実行し、`254 passed`（既存警告2件）。3モードの全テスト満点後遷移、仕様版51〜53の問題バンク復元、旧アンケート回答保全、新規事後v4の入力検証を含む。
+- Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。`frontend/tests/smoke.mjs`で削除項目が表示・送信されないことも確認した。
+- 新protocol ID（124文字）を保存できるようParticipant列の上限を160文字へ拡張し、PostgreSQL既存列の拡張DDLが冪等に生成されることを単体テストで確認した。実PostgreSQLへのDDL適用は未実施。SQLite隔離テストでは新protocolの参加者登録を確認した。
+- `git -c core.whitespace=cr-at-eol diff --check`が成功し、競合マーカーと未解決パスがないことを確認した。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
 
-## 2026-11-12 4用語版のインストラクションチューニング表記への復帰（仕様版51・fix/issue-336、統合前）
+## 2026-11-13 仕様版54とissue-344の競合解消
+
+- 仕様版54の統合protocolと満点後早期終了を採用し、新規登録を`four_topic_fundamentals`に固定するissue-344の登録実装を維持した。管理画面の3モード選択を新規参加者向けとして記述しないよう文書を整合した。
+- 同意文書版`consent-2026-11-12-revised-v1`、登録時のみ受信する研究用コードの非保存、学籍番号を取得しないこと、対応表のアプリ外管理・旧SQLite保持・明示削除cleanupを仕様54の運用説明へ統合した。
+- `backend/tests/test_test_glossary.py`は仕様版54/protocolの期待値とし、履歴用`final_test`ケースはlegacy `application`モードで実行する。
+- Backend全件は隔離SQLiteで`1732 passed, 6 failed`（502秒、警告6件）。失敗6件はすべて`test_question_sets.py::test_perfect_test_round_routes_to_survey_in_every_mode`で、`application`または`basic_understanding`を管理APIで設定しようとして409になった。issue-344統合後のAPIは新規登録を4用語版に固定し、他モードのPUTを拒否するため、mainから自動マージされた旧3モード前提のパラメータ化テストとの契約不一致である。4用語版の同テスト3ケースは通過した。自動マージ済みテストファイルは今回の競合解消では変更していない。
+- Frontend `npm test`と`npm run build`は成功した。研究DB・稼働中の3000番環境・実AIは使用していない。PostgreSQLへのDDL適用と手動ブラウザ確認は未実施。
+
+## 2026-11-12 4用語版のインストラクションチューニング表記への復帰（仕様版51・fix/issue-336）
 
 - 4用語版に問題バンク`split-actions-four-topic-v3`を追加し、LLM学習段階の用語・設問・選択肢・教授情報をインストラクションチューニング表記に更新した。4問・各10択、正解/M1/M3/unknownの役割、採点と確認問題snapshot再利用は維持する。
 - 4用語版の事前アンケートを`presurvey-four-topic-baseline-v4`へ更新し、`instruction_tuning`／「インストラクションチューニング」を保存・表示する。標準2モードの`fine_tuning`／「ファインチューニング」は維持した。仕様版50の問題バンクv1/v2と事前アンケートv2/v3、および仕様版50以下の保存済み記録は変更しない。
@@ -31,7 +41,7 @@
 - `git diff --check`が成功した。隔離ブラウザ確認はPlaywrightランタイムが見つからず未実施。
 - この文言変更は研究上の承認を意味しない。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
 
-上記3件は統合前の独立した検証記録であり、仕様版53の複合protocol全体を検証した結果ではない。仕様版53の統合後検証はマージ後に実施し、結果を以下へ追記する。
+上記の仕様版51・52・53に関する各変更は統合前の独立した検証記録であり、仕様版54の統合protocol全体を検証した結果ではない。仕様版54の統合後検証結果は本書冒頭の記録を参照する。
 
 ## 2026-11-11 仕様版50の事前アンケート・問題バンク更新（fix/issue-323の検証記録）
 

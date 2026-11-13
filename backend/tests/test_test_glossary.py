@@ -114,8 +114,8 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     complete_presurvey(client, pid)
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 53
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1"
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 54
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1"
         if phase == "final_test":
             # The internal final_test remains available only to legacy three-topic participants.
             participant.test_content_mode = "application"

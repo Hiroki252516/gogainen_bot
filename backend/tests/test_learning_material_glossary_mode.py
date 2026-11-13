@@ -52,8 +52,8 @@ def test_new_participants_are_integrated_and_old_setting_is_ignored(restore_lega
         with SessionLocal() as db:
             participant = db.get(Participant, participant_id)
             assert participant.learning_material_glossary_mode == INTEGRATED_MATERIAL
-            assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 53
-            assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1"
+            assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 54
+            assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1"
             assert can_resume(participant)
             setting = db.get(RuntimeSetting, 1)
             assert setting.learning_material_glossary_mode == legacy_mode
