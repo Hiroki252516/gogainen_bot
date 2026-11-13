@@ -39,7 +39,7 @@ class Participant(Base):
     learning_content_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     test_page_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     experiment_spec_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    protocol_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    protocol_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     option_order_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     retest_cycles_completed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

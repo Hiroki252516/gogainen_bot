@@ -61,19 +61,32 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
 # Version 41 was used by parallel protocols. Keep the v5 default for the two
 # mainline protocols and restore the branch-specific v6 bank by protocol ID.
 HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
-    # Spec 52 had separate conditions before they were combined as spec 53.
+    # Spec 53 has parallel protocol variants; preserve their fixed banks.
+    (53, "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-v1"): {
+        STANDARD: "split-actions-four-topic-v3",
+    },
+    (53, "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1"): {
+        STANDARD: "split-actions-four-topic-v3",
+    },
+    # Spec 52 also has parallel protocol variants.
+    (52, "experiment-plan-2026-11-12-perfect-test-early-exit-posttest-material-amount-v1"): {
+        STANDARD: "split-actions-four-topic-v2",
+    },
     (52, "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1"): {
         STANDARD: "split-actions-four-topic-v3",
     },
     (52, "experiment-plan-2026-11-12-posttest-system-clarity-removal-v1"): {
         STANDARD: "split-actions-four-topic-v2",
     },
-    # Spec 51 had two independent protocol variants before integration.
-    (51, "experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1"): {
-        STANDARD: "split-actions-four-topic-v3",
+    # Spec 51 had parallel protocol variants.
+    (51, "experiment-plan-2026-11-12-perfect-test-early-exit-v1"): {
+        STANDARD: "split-actions-four-topic-v2",
     },
     (51, "experiment-plan-2026-11-12-posttest-material-amount-wording-v1"): {
         STANDARD: "split-actions-four-topic-v2",
+    },
+    (51, "experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1"): {
+        STANDARD: "split-actions-four-topic-v3",
     },
     # Spec 50 protocol variants retain their exact assessment banks.
     (50, "experiment-plan-2026-11-11-four-topic-finetuning-terminology-v1"): {
