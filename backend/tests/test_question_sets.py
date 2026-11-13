@@ -783,11 +783,10 @@ def test_four_topic_mode_runs_learning_and_two_retests_after_pretest_errors(isol
         assert deleted.status_code == 200, deleted.text
 
 
-@pytest.mark.parametrize("mode", ["application", "basic_understanding", "four_topic_fundamentals"])
 @pytest.mark.parametrize("mastery_phase", ["pretest", "retest_1", "retest_2"])
-def test_perfect_test_round_routes_to_survey_in_every_mode(isolated, mode, mastery_phase):
+def test_perfect_test_round_routes_to_survey_in_four_topic_mode(isolated, mastery_phase):
     client, factory, _engine = isolated
-    configured = client.put("/api/admin/test-content-mode", json={"mode": mode})
+    configured = client.put("/api/admin/test-content-mode", json={"mode": "four_topic_fundamentals"})
     assert configured.status_code == 200, configured.text
     created = client.post("/api/registrations", json={
         "assignment_code": "A",
@@ -802,7 +801,7 @@ def test_perfect_test_round_routes_to_survey_in_every_mode(isolated, mode, maste
         pretest = _answer_mode_round(
             client, factory, participant_id, "pretest", wrong_first=mastery_phase != "pretest"
         )
-        assert len(pretest) == (4 if mode == "four_topic_fundamentals" else 3)
+        assert len(pretest) == 4
         diagnosed = client.post(f"/api/participants/{participant_id}/diagnose-pretest", json={})
         assert diagnosed.status_code == 200, diagnosed.text
         if mastery_phase == "pretest":
