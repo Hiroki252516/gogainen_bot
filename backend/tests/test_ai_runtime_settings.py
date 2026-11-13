@@ -4,7 +4,8 @@ import pytest
 
 from admin_client import AuthenticatedTestClient
 from app.ai.codex_app_server_backend import CodexAppServerBackend
-from app.core.config import get_settings
+from app.core import runtime_config
+from app.core.config import Settings, get_settings
 from app.core.runtime_config import (
     ALLOWED_MODELS,
     ALLOWED_REASONING_EFFORTS,
@@ -26,6 +27,16 @@ def reset_runtime_overrides():
     reset_model_override()
     reset_reasoning_effort_override()
     reset_fast_mode_override()
+
+
+def test_gpt6_luna_is_runtime_default_without_env_file(monkeypatch):
+    monkeypatch.delenv("CODEX_MODEL", raising=False)
+    monkeypatch.delenv("CODEX_REASONING_EFFORT", raising=False)
+    settings = Settings(_env_file=None)
+    monkeypatch.setattr(runtime_config, "get_settings", lambda: settings)
+
+    assert settings.codex_model == "gpt-6-luna"
+    assert runtime_config.current_ai_runtime_settings() == ("gpt-6-luna", "low", False)
 
 
 def test_admin_ai_api_exposes_and_accepts_all_model_and_effort_options(monkeypatch):
