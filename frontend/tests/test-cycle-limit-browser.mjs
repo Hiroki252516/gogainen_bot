@@ -126,7 +126,7 @@ try {
       await page.getByRole("heading", { name: "実験は終了です", exact: true }).waitFor();
       const logs = await (await page.request.get(new URL(`/api/admin/participants/${pid}/logs`, base).href)).json();
       assert.equal(logs.participant.experiment_spec_version, 7);
-      assert.equal(logs.latest_evaluation_summary.hypothesis_metrics.h6.value, 0);
+      assert.equal(logs.latest_evaluation_summary.hypothesis_metrics.h3.value, 0);
       assert.equal(logs.attempts.length, 9);
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page.goto(new URL("/admin", base).href);

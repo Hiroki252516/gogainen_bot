@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import hashlib
 
@@ -7,6 +8,7 @@ import pytest
 import yaml
 
 from app.ai.backend import strategy_for
+from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.ai.mandatory_elements import mandatory_element_requirements, mandatory_elements_schema
 from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
 from app.ai.tutoring_prompt import PROMPT_TEXT_PATH, _validate_prompt_text, build_tutoring_prompt
@@ -43,6 +45,16 @@ def test_prompt_yaml_is_valid_and_rejects_missing_required_sections():
     invalid = copy.deepcopy(raw)
     del invalid["tutoring"]["group_rules"]["proposed"]
     with pytest.raises(ValueError, match="group_rules.proposed"):
+        _validate_prompt_text(invalid)
+
+    invalid = copy.deepcopy(raw)
+    del invalid["feedback"]["correct_answer_summary"]
+    with pytest.raises(ValueError, match="feedback.correct_answer_summary"):
+        _validate_prompt_text(invalid)
+
+    invalid = copy.deepcopy(raw)
+    invalid["feedback"]["selected_distractor_feedback"]["rules"][0] = ""
+    with pytest.raises(ValueError, match="feedback.selected_distractor_feedback.rules"):
         _validate_prompt_text(invalid)
 
     invalid = copy.deepcopy(raw)
@@ -209,3 +221,87 @@ def test_rendered_prompt_matches_expected_contract_hashes():
 
     proposed_prompt = rendered["proposed_m1_retry_counted"]
     assert "teaching_strategy はbackendで指定された belief_revision に固定する。" in proposed_prompt
+
+
+def test_feedback_prompts_match_existing_contract_hashes(monkeypatch):
+    backend = CodexAppServerBackend()
+    captured: list[tuple[str, str, dict]] = []
+
+    async def capture(purpose, prompt, output_schema, **kwargs):
+        captured.append((purpose, prompt, output_schema))
+        if purpose == "generate_correct_answer_summary":
+            return {"summary": "## 今回の要点\n- 説明します。"}
+        return {
+            "feedback": "## どこが違うか\n- 確認します。",
+            "remediation_focus": "仕組みを確認する。",
+            "general_knowledge_supplement": None,
+        }
+
+    monkeypatch.setattr(backend, "_run_structured_turn", capture)
+    base_payload = {
+        "participant_id": "P-FEEDBACK",
+        "prompt_contract_version": "feedback-prompt-v9",
+        "taxonomy_version": "feedback-taxonomy-v6",
+        "term": {
+            "slug": "memory_process",
+            "label": "記憶プロセス",
+            "description": "情報を保存し検索する仕組みです。",
+        },
+        "learning_stage": "STAGE-PRIVATE",
+        "component_term": "検索",
+        "question_body": "CURRENT_QUESTION",
+        "selected_option_body": "CURRENT_SELECTION",
+        "selected_option_bodies": ["CURRENT_SELECTION"],
+        "material": "CURRENT_MATERIAL",
+        "rag_context": {
+            "query": "COMMON_QUERY",
+            "allowed_sections": ["3.2"],
+            "chunks": [{"chunk_id": "current-chunk", "text": "COMMON_RAG_TEXT"}],
+        },
+        "learner_state": {"primary_misconception": "PRIVATE_DIAGNOSIS"},
+        "misconception_taxonomy": {"M1": "PRIVATE_TAXONOMY"},
+        "session_misconception_history": ["PRIVATE_HISTORY"],
+    }
+
+    for group in ("control", "proposed"):
+        payload = {**base_payload, "group_condition": group}
+        asyncio.run(backend.generate_correct_answer_summary(payload))
+        asyncio.run(backend.explain_selected_distractor(payload))
+
+    assert [purpose for purpose, _, _ in captured] == [
+        "generate_correct_answer_summary",
+        "explain_selected_distractor",
+        "generate_correct_answer_summary",
+        "explain_selected_distractor",
+    ]
+    expected_hashes = {
+        "control.generate_correct_answer_summary": "e78b233fc47f031c61b661afb5668675c7a1772bf2046d6228964d9caf449f2f",
+        "control.explain_selected_distractor": "f39f4a13974b63ee73c6d53e868622a3c2e9b04de0bb07944764433aad7298b8",
+        "proposed.generate_correct_answer_summary": "f92653c889563cd81acab307908c2631c6d036be8adb0f89140d4eb9ca0faa89",
+        "proposed.explain_selected_distractor": "001eeb1ff32690ca0de2e988ca190cbb61c145442cb037f47ff60fc765830deb",
+    }
+    actual_hashes = {
+        f"{group}.{purpose}": hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        for (purpose, prompt, _), group in zip(captured, ("control", "control", "proposed", "proposed"))
+    }
+    assert actual_hashes == expected_hashes
+
+    expected_schemas = [
+        {
+            "type": "object",
+            "properties": {"summary": {"type": "string"}},
+            "required": ["summary"],
+            "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "properties": {
+                "feedback": {"type": "string"},
+                "remediation_focus": {"type": "string"},
+                "general_knowledge_supplement": {"type": ["string", "null"]},
+            },
+            "required": ["feedback", "remediation_focus", "general_knowledge_supplement"],
+            "additionalProperties": False,
+        },
+    ] * 2
+    assert [schema for _, _, schema in captured] == expected_schemas

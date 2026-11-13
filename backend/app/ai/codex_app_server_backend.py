@@ -24,6 +24,7 @@ from app.ai.mandatory_elements import (
     mandatory_elements_schema,
 )
 from app.ai.misconception_taxonomy import TAXONOMY_VERSION
+from app.ai.prompt_config import PROMPT_TEXT
 from app.ai.teaching_contract import (
     PROMPT_CONTRACT_VERSION,
     teaching_contract_schema,
@@ -283,15 +284,7 @@ class CodexAppServerBackend:
             self._prompt(
                 "correct_answer_summary",
                 prompt_payload,
-                [
-                    "固定YAMLの採点結果は正答済みである。正答選択肢の本文をそのまま繰り返さず、学習上の要点だけを短く説明する。",
-                    "interaction_historyは現在回答より前の同じ用語の採点済み履歴である。履歴を踏まえて要点を具体化してよいが、過去の問題や回答をそのまま転載しない。",
-                    "summary は学習者向けの安全なMarkdownにする。冒頭に ## 今回の要点 を置き、箇条書き、**太字**、短い段落だけを使う。",
-                    "HTML、表、コードブロック、画像、長大な連続段落は使わない。",
-                    "rag_context.chunks がある場合はその本文を優先し、本文にない内容を推測で断定しない。",
-                    "M1/M3/unknown、taxonomy、研究者向け診断、AIの思考過程を出力しない。",
-                    "summary には学習者の個人情報や内部識別子を含めない。",
-                ],
+                PROMPT_TEXT["feedback"]["correct_answer_summary"]["rules"],
             ),
             schema,
             audit_context=self._audit_context(payload),
@@ -320,17 +313,7 @@ class CodexAppServerBackend:
             self._prompt(
                 "selected_distractor_feedback",
                 prompt_payload,
-                [
-                    "固定YAMLの採点結果は不正解である。選択された説明の問題点と、教材を見直す観点だけを説明する。",
-                    "interaction_historyは現在回答より前の同じ用語の採点済み履歴である。履歴の回答・正誤を見直す観点に利用してよいが、履歴にない診断結果をbackendの判定として断定しない。",
-                    "正答の選択肢本文、正答位置、正答そのものを直接示さない。",
-                    "feedback は ## どこが違うか と ## 見直す観点を中心に、箇条書き、**太字**、短い段落だけを使う安全なMarkdownにする。",
-                    "remediation_focus は学習者が次に確認する観点を一文で返し、general_knowledge_supplement は追加説明が不要なら null にする。",
-                    "taxonomyや誤概念タイプが入力されている場合は解説の具体化に使うが、M1/M3/unknownなどのラベルを出力しない。",
-                    "HTML、表、コードブロック、画像、長大な連続段落、AIの思考過程は出力しない。",
-                    "rag_context.chunks がある場合はその本文を優先し、本文にない内容を推測で断定しない。",
-                    "選択内容が空なら、前提知識不足として定義と判断基準の確認を促す。",
-                ],
+                PROMPT_TEXT["feedback"]["selected_distractor_feedback"]["rules"],
             ),
             schema,
             audit_context=self._audit_context(payload),

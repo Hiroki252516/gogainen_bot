@@ -33,22 +33,28 @@
 
 仕様版52には二つの独立protocolがある。`experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`は事後v3で、教材量質問文を「教材の量はどの程度でしたか」に更新し、`system_clarity`を保持した。`experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`は事後v4で、`system_clarity`を削除したが、教材量質問文は統合前の文言だった。仕様版53で両変更を統合し、仕様版52の保存済み回答はそれぞれのprotocolに対応する版で保全する。
 
-## H5の集計
+## 現行H4との対応
 
-指標版は`six-hypotheses-v8-posttest-five-point-evaluation`。H5の参加者値は、教材閲覧者について次の4項目の数値回答の算術平均とする。
+現行指標版`four-hypotheses-v1`では、教材評価6項目を別々に集計し、単一の総合点には合成しない。内容理解（`clarity`）、読みやすさ（`readability`）、日本語表現（`japanese_clarity`）、正しい理解への役立ち度（`learning_usefulness`）は、それぞれ数値回答の平均・中央値と群間差を示す。各項目で「評価できない」、未回答、教材未閲覧を区別する。
+
+難易度（`difficulty_appropriateness`）と教材量（`amount_appropriateness`）は中央の3が望ましい尺度であり、平均・中央値・群間差は出さず、1〜5、「評価できない」、未回答の回答分布を項目別に示す。集計・出力の正本は[現行4仮説の評価指標](12_evaluation_metrics.md)である。
+
+## 旧H5の集計（履歴）
+
+旧指標版`six-hypotheses-v8-posttest-five-point-evaluation`では、H5の参加者値を教材閲覧者について次の4項目の数値回答の算術平均としていた。この定義は旧評価サマリーを解釈するための履歴であり、現行H4の計算には使用しない。
 
 - 教材で説明された内容を理解できた（`clarity`）
 - 教材は読みやすかった（`readability`）
 - 教材の日本語表現は分かりやすかった（`japanese_clarity`）
 - 教材は、用語や仕組みを正しく理解するために役立った（`learning_usefulness`）
 
-`not_applicable`は平均から除外し、平均に使った有効項目数と評価不能項目数を記録する。数値回答が1件以上あればその平均を使う。4項目すべてが`not_applicable`ならH5値を作らず、評価不能として対象外にする。未閲覧は未閲覧、posttest欠落は欠測として別々に記録する。
+旧H5では`not_applicable`を平均から除外し、平均に使った有効項目数と評価不能項目数を記録していた。4項目すべてが`not_applicable`なら対象外、未閲覧は未閲覧、posttest欠落は欠測として扱っていた。
 
-群集計では、`eligible_count`を「教材閲覧者数 − 4項目すべて評価不能の人数」とする。`valid_response_count`はH5数値を持つ参加者数、`missing_count`は`eligible_count - valid_response_count`とし、教材未閲覧者・全項目評価不能者を未回答に数えない。
+旧H5の群集計では、`eligible_count`を「教材閲覧者数 − 4項目すべて評価不能の人数」としていた。`valid_response_count`はH5数値を持つ参加者数、`missing_count`は`eligible_count - valid_response_count`であり、教材未閲覧者・全項目評価不能者を未回答に数えなかった。
 
-難易度（`difficulty_appropriateness`）と教材の量（`amount_appropriateness`）はH5へ含めず、群別の回答分布を別に報告する。分布は1〜5、`not_applicable`、未回答を区別し、平均・中央値やH5の群間差を計算しない。集計・CSV／Excelの詳細JSONには各値の件数、閲覧者分母、対象外・未回答の内訳を含める。
+旧H5では難易度・教材量を指標に含めず、群別分布だけを報告していた。以下の項目定義は旧H5の構成を記録するもので、現在は各項目をH4内で独立して扱う。
 
-旧指標`six-hypotheses-v7-pretest-perfect-exit`と旧10段階アンケートは履歴として保持し、新指標へ合算しない。尺度の妥当性、質問理解、H5構成の研究上の妥当性、研究上の承認はこの実装では確認していない。
+旧指標`six-hypotheses-v7-pretest-perfect-exit`および旧10段階アンケート・H5サマリーは履歴として保持し、新指標へ合算しない。尺度の妥当性、質問理解、指標構成の研究上の妥当性、研究上の承認はこの実装では確認していない。
 
 ## 仕様版50・`posttest-5point-v2`の履歴
 

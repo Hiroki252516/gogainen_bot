@@ -498,11 +498,11 @@ for (const expectedText of ["type ApiRequestInit", "AbortController", "timeoutMs
 }
 const surveyPage = fs.readFileSync(new URL("../app/survey/page.tsx", import.meta.url), "utf8");
 const hypothesisMetrics = fs.readFileSync(new URL("../components/HypothesisMetrics.tsx", import.meta.url), "utf8");
-for (const expectedText of ["6仮説の記述集計", "hypothesis_metrics.csv", "hypothesis_metrics.xlsx", "hypothesis_group_summary.csv", "hypothesis_group_summary.xlsx", "6仮説・参加者別Excel (.xlsx)", "6仮説・群別Excel (.xlsx)", "observed_nonattainer_sessions", "pooled_denominator", "material_item_differences", "H5_ITEMS", "DISTRIBUTION_ITEMS", "今回の教材の量", "教材量の回答分布（H5対象外）", "評価できない", "未回答"]) {
+for (const expectedText of ["4仮説の記述集計", "hypothesis_metrics.csv", "hypothesis_metrics.xlsx", "hypothesis_group_summary.csv", "hypothesis_group_summary.xlsx", "4仮説・参加者別Excel (.xlsx)", "4仮説・群別Excel (.xlsx)", "H4_NUMERIC_ITEMS", "CENTERED_ITEMS", "学習時間に対する分量", "難易度・分量の回答分布", "評価できない", "未回答"]) {
   if (!hypothesisMetrics.includes(expectedText)) throw new Error(`hypothesis display/export contract is missing: ${expectedText}`);
 }
-for (const expectedText of ["欠測・未観測", "censoring_breakdown", "censoring_reason", "途中中断", "継続中", "完了・満点未達", "終了状況不明", "表示済みセッションの記録欠落を意味しません"]) {
-  if (!hypothesisMetrics.includes(expectedText)) throw new Error(`H2 nonattainment reporting is missing: ${expectedText}`);
+for (const expectedText of ["事前テストと初回再テストの完答", "参加者ごとの再選択割合", "事前テスト未完了", "未受験・中断・未達は未到達", "未閲覧者"]) {
+  if (!hypothesisMetrics.includes(expectedText)) throw new Error(`four-hypothesis reporting is missing: ${expectedText}`);
 }
 for (const expectedText of ["material-view", "visibilitychange", "materialViewError"]) {
   if (!learningPage.includes(expectedText)) throw new Error(`material display recording is missing: ${expectedText}`);

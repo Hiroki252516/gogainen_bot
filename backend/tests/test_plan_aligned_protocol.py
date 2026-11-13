@@ -21,7 +21,7 @@ from app.seed.seed_questions import seed_database
 from app.services import experiment
 from split_api_support import new_research_code
 from app.services.hypothesis_metrics import (
-    H5_COMPOSITE_KEYS,
+    H4_NUMERIC_KEYS,
     current_metrics,
     group_metrics,
     participant_metrics,
@@ -60,9 +60,10 @@ def study(tmp_path):
     engine.dispose()
 
 
-def participant(db, code="T", group="proposed", protocol=CURRENT_PROTOCOL_ID):
+def participant(db, code="T", group="proposed", protocol=CURRENT_PROTOCOL_ID,
+                spec_version=CURRENT_EXPERIMENT_SPEC_VERSION):
     row = Participant(display_code=code, group_condition=group, protocol_id=protocol,
-                      experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD], test_content_mode="application", consent_checked=True, current_step="learning")
+                      experiment_spec_version=spec_version, learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD], test_content_mode="application", consent_checked=True, current_step="learning")
     db.add(row)
     db.flush()
     return row
@@ -224,7 +225,7 @@ def test_spec_50_posttest_v2_answer_remains_read_only_without_migration(study):
     assert survey.responses_json == responses
 
 
-def test_six_metrics_use_first_round_and_nested_term_means(study):
+def test_four_hypotheses_use_first_retest_pair_and_individual_material_items(study):
     p = participant(study)
     test_round(study, p, 0, ["M1", "M3", "unknown"])
     test_round(study, p, 1, ["M1", "unknown", "correct"])
@@ -240,14 +241,13 @@ def test_six_metrics_use_first_round_and_nested_term_means(study):
     study.flush()
     row = participant_metrics(study, p)
     assert row["h1"]["value"] == pytest.approx(100 / 3)
-    assert row["h2"]["value"] == 3
-    assert row["h2"]["first_mastery_round"] == 2
-    assert row["h3"]["term_means"] == {"llm_knowledge": 2, "memory_process": 0}
+    assert row["h2"]["value"] == pytest.approx(0.5)
+    assert row["h2"]["numerator"] == 2
+    assert row["h2"]["denominator"] == 4
     assert row["h3"]["value"] == 1
-    assert row["h4"]["value"] == 0.5
-    assert row["h4"]["denominator"] == 4
-    assert row["h5"]["value"] == 4
-    assert row["h6"]["attained"] is True
+    assert row["h3"]["first_mastery_round"] == 2
+    assert row["h4"]["items"]["clarity"] == 4
+    assert "h5" not in row and "h6" not in row
     assert row["rounds"][1]["gain_pt"] == 100
 
 
@@ -259,15 +259,13 @@ def test_incomplete_or_unscored_tests_are_not_mastery_or_zero_missing(study, typ
     session(study, p, "llm_knowledge", 1, answered=False)
     row = participant_metrics(study, p)
     assert row["h1"]["value"] is None
-    assert row["h4"]["value"] is None
     assert row["h2"]["value"] is None
-    assert row["h2"]["observed_session_count"] == 1
-    assert row["h3"]["value"] is None
-    assert row["h5"]["status"] == "missing_survey"
-    assert row["h6"]["attained"] is False
+    assert row["h2"]["status"] == "missing_paired_tests"
+    assert row["h3"]["value"] == 0
+    assert row["h4"]["status"] == "missing_survey"
 
 
-def test_pretest_perfect_early_exit_is_not_applicable_to_h1_h2_h6(study, tmp_path):
+def test_pretest_perfect_early_exit_is_excluded_from_h1_h2_h3(study, tmp_path):
     p = participant(study)
     test_round(study, p, 0, ["correct"] * 3)
     p.current_step = "survey"
@@ -278,29 +276,27 @@ def test_pretest_perfect_early_exit_is_not_applicable_to_h1_h2_h6(study, tmp_pat
     assert row["h1"]["status"] == "not_applicable_pretest_mastery"
     assert row["h2"]["value"] is None
     assert row["h2"]["status"] == "not_applicable_pretest_mastery"
-    assert row["h4"]["value"] is None
-    assert row["h4"]["status"].startswith("not_applicable")
-    assert row["h5"]["items"] is None
-    assert row["h6"]["value"] is None
-    assert row["h6"]["status"] == "not_applicable_pretest_mastery"
+    assert row["h3"]["value"] is None
+    assert row["h3"]["status"] == "not_applicable_pretest_mastery"
+    assert row["h4"]["items"] is None
 
     grouped = group_metrics([row])
     proposed = grouped["groups"][1]
     assert proposed["participant_count"] == 1
     assert proposed["pretest_perfect_early_exit_count"] == 1
-    for key in ("h1", "h2", "h6"):
+    for key in ("h1", "h2", "h3"):
         assert proposed[key]["eligible_count"] == 0
         assert proposed[key]["not_applicable_count"] == 1
         assert proposed[key]["missing_count"] == 0
-    assert proposed["h6"]["denominator"] == 0
-    assert proposed["h6"]["numerator"] == 0
+    assert proposed["h3"]["denominator"] == 0
+    assert proposed["h3"]["numerator"] == 0
     assert grouped["routes"]["pretest_perfect_early_exit"][1]["participant_count"] == 1
     exported = write_metrics_csv(tmp_path / "early-exit.csv", [row], grouped=True)
     records = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
-    h6 = next(record for record in records if record["metric"] == "h6" and record["group_condition"] == "proposed")
-    assert h6["eligible_count"] == "0"
-    assert h6["not_applicable_count"] == "1"
-    assert json.loads(h6["details_json"])["denominator"] == 0
+    h3 = next(record for record in records if record["metric"] == "h3" and record["group_condition"] == "proposed")
+    assert h3["eligible_count"] == "0"
+    assert h3["not_applicable_count"] == "1"
+    assert json.loads(h3["details_json"])["denominator"] == 0
     assert proposed["rounds"] == []
 
     learner = participant(study, "LEARNER")
@@ -311,20 +307,20 @@ def test_pretest_perfect_early_exit_is_not_applicable_to_h1_h2_h6(study, tmp_pat
     assert retest_one["gain"]["eligible_count"] == 1
     assert retest_one["gain"]["not_applicable_count"] == 1
     assert retest_one["gain"]["missing_count"] == 0
-    assert retest_one["recurrence"]["eligible_count"] == 1
-    assert retest_one["recurrence"]["not_applicable_count"] == 1
-    assert retest_one["recurrence"]["missing_count"] == 0
+    assert retest_one["same_type_reselection"]["eligible_count"] == 1
+    assert retest_one["same_type_reselection"]["not_applicable_count"] == 1
+    assert retest_one["same_type_reselection"]["missing_count"] == 0
 
 
-def test_mastery_does_not_depend_on_survey_completion_and_is_first_not_latest(study):
+def test_retest_perfect_score_does_not_depend_on_survey_completion_and_records_first_round(study):
     p = participant(study)
     p.completion_reason = "give_up"
     test_round(study, p, 0, ["M3"] * 3)
     test_round(study, p, 1, ["correct"] * 3)
     test_round(study, p, 2, ["M3"] * 3)
     row = participant_metrics(study, p)
-    assert row["h6"]["value"] == 1
-    assert row["h2"]["first_mastery_round"] == 1
+    assert row["h3"]["value"] == 1
+    assert row["h3"]["first_mastery_round"] == 1
 
 
 def test_group_weights_missing_censoring_and_export_match(study, tmp_path):
@@ -340,15 +336,15 @@ def test_group_weights_missing_censoring_and_export_match(study, tmp_path):
     assert len(rows) == 3
     result = group_metrics(rows)
     proposed = next(g for g in result["groups"] if g["group_condition"] == "proposed")
-    assert proposed["h4"]["mean"] == 0.5
-    assert proposed["h4"]["pooled_rate"] == 0.25
-    assert proposed["h6"]["rate"] == 0.5
-    assert proposed["h2"]["n"] == 1
-    assert proposed["h2"]["not_attained_count"] == 1
+    assert proposed["h2"]["mean"] == 0.5
+    assert proposed["h2"]["pooled_rate"] == 0.25
+    assert proposed["h3"]["rate"] == 0.5
+    assert proposed["h2"]["n"] == 2
     control = next(g for g in result["groups"] if g["group_condition"] == "control")
     assert control["h1"]["mean"] is None
     assert control["h1"]["missing_count"] == 1
-    assert control["h6"]["rate"] == 0
+    assert control["h3"]["rate"] is None
+    assert control["h3"]["denominator"] == 0
     for grouped in (False, True):
         path = write_metrics_csv(tmp_path / f"{grouped}.csv", rows, grouped=grouped)
         exported = list(csv.DictReader(path.open(encoding="utf-8-sig")))
@@ -357,7 +353,7 @@ def test_group_weights_missing_censoring_and_export_match(study, tmp_path):
         assert "LEGACY" not in path.read_text(encoding="utf-8-sig")
 
 
-def test_h2_distinguishes_nonattainer_outcomes_without_changing_h6(study, tmp_path):
+def test_h3_uses_retest_eligible_denominator_and_counts_unattempted_as_not_attained(study, tmp_path):
     for index, reason in enumerate(("give_up", None, "completed", "other")):
         p = participant(study, f"NOT-{index}")
         p.completion_reason = reason
@@ -366,33 +362,30 @@ def test_h2_distinguishes_nonattainer_outcomes_without_changing_h6(study, tmp_pa
             p.current_step = "finish"
         for number in range(index):
             session(study, p, "llm_knowledge", number + 1, answered=False)
-    for index, reason in enumerate(("completed", "give_up")):
-        p = participant(study, f"ATTAINED-{index}")
-        p.completion_reason = reason
-        test_round(study, p, 0, ["M1"] * 3)
-        test_round(study, p, 1, ["correct"] * 3, phase="final_test")
+    no_retest = participant(study, "NO-RETEST")
+    test_round(study, no_retest, 0, ["M1"] * 3)
+    attained = participant(study, "ATTAINED")
+    test_round(study, attained, 0, ["M1"] * 3)
+    test_round(study, attained, 1, ["correct"] * 3, phase="final_test")
     rows = current_metrics(study)
     by_code = {row["display_code"]: row for row in rows}
-    assert [by_code[f"NOT-{i}"]["h2"]["censoring_reason"] for i in range(4)] == ["give_up", "in_progress", "completed_without_mastery", "other"]
-    assert all(by_code[f"ATTAINED-{i}"]["h2"]["censoring_reason"] is None for i in range(2))
+    assert all(by_code[f"NOT-{i}"]["h3"]["status"] == "not_applicable_pretest_incomplete" for i in range(4))
+    assert by_code["NO-RETEST"]["h3"]["value"] == 0
+    assert by_code["ATTAINED"]["h3"]["value"] == 1
     result = group_metrics(rows)["groups"][1]
-    assert result["h2"]["n"] == 2
-    assert result["h2"]["mean"] == 0
-    assert result["h2"]["missing_count"] == 4
-    assert result["h2"]["censored_count"] == 4
-    assert result["h2"]["not_attained_count"] == 4
-    assert result["h2"]["observed_nonattainer_sessions"]["mean"] == 1.5
-    for reason, count in zip(("give_up", "in_progress", "completed_without_mastery", "other"), range(4)):
-        assert result["h2"]["censoring_breakdown"][reason]["n"] == 1
-        assert result["h2"]["censoring_breakdown"][reason]["mean"] == count
-    assert result["h6"]["denominator"] == 6
-    assert result["h6"]["numerator"] == 2
-    assert result["h6"]["rate"] == pytest.approx(1 / 3)
-    exported = write_metrics_csv(tmp_path / "h2.csv", rows, grouped=True)
+    assert result["h3"]["n"] == 2
+    assert result["h3"]["missing_count"] == 0
+    assert result["h3"]["not_applicable_count"] == 4
+    assert result["h3"]["eligible_count"] == 2
+    assert result["h3"]["denominator"] == 2
+    assert result["h3"]["numerator"] == 1
+    assert result["h3"]["rate"] == pytest.approx(0.5)
+    exported = write_metrics_csv(tmp_path / "h3.csv", rows, grouped=True)
     records = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
-    h2 = next(r for r in records if r["metric"] == "h2" and r["group_condition"] == "proposed")
-    assert h2["missing_count"] == "4"
-    assert json.loads(h2["details_json"])["censoring_breakdown"] == result["h2"]["censoring_breakdown"]
+    h3 = next(r for r in records if r["metric"] == "h3" and r["group_condition"] == "proposed")
+    assert h3["eligible_count"] == "2"
+    assert h3["not_applicable_count"] == "4"
+    assert json.loads(h3["details_json"])["denominator"] == 2
 
 
 @pytest.mark.parametrize("grouped", [False, True])
@@ -420,8 +413,8 @@ def test_material_view_without_an_answer_refreshes_evaluation_cache(study):
     refreshed = experiment._ensure_evaluation_summary(study, p)
     assert refreshed.id != cached.id
     assert refreshed.hypothesis_metrics_json["has_viewed_material"] is True
-    assert refreshed.hypothesis_metrics_json["h2"]["observed_session_count"] == 1
-    assert refreshed.hypothesis_metrics_json["h5"]["status"] == "missing_survey"
+    assert refreshed.hypothesis_metrics_json["h3"]["value"] == 0
+    assert refreshed.hypothesis_metrics_json["h4"]["status"] == "missing_survey"
     record_material_view(study, turn.id)
     assert experiment._ensure_evaluation_summary(study, p).id == refreshed.id
 
@@ -439,6 +432,8 @@ def test_evaluation_cache_refreshes_only_current_protocol_on_metrics_version_cha
         assert (refreshed.id != cached.id) is (protocol == CURRENT_PROTOCOL_ID)
         if protocol == CURRENT_PROTOCOL_ID:
             assert refreshed.hypothesis_metrics_json["metrics_version"] == METRICS_VERSION
+            assert study.query(EvaluationSummary).filter_by(participant_id=p.id).count() == 2
+            assert cached.hypothesis_metrics_json["metrics_version"] == "six-hypotheses-v1"
 
 
 def test_rounds_remain_distinct_after_variant_five_is_reused(study):
@@ -449,7 +444,7 @@ def test_rounds_remain_distinct_after_variant_five_is_reused(study):
     row = participant_metrics(study, p)
     assert [r["round"] for r in row["rounds"]] == [5, 6]
     assert row["h1"]["value"] is None
-    assert row["h2"]["first_mastery_round"] == 6
+    assert row["h3"]["first_mastery_round"] == 6
 
 
 @pytest.mark.parametrize("field,value", [("system_usability", 0), ("system_usability", 6), ("system_usability", True), ("system_usability", 3.5), ("system_usability", "4")])
@@ -612,7 +607,7 @@ def test_old_questionnaire_cannot_be_written_as_the_new_version():
 
 
 @pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", "posttest-5point-v1", "posttest-5point-v2", "posttest-5point-v3", SURVEY_VERSION])
-def test_h5_uses_only_current_survey_version_without_rewriting_history(study, version):
+def test_h4_uses_only_current_survey_version_without_rewriting_history(study, version):
     p = participant(study)
     session(study, p, "llm_knowledge", 1)
     responses = questionnaire(True)
@@ -635,15 +630,85 @@ def test_h5_uses_only_current_survey_version_without_rewriting_history(study, ve
                                responses_json=responses, free_comment=None)
     study.add(survey)
     study.commit()
-    metrics = participant_metrics(study, p)["h5"]
-    assert metrics["value"] == (4 if version == SURVEY_VERSION else None)
+    metrics = participant_metrics(study, p)["h4"]
+    if version == SURVEY_VERSION:
+        assert metrics["items"]["clarity"] == 4
+    else:
+        assert metrics["items"] is None
     assert metrics["status"] == ("observed" if version == SURVEY_VERSION else "missing_survey")
     study.refresh(survey)
     assert survey.responses_json == original
     assert survey.survey_version == version
 
 
-def test_h5_excludes_not_applicable_and_reports_centered_scales_as_distributions(study, tmp_path):
+@pytest.mark.parametrize(
+    "protocol,survey_version",
+    [
+        ("experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1", "posttest-5point-v3"),
+        ("experiment-plan-2026-11-12-posttest-system-clarity-removal-v1", "posttest-5point-v4"),
+    ],
+)
+def test_spec52_protocols_get_read_only_hypothesis_metrics_with_saved_survey_version(
+    study, tmp_path, protocol, survey_version
+):
+    p = participant(study, f"SPEC52-{survey_version}", protocol=protocol, spec_version=52)
+    test_round(study, p, 0, ["M1", "M3", "unknown"])
+    test_round(study, p, 1, ["M1", "M3", "correct"])
+    session(study, p, "llm_knowledge", 1)
+    responses = questionnaire(viewed=True)
+    responses["survey_version"] = survey_version
+    responses["material_ratings"] = {key: 4 for key in MATERIAL_RATING_KEYS}
+    study.add(ParticipantSurvey(participant_id=p.id, phase="posttest",
+                                survey_version=survey_version, responses_json=responses))
+    study.commit()
+
+    row = participant_metrics(study, p)
+    assert row["metrics_version"] == METRICS_VERSION
+    assert row["experiment_spec_version"] == 52
+    assert row["protocol_id"] == protocol
+    assert row["survey_version"] == survey_version
+    assert row["h4"]["items"]["clarity"] == 4
+    assert not can_resume(p)
+
+    prior = EvaluationSummary(participant_id=p.id, group_condition=p.group_condition,
+                              pretest_score=0.25, completed=False,
+                              hypothesis_metrics_json={"metrics_version": "six-hypotheses-v8"})
+    study.add(prior)
+    study.commit()
+    original_step = p.current_step
+    original_attempt_count = study.query(Attempt).filter_by(participant_id=p.id).count()
+    refreshed = experiment._ensure_evaluation_summary(study, p)
+    assert refreshed.id != prior.id
+    assert refreshed.hypothesis_metrics_json["metrics_version"] == METRICS_VERSION
+    assert prior.hypothesis_metrics_json == {"metrics_version": "six-hypotheses-v8"}
+    assert prior.pretest_score == 0.25
+    assert study.query(EvaluationSummary).filter_by(participant_id=p.id).count() == 2
+    assert experiment._ensure_evaluation_summary(study, p).id == refreshed.id
+    assert study.query(EvaluationSummary).filter_by(participant_id=p.id).count() == 2
+    assert p.current_step == original_step
+    assert study.query(Attempt).filter_by(participant_id=p.id).count() == original_attempt_count
+    exported = write_metrics_csv(tmp_path / "spec52-metrics.csv", [row], grouped=False)
+    exported_rows = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
+    assert exported_rows and all(item["protocol_id"] == protocol for item in exported_rows)
+    assert all(item["experiment_spec_version"] == "52" for item in exported_rows)
+    assert all(item["survey_version"] == survey_version for item in exported_rows)
+
+
+def test_spec51_is_not_included_in_new_hypothesis_metrics(study):
+    p = participant(study, "SPEC51", protocol="experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1",
+                    spec_version=51)
+    test_round(study, p, 0, ["M1", "M3", "unknown"])
+    prior = EvaluationSummary(participant_id=p.id, group_condition=p.group_condition,
+                              hypothesis_metrics_json={"metrics_version": "six-hypotheses-v8"})
+    study.add(prior)
+    study.commit()
+
+    assert p.id not in {row["participant_id"] for row in current_metrics(study)}
+    assert experiment._ensure_evaluation_summary(study, p).id == prior.id
+    assert study.query(EvaluationSummary).filter_by(participant_id=p.id).count() == 1
+
+
+def test_h4_reports_numeric_items_and_centered_scales_separately(study, tmp_path):
     p = participant(study)
     session(study, p, "llm_knowledge", 1)
     responses = questionnaire(True)
@@ -659,37 +724,38 @@ def test_h5_excludes_not_applicable_and_reports_centered_scales_as_distributions
                                 responses_json=responses))
     study.flush()
     row = participant_metrics(study, p)
-    assert row["h5"]["value"] == pytest.approx(3)
-    assert row["h5"]["valid_item_count"] == 3
-    assert row["h5"]["not_evaluable_item_count"] == 1
+    assert row["h4"]["items"]["clarity"] == 2
+    assert row["h4"]["items"]["readability"] == "not_applicable"
+    assert "value" not in row["h4"]
 
-    groups = group_metrics([row])["groups"][1]["h5"]
+    groups = group_metrics([row])["groups"][1]["h4"]
+    assert groups["items"]["clarity"]["mean"] == 2
+    assert groups["items"]["readability"]["not_applicable_count"] == 1
     assert groups["items"]["difficulty_appropriateness"]["mean"] is None
     assert groups["items"]["difficulty_appropriateness"]["distribution"]["5"] == 1
     assert groups["items"]["amount_appropriateness"]["distribution"]["not_applicable"] == 1
     exported = write_metrics_csv(tmp_path / "survey-metrics.csv", [row], grouped=True)
     records = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
-    difficulty = next(record for record in records if record["metric"] == "h5.difficulty_appropriateness" and record["group_condition"] == "proposed")
+    difficulty = next(record for record in records if record["metric"] == "h4.difficulty_appropriateness" and record["group_condition"] == "proposed")
     assert difficulty["mean"] == ""
     assert json.loads(difficulty["details_json"])["distribution"]["5"] == 1
 
 
-def test_h5_all_core_items_not_evaluable_is_not_applicable(study):
+def test_h4_keeps_each_not_evaluable_item_separate(study):
     p = participant(study)
     session(study, p, "llm_knowledge", 1)
     responses = questionnaire(True)
-    for key in ("clarity", "readability", "japanese_clarity", "learning_usefulness"):
+    for key in H4_NUMERIC_KEYS:
         responses["material_ratings"][key] = "not_applicable"
     study.add(ParticipantSurvey(participant_id=p.id, phase="posttest", survey_version=SURVEY_VERSION,
                                 responses_json=responses))
     study.flush()
-    metric = participant_metrics(study, p)["h5"]
-    assert metric["value"] is None
-    assert metric["status"] == "not_applicable_no_evaluable_ratings"
-    assert metric["not_evaluable_item_count"] == 4
+    metric = participant_metrics(study, p)["h4"]
+    assert metric["status"] == "observed"
+    assert all(metric["items"][key] == "not_applicable" for key in H4_NUMERIC_KEYS)
 
 
-def test_h5_group_counts_separate_eligible_missing_not_viewed_and_not_evaluable(study, tmp_path):
+def test_h4_group_counts_separate_viewed_missing_not_viewed_and_not_evaluable(study, tmp_path):
     observed = participant(study, "OBSERVED")
     session(study, observed, "llm_knowledge", 1)
     study.add(ParticipantSurvey(participant_id=observed.id, phase="posttest", survey_version=SURVEY_VERSION,
@@ -701,7 +767,7 @@ def test_h5_group_counts_separate_eligible_missing_not_viewed_and_not_evaluable(
     not_evaluable = participant(study, "NOT-EVALUABLE")
     session(study, not_evaluable, "llm_knowledge", 1)
     responses = questionnaire(True)
-    for key in H5_COMPOSITE_KEYS:
+    for key in H4_NUMERIC_KEYS:
         responses["material_ratings"][key] = "not_applicable"
     study.add(ParticipantSurvey(participant_id=not_evaluable.id, phase="posttest", survey_version=SURVEY_VERSION,
                                 responses_json=responses))
@@ -712,24 +778,20 @@ def test_h5_group_counts_separate_eligible_missing_not_viewed_and_not_evaluable(
 
     rows = [participant_metrics(study, p) for p in (observed, missing, not_evaluable, not_viewed)]
     group = group_metrics(rows)["groups"][1]
-    grouped = group["h5"]
+    grouped = group["h4"]
     assert group["participant_count"] == 4
     assert grouped["viewed_count"] == 3
-    assert grouped["eligible_count"] == 2
-    assert grouped["valid_response_count"] == grouped["n"] == 1
-    assert grouped["missing_count"] == 1
-    assert grouped["not_applicable_count"] == 2
-    assert grouped["not_evaluable_count"] == 1
+    assert grouped["items"]["clarity"]["eligible_count"] == 3
+    assert grouped["items"]["clarity"]["n"] == 1
+    assert grouped["items"]["clarity"]["missing_count"] == 1
+    assert grouped["items"]["clarity"]["not_applicable_count"] == 1
     assert grouped["not_viewed_count"] == 1
+    assert grouped["missing_survey_count"] == 1
 
-    exported = write_metrics_csv(tmp_path / "h5-denominators.csv", rows, grouped=True)
+    exported = write_metrics_csv(tmp_path / "h4-denominators.csv", rows, grouped=True)
     records = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
-    summary = next(record for record in records if record["metric"] == "h5" and record["group_condition"] == "proposed")
-    assert summary["eligible_count"] == "2"
-    assert summary["missing_count"] == "1"
+    summary = next(record for record in records if record["metric"] == "h4" and record["group_condition"] == "proposed")
     details = json.loads(summary["details_json"])
-    assert details["valid_response_count"] == 1
-    assert details["not_evaluable_count"] == 1
     assert details["not_viewed_count"] == 1
 
 
