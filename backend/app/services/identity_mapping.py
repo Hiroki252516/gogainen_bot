@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -40,7 +41,7 @@ def delete_participant_mappings(participant_id: str) -> int:
         return 0
 
     deleted = 0
-    with sqlite3.connect(path, timeout=10) as db:
+    with closing(sqlite3.connect(path, timeout=10)) as db, db:
         db.execute("PRAGMA secure_delete=ON")
         tables = {
             row[0]

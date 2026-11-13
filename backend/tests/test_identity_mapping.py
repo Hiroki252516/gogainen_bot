@@ -157,6 +157,33 @@ def test_explicit_participant_deletion_cleans_only_matching_legacy_mapping_rows(
         assert event.after_json["identity_mapping_cleanup"] == "complete"
 
 
+def test_mapping_cleanup_closes_sqlite_connection(tmp_path, monkeypatch):
+    path = tmp_path / "identities.sqlite3"
+    path.touch()
+    connections = []
+    original_connect = sqlite3.connect
+
+    class TrackingConnection(sqlite3.Connection):
+        was_closed = False
+
+        def close(self):
+            self.was_closed = True
+            super().close()
+
+    def tracked_connect(*args, **kwargs):
+        kwargs["factory"] = TrackingConnection
+        connection = original_connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(get_settings(), "identity_mapping_path", str(path))
+    monkeypatch.setattr(identity_mapping.sqlite3, "connect", tracked_connect)
+
+    assert identity_mapping.delete_participant_mappings("participant-1") == 0
+    assert len(connections) == 1
+    assert connections[0].was_closed
+
+
 def test_mapping_cleanup_failure_is_durable_and_retryable(monkeypatch):
     created = register()
     participant_id = created.json()["participant_id"]
