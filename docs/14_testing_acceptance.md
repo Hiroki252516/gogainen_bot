@@ -1,5 +1,18 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-13 origin/refactor/issue-343 統合後検証
+
+- issue-343で移動した回答後フィードバック指示のYAMLとBackend変更を、issue-339の仕様版54・現行4仮説評価と統合する。実験仕様・protocol・回答後フィードバックの意味は変更しない。
+- 統合後のBackend全テストは`1752 passed`（既存DeprecationWarning 6件）。競合マーカー・未解決パスがなく、`git diff --check`も成功した。
+- 既存の研究DB、実験用localhost:3000、実AIは使用しない。マージコミット後もpushは行わない。
+
+## 2026-11-13 回答後フィードバック指示のYAML化（refactor/issue-343、統合前の検証記録）
+
+- 正答時の要点生成と誤答時の解説に使う固定指示文を`learning_material.yml`へ移した。文言・順序、Schema、群別の入力投影は維持し、実験仕様・protocol・prompt契約識別子は変更していない。
+- YAMLの必須キー・型・項目数の起動時検証を追加し、正答/誤答と両群の代表ケース4通りで送信promptの固定SHA-256と出力Schemaを確認した。
+- 隔離した`/tmp`のSQLiteでBackend全テストを実行し、`1749 passed`。依存ライブラリ由来のDeprecationWarningが6件あった。`git diff --check`も成功した。
+- 実AI、研究DB、既存アプリ環境は使用していない。指示文移動の自動検証であり、フィードバック内容の意味的妥当性を評価したものではない。
+
 ## 2026-11-13 issue-339 と仕様版54の統合・検証
 
 - 現行条件は仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`、事後`posttest-5point-v4`とする。必要な全問が採点済みで満点の各テスト後は結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略する。
