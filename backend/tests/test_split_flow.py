@@ -13,6 +13,18 @@ def ok(response):
     return response.json()
 
 
+@pytest.fixture(autouse=True)
+def restore_option_order():
+    client = AuthenticatedTestClient(app)
+    ok(client.put("/api/admin/option-order", json={"mode": "debug_fixed"}))
+    try:
+        yield
+    finally:
+        current_mode = ok(client.get("/api/admin/option-order"))["mode"]
+        if current_mode != "debug_fixed":
+            ok(client.put("/api/admin/option-order", json={"mode": "debug_fixed"}))
+
+
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("first_role", ["unknown", "M1"])
@@ -23,7 +35,9 @@ def test_split_flow(group, layout, first_role, target_slug):
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()}))["participant_id"]
     # Keep this paired-assessment integration test on its explicit legacy fixture.
     with SessionLocal() as db:
-        db.get(Participant, pid).first_question_only = False
+        participant = db.get(Participant, pid)
+        participant.test_content_mode = "application"
+        participant.first_question_only = False
         db.commit()
     complete_presurvey(client, pid)
     questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
@@ -87,9 +101,9 @@ def test_split_maximum_rounds_and_mastery(pretest_perfect):
         questions = ok(client.get(f"/api/experiment/{pid}/{phase}"))["questions"]
         for q in questions:
             with SessionLocal() as db:
-                option = db.query(QuestionOption).filter_by(question_id=q["question_id"], is_correct=True).one() if correct else None
-                selected = option.id if option else q["options"][-1]["option_id"]
-            ok(client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "phase": phase.replace("-", "_"), "selected_option_ids": [selected]}))
+                correct_options = db.query(QuestionOption).filter_by(question_id=q["question_id"], is_correct=True).all()
+                selected = [option.id for option in correct_options] if correct else [q["options"][-1]["option_id"]]
+            ok(client.post("/api/attempts", json={"participant_id": pid, "question_id": q["question_id"], "phase": phase.replace("-", "_"), "selected_option_ids": selected}))
         acknowledge_all_question_reviews(client, pid, phase.replace("-", "_"))
     answer("pretest", pretest_perfect)
     diagnosed = ok(client.post(f"/api/participants/{pid}/diagnose-pretest", json={}))

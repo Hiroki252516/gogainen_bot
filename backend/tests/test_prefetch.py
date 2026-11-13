@@ -10,7 +10,7 @@ from admin_client import AuthenticatedTestClient as TestClient
 
 from app.db.session import SessionLocal
 from app.main import app
-from app.models import AICallLog, EvaluationSummary, Term, TutorSession, TutorTurn
+from app.models import AICallLog, EvaluationSummary, Participant, Term, TutorSession, TutorTurn
 from app.seed.content_loader import assessment_question_spec
 import app.services.experiment as experiment_service
 from app.services.prefetch import PrefetchCoordinator, wait_for_prefetch_tasks
@@ -95,6 +95,10 @@ def _create_participant_with_pretest() -> str:
     )
     assert participant.status_code == 200, participant.text
     pid = participant.json()["participant_id"]
+    with SessionLocal() as db:
+        row = db.get(Participant, pid)
+        row.test_content_mode = "application"
+        db.commit()
     complete_presurvey(client, pid)
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:

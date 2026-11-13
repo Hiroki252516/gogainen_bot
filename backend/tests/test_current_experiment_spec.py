@@ -71,6 +71,11 @@ def create_trial(group="A", labels="DEF"):
     result = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()})
     assert result.status_code == 200, result.text
     pid = result.json()["participant_id"]
+    # These cases exercise historical three-topic behavior, not the new registration default.
+    with SessionLocal() as db:
+        participant = db.get(Participant, pid)
+        participant.test_content_mode = "application"
+        db.commit()
     complete_presurvey(client, pid)
     questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
     for question in questions:

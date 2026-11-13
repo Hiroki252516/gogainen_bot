@@ -110,13 +110,12 @@ def create_trial(
     """Create a flow fixture with explicit snapshots for legacy behavior tests."""
     client = AuthenticatedTestClient(app)
     previous = ok(client.get("/api/admin/option-order"))["mode"]
-    previous_content_mode = ok(client.get("/api/admin/test-content-mode"))["mode"]
     ok(client.put("/api/admin/option-order", json={"mode": layout}))
-    if test_content_mode is not None:
-        ok(client.put("/api/admin/test-content-mode", json={"mode": test_content_mode}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()}))["participant_id"]
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
+        # Flow tests may emulate a participant with an older saved mode; live registration is fixed to four-topic.
+        participant.test_content_mode = test_content_mode or "application"
         participant.first_question_only = first_question_only
         participant.show_pretest_results = show_pretest_results
         participant.show_retest_results = show_retest_results
@@ -129,8 +128,6 @@ def create_trial(
         wait_for_prefetch_tasks()
         ok(client.delete(f"/api/admin/participants/{pid}"))
         ok(client.put("/api/admin/option-order", json={"mode": previous}))
-        if test_content_mode is not None:
-            ok(client.put("/api/admin/test-content-mode", json={"mode": previous_content_mode}))
 
 
 def answer_test(client, pid, phase, slug, roles):

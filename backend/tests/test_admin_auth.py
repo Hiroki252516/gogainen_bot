@@ -35,8 +35,8 @@ def test_login_cookie_csv_logout_and_revocation():
     token = client.cookies.get(admin_auth.COOKIE_NAME)
     assert client.get("/api/admin/participants").status_code == 200
     assert client.get("/api/admin/logs/overview.csv").status_code == 200
-    assert client.get("/api/admin/identity-mappings.csv").status_code == 200
-    assert client.get("/api/admin/research-code-mappings.csv").status_code == 200
+    assert client.get("/api/admin/identity-mappings.csv").status_code == 404
+    assert client.get("/api/admin/research-code-mappings.csv").status_code == 404
     logout = client.post("/api/admin/auth/logout")
     assert logout.status_code == 200
     assert "Secure" not in logout.headers["set-cookie"]

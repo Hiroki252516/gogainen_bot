@@ -162,6 +162,10 @@ def start_learning(group, research_code=None, labels="DEF"):
     participant_response = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "research_code": research_code})
     assert participant_response.status_code == 200, participant_response.text
     pid = participant_response.json()["participant_id"]
+    with SessionLocal() as db:
+        participant = db.get(Participant, pid)
+        participant.test_content_mode = "application"
+        db.commit()
     complete_presurvey(client, pid)
     questions_response = client.get(f"/api/experiment/{pid}/pretest")
     assert questions_response.status_code == 200, questions_response.text

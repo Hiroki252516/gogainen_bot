@@ -2,7 +2,11 @@
 
 ## 仕様版54の現行条件
 
-新規参加者は仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`を使う。仕様版53以下は保存済み問題・回答・snapshotを維持して閲覧専用とする。例外として仕様版52の対応する2 protocolは、既存記録を変更せずH1〜H4の評価サマリーのみ追加できる。仕様版51以下および未対応protocolは再計算対象外。GET `/api/participants/{id}/presurvey`は固定`test_content_mode`に応じ、標準2モードでは`presurvey-baseline-v4`、4用語版では`presurvey-four-topic-baseline-v4`と6件の`term_items`を返す。4用語版の下位用語キーは`instruction_tuning`、表示名は「インストラクションチューニング」。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、見聞き経験質問の「実験の説明を受ける前に」は維持する。POSTの保存構造と経験に応じた理解度検証は従来どおり。
+新規参加者は仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`を使い、`test_content_mode`は`four_topic_fundamentals`に固定する。仕様版53以下は保存済み問題・回答・snapshotを保持して参加者操作を読み取り専用とする。例外として仕様版52の対応する2 protocolは、参加者データ・進行・既存サマリーを変更せずH1〜H4の評価サマリーのみ追加できる。仕様版51以下および未対応protocolは再計算対象外。GET `/api/participants/{id}/presurvey`は新規4用語版`presurvey-four-topic-baseline-v4`と6件の`term_items`を返す。下位用語キーは`instruction_tuning`、表示名は「インストラクションチューニング」。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、経験質問文の「実験の説明を受ける前に」は維持する。POSTの保存構造と経験に応じた理解度検証は従来どおり。
+
+POST `/api/registrations`（互換URL `/api/participants`）は`assignment_code`、`consent_checked`、`research_code`を受け取る。研究用コードは半角数字1〜64桁を厳密に検証した後に破棄する。Participantや冪等性記録の作成前に値の利用を終え、request hash・レスポンスにも含めない。研究DB、別SQLite、ログ、CSV/XLSX、AI入力、ブラウザ永続領域には保存しない。`student_number`は入力項目ではなく、余分なキーとして拒否する。研究用コード・学籍番号・参加者IDの対応表は研究者がアプリ外で管理する。
+
+GET `/api/admin/test-content-mode`は固定値`four_topic_fundamentals`を返し、PUTは同じ値だけを受け付け、他モードを409で拒否する。新規登録は4用語版をParticipantへsnapshotし、既存Participantのモードを変えない。問題モード切替UIと対応表のGET/CSV/DELETE管理APIは提供しない。参加者削除APIは明示削除の後処理として、旧SQLiteに存在する当該Participant IDの行だけをcleanupする。必要な全設問が採点済みかつ全問正解した事前・再テスト1/2・内部`final_test`後は、結果表示snapshotに従ってsurveyへ遷移し、学習・後続テストを省略する。詳細は[データモデル](07_data_model.md)と[運用手順](19_experiment_operation_runbook.md)。
 
 4用語版は現行問題バンク`split-actions-four-topic-v3`から出題する。仕様版51のissue336 protocolと仕様版52の4用語表記protocolはv3、仕様版51のissue338 protocolと仕様版52の早期終了・教材量protocolはv2を使う。仕様版50の各protocolと仕様版49以下は記録時のバンクを使用し、保存済み問題snapshotに従って復元する。問題内容の取得・採点・回答後確認のAPI契約、問題snapshot、役割構成は変わらない。詳細は[事前アンケート](49_presurvey_baseline.md)と[4用語版](51_four_topic_foundation_mode.md)。
 
@@ -32,7 +36,7 @@
 
 ## 設問1のみ出題APIの廃止（仕様版35で導入した履歴）
 
-過去には管理認証付きGET/PUT `/api/admin/first-question-only` で条件を切り替えていた。仕様版40から当該APIを廃止した。現行仕様版54では現行版・基礎理解版を各3問、4用語版を4問とし、いずれも参加者の問題モードと登録snapshotに従う。旧参加者の記録復元には保存snapshotと版対応を使う。詳細は[48](48_first_question_only.md)・[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)。
+過去には管理認証付きGET/PUT `/api/admin/first-question-only` で条件を切り替えていた。仕様版40から当該APIを廃止した。現行仕様版54の新規参加者は4用語版を各1問（計4問）出題する。現行版・基礎理解版の各3問条件は過去参加者の記録復元用に保持する。旧参加者の記録復元には保存snapshotと版対応を使う。詳細は[48](48_first_question_only.md)・[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)。
 
 ## 教材用語解説モード（仕様版39導入・42現行）
 
@@ -60,17 +64,16 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 教材・回答後解説に加え、GET /api/experiment/{id}/pretest、/retest、/final-testの各questions項目へ`glossary: {version, entries: [{id, term, definition}]}`を返す。テストは用語見出し・問題文・全選択肢から抽出し、選択・正誤・診断を使わない。未回答GETはDBへ保存せず、回答時に同じ不変辞書からAttempt.glossary_snapshotへ保存する。回答済みの再取得・再送は保存値を使い、欠落は後付けしない。該当語なしは空配列、snapshot欠落時はnull。指紋・出典・正答・分類情報は公開しない。新規ルート・管理設定は追加せず、nullable JSON列を1つ追加する。AI入力・共通履歴には含めない。[保存仕様](24_learning_glossary.md)。
 
-## 2026-11-11 現行: 研究用コード登録（fix/issue-317）
+## 2026-11-11 研究用コード登録（履歴、fix/issue-317）
 
 - POST /api/registrations（互換URL /api/participants）: `assignment_code`、`consent_checked`、`research_code`を受け取る。`research_code`は半角数字1〜64桁を厳密に検証し、先頭ゼロを保持する。旧`student_number`フィールドなど余分なキーは拒否し、登録入力の検証応答では受信値を返さない。
-- 研究用コードは研究DBではなく、`IDENTITY_MAPPING_PATH`の分離SQLiteにある`research_code_mappings`へ保存する。研究DB、AI入力・AIログ、通常の研究用CSV/XLSX、登録応答には含めない。研究用コードの重複は409とし、エラーに入力値を含めない。
+- 当時は研究用コードを`IDENTITY_MAPPING_PATH`の分離SQLiteにある`research_code_mappings`へ保存していた。現在は登録時に検証後破棄し、既存SQLiteファイル・行はそのまま保持する。
 - Idempotency-Keyによる同じ登録要求の再送は保存済み登録結果を返し、管理者が削除済みの対応表を再作成しない。既存の登録冪等性レコードに研究用コードそのものは保存しない。
-- GET /api/admin/research-code-mappings: 現行参加者に対応する研究用コードの対応表を返す。GET /api/admin/research-code-mappings.csvはBOM付きUTF-8 CSVをダウンロードする。両方とも認証必須・`Cache-Control: no-store`。
-- DELETE /api/admin/research-code-mappings/{participant_id}、DELETE /api/admin/research-code-mappings: 研究用コード対応表を個別または全件削除する。研究データは残る。
-- 旧`/api/admin/identity-mappings`系は学籍番号対応表用として残し、研究用コード対応表とは別に動作する。既存行を移行・変更せず、旧APIの削除操作も研究用コード表へ波及しない。
-- DELETE /api/admin/participants/{participant_id}: 研究DB削除後の再試行可能なcleanupで、旧学籍番号表と研究用コード表の両方から当該参加者の行を削除する。
+- 当時のGET/CSV/DELETE `/api/admin/research-code-mappings`各routeは廃止済みで、現行APIでは提供しない。
+- 旧`/api/admin/identity-mappings`系も現行APIでは提供しない。旧行を登録処理で読み書きしない。
+- DELETE `/api/admin/participants/{participant_id}`は、明示的なParticipant削除後に、既存旧SQLite内の当該ID行だけを再試行可能なcleanupで削除する。外部Excel表は研究者が別途管理する。
 
-この登録入力と同意文書は現時点で一致していない。別担当者の同意文書更新が統合され、研究計画・倫理手続き上の必要な確認を終えるまでは、本変更を実参加者の募集・登録に使用しない。UI/API変更は承認取得を意味しない。
+上記はfix/issue-317当時の実装記録であり、その後の2026-11-12更新で同意文書・登録方式と一致させた。更新は指導教員または研究倫理上の承認を意味しない。
 
 ## 2026-10-21 同意・学籍番号対応表（履歴）
 
@@ -86,7 +89,7 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 
 ## 計画書対応の範囲
 
-現行APIは[実装判断](20_experiment_plan_alignment.md)に沿う。現行コードでは仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`で進行可否を判定し、仕様版53以下および未対応版は閲覧専用とする。管理認証付きGET/PUT `/api/admin/test-content-mode`は新規参加者用の問題モードを設定し、設定を登録時にsnapshotする。必要な全設問を採点し全問正解したテストの後は、結果表示snapshotに従って結果確認後または直接surveyへ進み、学習・後続テストを省略する。未達者は問題モード別経路を使う。詳細は[問題モード](50_basic_understanding_question_mode.md)・[4用語版](51_four_topic_foundation_mode.md)、[事前](49_presurvey_baseline.md)・[事後](52_posttest_five_point_evaluation.md)アンケート、[評価指標](12_evaluation_metrics.md)を参照する。
+現行APIは[実装判断](20_experiment_plan_alignment.md)に沿う。仕様版54で進行可否を判定し、仕様版53以下および未対応版は閲覧専用とする。管理認証付きGET/PUT `/api/admin/test-content-mode`は新規登録で4用語版に固定された値を返し、他モードの設定変更を拒否する。必要な全設問を採点し全問正解したテストの後は、結果表示snapshotに従って結果確認後または直接surveyへ進み、学習・後続テストを省略する。未達者は4用語版の経路を使う。詳細は[4用語版](51_four_topic_foundation_mode.md)、[事前](49_presurvey_baseline.md)・[事後](52_posttest_five_point_evaluation.md)アンケート、[評価指標](12_evaluation_metrics.md)を参照する。
 
 GET `/api/participants/{id}/presurvey`は参加者の固定済み`test_content_mode`に応じて`survey_version`と6件の`term_items`（`key`・`label`）を返す。標準2モードは`presurvey-baseline-v4`、4用語版は`presurvey-four-topic-baseline-v4`で、4用語版の`instruction_tuning`は「インストラクションチューニング」と表示する。POST同URLは、6用語の`prior_term_exposure`（`experienced`／`not_experienced`／`cannot_recall`）と`prior_term_understanding`（`not_at_all`／`slightly`／`moderately`／`well`またはnull）、`general_ratings.ai_usage_frequency_30d`（5区分）および3項目の`ai_proficiency`（1〜5または`not_applicable`）を受け付ける。経験が`experienced`なら理解度を必須とし、それ以外は理解度nullを要求する。欠落・余分な用語キー、不正な選択値、条件分岐に反する値は422。固定版に対応したPydantic modelで検証し、phase=presurveyのParticipantSurveyとして冪等保存する。理解度質問文は全モードで「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、見聞き経験質問の「実験の説明を受ける前に」は維持する。登録後の`current_step=presurvey`中はテスト出題・採点を拒否し、保存後にpretestへ進める。仕様版50以下の保存済み回答は記録時のschemaのまま復元し、変換しない。
 

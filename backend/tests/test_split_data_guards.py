@@ -35,6 +35,10 @@ def learning_turn(monkeypatch):
     client = AuthenticatedTestClient(main_module.app)
     ok(client.put("/api/admin/option-order", json={"mode": "randomized"}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": "B", "consent_checked": True, "research_code": new_research_code()}))["participant_id"]
+    with SessionLocal() as db:
+        participant = db.get(Participant, pid)
+        participant.test_content_mode = "application"
+        db.commit()
     complete_presurvey(client, pid)
     questions = ok(client.get(f"/api/experiment/{pid}/pretest"))["questions"]
     for index, question in enumerate(questions):
