@@ -53,6 +53,7 @@ from app.services.hypothesis_metrics import (
     METRICS_VERSION,
     current_metrics,
     group_metrics,
+    metrics_eligible,
     metrics_export_rows,
     participant_metrics,
     write_metrics_csv,
@@ -3919,17 +3920,44 @@ def _ensure_evaluation_summary(db: Session, participant: Participant) -> Evaluat
         .order_by(EvaluationSummary.created_at.desc(), EvaluationSummary.id.desc())
         .first()
     )
-    if not can_resume(participant) or not _has_scored_pretest(db, participant.id):
+    if not metrics_eligible(participant) or not _has_scored_pretest(db, participant.id):
         return latest
     source_at = _latest_evaluation_source_at(db, participant)
     expected_completed = participant.completed_at is not None and participant.completion_reason != "give_up"
-    if (
+    legacy_analytics_only = not can_resume(participant)
+    summary_is_stale = (
         latest is None
         or (latest.hypothesis_metrics_json or {}).get("metrics_version") != METRICS_VERSION
         or (source_at is not None and latest.created_at < source_at)
-        or latest.completed != expected_completed
+    )
+    if (
+        summary_is_stale
+        or (not legacy_analytics_only and latest.completed != expected_completed)
     ):
-        return recalculate_evaluation(db, participant.id)
+        if can_resume(participant):
+            return recalculate_evaluation(db, participant.id)
+        metrics = participant_metrics(db, participant)
+        copied_fields = (
+            "pretest_score", "retest_score", "attainment_correct_rate",
+            "legacy_transfer_correct_rate", "same_misconception_recurrence_rate",
+            "m1_recurrence_rate", "legacy_m2_recurrence_rate", "m3_recurrence_rate",
+            "legacy_m4_failure_rate", "legacy_unknown_persistence_rate", "learning_target_count",
+            "score_timeline_json", "misconception_timeline_json", "learning_burden_json",
+            "condition_check_json", "completed",
+        )
+        summary = EvaluationSummary(
+            participant_id=participant.id,
+            group_condition=participant.group_condition,
+            **({field: getattr(latest, field) for field in copied_fields} if latest else {
+                "learning_target_count": 0,
+                "completed": False,
+            }),
+            hypothesis_metrics_json=metrics,
+        )
+        db.add(summary)
+        _commit(db)
+        db.refresh(summary)
+        return summary
     return latest
 
 
@@ -4040,7 +4068,11 @@ def admin_summary(db: Session) -> dict[str, Any]:
                 "misconception_transition_summary": _group_misconception_transition_summary(group_participants, latest_summaries, terms, mode),
             }
         )
-    return {"groups": rows, "hypotheses": group_metrics(current_metrics(db))}
+    hypothesis_rows = current_metrics(db)
+    for metric_row in hypothesis_rows:
+        if metric_row["experiment_spec_version"] == 52:
+            _ensure_evaluation_summary(db, get_participant(db, metric_row["participant_id"]))
+    return {"groups": rows, "hypotheses": group_metrics(hypothesis_rows)}
 
 
 EXPORTS = {
@@ -4701,6 +4733,17 @@ def export_hypothesis_metrics_xlsx(db: Session, name: str) -> Path:
         current_metrics(db),
         grouped=name == "hypothesis_group_summary",
     )
+    rows = [
+        {
+            **row,
+            "experiment_spec_version": (
+                str(row["experiment_spec_version"])
+                if row.get("experiment_spec_version") is not None
+                else None
+            ),
+        }
+        for row in rows
+    ]
     path = Path(get_settings().export_dir) / f"{name}.xlsx"
     sheet_title = "参加者別" if name == "hypothesis_metrics" else "群別"
     return write_xlsx(path, columns=METRICS_CSV_COLUMNS, rows=rows, sheet_title=sheet_title)

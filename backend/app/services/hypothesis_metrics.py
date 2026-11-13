@@ -8,7 +8,12 @@ from statistics import mean, median
 
 from sqlalchemy.orm import Session
 
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, assert_current_experiment
+from app.core.experiment_spec import (
+    CURRENT_EXPERIMENT_SPEC_VERSION,
+    CURRENT_PROTOCOL_ID,
+    can_resume,
+    assert_current_experiment,
+)
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
 from app.services.split_assessment import uses_split, split_item_keys
 from app.services.first_question_only import enabled as first_question_enabled, question_numbers
@@ -17,11 +22,16 @@ from app.services.test_content_mode import mode_label as test_content_mode_label
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS
 
 METRICS_VERSION = "four-hypotheses-v1"
+SPEC52_METRICS_PROTOCOLS = {
+    "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1": "posttest-5point-v3",
+    "experiment-plan-2026-11-12-posttest-system-clarity-removal-v1": "posttest-5point-v4",
+}
 TERM_SLUGS = ACTIVE_TERM_SLUGS
 H4_NUMERIC_KEYS = ("clarity", "readability", "japanese_clarity", "learning_usefulness")
 CENTERED_RATING_KEYS = ("difficulty_appropriateness", "amount_appropriateness")
 METRICS_CSV_COLUMNS = [
-    "metrics_version", "protocol_id", "test_content_mode", "group_condition", "participant_id", "display_code", "route",
+    "metrics_version", "experiment_spec_version", "protocol_id", "survey_version", "test_content_mode",
+    "group_condition", "participant_id", "display_code", "route",
     "metric", "value", "n", "mean", "median", "numerator", "denominator", "eligible_count", "missing_count",
     "not_applicable_count", "status", "details_json",
 ]
@@ -55,8 +65,20 @@ def _questions_per_test(mode: str, first_only: bool) -> int:
     return 3 if first_only else 6
 
 
+def metrics_eligible(participant: Participant) -> bool:
+    """Allow current participants and the two spec-52 cohorts for analytics only."""
+    if can_resume(participant):
+        assert_current_experiment(participant)
+        return True
+    return (
+        participant.experiment_spec_version == 52
+        and participant.protocol_id in SPEC52_METRICS_PROTOCOLS
+    )
+
+
 def participant_metrics(db: Session, participant: Participant) -> dict:
-    assert_current_experiment(participant)
+    if not metrics_eligible(participant):
+        assert_current_experiment(participant)
     mode = participant_test_content_mode(participant)
     term_slugs = _mode_term_slugs(mode)
     terms = {t.id: t.slug for t in db.query(Term).filter(Term.slug.in_(term_slugs)).all()}
@@ -120,10 +142,15 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         TutorSession.participant_id == participant.id,
         TutorTurn.material_viewed_at.is_not(None),
     ).distinct().all()
+    expected_survey_version = (
+        SURVEY_VERSION
+        if can_resume(participant)
+        else SPEC52_METRICS_PROTOCOLS[participant.protocol_id]
+    )
     survey = db.query(ParticipantSurvey).filter(
         ParticipantSurvey.participant_id == participant.id,
         ParticipantSurvey.phase == "posttest",
-        ParticipantSurvey.survey_version == SURVEY_VERSION,
+        ParticipantSurvey.survey_version == expected_survey_version,
     ).order_by(ParticipantSurvey.created_at.desc(), ParticipantSurvey.id.desc()).first()
     raw_ratings = ((survey.responses_json or {}).get("material_ratings") if survey else None) if displayed else None
     ratings = None
@@ -147,7 +174,9 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
     else:
         h4_status = "observed"
     return {
-        "metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
+        "metrics_version": METRICS_VERSION, "protocol_id": participant.protocol_id,
+        "experiment_spec_version": participant.experiment_spec_version,
+        "survey_version": survey.survey_version if survey else expected_survey_version,
         "participant_id": participant.id, "display_code": participant.display_code,
         "scoring_unit": "subquestion" if split else "term", "questions_per_test": expected_count,
         "first_question_only": first_question_enabled(participant),
@@ -175,8 +204,20 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
 
 
 def current_metrics(db: Session) -> list[dict]:
-    participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
-                                                  protocol_id=CURRENT_PROTOCOL_ID, consent_checked=True).order_by(Participant.created_at, Participant.id).all()
+    from sqlalchemy import and_, or_
+
+    spec52_conditions = [
+        and_(Participant.experiment_spec_version == 52, Participant.protocol_id == protocol)
+        for protocol in SPEC52_METRICS_PROTOCOLS
+    ]
+    participants = db.query(Participant).filter(
+        Participant.consent_checked.is_(True),
+        or_(
+            and_(Participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION,
+                 Participant.protocol_id == CURRENT_PROTOCOL_ID),
+            *spec52_conditions,
+        ),
+    ).order_by(Participant.created_at, Participant.id).all()
     return [participant_metrics(db, participant) for participant in participants]
 
 
@@ -271,12 +312,14 @@ def _group(rows):
 def group_metrics(rows: list[dict]) -> dict:
     conditions = sorted({row.get("first_question_only", False) is True for row in rows}) or [True]
     modes = sorted({row.get("test_content_mode") or "application" for row in rows}) or ["application"]
-    if len(conditions) > 1 or len(modes) > 1:
+    protocols = sorted({row.get("protocol_id") or CURRENT_PROTOCOL_ID for row in rows}) or [CURRENT_PROTOCOL_ID]
+    if len(conditions) > 1 or len(modes) > 1 or len(protocols) > 1:
         strata_keys = sorted({
-            (row.get("first_question_only") is True, row.get("test_content_mode") or "application")
+            (row.get("first_question_only") is True, row.get("test_content_mode") or "application",
+             row.get("protocol_id") or CURRENT_PROTOCOL_ID)
             for row in rows
-        }) or [(True, "application")]
-        return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID,
+        }) or [(True, "application", CURRENT_PROTOCOL_ID)]
+        return {"metrics_version": METRICS_VERSION, "protocol_id": None,
                 "groups": [], "routes": {},
                 "differences_proposed_minus_control": {}, "h4_item_differences": {},
                 "strata": [
@@ -284,8 +327,9 @@ def group_metrics(rows: list[dict]) -> dict:
                         row for row in rows
                         if (row.get("first_question_only") is True) == condition
                         and (row.get("test_content_mode") or "application") == mode
+                        and (row.get("protocol_id") or CURRENT_PROTOCOL_ID) == protocol
                     ])
-                    for condition, mode in strata_keys
+                    for condition, mode, protocol in strata_keys
                 ],
                 "descriptive_only": True}
     first_only = conditions[0] if conditions else False
@@ -299,7 +343,10 @@ def group_metrics(rows: list[dict]) -> dict:
         for key in MATERIAL_RATING_KEYS
     }
     routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("pretest_perfect_early_exit", "learning_retest", "pretest_incomplete")}
-    return {"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, "groups": groups,
+    return {"metrics_version": METRICS_VERSION, "protocol_id": protocols[0],
+            "experiment_spec_version": next((row.get("experiment_spec_version") for row in rows), CURRENT_EXPERIMENT_SPEC_VERSION),
+            "survey_version": next((row.get("survey_version") for row in rows if row.get("survey_version")), None),
+            "groups": groups,
             "test_content_mode": mode, "test_content_mode_label": test_content_mode_label(mode),
             "first_question_only": first_only, "questions_per_test": _questions_per_test(mode, first_only),
             "differences_proposed_minus_control": differences, "h4_item_differences": item_differences,
@@ -316,7 +363,8 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
         return [record for stratum in source["strata"] for record in metrics_export_rows(
             [row for row in rows
              if (row.get("first_question_only") is True) == stratum["first_question_only"]
-             and (row.get("test_content_mode") or "application") == stratum["test_content_mode"]],
+             and (row.get("test_content_mode") or "application") == stratum["test_content_mode"]
+             and (row.get("protocol_id") or CURRENT_PROTOCOL_ID) == stratum["protocol_id"]],
             grouped=True,
         )]
     if grouped:
@@ -340,7 +388,8 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
         records.append({"test_content_mode": source["test_content_mode"], "metric": "group_details", "details_json": json.dumps(source, ensure_ascii=False)})
     else:
         for row in rows:
-            base = {k: row[k] for k in ("group_condition", "participant_id", "display_code", "route")}
+            base = {k: row[k] for k in ("group_condition", "participant_id", "display_code", "route",
+                                        "protocol_id", "experiment_spec_version", "survey_version")}
             base["test_content_mode"] = row.get("test_content_mode") or "application"
             base["first_question_only"] = row.get("first_question_only") is True
             for key in ("h1", "h2", "h3"):
@@ -357,8 +406,19 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
         details = json.loads(record.get("details_json") or "{}")
         first_only = record.pop("first_question_only", source.get("first_question_only", False))
         mode = record.get("test_content_mode") or source.get("test_content_mode", "application")
-        record["details_json"] = json.dumps({**details, "test_content_mode": mode, "first_question_only": first_only, "questions_per_test": _questions_per_test(mode, first_only)}, ensure_ascii=False)
-        output.append({"metrics_version": METRICS_VERSION, "protocol_id": CURRENT_PROTOCOL_ID, **record})
+        protocol_id = record.get("protocol_id") or source.get("protocol_id") or CURRENT_PROTOCOL_ID
+        survey_version = record.get("survey_version") or source.get("survey_version")
+        spec_version = record.get("experiment_spec_version") or source.get("experiment_spec_version", CURRENT_EXPERIMENT_SPEC_VERSION)
+        record["details_json"] = json.dumps({
+            **details,
+            "test_content_mode": mode,
+            "first_question_only": first_only,
+            "questions_per_test": _questions_per_test(mode, first_only),
+            "experiment_spec_version": spec_version,
+            "survey_version": survey_version,
+        }, ensure_ascii=False)
+        output.append({"metrics_version": METRICS_VERSION, "protocol_id": protocol_id,
+                       "experiment_spec_version": spec_version, "survey_version": survey_version, **record})
     return output
 
 

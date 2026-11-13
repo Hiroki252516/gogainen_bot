@@ -1,17 +1,16 @@
 # 事後アンケート5段階評価
 
-## 現行条件（仕様版52）
+## 現行条件（仕様版53）
 
-新規参加者は仕様版52 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`で、事後アンケート版`posttest-5point-v3`を使用する。教材量の質問文は「教材の量はどの程度でしたか」。適用範囲は新規参加者のみ。仕様版51以下の参加者・回答・評価サマリーは保存時の版を保全し、尺度変換・上書き・新指標への再集計を行わない。この変更は研究上の承認を意味しない。
+新規参加者は仕様版53 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`で、事後アンケート版`posttest-5point-v4`を使用する。システム評価は「必要な操作をスムーズに行えた」のみで、`system_clarity`は新規回答schemaから除く。教材量の質問文は「教材の量はどの程度でしたか」。適用範囲は新規参加者のみ。仕様版52以下の参加者・回答・評価サマリーは保存時の版を保全し、尺度変換・上書き・新指標への再集計を行わない。この変更は研究上の承認を意味しない。
 
-項目数はシステム評価2項目、教材評価6項目、任意の自由記述を維持する。表示文と回答値は以下のとおり。
+項目数はシステム評価1項目、教材評価6項目、任意の自由記述とする。表示文と回答値は以下のとおり。
 
 ### システム評価
 
 | 質問 | 1 | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- | --- |
 | 必要な操作をスムーズに行えた | 全くそう思わない | あまりそう思わない | どちらともいえない | ややそう思う | 非常にそう思う |
-| 画面を見て、次に何をすればよいか分かった | 全くそう思わない | あまりそう思わない | どちらともいえない | ややそう思う | 非常にそう思う |
 
 ### 教材評価
 
@@ -26,7 +25,13 @@
 
 各評価項目には独立した「評価できない」を設け、保存値`not_applicable`とする。数値回答は厳密な整数1〜5。教材を閲覧した参加者は教材評価6項目すべてに数値または`not_applicable`で回答する。未閲覧者の`material_ratings`は従来どおりJSON `null`とし、閲覧後の`not_applicable`や欠落回答とは区別する。自由記述は任意で、操作上の迷い、教材の分かりにくさ、改善点を記入できる案内を付ける。
 
-回答は既存の`ParticipantSurvey`に`phase=posttest`、`survey_version=posttest-5point-v3`、`responses_json`として保存する。DB列追加は行わない。APIは必須回答・尺度範囲・未閲覧時のnull条件を検証する。同じ内容の冪等再送は既存契約に従う。管理ログとアンケートCSV／Excelでは、phase、版、回答値を保持し、数値と`not_applicable`を混同しない。回答キー`amount_appropriateness`、選択肢、集計方法は仕様版50から変更しない。
+回答は既存の`ParticipantSurvey`に`phase=posttest`、`survey_version=posttest-5point-v4`、`responses_json`として保存する。DB列追加は行わない。APIは`system_usability`、教材評価6項目、自由記述を検証し、削除した`system_clarity`など余分なキーを拒否する。必須回答・尺度範囲・未閲覧時のnull条件を検証し、同じ内容の冪等再送は既存契約に従う。管理ログとアンケートCSV／Excelでは、phase、版、回答値を保持し、数値と`not_applicable`を混同しない。回答キー`amount_appropriateness`、選択肢、集計方法は仕様版51から変更しない。
+
+## 仕様版51・`posttest-5point-v3`の履歴
+
+仕様版51ではシステム評価2項目（「必要な操作をスムーズに行えた」「画面を見て、次に何をすればよいか分かった」）と教材評価6項目、任意の自由記述を取得した。仕様版52では後者のシステム評価項目を新規回答から削除し、v4として区別する。v3の保存済み回答・質問定義・ログ・CSV／Excelは変更せず、v4へ変換しない。
+
+仕様版52には二つの独立protocolがある。`experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`は事後v3で、教材量質問文を「教材の量はどの程度でしたか」に更新し、`system_clarity`を保持した。`experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`は事後v4で、`system_clarity`を削除したが、教材量質問文は統合前の文言だった。仕様版53で両変更を統合し、仕様版52の保存済み回答はそれぞれのprotocolに対応する版で保全する。
 
 ## 現行H4との対応
 

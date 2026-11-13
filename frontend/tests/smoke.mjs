@@ -505,7 +505,7 @@ for (const expectedText of ["事前テストと初回再テストの完答", "�
 for (const expectedText of ["material-view", "visibilitychange", "materialViewError"]) {
   if (!learningPage.includes(expectedText)) throw new Error(`material display recording is missing: ${expectedText}`);
 }
-for (const expectedText of ["/survey", "PosttestQuestionnaire", "material_ratings_required", "posttest-5point-v3", 'router.replace("/finish")']) {
+for (const expectedText of ["/survey", "PosttestQuestionnaire", "material_ratings_required", "posttest-5point-v4", 'router.replace("/finish")']) {
   if (!surveyPage.includes(expectedText)) {
     throw new Error(`survey page missing save-and-finish behavior: ${expectedText}`);
   }
@@ -524,11 +524,12 @@ for (const expectedText of [
   "moderately", "well", "覚えていない", "全く理解していない",
   "基本的な意味や働きをどの程度理解していますか。", "instruction_tuning", "インストラクションチューニング",
   "ai_usage_frequency_30d", "21_30_days", "goal_aligned_output", "verify_with_sources", "実験後アンケート",
-  "posttest-5point-v3", "教材の量はどの程度でしたか", "教材について", "教材評価6項目は対象外",
+  "posttest-5point-v4", "必要な操作をスムーズに行えた", "教材の量はどの程度でしたか", "教材について", "教材評価6項目は対象外",
   "自由記述（任意）", "もう一度入力する", "入力を確認する（保存なし）",
 ]) {
   if (!surveyForms.includes(expectedText)) throw new Error(`shared survey form behavior missing: ${expectedText}`);
 }
+if (surveyForms.includes("画面を見て、次に何をすればよいか分かった")) throw new Error("removed posttest item must not be rendered");
 if (!styles.includes(".presurvey-form .survey-choice-options {\n  grid-template-columns: repeat(var(--survey-choice-option-count), minmax(0, 1fr));\n}")) throw new Error("presurvey choices must display options in one row on wide screens");
 if (!styles.includes(".presurvey-form .survey-choice-options {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }")) throw new Error("presurvey choices must wrap to two columns on narrow screens");
 if (!surveyForms.includes("--survey-choice-option-count")) throw new Error("presurvey choice grid must use the number of options for its desktop columns");

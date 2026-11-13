@@ -227,6 +227,24 @@ def test_spec_51_instruction_tuning_protocol_restores_its_saved_bank():
     }
 
 
+@pytest.mark.parametrize(
+    "protocol_id,expected_bank",
+    [
+        ("experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1", "split-actions-four-topic-v3"),
+        ("experiment-plan-2026-11-12-posttest-system-clarity-removal-v1", "split-actions-four-topic-v2"),
+    ],
+)
+def test_spec_52_protocol_variants_restore_their_saved_four_topic_bank(protocol_id, expected_bank):
+    participant = {
+        "experiment_spec_version": 52,
+        "protocol_id": protocol_id,
+        "test_content_mode": "four_topic_fundamentals",
+    }
+
+    assert assessment_bank_for_participant(participant) == expected_bank
+    assert historical_assessment_bank_versions_for(participant) == {STANDARD: expected_bank}
+
+
 def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map():
     participant = {
         "experiment_spec_version": CURRENT_EXPERIMENT_SPEC_VERSION,
@@ -348,8 +366,8 @@ def test_mode_setting_is_authenticated_and_snapshotted_for_new_participants(isol
         with factory() as db:
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
-            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 52
-            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1"
+            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 53
+            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()

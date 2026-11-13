@@ -1,15 +1,30 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-12 現行評価指標を4仮説へ更新（fix/issue-339）
+## 2026-11-12 issue-328統合後の競合解決・回帰検証
+
+- 仕様版53の新規参加者は`experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`と事後`posttest-5point-v4`を使う。`system_clarity`を新規回答で拒否し、教材評価6項目を維持する。
+- 仕様版52の`experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1`（事後v3）と`experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`（事後v4）は、参加者の再開・回答・進行を変えず、保存済みデータからH1〜H4の評価サマリーのみ追加する。既存サマリー・回答・教材・アンケートは不変で、再計算は冪等。仕様版51以下は対象外。
+- 4仮説・旧サマリー保全・仕様52の両protocol・仕様51除外を含むBackend対象テストは`129 passed`。Frontend `npm test`と`npm run build`が成功した。
+- Backend全テストは`1733 passed`（DeprecationWarning 6件）。CSV/XLSX一致テストを含み、仕様版識別子はXLSXでも文字列としてCSVと同じ値を保つ。
+- `git -c core.whitespace=cr-at-eol diff --check`、未解決ファイル、競合マーカーの最終確認が成功した。ブラウザでの実画面確認は未実施。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。研究上の承認や尺度の妥当性は確認していない。
+
+## 2026-11-12 現行評価指標を4仮説へ更新（fix/issue-339単独時・issue-328統合前の記録）
 
 - 現行指標版を`four-hypotheses-v1`とし、H1を事前テストから初回再テストへの正答率差、H2を事前M1/M3項目に対する同タイプ再選択率、H3を事前完了・事前非満点の再テスト対象者における満点率、H4を教材評価6項目の個別記述集計とした。後続再テストは参考値とし、H4の難易度・教材量は分布のみを出力する。
-- 仕様版52の現行protocol参加者も保存済みデータから新指標の評価サマリーを作る。既存サマリーとraw dataは上書きせず、仕様版・protocol・問題・回答・参加者進行は変更しない。旧6仮説の集計記録は履歴として保全する。
+- 仕様版52で当時対応していたprotocolの参加者も保存済みデータから新指標の評価サマリーを作る。既存サマリーとraw dataは上書きせず、仕様版・protocol・問題・回答・参加者進行は変更しない。旧6仮説の集計記録は履歴として保全する。
 - 管理画面、参加者ログ、評価API、専用参加者別／群別CSV・XLSXはH1〜H4を出力し、旧H5/H6を現行指標として表示しない。統合ログCSVの固定ヘッダーと従来列は維持する。6教材項目を単一の総合点へ合成しない。
 - Backend全テストは`1726 passed`（既存DeprecationWarning 5件）。H1〜H4、早期終了・未完了の対象外処理、H2の完答条件、H3の未受験・未達分母、H4の閲覧・未閲覧・評価不能・未回答、モード別集計、旧サマリー保全、CSV/XLSX出力を検証した。
 - Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。Frontendの実ブラウザ画面確認は未実施。
 - `git diff --check`は成功。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。統計的有意差・仮説支持の自動判定や研究上の承認は追加・確認していない。
 
-## 2026-11-12 4用語版のインストラクションチューニング表記への復帰（仕様版51・fix/issue-336）
+## 2026-11-12 事後アンケートのシステム評価項目削除（fix/issue-328、統合前の検証記録）
+
+- 新規参加者の仕様を52 / `experiment-plan-2026-11-12-posttest-system-clarity-removal-v1`、事後アンケートを`posttest-5point-v4`へ更新した。システム評価は「必要な操作をスムーズに行えた」のみとし、`system_clarity`はv4の送信画面・入力契約から除外した。v3の既存回答・記録は変更しない。
+- 対象Backendテストは9件成功し、v4の余分キー拒否、旧v3を含むH5の版別処理、survey APIの現行版を確認した。Frontend `npm test`と`npm run build`は成功した。
+- Backend全テストは`1051 failed, 650 passed, 23 errors`。多数のフローで問題バンクvariantが見つからず503となった。今回の変更との因果関係は特定できておらず、全Backendテストは成功扱いにしていない。
+- `git diff --check`は成功した。ブラウザの実画面確認は未実施。研究上の承認を意味しない。
+
+## 2026-11-12 4用語版のインストラクションチューニング表記への復帰（仕様版51・fix/issue-336、統合前）
 
 - 4用語版に問題バンク`split-actions-four-topic-v3`を追加し、LLM学習段階の用語・設問・選択肢・教授情報をインストラクションチューニング表記に更新した。4問・各10択、正解/M1/M3/unknownの役割、採点と確認問題snapshot再利用は維持する。
 - 4用語版の事前アンケートを`presurvey-four-topic-baseline-v4`へ更新し、`instruction_tuning`／「インストラクションチューニング」を保存・表示する。標準2モードの`fine_tuning`／「ファインチューニング」は維持した。仕様版50の問題バンクv1/v2と事前アンケートv2/v3、および仕様版50以下の保存済み記録は変更しない。
@@ -18,7 +33,6 @@
 - `git diff --check`は成功。隔離した画面での実ブラウザ表示確認は未実施。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
 
 ## 2026-11-12 事後アンケート教材量の質問文更新（仕様版51・fix/issue-338、統合前の記録）
-## 2026-11-12 事後アンケート教材量の質問文更新（fix/issue-338）
 
 - 新規参加者を仕様版51 / `experiment-plan-2026-11-12-posttest-material-amount-wording-v1`、事後アンケート版`posttest-5point-v3`へ更新した。質問文は「教材の量はどの程度でしたか」。選択肢、`amount_appropriateness`、集計は維持する。
 - 仕様版50 / `posttest-5point-v2`の質問文・保存済み回答は履歴として維持する。旧回答を変換せず、v2の新規送信は拒否する。
@@ -26,7 +40,7 @@
 - `git diff --check`が成功した。隔離ブラウザ確認はPlaywrightランタイムが見つからず未実施。
 - この文言変更は研究上の承認を意味しない。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。
 
-上記2件はそれぞれ独立した仕様版51 protocolで行った統合前の検証記録であり、仕様版52の複合protocol全体を検証した結果ではない。仕様版52の統合後検証はマージ後に実施し、結果を以下へ追記する。
+上記3件は統合前の独立した検証記録であり、仕様版53の複合protocol全体を検証した結果ではない。統合後の検証結果は本書冒頭の「issue-328統合後の競合解決・回帰検証」を参照する。
 
 ## 2026-11-11 仕様版50の事前アンケート・問題バンク更新（fix/issue-323の検証記録）
 

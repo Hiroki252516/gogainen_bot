@@ -90,13 +90,16 @@ function MaterialEvaluation({ data }: { data: any }) {
 
 export function HypothesisMetrics({ data }: { data: any }) {
   if (!data) return null;
-  if (data.strata?.length) return <div className="stack">{data.strata.map((stratum: any) => <HypothesisMetrics key={`${stratum.test_content_mode}-${String(stratum.first_question_only)}`} data={stratum} />)}</div>;
-  const titleId = `hypotheses-title-${data.test_content_mode || "application"}-${data.first_question_only ? "q1" : "q12"}`;
+  if (data.strata?.length) return <div className="stack">{data.strata.map((stratum: any) => <div className="stack" key={`${stratum.protocol_id}-${stratum.experiment_spec_version}-${stratum.test_content_mode}-${String(stratum.first_question_only)}`}>
+    <p className="muted">仕様版{stratum.experiment_spec_version}／{stratum.protocol_id}／事後アンケート {stratum.survey_version || "未回答"}</p>
+    <HypothesisMetrics data={stratum} />
+  </div>)}</div>;
+  const titleId = `hypotheses-title-${data.protocol_id || "mixed"}-${data.test_content_mode || "application"}-${data.first_question_only ? "q1" : "q12"}`;
   const modeLabel = data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）";
   return <section className="panel stack" aria-labelledby={titleId}>
     <h2 id={titleId}>4仮説の記述集計：{modeLabel}</h2>
-    <p>集計対象: {modeLabel}／{testCountLabel(data)}</p>
-    <p>新プロトコル登録者のみ。統計検定・仮説支持の自動判定・欠測補完は行いません。H1は事前満点者を対象外とし、その他は事前テストと初回再テストの完答ペアを集計します。H2は事前テストと初回再テストの比較可能な完答ペアを対象とし、参加者ごとの再選択割合を算出します。H3は事前テスト完了者から事前満点者を除いた再テスト対象者が分母で、未受験・中断・未達は未到達として数えます。</p>
+    <p>集計対象: 仕様版{data.experiment_spec_version}／{data.protocol_id}／事後アンケート {data.survey_version || "回答なし"}／{modeLabel}／{testCountLabel(data)}</p>
+    <p>現行仕様版と、明示的に対応付けた仕様版52の2 protocolを対象とします。旧仕様版の参加者進行は読み取り専用のままで、保存済みデータから評価サマリーのみ追加する場合があります。統計検定・仮説支持の自動判定・欠測補完は行いません。H1は事前満点者を対象外とし、その他は事前テストと初回再テストの完答ペアを集計します。H2は事前テストと初回再テストの比較可能な完答ペアを対象とし、参加者ごとの再選択割合を算出します。H3は事前テスト完了者から事前満点者を除いた再テスト対象者が分母で、未受験・中断・未達は未到達として数えます。</p>
     <StatsTable groups={data.groups} />
     <p className="muted">H2の参加者内割合は、事前テストでM1/M3だった項目のうち、初回再テストでも同じタイプを選んだ割合です。群の平均は参加者ごとの割合を等しい重みで集計します。H3の対象外には事前テスト未完了者と事前満点者を含み、人数を別掲します。</p>
     <div className="actions">

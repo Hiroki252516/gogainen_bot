@@ -112,7 +112,8 @@ try {
     assert.equal(await page.getByText("普段のAI利用頻度", { exact: true }).count(), 0);
     assert.equal(await page.getByText("事前学習", { exact: true }).count(), 0);
     const ratings = page.locator(".survey-rating-options");
-    assert.equal(await ratings.count(), fixture.viewed ? 8 : 2);
+    assert.equal(await ratings.count(), fixture.viewed ? 7 : 1);
+    assert.equal(await page.getByText("画面を見て、次に何をすればよいか分かった", { exact: true }).count(), 0);
     assert(await page.getByText("教材で説明された内容を理解できた", { exact: true }).count() === Number(fixture.viewed));
     for (let index = 0; index < await ratings.count() - 1; index++) {
       const value = fixture.viewed && index === 2 ? "not_applicable" : "4";
@@ -129,10 +130,10 @@ try {
     const saved = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/survey"));
     await save.click();
     const body = (await posted).postDataJSON();
-    assert.equal(body.survey_version, "posttest-5point-v3");
+    assert.equal(body.survey_version, "posttest-5point-v4");
     assert(!("prior_term_knowledge" in body));
     assert.equal(body.general_ratings.system_usability, 4);
-    assert.equal(body.general_ratings.system_clarity, 4);
+    assert(!("system_clarity" in body.general_ratings));
     assert(!("ai_usage_frequency" in body.general_ratings));
     assert(!("experiences" in body));
     assert(!("self_rated_ai_knowledge" in body.general_ratings));
@@ -155,7 +156,7 @@ try {
     assert.deepEqual(presurvey.responses.prior_term_exposure, fixture.presurveyPayload.prior_term_exposure);
     assert.deepEqual(presurvey.responses.prior_term_understanding, fixture.presurveyPayload.prior_term_understanding);
     assert.deepEqual(presurvey.responses.general_ratings, fixture.presurveyPayload.general_ratings);
-    assert.equal(posttest.survey_version, "posttest-5point-v3");
+    assert.equal(posttest.survey_version, "posttest-5point-v4");
     assert(!("prior_term_exposure" in posttest.responses));
     assert(!("prior_term_understanding" in posttest.responses));
     assert.equal(posttest.free_comment, "");

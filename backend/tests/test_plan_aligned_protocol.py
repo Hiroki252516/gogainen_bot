@@ -60,9 +60,10 @@ def study(tmp_path):
     engine.dispose()
 
 
-def participant(db, code="T", group="proposed", protocol=CURRENT_PROTOCOL_ID):
+def participant(db, code="T", group="proposed", protocol=CURRENT_PROTOCOL_ID,
+                spec_version=CURRENT_EXPERIMENT_SPEC_VERSION):
     row = Participant(display_code=code, group_condition=group, protocol_id=protocol,
-                      experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD], test_content_mode="application", consent_checked=True, current_step="learning")
+                      experiment_spec_version=spec_version, learning_content_version=LEARNING_CONTENT_VERSIONS[STANDARD], test_content_mode="application", consent_checked=True, current_step="learning")
     db.add(row)
     db.flush()
     return row
@@ -107,7 +108,7 @@ def session(db, p, slug, index, wrong=0, *, displayed=True, answered=True, ended
 
 def questionnaire(viewed=False):
     return {"survey_version": SURVEY_VERSION,
-            "general_ratings": {"system_usability": 4, "system_clarity": 5},
+            "general_ratings": {"system_usability": 4},
             "material_ratings": {key: 4 for key in MATERIAL_RATING_KEYS} if viewed else None,
             "free_comment": "  特になし  "}
 
@@ -446,7 +447,7 @@ def test_rounds_remain_distinct_after_variant_five_is_reused(study):
     assert row["h3"]["first_mastery_round"] == 6
 
 
-@pytest.mark.parametrize("field,value", [("system_usability", 0), ("system_usability", 6), ("system_usability", True), ("system_clarity", 3.5), ("system_clarity", "4")])
+@pytest.mark.parametrize("field,value", [("system_usability", 0), ("system_usability", 6), ("system_usability", True), ("system_usability", 3.5), ("system_usability", "4")])
 def test_rating_validation_is_strict_and_bounded(field, value):
     payload = questionnaire()
     payload["general_ratings"][field] = value
@@ -463,6 +464,13 @@ def test_required_knowledge_and_material_fields():
         mutate(payload)
         with pytest.raises(ValidationError):
             SurveyPayload.model_validate(payload)
+
+
+def test_removed_system_clarity_is_rejected_for_new_survey_version():
+    payload = questionnaire()
+    payload["general_ratings"]["system_clarity"] = 4
+    with pytest.raises(ValidationError):
+        SurveyPayload.model_validate(payload)
     for mutate in (lambda p: p.pop("prior_term_exposure"),
                    lambda p: p["prior_term_exposure"].update(pretraining="yes"),
                    lambda p: p["general_ratings"].pop("ai_usage_frequency_30d")):
@@ -473,7 +481,7 @@ def test_required_knowledge_and_material_fields():
 
 
 @pytest.mark.parametrize("section,keys", [
-    ("general_ratings", ("system_usability", "system_clarity")),
+    ("general_ratings", ("system_usability",)),
     ("material_ratings", MATERIAL_RATING_KEYS),
 ])
 def test_every_displayed_survey_item_requires_an_explicit_answer(section, keys):
@@ -598,7 +606,7 @@ def test_old_questionnaire_cannot_be_written_as_the_new_version():
         SurveyPayload.model_validate(payload)
 
 
-@pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", "posttest-5point-v1", "posttest-5point-v2", SURVEY_VERSION])
+@pytest.mark.parametrize("version", ["posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3", "posttest-5point-v1", "posttest-5point-v2", "posttest-5point-v3", SURVEY_VERSION])
 def test_h4_uses_only_current_survey_version_without_rewriting_history(study, version):
     p = participant(study)
     session(study, p, "llm_knowledge", 1)
@@ -615,6 +623,8 @@ def test_h4_uses_only_current_survey_version_without_rewriting_history(study, ve
             "system_usability": 9,
             "system_clarity": 8,
         }
+    elif version == "posttest-5point-v3":
+        responses["general_ratings"]["system_clarity"] = 5
     original = json.loads(json.dumps(responses))
     survey = ParticipantSurvey(participant_id=p.id, phase="posttest", survey_version=version,
                                responses_json=responses, free_comment=None)
@@ -629,6 +639,73 @@ def test_h4_uses_only_current_survey_version_without_rewriting_history(study, ve
     study.refresh(survey)
     assert survey.responses_json == original
     assert survey.survey_version == version
+
+
+@pytest.mark.parametrize(
+    "protocol,survey_version",
+    [
+        ("experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-v1", "posttest-5point-v3"),
+        ("experiment-plan-2026-11-12-posttest-system-clarity-removal-v1", "posttest-5point-v4"),
+    ],
+)
+def test_spec52_protocols_get_read_only_hypothesis_metrics_with_saved_survey_version(
+    study, tmp_path, protocol, survey_version
+):
+    p = participant(study, f"SPEC52-{survey_version}", protocol=protocol, spec_version=52)
+    test_round(study, p, 0, ["M1", "M3", "unknown"])
+    test_round(study, p, 1, ["M1", "M3", "correct"])
+    session(study, p, "llm_knowledge", 1)
+    responses = questionnaire(viewed=True)
+    responses["survey_version"] = survey_version
+    responses["material_ratings"] = {key: 4 for key in MATERIAL_RATING_KEYS}
+    study.add(ParticipantSurvey(participant_id=p.id, phase="posttest",
+                                survey_version=survey_version, responses_json=responses))
+    study.commit()
+
+    row = participant_metrics(study, p)
+    assert row["metrics_version"] == METRICS_VERSION
+    assert row["experiment_spec_version"] == 52
+    assert row["protocol_id"] == protocol
+    assert row["survey_version"] == survey_version
+    assert row["h4"]["items"]["clarity"] == 4
+    assert not can_resume(p)
+
+    prior = EvaluationSummary(participant_id=p.id, group_condition=p.group_condition,
+                              pretest_score=0.25, completed=False,
+                              hypothesis_metrics_json={"metrics_version": "six-hypotheses-v8"})
+    study.add(prior)
+    study.commit()
+    original_step = p.current_step
+    original_attempt_count = study.query(Attempt).filter_by(participant_id=p.id).count()
+    refreshed = experiment._ensure_evaluation_summary(study, p)
+    assert refreshed.id != prior.id
+    assert refreshed.hypothesis_metrics_json["metrics_version"] == METRICS_VERSION
+    assert prior.hypothesis_metrics_json == {"metrics_version": "six-hypotheses-v8"}
+    assert prior.pretest_score == 0.25
+    assert study.query(EvaluationSummary).filter_by(participant_id=p.id).count() == 2
+    assert experiment._ensure_evaluation_summary(study, p).id == refreshed.id
+    assert study.query(EvaluationSummary).filter_by(participant_id=p.id).count() == 2
+    assert p.current_step == original_step
+    assert study.query(Attempt).filter_by(participant_id=p.id).count() == original_attempt_count
+    exported = write_metrics_csv(tmp_path / "spec52-metrics.csv", [row], grouped=False)
+    exported_rows = list(csv.DictReader(exported.open(encoding="utf-8-sig")))
+    assert exported_rows and all(item["protocol_id"] == protocol for item in exported_rows)
+    assert all(item["experiment_spec_version"] == "52" for item in exported_rows)
+    assert all(item["survey_version"] == survey_version for item in exported_rows)
+
+
+def test_spec51_is_not_included_in_new_hypothesis_metrics(study):
+    p = participant(study, "SPEC51", protocol="experiment-plan-2026-11-12-four-topic-instruction-tuning-terminology-v1",
+                    spec_version=51)
+    test_round(study, p, 0, ["M1", "M3", "unknown"])
+    prior = EvaluationSummary(participant_id=p.id, group_condition=p.group_condition,
+                              hypothesis_metrics_json={"metrics_version": "six-hypotheses-v8"})
+    study.add(prior)
+    study.commit()
+
+    assert p.id not in {row["participant_id"] for row in current_metrics(study)}
+    assert experiment._ensure_evaluation_summary(study, p).id == prior.id
+    assert study.query(EvaluationSummary).filter_by(participant_id=p.id).count() == 1
 
 
 def test_h4_reports_numeric_items_and_centered_scales_separately(study, tmp_path):
@@ -803,7 +880,7 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     changed_baseline["general_ratings"]["ai_usage_frequency_30d"] = "21_30_days"
     assert client.post(f"/api/participants/{pid}/presurvey", json=changed_baseline).status_code == 409
     assert client.get(f"/api/participants/{pid}/survey").json()["material_ratings_required"] is False
-    assert client.get(f"/api/participants/{pid}/survey").json()["survey_version"] == "posttest-5point-v3"
+    assert client.get(f"/api/participants/{pid}/survey").json()["survey_version"] == "posttest-5point-v4"
     with SessionLocal() as db:
         p = db.get(Participant, pid)
         assert p.protocol_id == CURRENT_PROTOCOL_ID
