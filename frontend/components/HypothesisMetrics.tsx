@@ -1,24 +1,22 @@
 import { API_BASE } from "@/lib/api";
 
 const LABELS: Record<string, string> = {
-  h1: "仮説1：初回再テストの伸び（ポイント）",
-  h2: "仮説2：満点までの用語別学習セッション数",
-  h3: "仮説3：一用語当たりの不正解数",
-  h4: "仮説4：同種誤答の再選択率",
-  h5: "仮説5：教材評価4項目の平均（1〜5）",
-  h6: "仮説6：再テスト満点到達割合",
+  h1: "H1：事前テストから初回再テストへの正答率の伸び（ポイント）",
+  h2: "H2：同じ誤答タイプの再選択率",
+  h3: "H3：再テスト満点率",
 };
-const ITEMS: Record<string, string> = {
-  clarity: "内容のわかりやすさ", readability: "読みやすさ", japanese_clarity: "日本語のわかりやすさ",
-  difficulty_appropriateness: "難易度の適切さ", learning_usefulness: "学習への役立ち度", amount_appropriateness: "量の適切さ",
+const ITEM_LABELS: Record<string, string> = {
+  clarity: "内容理解",
+  readability: "読みやすさ",
+  japanese_clarity: "日本語表現",
+  difficulty_appropriateness: "難易度",
+  learning_usefulness: "正しい理解への役立ち度",
+  amount_appropriateness: "学習時間に対する分量",
 };
-const H5_ITEMS = ["clarity", "readability", "japanese_clarity", "learning_usefulness"];
-const DISTRIBUTION_ITEMS: Record<string, { label: string; options: string[] }> = {
-  difficulty_appropriateness: { label: "教材の難易度", options: ["簡単すぎた", "やや簡単", "ちょうどよい", "やや難しい", "難しすぎた"] },
-  amount_appropriateness: { label: "今回の教材の量", options: ["少なすぎた", "やや少ない", "ちょうどよい", "やや多い", "多すぎた"] },
-};
-const CENSORING_REASONS: Record<string, string> = {
-  give_up: "途中中断", in_progress: "継続中", completed_without_mastery: "完了・満点未達", other: "終了状況不明",
+const H4_NUMERIC_ITEMS = ["clarity", "readability", "japanese_clarity", "learning_usefulness"];
+const CENTERED_ITEMS: Record<string, string[]> = {
+  difficulty_appropriateness: ["簡単すぎた", "やや簡単", "ちょうどよい", "やや難しい", "難しすぎた"],
+  amount_appropriateness: ["少なすぎた", "やや少ない", "ちょうどよい", "やや多い", "多すぎた"],
 };
 const TEST_CONTENT_MODES: Record<string, string> = {
   application: "現行版（場面応用）",
@@ -27,11 +25,15 @@ const TEST_CONTENT_MODES: Record<string, string> = {
 };
 const ROUTES: Record<string, string> = {
   pretest_perfect_early_exit: "事前テスト満点・早期終了",
-  learning_retest: "学習・再テスト",
+  learning_retest: "事前テスト完了・再テスト対象",
   pretest_incomplete: "事前テスト未完了",
 };
-function format(value: number | null | undefined, rate = false) {
-  return value == null ? "対象データなし" : rate ? `${(value * 100).toFixed(1)}%` : value.toFixed(2);
+
+function format(value: number | null | undefined) {
+  return value == null ? "対象データなし" : value.toFixed(2);
+}
+function formatRate(value: number | null | undefined) {
+  return value == null ? "対象データなし" : `${(value * 100).toFixed(1)}%`;
 }
 function testCountLabel(data: any) {
   if (data.test_content_mode === "four_topic_fundamentals") return "4問・4用語";
@@ -39,96 +41,115 @@ function testCountLabel(data: any) {
 }
 function StatsTable({ groups }: { groups: any[] }) {
   return <div style={{ overflowX: "auto" }}><table>
-    <thead><tr><th>指標</th><th>群</th><th>観測人数</th><th>適用対象</th><th>平均／割合</th><th>中央値</th><th>欠測・未観測</th><th>対象外</th></tr></thead>
+    <thead><tr><th>仮説</th><th>群</th><th>観測人数</th><th>適用対象</th><th>平均／割合</th><th>中央値</th><th>欠測</th><th>対象外</th></tr></thead>
     <tbody>{Object.entries(LABELS).flatMap(([key, label]) => groups.map((group: any) => {
       const stat = group[key];
+      const rate = key === "h2" || key === "h3";
       return <tr key={`${group.group_condition}-${key}`}><th>{label}</th><td>{group.group_condition}</td><td>{stat.n}</td>
-        <td>{stat.eligible_count ?? Math.max(0, group.participant_count - (stat.not_applicable_count || 0))}</td>
-        <td>{format(stat.mean, key === "h4" || key === "h6")}</td><td>{format(stat.median, key === "h4" || key === "h6")}</td>
-        <td>{stat.missing_count}</td><td>{stat.not_applicable_count}</td></tr>;
+        <td>{stat.eligible_count}</td><td>{rate ? formatRate(stat.mean) : stat.mean == null ? "対象データなし" : `${format(stat.mean)} pt`}</td>
+        <td>{rate ? formatRate(stat.median) : format(stat.median)}</td><td>{stat.missing_count}</td><td>{stat.not_applicable_count}</td></tr>;
     }))}</tbody>
   </table></div>;
 }
+
+function MaterialEvaluation({ data }: { data: any }) {
+  return <>
+    <h3>H4：教材評価（項目別）</h3>
+    <p>教材閲覧者を対象に項目ごとに集計します。4項目は数値回答の平均を示し、難易度・分量は「3＝ちょうどよい」を中央とする分布のみを示します。6項目を合成した総合点は算出しません。</p>
+    <div style={{ overflowX: "auto" }}><table><thead><tr><th>項目</th><th>群</th><th>数値回答数</th><th>平均</th><th>中央値</th><th>評価できない</th><th>未回答</th><th>群間差</th></tr></thead>
+      <tbody>{H4_NUMERIC_ITEMS.flatMap((key) => data.groups.map((group: any) => {
+        const stat = group.h4.items[key];
+        return <tr key={`${key}-${group.group_condition}`}><th>{ITEM_LABELS[key]}</th><td>{group.group_condition}</td><td>{stat.n}</td>
+          <td>{format(stat.mean)}</td><td>{format(stat.median)}</td><td>{stat.not_applicable_count}</td><td>{stat.missing_count}</td>
+          <td>{format(data.h4_item_differences[key])}</td></tr>;
+      }))}</tbody></table></div>
+    <h4>難易度・分量の回答分布</h4>
+    <p>割合の分母は教材閲覧者数です。「評価できない」「未回答」は分けて表示します。未閲覧者はこの分布の分母に含めません。</p>
+    <div style={{ overflowX: "auto" }}><table><thead><tr><th>項目</th><th>群</th><th>閲覧者数</th><th>回答</th><th>人数</th><th>割合</th></tr></thead>
+      <tbody>{Object.entries(CENTERED_ITEMS).flatMap(([key, options]) => data.groups.flatMap((group: any) => {
+        const stat = group.h4.items[key];
+        const distribution = stat.distribution;
+        const denominator = group.h4.viewed_count;
+        const responseRows = [
+          ...options.map((label, index) => [String(index + 1), label] as const),
+          ["not_applicable", "評価できない"] as const,
+          ["missing", "未回答"] as const,
+        ];
+        return responseRows.map(([value, label]) => {
+          const count = distribution[value] || 0;
+          return <tr key={`${key}-${group.group_condition}-${value}`}><th>{ITEM_LABELS[key]}</th><td>{group.group_condition}</td>
+            <td>{denominator}</td><td>{label}</td><td>{count}</td>
+            <td>{denominator ? `${(count / denominator * 100).toFixed(1)}%` : "対象データなし"}</td></tr>;
+        });
+      }))}</tbody></table></div>
+    {data.groups.map((group: any) => <p className="muted" key={`h4-${group.group_condition}`}>
+      {group.group_condition}：閲覧者 {group.h4.viewed_count}人、未閲覧 {group.h4.not_viewed_count}人、閲覧後のアンケート欠測 {group.h4.missing_survey_count}人。
+    </p>)}
+  </>;
+}
+
 export function HypothesisMetrics({ data }: { data: any }) {
   if (!data) return null;
-  if (data.strata?.length) return <div className="stack">{data.strata.map((stratum: any) => <HypothesisMetrics key={`${stratum.test_content_mode}-${String(stratum.first_question_only)}`} data={stratum} />)}</div>;
-  const titleId = `hypotheses-title-${data.test_content_mode || "application"}-${data.first_question_only ? "q1" : "q12"}`;
+  if (data.strata?.length) return <div className="stack">{data.strata.map((stratum: any) => <div className="stack" key={`${stratum.protocol_id}-${stratum.experiment_spec_version}-${stratum.test_content_mode}-${String(stratum.first_question_only)}`}>
+    <p className="muted">仕様版{stratum.experiment_spec_version}／{stratum.protocol_id}／事後アンケート {stratum.survey_version || "未回答"}</p>
+    <HypothesisMetrics data={stratum} />
+  </div>)}</div>;
+  const titleId = `hypotheses-title-${data.protocol_id || "mixed"}-${data.test_content_mode || "application"}-${data.first_question_only ? "q1" : "q12"}`;
+  const modeLabel = data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）";
   return <section className="panel stack" aria-labelledby={titleId}>
-    <h2 id={titleId}>6仮説の記述集計：{data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）"}</h2>
-    <p>集計対象: {data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）"}／{testCountLabel(data)}</p>
-    <p>新プロトコル登録者のみ。統計検定・仮説支持の自動判定は行いません。欠測は補完しません。事前テスト満点者は早期終了として別集計し、仮説1・2・6の適用対象から除きます。</p>
+    <h2 id={titleId}>4仮説の記述集計：{modeLabel}</h2>
+    <p>集計対象: 仕様版{data.experiment_spec_version}／{data.protocol_id}／事後アンケート {data.survey_version || "回答なし"}／{modeLabel}／{testCountLabel(data)}</p>
+    <p>現行仕様版と、明示的に対応付けた仕様版52の2 protocolを対象とします。旧仕様版の参加者進行は読み取り専用のままで、保存済みデータから評価サマリーのみ追加する場合があります。統計検定・仮説支持の自動判定・欠測補完は行いません。H1は事前満点者を対象外とし、その他は事前テストと初回再テストの完答ペアを集計します。H2は事前テストと初回再テストの比較可能な完答ペアを対象とし、参加者ごとの再選択割合を算出します。H3は事前テスト完了者から事前満点者を除いた再テスト対象者が分母で、未受験・中断・未達は未到達として数えます。</p>
     <StatsTable groups={data.groups} />
-    <p className="muted">仮説2は満点到達者のみの条件付き集計です。仮説2の未観測は満点までの総回数が未確定の人数であり、表示済みセッションの記録欠落を意味しません。仮説3は用語内平均→参加者内平均、仮説4は参加者ごとの率の平均です。</p>
+    <p className="muted">H2の参加者内割合は、事前テストでM1/M3だった項目のうち、初回再テストでも同じタイプを選んだ割合です。群の平均は参加者ごとの割合を等しい重みで集計します。H3の対象外には事前テスト未完了者と事前満点者を含み、人数を別掲します。</p>
     <div className="actions">
-      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_metrics.csv`}>6仮説・参加者別CSV</a>
-      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_metrics.xlsx`}>6仮説・参加者別Excel (.xlsx)</a>
-      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.csv`}>6仮説・群別CSV</a>
-      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.xlsx`}>6仮説・群別Excel (.xlsx)</a>
+      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_metrics.csv`}>4仮説・参加者別CSV</a>
+      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_metrics.xlsx`}>4仮説・参加者別Excel (.xlsx)</a>
+      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.csv`}>4仮説・群別CSV</a>
+      <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.xlsx`}>4仮説・群別Excel (.xlsx)</a>
     </div>
     <h3>群間差（proposed − control）</h3>
     <ul>{Object.entries(LABELS).map(([key, label]) => {
       const difference = data.differences_proposed_minus_control[key];
-      return <li key={key}>{label}：{key === "h4" || key === "h6" ? difference == null ? "対象データなし" : `${(difference * 100).toFixed(1)}ポイント` : format(difference)}</li>;
+      return <li key={key}>{label}：{difference == null ? "対象データなし" : key === "h1" ? `${difference.toFixed(2)} pt` : formatRate(difference)}</li>;
     })}</ul>
-    <h3>仮説5の構成項目</h3>
-    <p>教材を閲覧した参加者について、内容理解・読みやすさ・日本語表現・正しい理解への役立ち度の数値回答から参加者内平均を算出します。「評価できない」は平均から除外します。</p>
-    <div style={{ overflowX: "auto" }}><table><thead><tr><th>項目</th><th>群</th><th>数値回答者数</th><th>平均（1〜5）</th><th>中央値</th><th>評価できない</th><th>未回答</th><th>群間差</th></tr></thead>
-      <tbody>{H5_ITEMS.flatMap((key) => data.groups.map((group: any) => {
-        const label = ITEMS[key];
-        const stat = group.h5.items[key];
-        return <tr key={`${key}-${group.group_condition}`}><th>{label}</th><td>{group.group_condition}</td><td>{stat.n}</td><td>{format(stat.mean)}</td><td>{format(stat.median)}</td><td>{stat.not_applicable_count}</td><td>{stat.missing_count}</td><td>{format(data.material_item_differences[key])}</td></tr>;
-      }))}</tbody></table></div>
-    <h3>難易度・教材量の回答分布（H5対象外）</h3>
-    <p>各割合の分母は教材閲覧者数です。未回答と「評価できない」は別に表示します。</p>
-    <div style={{ overflowX: "auto" }}><table><thead><tr><th>項目</th><th>群</th><th>閲覧者数</th><th>回答</th><th>人数</th><th>割合</th></tr></thead>
-      <tbody>{Object.entries(DISTRIBUTION_ITEMS).flatMap(([key, item]) => data.groups.flatMap((group: any) => {
-        const stat = group.h5.items[key];
-        const distribution = stat.distribution;
-        const denominator = group.h5.viewed_count;
-        const rows = [
-          ...item.options.map((option, index) => [String(index + 1), option] as const),
-          ["not_applicable", "評価できない"] as const,
-          ["missing", "未回答"] as const,
-        ];
-        return rows.map(([value, label]) => {
-          const count = distribution[value] || 0;
-          return <tr key={`${key}-${group.group_condition}-${value}`}><th>{item.label}</th><td>{group.group_condition}</td><td>{denominator}</td><td>{label}</td><td>{count}</td><td>{denominator ? `${(count / denominator * 100).toFixed(1)}%` : "対象データなし"}</td></tr>;
-        });
-      }))}</tbody></table></div>
+    <MaterialEvaluation data={data} />
     {data.groups.map((group: any) => <div className="notice" key={group.group_condition}>
-      <strong>{group.group_condition}：登録 {group.participant_count}人、事前満点・早期終了 {group.pretest_perfect_early_exit_count}人</strong>
-      <p>満点到達 {group.h6.numerator}/{group.h6.denominator}人、未達 {group.h2.not_attained_count}人、学習なし到達 {group.h2.attained_without_learning_count}人</p>
-      <p>仮説1・2・6の適用対象：H1 {group.h1.eligible_count}人、H2 {group.h2.eligible_count}人、H6 {group.h6.eligible_count}人。対象外数は各表の「対象外」を参照。</p>
-      <p>未達者の観測セッション数：n={group.h2.observed_nonattainer_sessions.n}、平均 {format(group.h2.observed_nonattainer_sessions.mean)}、中央値 {format(group.h2.observed_nonattainer_sessions.median)}</p>
-      <p>H5：数値評価あり {group.h5.valid_response_count}人、4項目すべて評価できない {group.h5.not_evaluable_count}人、教材未閲覧 {group.h5.not_viewed_count}人、欠測 {group.h5.missing_count}人</p>
-      <ul>{Object.entries(CENSORING_REASONS).map(([reason, label]) => {
-        const stat = group.h2.censoring_breakdown[reason];
-        return <li key={reason}>{label}：{stat.n}人、観測セッション数の平均 {format(stat.mean)}、中央値 {format(stat.median)}</li>;
-      })}</ul>
-      <p>参考・用語件数比：{group.h4.pooled_numerator}/{group.h4.pooled_denominator}（{format(group.h4.pooled_rate, true)}）、教材表示者 {group.h5.viewed_count}人</p>
+      <strong>{group.group_condition}：登録 {group.participant_count}人、事前満点・早期終了 {group.pretest_perfect_early_exit_count}人、事前未完了 {group.pretest_incomplete_count}人</strong>
+      <p>H2：完答ペア {group.h2.paired_complete_count}人、比較対象M1/M3項目 {group.h2.participant_denominator}件、同じタイプの再選択 {group.h2.participant_numerator}件。参考の項目加重率 {formatRate(group.h2.pooled_rate)}。</p>
+      <p>H3：満点到達 {group.h3.numerator}/{group.h3.denominator}人。事前未完了 {group.h3.pretest_incomplete_count}人、事前満点・早期終了 {group.pretest_perfect_early_exit_count}人は対象外。</p>
       <p>終了状況：{JSON.stringify(group.completion_reasons)}</p>
     </div>)}
-    <details><summary>経路別集計（事前満点・通常学習・事前未完了）</summary>
+    <details><summary>経路別集計</summary>
       {Object.entries(data.routes).map(([route, groups]) => <div key={route}><h3>{ROUTES[route] || route}</h3><StatsTable groups={groups as any[]} /></div>)}
     </details>
-    <details><summary>再テスト回次別の参考値</summary>
-      <p>後半の回次は受験者が異なります。全回をまとめた平均を主指標にはしません。</p>
+    <details><summary>後続再テストの参考値</summary>
+      <p>H1・H2の主比較は初回再テストです。後続回は受験者が異なるため、各回の参考値として分けて表示します。</p>
       {data.groups.map((group: any) => <div key={group.group_condition}><h3>{group.group_condition}</h3>
-        <ul>{group.rounds.map((round: any) => <li key={round.round}>再テスト{round.round}：伸び n={round.gain.n}／適用対象 {round.gain.eligible_count}人／対象外 {round.gain.not_applicable_count}人／欠測 {round.gain.missing_count}人、平均 {format(round.gain.mean)}・中央値 {format(round.gain.median)}；再選択率 n={round.recurrence.n}／適用対象 {round.recurrence.eligible_count}人／対象外 {round.recurrence.not_applicable_count}人／欠測 {round.recurrence.missing_count}人、平均 {format(round.recurrence.mean, true)}</li>)}</ul>
+        <ul>{group.rounds.filter((round: any) => round.round > 1).map((round: any) => <li key={round.round}>
+          再テスト{round.round}：正答率の伸び n={round.gain.n}／平均 {format(round.gain.mean)} pt、同タイプ再選択率 n={round.same_type_reselection.n}／平均 {formatRate(round.same_type_reselection.mean)}
+        </li>)}</ul>
       </div>)}
     </details>
-    <p className="muted">教材表示は読了・理解の証明ではありません。正答のデバッグ配置・管理アクセス対策は別途確認が必要です。</p>
+    <p className="muted">H4は主観評価です。教材表示・評価は読了、理解、または因果関係の証明ではありません。</p>
   </section>;
 }
 
 export function ParticipantHypothesisMetrics({ data }: { data: any }) {
   if (!data) return null;
-  return <section className="notice stack"><h3>参加者の6仮説対応値</h3>
-    <p>テスト問題モード：{data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）"}</p>
+  const modeLabel = data.test_content_mode_label || TEST_CONTENT_MODES[data.test_content_mode] || "現行版（場面応用）";
+  const h4Status = data.h4.status === "observed" ? "回答あり" : data.h4.status === "missing_survey" ? "閲覧後アンケート欠測" : "教材未閲覧";
+  return <section className="notice stack"><h3>参加者の4仮説対応値</h3>
+    <p>テスト問題モード：{modeLabel}</p>
     <p>出題設問：{testCountLabel(data)}</p>
     <p>経路：{data.route}／教材表示：{data.has_viewed_material ? "あり" : "なし"}</p>
-    {data.h2.censoring_reason && <p>満点未達の終了状況：{CENSORING_REASONS[data.h2.censoring_reason]}</p>}
-    <ul>{Object.entries(LABELS).map(([key, label]) => <li key={key}>{label}：{format(data[key].value, key === "h4" || key === "h6")}（{data[key].status || "observed"}）</li>)}</ul>
-    <details><summary>分母・用語別・回次別の詳細</summary><pre>{JSON.stringify(data, null, 2)}</pre></details>
+    <ul>
+      <li>{LABELS.h1}：{data.h1.value == null ? "対象データなし" : `${format(data.h1.value)} pt`}（{data.h1.status}）</li>
+      <li>{LABELS.h2}：{formatRate(data.h2.value)}（{data.h2.status}、{data.h2.numerator ?? "-"}/{data.h2.denominator ?? "-"}）</li>
+      <li>{LABELS.h3}：{data.h3.value == null ? "対象外" : data.h3.value ? "満点到達" : "未到達"}（{data.h3.status}）</li>
+      <li>H4：教材評価・{h4Status}</li>
+    </ul>
+    {data.h4.items && <ul>{Object.entries(ITEM_LABELS).map(([key, label]) => <li key={key}>{label}：{data.h4.items[key] ?? "未回答"}</li>)}</ul>}
+    <details><summary>分母・項目・回次別の詳細</summary><pre>{JSON.stringify(data, null, 2)}</pre></details>
   </section>;
 }

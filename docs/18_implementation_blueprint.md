@@ -11,7 +11,7 @@
 - core/experiment_spec：仕様版とprotocol_idの両方で進行可否を判定。
 - services/experiment：固定採点、群別入力、教材・回答後解説、再学習、履歴保護。
 - services/research_protocol：新アンケートの厳密型・必須/対象外判定、冪等な教材表示記録。
-- services/hypothesis_metrics：6仮説の根拠・参加者値・群別記述集計・専用CSV。既存評価列と分離。
+- services/hypothesis_metrics：現行4仮説の根拠・参加者値・群別記述集計・専用CSV。`four-hypotheses-v1`を使い、旧6仮説の保存済みサマリーとは分離する。
 - ai：自由な章立て、本文証拠、群別allowlist、v7契約とv3taxonomy。AIBackendを経由しMockへ自動フォールバックしない。
 
 ## 追加するnullable列

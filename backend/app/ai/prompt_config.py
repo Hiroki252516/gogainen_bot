@@ -83,6 +83,20 @@ def _validate_prompt_text(raw: Any) -> dict[str, Any]:
         _required_text(structured.get(key), f"structured.{key}")
     _required_text_list(structured.get("output_rules"), "structured.output_rules", expected_length=3)
 
+    feedback = _required_mapping(root.get("feedback"), "feedback")
+    correct_summary = _required_mapping(
+        feedback.get("correct_answer_summary"), "feedback.correct_answer_summary"
+    )
+    _required_text_list(
+        correct_summary.get("rules"), "feedback.correct_answer_summary.rules", expected_length=7
+    )
+    selected_distractor = _required_mapping(
+        feedback.get("selected_distractor_feedback"), "feedback.selected_distractor_feedback"
+    )
+    _required_text_list(
+        selected_distractor.get("rules"), "feedback.selected_distractor_feedback.rules", expected_length=9
+    )
+
     tutoring = _required_mapping(root.get("tutoring"), "tutoring")
     common = _required_mapping(tutoring.get("common_rules"), "tutoring.common_rules")
     _required_text(common.get("opening"), "tutoring.common_rules.opening")
@@ -129,11 +143,11 @@ def _load_prompt_text() -> dict[str, Any]:
     try:
         raw = yaml.safe_load(PROMPT_TEXT_PATH.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
-        raise RuntimeError(f"Unable to load tutoring prompt text from {PROMPT_TEXT_PATH}") from exc
+        raise RuntimeError(f"Unable to load AI prompt text from {PROMPT_TEXT_PATH}") from exc
     try:
         return _validate_prompt_text(raw)
     except ValueError as exc:
-        raise RuntimeError(f"Invalid tutoring prompt text in {PROMPT_TEXT_PATH}: {exc}") from exc
+        raise RuntimeError(f"Invalid AI prompt text in {PROMPT_TEXT_PATH}: {exc}") from exc
 
 
 PROMPT_TEXT = _load_prompt_text()

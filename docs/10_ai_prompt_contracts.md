@@ -106,9 +106,9 @@ M1/M3の内部キーとteaching_contractを維持し、unknownのmandatory_eleme
 
 正答要約/誤答解説も共通入力を使い、現在の問題・選択内容・表示済み教材を追加する。不正解の現在選択には従来どおり選ばれた誤答本文だけを使う。履歴は現在回答より前の確定分とし、二重掲載しない。proposedだけ診断と教授方針を追加し、固定採点をAI解説で変えない。
 
-### 回答後解説の現行原文の参照
+### 回答後解説の現行指示
 
-正答/誤答ごとの基本指示は両群共通。正答要約は [codex_app_server_backend.py](../backend/app/ai/codex_app_server_backend.py) の240行目から（指示原文258〜264行目）、誤答解説は273行目から（295〜303行目）。群別入力だけを切り替え、教材生成プロンプト全体をそのまま流用しない。
+正答/誤答ごとの固定指示は両群共通で、[learning_material.yml](../backend/app/ai/prompts/learning_material.yml) の `feedback.correct_answer_summary.rules` と `feedback.selected_distractor_feedback.rules` を使う。YAMLはこれら固定文言の正本であり、起動時に必須キー・型・項目数を検証する。目的名、出力Schema、群別入力の投影、内部ラベル除去はPython側が担当する。群別入力だけを切り替え、教材生成プロンプト全体をそのまま流用しない。
 
 正答は要点を短くまとめてsummaryを返し、冒頭に「今回の要点」を置くよう指示する。誤答は正答本文・位置を直接示さず、「どこが違うか」「見直す観点」を中心とするfeedbackを生成するよう指示する。これらの内容上の条件を全て自動検査しているわけではない。remediation_focusとgeneral_knowledge_supplementも返すが、現行画面に表示する解説本文はfeedbackだけ。
 
