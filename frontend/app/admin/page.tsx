@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { IdentityMappings } from "@/components/IdentityMappings";
-import { ResearchCodeMappings } from "@/components/ResearchCodeMappings";
 import { HypothesisMetrics, ParticipantHypothesisMetrics } from "@/components/HypothesisMetrics";
 import { API_BASE, ApiError, api, clearParticipantSession, participantId } from "@/lib/api";
 
@@ -34,7 +32,6 @@ type AiModel = (typeof AI_MODELS)[number][0];
 type OptionOrderMode = "debug_fixed" | "randomized";
 type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
 type TestContentMode = "application" | "basic_understanding" | "four_topic_fundamentals";
-type TestContentModeSetting = { mode: TestContentMode; label: string; applies_to: "new_participants_only" };
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
   study_settings_warning?: string | null;
@@ -158,9 +155,6 @@ export default function AdminPage() {
   const [optionOrder, setOptionOrder] = useState<OptionOrderSetting | null>(null);
   const [optionOrderSaving, setOptionOrderSaving] = useState(false);
   const [optionOrderError, setOptionOrderError] = useState("");
-  const [testContentMode, setTestContentMode] = useState<TestContentModeSetting | null>(null);
-  const [testContentModeSaving, setTestContentModeSaving] = useState(false);
-  const [testContentModeError, setTestContentModeError] = useState("");
   const [summaryError, setSummaryError] = useState("");
   const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [login, setLogin] = useState<any>(null);
@@ -187,9 +181,6 @@ export default function AdminPage() {
     api<OptionOrderSetting>("/api/admin/option-order")
       .then(setOptionOrder)
       .catch((err) => setOptionOrderError(err instanceof Error ? err.message : String(err)));
-    api<TestContentModeSetting>("/api/admin/test-content-mode")
-      .then(setTestContentMode)
-      .catch((err) => setTestContentModeError(err instanceof Error ? err.message : String(err)));
   }, []);
 
   useEffect(() => {
@@ -349,23 +340,6 @@ export default function AdminPage() {
       setOptionOrderError(err instanceof Error ? err.message : String(err));
     } finally {
       setOptionOrderSaving(false);
-    }
-  }
-
-  async function updateTestContentMode(mode: TestContentMode) {
-    if (testContentModeSaving || !testContentMode || testContentMode.mode === mode) return;
-    setTestContentModeError("");
-    setTestContentModeSaving(true);
-    try {
-      const updated = await api<TestContentModeSetting>("/api/admin/test-content-mode", {
-        method: "PUT",
-        body: JSON.stringify({ mode })
-      });
-      setTestContentMode(updated);
-    } catch (err) {
-      setTestContentModeError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setTestContentModeSaving(false);
     }
   }
 
@@ -591,29 +565,9 @@ export default function AdminPage() {
               {optionOrderError ? <p className="danger" role="alert">{optionOrderError}</p> : null}
             </div>
             <div className="notice">
-              <strong>テスト問題モード</strong>
-              <p>{testContentMode?.label || (testContentModeError ? "取得できません" : "設定を確認中")}</p>
-              <div className="reasoning-effort-buttons option-order-buttons" role="group" aria-label="テスト問題モード">
-                {([
-                  ["application", "現行版（場面応用）"],
-                  ["basic_understanding", "基礎理解版"],
-                  ["four_topic_fundamentals", "4用語版"]
-                ] as [TestContentMode, string][]).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={testContentMode?.mode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
-                    aria-pressed={testContentMode?.mode === mode}
-                    disabled={!testContentMode || testContentModeSaving}
-                    onClick={() => updateTestContentMode(mode)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <p className="muted">新規参加者の事前テスト・学習・確認問題・再テストに適用します。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスを扱います。登録済みの参加者には反映されません。</p>
-              {testContentModeSaving ? <p className="muted">保存中...</p> : null}
-              {testContentModeError ? <p className="danger" role="alert">{testContentModeError}</p> : null}
+              <strong>新規参加者のテスト問題モード</strong>
+              <p>4用語版（固定）</p>
+              <p className="muted">事前テスト・学習・確認問題・再テストでは、Transformer、LLMの学習段階、マルチエージェント、記憶プロセスを扱います。登録済みの参加者の設定と進行は変更しません。</p>
             </div>
           </div>
           {activeGroupSummaries.length ? (
@@ -809,8 +763,6 @@ export default function AdminPage() {
             <p className="muted">被験者一覧の「被験者ログを見る」を押すと、1人分の流れを確認できます。</p>
           )}
         </section>
-        <IdentityMappings key={participants.length} />
-        <ResearchCodeMappings key={`research-code-${participants.length}`} />
       </div>
     </AppShell>
   );

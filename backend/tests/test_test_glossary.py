@@ -116,6 +116,10 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
         participant = db.get(Participant, pid)
         assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 55
         assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1"
+        # This test verifies the legacy three-topic question bank and its
+        # glossary snapshots, not the current four-topic registration default.
+        participant.test_content_mode = "application"
+        participant.first_question_only = False
         participant.current_step = phase
         participant.retest_cycles_completed = completed
         db.commit()
@@ -123,7 +127,7 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     response = client.get(path)
     assert response.status_code == 200, response.text
     questions = response.json()["questions"]
-    assert len(questions) == 3
+    assert len(questions) == 6
     assert client.get(path).json() == response.json()
     for question in questions:
         expected = experiment._test_glossary(question["term_label"], question["body"], question["options"])
@@ -137,8 +141,13 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     question = questions[0]
     expected = experiment._test_glossary(question["term_label"], question["body"], question["options"])
     assert expected["entries"]
+    selected_option_ids = (
+        [option["option_id"] for option in question["options"] if option["label"] in {"A", "B", "C"}]
+        if question["selection_mode"] != "single"
+        else [question["options"][0]["option_id"]]
+    )
     body = {"participant_id": pid, "question_id": question["question_id"], "phase": phase,
-            "selected_option_ids": [option["option_id"] for option in question["options"] if option["exclusive"]]}
+            "selected_option_ids": selected_option_ids}
     saved = client.post("/api/attempts", json=body, headers={"Idempotency-Key": "test-glossary"})
     assert saved.status_code == 200, saved.text
     original = experiment._test_glossary

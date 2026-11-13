@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, SecretStr, Field, StrictBool
 from sqlalchemy import text
@@ -83,7 +83,7 @@ from app.services.identity_mapping_cleanup import (
     recover_pending_identity_mapping_cleanups,
 )
 from app.services.option_order import current_option_order_mode, save_option_order_mode
-from app.services.test_content_mode import current_mode as current_test_content_mode, mode_label as test_content_mode_label, save_mode as save_test_content_mode
+from app.services.test_content_mode import FOUR_TOPIC_FUNDAMENTALS, mode_label as test_content_mode_label
 from app.services.learning_glossary import load_learning_glossary, public_glossary
 from app.services import identity_mapping
 from app.services.research_protocol import FourTopicPresurveyPayload, PresurveyPayload, SurveyPayload, presurvey_context, survey_context, record_material_view
@@ -369,24 +369,15 @@ async def api_create_participant(
 ) -> dict:
     if not payload.consent_checked:
         raise HTTPException(400, "同意書への同意が必要です。")
-    research_code = identity_mapping.validate_research_code(payload.research_code)
+    identity_mapping.validate_research_code(payload.research_code)
     normalized_key = normalize_idempotency_key(idempotency_key)
     registration_key = normalized_key or str(uuid4())
     if normalized_key and registration_key_was_deleted(db, normalized_key):
         raise HTTPException(409, "この参加登録は削除されています。再送による再登録はできません。")
-    if normalized_key:
-        existing_research_code = identity_mapping.research_code_for_registration_key(registration_key)
-        if existing_research_code is not None and existing_research_code != research_code:
-            raise HTTPException(409, "同じ登録要求キーには別の入力値を使用できません。")
-    staged_id: str | None = None
 
     def operation() -> dict:
-        nonlocal staged_id
         try:
             participant = create_participant(db, payload.assignment_code, payload.consent_checked)
-            staged_id = participant.id
-            identity_mapping.save_research_code_mapping(participant.id, participant.display_code, research_code,
-                                                        participant.consented_at.isoformat(), registration_key)
         except OperationalError as exc:
             _raise_database_unavailable(db, exc)
         return {
@@ -407,10 +398,7 @@ async def api_create_participant(
             operation=operation,
         )
     except Exception as exc:
-        # Do not remove a mapping if the research commit succeeded but the response failed.
         db.rollback()
-        if staged_id and db.query(Participant.id).filter_by(id=staged_id).first() is None:
-            identity_mapping.delete_participant_mappings(staged_id)
         if isinstance(exc, OperationalError):
             _raise_database_unavailable(db, exc)
         raise
@@ -871,20 +859,15 @@ def api_set_admin_option_order(payload: OptionOrderPayload, db: Session = Depend
 
 @app.get("/api/admin/test-content-mode")
 def api_admin_test_content_mode(db: Session = Depends(get_db)) -> dict:
-    try:
-        mode = current_test_content_mode(db)
-    except ValueError as exc:
-        raise HTTPException(status_code=503, detail="テスト問題モード設定を読み取れません。管理者に連絡してください。") from exc
+    mode = FOUR_TOPIC_FUNDAMENTALS
     return {"mode": mode, "label": test_content_mode_label(mode), "applies_to": "new_participants_only"}
 
 
 @app.put("/api/admin/test-content-mode")
 def api_set_admin_test_content_mode(payload: TestContentModePayload, db: Session = Depends(get_db)) -> dict:
-    try:
-        mode = save_test_content_mode(db, payload.mode)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="未対応のテスト問題モードです。") from exc
-    return {"mode": mode, "label": test_content_mode_label(mode), "applies_to": "new_participants_only"}
+    if payload.mode != FOUR_TOPIC_FUNDAMENTALS:
+        raise HTTPException(status_code=409, detail="新規参加者のテスト問題モードは4用語版に固定されています。")
+    return {"mode": FOUR_TOPIC_FUNDAMENTALS, "label": test_content_mode_label(FOUR_TOPIC_FUNDAMENTALS), "applies_to": "new_participants_only"}
 
 
 @app.get("/api/admin/participants")
@@ -959,60 +942,6 @@ async def api_delete_admin_participant(participant_id: str, db: Session = Depend
             detail="参加者データの削除は完了しましたが、対応表の削除が未完了です。時間をおいて再試行してください。",
         )
     return result
-
-
-def _visible_identity_mappings(db: Session) -> list[dict]:
-    # Hide orphaned staged registrations after a crash; never expose them as participants.
-    current_ids = {row[0] for row in db.query(Participant.id).all()}
-    return [row for row in identity_mapping.list_mappings() if row["participant_id"] in current_ids]
-
-
-def _visible_research_code_mappings(db: Session) -> list[dict]:
-    current_ids = {row[0] for row in db.query(Participant.id).all()}
-    return [row for row in identity_mapping.list_research_code_mappings() if row["participant_id"] in current_ids]
-
-
-@app.get("/api/admin/identity-mappings")
-def api_identity_mappings(db: Session = Depends(get_db)):
-    return JSONResponse({"mappings": _visible_identity_mappings(db)}, headers={"Cache-Control": "no-store"})
-
-
-@app.get("/api/admin/identity-mappings.csv")
-def api_identity_mapping_csv(db: Session = Depends(get_db)):
-    return Response(identity_mapping.mapping_csv(_visible_identity_mappings(db)), media_type="text/csv; charset=utf-8",
-                    headers={"Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="identity-mappings.csv"'})
-
-
-@app.delete("/api/admin/identity-mappings")
-def api_delete_all_identity_mappings():
-    return JSONResponse({"deleted_count": identity_mapping.delete_mapping()}, headers={"Cache-Control": "no-store"})
-
-
-@app.delete("/api/admin/identity-mappings/{participant_id}")
-def api_delete_identity_mapping(participant_id: str):
-    return JSONResponse({"deleted_count": identity_mapping.delete_mapping(participant_id)}, headers={"Cache-Control": "no-store"})
-
-
-@app.get("/api/admin/research-code-mappings")
-def api_research_code_mappings(db: Session = Depends(get_db)):
-    return JSONResponse({"mappings": _visible_research_code_mappings(db)}, headers={"Cache-Control": "no-store"})
-
-
-@app.get("/api/admin/research-code-mappings.csv")
-def api_research_code_mapping_csv(db: Session = Depends(get_db)):
-    rows = _visible_research_code_mappings(db)
-    return Response(identity_mapping.research_code_mapping_csv(rows), media_type="text/csv; charset=utf-8",
-                    headers={"Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="research-code-mappings.csv"'})
-
-
-@app.delete("/api/admin/research-code-mappings")
-def api_delete_all_research_code_mappings():
-    return JSONResponse({"deleted_count": identity_mapping.delete_research_code_mapping()}, headers={"Cache-Control": "no-store"})
-
-
-@app.delete("/api/admin/research-code-mappings/{participant_id}")
-def api_delete_research_code_mapping(participant_id: str):
-    return JSONResponse({"deleted_count": identity_mapping.delete_research_code_mapping(participant_id)}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/admin/logs/overview")

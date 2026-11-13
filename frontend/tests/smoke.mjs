@@ -15,7 +15,6 @@ const required = [
   "components/GiveUpButton.tsx",
   "components/ExperimentProgress.tsx",
   "components/ParticipantFlowGuard.tsx",
-  "components/ResearchCodeMappings.tsx",
   "components/MarkdownText.tsx",
   "components/LearningGlossary.tsx",
   "components/GlossarySidebar.tsx"
@@ -474,14 +473,17 @@ for (const forbiddenText of ["pending_group_condition", "group_condition", "提�
   }
 }
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/presurvey")', "同意して事前アンケートへ", "ConsentDocument", "research_code", "伝えられた番号を入力してください（必須）", "研究用コード", "timeoutMs: 15000", 'role="alert"', 'inputMode="numeric"', 'pattern="[0-9]*"', 'replace(/[^0-9]/g, "")', '/^[0-9]{1,64}$/']) {
+for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/presurvey")', "同意して事前アンケートへ", "ConsentDocument", "research_code", "研究用コードを入力してください（必須）", "アプリ内には保存しません", "timeoutMs: 15000", 'role="alert"', 'inputMode="numeric"', 'pattern="[0-9]*"', 'replace(/[^0-9]/g, "")', '/^[0-9]{1,64}$/']) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
   }
 }
-const researchMappings = fs.readFileSync(new URL("../components/ResearchCodeMappings.tsx", import.meta.url), "utf8");
-for (const expectedText of ["/api/admin/research-code-mappings", "研究用コード対応表を表示・更新", "研究用コード対応表CSVをダウンロード", "研究用コード対応表を全件削除", "research_code"]) {
-  if (!researchMappings.includes(expectedText)) throw new Error(`research-code mapping UI missing: ${expectedText}`);
+const consentDocument = fs.readFileSync(new URL("../components/ConsentDocument.tsx", import.meta.url), "utf8");
+for (const expectedText of ["4つの専門用語", "テストの回答記録", "AIによる教材・説明の生成に関する記録", "Codex app-server", "OpenAIのサービス上", "10年間", "g2341063@tcu.ac.jp", "約15分～約45分"]) {
+  if (!consentDocument.includes(expectedText)) throw new Error(`consent document missing current content: ${expectedText}`);
+}
+for (const forbiddenText of ["未確定項目", "3年とし", "3つの専門用語", "研究用コード対応表を表示・更新"]) {
+  if (consentDocument.includes(forbiddenText)) throw new Error(`consent document contains retired content: ${forbiddenText}`);
 }
 for (const forbiddenText of ["GROUP_LABELS", "pending_group_condition", "group_condition", "提案群", "統制群"]) {
   if (consentPage.includes(forbiddenText)) {
@@ -553,10 +555,13 @@ const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.u
 if (!adminPage.includes("clearParticipantSession") || !adminPage.includes("participantId()")) {
   throw new Error("admin page must clear a deleted participant's browser session");
 }
-for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "テスト問題モード", "現行版（場面応用）", "基礎理解版", "4用語版", "four_topic_fundamentals", "basic_understanding", "new_participants_only", "test_content_mode_label", "アンケートのデバッグ", "事前アンケートを試す", "事後アンケートを試す", "/admin/survey-preview/presurvey", "/admin/survey-preview/posttest", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "全体ログ Excel (.xlsx)", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "被験者ログ Excel (.xlsx)", "ギブアップ回数", "参加者を削除", "window.confirm", "/api/admin/test-content-mode", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/api/admin/logs/overview.xlsx", "/logs.csv", "/logs_excel.csv", "/logs.xlsx"]) {
+for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "新規参加者のテスト問題モード", "4用語版（固定）", "Transformer", "マルチエージェント", "アンケートのデバッグ", "事前アンケートを試す", "事後アンケートを試す", "/admin/survey-preview/presurvey", "/admin/survey-preview/posttest", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "全体ログ Excel (.xlsx)", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "被験者ログ Excel (.xlsx)", "ギブアップ回数", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/api/admin/logs/overview.xlsx", "/logs.csv", "/logs_excel.csv", "/logs.xlsx"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }
+}
+for (const forbiddenText of ["現行版（場面応用）", "基礎理解版", "IdentityMappings", "ResearchCodeMappings", "/api/admin/identity-mappings", "/api/admin/research-code-mappings"]) {
+  if (adminPage.includes(forbiddenText)) throw new Error(`admin page exposes retired choice or mapping UI: ${forbiddenText}`);
 }
 if (adminPage.includes("用語ごと（2設問／ページ）")) {
   throw new Error("admin log must not assume a fixed number of questions per term page");

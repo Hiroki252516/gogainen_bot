@@ -22,7 +22,6 @@ async function api(request, path, method = "GET", data) {
 
 async function prepareFixture(request, fixture) {
   await api(request, "/api/admin/auth/login", "POST", { password: "abc" });
-  await api(request, "/api/admin/test-content-mode", "PUT", { mode: "application" });
   await api(request, "/api/admin/option-order", "PUT", { mode: "debug_fixed" });
   const record = await api(request, "/api/registrations", "POST", {
     assignment_code: "A", consent_checked: true,
@@ -43,7 +42,7 @@ async function prepareFixture(request, fixture) {
   const baseline = await api(request, "/api/participants/" + pid + "/presurvey", "POST", presurveyPayload);
   assert.equal(baseline.next_url, "/pretest");
   const questions = (await api(request, "/api/experiment/" + pid + "/pretest")).questions;
-  assert.equal(questions.length, 3);
+  assert.equal(questions.length, 4);
   for (const question of questions) {
     const at = new Date().toISOString();
     await api(request, "/api/attempts/term-page", "POST", {
