@@ -159,7 +159,8 @@ def test_registration_snapshot_pretest_perfect_exit_and_disabled_question_reject
                 assert metric["first_question_only"] is first_only
                 assert metric["route"] == "pretest_perfect_early_exit"
                 assert metric["h1"]["value"] is None
-                assert metric["h6"]["attained"] is None
+                assert metric["h3"]["status"] == "not_applicable_pretest_mastery"
+                assert "h5" not in metric and "h6" not in metric
                 assert participant.current_step == "survey"
                 assert db.query(Attempt).filter_by(participant_id=pid).count() == count
                 assert experiment.participant_logs(db, pid)["participant"]["first_question_only"] is first_only
@@ -192,10 +193,12 @@ def test_learning_snapshot_and_both_retest_rounds(first_only):
                 assert metric["h1"]["value"] == 0
                 assert metric["h1"]["pretest_score"] == pytest.approx((count - 1) / count)
                 assert metric["rounds"][-1]["gain_pt"] == pytest.approx(100 / count)
-                assert metric["h4"]["denominator"] == 1
-                assert metric["h4"]["value"] == 1
-                assert metric["h6"]["attained"] is True
-                assert metric["h2"]["first_mastery_round"] == 2
+                assert set(metric["h4"]) == {"status", "items", "viewed", "survey_present"}
+                assert "value" not in metric["h4"] and "denominator" not in metric["h4"]
+                assert metric["h3"]["attained"] is True
+                assert metric["h3"]["first_mastery_round"] == 2
+                assert "first_mastery_round" not in metric["h2"]
+                assert "h5" not in metric and "h6" not in metric
                 assert len(metric["rounds"]) == 2
                 assert all(r["complete"] for r in metric["rounds"])
                 logs = experiment.participant_logs(db, pid)

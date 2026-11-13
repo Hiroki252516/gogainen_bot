@@ -2,7 +2,7 @@
 
 ## 計画書に対する位置づけ
 
-採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。新6仮説はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧記録保護は仕様版とprotocol_idで限定する。
+採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。現行4仮説（指標版`four-hypotheses-v1`）はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧6仮説の評価サマリーとraw dataは上書きせず、旧記録保護は仕様版とprotocol_idで限定する。
 
 現行仕様版54では新規参加者のsnapshotされた問題モードに応じて`split-actions-v5`、`split-actions-basic-v1`、`split-actions-four-topic-v3`を使う。RuntimeSetting保存値を尊重する。application/basic_understandingは各用語の設問1、four_topic_fundamentalsは4用語各1問を出題する。4用語版v3では「インストラクションチューニング」に用語表記を統一し、仕様版53以下の過去記録はprotocolに応じて当時のバンク・回答snapshotから復元する。保存済み回答の選択内容と正誤を同じテスト画面内に表示し、AIサービスは回答採点に呼ばない。事前・再テスト1/2・内部`final_test`の必要な全設問が採点済みで全問正解なら、結果表示snapshotに応じて確認後または直接surveyへ進み、学習・後続テストを省略する。未達時は従来の問題モード別進行を使う。登録後の設定変更は既存参加者へ遡及しない。仮説集計はモード別に分離する。事前アンケートはモード別の版を使い、事後アンケートは`posttest-5point-v4`を使う。システム評価は1項目、教材評価は6項目で、教材量質問は「教材の量はどの程度でしたか」。仕様版53の両protocolおよびそれ以前の参加者は当時の内容を維持し、旧設問1・2契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、問題モードは[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)、事前アンケートは[49](49_presurvey_baseline.md)。
 

@@ -911,11 +911,9 @@ def test_hypothesis_metrics_are_partitioned_by_test_content_mode():
                 "has_viewed_material": True,
                 "rounds": [],
                 "h1": {"value": offset, "status": "observed"},
-                "h2": {"value": 1, "censoring_reason": None, "observed_session_count": 1, "attained_without_learning": False},
-                "h3": {"value": offset, "status": "observed"},
-                "h4": {"value": offset, "numerator": 1, "denominator": 2, "status": "observed"},
-                "h5": {"value": offset, "items": {key: 5 for key in MATERIAL_RATING_KEYS}, "status": "observed"},
-                "h6": {"value": 1, "attained": True},
+                "h2": {"value": offset, "numerator": 1, "denominator": 2, "status": "observed"},
+                "h3": {"value": 1, "attained": True, "status": "observed"},
+                "h4": {"status": "observed", "viewed": True, "items": {key: 5 for key in MATERIAL_RATING_KEYS}},
             })
     grouped = group_metrics(rows)
     assert {stratum["test_content_mode"] for stratum in grouped["strata"]} == {
@@ -924,6 +922,7 @@ def test_hypothesis_metrics_are_partitioned_by_test_content_mode():
     assert all(len(stratum["groups"]) == 2 for stratum in grouped["strata"])
     exported = metrics_export_rows(rows, grouped=True)
     assert {row["test_content_mode"] for row in exported} == {"application", "basic_understanding", "four_topic_fundamentals"}
+    assert all(row["metric"] not in {"h5", "h6"} and not row["metric"].startswith(("h5.", "h6.")) for row in exported)
     four_topic_summary = next(item for item in grouped["strata"] if item["test_content_mode"] == "four_topic_fundamentals")
     assert four_topic_summary["questions_per_test"] == 4
 

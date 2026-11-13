@@ -1,14 +1,36 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-13 回答後フィードバック指示のYAML化（refactor/issue-343）
+## 2026-11-13 origin/refactor/issue-343 統合後検証
+
+- issue-343で移動した回答後フィードバック指示のYAMLとBackend変更を、issue-339の仕様版54・現行4仮説評価と統合する。実験仕様・protocol・回答後フィードバックの意味は変更しない。
+- 統合後のBackend全テストは`1752 passed`（既存DeprecationWarning 6件）。競合マーカー・未解決パスがなく、`git diff --check`も成功した。
+- 既存の研究DB、実験用localhost:3000、実AIは使用しない。マージコミット後もpushは行わない。
+
+## 2026-11-13 回答後フィードバック指示のYAML化（refactor/issue-343、統合前の検証記録）
 
 - 正答時の要点生成と誤答時の解説に使う固定指示文を`learning_material.yml`へ移した。文言・順序、Schema、群別の入力投影は維持し、実験仕様・protocol・prompt契約識別子は変更していない。
 - YAMLの必須キー・型・項目数の起動時検証を追加し、正答/誤答と両群の代表ケース4通りで送信promptの固定SHA-256と出力Schemaを確認した。
 - 隔離した`/tmp`のSQLiteでBackend全テストを実行し、`1749 passed`。依存ライブラリ由来のDeprecationWarningが6件あった。`git diff --check`も成功した。
 - 実AI、研究DB、既存アプリ環境は使用していない。指示文移動の自動検証であり、フィードバック内容の意味的妥当性を評価したものではない。
 
-## 2026-11-12 仕様版54へのマージ統合（origin/fix/issue-328）
+## 2026-11-13 issue-339 と仕様版54の統合・検証
 
+- 現行条件は仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`、事後`posttest-5point-v4`とする。必要な全問が採点済みで満点の各テスト後は結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略する。
+- 現行評価は`four-hypotheses-v1`のH1〜H4。旧H1〜H6は履歴として扱い、現行管理画面・API・出力には含めない。
+- 仕様版52の対応する2 protocolは参加者の進行・回答を変えず、既存サマリーを上書きせずH1〜H4評価サマリーだけを追加する。仕様版51以下・未対応protocolは再計算しない。
+- 統合後のBackend全テストは`1751 passed`（既存DeprecationWarning 6件）。Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。実ブラウザ確認は未実施。
+- 競合マーカーと未解決パスがなく、`git diff --check`が成功した。研究DB、実験用localhost:3000、実AI、コミット・pushは使用・実施していない。研究上の承認や尺度の妥当性は確認済みと扱わない。
+
+## 2026-11-12 現行評価指標を4仮説へ更新（fix/issue-339単独時・issue-328統合前の記録）
+
+- 現行指標版を`four-hypotheses-v1`とし、H1を事前テストから初回再テストへの正答率差、H2を事前M1/M3項目に対する同タイプ再選択率、H3を事前完了・事前非満点の再テスト対象者における満点率、H4を教材評価6項目の個別記述集計とした。後続再テストは参考値とし、H4の難易度・教材量は分布のみを出力する。
+- 仕様版52で当時対応していたprotocolの参加者も保存済みデータから新指標の評価サマリーを作る。既存サマリーとraw dataは上書きせず、仕様版・protocol・問題・回答・参加者進行は変更しない。旧6仮説の集計記録は履歴として保全する。
+- 管理画面、参加者ログ、評価API、専用参加者別／群別CSV・XLSXはH1〜H4を出力し、旧H5/H6を現行指標として表示しない。統合ログCSVの固定ヘッダーと従来列は維持する。6教材項目を単一の総合点へ合成しない。
+- Backend全テストは`1726 passed`（既存DeprecationWarning 5件）。H1〜H4、早期終了・未完了の対象外処理、H2の完答条件、H3の未受験・未達分母、H4の閲覧・未閲覧・評価不能・未回答、モード別集計、旧サマリー保全、CSV/XLSX出力を検証した。
+- Frontend `npm test`と`npm run build`（TypeScript検査を含む）が成功した。Frontendの実ブラウザ画面確認は未実施。
+- `git diff --check`は成功。研究DB、localhost:3000、実AI、コミット・pushは使用・実施していない。統計的有意差・仮説支持の自動判定や研究上の承認は追加・確認していない。
+
+## 2026-11-12 事後アンケートのシステム評価項目削除（fix/issue-328、統合前の検証記録）
 - 仕様版53にあった「全モードの事前・再テスト1/2・内部`final_test`で満点後に早期終了」と、事後アンケート`posttest-5point-v4`（`system_clarity`を除いたシステム評価1項目）を統合し、仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`を現行protocolとした。
 - 仕様版53の早期終了protocolは問題バンクv3・presurvey v4・posttest v3、同版のアンケート改訂protocolはバンクv3・presurvey v4・posttest v4として復元可能に保つ。仕様版51・52の各protocolと保存済み回答も当時の版で復元し、書き換えない。仕様版53以下は閲覧専用。
 - 仕様版54統合後に関連Backendテスト8ファイルを隔離SQLiteで実行し、`254 passed`（既存警告2件）。3モードの全テスト満点後遷移、仕様版51〜53の問題バンク復元、旧アンケート回答保全、新規事後v4の入力検証を含む。

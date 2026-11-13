@@ -683,7 +683,7 @@ export default function AdminPage() {
               <p>{readOnlyParticipantCount}</p>
             </div>
           </div>
-          <p className="muted">以下の従来保存値・推移は参考情報です。6仮説の確定指標は専用の集計欄を参照してください。</p>
+          <p className="muted">以下の従来保存値・推移は参考情報です。現行4仮説の指標は専用の集計欄を参照してください。</p>
           <div className="grid">
             {activeGroupSummaries.map((group: any) => (
               <MisconceptionTransitionSummary

@@ -2,7 +2,7 @@
 
 ## 仕様版54の現行コード（2026-11-12）
 
-新規参加者は仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`で登録する。事前・再テスト1/2・内部`final_test`で全問正解なら、結果表示snapshotに応じて確認後または直接事後アンケートへ進み、学習・後続テストを省略する。4用語版は問題バンク`split-actions-four-topic-v3`、事前アンケート`presurvey-four-topic-baseline-v4`を使い、項目`instruction_tuning`を「インストラクションチューニング」と表示する。標準2モードの事前アンケートは`presurvey-baseline-v4`。事後アンケートは`posttest-5point-v4`で、システム評価は「必要な操作をスムーズに行えた」の1項目、教材評価は6項目。教材量の質問文は「教材の量はどの程度でしたか」。4問・10択・採点・確認問題snapshot再利用、教材検索先、共通RAG資料、H5の定義は維持する。仕様版53の2 protocol、仕様版51・52の各protocolとそれ以前の参加者・回答・snapshotは当時の版で復元し、変更しない。難易度・測定上の同等性、尺度・H5の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+新規参加者は仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`で登録する。事前・再テスト1/2・内部`final_test`で必要な全設問を採点し全問正解なら、結果表示snapshotに応じて確認後または直接事後アンケートへ進み、学習・後続テストを省略する。4用語版は問題バンク`split-actions-four-topic-v3`、事前アンケート`presurvey-four-topic-baseline-v4`、標準2モードは`presurvey-baseline-v4`を使う。事後アンケートは`posttest-5point-v4`で、システム評価1項目・教材評価6項目。教材量の質問文は「教材の量はどの程度でしたか」。4用語版の項目`instruction_tuning`は「インストラクションチューニング」と表示する。現行指標は`four-hypotheses-v1`のH1〜H4。仕様版53の各protocolと仕様版51以下は保存時の問題・アンケートsnapshotで復元し、記録を変更しない。仕様版52の2つの対応protocolには評価サマリーのみを追加し、旧サマリー・回答・進行状態は変更しない。仕様版51以下と未対応protocolは再計算対象外。難易度・測定上の同等性、指標の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版48の履歴条件（2026-11-10）
 
@@ -22,7 +22,7 @@
 
 ## 仕様版43当時のコード（履歴・2026-11-08）
 
-新規参加者は`experiment-plan-2026-11-08-basic-understanding-question-mode-v1`で登録する。管理画面の問題モード設定を登録時に固定し、現行版（場面応用、`split-actions-v5`）または基礎理解版（`split-actions-basic-v1`）を使用する。既定値は現行版。出題数、答え合わせ、結果表示、事前アンケート、教材・教授・採点条件は仕様版42のまま引き継ぐ。6仮説は問題モード別に集計し、モード間を合算しない。仕様版42以下と旧protocolは閲覧専用、既存記録は不変。基礎理解版の難易度低下・難易度同等性・研究上の承認は未検証・未確認。[詳細](50_basic_understanding_question_mode.md)。
+新規参加者は`experiment-plan-2026-11-08-basic-understanding-question-mode-v1`で登録する。管理画面の問題モード設定を登録時に固定し、現行版（場面応用、`split-actions-v5`）または基礎理解版（`split-actions-basic-v1`）を使用する。既定値は現行版。出題数、答え合わせ、結果表示、事前アンケート、教材・教授・採点条件は仕様版42のまま引き継ぐ。当時の旧6仮説は問題モード別に集計し、モード間を合算しなかった。仕様版42以下と旧protocolは閲覧専用、既存記録は不変。基礎理解版の難易度低下・難易度同等性・研究上の承認は未検証・未確認。[詳細](50_basic_understanding_question_mode.md)。
 
 ## 仕様版42の履歴コード
 
@@ -54,7 +54,7 @@
 
 ## 仕様版26で採用した共通の用語注釈辞書（現行仕様版54でも維持）
 
-以下は採用時点の記録を含む。現在の保存版・readonly境界は冒頭の仕様版54の記述を正とする。
+以下は採用時点の記録を含む。現在の保存版・read-only境界は冒頭の仕様版54の記述を正とする。仕様版52の対応2 protocolに限る評価サマリー追加は参加者操作を伴わない例外として扱う。
 
 仕様版26で共通固定辞書learning-glossary-v2の16語を導入した。v1〜v3は履歴用に無変更で保持し、現行v4をテスト・回答後解説・教材注釈と教材内解説モードに使う。仕様版31で導入した教材内解説では辞書を意味参照として渡し、本文では定義を逐語転載せず自然に言い換える。仕様版36ではv1のRAG定義・別表記・出典をv4へ追加した。教材snapshotや回答後・テストの保存済みsnapshotは更新しない。AI、事前学習、ファインチューニング、プロンプトエンジニアリング、データベース、マルチエージェント、タスク、記憶プロセスの8語を注釈から除外する。長い除外語の一部からプロンプト・エージェントを抽出せず、独立して登場した場合は補足する。仕様版26の当時は新規だけprotocol_id=`experiment-plan-2026-10-27-test-glossary-v2`を保存し、版25以下を閲覧専用としていた。詳細は[24](24_learning_glossary.md)、[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、版25で採用した問題本文・分類理由は[38](38_round_two_revision.md)。
 
@@ -64,7 +64,7 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 - 比較は履歴を使う通常AIチューター（control）と、明示的診断・修正対象・訂正情報・taxonomy・タイプ別教授方針を追加するAIチューター（proposed）。統制群の自然な誤り訂正を許容する。
 - 対象3概念：llm_knowledge、multi_agent、memory_process。大学生40名/各群20名・原則無作為割付を目標とし、アプリは研究者のA/Bコードを使用する。
-- 6仮説：初回の正答率の伸び、満点までの用語別セッション数、用語内不正解数、同種誤答再選択率、教材評価、満点到達割合。記述集計のみ。
+- 現行4仮説（`four-hypotheses-v1`）：初回再テストへの正答率の伸び、同じ誤答タイプの再選択、再テスト満点率、教材評価6項目の個別集計。記述集計のみ。旧6仮説サマリーは履歴として保持する。
 - backendが固定採点・分類・方略決定を行う。M1/M3/unknown、M3優先。AIは教材・正答要約・誤答解説のみ。
 - 共通説明とunknownは意味や仕組みを説明する。unknownは定義・仕組み・教材内適用確認を本文証拠で検査し、旧6項目を必須としない。
 - 仕様版39までは本文を注釈欄のみで600〜800文字、教材内解説で600〜1200文字として検証した。仕様版42では目標800文字程度のみを指示し、上下限による合否判定を行わない。自由な章立て。実験群の本文証拠検査は意味的な正しさや理解の証明ではない。
