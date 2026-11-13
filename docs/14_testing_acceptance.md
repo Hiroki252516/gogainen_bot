@@ -1,5 +1,12 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-13 回答後フィードバック指示のYAML化（refactor/issue-343）
+
+- 正答時の要点生成と誤答時の解説に使う固定指示文を`learning_material.yml`へ移した。文言・順序、Schema、群別の入力投影は維持し、実験仕様・protocol・prompt契約識別子は変更していない。
+- YAMLの必須キー・型・項目数の起動時検証を追加し、正答/誤答と両群の代表ケース4通りで送信promptの固定SHA-256と出力Schemaを確認した。
+- 隔離した`/tmp`のSQLiteでBackend全テストを実行し、`1749 passed`。依存ライブラリ由来のDeprecationWarningが6件あった。`git diff --check`も成功した。
+- 実AI、研究DB、既存アプリ環境は使用していない。指示文移動の自動検証であり、フィードバック内容の意味的妥当性を評価したものではない。
+
 ## 2026-11-12 仕様版54へのマージ統合（origin/fix/issue-328）
 
 - 仕様版53にあった「全モードの事前・再テスト1/2・内部`final_test`で満点後に早期終了」と、事後アンケート`posttest-5point-v4`（`system_clarity`を除いたシステム評価1項目）を統合し、仕様版54 / `experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1`を現行protocolとした。
