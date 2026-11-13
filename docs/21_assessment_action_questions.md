@@ -1,6 +1,6 @@
 # 行動選択型テスト問題と分類根拠
 
-> **適用範囲:** 本書は通常版問題バンク`scenario-actions-v9`の採用履歴・設計根拠を記録した資料であり、現行の全問題モードの完全な問題一覧ではない。現行仕様版54では、登録時snapshotに応じて`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v3`（4用語版）を使用する。4用語版v1/v2は仕様版53以下の旧protocol復元用に保持する。問題の現行条件は[基礎理解版](50_basic_understanding_question_mode.md)・[4用語版](51_four_topic_foundation_mode.md)、現行YAMLは各バンクを正本とする。
+> **適用範囲:** 本書は通常版問題バンク`scenario-actions-v9`の採用履歴・設計根拠を記録した資料であり、現行の全問題モードの完全な問題一覧ではない。現行仕様版55では、登録時snapshotに応じて`split-actions-v5`（現行版）、`split-actions-basic-v1`（基礎理解版）、`split-actions-four-topic-v3`（4用語版）を使用する。4用語版v1/v2は仕様版54以下の旧protocol復元用に保持する。問題の現行条件は[基礎理解版](50_basic_understanding_question_mode.md)・[4用語版](51_four_topic_foundation_mode.md)、現行YAMLは各バンクを正本とする。
 
 ## 適用範囲
 

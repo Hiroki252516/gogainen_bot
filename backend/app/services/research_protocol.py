@@ -11,8 +11,8 @@ from sqlalchemy import update
 from app.core.experiment_spec import assert_current_experiment
 from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
-PRESURVEY_VERSION = "presurvey-baseline-v4"
-FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v4"
+PRESURVEY_VERSION = "presurvey-baseline-v5"
+FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v5"
 SURVEY_VERSION = "posttest-5point-v4"
 SUPPORTED_SURVEY_VERSIONS = (
     "posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3",
@@ -162,7 +162,7 @@ FOUR_TOPIC_PRESURVEY_V2_TERM_ITEMS = (
 
 
 class PresurveyPayload(StrictModel):
-    survey_version: Literal["presurvey-baseline-v4"] = PRESURVEY_VERSION
+    survey_version: Literal["presurvey-baseline-v5"] = PRESURVEY_VERSION
     prior_term_exposure: PriorTermExposure
     prior_term_understanding: PriorTermUnderstanding
     general_ratings: BaselineRatings
@@ -174,7 +174,7 @@ class PresurveyPayload(StrictModel):
 
 
 class FourTopicPresurveyPayload(StrictModel):
-    survey_version: Literal["presurvey-four-topic-baseline-v4"] = FOUR_TOPIC_PRESURVEY_VERSION
+    survey_version: Literal["presurvey-four-topic-baseline-v5"] = FOUR_TOPIC_PRESURVEY_VERSION
     prior_term_exposure: FourTopicPriorTermExposure
     prior_term_understanding: FourTopicPriorTermUnderstanding
     general_ratings: BaselineRatings
@@ -183,6 +183,18 @@ class FourTopicPresurveyPayload(StrictModel):
     def validate_understanding_branch(self):
         _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
         return self
+
+
+class PresurveyPayloadV4(PresurveyPayload):
+    """Read-only schema for validating the prior standard presurvey version."""
+
+    survey_version: Literal["presurvey-baseline-v4"] = "presurvey-baseline-v4"
+
+
+class FourTopicPresurveyPayloadV4(FourTopicPresurveyPayload):
+    """Read-only schema for validating the prior four-topic presurvey version."""
+
+    survey_version: Literal["presurvey-four-topic-baseline-v4"] = "presurvey-four-topic-baseline-v4"
 
 
 class FourTopicPresurveyPayloadV3(StrictModel):
