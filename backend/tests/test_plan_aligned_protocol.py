@@ -38,6 +38,7 @@ from app.services.research_protocol import (
     PRESURVEY_VERSION,
     SURVEY_VERSION,
     FourTopicPresurveyPayload,
+    FourTopicPresurveyPayloadV7,
     FourTopicPresurveyPayloadV4,
     FourTopicPresurveyPayloadV2,
     FourTopicPresurveyPayloadV3,
@@ -554,11 +555,11 @@ def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation(
     assert keys == ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"]
     assert FOUR_TOPIC_PRESURVEY_TERM_ITEMS[2]["label"] == "インストラクションチューニング"
     payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION, keys)
-    parsed = FourTopicPresurveyPayload.model_validate(payload)
+    parsed = FourTopicPresurveyPayloadV7.model_validate(payload)
     assert set(parsed.prior_term_exposure.model_dump()) == set(keys)
     payload["prior_term_exposure"]["transformer"] = "cannot_recall"
     with pytest.raises(ValidationError):
-        FourTopicPresurveyPayload.model_validate(payload)
+        FourTopicPresurveyPayloadV7.model_validate(payload)
 
 
 def test_presurvey_v4_schemas_remain_historical_and_are_not_current():

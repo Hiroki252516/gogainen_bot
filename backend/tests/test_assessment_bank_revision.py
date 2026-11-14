@@ -63,9 +63,9 @@ def test_replacement_seed_preserves_old_questions_options_and_snapshotless_resul
         before_options = {row.id: (row.question_id, row.option_label, row.body, row.is_correct, row.misconception_type) for row in db.query(QuestionOption)}
         seed_database(db)
         seed_database(db)
-        assert db.query(Question).count() == len(old_questions) + 63
+        assert db.query(Question).count() == len(old_questions) + 75
         assert db.query(Question).filter_by(is_active=True).count() == 39
-        assert db.query(QuestionOption).count() == len(before_options) + 522
+        assert db.query(QuestionOption).count() == len(before_options) + 642
         for qid, expected in before_questions.items():
             row = db.get(Question, qid)
             assert not row.is_active
