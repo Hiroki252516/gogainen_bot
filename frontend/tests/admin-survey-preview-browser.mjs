@@ -7,9 +7,9 @@ const { chromium } = await import(process.env.SURVEY_PREVIEW_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
 const terms = ["Transformer", "事前学習", "インストラクションチューニング", "人の評価・好みを用いる事後学習", "マルチエージェント", "記憶プロセス"];
 const proficiencyItems = [
-  "目的を伝えて、目的に合った回答を得る",
-  "期待と違う回答のとき、指示や条件を修正する",
-  "AIの回答を他の資料・情報源で確認する",
+  "AIに目的を伝え、目的に合った回答を得ることができますか。",
+  "AIの回答が期待と異なるとき、指示や条件を修正できますか。",
+  "AIの回答が正しいか、公式サイトや別の資料で確かめられますか。",
 ];
 
 try {
@@ -85,7 +85,7 @@ try {
         assert.equal(await page.getByRole("group", { name: `${term}の基本的な意味や働きをどの程度理解していますか。`, exact: true }).count(), 0);
       }
     }
-    await page.getByRole("group", { name: "直近30日間のうち、AIを利用した日数", exact: true }).getByRole("button", { name: "0日", exact: true }).click();
+    await page.getByRole("group", { name: "直近30日間のうち、AIを利用した日は何日ありましたか。", exact: true }).getByRole("button", { name: "0日", exact: true }).click();
     for (const label of proficiencyItems) {
       await page.getByRole("group", { name: label, exact: true }).getByRole("button", { name: "評価できない", exact: true }).click();
     }

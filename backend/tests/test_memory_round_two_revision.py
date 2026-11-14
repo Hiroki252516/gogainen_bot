@@ -164,4 +164,4 @@ def test_current_spec_resolves_without_historical_mapping():
         assert participant.learning_content_version == 15
         restored = db.get(Question, question["question_id"])
         assert restored is not None and restored.id == question["question_id"]
-        assert restored.construct_key.endswith("split-actions-four-topic-v3")
+        assert restored.construct_key.endswith("split-actions-four-topic-v4")

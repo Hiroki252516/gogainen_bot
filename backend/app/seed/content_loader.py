@@ -38,7 +38,8 @@ LEARNING_V14_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v14.yml"
 LEARNING_V15_CONTENT_PATH = STANDARD_CONTENT_DIR / "learning_questions_v15.yml"
 FOUR_TOPIC_FUNDAMENTALS_V1_PATH = STANDARD_CONTENT_DIR / "four_topic_fundamentals_v1.yml"
 FOUR_TOPIC_FUNDAMENTALS_V2_PATH = STANDARD_CONTENT_DIR / "four_topic_fundamentals_v2.yml"
-FOUR_TOPIC_FUNDAMENTALS_PATH = STANDARD_CONTENT_DIR / "four_topic_fundamentals_v3.yml"
+FOUR_TOPIC_FUNDAMENTALS_V3_PATH = STANDARD_CONTENT_DIR / "four_topic_fundamentals_v3.yml"
+FOUR_TOPIC_FUNDAMENTALS_V4_PATH = STANDARD_CONTENT_DIR / "four_topic_fundamentals_v4.yml"
 ACTIVE_TERM_SLUGS = ("llm_knowledge", "multi_agent", "memory_process")
 FOUR_TOPIC_TERM_SLUGS = ("transformer", "llm_training_stages", "multi_agent_four_topic", "memory_process_four_topic")
 QUESTION_PHASES = ("pretest", "retest")
@@ -473,12 +474,13 @@ def teaching_target_for_option(term_slug: str, option_label: str) -> dict[str, A
     return deepcopy(target) if isinstance(target, dict) else None
 
 
-@lru_cache(maxsize=3)
-def four_topic_terms(bank_version: str = "split-actions-four-topic-v3") -> tuple[dict[str, Any], ...]:
+@lru_cache(maxsize=4)
+def four_topic_terms(bank_version: str = "split-actions-four-topic-v4") -> tuple[dict[str, Any], ...]:
     paths = {
         "split-actions-four-topic-v1": FOUR_TOPIC_FUNDAMENTALS_V1_PATH,
         "split-actions-four-topic-v2": FOUR_TOPIC_FUNDAMENTALS_V2_PATH,
-        "split-actions-four-topic-v3": FOUR_TOPIC_FUNDAMENTALS_PATH,
+        "split-actions-four-topic-v3": FOUR_TOPIC_FUNDAMENTALS_V3_PATH,
+        "split-actions-four-topic-v4": FOUR_TOPIC_FUNDAMENTALS_V4_PATH,
     }
     path = paths.get(bank_version)
     if path is None:

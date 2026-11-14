@@ -86,7 +86,7 @@ from app.services.option_order import current_option_order_mode, save_option_ord
 from app.services.test_content_mode import FOUR_TOPIC_FUNDAMENTALS, mode_label as test_content_mode_label
 from app.services.learning_glossary import load_learning_glossary, public_glossary
 from app.services import identity_mapping
-from app.services.research_protocol import FourTopicPresurveyPayload, PresurveyPayload, SurveyPayload, presurvey_context, survey_context, record_material_view
+from app.services.research_protocol import FourTopicPresurveyPayloadV7, PresurveyPayload, SurveyPayload, presurvey_context, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
 from app.services.prefetch import prefetch_coordinator, schedule_prefetch
 
@@ -614,7 +614,7 @@ def api_presurvey_context(participant_id: str, db: Session = Depends(get_db)) ->
 @app.post("/api/participants/{participant_id}/presurvey")
 async def api_submit_presurvey(
     participant_id: str,
-    payload: PresurveyPayload | FourTopicPresurveyPayload,
+    payload: PresurveyPayload | FourTopicPresurveyPayloadV7,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
