@@ -3,7 +3,7 @@ ASSESSMENT_BANK_VERSIONS = {STANDARD: "split-actions-v5"}
 ASSESSMENT_MODE_BANK_VERSIONS = {
     "application": "split-actions-v5",
     "basic_understanding": "split-actions-basic-v1",
-    "four_topic_fundamentals": "split-actions-four-topic-v3",
+    "four_topic_fundamentals": "split-actions-four-topic-v4",
 }
 ASSESSMENT_MODE_LABELS = {
     "application": "現行版（場面応用）",
@@ -61,6 +61,22 @@ HISTORICAL_ASSESSMENT_BANK_VERSIONS = {
 # Version 41 was used by parallel protocols. Keep the v5 default for the two
 # mainline protocols and restore the branch-specific v6 bank by protocol ID.
 HISTORICAL_ASSESSMENT_BANK_PROTOCOL_VERSIONS = {
+    # Spec 57 used bank v4 with the prior four-topic presurvey wording.
+    (57, "experiment-plan-2026-11-14-four-topic-transformer-attention-ffn-m1-v1"): {
+        STANDARD: "split-actions-four-topic-v4",
+    },
+    # Spec 56 retained the five-point presurvey and used four-topic bank v3.
+    (56, "experiment-plan-2026-11-14-presurvey-understanding-five-point-v1"): {
+        STANDARD: "split-actions-four-topic-v3",
+    },
+    # Spec 55 used four-topic bank v3 with the four-point presurvey.
+    (55, "experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1"): {
+        STANDARD: "split-actions-four-topic-v3",
+    },
+    # Spec 54 unified the two spec-53 variants and still used bank v3.
+    (54, "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-clarity-removal-v1"): {
+        STANDARD: "split-actions-four-topic-v3",
+    },
     # Spec 53 has parallel protocol variants; preserve their fixed banks.
     (53, "experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-v1"): {
         STANDARD: "split-actions-four-topic-v3",

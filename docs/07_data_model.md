@@ -1,10 +1,10 @@
 # 現行データと履歴互換
 
-## 仕様版55の現行条件
+## 仕様版58の現行条件
 
 `Participant.protocol_id`は160文字まで保存する。PostgreSQLで既存列が短い場合は起動時に160文字へ拡張し、既存のprotocol ID値は変更しない。
 
-現行Participantは仕様版55 / `experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1`を使用する。新規Participantの`test_content_mode`は`four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v3`、事前版`presurvey-four-topic-baseline-v5`、事後版`posttest-5point-v4`を使う。事前のAI利用自己評価3項目には具体例を表示するが、保存キー・尺度・回答値は変えない。4用語版の回答キーは`instruction_tuning`。アンケートは既存`ParticipantSurvey`の`phase`、`survey_version`、`responses_json`へ保存し、DB列は追加しない。旧版と保存値は変換せず保持する。教材評価は整数1〜5または`not_applicable`、未閲覧者は教材評価全体をJSON nullとする。現行指標`four-hypotheses-v1`のH4は事後phaseの教材評価6項目を個別に集計する。仕様版54以下は参加者操作を読み取り専用とし、当時の保存内容を保全する。仕様版52の対応する2 protocolには、参加者の進行・回答・旧サマリーを変えずH1〜H4評価サマリーだけを追加する。仕様版51以下・未対応protocolは再計算対象外。研究用コードは形式検証後に破棄し、アプリDBへ保存しない。対応表はアプリ外で管理し、モデルに含めない。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
+現行Participantは仕様版58 / `experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1`を使用する。新規Participantの`test_content_mode`は`four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v4`、事前版`presurvey-four-topic-baseline-v7`、事後版`posttest-5point-v4`を使う。AI利用日数の質問文とAI自己評価3項目の設問文を更新し、例は最初の2項目だけに表示する。保存キー・尺度・回答値は変えない。用語理解度は5段階（not_at_all／hardly／slightly／moderately／well）とし、仕様版57以下の回答は変換しない。4用語版の回答キーは`instruction_tuning`。アンケートは既存`ParticipantSurvey`の`phase`、`survey_version`、`responses_json`へ保存し、DB列は追加しない。旧版と保存値は変換せず保持する。教材評価は整数1〜5または`not_applicable`、未閲覧者は教材評価全体をJSON nullとする。現行指標`four-hypotheses-v1`のH4は事後phaseの教材評価6項目を個別に集計する。仕様版57以下は参加者操作を読み取り専用とし、当時の保存内容を保全する。仕様版52の対応する2 protocolには、参加者の進行・回答・旧サマリーを変えずH1〜H4評価サマリーだけを追加する。仕様版51以下・未対応protocolは再計算対象外。研究用コードは形式検証後に破棄し、アプリDBへ保存しない。対応表はアプリ外で管理し、モデルに含めない。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
 
 ## 仕様版48の条件（履歴）
 
@@ -50,7 +50,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 ## 現行の保存契約
 
-モデルの正本は`backend/app/models/__init__.py`。現行コードは仕様版55 / `experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1`を使用する。新規Participantの`test_content_mode`は`four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v3`を使う。`application`=`split-actions-v5`、`basic_understanding`=`split-actions-basic-v1`は既存参加者の履歴復元用に保持し、新規登録モードとしては選択しない。事前アンケート版`presurvey-four-topic-baseline-v5`、事後アンケート版`posttest-5point-v4`を保存し、phase/version別の回答JSONと各テストの問題snapshotから復元する。既存のNULLは補完しない。仕様版54以下は参加者操作をread-onlyとし、問題・回答・snapshotを変更しない。仕様版52の対応する2 protocolにはH1〜H4評価サマリーだけを追加し、既存サマリーは上書きしない。仕様版51以下・未対応protocolは再計算対象外。`question_options.rationale`は内部メタデータで表示APIに含めない。研究用コードは登録時に形式検証した後に破棄し、研究DBや冪等性記録へ保存しない。対応表はアプリ外で管理し、DBモデルに含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)。
+モデルの正本は`backend/app/models/__init__.py`。現行コードは仕様版58 / `experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1`を使用する。新規Participantの`test_content_mode`は`four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v4`を使う。`application`=`split-actions-v5`、`basic_understanding`=`split-actions-basic-v1`は既存参加者の履歴復元用に保持し、新規登録モードとしては選択しない。事前アンケート版`presurvey-four-topic-baseline-v7`、事後アンケート版`posttest-5point-v4`を保存し、phase/version別の回答JSONと各テストの問題snapshotから復元する。既存のNULLは補完しない。仕様版57以下は参加者操作をread-onlyとし、問題・回答・snapshotを変更しない。仕様版52の対応する2 protocolにはH1〜H4評価サマリーだけを追加し、既存サマリーは上書きしない。仕様版51以下・未対応protocolは再計算対象外。`question_options.rationale`は内部メタデータで表示APIに含めない。研究用コードは登録時に形式検証した後に破棄し、研究DBや冪等性記録へ保存しない。対応表はアプリ外で管理し、DBモデルに含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 2026-10-21時点の履歴: 学籍番号はSQLAlchemyの研究DBへ追加せず、IDENTITY_MAPPING_PATHが指す別SQLiteの`identity_mappings`へ保存した。当時は対応表APIも存在した。現在は管理画面/APIを廃止し、既存SQLiteファイルと行は登録・通常起動では参照・移行・変更・削除しない。明示的な参加者削除時に限り、既存ファイル内の対象participant_idの旧行をcleanupする。
@@ -61,7 +61,7 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規Participantだけ仕様版55と統合protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、`test_content_mode=four_topic_fundamentals`、`retest_cycles_completed=0`を固定する。RuntimeSettingの問題モードは登録時に参照しない。研究用コードは登録中に検証後破棄し、アプリには保存しない。事前アンケート版`presurvey-four-topic-baseline-v5`、事後アンケート版`posttest-5point-v4`を保存する。AI利用自己評価の例文は表示のみで、保存データは変わらない。全問採点後に満点となったテストは既存の`current_step`・Attempt・結果表示snapshotを使って早期終了し、列追加や旧行補完は行わない。仕様版54以下の参加者操作は読み取り専用とするが、仕様版52の対応2 protocolに限り既存サマリーを上書きしないH1〜H4評価サマリー追加を許可する。仕様版51以下・未対応protocolは再計算しない。起動時補修は仕様版とprotocol_idの両方で対象を限定する。
+現行コードでは新規Participantだけ仕様版58と統合protocolを保存し、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、`test_content_mode=four_topic_fundamentals`、`retest_cycles_completed=0`を固定する。RuntimeSettingの問題モードは登録時に参照しない。研究用コードは登録中に検証後破棄し、アプリには保存しない。事前アンケート版`presurvey-four-topic-baseline-v7`、事後アンケート版`posttest-5point-v4`を保存する。AI利用日数の質問文とAI自己評価3項目の設問文は更新するが、例は最初の2項目だけに表示し、保存データは変えない。全問採点後に満点となったテストは既存の`current_step`・Attempt・結果表示snapshotを使って早期終了し、列追加や旧行補完は行わない。仕様版57以下の参加者操作は読み取り専用とするが、仕様版52の対応2 protocolに限り既存サマリーを上書きしないH1〜H4評価サマリー追加を許可する。仕様版51以下・未対応protocolは再計算しない。起動時補修は仕様版とprotocol_idの両方で対象を限定する。
 
 現行の主な保存対象:
 
@@ -95,4 +95,4 @@ interaction_historyは既存Attempt/TutorTurnの採点済みsnapshotから読み
 
 ## 問題版の保存
 
-仕様版55の新規登録・出題・採点・確認問題復元は`test_content_mode=four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v3`を使う。`application`（`split-actions-v5`）と`basic_understanding`（`split-actions-basic-v1`）の資産は既存Participantの履歴復元用に保持し、新規登録モードとしては選択しない。仕様版51〜54のprotocolに応じv2/v3など当時のバンクを復元し、仕様版50以下は対応protocolに保存された版を使う。過去の問題は版付きconstruct_keyと回答snapshotから復元し、別バンクへフォールバックしない。旧`question_set_mode`の整理は別の履歴変更であり、通常版の問題資産や`test_content_mode`を削除しない。
+仕様版58の新規登録・出題・採点・確認問題復元は`test_content_mode=four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v4`を使う。`application`（`split-actions-v5`）と`basic_understanding`（`split-actions-basic-v1`）の資産は既存Participantの履歴復元用に保持し、新規登録モードとしては選択しない。仕様版51〜54のprotocolに応じv2/v3など当時のバンクを復元し、仕様版50以下は対応protocolに保存された版を使う。過去の問題は版付きconstruct_keyと回答snapshotから復元し、別バンクへフォールバックしない。旧`question_set_mode`の整理は別の履歴変更であり、通常版の問題資産や`test_content_mode`を削除しない。

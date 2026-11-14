@@ -1,8 +1,8 @@
 # 実験フロー
 
-## 仕様版55の現行フロー（2026-11-13）
+## 仕様版58の現行フロー（2026-11-14）
 
-新規参加者は仕様版55 / `experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1`を使い、問題モードは`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v3`、事前アンケートは`presurvey-four-topic-baseline-v5`、事後アンケートは`posttest-5point-v4`を使う。4用語版の下位用語は「インストラクションチューニング」。事前アンケートのAI利用自己評価3項目には具体例を表示するが、尺度・保存値は変更しない。全設問を採点し全問正解した事前・再テスト1/2・内部`final_test`後は、結果表示snapshotに応じて確認後または直接事後アンケートへ進み、学習・後続テストを省略する。未達時の経路は維持する。事後はシステム評価1項目・教材評価6項目で、教材量の質問文は「教材の量はどの程度でしたか」。現行指標は`four-hypotheses-v1`のH1〜H4。仕様版54以下の記録は保存時の内容を保全し参加者操作で変更しない。仕様版52の対応2 protocolに限り、回答・進行・既存サマリーを変えず評価サマリーを追加できる。仕様版51以下・未対応protocolは再計算対象外。研究用コードは登録時に検証後破棄し、学籍番号を取得せず、対応表はアプリ外で管理する。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+新規参加者は仕様版58 / `experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1`を使い、問題モードは`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v7`、事後アンケートは`posttest-5point-v4`を使う。4用語版の下位用語は「インストラクションチューニング」。AI利用日数の質問文とAI利用自己評価3項目の設問文を更新し、具体例は最初の2項目だけに表示する。尺度・保存値は変更しない。用語理解度は「ある」と答えた用語について5段階で尋ね、仕様版57以下の保存済み回答は変換しない。全設問を採点し全問正解した事前・再テスト1/2・内部`final_test`後は、結果表示snapshotに応じて確認後または直接事後アンケートへ進み、学習・後続テストを省略する。未達時の経路は維持する。事後はシステム評価1項目・教材評価6項目で、教材量の質問文は「教材の量はどの程度でしたか」。現行指標は`four-hypotheses-v1`のH1〜H4。仕様版57以下の記録は保存時の内容を保全し参加者操作で変更しない。仕様版52の対応2 protocolに限り、回答・進行・既存サマリーを変えず評価サマリーを追加できる。仕様版51以下・未対応protocolは再計算対象外。研究用コードは登録時に検証後破棄し、学籍番号を取得せず、対応表はアプリ外で管理する。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版48のフロー（履歴）
 

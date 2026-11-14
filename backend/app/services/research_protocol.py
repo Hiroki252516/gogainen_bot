@@ -12,7 +12,9 @@ from app.core.experiment_spec import assert_current_experiment
 from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 
 PRESURVEY_VERSION = "presurvey-baseline-v5"
-FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v5"
+FOUR_TOPIC_PRESURVEY_VERSION_V5 = "presurvey-four-topic-baseline-v5"
+FOUR_TOPIC_PRESURVEY_VERSION_V6 = "presurvey-four-topic-baseline-v6"
+FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v7"
 SURVEY_VERSION = "posttest-5point-v4"
 SUPPORTED_SURVEY_VERSIONS = (
     "posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3",
@@ -22,7 +24,7 @@ PosttestRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_a
 ProficiencyRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
 Comment = Annotated[str, StringConstraints(strip_whitespace=True)]
 EXPOSURE_VALUES = ("experienced", "not_experienced", "cannot_recall")
-UNDERSTANDING_VALUES = ("not_at_all", "slightly", "moderately", "well")
+UNDERSTANDING_VALUES = ("not_at_all", "hardly", "slightly", "moderately", "well")
 AI_FREQUENCY_VALUES = ("0_days", "1_3_days", "4_8_days", "9_20_days", "21_30_days")
 
 
@@ -64,6 +66,15 @@ class FourTopicPriorTermUnderstanding(StrictModel):
     human_feedback_post_training: Literal["not_at_all", "slightly", "moderately", "well"] | None
     multi_agent: Literal["not_at_all", "slightly", "moderately", "well"] | None
     memory_process: Literal["not_at_all", "slightly", "moderately", "well"] | None
+
+
+class FourTopicPriorTermUnderstandingV6(StrictModel):
+    transformer: Literal["not_at_all", "hardly", "slightly", "moderately", "well"] | None
+    pretraining: Literal["not_at_all", "hardly", "slightly", "moderately", "well"] | None
+    instruction_tuning: Literal["not_at_all", "hardly", "slightly", "moderately", "well"] | None
+    human_feedback_post_training: Literal["not_at_all", "hardly", "slightly", "moderately", "well"] | None
+    multi_agent: Literal["not_at_all", "hardly", "slightly", "moderately", "well"] | None
+    memory_process: Literal["not_at_all", "hardly", "slightly", "moderately", "well"] | None
 
 
 class FourTopicPriorTermExposureV3(StrictModel):
@@ -174,9 +185,33 @@ class PresurveyPayload(StrictModel):
 
 
 class FourTopicPresurveyPayload(StrictModel):
-    survey_version: Literal["presurvey-four-topic-baseline-v5"] = FOUR_TOPIC_PRESURVEY_VERSION
+    survey_version: Literal["presurvey-four-topic-baseline-v5"] = FOUR_TOPIC_PRESURVEY_VERSION_V5
     prior_term_exposure: FourTopicPriorTermExposure
     prior_term_understanding: FourTopicPriorTermUnderstanding
+    general_ratings: BaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
+
+
+class FourTopicPresurveyPayloadV6(StrictModel):
+    survey_version: Literal["presurvey-four-topic-baseline-v6"] = FOUR_TOPIC_PRESURVEY_VERSION_V6
+    prior_term_exposure: FourTopicPriorTermExposure
+    prior_term_understanding: FourTopicPriorTermUnderstandingV6
+    general_ratings: BaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
+
+
+class FourTopicPresurveyPayloadV7(StrictModel):
+    survey_version: Literal["presurvey-four-topic-baseline-v7"] = FOUR_TOPIC_PRESURVEY_VERSION
+    prior_term_exposure: FourTopicPriorTermExposure
+    prior_term_understanding: FourTopicPriorTermUnderstandingV6
     general_ratings: BaselineRatings
 
     @model_validator(mode="after")
@@ -267,7 +302,7 @@ def presurvey_context(participant: Participant) -> dict:
 
 def validate_presurvey_payload(payload: dict, test_content_mode: str | None = None) -> dict:
     if test_content_mode == "four_topic_fundamentals":
-        return FourTopicPresurveyPayload.model_validate(payload).model_dump()
+        return FourTopicPresurveyPayloadV7.model_validate(payload).model_dump()
     return PresurveyPayload.model_validate(payload).model_dump()
 
 

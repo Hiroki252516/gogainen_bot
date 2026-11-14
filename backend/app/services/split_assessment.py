@@ -17,10 +17,12 @@ from app.seed.import_split_assessment_draft import validate
 
 
 TERMS = ("llm_knowledge", "multi_agent", "memory_process")
-FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v3"
-PREVIOUS_FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v2"
-HISTORICAL_FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v1"
+FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v4"
+PREVIOUS_FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v3"
+HISTORICAL_FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v2"
+OLDEST_FOUR_TOPIC_BANK_VERSION = "split-actions-four-topic-v1"
 FOUR_TOPIC_BANK_VERSIONS = (
+    OLDEST_FOUR_TOPIC_BANK_VERSION,
     HISTORICAL_FOUR_TOPIC_BANK_VERSION,
     PREVIOUS_FOUR_TOPIC_BANK_VERSION,
     FOUR_TOPIC_BANK_VERSION,
@@ -157,7 +159,8 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 
 def uses_split(participant: Any) -> bool:
-    return participant.experiment_spec_version in {27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55}
+    version = getattr(participant, "experiment_spec_version", None)
+    return isinstance(version, int) and not isinstance(version, bool) and 27 <= version <= 58
 
 
 @lru_cache

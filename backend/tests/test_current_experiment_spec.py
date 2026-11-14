@@ -33,8 +33,8 @@ client = TestClient(app)
 def test_current_protocol_id_fits_participant_schema():
     protocol_column = Participant.__table__.c.protocol_id
 
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 55
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1"
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 58
+    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1"
     assert protocol_column.type.length >= len(CURRENT_PROTOCOL_ID)
 
 
@@ -273,8 +273,8 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
     Base.metadata.create_all(isolated)
     with Session(isolated) as db:
         seed_database(db)
-        assert db.query(Question).count() == 63
-        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 21, "retest": 42, "final_test": 0}
+        assert db.query(Question).count() == 75
+        assert {phase: db.query(Question).filter_by(phase=phase).count() for phase in ("pretest", "retest", "final_test")} == {"pretest": 25, "retest": 50, "final_test": 0}
         participant = Participant(display_code="OLD", group_condition="proposed", current_step="finish", completion_reason=None)
         db.add(participant)
         db.flush()
@@ -292,7 +292,7 @@ def test_fresh_seed_and_old_database_migration_preserve_history(tmp_path, monkey
         pid = participant.id
         seed_database(db)
         seed_database(db)
-        assert db.query(Question).count() == 66
+        assert db.query(Question).count() == 78
         assert db.query(Question).filter_by(is_active=True).count() == 39
         assert not old_question.is_active and not transfer.is_active
         db.refresh(retired_variant)

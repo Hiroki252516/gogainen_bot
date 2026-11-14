@@ -57,7 +57,7 @@ def test_mode_banks_are_separate_and_have_expected_question_roles(isolated):
     assert ASSESSMENT_MODE_BANK_VERSIONS == {
         "application": "split-actions-v5",
         "basic_understanding": "split-actions-basic-v1",
-        "four_topic_fundamentals": "split-actions-four-topic-v3",
+        "four_topic_fundamentals": "split-actions-four-topic-v4",
     }
     assert LEARNING_CONTENT_VERSIONS == {STANDARD: 15}
     assert all(set(banks) == {STANDARD} for banks in HISTORICAL_ASSESSMENT_BANK_VERSIONS.values())
@@ -79,6 +79,7 @@ def test_mode_banks_are_separate_and_have_expected_question_roles(isolated):
     assert len(split_specs("llm_training_stages", "pretest_v1", "split-actions-four-topic-v1")[0]["options"]) == 10
     assert len(split_specs("llm_training_stages", "pretest_v1", "split-actions-four-topic-v2")[0]["options"]) == 10
     assert len(split_specs("llm_training_stages", "pretest_v1", "split-actions-four-topic-v3")[0]["options"]) == 10
+    assert len(split_specs("llm_training_stages", "pretest_v1", "split-actions-four-topic-v4")[0]["options"]) == 10
     basic = split_bank("split-actions-basic-v1")
     assert set(basic) == {"pretest_v1", "retest_v1", "retest_v2"}
     for round_key, terms in basic.items():
@@ -94,13 +95,13 @@ def test_mode_banks_are_separate_and_have_expected_question_roles(isolated):
                 assert len({choice["body"] for choice in question["choices"]}) == 6
 
     with factory() as db:
-        assert db.query(Question).count() == 63
-        assert db.query(QuestionOption).count() == 522
+        assert db.query(Question).count() == 75
+        assert db.query(QuestionOption).count() == 642
         historical_questions = db.query(Question).filter(
             Question.construct_key.endswith("split-actions-four-topic-v1")
         ).all()
         current_four_topic_questions = db.query(Question).filter(
-            Question.construct_key.endswith("split-actions-four-topic-v3")
+            Question.construct_key.endswith("split-actions-four-topic-v4")
         ).all()
         previous_four_topic_questions = db.query(Question).filter(
             Question.construct_key.endswith("split-actions-four-topic-v2")
@@ -300,9 +301,9 @@ def test_current_version_requires_saved_mode_and_is_not_in_historical_bank_map()
     assert participant["test_content_mode"] is None
 
     participant["test_content_mode"] = "four_topic_fundamentals"
-    assert assessment_bank_for_participant(participant) == "split-actions-four-topic-v3"
+    assert assessment_bank_for_participant(participant) == "split-actions-four-topic-v4"
     assert historical_assessment_bank_versions_for(participant) == {
-        STANDARD: "split-actions-four-topic-v3"
+        STANDARD: "split-actions-four-topic-v4"
     }
 
 
@@ -462,20 +463,20 @@ def test_new_participants_are_fixed_to_four_topic_and_old_mode_snapshots_remain(
         with factory() as db:
             default_participant = db.get(Participant, default_id)
             assert default_participant.test_content_mode == "four_topic_fundamentals"
-            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 55
+            assert default_participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 58
             assert uses_split(default_participant)
-            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1"
+            assert default_participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1"
             default_survey = db.query(ParticipantSurvey).filter_by(
                 participant_id=default_id, phase="presurvey"
             ).one()
-            assert default_survey.survey_version == "presurvey-four-topic-baseline-v5"
+            assert default_survey.survey_version == "presurvey-four-topic-baseline-v7"
         default_response = client.get(f"/api/experiment/{default_id}/pretest")
         assert default_response.status_code == 200, default_response.text
         default_questions = default_response.json()["questions"]
         assert [question["term_slug"] for question in default_questions] == list(FOUR_TOPIC_TERM_SLUGS)
         assert len(default_questions) == 4
         default_context = presurvey_contexts[default_id]
-        assert default_context["survey_version"] == "presurvey-four-topic-baseline-v5"
+        assert default_context["survey_version"] == "presurvey-four-topic-baseline-v7"
         assert [item["key"] for item in default_context["term_items"]] == [
             "transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process",
         ]
@@ -506,7 +507,7 @@ def test_new_participants_are_fixed_to_four_topic_and_old_mode_snapshots_remain(
             presurvey_record = db.query(ParticipantSurvey).filter_by(
                 participant_id=four_id, phase="presurvey"
             ).one()
-            assert presurvey_record.survey_version == "presurvey-four-topic-baseline-v5"
+            assert presurvey_record.survey_version == "presurvey-four-topic-baseline-v7"
         four_questions = client.get(f"/api/experiment/{four_id}/pretest").json()["questions"]
         assert [question["term_slug"] for question in four_questions] == list(FOUR_TOPIC_TERM_SLUGS)
         assert len(four_questions) == 4

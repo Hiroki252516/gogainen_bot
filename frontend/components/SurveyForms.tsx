@@ -20,6 +20,7 @@ const EXPOSURE_OPTIONS = [
 ] as const;
 const UNDERSTANDING_OPTIONS = [
   ["not_at_all", "全く理解していない"],
+  ["hardly", "ほとんど理解していない"],
   ["slightly", "少し理解している"],
   ["moderately", "ある程度理解している"],
   ["well", "よく理解している"],
@@ -40,9 +41,9 @@ const PROFICIENCY_OPTIONS = [
   ["not_applicable", "評価できない"],
 ] as const;
 const PROFICIENCY_ITEMS = [
-  ["goal_aligned_output", "目的を伝えて、目的に合った回答を得る", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],
-  ["revise_instructions", "期待と違う回答のとき、指示や条件を修正する", "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。"],
-  ["verify_with_sources", "AIの回答を他の資料・情報源で確認する", "例：候補の営業時間や料金を、施設の公式情報で確かめる。"],
+  ["goal_aligned_output", "AIに目的を伝え、目的に合った回答を得ることができますか。", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],
+  ["revise_instructions", "AIの回答が期待と異なるとき、指示や条件を修正できますか。", "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。"],
+  ["verify_with_sources", "AIの回答が正しいか、公式サイトや別の資料で確かめられますか。", ""],
 ] as const;
 const PROFICIENCY_ANCHORS = "1：全くできない ／ 2：あまりできない ／ 3：少しできる ／ 4：ある程度できる ／ 5：よくできる";
 
@@ -214,15 +215,16 @@ export function PresurveyQuestionnaire({
         </div> : null}
       </section>;
     })}
-    <h2>普段のAI利用について</h2>
+    <h2>AIの利用経験</h2>
     <ChoiceButtons
-      label="直近30日間のうち、AIを利用した日数"
+      label="直近30日間のうち、AIを利用した日は何日ありましたか。"
       value={values.ai_usage_frequency_30d || ""}
       options={FREQUENCY_OPTIONS}
       disabled={submitting}
       onChange={(value) => update("ai_usage_frequency_30d", value)}
     />
-    <p className="muted">次の各行動をどの程度できるか回答してください。評価する機会がなかった場合は「評価できない」を選んでください。</p>
+    <h2>AIの使い方についての自己評価</h2>
+    <p className="muted">次の各項目について、最も当てはまるものを選んでください。実際に評価する機会がなかった場合は、「評価できない」を選んでください。</p>
     {PROFICIENCY_ITEMS.map(([key, label, example]) => <ChoiceButtons
       key={key}
       label={label}

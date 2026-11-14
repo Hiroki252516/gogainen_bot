@@ -114,8 +114,8 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
     complete_presurvey(client, pid)
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
-        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 55
-        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-13-presurvey-ai-proficiency-examples-v1"
+        assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 58
+        assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1"
         # This test verifies the legacy three-topic question bank and its
         # glossary snapshots, not the current four-topic registration default.
         participant.test_content_mode = "application"

@@ -9,7 +9,7 @@ const { chromium } = await import(process.env.PRESURVEY_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
 const mode = {
   mode: "four_topic_fundamentals",
-  version: "presurvey-four-topic-baseline-v5",
+  version: "presurvey-four-topic-baseline-v7",
   keys: ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"],
 };
 const experienceChoices = [
@@ -19,17 +19,18 @@ const experienceChoices = [
 ];
 const understandingChoices = [
   ["not_at_all", "全く理解していない"],
+  ["hardly", "ほとんど理解していない"],
   ["slightly", "少し理解している"],
   ["moderately", "ある程度理解している"],
   ["well", "よく理解している"],
 ];
 const understandingScale = [
-  "全く理解していない", "少し理解している", "ある程度理解している", "よく理解している",
+  "全く理解していない", "ほとんど理解していない", "少し理解している", "ある程度理解している", "よく理解している",
 ];
 const proficiencyItems = [
-  ["goal_aligned_output", "目的を伝えて、目的に合った回答を得る", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],
-  ["revise_instructions", "期待と違う回答のとき、指示や条件を修正する", "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。"],
-  ["verify_with_sources", "AIの回答を他の資料・情報源で確認する", "例：候補の営業時間や料金を、施設の公式情報で確かめる。"],
+  ["goal_aligned_output", "AIに目的を伝え、目的に合った回答を得ることができますか。", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],
+  ["revise_instructions", "AIの回答が期待と異なるとき、指示や条件を修正できますか。", "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。"],
+  ["verify_with_sources", "AIの回答が正しいか、公式サイトや別の資料で確かめられますか。", null],
 ];
 
 async function request(context, path, method = "GET", data) {
@@ -115,15 +116,17 @@ try {
         }
       }
 
-      const frequencyLabel = "直近30日間のうち、AIを利用した日数";
+      const frequencyLabel = "直近30日間のうち、AIを利用した日は何日ありましたか。";
       const frequency = page.getByRole("group", { name: frequencyLabel, exact: true });
       for (const label of ["0日", "1〜3日", "4〜8日", "9〜20日", "21〜30日"]) {
         assert.equal(await frequency.getByRole("button", { name: label, exact: true }).count(), 1);
       }
       await frequency.getByRole("button", { name: "9〜20日", exact: true }).click();
       const proficiency = {};
+      assert.equal(await page.getByText("次の各項目について、最も当てはまるものを選んでください。実際に評価する機会がなかった場合は、「評価できない」を選んでください。", { exact: true }).count(), 1);
       for (const [key, label, example] of proficiencyItems) {
-        assert.equal(await page.getByText(example, { exact: true }).count(), 1);
+        if (example) assert.equal(await page.getByText(example, { exact: true }).count(), 1);
+        else assert.equal(await page.getByText("例：候補の営業時間や料金を、施設の公式情報で確かめる。", { exact: true }).count(), 0);
         const group = page.getByRole("group", { name: label, exact: true });
         for (const choice of ["1", "2", "3", "4", "5", "評価できない"]) {
           assert.equal(await group.getByRole("button", { name: choice, exact: true }).count(), 1);
