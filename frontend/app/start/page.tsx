@@ -18,7 +18,7 @@ export default function StartPage() {
   function start() {
     const normalizedCode = assignmentCode.trim().toUpperCase();
     if (normalizedCode !== "A" && normalizedCode !== "B") {
-      setError("管理者から伝えられた参加コード（AまたはB）を入力してください。");
+      setError("管理者から伝えられた群割当用コード（AまたはB）を入力してください。");
       return;
     }
     localStorage.setItem("pending_assignment_code", normalizedCode);
@@ -30,9 +30,9 @@ export default function StartPage() {
       <AppShell step="開始">
         <section className="panel stack">
           <h1>専門用語理解の実験を開始します</h1>
-          <p className="muted">管理者から伝えられた参加コードを入力し、同意書と事前アンケートへの回答後にテストを開始します。</p>
+          <p className="muted">管理者から伝えられた群割当用コードを入力し、同意書と事前アンケートへの回答後にテストを開始します。</p>
           <label>
-            参加コード
+            群割当用コード
             <input
               value={assignmentCode}
               onChange={(event) => {

@@ -4,7 +4,7 @@
 
 新規参加者は仕様版58 / `experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1`を使い、`test_content_mode`は`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v7`、事後アンケートは`posttest-5point-v4`。4用語版の下位用語キーは`instruction_tuning`、表示名は「インストラクションチューニング」。仕様版57以下は保存済み問題・回答・snapshotを維持して参加者操作を読み取り専用とする。仕様版52の対応する2 protocolは参加者記録を変更せずH1〜H4評価サマリーのみ追加でき、仕様版51以下および未対応protocolは再計算対象外。GET `/api/participants/{id}/presurvey`はParticipantに保存された版に対応する6件の`term_items`を返す。理解度質問は「{用語}の基本的な意味や働きをどの程度理解していますか。」とし、見聞き経験質問の「実験の説明を受ける前に」は維持する。理解度は現行4用語版v7で5段階（not_at_all／hardly／slightly／moderately／well）とし、仕様版57以下の回答は当時の形式で保持する。AI利用日数の質問文とAI自己評価3項目の設問文を更新する。最初の2項目に具体例を表示し、3項目目に例は表示しない。回答キー・尺度・POST保存構造は変更しない。
 
-POST `/api/registrations`（互換URL `/api/participants`）は`assignment_code`、`consent_checked`、`research_code`を受け取る。研究用コードは半角数字1〜64桁を厳密に検証した後に破棄する。Participantや冪等性記録の作成前に値の利用を終え、request hash・レスポンスにも含めない。研究DB、別SQLite、ログ、CSV/XLSX、AI入力、ブラウザ永続領域には保存しない。`student_number`は入力項目ではなく、余分なキーとして拒否する。研究用コード・学籍番号・参加者IDの対応表は研究者がアプリ外で管理する。
+POST `/api/registrations`（互換URL `/api/participants`）は`assignment_code`、`consent_checked`、`research_code`を受け取る。参加者用コードは半角数字1〜64桁を厳密に検証した後に破棄する。Participantや冪等性記録の作成前に値の利用を終え、request hash・レスポンスにも含めない。研究DB、別SQLite、ログ、CSV/XLSX、AI入力、ブラウザ永続領域には保存しない。`student_number`は入力項目ではなく、余分なキーとして拒否する。参加者用コード・学籍番号・参加者IDの対応表は研究者がアプリ外で管理する。
 
 GET `/api/admin/test-content-mode`は互換用の固定値`four_topic_fundamentals`を返し、PUTは同じ値だけを受け付け、他モードを409で拒否する。新規登録は4用語版をParticipantへsnapshotし、既存Participantのモードを変えない。問題モード切替UIと対応表のGET/CSV/DELETE管理APIは提供しない。参加者削除APIは明示削除の後処理として、旧SQLiteに存在する当該Participant IDの行だけをcleanupする。必要な全設問が採点済みかつ全問正解した事前・再テスト1/2・内部`final_test`後は、結果表示snapshotに従ってsurveyへ遷移し、学習・後続テストを省略する。詳細は[データモデル](07_data_model.md)と[運用手順](19_experiment_operation_runbook.md)。
 
@@ -67,8 +67,8 @@ POST /api/participants/{id}/question-review-acknowledgements はphaseとterm_slu
 ## 2026-11-11 研究用コード登録（履歴、fix/issue-317）
 
 - POST /api/registrations（互換URL /api/participants）: `assignment_code`、`consent_checked`、`research_code`を受け取る。`research_code`は半角数字1〜64桁を厳密に検証し、先頭ゼロを保持する。旧`student_number`フィールドなど余分なキーは拒否し、登録入力の検証応答では受信値を返さない。
-- 当時は研究用コードを`IDENTITY_MAPPING_PATH`の分離SQLiteにある`research_code_mappings`へ保存していた。現在は登録時に検証後破棄し、既存SQLiteファイル・行はそのまま保持する。
-- Idempotency-Keyによる同じ登録要求の再送は保存済み登録結果を返し、管理者が削除済みの対応表を再作成しない。既存の登録冪等性レコードに研究用コードそのものは保存しない。
+- 当時は研究用コードを`IDENTITY_MAPPING_PATH`の分離SQLiteにある`research_code_mappings`へ保存していた。現在は参加者用コードを登録時に検証後破棄し、既存SQLiteファイル・行はそのまま保持する。
+- Idempotency-Keyによる同じ登録要求の再送は保存済み登録結果を返し、管理者が削除済みの対応表を再作成しない。既存の登録冪等性レコードに`research_code`（参加者用コード）の値そのものは保存しない。
 - 当時のGET/CSV/DELETE `/api/admin/research-code-mappings`各routeは廃止済みで、現行APIでは提供しない。
 - 旧`/api/admin/identity-mappings`系も現行APIでは提供しない。旧行を登録処理で読み書きしない。
 - DELETE `/api/admin/participants/{participant_id}`は、明示的なParticipant削除後に、既存旧SQLite内の当該ID行だけを再試行可能なcleanupで削除する。外部Excel表は研究者が別途管理する。

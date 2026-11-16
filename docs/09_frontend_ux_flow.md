@@ -2,7 +2,7 @@
 
 ## 仕様版58の現行フロー（2026-11-14）
 
-新規参加者は仕様版58 / `experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1`で登録し、`four_topic_fundamentals`に固定する。4用語版は問題バンクv4と`presurvey-four-topic-baseline-v7`を使い、下位用語は「インストラクションチューニング」と表示する。事前アンケートのAI利用日数の質問文とAI自己評価3項目の設問文を更新し、例は最初の2項目だけに表示する。回答尺度・保存値は変更しない。用語理解度は5段階で、旧4段階の保存済み回答は変換しない。事後アンケートは`posttest-5point-v4`でシステム評価1項目・教材評価6項目とし、教材量の質問は「教材の量はどの程度でしたか」。各評定に「評価できない」を設け、教材未閲覧・評価不能・未回答を区別する。必要な全設問が採点済みで全問正解した場合、事前・再テスト1/2・内部`final_test`後に結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略する。未達時は従来の学習経路を維持する。仕様版57以下の保存記録は当時の版で復元し、変更しない。研究用コードは登録時に検証後破棄し、学籍番号入力欄・対応表管理UI/APIは設けず、対応表は研究者がアプリ外で管理する。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
+新規参加者は仕様版58 / `experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1`で登録し、`four_topic_fundamentals`に固定する。4用語版は問題バンクv4と`presurvey-four-topic-baseline-v7`を使い、下位用語は「インストラクションチューニング」と表示する。事前アンケートのAI利用日数の質問文とAI自己評価3項目の設問文を更新し、例は最初の2項目だけに表示する。回答尺度・保存値は変更しない。用語理解度は5段階で、旧4段階の保存済み回答は変換しない。事後アンケートは`posttest-5point-v4`でシステム評価1項目・教材評価6項目とし、教材量の質問は「教材の量はどの程度でしたか」。各評定に「評価できない」を設け、教材未閲覧・評価不能・未回答を区別する。必要な全設問が採点済みで全問正解した場合、事前・再テスト1/2・内部`final_test`後に結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略する。未達時は従来の学習経路を維持する。仕様版57以下の保存記録は当時の版で復元し、変更しない。参加者用コードは登録時に検証後破棄し、学籍番号入力欄・対応表管理UI/APIは設けず、対応表は研究者がアプリ外で管理する。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
 
 ## 仕様版48のフロー（履歴）
 
@@ -88,7 +88,7 @@
 
 start / consent / pretest / diagnosing / learning-targets / learning/[termSlug] / retest / final-test / survey / finish / adminを使う。廃止した追加確認ページは404。
 
-ParticipantFlowGuardはcurrent-stepを確認する。旧試用は回答・生成を始めず閲覧専用案内と「新しい実験を開始」を表示する。新規開始はブラウザのparticipant_id、display_code、learning_targets、保留参加コード、保留送信を消すだけでDBを削除しない。
+ParticipantFlowGuardはcurrent-stepを確認する。旧試用は回答・生成を始めず閲覧専用案内と「新しい実験を開始」を表示する。新規開始はブラウザのparticipant_id、display_code、learning_targets、保留群割当用コード、保留送信を消すだけでDBを削除しない。
 
 現行仕様版58では参加者モードに応じた問題バンクから各用語の設問1を出題する。application/basic_understandingは3問単一選択、four_topic_fundamentalsは4問の3選択またはJ単独で回答する。選択肢の配置は保存されたoption_order_modeに従い、ラベル位置ではなく選択肢IDで採点する。上限・回答済みロック、実測時刻、冪等送信を維持する。過去の設問ペアは保存済みsnapshotの復元対象で、新規参加者には出題しない。
 

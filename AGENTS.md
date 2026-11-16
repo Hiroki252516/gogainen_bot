@@ -2,7 +2,7 @@
 
 ## 仕様版58の現行条件（2026-11-14）
 
-新規参加者は仕様版58 / `experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v7`、事後アンケートは`posttest-5point-v4`を使う。4用語版の`instruction_tuning`は「インストラクションチューニング」と表示する。理解度は「ある」と回答した用語だけ5段階（not_at_all／hardly／slightly／moderately／well）で尋ねる。仕様版57以下の理解度回答は保存時の値を保持し、変換しない。事前アンケートではAI利用日数の質問文と自己評価3項目の聞き方を更新する。自己評価3項目の具体例は最初の2項目だけに表示し、回答キー・尺度・保存形式は維持する。事後はシステム評価1項目・教材評価6項目で、教材量の質問は「教材の量はどの程度でしたか」。必要な全設問が採点済みかつ全問正解なら、事前・再テスト1/2・内部`final_test`後に結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略する。未達時の経路と採点・上限は維持する。現行指標は`four-hypotheses-v1`のH1〜H4で、旧6仮説は履歴とする。仕様版57以下は参加者操作を読み取り専用とし、保存済み記録を変更しない。例外として仕様版52の2つの対応protocolには参加者の進行・回答・既存サマリーを変えず評価サマリーだけを追加できる。仕様版51以下・未対応protocolは再計算対象外。現行同意文書は`consent-2026-11-12-revised-v1`。研究用コードは登録時に形式を検証した後に破棄し、DB・冪等性記録・ログ・エクスポート・AI入力・ブラウザ保存へ記録しない。学籍番号はアプリで取得せず、対応表は研究者がアプリ外で管理する。尺度・難易度・測定上の同等性・研究上の承認は未確認。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
+新規参加者は仕様版58 / `experiment-plan-2026-11-14-presurvey-ai-proficiency-question-wording-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v7`、事後アンケートは`posttest-5point-v4`を使う。4用語版の`instruction_tuning`は「インストラクションチューニング」と表示する。理解度は「ある」と回答した用語だけ5段階（not_at_all／hardly／slightly／moderately／well）で尋ねる。仕様版57以下の理解度回答は保存時の値を保持し、変換しない。事前アンケートではAI利用日数の質問文と自己評価3項目の聞き方を更新する。自己評価3項目の具体例は最初の2項目だけに表示し、回答キー・尺度・保存形式は維持する。事後はシステム評価1項目・教材評価6項目で、教材量の質問は「教材の量はどの程度でしたか」。必要な全設問が採点済みかつ全問正解なら、事前・再テスト1/2・内部`final_test`後に結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略する。未達時の経路と採点・上限は維持する。現行指標は`four-hypotheses-v1`のH1〜H4で、旧6仮説は履歴とする。仕様版57以下は参加者操作を読み取り専用とし、保存済み記録を変更しない。例外として仕様版52の2つの対応protocolには参加者の進行・回答・既存サマリーを変えず評価サマリーだけを追加できる。仕様版51以下・未対応protocolは再計算対象外。現行同意文書は`consent-2026-11-16-participant-use-code-wording-v1`。群割当用コード（A/B）と参加者用コードの表示名を使う。参加者用コードは登録時に形式を検証した後に破棄し、DB・冪等性記録・ログ・エクスポート・AI入力・ブラウザ保存へ記録しない。学籍番号はアプリで取得せず、対応表は研究者がアプリ外で管理する。尺度・難易度・測定上の同等性・研究上の承認は未確認。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
 
 ## 仕様版48の履歴条件（2026-11-10）
 
@@ -81,7 +81,7 @@
 ## Research Invariants
 
 - 新規参加者は4用語版に固定する。既存参加者の出題・採点・確認問題復元はsnapshotされた`test_content_mode`に対応する問題バンクだけを使い、集計もモード別に分離する。`/api/admin/test-content-mode`のGETは固定値を返し、PUTで他モードを要求した場合は409とする。旧`question_set_mode`設定APIとフィルターは廃止済みで、旧フィルター付き要求は422で拒否する。過去のeasy-mode削除手順は新しい`test_content_mode`・問題資産・記録を対象にせず、旧版へのフォールバックを実装しない。
-- 登録時の`research_code`は半角数字1〜64桁を検証した後に破棄する。登録request_hashには研究用コードを含めず、別SQLiteを登録時に開かない。コードをログ・DB・export・AI入力・browser storageへ追加しない。学籍番号はアプリで取得しない。過去の対応表ファイル/行は登録・通常起動時に参照、移行、削除せず、対応表API/UIも復活させない。既存の明示的参加者削除cleanupは維持する。
+- 登録時の`research_code`（参加者用コード）は半角数字1〜64桁を検証した後に破棄する。登録request_hashには参加者用コードを含めず、別SQLiteを登録時に開かない。コードをログ・DB・export・AI入力・browser storageへ追加しない。学籍番号はアプリで取得しない。過去の対応表ファイル/行は登録・通常起動時に参照、移行、削除せず、対応表API/UIも復活させない。既存の明示的参加者削除cleanupは維持する。
 
 - 現行の評価指標版は`four-hypotheses-v1`。H1は事前から初回再テストへの正答率差、H2は事前M1/M3項目に対する初回再テストでの同タイプ再選択率、H3は事前完了・非満点者を分母にした再テスト満点率、H4は教材評価6項目の個別集計。詳細な分母・欠測規則はdocs/12を正とし、現行API/UI/exportへ旧H5/H6を混ぜない。仕様版52参加者の新サマリーを作っても旧サマリー・生データは上書きしない。
 - 目標は大学生40名/各群20名、原則無作為割付。low設定・事前知識6項目・事前AI利用2領域・事後システム評価1/教材評価6の5段階・任意自由記述・現行4仮説の記述集計は実装済み。自動割付・人数上限は対象外。式・対象はdocs/12・20の定義を守る。

@@ -20,7 +20,7 @@ const EXPOSURE_OPTIONS = [
 ] as const;
 const UNDERSTANDING_OPTIONS = [
   ["not_at_all", "全く理解していない"],
-  ["hardly", "ほとんど理解していない"],
+  ["hardly", "あまり理解していない"],
   ["slightly", "少し理解している"],
   ["moderately", "ある程度理解している"],
   ["well", "よく理解している"],

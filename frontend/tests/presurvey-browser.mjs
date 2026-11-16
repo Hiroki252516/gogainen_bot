@@ -19,13 +19,13 @@ const experienceChoices = [
 ];
 const understandingChoices = [
   ["not_at_all", "全く理解していない"],
-  ["hardly", "ほとんど理解していない"],
+  ["hardly", "あまり理解していない"],
   ["slightly", "少し理解している"],
   ["moderately", "ある程度理解している"],
   ["well", "よく理解している"],
 ];
 const understandingScale = [
-  "全く理解していない", "ほとんど理解していない", "少し理解している", "ある程度理解している", "よく理解している",
+  "全く理解していない", "あまり理解していない", "少し理解している", "ある程度理解している", "よく理解している",
 ];
 const proficiencyItems = [
   ["goal_aligned_output", "AIに目的を伝え、目的に合った回答を得ることができますか。", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],

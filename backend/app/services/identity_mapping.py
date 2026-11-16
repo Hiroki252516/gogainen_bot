@@ -11,12 +11,12 @@ from sqlalchemy.engine import make_url
 
 from app.core.config import get_settings
 
-CONSENT_DOCUMENT_VERSION = "consent-2026-11-12-revised-v1"
+CONSENT_DOCUMENT_VERSION = "consent-2026-11-16-participant-use-code-wording-v1"
 
 
 def validate_research_code(value: str) -> str:
     if re.fullmatch(r"[0-9]{1,64}", value) is None:
-        raise HTTPException(400, "研究用コードは半角数字1〜64桁で入力してください。")
+        raise HTTPException(400, "参加者用コードは半角数字1〜64桁で入力してください。")
     return value
 
 

@@ -763,7 +763,7 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
     group_condition_by_code = {"A": "proposed", "B": "control"}
     group_condition = group_condition_by_code.get(normalized_code)
     if group_condition is None:
-        raise HTTPException(status_code=400, detail="管理者から伝えられた参加コード（AまたはB）が必要です。")
+        raise HTTPException(status_code=400, detail="管理者から伝えられた群割当用コード（AまたはB）が必要です。")
     participant = Participant(
         display_code=next_display_code(db),
         show_pretest_results=False,

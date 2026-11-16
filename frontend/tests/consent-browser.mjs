@@ -16,7 +16,7 @@ const synthetic = "001202611120001";
 try {
   await page.goto(new URL(previewOnly ? "/consent" : "/start", base).href);
   if (!previewOnly) {
-    await page.getByLabel("参加コード", { exact: true }).fill("A");
+    await page.getByLabel("群割当用コード", { exact: true }).fill("A");
     await page.getByRole("button", { name: "同意書を確認する", exact: true }).click();
   }
   await page.getByRole("heading", { name: "研究参加同意書", exact: true }).waitFor();
@@ -24,7 +24,7 @@ try {
   assert.equal(await page.getByText("未確定項目を含む動作確認用です。", { exact: false }).count(), 0);
   assert.equal(await page.getByText("4つの専門用語", { exact: false }).count(), 1);
   assert.equal(await page.getByText("Codex app-server", { exact: false }).count(), 1);
-  const researchCodeInput = page.getByRole("textbox", { name: "研究用コードを入力してください（必須）" });
+  const researchCodeInput = page.getByRole("textbox", { name: "参加者用コードを入力してください（必須）" });
   await researchCodeInput.waitFor();
   assert.equal(await page.getByRole("textbox", { name: /学籍番号/ }).count(), 0);
 
