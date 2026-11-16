@@ -26,7 +26,7 @@ try {
     const page = await context.newPage();
     page.setDefaultTimeout(120_000);
     await page.goto(new URL("/start", base).href);
-    await page.getByLabel("参加コード", { exact: true }).fill("A");
+    await page.getByLabel("群割当用コード", { exact: true }).fill("A");
     await page.getByRole("button", { name: "同意書を確認する", exact: true }).click();
     await page.getByRole("textbox", { name: "伝えられた番号を入力してください（必須）" }).fill("001234567890");
     await page.getByRole("checkbox", { name: "説明を読み、その内容を理解した上で、本実験に参加することに同意します。", exact: true }).check();

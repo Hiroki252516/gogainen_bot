@@ -473,7 +473,7 @@ for (const forbiddenText of ["pending_group_condition", "group_condition", "提�
   }
 }
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/presurvey")', "同意して事前アンケートへ", "ConsentDocument", "research_code", "研究用コードを入力してください（必須）", "アプリ内には保存しません", "timeoutMs: 15000", 'role="alert"', 'inputMode="numeric"', 'pattern="[0-9]*"', 'replace(/[^0-9]/g, "")', '/^[0-9]{1,64}$/']) {
+for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/presurvey")', "同意して事前アンケートへ", "ConsentDocument", "research_code", "参加者用コードを入力してください（必須）", "アプリ内には保存しません", "timeoutMs: 15000", 'role="alert"', 'inputMode="numeric"', 'pattern="[0-9]*"', 'replace(/[^0-9]/g, "")', '/^[0-9]{1,64}$/']) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
   }
@@ -482,7 +482,7 @@ const consentDocument = fs.readFileSync(new URL("../components/ConsentDocument.t
 for (const expectedText of ["4つの専門用語", "テストの回答記録", "AIによる教材・説明の生成に関する記録", "Codex app-server", "OpenAIのサービス上", "10年間", "g2341063@tcu.ac.jp", "約15分～約45分"]) {
   if (!consentDocument.includes(expectedText)) throw new Error(`consent document missing current content: ${expectedText}`);
 }
-for (const forbiddenText of ["未確定項目", "3年とし", "3つの専門用語", "研究用コード対応表を表示・更新"]) {
+for (const forbiddenText of ["未確定項目", "3年とし", "3つの専門用語", "参加者用コード対応表を表示・更新"]) {
   if (consentDocument.includes(forbiddenText)) throw new Error(`consent document contains retired content: ${forbiddenText}`);
 }
 for (const forbiddenText of ["GROUP_LABELS", "pending_group_condition", "group_condition", "提案群", "統制群"]) {
@@ -523,7 +523,7 @@ const surveyForms = fs.readFileSync(new URL("../components/SurveyForms.tsx", imp
 for (const expectedText of [
   "実験前アンケート", "termItems.map", "prior_term_exposure", "prior_term_understanding",
   "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "hardly", "slightly",
-  "moderately", "well", "覚えていない", "全く理解していない", "ほとんど理解していない",
+  "moderately", "well", "覚えていない", "全く理解していない", "あまり理解していない",
   "基本的な意味や働きをどの程度理解していますか。", "instruction_tuning", "インストラクションチューニング",
   "ai_usage_frequency_30d", "21_30_days", "goal_aligned_output", "verify_with_sources",
   "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。",

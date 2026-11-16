@@ -26,11 +26,11 @@ export default function ConsentPage() {
       return;
     }
     if (assignmentCode !== "A" && assignmentCode !== "B") {
-      setError("開始画面から管理者の参加コードを入力してください。");
+      setError("開始画面から管理者の群割当用コードを入力してください。");
       return;
     }
     if (!/^[0-9]{1,64}$/.test(researchCode)) {
-      setError("研究用コードは半角数字1〜64桁で入力してください。");
+      setError("参加者用コードは半角数字1〜64桁で入力してください。");
       return;
     }
     setSubmitting(true);
@@ -68,13 +68,13 @@ export default function ConsentPage() {
         <section className="panel stack">
           <h1>研究参加同意書</h1>
           <ConsentDocument />
-          <label>研究用コードを入力してください（必須）
+          <label>参加者用コードを入力してください（必須）
             <input value={researchCode}
               onChange={(event) => setResearchCode(event.target.value.replace(/[^0-9]/g, ""))}
               required maxLength={64} inputMode="numeric" pattern="[0-9]*"
               autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={submitting} />
           </label>
-          <p className="muted">研究用コードは登録処理に必要な間だけ受信し、アプリ内には保存しません。学籍番号は入力しないでください。研究者が研究用コード・学籍番号・参加者IDの対応表をアプリ外で管理します。</p>
+          <p className="muted">参加者用コードは登録処理に必要な間だけ受信し、アプリ内には保存しません。学籍番号は入力しないでください。研究者が参加者用コード・学籍番号・参加者IDの対応表をアプリ外で管理します。</p>
           <h2>同意確認</h2>
           <label className="option">
             <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={submitting} />
