@@ -28,7 +28,7 @@ try {
     await page.goto(new URL("/start", base).href);
     await page.getByLabel("群割当用コード", { exact: true }).fill("A");
     await page.getByRole("button", { name: "同意書を確認する", exact: true }).click();
-    await page.getByRole("textbox", { name: "伝えられた番号を入力してください（必須）" }).fill("001234567890");
+    await page.getByRole("textbox", { name: "参加者用コードを入力してください（必須）" }).fill("001234567890");
     await page.getByRole("checkbox", { name: "説明を読み、その内容を理解した上で、本実験に参加することに同意します。", exact: true }).check();
     const created = page.waitForResponse((response) => response.url().endsWith("/api/registrations") && response.request().method() === "POST");
     await page.getByRole("button", { name: "同意して事前アンケートへ", exact: true }).click();
