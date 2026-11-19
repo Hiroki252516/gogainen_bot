@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 
 export type SurveyTermItem = { key: string; label: string };
 
@@ -8,7 +8,7 @@ export const FOUR_TOPIC_PRESURVEY_TERM_ITEMS: readonly SurveyTermItem[] = [
   { key: "transformer", label: "Transformer" },
   { key: "pretraining", label: "事前学習" },
   { key: "instruction_tuning", label: "インストラクションチューニング" },
-  { key: "human_feedback_post_training", label: "人の評価・好みを用いる事後学習" },
+  { key: "human_feedback_post_training", label: "事後学習" },
   { key: "multi_agent", label: "マルチエージェント" },
   { key: "memory_process", label: "記憶プロセス" },
 ];
@@ -16,12 +16,12 @@ export const FOUR_TOPIC_PRESURVEY_TERM_ITEMS: readonly SurveyTermItem[] = [
 const EXPOSURE_OPTIONS = [
   ["experienced", "ある"],
   ["not_experienced", "ない"],
-  ["cannot_recall", "覚えていない"],
+  ["cannot_recall", "判断できない"],
 ] as const;
 const UNDERSTANDING_OPTIONS = [
   ["not_at_all", "全く理解していない"],
   ["hardly", "あまり理解していない"],
-  ["slightly", "少し理解している"],
+  ["neither", "どちらとも言えない"],
   ["moderately", "ある程度理解している"],
   ["well", "よく理解している"],
 ] as const;
@@ -33,19 +33,17 @@ const FREQUENCY_OPTIONS = [
   ["21_30_days", "21〜30日"],
 ] as const;
 const PROFICIENCY_OPTIONS = [
-  ["1", "1"],
-  ["2", "2"],
-  ["3", "3"],
-  ["4", "4"],
-  ["5", "5"],
-  ["not_applicable", "評価できない"],
+  ["1", "全くできない"],
+  ["2", "あまりできない"],
+  ["3", "どちらでもない"],
+  ["4", "ある程度できる"],
+  ["5", "よくできる"],
 ] as const;
 const PROFICIENCY_ITEMS = [
   ["goal_aligned_output", "AIに目的を伝え、目的に合った回答を得ることができますか。", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],
   ["revise_instructions", "AIの回答が期待と異なるとき、指示や条件を修正できますか。", "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。"],
-  ["verify_with_sources", "AIの回答が正しいか、公式サイトや別の資料で確かめられますか。", ""],
+  ["verify_with_sources", "AIの回答が正しいか、公式サイトや別の資料で確かめられますか。", "例：AIが答えた営業時間を、お店の公式サイトで確認する。"],
 ] as const;
-const PROFICIENCY_ANCHORS = "1：全くできない ／ 2：あまりできない ／ 3：少しできる ／ 4：ある程度できる ／ 5：よくできる";
 
 const GENERAL = [
   ["system_usability", "必要な操作をスムーズに行えた"],
@@ -54,8 +52,8 @@ const MATERIAL = [
   ["clarity", "教材で説明された内容を理解できた", "agreement"],
   ["readability", "教材は読みやすかった", "agreement"],
   ["japanese_clarity", "教材の日本語表現は分かりやすかった", "agreement"],
-  ["difficulty_appropriateness", "教材の難易度はどの程度でしたか", "difficulty"],
   ["learning_usefulness", "教材は、用語や仕組みを正しく理解するために役立った", "agreement"],
+  ["difficulty_appropriateness", "教材の難易度はどの程度でしたか", "difficulty"],
   ["amount_appropriateness", "教材の量はどの程度でしたか", "amount"],
 ] as const;
 const AGREEMENT_OPTIONS = [
@@ -79,11 +77,10 @@ const AMOUNT_OPTIONS = [
   ["4", "やや多い"],
   ["5", "多すぎた"],
 ] as const;
-const NOT_APPLICABLE_OPTION = ["not_applicable", "評価できない"] as const;
 
 type ExposureValue = (typeof EXPOSURE_OPTIONS)[number][0];
 type UnderstandingValue = (typeof UNDERSTANDING_OPTIONS)[number][0];
-type RatingValue = number | "not_applicable";
+type RatingValue = number;
 
 export type PresurveySubmission = {
   survey_version: string;
@@ -91,14 +88,14 @@ export type PresurveySubmission = {
   prior_term_understanding: Record<string, UnderstandingValue | null>;
   general_ratings: {
     ai_usage_frequency_30d: (typeof FREQUENCY_OPTIONS)[number][0];
-    ai_proficiency: Record<string, RatingValue>;
+    ai_proficiency: Record<string, number>;
   };
 };
 
 export type PosttestSubmission = {
-  survey_version: "posttest-5point-v4";
-  general_ratings: Record<string, RatingValue>;
-  material_ratings: Record<string, RatingValue> | null;
+  survey_version: "posttest-5point-v5";
+  general_ratings: Record<string, number>;
+  material_ratings: Record<string, number> | null;
   free_comment: string;
 };
 
@@ -161,10 +158,7 @@ export function PresurveyQuestionnaire({
         ])) as Record<string, UnderstandingValue | null>,
         general_ratings: {
           ai_usage_frequency_30d: values.ai_usage_frequency_30d as PresurveySubmission["general_ratings"]["ai_usage_frequency_30d"],
-          ai_proficiency: Object.fromEntries(PROFICIENCY_ITEMS.map(([key]) => {
-            const value = values[`proficiency:${key}`];
-            return [key, value === "not_applicable" ? value : Number(value)];
-          })) as Record<string, RatingValue>,
+          ai_proficiency: Object.fromEntries(PROFICIENCY_ITEMS.map(([key]) => [key, Number(values[`proficiency:${key}`])])) as Record<string, number>,
         },
       };
       if (preview) {
@@ -193,8 +187,8 @@ export function PresurveyQuestionnaire({
     <p className="muted">まず見聞きした経験を回答してください。「ある」の場合に、理解度の項目が表示されます。</p>
     {termItems.map(({ key, label }) => {
       const exposure = values[`exposure:${key}`] || "";
-      const experienceQuestion = `${label}という用語を、実験の説明を受ける前に見たり聞いたりしたことがありますか。`;
-      const understandingQuestion = `${label}の基本的な意味や働きをどの程度理解していますか。`;
+      const experienceQuestion = `実験を始める前に、${label}という用語を見たり聞いたりしたことがありますか。`;
+      const understandingQuestion = `${label}の基本的な仕組みを、どの程度理解していますか。`;
       return <section className="stack presurvey-term-item" key={key} aria-label={label}>
         <ChoiceButtons
           label={experienceQuestion}
@@ -205,8 +199,9 @@ export function PresurveyQuestionnaire({
         />
         {exposure === "experienced" ? <div className="presurvey-followup">
           <h3 className="presurvey-followup-heading">追加質問：理解度</h3>
-          <ChoiceButtons
+          <RatingButtons
             label={understandingQuestion}
+            description={<><strong>回答の目安</strong><br />基本的な仕組みがあまり分からない場合は「2 あまり理解していない」が目安です。基本的な仕組みは分かるものの、分からない部分もある場合は「4 ある程度理解している」が目安です。</>}
             value={values[`understanding:${key}`] || ""}
             options={UNDERSTANDING_OPTIONS}
             disabled={submitting}
@@ -215,7 +210,7 @@ export function PresurveyQuestionnaire({
         </div> : null}
       </section>;
     })}
-    <h2>AIの利用経験</h2>
+    <h2 className="survey-section-heading">AIの利用経験</h2>
     <ChoiceButtons
       label="直近30日間のうち、AIを利用した日は何日ありましたか。"
       value={values.ai_usage_frequency_30d || ""}
@@ -223,14 +218,13 @@ export function PresurveyQuestionnaire({
       disabled={submitting}
       onChange={(value) => update("ai_usage_frequency_30d", value)}
     />
-    <h2>AIの使い方についての自己評価</h2>
-    <p className="muted">次の各項目について、最も当てはまるものを選んでください。実際に評価する機会がなかった場合は、「評価できない」を選んでください。</p>
-    {PROFICIENCY_ITEMS.map(([key, label, example]) => <ChoiceButtons
+    <h2 className="survey-section-heading">AIの使い方についての自己評価</h2>
+    <p className="muted">次の各項目について、最も当てはまるものを選んでください。</p>
+    {PROFICIENCY_ITEMS.map(([key, label, example]) => <RatingButtons
       key={key}
       label={label}
       description={example}
       value={values[`proficiency:${key}`] || ""}
-      anchors={PROFICIENCY_ANCHORS}
       options={PROFICIENCY_OPTIONS}
       disabled={submitting}
       onChange={(value) => update(`proficiency:${key}`, value)}
@@ -271,9 +265,9 @@ export function PosttestQuestionnaire({
     setSubmitting(true);
     setError("");
     try {
-      const ratingValue = (value: string): RatingValue => value === "not_applicable" ? value : Number(value);
+      const ratingValue = (value: string): RatingValue => Number(value);
       const payload: PosttestSubmission = {
-        survey_version: "posttest-5point-v4",
+        survey_version: "posttest-5point-v5",
         general_ratings: Object.fromEntries(GENERAL.map(([key]) => [key, ratingValue(values[key])])),
         material_ratings: materialRatingsRequired
           ? Object.fromEntries(MATERIAL.map(([key]) => [key, ratingValue(values[key])]))
@@ -303,9 +297,14 @@ export function PosttestQuestionnaire({
     <p>自由記述以外の表示される項目はすべて必須です。各質問について回答してください。</p>
     <h2>システムについて</h2>
     {GENERAL.map(([key, label]) => <RatingButtons key={key} label={label} options={AGREEMENT_OPTIONS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
-    <h2>教材について</h2>
+    <h2 className="survey-section-heading">教材について</h2>
     {materialRatingsRequired
-      ? MATERIAL.map(([key, label, scale]) => <RatingButtons key={key} label={label} options={scale === "difficulty" ? DIFFICULTY_OPTIONS : scale === "amount" ? AMOUNT_OPTIONS : AGREEMENT_OPTIONS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)
+      ? <>
+        {MATERIAL.slice(0, 4).map(([key, label]) => <RatingButtons key={key} label={label} options={AGREEMENT_OPTIONS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
+        <div className="survey-rating-spacer survey-rating-scale-change">
+          {MATERIAL.slice(4).map(([key, label, scale]) => <RatingButtons key={key} label={label} options={scale === "difficulty" ? DIFFICULTY_OPTIONS : AMOUNT_OPTIONS} value={values[key] || ""} disabled={submitting} onChange={(value) => update(key, value)} />)}
+        </div>
+      </>
       : <p>教材の表示記録がないため、教材評価6項目は対象外です。</p>}
     <label>自由記述（任意）
       <textarea value={comment} disabled={submitting} onChange={(event) => setComment(event.target.value)} rows={5} />
@@ -322,7 +321,6 @@ function ChoiceButtons({
   options,
   disabled,
   onChange,
-  anchors,
   description,
 }: {
   label: string;
@@ -330,13 +328,11 @@ function ChoiceButtons({
   options: readonly (readonly [string, string])[];
   disabled: boolean;
   onChange: (value: string) => void;
-  anchors?: string;
   description?: string;
 }) {
   return <div className="survey-choice-question">
     <div className="survey-rating-label"><span className="survey-question-label">{label}</span><span className="required-indicator">必須</span></div>
     {description ? <p className="muted survey-choice-description">{description}</p> : null}
-    {anchors ? <span className="muted">{anchors}</span> : null}
     <div
       className="survey-choice-options"
       role="group"
@@ -355,18 +351,19 @@ function ChoiceButtons({
   </div>;
 }
 
-function RatingButtons({ label, options, value, disabled, onChange }: {
+function RatingButtons({ label, options, value, disabled, onChange, description }: {
   label: string;
   options: readonly (readonly [string, string])[];
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
+  description?: ReactNode;
 }) {
-  const choices = [...options, NOT_APPLICABLE_OPTION];
   return <div className="survey-rating">
     <div className="survey-rating-label"><span>{label}</span><span className="required-indicator">必須</span></div>
+    {description ? <p className="muted survey-choice-description">{description}</p> : null}
     <div className="survey-rating-options" role="group" aria-label={label}>
-      {choices.map(([rating, optionLabel]) => <button
+      {options.map(([rating, optionLabel], index) => <button
         key={rating}
         type="button"
         className={`survey-rating-button${value === rating ? " selected" : ""}`}
@@ -375,7 +372,7 @@ function RatingButtons({ label, options, value, disabled, onChange }: {
         aria-pressed={value === rating}
         disabled={disabled}
         onClick={() => onChange(rating)}
-      ><span className="survey-rating-value">{rating === "not_applicable" ? "評価不能" : rating}</span><span>{optionLabel}</span></button>)}
+      ><span className="survey-rating-value">{index + 1}</span><span>{optionLabel}</span></button>)}
     </div>
   </div>;
 }

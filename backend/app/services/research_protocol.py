@@ -14,17 +14,22 @@ from app.models import AuditEvent, Participant, TutorSession, TutorTurn, now
 PRESURVEY_VERSION = "presurvey-baseline-v5"
 FOUR_TOPIC_PRESURVEY_VERSION_V5 = "presurvey-four-topic-baseline-v5"
 FOUR_TOPIC_PRESURVEY_VERSION_V6 = "presurvey-four-topic-baseline-v6"
-FOUR_TOPIC_PRESURVEY_VERSION = "presurvey-four-topic-baseline-v7"
-SURVEY_VERSION = "posttest-5point-v4"
+FOUR_TOPIC_PRESURVEY_VERSION_V7 = "presurvey-four-topic-baseline-v7"
+FOUR_TOPIC_PRESURVEY_VERSION_V8 = "presurvey-four-topic-baseline-v8"
+FOUR_TOPIC_PRESURVEY_VERSION_V9 = "presurvey-four-topic-baseline-v9"
+FOUR_TOPIC_PRESURVEY_VERSION_V10 = "presurvey-four-topic-baseline-v10"
+FOUR_TOPIC_PRESURVEY_VERSION = FOUR_TOPIC_PRESURVEY_VERSION_V10
+SURVEY_VERSION = "posttest-5point-v5"
 SUPPORTED_SURVEY_VERSIONS = (
     "posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3",
-    "posttest-5point-v1", "posttest-5point-v2", "posttest-5point-v3", SURVEY_VERSION,
+    "posttest-5point-v1", "posttest-5point-v2", "posttest-5point-v3", "posttest-5point-v4", SURVEY_VERSION,
 )
-PosttestRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
+PosttestRating = Annotated[int, Field(strict=True, ge=1, le=5)]
 ProficiencyRating = Annotated[int, Field(strict=True, ge=1, le=5)] | Literal["not_applicable"]
+CurrentProficiencyRating = Annotated[int, Field(strict=True, ge=1, le=5)]
 Comment = Annotated[str, StringConstraints(strip_whitespace=True)]
 EXPOSURE_VALUES = ("experienced", "not_experienced", "cannot_recall")
-UNDERSTANDING_VALUES = ("not_at_all", "hardly", "slightly", "moderately", "well")
+UNDERSTANDING_VALUES = ("not_at_all", "hardly", "neither", "moderately", "well")
 AI_FREQUENCY_VALUES = ("0_days", "1_3_days", "4_8_days", "9_20_days", "21_30_days")
 
 
@@ -77,6 +82,15 @@ class FourTopicPriorTermUnderstandingV6(StrictModel):
     memory_process: Literal["not_at_all", "hardly", "slightly", "moderately", "well"] | None
 
 
+class FourTopicPriorTermUnderstandingV8(StrictModel):
+    transformer: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    pretraining: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    instruction_tuning: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    human_feedback_post_training: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    multi_agent: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    memory_process: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+
+
 class FourTopicPriorTermExposureV3(StrictModel):
     transformer: Literal["experienced", "not_experienced", "cannot_recall"]
     pretraining: Literal["experienced", "not_experienced", "cannot_recall"]
@@ -119,9 +133,20 @@ class AIProficiencyRatings(StrictModel):
     verify_with_sources: ProficiencyRating
 
 
+class CurrentAIProficiencyRatings(StrictModel):
+    goal_aligned_output: CurrentProficiencyRating
+    revise_instructions: CurrentProficiencyRating
+    verify_with_sources: CurrentProficiencyRating
+
+
 class BaselineRatings(StrictModel):
     ai_usage_frequency_30d: Literal["0_days", "1_3_days", "4_8_days", "9_20_days", "21_30_days"]
     ai_proficiency: AIProficiencyRatings
+
+
+class CurrentBaselineRatings(StrictModel):
+    ai_usage_frequency_30d: Literal["0_days", "1_3_days", "4_8_days", "9_20_days", "21_30_days"]
+    ai_proficiency: CurrentAIProficiencyRatings
 
 
 class PosttestRatings(StrictModel):
@@ -132,8 +157,8 @@ class MaterialRatings(StrictModel):
     clarity: PosttestRating
     readability: PosttestRating
     japanese_clarity: PosttestRating
-    difficulty_appropriateness: PosttestRating
     learning_usefulness: PosttestRating
+    difficulty_appropriateness: PosttestRating
     amount_appropriateness: PosttestRating
 
 
@@ -146,7 +171,7 @@ PRESURVEY_TERM_ITEMS = (
     {"key": "multi_agent", "label": "マルチエージェント"},
     {"key": "memory_process", "label": "記憶プロセス"},
 )
-FOUR_TOPIC_PRESURVEY_TERM_ITEMS = (
+FOUR_TOPIC_PRESURVEY_TERM_ITEMS_V8 = (
     {"key": "transformer", "label": "Transformer"},
     {"key": "pretraining", "label": "事前学習"},
     {"key": "instruction_tuning", "label": "インストラクションチューニング"},
@@ -154,6 +179,16 @@ FOUR_TOPIC_PRESURVEY_TERM_ITEMS = (
     {"key": "multi_agent", "label": "マルチエージェント"},
     {"key": "memory_process", "label": "記憶プロセス"},
 )
+FOUR_TOPIC_PRESURVEY_TERM_ITEMS_V9 = (
+    {"key": "transformer", "label": "Transformer"},
+    {"key": "pretraining", "label": "事前学習"},
+    {"key": "instruction_tuning", "label": "インストラクションチューニング"},
+    {"key": "human_feedback_post_training", "label": "事後学習"},
+    {"key": "multi_agent", "label": "マルチエージェント"},
+    {"key": "memory_process", "label": "記憶プロセス"},
+)
+FOUR_TOPIC_PRESURVEY_TERM_ITEMS_V10 = FOUR_TOPIC_PRESURVEY_TERM_ITEMS_V9
+FOUR_TOPIC_PRESURVEY_TERM_ITEMS = FOUR_TOPIC_PRESURVEY_TERM_ITEMS_V10
 FOUR_TOPIC_PRESURVEY_V3_TERM_ITEMS = (
     {"key": "transformer", "label": "Transformer"},
     {"key": "pretraining", "label": "事前学習"},
@@ -209,10 +244,46 @@ class FourTopicPresurveyPayloadV6(StrictModel):
 
 
 class FourTopicPresurveyPayloadV7(StrictModel):
-    survey_version: Literal["presurvey-four-topic-baseline-v7"] = FOUR_TOPIC_PRESURVEY_VERSION
+    survey_version: Literal["presurvey-four-topic-baseline-v7"] = FOUR_TOPIC_PRESURVEY_VERSION_V7
     prior_term_exposure: FourTopicPriorTermExposure
     prior_term_understanding: FourTopicPriorTermUnderstandingV6
     general_ratings: BaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
+
+
+class FourTopicPresurveyPayloadV8(StrictModel):
+    survey_version: Literal["presurvey-four-topic-baseline-v8"] = FOUR_TOPIC_PRESURVEY_VERSION_V8
+    prior_term_exposure: FourTopicPriorTermExposure
+    prior_term_understanding: FourTopicPriorTermUnderstandingV8
+    general_ratings: CurrentBaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
+
+
+class FourTopicPresurveyPayloadV9(StrictModel):
+    survey_version: Literal["presurvey-four-topic-baseline-v9"] = FOUR_TOPIC_PRESURVEY_VERSION_V9
+    prior_term_exposure: FourTopicPriorTermExposure
+    prior_term_understanding: FourTopicPriorTermUnderstandingV8
+    general_ratings: CurrentBaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
+
+
+class FourTopicPresurveyPayloadV10(StrictModel):
+    survey_version: Literal["presurvey-four-topic-baseline-v10"] = FOUR_TOPIC_PRESURVEY_VERSION_V10
+    prior_term_exposure: FourTopicPriorTermExposure
+    prior_term_understanding: FourTopicPriorTermUnderstandingV8
+    general_ratings: CurrentBaselineRatings
 
     @model_validator(mode="after")
     def validate_understanding_branch(self):
@@ -266,7 +337,7 @@ def _validate_understanding_branch(exposure: StrictModel, understanding: StrictM
 
 
 class SurveyPayload(StrictModel):
-    survey_version: Literal["posttest-5point-v4"] = SURVEY_VERSION
+    survey_version: Literal["posttest-5point-v5"] = SURVEY_VERSION
     general_ratings: PosttestRatings
     material_ratings: MaterialRatings | None
     free_comment: Comment | None = None
@@ -296,13 +367,13 @@ def presurvey_context(participant: Participant) -> dict:
         raise HTTPException(status_code=409, detail="この参加者は事前アンケート対象ではありません。")
     four_topic = participant.test_content_mode == "four_topic_fundamentals"
     survey_version = FOUR_TOPIC_PRESURVEY_VERSION if four_topic else PRESURVEY_VERSION
-    terms = FOUR_TOPIC_PRESURVEY_TERM_ITEMS if four_topic else PRESURVEY_TERM_ITEMS
+    terms = FOUR_TOPIC_PRESURVEY_TERM_ITEMS_V10 if four_topic else PRESURVEY_TERM_ITEMS
     return {"survey_version": survey_version, "term_items": list(terms)}
 
 
 def validate_presurvey_payload(payload: dict, test_content_mode: str | None = None) -> dict:
     if test_content_mode == "four_topic_fundamentals":
-        return FourTopicPresurveyPayloadV7.model_validate(payload).model_dump()
+        return FourTopicPresurveyPayloadV10.model_validate(payload).model_dump()
     return PresurveyPayload.model_validate(payload).model_dump()
 
 
@@ -327,7 +398,14 @@ def record_material_view(db: Session, turn_id: str) -> dict:
     if turn.material_viewed_at is None:
         if participant.current_step not in {"learning_targets", "learning"} or session.ended_at is not None:
             raise HTTPException(status_code=409, detail="現在の学習セッションでのみ教材表示を記録できます。")
-        if session.prefetch_state not in {"none", "consumed"}:
+        # The session retains the worker's outcome even if a request has
+        # generated its own material and already returned it to the learner.
+        generation_origin = (turn.diagnosis_json or {}).get("generation_origin")
+        is_interactive_fallback = (
+            session.prefetch_state in {"failed", "discarded"}
+            and generation_origin == "interactive_fallback"
+        )
+        if session.prefetch_state not in {"none", "consumed"} and not is_interactive_fallback:
             raise HTTPException(status_code=409, detail="未利用の先行生成は教材表示として記録できません。")
         viewed_at = now()
         changed = db.execute(update(TutorTurn).where(TutorTurn.id == turn.id, TutorTurn.material_viewed_at.is_(None)).values(material_viewed_at=viewed_at))

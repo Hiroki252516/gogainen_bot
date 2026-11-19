@@ -28,7 +28,7 @@ export default function AdminSurveyPreviewPage() {
         </div>
       </section>
       {isPresurvey ? <PresurveyQuestionnaire
-        surveyVersion="presurvey-four-topic-baseline-v7"
+        surveyVersion="presurvey-four-topic-baseline-v10"
         termItems={FOUR_TOPIC_PRESURVEY_TERM_ITEMS}
         preview
         onSubmit={ignorePreviewSubmission}

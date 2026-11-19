@@ -36,7 +36,7 @@ async function prepareFixture(request, fixture) {
     prior_term_understanding: Object.fromEntries(termKeys.map((key) => [key, null])),
     general_ratings: {
       ai_usage_frequency_30d: "4_8_days",
-      ai_proficiency: { goal_aligned_output: 3, revise_instructions: 4, verify_with_sources: "not_applicable" },
+      ai_proficiency: { goal_aligned_output: 3, revise_instructions: 4, verify_with_sources: 3 },
     },
   };
   const baseline = await api(request, "/api/participants/" + pid + "/presurvey", "POST", presurveyPayload);
@@ -112,15 +112,32 @@ try {
     assert.equal(await page.getByText("事前学習", { exact: true }).count(), 0);
     const ratings = page.locator(".survey-rating-options");
     assert.equal(await ratings.count(), fixture.viewed ? 7 : 1);
+    for (const group of await ratings.all()) {
+      assert.equal(await group.locator("button").count(), 5);
+      assert.deepEqual(await group.locator(".survey-rating-value").allTextContents(), ["1", "2", "3", "4", "5"]);
+      assert.equal(await group.getByRole("button", { name: "評価できない", exact: true }).count(), 0);
+    }
     assert.equal(await page.getByText("画面を見て、次に何をすればよいか分かった", { exact: true }).count(), 0);
     assert(await page.getByText("教材で説明された内容を理解できた", { exact: true }).count() === Number(fixture.viewed));
     for (let index = 0; index < await ratings.count() - 1; index++) {
-      const value = fixture.viewed && index === 2 ? "not_applicable" : "4";
-      await ratings.nth(index).locator(`[data-rating-value="${value}"]`).click();
+      await ratings.nth(index).locator('[data-rating-value="4"]').click();
     }
     await save.click();
     assert.match(await page.locator("form").getByRole("alert").innerText(), /未選択/);
-    await ratings.last().locator(`[data-rating-value="${fixture.viewed ? "not_applicable" : "4"}"]`).click();
+    await ratings.last().locator('[data-rating-value="4"]').click();
+    if (fixture.viewed) {
+      assert.deepEqual(
+        await page.locator(".survey-rating .survey-rating-label > span:first-child").allTextContents(),
+        ["必要な操作をスムーズに行えた", "教材で説明された内容を理解できた", "教材は読みやすかった", "教材の日本語表現は分かりやすかった", "教材は、用語や仕組みを正しく理解するために役立った", "教材の難易度はどの程度でしたか", "教材の量はどの程度でしたか"],
+      );
+      assert.equal(await page.locator(".survey-rating-spacer").count(), 1);
+      assert(Number.parseFloat(await page.locator(".survey-rating-spacer").evaluate((element) => getComputedStyle(element).marginTop)) > 0);
+    }
+    const numericCards = await page.locator(".survey-rating-options").evaluateAll((groups) => groups.map((group) => {
+      const buttons = [...group.querySelectorAll("button")];
+      return buttons.every((button) => button.querySelector(".survey-rating-value").getBoundingClientRect().top < button.querySelector("span:last-child").getBoundingClientRect().top);
+    }));
+    assert(numericCards.every(Boolean), "rating numbers must appear above their labels");
     const textarea = page.locator("textarea");
     assert.equal(await textarea.getAttribute("required"), null);
     assert.equal(await textarea.inputValue(), "");
@@ -129,7 +146,7 @@ try {
     const saved = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/survey"));
     await save.click();
     const body = (await posted).postDataJSON();
-    assert.equal(body.survey_version, "posttest-5point-v4");
+    assert.equal(body.survey_version, "posttest-5point-v5");
     assert(!("prior_term_knowledge" in body));
     assert.equal(body.general_ratings.system_usability, 4);
     assert(!("system_clarity" in body.general_ratings));
@@ -139,9 +156,10 @@ try {
     assert.equal(body.free_comment, "");
     assert.equal(body.material_ratings === null, !fixture.viewed);
     if (fixture.viewed) {
-      assert.equal(body.material_ratings.clarity, "not_applicable");
-      assert.equal(body.material_ratings.amount_appropriateness, "not_applicable");
+      assert.equal(body.material_ratings.clarity, 4);
+      assert.equal(body.material_ratings.amount_appropriateness, 4);
       assert.equal(body.material_ratings.readability, 4);
+      assert(Object.values(body.material_ratings).every((value) => Number.isInteger(value) && value >= 1 && value <= 5));
     }
     assert((await saved).ok());
     await page.waitForURL(new URL("/finish", base).href);
@@ -155,7 +173,7 @@ try {
     assert.deepEqual(presurvey.responses.prior_term_exposure, fixture.presurveyPayload.prior_term_exposure);
     assert.deepEqual(presurvey.responses.prior_term_understanding, fixture.presurveyPayload.prior_term_understanding);
     assert.deepEqual(presurvey.responses.general_ratings, fixture.presurveyPayload.general_ratings);
-    assert.equal(posttest.survey_version, "posttest-5point-v4");
+    assert.equal(posttest.survey_version, "posttest-5point-v5");
     assert(!("prior_term_exposure" in posttest.responses));
     assert(!("prior_term_understanding" in posttest.responses));
     assert.equal(posttest.free_comment, "");
