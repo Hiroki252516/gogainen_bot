@@ -9,28 +9,28 @@ const { chromium } = await import(process.env.PRESURVEY_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
 const mode = {
   mode: "four_topic_fundamentals",
-  version: "presurvey-four-topic-baseline-v7",
+  version: "presurvey-four-topic-baseline-v10",
   keys: ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"],
 };
 const experienceChoices = [
   ["experienced", "ある"],
   ["not_experienced", "ない"],
-  ["cannot_recall", "覚えていない"],
+  ["cannot_recall", "判断できない"],
 ];
 const understandingChoices = [
   ["not_at_all", "全く理解していない"],
   ["hardly", "あまり理解していない"],
-  ["slightly", "少し理解している"],
+  ["neither", "どちらとも言えない"],
   ["moderately", "ある程度理解している"],
   ["well", "よく理解している"],
 ];
 const understandingScale = [
-  "全く理解していない", "あまり理解していない", "少し理解している", "ある程度理解している", "よく理解している",
+  "全く理解していない", "あまり理解していない", "どちらとも言えない", "ある程度理解している", "よく理解している",
 ];
 const proficiencyItems = [
   ["goal_aligned_output", "AIに目的を伝え、目的に合った回答を得ることができますか。", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],
   ["revise_instructions", "AIの回答が期待と異なるとき、指示や条件を修正できますか。", "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。"],
-  ["verify_with_sources", "AIの回答が正しいか、公式サイトや別の資料で確かめられますか。", null],
+  ["verify_with_sources", "AIの回答が正しいか、公式サイトや別の資料で確かめられますか。", "例：AIが答えた営業時間を、お店の公式サイトで確認する。"],
 ];
 
 async function request(context, path, method = "GET", data) {
@@ -76,7 +76,7 @@ try {
       const exposure = {};
       const understanding = {};
       for (const [index, { key, label }] of surveyContext.term_items.entries()) {
-        const group = page.getByRole("group", { name: `${label}という用語を、実験の説明を受ける前に見たり聞いたりしたことがありますか。`, exact: true });
+        const group = page.getByRole("group", { name: `実験を始める前に、${label}という用語を見たり聞いたりしたことがありますか。`, exact: true });
         for (const [, choiceLabel] of experienceChoices) {
           assert.equal(await group.getByRole("button", { name: choiceLabel, exact: true }).count(), 1);
         }
@@ -85,7 +85,7 @@ try {
         await selectedButton.click();
         exposure[key] = selected[0];
 
-        const comprehensionLabel = `${label}の基本的な意味や働きをどの程度理解していますか。`;
+        const comprehensionLabel = `${label}の基本的な仕組みを、どの程度理解していますか。`;
         const comprehensionGroup = page.getByRole("group", { name: comprehensionLabel, exact: true });
         if (selected[0] === "experienced") {
           assert.equal(await comprehensionGroup.count(), 1);
@@ -107,6 +107,7 @@ try {
           for (const choiceLabel of understandingScale) {
             assert.equal(await comprehensionGroup.getByRole("button", { name: choiceLabel, exact: true }).count(), 1);
           }
+          assert.deepEqual(await comprehensionGroup.locator(".survey-rating-value").allTextContents(), ["1", "2", "3", "4", "5"]);
           const chosenUnderstanding = understandingChoices[(index + 1) % understandingChoices.length];
           await comprehensionGroup.getByRole("button", { name: chosenUnderstanding[1], exact: true }).click();
           understanding[key] = chosenUnderstanding[0];
@@ -123,17 +124,18 @@ try {
       }
       await frequency.getByRole("button", { name: "9〜20日", exact: true }).click();
       const proficiency = {};
-      assert.equal(await page.getByText("次の各項目について、最も当てはまるものを選んでください。実際に評価する機会がなかった場合は、「評価できない」を選んでください。", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("次の各項目について、最も当てはまるものを選んでください。", { exact: true }).count(), 1);
       for (const [key, label, example] of proficiencyItems) {
-        if (example) assert.equal(await page.getByText(example, { exact: true }).count(), 1);
-        else assert.equal(await page.getByText("例：候補の営業時間や料金を、施設の公式情報で確かめる。", { exact: true }).count(), 0);
+        assert.equal(await page.getByText(example, { exact: true }).count(), 1);
         const group = page.getByRole("group", { name: label, exact: true });
-        for (const choice of ["1", "2", "3", "4", "5", "評価できない"]) {
+        for (const choice of ["全くできない", "あまりできない", "どちらでもない", "ある程度できる", "よくできる"]) {
           assert.equal(await group.getByRole("button", { name: choice, exact: true }).count(), 1);
         }
-        const chosen = key === "verify_with_sources" ? "評価できない" : key === "goal_aligned_output" ? "4" : "2";
-        await group.getByRole("button", { name: chosen, exact: true }).click();
-    proficiency[key] = chosen === "評価できない" ? "not_applicable" : Number(chosen);
+        assert.equal(await group.getByRole("button", { name: "評価できない", exact: true }).count(), 0);
+        const chosen = key === "goal_aligned_output" ? "4" : key === "revise_instructions" ? "2" : "3";
+        await group.locator(`[data-rating-value="${chosen}"]`).click();
+        assert.deepEqual(await group.locator(".survey-rating-value").allTextContents(), ["1", "2", "3", "4", "5"]);
+        proficiency[key] = Number(chosen);
       }
       const choiceLayouts = await page.locator(".presurvey-form .survey-choice-options").evaluateAll((groups) => groups.map((group) => {
         const buttons = [...group.querySelectorAll("button")].map((button) => button.getBoundingClientRect());
@@ -152,6 +154,28 @@ try {
         && rows === (narrow ? Math.ceil(optionCount / 2) : 1)
         && !overflowingButtons
       ), `choices must match the responsive horizontal layout at ${width}px`);
+      const ratingLayouts = await page.locator(".presurvey-form .survey-rating-options").evaluateAll((groups) => groups.map((group) => {
+        const buttons = [...group.querySelectorAll("button")];
+        const rects = buttons.map((button) => button.getBoundingClientRect());
+        const labelsBelowNumbers = buttons.every((button) => {
+          const number = button.querySelector(".survey-rating-value").getBoundingClientRect();
+          const label = button.querySelector("span:last-child").getBoundingClientRect();
+          return number.top < label.top;
+        });
+        return {
+          columns: getComputedStyle(group).gridTemplateColumns.trim().split(/\s+/).length,
+          optionCount: buttons.length,
+          rows: new Set(rects.map((rect) => Math.round(rect.top))).size,
+          labelsBelowNumbers,
+        };
+      }));
+      assert(ratingLayouts.length > 0);
+      assert(ratingLayouts.every(({ columns, optionCount, rows, labelsBelowNumbers }) =>
+        optionCount === 5
+        && columns === (narrow ? 2 : 5)
+        && rows === (narrow ? 3 : 1)
+        && labelsBelowNumbers
+      ), `all numeric ratings must use stacked number and label cards at ${width}px`);
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `horizontal overflow at ${width}px`);
 
       const responsePromise = page.waitForResponse((response) => response.url().endsWith(`/api/participants/${pid}/presurvey`) && response.request().method() === "POST");

@@ -5,7 +5,7 @@ const base = new URL(process.env.SURVEY_PREVIEW_UI_BASE_URL);
 assert(["localhost", "127.0.0.1"].includes(base.hostname) && base.port && base.port !== "3000");
 const { chromium } = await import(process.env.SURVEY_PREVIEW_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
-const terms = ["Transformer", "事前学習", "インストラクションチューニング", "人の評価・好みを用いる事後学習", "マルチエージェント", "記憶プロセス"];
+const terms = ["Transformer", "事前学習", "インストラクションチューニング", "事後学習", "マルチエージェント", "記憶プロセス"];
 const proficiencyItems = [
   "AIに目的を伝え、目的に合った回答を得ることができますか。",
   "AIの回答が期待と異なるとき、指示や条件を修正できますか。",
@@ -45,12 +45,12 @@ try {
     await page.getByRole("alert").getByText("未選択の項目があります。必須の各項目を選択してください。", { exact: true }).waitFor();
 
     for (const [index, term] of terms.entries()) {
-      const group = page.getByRole("group", { name: `${term}という用語を、実験の説明を受ける前に見たり聞いたりしたことがありますか。`, exact: true });
+      const group = page.getByRole("group", { name: `実験を始める前に、${term}という用語を見たり聞いたりしたことがありますか。`, exact: true });
       assert.equal(await group.count(), 1);
       if (index === 0) {
         const experienced = group.getByRole("button", { name: "ある", exact: true });
         await experienced.click();
-        const understanding = page.getByRole("group", { name: `${term}の基本的な意味や働きをどの程度理解していますか。`, exact: true });
+        const understanding = page.getByRole("group", { name: `${term}の基本的な仕組みを、どの程度理解していますか。`, exact: true });
         assert.equal(await understanding.count(), 1);
         const termItem = page.locator(".presurvey-term-item").filter({ has: group });
         const followup = termItem.locator(".presurvey-followup");
@@ -80,18 +80,18 @@ try {
         assert.equal(await followup.getByRole("button", { name: "ある程度理解している", exact: true }).getAttribute("aria-pressed"), "false", "hidden follow-up answers must be cleared");
         await understanding.getByRole("button", { name: "ある程度理解している", exact: true }).click();
       } else {
-        const answer = index % 2 ? "ない" : "覚えていない";
+        const answer = index % 2 ? "ない" : "判断できない";
         await group.getByRole("button", { name: answer, exact: true }).click();
-        assert.equal(await page.getByRole("group", { name: `${term}の基本的な意味や働きをどの程度理解していますか。`, exact: true }).count(), 0);
+        assert.equal(await page.getByRole("group", { name: `${term}の基本的な仕組みを、どの程度理解していますか。`, exact: true }).count(), 0);
       }
     }
     await page.getByRole("group", { name: "直近30日間のうち、AIを利用した日は何日ありましたか。", exact: true }).getByRole("button", { name: "0日", exact: true }).click();
     for (const label of proficiencyItems) {
-      await page.getByRole("group", { name: label, exact: true }).getByRole("button", { name: "評価できない", exact: true }).click();
+      await page.getByRole("group", { name: label, exact: true }).locator('[data-rating-value="3"]').click();
     }
     await presurveySubmit.click();
     await page.getByRole("alert").getByText("未選択の項目があります。必須の各項目を選択してください。", { exact: true }).waitFor();
-    await page.getByRole("group", { name: `${terms[0]}の基本的な意味や働きをどの程度理解していますか。`, exact: true }).getByRole("button", { name: "全く理解していない", exact: true }).click();
+    await page.getByRole("group", { name: `${terms[0]}の基本的な仕組みを、どの程度理解していますか。`, exact: true }).getByRole("button", { name: "全く理解していない", exact: true }).click();
     await presurveySubmit.click();
     await page.getByRole("heading", { name: "事前アンケートの入力確認", exact: true }).waitFor();
     await page.getByText("デバッグプレビューのため、回答は保存されていません。", { exact: false }).waitFor();

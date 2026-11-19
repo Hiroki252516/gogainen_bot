@@ -31,6 +31,10 @@ from app.services.hypothesis_metrics import METRICS_VERSION
 from app.services.research_protocol import (
     FOUR_TOPIC_PRESURVEY_TERM_ITEMS,
     FOUR_TOPIC_PRESURVEY_VERSION,
+    FOUR_TOPIC_PRESURVEY_VERSION_V7,
+    FOUR_TOPIC_PRESURVEY_VERSION_V8,
+    FOUR_TOPIC_PRESURVEY_VERSION_V9,
+    FOUR_TOPIC_PRESURVEY_VERSION_V10,
     FOUR_TOPIC_PRESURVEY_V2_TERM_ITEMS,
     FOUR_TOPIC_PRESURVEY_V3_TERM_ITEMS,
     MATERIAL_RATING_KEYS,
@@ -39,6 +43,9 @@ from app.services.research_protocol import (
     SURVEY_VERSION,
     FourTopicPresurveyPayload,
     FourTopicPresurveyPayloadV7,
+    FourTopicPresurveyPayloadV8,
+    FourTopicPresurveyPayloadV9,
+    FourTopicPresurveyPayloadV10,
     FourTopicPresurveyPayloadV4,
     FourTopicPresurveyPayloadV2,
     FourTopicPresurveyPayloadV3,
@@ -119,6 +126,11 @@ def questionnaire(viewed=False):
 
 def baseline_questionnaire(survey_version=PRESURVEY_VERSION, term_keys=None):
     term_keys = term_keys or [item["key"] for item in PRESURVEY_TERM_ITEMS]
+    uses_numeric_proficiency = survey_version in {
+        FOUR_TOPIC_PRESURVEY_VERSION_V8,
+        FOUR_TOPIC_PRESURVEY_VERSION_V9,
+        FOUR_TOPIC_PRESURVEY_VERSION_V10,
+    }
     exposure = {
         key: ("experienced" if index % 3 == 0 else "not_experienced" if index % 3 == 1 else "cannot_recall")
         for index, key in enumerate(term_keys)
@@ -135,7 +147,7 @@ def baseline_questionnaire(survey_version=PRESURVEY_VERSION, term_keys=None):
             "ai_proficiency": {
                 "goal_aligned_output": 4,
                 "revise_instructions": 2,
-                "verify_with_sources": "not_applicable",
+                "verify_with_sources": 3 if uses_numeric_proficiency else "not_applicable",
             },
         },
     }
@@ -475,6 +487,10 @@ def test_removed_system_clarity_is_rejected_for_new_survey_version():
     payload["general_ratings"]["system_clarity"] = 4
     with pytest.raises(ValidationError):
         SurveyPayload.model_validate(payload)
+    payload = questionnaire()
+    payload["general_ratings"]["system_usability"] = "not_applicable"
+    with pytest.raises(ValidationError):
+        SurveyPayload.model_validate(payload)
     for mutate in (lambda p: p.pop("prior_term_exposure"),
                    lambda p: p["prior_term_exposure"].update(pretraining="yes"),
                    lambda p: p["general_ratings"].pop("ai_usage_frequency_30d")):
@@ -554,12 +570,27 @@ def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation(
     keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
     assert keys == ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"]
     assert FOUR_TOPIC_PRESURVEY_TERM_ITEMS[2]["label"] == "インストラクションチューニング"
+    assert FOUR_TOPIC_PRESURVEY_TERM_ITEMS[3]["label"] == "事後学習"
     payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION, keys)
-    parsed = FourTopicPresurveyPayloadV7.model_validate(payload)
+    payload["prior_term_understanding"]["transformer"] = "neither"
+    parsed = FourTopicPresurveyPayloadV10.model_validate(payload)
     assert set(parsed.prior_term_exposure.model_dump()) == set(keys)
+    invalid = json.loads(json.dumps(payload))
+    invalid["prior_term_understanding"]["transformer"] = "slightly"
+    with pytest.raises(ValidationError):
+        FourTopicPresurveyPayloadV10.model_validate(invalid)
+    for version, schema in (
+        (FOUR_TOPIC_PRESURVEY_VERSION_V8, FourTopicPresurveyPayloadV8),
+        (FOUR_TOPIC_PRESURVEY_VERSION_V9, FourTopicPresurveyPayloadV9),
+    ):
+        historical = baseline_questionnaire(version, keys)
+        historical["prior_term_understanding"]["transformer"] = "neither"
+        assert schema.model_validate(historical).survey_version == version
+    legacy = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V7, keys)
+    assert FourTopicPresurveyPayloadV7.model_validate(legacy)
     payload["prior_term_exposure"]["transformer"] = "cannot_recall"
     with pytest.raises(ValidationError):
-        FourTopicPresurveyPayloadV7.model_validate(payload)
+        FourTopicPresurveyPayloadV10.model_validate(payload)
 
 
 def test_presurvey_v4_schemas_remain_historical_and_are_not_current():
@@ -842,7 +873,8 @@ def test_h4_group_counts_separate_viewed_missing_not_viewed_and_not_evaluable(st
     assert details["not_viewed_count"] == 1
 
 
-def test_display_is_idempotent_and_controls_survey_eligibility(study):
+@pytest.mark.parametrize("prefetch_state", ["consumed", "failed", "discarded"])
+def test_display_is_idempotent_and_controls_survey_eligibility(study, prefetch_state):
     p = participant(study)
     row = session(study, p, "memory_process", 1, displayed=False, answered=False, ended=False)
     turn = study.query(TutorTurn).filter_by(tutor_session_id=row.id).one()
@@ -850,11 +882,20 @@ def test_display_is_idempotent_and_controls_survey_eligibility(study):
     assert validate_survey_for_participant(study, p, questionnaire())["material_ratings"] is None
     with pytest.raises(HTTPException):
         record_material_view(study, turn.id)
-    row.prefetch_state = "consumed"
+    row.prefetch_state = prefetch_state
+    if prefetch_state != "consumed":
+        turn.diagnosis_json = {"generation_origin": "prefetch"}
+        study.commit()
+        with pytest.raises(HTTPException) as rejected:
+            record_material_view(study, turn.id)
+        assert rejected.value.status_code == 409
+        assert turn.material_viewed_at is None
+        turn.diagnosis_json = {"generation_origin": "interactive_fallback"}
     study.commit()
     first = record_material_view(study, turn.id)
     second = record_material_view(study, turn.id)
     assert first == second
+    assert row.prefetch_state == prefetch_state
     assert study.query(AuditEvent).filter_by(action="material_view", entity_id=p.id).count() == 1
     assert survey_context(study, p)["material_ratings_required"]
     with pytest.raises(HTTPException):
@@ -930,7 +971,7 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     changed_baseline["general_ratings"]["ai_usage_frequency_30d"] = "21_30_days"
     assert client.post(f"/api/participants/{pid}/presurvey", json=changed_baseline).status_code == 409
     assert client.get(f"/api/participants/{pid}/survey").json()["material_ratings_required"] is False
-    assert client.get(f"/api/participants/{pid}/survey").json()["survey_version"] == "posttest-5point-v4"
+    assert client.get(f"/api/participants/{pid}/survey").json()["survey_version"] == "posttest-5point-v5"
     with SessionLocal() as db:
         p = db.get(Participant, pid)
         assert p.protocol_id == CURRENT_PROTOCOL_ID

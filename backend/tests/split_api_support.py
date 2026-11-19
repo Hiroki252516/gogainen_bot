@@ -31,9 +31,9 @@ def complete_presurvey(client, pid):
         "general_ratings": {
             "ai_usage_frequency_30d": "0_days",
             "ai_proficiency": {
-                "goal_aligned_output": "not_applicable",
-                "revise_instructions": "not_applicable",
-                "verify_with_sources": "not_applicable",
+                "goal_aligned_output": 3,
+                "revise_instructions": 3,
+                "verify_with_sources": 3,
             },
         },
     }
