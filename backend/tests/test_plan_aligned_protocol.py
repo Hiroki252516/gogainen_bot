@@ -31,8 +31,10 @@ from app.services.hypothesis_metrics import METRICS_VERSION
 from app.services.research_protocol import (
     FOUR_TOPIC_PRESURVEY_TERM_ITEMS,
     FOUR_TOPIC_PRESURVEY_VERSION,
-    FOUR_TOPIC_PRESURVEY_VERSION_V8,
     FOUR_TOPIC_PRESURVEY_VERSION_V7,
+    FOUR_TOPIC_PRESURVEY_VERSION_V8,
+    FOUR_TOPIC_PRESURVEY_VERSION_V9,
+    FOUR_TOPIC_PRESURVEY_VERSION_V10,
     FOUR_TOPIC_PRESURVEY_V2_TERM_ITEMS,
     FOUR_TOPIC_PRESURVEY_V3_TERM_ITEMS,
     MATERIAL_RATING_KEYS,
@@ -43,6 +45,7 @@ from app.services.research_protocol import (
     FourTopicPresurveyPayloadV7,
     FourTopicPresurveyPayloadV8,
     FourTopicPresurveyPayloadV9,
+    FourTopicPresurveyPayloadV10,
     FourTopicPresurveyPayloadV4,
     FourTopicPresurveyPayloadV2,
     FourTopicPresurveyPayloadV3,
@@ -123,6 +126,11 @@ def questionnaire(viewed=False):
 
 def baseline_questionnaire(survey_version=PRESURVEY_VERSION, term_keys=None):
     term_keys = term_keys or [item["key"] for item in PRESURVEY_TERM_ITEMS]
+    uses_numeric_proficiency = survey_version in {
+        FOUR_TOPIC_PRESURVEY_VERSION_V8,
+        FOUR_TOPIC_PRESURVEY_VERSION_V9,
+        FOUR_TOPIC_PRESURVEY_VERSION_V10,
+    }
     exposure = {
         key: ("experienced" if index % 3 == 0 else "not_experienced" if index % 3 == 1 else "cannot_recall")
         for index, key in enumerate(term_keys)
@@ -139,7 +147,7 @@ def baseline_questionnaire(survey_version=PRESURVEY_VERSION, term_keys=None):
             "ai_proficiency": {
                 "goal_aligned_output": 4,
                 "revise_instructions": 2,
-                "verify_with_sources": 3 if survey_version == FOUR_TOPIC_PRESURVEY_VERSION else "not_applicable",
+                "verify_with_sources": 3 if uses_numeric_proficiency else "not_applicable",
             },
         },
     }
@@ -565,19 +573,24 @@ def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation(
     assert FOUR_TOPIC_PRESURVEY_TERM_ITEMS[3]["label"] == "事後学習"
     payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION, keys)
     payload["prior_term_understanding"]["transformer"] = "neither"
-    parsed = FourTopicPresurveyPayloadV9.model_validate(payload)
+    parsed = FourTopicPresurveyPayloadV10.model_validate(payload)
     assert set(parsed.prior_term_exposure.model_dump()) == set(keys)
     invalid = json.loads(json.dumps(payload))
     invalid["prior_term_understanding"]["transformer"] = "slightly"
     with pytest.raises(ValidationError):
-        FourTopicPresurveyPayloadV9.model_validate(invalid)
-    historical_v8 = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V8, keys)
-    assert FourTopicPresurveyPayloadV8.model_validate(historical_v8)
+        FourTopicPresurveyPayloadV10.model_validate(invalid)
+    for version, schema in (
+        (FOUR_TOPIC_PRESURVEY_VERSION_V8, FourTopicPresurveyPayloadV8),
+        (FOUR_TOPIC_PRESURVEY_VERSION_V9, FourTopicPresurveyPayloadV9),
+    ):
+        historical = baseline_questionnaire(version, keys)
+        historical["prior_term_understanding"]["transformer"] = "neither"
+        assert schema.model_validate(historical).survey_version == version
     legacy = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V7, keys)
     assert FourTopicPresurveyPayloadV7.model_validate(legacy)
     payload["prior_term_exposure"]["transformer"] = "cannot_recall"
     with pytest.raises(ValidationError):
-        FourTopicPresurveyPayloadV9.model_validate(payload)
+        FourTopicPresurveyPayloadV10.model_validate(payload)
 
 
 def test_presurvey_v4_schemas_remain_historical_and_are_not_current():
