@@ -56,6 +56,7 @@ try {
         const followup = termItem.locator(".presurvey-followup");
         assert.equal(await followup.count(), 1);
         await followup.getByRole("heading", { name: "追加質問：理解度", exact: true }).waitFor();
+        assert((await followup.innerText()).includes("基本的な仕組みを知らない場合は「1 全く理解していない」、一部知っている場合は「2 あまり理解していない」、知っている場合は「4 ある程度理解している」、説明できる場合は「5 よく理解している」が目安です。"));
         assert.equal(await experienced.evaluate((button) => button === document.activeElement), true, "revealing the follow-up must not move focus");
         const announcement = page.locator(".presurvey-announcement");
         assert.equal(await announcement.getAttribute("role"), "status");
