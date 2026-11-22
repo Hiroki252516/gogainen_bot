@@ -9,7 +9,7 @@ const { chromium } = await import(process.env.PRESURVEY_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
 const mode = {
   mode: "four_topic_fundamentals",
-  version: "presurvey-four-topic-baseline-v10",
+  version: "presurvey-four-topic-baseline-v11",
   keys: ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"],
 };
 const experienceChoices = [
@@ -27,6 +27,7 @@ const understandingChoices = [
 const understandingScale = [
   "全く理解していない", "あまり理解していない", "どちらとも言えない", "ある程度理解している", "よく理解している",
 ];
+const understandingGuide = "基本的な仕組みを知らない場合は「1 全く理解していない」、一部知っている場合は「2 あまり理解していない」、知っている場合は「4 ある程度理解している」、説明できる場合は「5 よく理解している」が目安です。";
 const proficiencyItems = [
   ["goal_aligned_output", "AIに目的を伝え、目的に合った回答を得ることができますか。", "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。"],
   ["revise_instructions", "AIの回答が期待と異なるとき、指示や条件を修正できますか。", "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。"],
@@ -93,6 +94,7 @@ try {
           const followup = termItem.locator(".presurvey-followup");
           assert.equal(await followup.count(), 1);
           await followup.getByRole("heading", { name: "追加質問：理解度", exact: true }).waitFor();
+          assert((await followup.innerText()).includes(understandingGuide));
           assert.equal(await selectedButton.evaluate((button) => button === document.activeElement), true);
           assert.equal(await page.locator(".presurvey-announcement").getAttribute("role"), "status");
           assert.match(await page.locator(".presurvey-announcement").innerText(), new RegExp(`${label}.*表示`));

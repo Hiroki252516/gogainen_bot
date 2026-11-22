@@ -160,7 +160,7 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 def uses_split(participant: Any) -> bool:
     version = getattr(participant, "experiment_spec_version", None)
-    return isinstance(version, int) and not isinstance(version, bool) and 27 <= version <= 61
+    return isinstance(version, int) and not isinstance(version, bool) and 27 <= version <= 62
 
 
 @lru_cache

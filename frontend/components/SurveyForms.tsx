@@ -201,7 +201,7 @@ export function PresurveyQuestionnaire({
           <h3 className="presurvey-followup-heading">追加質問：理解度</h3>
           <RatingButtons
             label={understandingQuestion}
-            description={<><strong>回答の目安</strong><br />基本的な仕組みがあまり分からない場合は「2 あまり理解していない」が目安です。基本的な仕組みは分かるものの、分からない部分もある場合は「4 ある程度理解している」が目安です。</>}
+            description={<><strong>回答の目安</strong><br />基本的な仕組みを知らない場合は「1 全く理解していない」、一部知っている場合は「2 あまり理解していない」、知っている場合は「4 ある程度理解している」、説明できる場合は「5 よく理解している」が目安です。</>}
             value={values[`understanding:${key}`] || ""}
             options={UNDERSTANDING_OPTIONS}
             disabled={submitting}

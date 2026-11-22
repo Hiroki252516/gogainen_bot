@@ -525,6 +525,7 @@ for (const expectedText of [
   "updateExposure", "experienced", "not_experienced", "cannot_recall", "not_at_all", "hardly", "neither",
   "moderately", "well", "判断できない", "全く理解していない", "あまり理解していない",
   "基本的な仕組みを、どの程度理解していますか。", "instruction_tuning", "インストラクションチューニング",
+  "基本的な仕組みを知らない場合は「1 全く理解していない」、一部知っている場合は「2 あまり理解していない」、知っている場合は「4 ある程度理解している」、説明できる場合は「5 よく理解している」が目安です。",
   "ai_usage_frequency_30d", "21_30_days", "goal_aligned_output", "verify_with_sources",
   "例：週末の外食先を探すとき、希望を伝えて候補を提案してもらう。",
   "例：候補が希望と違うとき、予算や移動時間などの条件を伝え直す。",
@@ -543,7 +544,7 @@ if (!styles.includes(".presurvey-form .survey-choice-options {\n  grid-template-
 if (!styles.includes(".presurvey-form .survey-choice-options {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }")) throw new Error("presurvey choices must wrap to two columns on narrow screens");
 if (!surveyForms.includes("--survey-choice-option-count")) throw new Error("presurvey choice grid must use the number of options for its desktop columns");
 const previewPage = fs.readFileSync(new URL("../app/admin/survey-preview/[phase]/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["FOUR_TOPIC_PRESURVEY_TERM_ITEMS", "presurvey-four-topic-baseline-v10", "PresurveyQuestionnaire", "PosttestQuestionnaire", "materialRatingsRequired", "preview", "入力と必須チェックを試せます", "/admin/survey-preview/presurvey", "/admin/survey-preview/posttest"]) {
+for (const expectedText of ["FOUR_TOPIC_PRESURVEY_TERM_ITEMS", "presurvey-four-topic-baseline-v11", "PresurveyQuestionnaire", "PosttestQuestionnaire", "materialRatingsRequired", "preview", "入力と必須チェックを試せます", "/admin/survey-preview/presurvey", "/admin/survey-preview/posttest"]) {
   if (!previewPage.includes(expectedText)) throw new Error(`admin survey preview missing: ${expectedText}`);
 }
 if (previewPage.includes("/api/participants/") || previewPage.includes("postIdempotent")) throw new Error("admin survey preview must not call participant APIs");
