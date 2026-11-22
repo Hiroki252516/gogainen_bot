@@ -6,17 +6,17 @@ terms:
     component_terms: [Transformer, Attention, FFN, トークン]
     rag_dir: rag_ready_教材
     rag_sections: ["1.1.2.4"]
-    question: Transformerの構造と、Attention・FFNの役割について、適切な説明を3つ選びなさい。
+    question: Transformerの構造と、その内部にあるAttention・FFNの働きについて、正しい説明を3つ選びなさい。
     options:
-      - {label: A, role: correct, body: "Transformerは、AttentionやFFNなどの層を組み合わせたニューラルネットワークの構造である。"}
-      - {label: B, role: correct, body: "Attentionは、あるトークンを処理するときに、自分自身や他のトークンの情報をどの程度参照するかを重みづけする仕組みである。"}
-      - {label: C, role: correct, body: "FFNは、Attentionなどの処理を経た各トークンの特徴表現を変換する層である。"}
-      - {label: D, role: M1, body: "Transformerは、Attentionが文章中で最も重要な単語を1つだけ選び、FFNがその単語の情報だけを使って各トークンの特徴を変換する構造である。"}
-      - {label: E, role: M1, body: "Attentionは、文章中の単語の出現回数を数え、その回数だけでトークン間の関係を決める。"}
-      - {label: F, role: M1, body: "FFNは、トークン同士の関係を比較し、Attentionで使用する重みを直接決める層である。"}
-      - {label: G, role: M3, body: "Attentionは、入力された文章から重要な単語を検索して取り出す外部の検索ツールである。"}
-      - {label: H, role: M3, body: "FFNは、各トークンの内容を判断して回答を決める独立したAIエージェントである。"}
-      - {label: I, role: M3, body: "Transformerは、AttentionとFFNを利用して翻訳や文章生成を行うアプリケーションそのものを指す。"}
+      - {label: A, role: correct, body: "Transformerは、AttentionやFFNなどの層を組み合わせて作られる、ニューラルネットワークの構造である。"}
+      - {label: B, role: correct, body: "Attentionは、各トークンが自分自身や他のトークンからどの程度情報を取り込むかを、計算した重みによって調整する仕組みである。"}
+      - {label: C, role: correct, body: "FFNは、Attentionなどで処理された各トークンの特徴を、別の形の数値情報に変換する層である。"}
+      - {label: D, role: M1, body: "Transformerでは、Attentionが文章の中から最も重要な単語を1つ選び、FFNがその単語の情報を使ってすべてのトークンを処理する。"}
+      - {label: E, role: M1, body: "Attentionは、同じ単語が文章に何回現れたかを数え、出現回数が多い単語ほど強く参照する仕組みである。"}
+      - {label: F, role: M1, body: "FFNは、トークン同士のつながりを比較して、Attentionが使う重みを決める役割を持つ。"}
+      - {label: G, role: M3, body: "Attentionは、重要な単語を外部のデータベースから探して取り出す検索ツールである。"}
+      - {label: H, role: M3, body: "FFNは、各トークンの内容を調べ、どのような回答を出すかを自分で決めるAIエージェントである。"}
+      - {label: I, role: M3, body: "Transformerは、AttentionとFFNを使って翻訳や文章生成を提供するAIアプリそのものを指す。"}
       - {label: J, role: unknown, body: わからない。}
     teaching_targets:
       D: {corrected_claim: "Attentionは最も重要な1語だけを選ぶのではなく、各トークンが系列内の複数のトークン情報を重み付けして参照する。FFNは1語の情報だけで各トークンを処理するのではなく、各トークンの特徴表現を変換する。", mechanism_explanation: "Attentionはトークン間の重み付けを通じて複数の情報を各トークンの表現に反映する。その後、FFNは各トークンの表現に変換を適用する。", contrast_example: "単一の重要語だけを選んで全体を処理する説明と、系列内の複数の情報を参照して各トークンの表現を変換する説明は異なる。"}
@@ -32,21 +32,21 @@ terms:
     component_terms: [LLM, 事前学習, インストラクションチューニング, 事後学習, モデルの重み]
     rag_dir: rag_ready_教材
     rag_sections: ["1.1.3.2"]
-    question: LLMの事前学習、インストラクションチューニング、人の評価を用いる事後学習について、適切な説明を3つ選びなさい。
+    question: LLMの事前学習と、インストラクションチューニングなどの事後学習について、正しい説明を3つ選びなさい。
     options:
-      - {label: A, role: correct, body: "事前学習では、大量の文章などを使って次のトークンを予測する学習を行い、言語のパターンを学ぶ。"}
-      - {label: B, role: correct, body: "インストラクションチューニングでは、指示とそれに対応する回答例を使ってモデルを訓練し、指示に沿った応答ができるよう調整する。"}
-      - {label: C, role: correct, body: "事後学習には、人の評価や好みを参考にして、回答の有用性や安全性などを改善する調整も含まれる。"}
-      - {label: D, role: M1, body: "事前学習では、文章中の単語の出現回数を覚えることが中心で、語順や文脈の関係は学習の対象にならない。"}
-      - {label: E, role: M1, body: "インストラクションチューニングでは、訓練例の文章をそのまま暗記するだけで、異なる指示には対応できない。"}
-      - {label: F, role: M1, body: "人の評価を使う事後学習では、回答に点数を付けるだけでその点数が自動的にモデルの重みに反映され、回答の傾向が変わる。"}
-      - {label: G, role: M3, body: "事前学習は、完成したLLMに利用者が質問を入力し、その場で回答を得る操作と同じ処理である。"}
-      - {label: H, role: M3, body: "インストラクションチューニングは、会話履歴を一時的に保持するコンテキストウィンドウの機能である。"}
-      - {label: I, role: M3, body: "人の評価を使う事後学習は、完成したモデルの性能を測って点数を記録する評価テストと同じ工程である。"}
+      - {label: A, role: correct, body: "事前学習では、大量の文章を使い、次に続くトークンを予測する学習などを通して、言語のパターンを学ぶ。"}
+      - {label: B, role: correct, body: "インストラクションチューニングでは、指示と適切な回答を組にしたデータでモデルを訓練し、指示に沿って答えられるよう調整する。"}
+      - {label: C, role: correct, body: "事後学習には、人が回答を評価した結果を学習に利用し、回答の有用性や安全性を高める調整も含まれる。"}
+      - {label: D, role: M1, body: "事前学習では、文章に現れた単語の回数を覚え、その出現回数だけを使って文章の続きを予測する。"}
+      - {label: E, role: M1, body: "インストラクションチューニングでは、指示と回答の例文を暗記し、初めて見る指示にも覚えた回答文を選んで返す。"}
+      - {label: F, role: M1, body: "人の評価を使う事後学習では、回答に点数が付いた時点で、その点数に合わせてモデルの重みが自動的に変わる。"}
+      - {label: G, role: M3, body: "事前学習は、完成したLLMに質問を入力して回答を受け取るときに行われる処理である。"}
+      - {label: H, role: M3, body: "インストラクションチューニングは、会話履歴をコンテキストウィンドウに一時的に保持するための機能である。"}
+      - {label: I, role: M3, body: "人の評価を使う事後学習は、完成したLLMの回答を採点して性能を測定し、その点数を記録するテストである。"}
       - {label: J, role: unknown, body: わからない。}
     teaching_targets:
       D: {corrected_claim: "事前学習では語順や文脈を含む言語パターンを学習する。", mechanism_explanation: "次のトークンを予測する過程で、前後の語や文脈に関係する情報をモデルの重みに反映する。", contrast_example: "語の数え上げだけでなく、文の続きや表現の関係を予測する。"}
-      E: {corrected_claim: "インストラクションチューニングは訓練例の丸暗記だけではなく、指示と回答例を使って指示に沿う応答を学習する。", mechanism_explanation: "指示と対応する回答例を学習データとして訓練し、さまざまな指示に応じる出力傾向をモデルに調整する。", contrast_example: "訓練例と完全に同じ文を再現することと、指示と回答例から応答の仕方を学習することは異なる。"}
+      E: {corrected_claim: "インストラクションチューニングは回答例を暗記して選ぶだけの仕組みではなく、指示と回答の対応を使って応答の仕方を学習する。", mechanism_explanation: "指示と対応する回答例を学習データとして訓練し、さまざまな指示に応じる出力傾向をモデルに調整する。", contrast_example: "訓練例と完全に同じ文を再現することと、指示と回答例から応答の仕方を学習することは異なる。"}
       F: {corrected_claim: "評価点を付けるだけでは重みは変わらず、評価信号を使った訓練・最適化の工程が必要である。", mechanism_explanation: "人の評価や好みを学習に利用する工程では、定められた最適化を通じてモデルを調整する。", contrast_example: "評価結果を記録する測定と、その評価信号を訓練へ利用する処理は区別される。"}
       G: {corrected_claim: "事前学習はモデルを訓練する段階であり、完成済みモデルへ質問して回答を得る推論とは異なる。", mechanism_explanation: "事前学習ではデータを使ってパラメータを調整し、推論では固定されたモデルが入力に応じて出力する。", contrast_example: "モデルを作る訓練と、作られたモデルを使う質問応答は別工程である。", wrong_category: 推論時の利用, correct_category: モデルの訓練, boundary_criterion: 学習データでパラメータを更新するか、学習済みモデルで出力を得るか}
       H: {corrected_claim: "インストラクションチューニングは訓練による応答調整であり、会話履歴を一時保持する機能ではない。", mechanism_explanation: "指示と回答例を使った訓練でモデルの応答傾向を調整する。コンテキストウィンドウは現在の入力内で会話情報を扱う。", contrast_example: "学習時に回答傾向を調整することと、実行時に履歴を入力へ含めることは別である。", wrong_category: 実行時の一時履歴, correct_category: 学習による応答調整, boundary_criterion: 訓練データでモデルを調整するか、現在の入力情報を保持するか}
@@ -56,17 +56,17 @@ terms:
     label: マルチエージェント
     description: 複数のAIエージェントの役割分担、情報受け渡し、結果統合。
     component_terms: [AIエージェント, 役割分担, 情報共有, 結果統合]
-    question: 複数のAIエージェントが役割を分担して作業を進める仕組みについて、適切な説明を3つ選びなさい。
+    question: 複数のAIエージェントが仕事を分担し、情報を共有する仕組みについて、正しい説明を3つ選びなさい。
     options:
-      - {label: A, role: correct, body: "複数のAIエージェントに異なる役割を割り当て、1つの目的に向けて仕事を分担できる。"}
-      - {label: B, role: correct, body: "あるAIエージェントが調べた情報を別の担当へ渡し、受け取った側の作業に使う仕組みを設けられる。"}
-      - {label: C, role: correct, body: "各担当が作成した結果をまとめ、必要に応じて内容を確認・修正して最終的な回答を作れる。"}
-      - {label: D, role: M1, body: "それぞれのAIエージェントに役割名を付ければ、担当間で必要な情報が自動的に共有される。"}
-      - {label: E, role: M1, body: "各担当の回答を順番に並べれば、内容に食い違いがあっても、それが自動的に解決された最終回答になる。"}
-      - {label: F, role: M1, body: "複数の担当で仕事を分けた場合、一度作成した結果を見直すと役割分担が崩れるため、最初の結果をそのまま使う。"}
-      - {label: G, role: M3, body: "指定された資料の検索結果を返すだけの検索ツールも、独立したAIエージェントの1つとして数える。"}
-      - {label: H, role: M3, body: "1つのAIの処理を条件によって複数に分岐させると、分岐の数だけAIエージェントが存在する。"}
-      - {label: I, role: M3, body: "1つのAIの回答を「調査」「計画」「案内」の3つの欄に分けると、3つのAIエージェントが仕事を分担したことになる。"}
+      - {label: A, role: correct, body: "複数のAIエージェントに異なる役割を与え、1つの目的に向けて仕事を分担できる。"}
+      - {label: B, role: correct, body: "調査を担当するAIが得た情報を別のAIに渡し、次の担当がその情報を使って作業を進められる。"}
+      - {label: C, role: correct, body: "担当ごとの結果を組み合わせ、必要に応じて内容の食い違いを確認・修正し、最終的な回答にまとめられる。"}
+      - {label: D, role: M1, body: "各AIエージェントに役割名を付けると、必要な情報が担当間に自動的に伝わる。"}
+      - {label: E, role: M1, body: "各担当の回答を順番に並べると、回答同士の食い違いも自動的に解消され、1つの最終回答になる。"}
+      - {label: F, role: M1, body: "複数の担当に仕事を分けた後で結果を修正すると、役割分担の意味が失われるため、最初に出した結果をそのまま採用する。"}
+      - {label: G, role: M3, body: "指定された資料を探して結果を返す検索ツールも、情報を調べる役割があるため、独立したAIエージェントの1つである。"}
+      - {label: H, role: M3, body: "1つのAIが条件に応じて処理を複数に分けると、その分岐先がそれぞれ別のAIエージェントになる。"}
+      - {label: I, role: M3, body: "1つのAIに「調査」「計画」「案内」の3つの見出しで回答させると、3つのAIエージェントが仕事を分担したことになる。"}
       - {label: J, role: unknown, body: わからない。}
     teaching_targets:
       D: {corrected_claim: "役割名だけでは情報共有は起きず、担当間で結果を渡す仕組みが必要である。", mechanism_explanation: "各エージェントの入出力を調整するオーケストレーションが、必要な情報を次の担当へ渡す。", contrast_example: "担当に名前を付けることと、調査結果を次の担当の入力に含めることは別である。"}
@@ -80,17 +80,17 @@ terms:
     label: 記憶プロセス
     description: Memory、MemGPT、Reflectionによる情報保存・取得と振り返り。
     component_terms: [Memory, MemGPT, Reflection, 外部記憶, 振り返り]
-    question: AIエージェントのMemory・MemGPT・Reflectionの仕組みについて、適切な説明を3つ選びなさい。
+    question: AIエージェントのMemory・MemGPT・Reflectionについて、正しい説明を3つ選びなさい。
     options:
-      - {label: A, role: correct, body: "Memoryは、会話などから得た情報を保存し、必要なときに取り出して後の処理に利用する仕組みである。"}
-      - {label: B, role: correct, body: "MemGPTは、OSの仮想メモリの考え方を参考に、LLMの入力に含める情報と外部に保存する情報を管理する仕組みである。"}
-      - {label: C, role: correct, body: "Reflectionは、過去の出力やその評価を振り返り、得られた気づきを次の試行の改善に利用する処理である。"}
-      - {label: D, role: M1, body: "会話をまたぐ記憶機能を設けなくても、LLMが一度回答に使った利用者の希望は、次の新しい会話にも自動的に引き継がれる。"}
-      - {label: E, role: M1, body: "MemGPTでは、外部に保存した情報も毎回まとめてLLMの入力に含めることで、過去の情報を参照する。"}
-      - {label: F, role: M1, body: "Reflectionでは、振り返りの文章を一度作成すると、保存や再参照の仕組みがなくても次の会話でその内容が使われる。"}
-      - {label: G, role: M3, body: "利用者ごとの希望を取り出すMemoryは、モデルが学習で獲得した重みそのものと同じ仕組みである。"}
-      - {label: H, role: M3, body: "Reflectionは、モデルの学習済みの重みを更新する追加訓練の一種である。"}
-      - {label: I, role: M3, body: "MemGPTは、外部記憶の管理方法ではなく、モデル自体のコンテキストウィンドウを広げるネットワーク構造の一種である。"}
+      - {label: A, role: correct, body: "Memoryは、会話などで得た情報を保存し、後の応答で必要な情報を取り出して使う仕組みである。"}
+      - {label: B, role: correct, body: "MemGPTは、OSの仮想メモリの考え方を参考に、LLMの入力内に置く情報と外部に保存する情報を管理する仕組みである。"}
+      - {label: C, role: correct, body: "Reflectionは、過去の出力やその評価を振り返って改善点をまとめ、次の試行に生かす処理である。"}
+      - {label: D, role: M1, body: "LLMは一度回答に使った利用者の希望を自分で覚えるため、別の日に新しい会話が始まってもその希望を利用できる。"}
+      - {label: E, role: M1, body: "MemGPTは、過去の情報を使うために、外部に保存された記録を毎回すべてLLMの入力に読み込む仕組みである。"}
+      - {label: F, role: M1, body: "Reflectionで振り返りの文章を一度作ると、それだけで改善点が新しい会話にも引き継がれる。"}
+      - {label: G, role: M3, body: "Memoryは、利用者ごとの希望をモデルの学習済みの重みに保存し、必要なときに取り出す仕組みである。"}
+      - {label: H, role: M3, body: "Reflectionは、振り返りを行うたびにモデルの重みを更新する追加訓練の仕組みである。"}
+      - {label: I, role: M3, body: "MemGPTは、モデルのネットワーク構造を変更して、一度に入力できる情報量（コンテキストウィンドウ）を広げる技術である。"}
       - {label: J, role: unknown, body: わからない。}
     teaching_targets:
       D: {corrected_claim: "新しい会話へ希望を引き継ぐには、情報を保存し、必要時に取得する記憶機構が必要である。", mechanism_explanation: "別セッションでは会話履歴が自動で共有されないため、利用者に紐づく記録を読み出して入力へ反映する。", contrast_example: "同じ会話の履歴を参照することと、会話を越えて保存・取得することは異なる。"}
