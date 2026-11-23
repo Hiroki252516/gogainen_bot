@@ -602,9 +602,13 @@ def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation(
     payload["prior_term_exposure"]["transformer"] = "cannot_recall"
     with pytest.raises(ValidationError):
         FourTopicPresurveyPayloadV11.model_validate(payload)
-    historical_v10 = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V10, keys)
-    historical_v10["prior_term_understanding"]["transformer"] = "neither"
-    assert FourTopicPresurveyPayloadV10.model_validate(historical_v10)
+    previous = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V10, keys)
+    previous["prior_term_understanding"]["transformer"] = "neither"
+    assert FourTopicPresurveyPayloadV10.model_validate(previous).survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V10
+    with pytest.raises(ValidationError):
+        FourTopicPresurveyPayloadV11.model_validate(previous)
+    current = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V12, keys)
+    assert FourTopicPresurveyPayloadV12.model_validate(current).survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V12
 
 
 def test_four_topic_presurvey_v11_keeps_30_day_frequency_schema():
@@ -640,14 +644,6 @@ def test_four_topic_presurvey_v12_rejects_legacy_frequency_key():
     payload["general_ratings"]["ai_usage_frequency_30d"] = "9_20_days"
     with pytest.raises(ValidationError):
         FourTopicPresurveyPayloadV12.model_validate(payload)
-
-    previous = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V10, keys)
-    previous["prior_term_understanding"]["transformer"] = "neither"
-    assert FourTopicPresurveyPayloadV10.model_validate(previous).survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V10
-    with pytest.raises(ValidationError):
-        FourTopicPresurveyPayloadV11.model_validate(previous)
-    current = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V12, keys)
-    assert FourTopicPresurveyPayloadV12.model_validate(current).survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V12
 
 
 def test_presurvey_v4_schemas_remain_historical_and_are_not_current():
@@ -1015,6 +1011,13 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
         presurvey_context["survey_version"],
         [item["key"] for item in presurvey_context["term_items"]],
     )
+    legacy_four_topic_baseline = baseline_questionnaire(
+        FOUR_TOPIC_PRESURVEY_VERSION_V11,
+        [item["key"] for item in presurvey_context["term_items"]],
+    )
+    assert client.post(f"/api/participants/{pid}/presurvey", json=legacy_four_topic_baseline).status_code == 422
+    legacy_standard_baseline = baseline_questionnaire()
+    assert client.post(f"/api/participants/{pid}/presurvey", json=legacy_standard_baseline).status_code == 422
     legacy_baseline = json.loads(json.dumps(baseline))
     legacy_baseline["survey_version"] = "presurvey-baseline-v4"
     assert client.post(f"/api/participants/{pid}/presurvey", json=legacy_baseline).status_code == 422
