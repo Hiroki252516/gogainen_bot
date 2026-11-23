@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Hiroki252516/gogainen_bot/compare/v0.3.0...v0.4.0) (2026-11-23)
+
+
+### Features
+
+* PRレビュー修正 ([8b90870](https://github.com/Hiroki252516/gogainen_bot/commit/8b9087062e28840f9337ee63c6ff0ae688f0883d))
+
 ## [0.3.0](https://github.com/Hiroki252516/gogainen_bot/compare/v0.2.0...v0.3.0) (2026-11-22)
 
 
