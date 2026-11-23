@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -795,7 +796,10 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
 def submit_presurvey(db: Session, participant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     participant = get_participant(db, participant_id, for_update=True)
     assert_current_experiment(participant)
-    responses = validate_presurvey_payload(payload, participant.test_content_mode)
+    try:
+        responses = validate_presurvey_payload(payload, participant.test_content_mode)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail="事前アンケートの内容が現在の参加者設定と一致しません。") from exc
     survey_version = responses["survey_version"]
     existing = (
         db.query(ParticipantSurvey)

@@ -1,5 +1,13 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-23 origin/main統合（仕様版63）
+
+- 仕様版63 / `experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1`へ統合し、新規参加者の事前アンケートをv12とした。v12は週0〜7日のAI利用頻度と理解度の回答目安を含む。仕様版62では同じv11名で異なるpayloadを使った2 protocolがあったため、両履歴は変換せず保持する。
+- Backend全テスト1,760件成功。仕様版・protocol読取専用、旧v11 schema、現行v12検証を含む関連292件も成功。テストDBは`/tmp/gogainen-origin-merge-full`以下の隔離SQLiteを使用した。
+- Frontend `npm test`と`npm run build`成功。`git -c core.whitespace=cr-at-eol diff --check`成功。
+- ブラウザ実操作テストは未実行。テストはMock AIを使用し、実AI接続は行っていない。
+- 理解度尺度の妥当性、質問回答目安の影響、研究上の承認は未確認。
+
 ## 2026-11-22 事前理解度の回答目安を4段階に更新（仕様版62・feature/issue-378）
 
 - 新規参加者を仕様版62 / `experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1`へ固定し、事前アンケートを`presurvey-four-topic-baseline-v11`とする。現行の4用語版固定、問題バンクv4、事後アンケートv5は維持する。仕様版61以下の回答・snapshotは変更しない。
@@ -1078,3 +1086,11 @@ git -c core.whitespace=cr-at-eol diff --check
 - 両群とも再テスト1のM3誤答から結果確認を経て再学習へ進み、事前/学習2回/再テストの4件履歴、自由な章立て、教授契約の検証を確認。
 - 生成各試行のmaterial_structureと保存TutorTurnの章立て・節数・証拠配置を照合。証拠不一致は再生成で修正し、検証を緩めなかった。最初の確認でモデル混雑エラーも記録したが、同モデルで再試行し、Mockへ切り替えていない。
 - desktop/mobileの表示と横方向のはみ出しがないことを確認。検証環境はbackend/.local/dynamic-sections-validation.dbを使用し、従来の試用DB・別仕様リポジトリ・履歴資料を変更していない。
+
+## 2026-11-22 週あたりAI利用頻度（仕様版62）
+
+- 事前アンケートを`presurvey-four-topic-baseline-v11`へ更新し、「普段の生活では、1週間あたり何日程度AIを利用しますか。」と0〜7日の8択を表示する。保存値は`general_ratings.ai_usage_days_per_week`の整数0〜7で、v10以前の回答形式・JSONを変換しない。
+- 送信APIのrequest schemaにv11を追加し、v11のpayloadが参加者登録から保存まで通ること、旧30日キーが新規schemaで受け付けられないことを確認した。v11 schema関連14件、4用語版の仕様版62出題・満点遷移関連6件が成功。
+- Backend全件の実行は1755件成功・1件失敗。失敗は登録APIが返さない`test_content_mode`を応答に期待するテスト不整合だったため、保存済みParticipant snapshotをDBで検証するよう修正し、そのテストを単独で再実行して成功した。修正後の全Backend suiteは再実行していない。
+- Frontend `npm test`と`npm run build`は成功。`git -c core.whitespace=cr-at-eol diff --check`も成功した。
+- Playwrightブラウザ検証は未実施。専用スクリプトが要求する隔離backend、`PRESURVEY_VERIFY_ISOLATED=1`、Playwright module pathが用意されていないため、稼働中の研究環境には接続していない。

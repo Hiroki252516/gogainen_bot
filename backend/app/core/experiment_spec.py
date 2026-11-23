@@ -7,8 +7,8 @@ from fastapi import HTTPException
 from app.core.question_sets import LEARNING_CONTENT_VERSION
 
 
-CURRENT_EXPERIMENT_SPEC_VERSION = 62
-CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1"
+CURRENT_EXPERIMENT_SPEC_VERSION = 63
+CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1"
 MAX_POST_PRETEST_TESTS = 2
 MAX_LEARNING_CONFIRMATION_ATTEMPTS = 1
 

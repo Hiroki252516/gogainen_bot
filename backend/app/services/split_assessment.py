@@ -11,6 +11,7 @@ from functools import lru_cache
 import yaml
 from fastapi import HTTPException
 
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION
 from app.core.question_sets import ASSESSMENT_BANK_VERSIONS, STANDARD
 from app.seed.content_loader import four_topic_terms, teaching_target_for_option
 from app.seed.import_split_assessment_draft import validate
@@ -160,7 +161,11 @@ def require_confirmation_spec(practice: Any) -> dict:
 
 def uses_split(participant: Any) -> bool:
     version = getattr(participant, "experiment_spec_version", None)
-    return isinstance(version, int) and not isinstance(version, bool) and 27 <= version <= 62
+    return (
+        isinstance(version, int)
+        and not isinstance(version, bool)
+        and 27 <= version <= CURRENT_EXPERIMENT_SPEC_VERSION
+    )
 
 
 @lru_cache

@@ -86,7 +86,7 @@ try {
         assert.equal(await page.getByRole("group", { name: `${term}の基本的な仕組みを、どの程度理解していますか。`, exact: true }).count(), 0);
       }
     }
-    await page.getByRole("group", { name: "直近30日間のうち、AIを利用した日は何日ありましたか。", exact: true }).getByRole("button", { name: "0日", exact: true }).click();
+    await page.getByRole("group", { name: "普段の生活では、1週間あたり何日程度AIを利用しますか。", exact: true }).getByRole("button", { name: "0日", exact: true }).click();
     for (const label of proficiencyItems) {
       await page.getByRole("group", { name: label, exact: true }).locator('[data-rating-value="3"]').click();
     }
