@@ -1,8 +1,12 @@
 # 現行問題バンクと履歴
 
-## 現行条件（仕様版61・2026-11-19）
+## 現行条件（仕様版62・2026-11-22）
 
-仕様版61の新規参加者は`four_topic_fundamentals`に固定し、`split-actions-four-topic-v4`を使う。`split-actions-v5`（現行版）と`split-actions-basic-v1`（基礎理解版）は過去Participantの履歴復元用に保持する。4用語版v4ではTransformerのDをM1誤答肢へ更新し、LLM学習段階の用語を「インストラクションチューニング」とし、問題文・選択肢・提案群の教材生成用情報も合わせる。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。v1は仕様版49以下、v2は仕様版50の対応protocolと仕様版51/52のissue338系protocol、v3は仕様版51〜56の復元用に保持し、別のconstruct keyで各バンクをseedする。現行仕様版61ではv4を使う。詳細は[51](51_four_topic_foundation_mode.md)。
+仕様版62でも新規参加者は`four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v4`を使う。問題本文・選択肢・出題数は変更しない。事前アンケート版のみ`presurvey-four-topic-baseline-v11`へ更新し、AI利用頻度を週あたり0〜7日の整数で取得する。
+
+## 仕様版61の採用時条件（履歴）
+
+仕様版61の新規参加者は`four_topic_fundamentals`に固定し、`split-actions-four-topic-v4`を使う。`split-actions-v5`（現行版）と`split-actions-basic-v1`（基礎理解版）は過去Participantの履歴復元用に保持する。4用語版v4ではTransformerのDをM1誤答肢へ更新し、LLM学習段階の用語を「インストラクションチューニング」とし、問題文・選択肢・提案群の教材生成用情報も合わせる。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。v1は仕様版49以下、v2は仕様版50の対応protocolと仕様版51/52のissue338系protocol、v3は仕様版51〜56の復元用に保持し、別のconstruct keyで各バンクをseedする。現行仕様版62ではv4を使う。詳細は[51](51_four_topic_foundation_mode.md)。
 
 ## 仕様版48の条件（履歴）
 

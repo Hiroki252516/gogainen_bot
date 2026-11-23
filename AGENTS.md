@@ -1,8 +1,12 @@
 # Repository Instructions for Codex
 
-## 仕様版61の現行条件（2026-11-19）
+## 仕様版62の現行条件（2026-11-22）
 
-新規参加者は仕様版61 / experiment-plan-2026-11-19-presurvey-guidance-example-v1で登録し、four_topic_fundamentalsに固定する。問題バンクはsplit-actions-four-topic-v4、事前アンケートはpresurvey-four-topic-baseline-v10、事後アンケートはposttest-5point-v5を使う。事前アンケートでは、経験「ある」の用語について基本的な仕組みの理解度を5段階で尋ね、質問の下に回答の目安を表示する。経験質問の開始文は「実験を始める前に、」、第三選択肢は「判断できない」とし、4番目の用語表示は「事後学習」とする。AI自己評価の具体例は3項目すべてに表示し、3項目目の例は「AIが答えた営業時間を、お店の公式サイトで確認する。」とする。回答キー・尺度・保存payloadは維持する。数値評価は整数1〜5のみで、数字を上・文言を下に表示する。事後の教材難易度・量は教材評価の最後に間隔を置いて配置する。仕様版60以下の記録は読み取り専用とし、保存済み回答・snapshotを変更しない。例外として仕様版52の2 protocolには参加者記録を変えず評価サマリーのみ追加できる。仕様版51以下・未対応protocolは再計算対象外とする。尺度・妥当性・研究上の承認は未確認。詳細はdocs/49、51、52、12、14を参照する。
+新規参加者は仕様版62 / `experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v11`、事後アンケートは`posttest-5point-v5`を使う。AI利用頻度は「普段の生活では、1週間あたり何日程度AIを利用しますか。」と尋ね、0〜7日の整数を`ai_usage_days_per_week`に保存する。30日区分の回答形式と`ai_usage_frequency_30d`はv10以前の履歴として保持し、既存回答を変換しない。用語経験・理解度、理解度の回答目安、AI自己評価3項目の設問文・例、事後評価、テスト・進行・集計条件は仕様版61から維持する。同意文書は`consent-2026-11-22-weekly-ai-use-frequency-v1`。仕様版61以下の記録は読み取り専用とし、保存済み回答・snapshotを変更しない。例外として仕様版52の2 protocolには参加者記録を変えず評価サマリーのみ追加できる。仕様版51以下・未対応protocolは再計算対象外とする。尺度・妥当性・研究上の承認は未確認。詳細はdocs/49、51、52、12、14を参照する。
+
+## 仕様版61の履歴条件（2026-11-19）
+
+仕様版61 / `experiment-plan-2026-11-19-presurvey-guidance-example-v1`では、事前アンケートに`presurvey-four-topic-baseline-v10`を使い、直近30日のAI利用日数を`ai_usage_frequency_30d`に保存した。仕様版62では週あたりの日数を別キー・別版として導入し、仕様版61以下を読み取り専用とする。
 
 ## 仕様版60の履歴条件（2026-11-19）
 
@@ -47,27 +51,27 @@
 
 ## 仕様版39の履歴条件（2026-11-06）
 
-当時は教材内解説を新規参加者に固定し、仕様版38以下を閲覧専用とした。現行仕様版61では仕様版60以下を閲覧専用とする。
+当時は教材内解説を新規参加者に固定し、仕様版38以下を閲覧専用とした。現行仕様版62では仕様版61以下を閲覧専用とする。
 
 ## 仕様版37の履歴条件（2026-11-04）
 
-当時のコードは仕様版37 / `experiment-plan-2026-11-04-presurvey-baseline-v2`。仕様版38〜60を経て現行仕様版61となり、現行では仕様版60以下は閲覧専用。
+当時のコードは仕様版37 / `experiment-plan-2026-11-04-presurvey-baseline-v2`。仕様版38〜61を経て現行仕様版62となり、現行では仕様版61以下は閲覧専用。
 
 ## 仕様版36の履歴条件（2026-11-04）
 
-この番号には`experiment-plan-2026-11-04-presurvey-baseline-v1`と`experiment-plan-2026-11-04-rag-glossary-v1`の別protocol記録がある。どちらも閲覧専用で保持し、問題バンクv5で結果を復元する。辞書v4によるRAG注釈は現行仕様版61でも維持する。
+この番号には`experiment-plan-2026-11-04-presurvey-baseline-v1`と`experiment-plan-2026-11-04-rag-glossary-v1`の別protocol記録がある。どちらも閲覧専用で保持し、問題バンクv5で結果を復元する。辞書v4によるRAG注釈は現行仕様版62でも維持する。
 
 ## 仕様版35の履歴条件（2026-11-03）
 
-仕様版35当時は通常版`split-actions-v5`と学習内容v15を使用した。全27問はPR #260（507ea4a）適用後の本文で、各問は正解1・M1二つ・M3二つ・unknown一つの6択。設問1・2だけを出題・採点し、設問3は保持する。設問1のみ出題設定、ペア答え合わせ、教材用語解説モードは登録時に固定する。教材内解説モードでは当時の辞書v3を意味参照としてAIへ渡し、逐語転載せず文脈に合わせて言い換える。仕様版35の結果はv5で復元する。現行仕様版61では辞書v4、教材内解説、目標800文字、統制群の共通prompt、およびモード別の固定テスト設定を維持する。仕様版36〜60を含む旧protocolは閲覧専用である。詳細は[事前アンケート](docs/49_presurvey_baseline.md)、[教材モード](docs/41_learning_glossary_material_mode.md)、[文字数条件](docs/42_learning_glossary_material_length.md)、[AI指示](docs/10_ai_prompt_contracts.md)、[RAG注釈](docs/49_rag_glossary.md)、[辞書](docs/24_learning_glossary.md)、[テスト履歴](docs/44_pretest_content_revision.md)〜[docs/48](docs/48_first_question_only.md)を参照する。受入検証と実験開始承認は別に扱う。
+仕様版35当時は通常版`split-actions-v5`と学習内容v15を使用した。全27問はPR #260（507ea4a）適用後の本文で、各問は正解1・M1二つ・M3二つ・unknown一つの6択。設問1・2だけを出題・採点し、設問3は保持する。設問1のみ出題設定、ペア答え合わせ、教材用語解説モードは登録時に固定する。教材内解説モードでは当時の辞書v3を意味参照としてAIへ渡し、逐語転載せず文脈に合わせて言い換える。仕様版35の結果はv5で復元する。現行仕様版62では辞書v4、教材内解説、目標800文字、統制群の共通prompt、およびモード別の固定テスト設定を維持する。仕様版36〜61を含む旧protocolは閲覧専用である。詳細は[事前アンケート](docs/49_presurvey_baseline.md)、[教材モード](docs/41_learning_glossary_material_mode.md)、[文字数条件](docs/42_learning_glossary_material_length.md)、[AI指示](docs/10_ai_prompt_contracts.md)、[RAG注釈](docs/49_rag_glossary.md)、[辞書](docs/24_learning_glossary.md)、[テスト履歴](docs/44_pretest_content_revision.md)〜[docs/48](docs/48_first_question_only.md)を参照する。受入検証と実験開始承認は別に扱う。
 
 ## 設問1のみ出題する設定（導入時の履歴）
 
-仕様版35で管理設定として導入し、仕様版40で設定UI/APIを廃止した。現行仕様版61の新規参加者は4用語版の各用語1問（計4問）に固定する。`application`・`basic_understanding`の計3問条件は既存参加者の記録復元用に保持する。保存済み回答と結果復元は変更しない。詳細は[docs/48](docs/48_first_question_only.md)・[docs/50](docs/50_basic_understanding_question_mode.md)・[docs/51](docs/51_four_topic_foundation_mode.md)。
+仕様版35で管理設定として導入し、仕様版40で設定UI/APIを廃止した。現行仕様版62の新規参加者は4用語版の各用語1問（計4問）に固定する。`application`・`basic_understanding`の計3問条件は既存参加者の記録復元用に保持する。保存済み回答と結果復元は変更しない。詳細は[docs/48](docs/48_first_question_only.md)・[docs/50](docs/50_basic_understanding_question_mode.md)・[docs/51](docs/51_four_topic_foundation_mode.md)。
 
 ## 仕様版28の答え合わせ（履歴）
 
-通常版のPRETEST・RETEST・内部final_testで、用語ごとの設問1・2を保存後に同じテスト画面内で本人の選択内容と正誤を示し、続行で次の用語へ進む。答え合わせ中はページ/URL遷移せず、正答・解説・内部分類を表示しない。これは仕様版28の採用時記録である。現行仕様版61の新規参加者は4用語版の各用語1問を出題し、回答後に設問ごとに確認する。`application`・`basic_understanding`の設問1のみ条件は既存記録の復元用に保持する。必要な全設問が採点済みで全問正解なら結果表示snapshotに応じて全体結果確認後または直接surveyへ進み、学習・後続テストを省略する。未達時は従来の経路を維持する。受入条件、API・snapshot・条件は[docs/40](docs/40_question_pair_answer_review.md)を参照する。
+通常版のPRETEST・RETEST・内部final_testで、用語ごとの設問1・2を保存後に同じテスト画面内で本人の選択内容と正誤を示し、続行で次の用語へ進む。答え合わせ中はページ/URL遷移せず、正答・解説・内部分類を表示しない。これは仕様版28の採用時記録である。現行仕様版62の新規参加者は4用語版の各用語1問を出題し、回答後に設問ごとに確認する。`application`・`basic_understanding`の設問1のみ条件は既存記録の復元用に保持する。必要な全設問が採点済みで全問正解なら結果表示snapshotに応じて全体結果確認後または直接surveyへ進み、学習・後続テストを省略する。未達時は従来の経路を維持する。受入条件、API・snapshot・条件は[docs/40](docs/40_question_pair_answer_review.md)を参照する。
 
 ## 仕様版27の採用記録
 
@@ -76,9 +80,9 @@
 ## 用語注釈の不変条件
 
 - 現行の共通固定辞書はlearning-glossary-v4の17語で、RAG（検索拡張生成）も注釈対象にする。v1〜v3は履歴として不変で保持する。AI、事前学習、ファインチューニング、プロンプトエンジニアリング、データベース、マルチエージェント、タスク、記憶プロセスの8語を注釈から除外する。長い除外語の一部からプロンプト・エージェントを抽出せず、独立して登場した場合は補足する。確認問題自体と結果確認画面は対象外。辞書・保存・移行はdocs/24・docs/49_rag_glossary.mdを参照する。
-- 注釈は表示用JSONとして保存し、現行の教材内解説では辞書を両群共通の意味参照として教材本文の生成入力に渡す。現行仕様版61は本文800文字程度を目安にするだけで、文字数による合否判定・再試行は行わない。旧版のモード別文字数契約とログは履歴として保持する。教授契約版v7は維持する。再表示はsnapshotを使い、旧教材へ後付けしない。登録語しか扱わず、AIで未知語を補わない。
+- 注釈は表示用JSONとして保存し、現行の教材内解説では辞書を両群共通の意味参照として教材本文の生成入力に渡す。現行仕様版62は本文800文字程度を目安にするだけで、文字数による合否判定・再試行は行わない。旧版のモード別文字数契約とログは履歴として保持する。教授契約版v7は維持する。再表示はsnapshotを使い、旧教材へ後付けしない。登録語しか扱わず、AIで未知語を補わない。
 
-このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は61 / `experiment-plan-2026-11-19-presurvey-guidance-example-v1`です。仕様版60以下は閲覧専用です。2026-11-12の同意・登録方式の更新は、研究倫理上の承認を意味しません。受入検証と実験開始承認は別に扱ってください。
+このリポジトリは、卒業研究用AIチューターのアプリケーションリポジトリです。目標仕様は実験計画書に合わせたdocs、現行挙動はコード・YAML・入力型・テストを基準にしてください。実行時の現行実験仕様版は62 / `experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1`です。仕様版61以下は閲覧専用です。2026-11-12の同意・登録方式の更新は、研究倫理上の承認を意味しません。受入検証と実験開始承認は別に扱ってください。
 
 ## Authoritative Documents
 
@@ -105,7 +109,7 @@
 - 学習確認は1用語・1セッションあたり最大3回答。必要な全設問を採点して全問正解した事前・再テスト1/2・内部`final_test`の後はsurveyへ進み、学習・後続テストを省略する。未達時は誤答用語を学習する。再テスト2後は正誤にかかわらずsurveyへ進む。採点済みバッチは1回とし、全問未回答は採点しない。
 - 新規Participantのテストは`four_topic_fundamentals`=`split-actions-four-topic-v4`に固定し、4用語各1問・計4問を出題する。A〜Cは正解、D〜FはM1、G〜IはM3、Jはunknownの10択。内部`final_test` APIは履歴復元用に保持し、新規通常経路では使わない。既存Participantは保存済みモード・protocol・snapshotに基づいて当時の問題を復元し、版付きconstruct_keyで本文・選択肢を上書きしない。学習確認は直前テストの保存snapshotを利用する。通常の学習v15と教材条件は維持する。
 - 選択肢配置は管理画面のDB保存設定で切り替える。既定値は`debug_fixed`で、新規参加者だけに適用する。実験データ収集前に`randomized`へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
-- 現行コードでは新規だけ仕様版61 / experiment-plan-2026-11-19-presurvey-guidance-example-v1を保存し、retest_cycles_completed=0で開始する。新規はpresurvey-four-topic-baseline-v10、posttest-5point-v5、問題バンクv4を使用する。理解度は経験ありの場合だけ回答目安付きで5段階とし、neitherを保存する。経験質問は「実験を始める前に、」、第三選択肢は「判断できない」、4番目の用語表示は「事後学習」とする。AI自己評価3項目すべてに例を付け、3項目目はAIの営業時間情報を公式サイトで確認する例とする。保存payload、回答キー、尺度は維持する。事前AI自己評価と事後評価は整数1〜5のみで、「評価できない」を設けない。数値尺度は数字上・文言下のカードとし、教材難易度・量は教材カテゴリ末尾に間隔を置く。仕様版60以下の保存回答は変換せず、既存snapshotを保全する。仕様版52の対応2 protocolは参加者記録を変えずH1〜H4評価サマリーのみ追加可能。仕様版51以下・未対応protocolは再計算対象外。
+- 現行コードでは新規だけ仕様版62 / `experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1`を保存し、retest_cycles_completed=0で開始する。新規は`presurvey-four-topic-baseline-v11`、`posttest-5point-v5`、問題バンクv4を使用する。週あたりAI利用日数は整数0〜7で`ai_usage_days_per_week`に保存し、旧30日回答形式は変換しない。理解度は経験ありの場合だけ回答目安付きで5段階とし、`neither`を保存する。経験質問は「実験を始める前に、」、第三選択肢は「判断できない」、4番目の用語表示は「事後学習」とする。AI自己評価3項目すべてに例を付け、3項目目はAIの営業時間情報を公式サイトで確認する例とする。事前AI自己評価と事後評価は整数1〜5のみで、「評価できない」を設けない。数値尺度は数字上・文言下のカードとし、教材難易度・量は教材カテゴリ末尾に間隔を置く。仕様版61以下の保存回答は変換せず、既存snapshotを保全する。仕様版52の対応2 protocolは参加者記録を変えずH1〜H4評価サマリーのみ追加可能。仕様版51以下・未対応protocolは再計算対象外。
 - 両群の教材の小見出し・数・順序・まとめ方はAIが決める。冒頭の##用語名と非空の###セクションだけを要求し、実験群の必須教授内容・transfer_checkは本文内証拠で検証する。固定見出しから証拠文を自動補正しない。
 - 教材内のtransfer_checkは維持するが、独立した追加テスト・旧支援量・自由回答処理を戻さない。
 - 過去のapplication/basic_understandingの対象は`llm_knowledge`、`multi_agent`、`memory_process`。現行新規4用語版の対象は`transformer`、`llm_training_stages`、`multi_agent_four_topic`、`memory_process_four_topic`。

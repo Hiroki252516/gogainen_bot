@@ -9,7 +9,7 @@ const { chromium } = await import(process.env.PRESURVEY_PLAYWRIGHT_MODULE);
 const browser = await chromium.launch({ headless: true });
 const mode = {
   mode: "four_topic_fundamentals",
-  version: "presurvey-four-topic-baseline-v10",
+  version: "presurvey-four-topic-baseline-v11",
   keys: ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"],
 };
 const experienceChoices = [
@@ -117,12 +117,12 @@ try {
         }
       }
 
-      const frequencyLabel = "直近30日間のうち、AIを利用した日は何日ありましたか。";
+      const frequencyLabel = "普段の生活では、1週間あたり何日程度AIを利用しますか。";
       const frequency = page.getByRole("group", { name: frequencyLabel, exact: true });
-      for (const label of ["0日", "1〜3日", "4〜8日", "9〜20日", "21〜30日"]) {
+      for (const label of ["0日", "1日", "2日", "3日", "4日", "5日", "6日", "7日"]) {
         assert.equal(await frequency.getByRole("button", { name: label, exact: true }).count(), 1);
       }
-      await frequency.getByRole("button", { name: "9〜20日", exact: true }).click();
+      await frequency.getByRole("button", { name: "4日", exact: true }).click();
       const proficiency = {};
       assert.equal(await page.getByText("次の各項目について、最も当てはまるものを選んでください。", { exact: true }).count(), 1);
       for (const [key, label, example] of proficiencyItems) {
@@ -186,7 +186,7 @@ try {
       assert.deepEqual(requestBody.prior_term_exposure, exposure);
       assert.deepEqual(requestBody.prior_term_understanding, understanding);
       assert.deepEqual(requestBody.general_ratings, {
-        ai_usage_frequency_30d: "9_20_days",
+        ai_usage_days_per_week: 4,
         ai_proficiency: proficiency,
       });
       await page.waitForURL(new URL("/pretest", base).href);
@@ -199,6 +199,7 @@ try {
       assert.equal(surveys[0].survey_version, mode.version);
       assert.deepEqual(surveys[0].responses.prior_term_exposure, exposure);
       assert.deepEqual(surveys[0].responses.prior_term_understanding, understanding);
+      assert.equal(surveys[0].responses.general_ratings.ai_usage_days_per_week, 4);
       const csv = await request(context, `/api/admin/participants/${pid}/logs.csv`);
       const xlsx = await request(context, `/api/admin/participants/${pid}/logs.xlsx`);
       assert(csv.ok() && xlsx.ok());

@@ -51,7 +51,7 @@ def test_registration_validates_but_does_not_persist_research_code():
     with SessionLocal() as db:
         participant = db.get(Participant, participant_id)
         assert participant.test_content_mode == "four_topic_fundamentals"
-        assert participant.consent_document_version == "consent-2026-11-16-participant-use-code-wording-v1"
+        assert participant.consent_document_version == "consent-2026-11-22-weekly-ai-use-frequency-v1"
         record = db.query(IdempotencyRecord).filter_by(idempotency_key=key).one()
         assert research_code not in record.request_hash
         assert research_code not in json.dumps(record.response_json)

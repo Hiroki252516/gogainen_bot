@@ -35,7 +35,7 @@ async function prepareFixture(request, fixture) {
     prior_term_exposure: Object.fromEntries(termKeys.map((key) => [key, "not_experienced"])),
     prior_term_understanding: Object.fromEntries(termKeys.map((key) => [key, null])),
     general_ratings: {
-      ai_usage_frequency_30d: "4_8_days",
+      ai_usage_days_per_week: 4,
       ai_proficiency: { goal_aligned_output: 3, revise_instructions: 4, verify_with_sources: 3 },
     },
   };

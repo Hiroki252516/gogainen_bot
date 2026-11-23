@@ -11,7 +11,7 @@ from sqlalchemy.engine import make_url
 
 from app.core.config import get_settings
 
-CONSENT_DOCUMENT_VERSION = "consent-2026-11-16-participant-use-code-wording-v1"
+CONSENT_DOCUMENT_VERSION = "consent-2026-11-22-weekly-ai-use-frequency-v1"
 
 
 def validate_research_code(value: str) -> str:

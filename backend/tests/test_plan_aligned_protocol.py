@@ -35,6 +35,7 @@ from app.services.research_protocol import (
     FOUR_TOPIC_PRESURVEY_VERSION_V8,
     FOUR_TOPIC_PRESURVEY_VERSION_V9,
     FOUR_TOPIC_PRESURVEY_VERSION_V10,
+    FOUR_TOPIC_PRESURVEY_VERSION_V11,
     FOUR_TOPIC_PRESURVEY_V2_TERM_ITEMS,
     FOUR_TOPIC_PRESURVEY_V3_TERM_ITEMS,
     MATERIAL_RATING_KEYS,
@@ -46,6 +47,7 @@ from app.services.research_protocol import (
     FourTopicPresurveyPayloadV8,
     FourTopicPresurveyPayloadV9,
     FourTopicPresurveyPayloadV10,
+    FourTopicPresurveyPayloadV11,
     FourTopicPresurveyPayloadV4,
     FourTopicPresurveyPayloadV2,
     FourTopicPresurveyPayloadV3,
@@ -130,7 +132,13 @@ def baseline_questionnaire(survey_version=PRESURVEY_VERSION, term_keys=None):
         FOUR_TOPIC_PRESURVEY_VERSION_V8,
         FOUR_TOPIC_PRESURVEY_VERSION_V9,
         FOUR_TOPIC_PRESURVEY_VERSION_V10,
+        FOUR_TOPIC_PRESURVEY_VERSION_V11,
     }
+    usage_response = (
+        {"ai_usage_days_per_week": 4}
+        if survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V11
+        else {"ai_usage_frequency_30d": "9_20_days"}
+    )
     exposure = {
         key: ("experienced" if index % 3 == 0 else "not_experienced" if index % 3 == 1 else "cannot_recall")
         for index, key in enumerate(term_keys)
@@ -143,7 +151,7 @@ def baseline_questionnaire(survey_version=PRESURVEY_VERSION, term_keys=None):
             for key in term_keys
         },
         "general_ratings": {
-            "ai_usage_frequency_30d": "9_20_days",
+            **usage_response,
             "ai_proficiency": {
                 "goal_aligned_output": 4,
                 "revise_instructions": 2,
@@ -573,12 +581,12 @@ def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation(
     assert FOUR_TOPIC_PRESURVEY_TERM_ITEMS[3]["label"] == "事後学習"
     payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION, keys)
     payload["prior_term_understanding"]["transformer"] = "neither"
-    parsed = FourTopicPresurveyPayloadV10.model_validate(payload)
+    parsed = FourTopicPresurveyPayloadV11.model_validate(payload)
     assert set(parsed.prior_term_exposure.model_dump()) == set(keys)
     invalid = json.loads(json.dumps(payload))
     invalid["prior_term_understanding"]["transformer"] = "slightly"
     with pytest.raises(ValidationError):
-        FourTopicPresurveyPayloadV10.model_validate(invalid)
+        FourTopicPresurveyPayloadV11.model_validate(invalid)
     for version, schema in (
         (FOUR_TOPIC_PRESURVEY_VERSION_V8, FourTopicPresurveyPayloadV8),
         (FOUR_TOPIC_PRESURVEY_VERSION_V9, FourTopicPresurveyPayloadV9),
@@ -590,7 +598,38 @@ def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation(
     assert FourTopicPresurveyPayloadV7.model_validate(legacy)
     payload["prior_term_exposure"]["transformer"] = "cannot_recall"
     with pytest.raises(ValidationError):
-        FourTopicPresurveyPayloadV10.model_validate(payload)
+        FourTopicPresurveyPayloadV11.model_validate(payload)
+
+    historical_v10 = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V10, keys)
+    historical_v10["prior_term_understanding"]["transformer"] = "neither"
+    assert FourTopicPresurveyPayloadV10.model_validate(historical_v10)
+
+
+@pytest.mark.parametrize("days", range(8))
+def test_four_topic_presurvey_v11_accepts_weekly_ai_usage_days(days):
+    keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
+    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V11, keys)
+    payload["general_ratings"]["ai_usage_days_per_week"] = days
+    parsed = FourTopicPresurveyPayloadV11.model_validate(payload)
+    assert parsed.general_ratings.ai_usage_days_per_week == days
+
+
+@pytest.mark.parametrize("days", [-1, 8, 2.5, True, "3"])
+def test_four_topic_presurvey_v11_rejects_invalid_weekly_ai_usage_days(days):
+    keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
+    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V11, keys)
+    payload["general_ratings"]["ai_usage_days_per_week"] = days
+    with pytest.raises(ValidationError):
+        FourTopicPresurveyPayloadV11.model_validate(payload)
+
+
+def test_four_topic_presurvey_v11_rejects_legacy_frequency_key():
+    keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
+    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V11, keys)
+    payload["general_ratings"].pop("ai_usage_days_per_week")
+    payload["general_ratings"]["ai_usage_frequency_30d"] = "9_20_days"
+    with pytest.raises(ValidationError):
+        FourTopicPresurveyPayloadV11.model_validate(payload)
 
 
 def test_presurvey_v4_schemas_remain_historical_and_are_not_current():
@@ -947,10 +986,12 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     assert created.status_code == 200
     pid = created.json()["participant_id"]
     assert created.json()["current_step"] == "presurvey"
+    with SessionLocal() as db:
+        assert db.get(Participant, pid).test_content_mode == "four_topic_fundamentals"
     assert client.get(f"/api/participants/{pid}/current-step").json()["next_url"] == "/presurvey"
     assert client.get(f"/api/experiment/{pid}/pretest").status_code == 409
     presurvey_context = client.get(f"/api/participants/{pid}/presurvey").json()
-    assert presurvey_context["survey_version"] in {PRESURVEY_VERSION, FOUR_TOPIC_PRESURVEY_VERSION}
+    assert presurvey_context["survey_version"] == FOUR_TOPIC_PRESURVEY_VERSION
     assert len(presurvey_context["term_items"]) == 6
     baseline = baseline_questionnaire(
         presurvey_context["survey_version"],
@@ -962,13 +1003,17 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     invalid_baseline = json.loads(json.dumps(baseline))
     invalid_baseline["prior_term_exposure"].pop("rag" if "rag" in invalid_baseline["prior_term_exposure"] else "transformer")
     assert client.post(f"/api/participants/{pid}/presurvey", json=invalid_baseline).status_code == 422
+    legacy_frequency = json.loads(json.dumps(baseline))
+    legacy_frequency["general_ratings"].pop("ai_usage_days_per_week")
+    legacy_frequency["general_ratings"]["ai_usage_frequency_30d"] = "9_20_days"
+    assert client.post(f"/api/participants/{pid}/presurvey", json=legacy_frequency).status_code == 422
     saved_baseline = client.post(f"/api/participants/{pid}/presurvey", json=baseline, headers={"Idempotency-Key": f"presurvey-{pid}"})
     assert saved_baseline.status_code == 200, saved_baseline.text
     assert saved_baseline.json()["next_url"] == "/pretest"
     assert client.get(f"/api/participants/{pid}/current-step").json()["step"] == "pretest"
     assert client.post(f"/api/participants/{pid}/presurvey", json=baseline, headers={"Idempotency-Key": f"presurvey-{pid}"}).json() == saved_baseline.json()
     changed_baseline = json.loads(json.dumps(baseline))
-    changed_baseline["general_ratings"]["ai_usage_frequency_30d"] = "21_30_days"
+    changed_baseline["general_ratings"]["ai_usage_days_per_week"] = 5
     assert client.post(f"/api/participants/{pid}/presurvey", json=changed_baseline).status_code == 409
     assert client.get(f"/api/participants/{pid}/survey").json()["material_ratings_required"] is False
     assert client.get(f"/api/participants/{pid}/survey").json()["survey_version"] == "posttest-5point-v5"
@@ -994,6 +1039,8 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     assert baseline_log["responses"]["prior_term_exposure"] == baseline["prior_term_exposure"]
     assert baseline_log["responses"]["prior_term_understanding"] == baseline["prior_term_understanding"]
     assert baseline_log["responses"]["general_ratings"] == baseline["general_ratings"]
+    assert baseline_log["responses"]["general_ratings"]["ai_usage_days_per_week"] == 4
+    assert "ai_usage_frequency_30d" not in baseline_log["responses"]["general_ratings"]
     assert posttest_log["responses"]["material_rating_status"] == "not_applicable_not_viewed"
     assert posttest_log["ai_experience_level"] is None
     assert posttest_log["free_comment"] is None
@@ -1008,6 +1055,7 @@ def test_new_api_survey_context_persistence_and_legacy_protection():
     assert [row["survey_version"] for row in exported_surveys] == [presurvey_context["survey_version"], SURVEY_VERSION]
     assert exported_surveys[0]["responses"]["prior_term_exposure"] == baseline["prior_term_exposure"]
     assert exported_surveys[0]["responses"]["prior_term_understanding"] == baseline["prior_term_understanding"]
+    assert exported_surveys[0]["responses"]["general_ratings"]["ai_usage_days_per_week"] == 4
     assert "prior_term_exposure" not in exported_surveys[1]["responses"]
     assert exported_surveys[1]["free_comment"] is None
     for name in ("hypothesis_metrics", "hypothesis_group_summary"):

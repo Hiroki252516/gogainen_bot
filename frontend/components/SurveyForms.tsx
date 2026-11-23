@@ -25,12 +25,15 @@ const UNDERSTANDING_OPTIONS = [
   ["moderately", "ある程度理解している"],
   ["well", "よく理解している"],
 ] as const;
-const FREQUENCY_OPTIONS = [
-  ["0_days", "0日"],
-  ["1_3_days", "1〜3日"],
-  ["4_8_days", "4〜8日"],
-  ["9_20_days", "9〜20日"],
-  ["21_30_days", "21〜30日"],
+const WEEKLY_AI_USAGE_OPTIONS = [
+  ["0", "0日"],
+  ["1", "1日"],
+  ["2", "2日"],
+  ["3", "3日"],
+  ["4", "4日"],
+  ["5", "5日"],
+  ["6", "6日"],
+  ["7", "7日"],
 ] as const;
 const PROFICIENCY_OPTIONS = [
   ["1", "全くできない"],
@@ -87,7 +90,7 @@ export type PresurveySubmission = {
   prior_term_exposure: Record<string, ExposureValue>;
   prior_term_understanding: Record<string, UnderstandingValue | null>;
   general_ratings: {
-    ai_usage_frequency_30d: (typeof FREQUENCY_OPTIONS)[number][0];
+    ai_usage_days_per_week: number;
     ai_proficiency: Record<string, number>;
   };
 };
@@ -138,7 +141,7 @@ export function PresurveyQuestionnaire({
         `exposure:${key}`,
         ...(values[`exposure:${key}`] === "experienced" ? [`understanding:${key}`] : []),
       ]),
-      "ai_usage_frequency_30d",
+      "ai_usage_days_per_week",
       ...PROFICIENCY_ITEMS.map(([key]) => `proficiency:${key}`),
     ];
     if (requiredKeys.some((key) => !values[key])) {
@@ -157,7 +160,7 @@ export function PresurveyQuestionnaire({
           values[`exposure:${key}`] === "experienced" ? values[`understanding:${key}`] : null,
         ])) as Record<string, UnderstandingValue | null>,
         general_ratings: {
-          ai_usage_frequency_30d: values.ai_usage_frequency_30d as PresurveySubmission["general_ratings"]["ai_usage_frequency_30d"],
+          ai_usage_days_per_week: Number(values.ai_usage_days_per_week),
           ai_proficiency: Object.fromEntries(PROFICIENCY_ITEMS.map(([key]) => [key, Number(values[`proficiency:${key}`])])) as Record<string, number>,
         },
       };
@@ -212,11 +215,11 @@ export function PresurveyQuestionnaire({
     })}
     <h2 className="survey-section-heading">AIの利用経験</h2>
     <ChoiceButtons
-      label="直近30日間のうち、AIを利用した日は何日ありましたか。"
-      value={values.ai_usage_frequency_30d || ""}
-      options={FREQUENCY_OPTIONS}
+      label="普段の生活では、1週間あたり何日程度AIを利用しますか。"
+      value={values.ai_usage_days_per_week || ""}
+      options={WEEKLY_AI_USAGE_OPTIONS}
       disabled={submitting}
-      onChange={(value) => update("ai_usage_frequency_30d", value)}
+      onChange={(value) => update("ai_usage_days_per_week", value)}
     />
     <h2 className="survey-section-heading">AIの使い方についての自己評価</h2>
     <p className="muted">次の各項目について、最も当てはまるものを選んでください。</p>
