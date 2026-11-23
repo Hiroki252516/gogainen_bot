@@ -96,8 +96,8 @@ def test_new_registration_uses_fixed_defaults_and_pretest_perfect_exits_to_surve
             assert participant.show_retest_results is False
             assert participant.show_question_reviews is True
             assert participant.first_question_only is True
-            assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 62
-            assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1"
+            assert participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION == 63
+            assert participant.protocol_id == CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1"
             rows = experiment.question_payloads(db, participant_id, "pretest")
             assert len(rows) == 4
             assert {row["term_slug"] for row in rows} == {

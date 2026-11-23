@@ -89,6 +89,7 @@ from app.services import identity_mapping
 from app.services.research_protocol import (
     FourTopicPresurveyPayloadV10,
     FourTopicPresurveyPayloadV11,
+    FourTopicPresurveyPayloadV12,
     PresurveyPayload,
     SurveyPayload,
     presurvey_context,
@@ -622,7 +623,7 @@ def api_presurvey_context(participant_id: str, db: Session = Depends(get_db)) ->
 @app.post("/api/participants/{participant_id}/presurvey")
 async def api_submit_presurvey(
     participant_id: str,
-    payload: PresurveyPayload | FourTopicPresurveyPayloadV10 | FourTopicPresurveyPayloadV11,
+    payload: PresurveyPayload | FourTopicPresurveyPayloadV10 | FourTopicPresurveyPayloadV11 | FourTopicPresurveyPayloadV12,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:

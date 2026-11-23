@@ -29,7 +29,7 @@ def complete_presurvey(client, pid):
         "prior_term_exposure": dict.fromkeys(term_keys, "not_experienced"),
         "prior_term_understanding": dict.fromkeys(term_keys, None),
         "general_ratings": {
-            **({"ai_usage_days_per_week": 0} if context["survey_version"] == "presurvey-four-topic-baseline-v11" else {"ai_usage_frequency_30d": "0_days"}),
+            **({"ai_usage_days_per_week": 0} if context["survey_version"] == "presurvey-four-topic-baseline-v12" else {"ai_usage_frequency_30d": "0_days"}),
             "ai_proficiency": {
                 "goal_aligned_output": 3,
                 "revise_instructions": 3,

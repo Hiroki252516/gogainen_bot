@@ -1,8 +1,12 @@
 # 実験の概要と現行仕様
 
-## 仕様版62の現行コード（2026-11-22）
+## 仕様版63の現行コード（2026-11-23）
 
-AI利用頻度は「普段の生活では、1週間あたり何日程度AIを利用しますか。」と尋ね、「0日」〜「7日」の8択を必須回答とする。保存キーは`general_ratings.ai_usage_days_per_week`で、値は厳密な整数0〜7。事前アンケートはv11、同意文書は`consent-2026-11-22-weekly-ai-use-frequency-v1`とする。仕様版61の30日区分回答は変更せず履歴として保持する。
+新規参加者は4用語版に固定し、`presurvey-four-topic-baseline-v12`と`posttest-5point-v5`を使う。AI利用日数は「普段の生活では、1週間あたり何日程度AIを利用しますか。」と尋ね、「0日」〜「7日」の8択を必須回答とする。保存キーは`general_ratings.ai_usage_days_per_week`で、値は厳密な整数0〜7。理解度の回答目安は「知らない」=1、「一部知っている」=2、「知っている」=4、「説明できる」=5。現行同意文書は`consent-2026-11-22-weekly-ai-use-frequency-v1`。仕様版62以下の保存回答は変更せず履歴として保持する。
+
+## 仕様版62の履歴条件（2026-11-22）
+
+仕様版62ではブランチ上に二つのprotocolがあった。`experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1`は理解度の回答目安を更新し、30日区分のAI利用日数を維持した。`experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1`はAI利用日数を週0〜7日の整数に変更した。統合後の仕様版63は両方を含む。どちらの仕様版62記録も参加者操作では再開せず、保存済みデータを変更しない。
 
 ## 仕様版61の履歴条件（2026-11-19）
 
@@ -54,9 +58,9 @@ AI利用頻度は「普段の生活では、1週間あたり何日程度AIを利
 
 通常版のPRETEST・RETEST・内部final_testで、設問1・2の両方を保存した後に同じテスト画面内で選択内容と正誤を示し、続行で次の用語へ進む。設定・API・保存・受入条件は[40](40_question_pair_answer_review.md)を参照する。
 
-当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。設問ペア確認の履歴契約は現行仕様版62でも復元互換性のため保持するが、新規参加者は選択した問題モードの対象設問を出題し、各問の回答後に確認する。過去に存在した設定UI/APIは廃止した。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
+当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。設問ペア確認の履歴契約は現行仕様版63でも復元互換性のため保持するが、新規参加者は選択した問題モードの対象設問を出題し、各問の回答後に確認する。過去に存在した設定UI/APIは廃止した。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
 
-## 仕様版26で採用した共通の用語注釈辞書（現行仕様版62でも維持）
+## 仕様版26で採用した共通の用語注釈辞書（現行仕様版63でも維持）
 
 以下は採用時点の記録を含む。現在の保存版・read-only境界は冒頭の仕様版61の記述を正とする。仕様版52の対応2 protocolに限る評価サマリー追加は参加者操作を伴わない例外として扱う。
 
@@ -91,4 +95,4 @@ A〜C正解等の配置はデバッグ用であり収集に使わない。管理
 
 ## 旧問題版設定の廃止（履歴）
 
-以前のeasy-mode整理で旧`question_set_mode`列・APIを廃止した。これは現在の問題モードを廃止したものではない。仕様版43〜57では新規Participantの`test_content_mode`を登録時に固定していた。現行仕様版62では新規参加者を`four_topic_fundamentals`に固定し、既存記録は保存済みprotocol・snapshotに従って復元する。登録済みParticipantの問題・回答・snapshotを切り替えない。版付きconstruct keyと保存snapshotから当時の問題を復元し、異なるバンクへフォールバックしない。研究DB内の旧条件に関するデータを削除する操作は、専用手順・明示設定を確認して扱い、起動や通常seedから削除しない。
+以前のeasy-mode整理で旧`question_set_mode`列・APIを廃止した。これは現在の問題モードを廃止したものではない。仕様版43〜57では新規Participantの`test_content_mode`を登録時に固定していた。現行仕様版63では新規参加者を`four_topic_fundamentals`に固定し、既存記録は保存済みprotocol・snapshotに従って復元する。登録済みParticipantの問題・回答・snapshotを切り替えない。版付きconstruct keyと保存snapshotから当時の問題を復元し、異なるバンクへフォールバックしない。研究DB内の旧条件に関するデータを削除する操作は、専用手順・明示設定を確認して扱い、起動や通常seedから削除しない。

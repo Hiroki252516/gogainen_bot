@@ -1,10 +1,12 @@
 # 実験フロー
 
-## 仕様版62の現行フロー（2026-11-22）
+## 仕様版63の現行フロー（2026-11-23）
 
-新規参加者は仕様版62 / `experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1`を使い、4用語版に固定する。事前アンケートv11では「普段の生活では、1週間あたり何日程度AIを利用しますか。」と尋ね、0〜7日の8択を整数`ai_usage_days_per_week`として保存する。仕様版61以下の保存回答は記録時の版のまま保全し、30日区分回答を変換しない。ほかの現行フロー・進行条件は[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)を参照する。
+新規参加者は仕様版63 / `experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1`を使い、4用語版に固定する。事前アンケートv12では週あたり0〜7日のAI利用日数を`ai_usage_days_per_week`に整数で保存し、理解度の回答目安に1・2・4・5を示す。仕様版62以下の保存回答・snapshotは変更せず、30日区分回答を変換しない。ほかの現行フロー・進行条件は[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)を参照する。
 
-## 仕様版61の履歴フロー（2026-11-19）
+## 仕様版62の履歴フロー（2026-11-22）
+
+仕様版62には、理解度の回答目安を変更するprotocolと週単位のAI利用日数へ変更するprotocolが別々に存在した。どちらもv11を使っていたため、統合後の新規参加者にはv12を適用し、仕様版62以下は閲覧専用とする。
 
 新規参加者は仕様版61 / `experiment-plan-2026-11-19-presurvey-guidance-example-v1`を使い、問題モードは`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v10`、事後アンケートは`posttest-5point-v5`を使う。4用語版の下位用語は「インストラクションチューニング」、human_feedback_post_trainingの表示名は「事後学習」。経験質問は「実験を始める前に、」で始まり、第三選択肢を「判断できない」とする。理解度質問は「{用語}の基本的な仕組みを、どの程度理解していますか。」とする。事前アンケートの理解度3番を「どちらとも言えない」／`neither`とし、AI自己評価は「評価できない」を外した1〜5とする。事後はシステム評価1項目・教材評価6項目を整数1〜5のみで取得する。数値尺度は数字を上、文言を下に表示し、教材難易度・教材量は「教材について」の末尾に間隔を置いて並べる。見聞き経験とAI利用日数はカテゴリ選択のままにする。AI利用日数の質問文とAI利用自己評価3項目の設問文、3項目すべてに具体例を表示し、3項目目は「AIが答えた営業時間を、お店の公式サイトで確認する。」とする条件を維持する。仕様版60以下の保存済み回答は変換しない。全設問を採点し全問正解した事前・再テスト1/2・内部`final_test`後は、結果表示snapshotに応じて確認後または直接事後アンケートへ進み、学習・後続テストを省略する。未達時の経路は維持する。教材量の質問文は「教材の量はどの程度でしたか」。現行指標は`four-hypotheses-v1`のH1〜H4。仕様版60以下の記録は保存時の内容を保全し参加者操作で変更しない。仕様版52の対応2 protocolに限り、回答・進行・既存サマリーを変えず評価サマリーを追加できる。仕様版51以下・未対応protocolは再計算対象外。参加者用コードは登録時に検証後破棄し、学籍番号を取得せず、対応表はアプリ外で管理する。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
 

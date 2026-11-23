@@ -14,7 +14,7 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend
 from app.ai.mock_backend import MockAIBackend
 from app.ai.misconception_taxonomy import TAXONOMY_VERSION, taxonomy_for_prompt
 from app.ai.teaching_contract import PROMPT_CONTRACT_VERSION
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, can_resume
 from app.db import session as database
 from app.db.session import SessionLocal, _ensure_protocol_id_capacity
 from app.main import app
@@ -33,9 +33,28 @@ client = TestClient(app)
 def test_current_protocol_id_fits_participant_schema():
     protocol_column = Participant.__table__.c.protocol_id
 
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 62
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1"
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 63
+    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1"
     assert protocol_column.type.length >= len(CURRENT_PROTOCOL_ID)
+
+
+@pytest.mark.parametrize(
+    ("version", "protocol_id"),
+    [
+        (62, "experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1"),
+        (62, "experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1"),
+        (61, "experiment-plan-2026-11-19-presurvey-guidance-example-v1"),
+    ],
+)
+def test_previous_current_spec_is_read_only_after_protocol_update(version, protocol_id):
+    previous = Participant(experiment_spec_version=version, protocol_id=protocol_id)
+    current = Participant(
+        experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
+        protocol_id=CURRENT_PROTOCOL_ID,
+    )
+
+    assert can_resume(previous) is False
+    assert can_resume(current) is True
 
 
 def test_postgres_protocol_id_width_migration_is_idempotent():

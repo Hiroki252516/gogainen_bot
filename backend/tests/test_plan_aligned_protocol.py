@@ -36,6 +36,7 @@ from app.services.research_protocol import (
     FOUR_TOPIC_PRESURVEY_VERSION_V9,
     FOUR_TOPIC_PRESURVEY_VERSION_V10,
     FOUR_TOPIC_PRESURVEY_VERSION_V11,
+    FOUR_TOPIC_PRESURVEY_VERSION_V12,
     FOUR_TOPIC_PRESURVEY_V2_TERM_ITEMS,
     FOUR_TOPIC_PRESURVEY_V3_TERM_ITEMS,
     MATERIAL_RATING_KEYS,
@@ -48,6 +49,7 @@ from app.services.research_protocol import (
     FourTopicPresurveyPayloadV9,
     FourTopicPresurveyPayloadV10,
     FourTopicPresurveyPayloadV11,
+    FourTopicPresurveyPayloadV12,
     FourTopicPresurveyPayloadV4,
     FourTopicPresurveyPayloadV2,
     FourTopicPresurveyPayloadV3,
@@ -133,10 +135,11 @@ def baseline_questionnaire(survey_version=PRESURVEY_VERSION, term_keys=None):
         FOUR_TOPIC_PRESURVEY_VERSION_V9,
         FOUR_TOPIC_PRESURVEY_VERSION_V10,
         FOUR_TOPIC_PRESURVEY_VERSION_V11,
+        FOUR_TOPIC_PRESURVEY_VERSION_V12,
     }
     usage_response = (
         {"ai_usage_days_per_week": 4}
-        if survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V11
+        if survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V12
         else {"ai_usage_frequency_30d": "9_20_days"}
     )
     exposure = {
@@ -579,7 +582,7 @@ def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation(
     assert keys == ["transformer", "pretraining", "instruction_tuning", "human_feedback_post_training", "multi_agent", "memory_process"]
     assert FOUR_TOPIC_PRESURVEY_TERM_ITEMS[2]["label"] == "インストラクションチューニング"
     assert FOUR_TOPIC_PRESURVEY_TERM_ITEMS[3]["label"] == "事後学習"
-    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION, keys)
+    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V11, keys)
     payload["prior_term_understanding"]["transformer"] = "neither"
     parsed = FourTopicPresurveyPayloadV11.model_validate(payload)
     assert set(parsed.prior_term_exposure.model_dump()) == set(keys)
@@ -599,37 +602,52 @@ def test_four_topic_presurvey_has_six_separate_terms_and_same_branch_validation(
     payload["prior_term_exposure"]["transformer"] = "cannot_recall"
     with pytest.raises(ValidationError):
         FourTopicPresurveyPayloadV11.model_validate(payload)
-
     historical_v10 = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V10, keys)
     historical_v10["prior_term_understanding"]["transformer"] = "neither"
     assert FourTopicPresurveyPayloadV10.model_validate(historical_v10)
 
 
-@pytest.mark.parametrize("days", range(8))
-def test_four_topic_presurvey_v11_accepts_weekly_ai_usage_days(days):
+def test_four_topic_presurvey_v11_keeps_30_day_frequency_schema():
     keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
-    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V11, keys)
+    historical = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V11, keys)
+    parsed = FourTopicPresurveyPayloadV11.model_validate(historical)
+    assert parsed.survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V11
+    assert parsed.general_ratings.ai_usage_frequency_30d == "9_20_days"
+
+
+@pytest.mark.parametrize("days", range(8))
+def test_four_topic_presurvey_v12_accepts_weekly_ai_usage_days(days):
+    keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
+    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V12, keys)
     payload["general_ratings"]["ai_usage_days_per_week"] = days
-    parsed = FourTopicPresurveyPayloadV11.model_validate(payload)
+    parsed = FourTopicPresurveyPayloadV12.model_validate(payload)
     assert parsed.general_ratings.ai_usage_days_per_week == days
 
 
 @pytest.mark.parametrize("days", [-1, 8, 2.5, True, "3"])
-def test_four_topic_presurvey_v11_rejects_invalid_weekly_ai_usage_days(days):
+def test_four_topic_presurvey_v12_rejects_invalid_weekly_ai_usage_days(days):
     keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
-    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V11, keys)
+    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V12, keys)
     payload["general_ratings"]["ai_usage_days_per_week"] = days
     with pytest.raises(ValidationError):
-        FourTopicPresurveyPayloadV11.model_validate(payload)
+        FourTopicPresurveyPayloadV12.model_validate(payload)
 
 
-def test_four_topic_presurvey_v11_rejects_legacy_frequency_key():
+def test_four_topic_presurvey_v12_rejects_legacy_frequency_key():
     keys = [item["key"] for item in FOUR_TOPIC_PRESURVEY_TERM_ITEMS]
-    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V11, keys)
+    payload = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V12, keys)
     payload["general_ratings"].pop("ai_usage_days_per_week")
     payload["general_ratings"]["ai_usage_frequency_30d"] = "9_20_days"
     with pytest.raises(ValidationError):
-        FourTopicPresurveyPayloadV11.model_validate(payload)
+        FourTopicPresurveyPayloadV12.model_validate(payload)
+
+    previous = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V10, keys)
+    previous["prior_term_understanding"]["transformer"] = "neither"
+    assert FourTopicPresurveyPayloadV10.model_validate(previous).survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V10
+    with pytest.raises(ValidationError):
+        FourTopicPresurveyPayloadV11.model_validate(previous)
+    current = baseline_questionnaire(FOUR_TOPIC_PRESURVEY_VERSION_V12, keys)
+    assert FourTopicPresurveyPayloadV12.model_validate(current).survey_version == FOUR_TOPIC_PRESURVEY_VERSION_V12
 
 
 def test_presurvey_v4_schemas_remain_historical_and_are_not_current():
