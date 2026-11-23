@@ -1,5 +1,14 @@
 # 受け入れ条件と検証記録
 
+## 2026-11-23 参加者コードを主識別子として保存（仕様版63・fix/issue-379）
+
+- 新規登録で半角数字1〜64桁の`participant_code`を受け付け、`Participant.id`と`display_code`に保存する。関連データは同じ識別子を参照し、既存参加者のID・回答・snapshotは変更しない。APIの`participant_id`フィールドと既存route名は互換維持し、新規参加者では参加者コードと同じ値を返す。
+- PostgreSQL起動時の再実行可能なschema更新で、参加者ID、display_code、参加者参照列、冪等記録・監査イベント・参加者セッションの識別列を64文字へ拡張する。旧外部SQLite対応表は通常登録で読み書きせず、参加者削除時の互換cleanupだけを維持する。
+- 登録時に24時間有効の署名付きHttpOnly/SameSite=Strict Cookieを発行する。DBにはtokenのSHA-256 hashだけを保存し、32文字未満または未設定の`PARTICIPANT_SESSION_SECRET`では参加者を作成せず503を返す。現行参加者APIはCookieを要求し、既存仕様版62以下は読み取り専用とする。参加者コードをAI入力へ含めず、学籍番号は取得しない。
+- 管理画面、参加者ログ、CSV/XLSXとファイル名の表示を参加者コードに揃えた。Frontend smoke testは、旧`research_code`・「被験者ログ」の期待値を現行登録payload・画面ラベルへ更新した。
+- Backend全テストは隔離SQLiteで`1745 passed`（警告5件）。PostgreSQL列幅更新は実DBに接続せずモックで検証し、identity mapping関連テストは`18 passed`。Frontend `npm test`は全7スクリプト成功、`npm run build`はTypeScript検査を含め成功した。初回Frontend実行で見つかった旧テスト期待値とpayload型の不一致は修正後に再検証した。
+- 手動ブラウザ確認と実PostgreSQLへの移行実行は未実施。研究DB、既存3000番環境、実AIは使用せず、コミット・pushは行っていない。参加者コードの保存方法を含む同意文書の変更は、指導教員・研究倫理上の承認を意味しない。
+
 ## 2026-11-22 事前理解度の回答目安を4段階に更新（仕様版62・feature/issue-378）
 
 - 新規参加者を仕様版62 / `experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1`へ固定し、事前アンケートを`presurvey-four-topic-baseline-v11`とする。現行の4用語版固定、問題バンクv4、事後アンケートv5は維持する。仕様版61以下の回答・snapshotは変更しない。

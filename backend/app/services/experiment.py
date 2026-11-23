@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ai.codex_app_server_backend import CodexAppServerError
@@ -113,6 +114,7 @@ from app.models import (
     IdempotencyRecord,
     LearnerState,
     Participant,
+    ParticipantSession,
     ParticipantSurvey,
     Question,
     QuestionDisplayOrder,
@@ -755,7 +757,12 @@ def next_display_code(db: Session) -> str:
     return f"P{max_number + 1:03d}"
 
 
-def create_participant(db: Session, assignment_code: str | None, consent_checked: bool) -> Participant:
+def create_participant(
+    db: Session,
+    assignment_code: str | None,
+    consent_checked: bool,
+    participant_code: str,
+) -> Participant:
     from app.services.identity_mapping import CONSENT_DOCUMENT_VERSION
     if not consent_checked:
         raise HTTPException(status_code=400, detail="同意書への同意が必要です。")
@@ -764,8 +771,11 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
     group_condition = group_condition_by_code.get(normalized_code)
     if group_condition is None:
         raise HTTPException(status_code=400, detail="管理者から伝えられた群割当用コード（AまたはB）が必要です。")
+    if db.get(Participant, participant_code) is not None:
+        raise HTTPException(status_code=409, detail="この参加者コードはすでに登録されています。")
     participant = Participant(
-        display_code=next_display_code(db),
+        id=participant_code,
+        display_code=participant_code,
         show_pretest_results=False,
         show_retest_results=False,
         show_question_reviews=True,
@@ -787,7 +797,11 @@ def create_participant(db: Session, assignment_code: str | None, consent_checked
         started_at=now(),
     )
     db.add(participant)
-    _commit(db)
+    try:
+        _commit(db)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="この参加者コードはすでに登録されています。") from exc
     db.refresh(participant)
     return participant
 
@@ -922,6 +936,7 @@ def delete_participant(db: Session, participant_id: str) -> dict[str, Any]:
 
     try:
         delete_by_participant(ParticipantSurvey)
+        deleted_counts[ParticipantSession.__tablename__] = db.query(ParticipantSession).filter_by(participant_id=participant.id).delete(synchronize_session=False)
         delete_by_participant(TermAssignment)
         delete_by_participant(QuestionDisplayOrder)
         delete_by_participant(RecurrenceEvent)
@@ -1785,7 +1800,7 @@ def _record_ai_log(db: Session, log: AICallLog) -> None:
     """Keep AI logs in the owning idempotent transaction when one is active."""
     participant_id = (log.request_payload or {}).get("participant_id")
     if participant_id and db.query(Participant.id).filter_by(id=participant_id).with_for_update().first() is None:
-        raise HTTPException(404, "被験者が見つかりません。")
+        raise HTTPException(404, "参加者が見つかりません。")
     if db.info.get("defer_commits"):
         db.info.setdefault("deferred_ai_logs", []).append(log)
         return
@@ -4073,7 +4088,7 @@ def admin_summary(db: Session) -> dict[str, Any]:
 
 
 EXPORTS = {
-    "participants": (Participant, ["id", "display_code", "group_condition", "assignment_method", "test_content_mode", "show_pretest_results", "show_retest_results", "show_question_reviews", "first_question_only", "learning_material_glossary_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
+    "participants": (Participant, ["id", "participant_code", "display_code", "group_condition", "assignment_method", "test_content_mode", "show_pretest_results", "show_retest_results", "show_question_reviews", "first_question_only", "learning_material_glossary_mode", "test_page_mode", "current_step", "started_at", "completed_at", "completion_reason"]),
     "attempts": (Attempt, ["id", "participant_id", "term_id", "phase", "test_round", "question_id", "legacy_selected_option_id", "selected_option_ids", "legacy_reason_text", "legacy_free_text_answer", "response_time_sec", "test_page_timing_json", "question_shown_at", "answered_at", "question_body_snapshot", "option_order_snapshot", "question_review_acknowledged_at", "is_correct", "score", "diagnosed_status", "misconception_type", "recurrence_flag", "legacy_l0_success", "legacy_requires_manual_review", "created_at"]),
     "learner_states": (LearnerState, ["participant_id", "term_id", "current_status", "primary_misconception", "legacy_scaffolding_level", "teaching_strategy", "stable_correct_count", "recurrence_count", "legacy_l0_success_count", "updated_at"]),
     "tutor_sessions": (TutorSession, ["id", "participant_id", "term_id", "session_index", "group_condition", "started_at", "ended_at", "prefetch_state", "prefetch_source_session_id", "prefetch_requested_at", "prefetch_generating_at", "prefetch_ready_at", "prefetch_consumed_at", "prefetch_failed_at", "prefetch_discarded_at", "prefetch_error_code"]),
@@ -4105,6 +4120,16 @@ def _question_map(db: Session) -> dict[str, Question]:
     return {question.id: question for question in db.query(Question).all()}
 
 
+def _stored_participant_code(participant: Participant | None) -> str | None:
+    if (
+        participant is not None
+        and participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
+        and participant.protocol_id == CURRENT_PROTOCOL_ID
+    ):
+        return participant.id
+    return None
+
+
 def _attempt_log_row(
     attempt: Attempt,
     participants: dict[str, Participant],
@@ -4128,6 +4153,7 @@ def _attempt_log_row(
         "test_timing_unit": "term_page" if participant and effective_test_page_mode(participant) == "per_term" else "per_question",
         **({"legacy_fields": legacy_fields(attempt)} if participant and not can_resume(participant) else {}),
         "participant_id": attempt.participant_id,
+        "participant_code": _stored_participant_code(participant),
         "display_code": participant.display_code if participant else None,
         "legacy_read_only": bool(participant and not can_resume(participant)),
         "group_condition": participant.group_condition if participant else None,
@@ -4166,6 +4192,7 @@ def _turn_log_row(turn: TutorTurn, session: TutorSession, participant: Participa
         **({"legacy_fields": legacy_fields(turn)} if participant and not can_resume(participant) else {}),
         "tutor_session_id": turn.tutor_session_id,
         "participant_id": session.participant_id,
+        "participant_code": _stored_participant_code(participant),
         "display_code": participant.display_code if participant else None,
         "test_content_mode": participant.test_content_mode if participant else None,
         "test_content_mode_label": test_content_mode_label(participant.test_content_mode) if participant else None,
@@ -4312,6 +4339,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
         "participants": [
             {
                 "participant_id": row.id,
+                "participant_code": _stored_participant_code(row),
                 "display_code": row.display_code,
                 "experiment_spec_version": row.experiment_spec_version,
                 "test_page_mode": row.test_page_mode,
@@ -4356,6 +4384,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
             {
                 "id": row.id,
                 "participant_id": row.entity_id,
+                "participant_code": _stored_participant_code(participant_by_id.get(row.entity_id)),
                 "display_code": participant_by_id.get(row.entity_id).display_code if participant_by_id.get(row.entity_id) else None,
                 "group_condition": participant_by_id.get(row.entity_id).group_condition if participant_by_id.get(row.entity_id) else None,
                 "actor": row.actor,
@@ -4370,6 +4399,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
             {
                 "id": row.id,
                 "participant_id": row.participant_id,
+                "participant_code": _stored_participant_code(participant_by_id.get(row.participant_id)),
                 "display_code": participant_by_id.get(row.participant_id).display_code if participant_by_id.get(row.participant_id) else None,
                 "term_slug": terms.get(row.term_id).slug if terms.get(row.term_id) else None,
                 "previous_misconception_type": row.previous_misconception_type,
@@ -4383,6 +4413,7 @@ def admin_logs_overview(db: Session) -> dict[str, Any]:
         "evaluation_summaries": [
             {
                 "participant_id": row.participant_id,
+                "participant_code": _stored_participant_code(participant_by_id.get(row.participant_id)),
                 "display_code": participant_by_id.get(row.participant_id).display_code if participant_by_id.get(row.participant_id) else None,
                 "group_condition": row.group_condition,
                 "pretest_score": row.pretest_score,
@@ -4466,6 +4497,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             "first_question_only": participant.first_question_only,
             "learning_material_glossary_mode": participant.learning_material_glossary_mode,
             "participant_id": participant.id,
+            "participant_code": _stored_participant_code(participant),
             "display_code": participant.display_code,
             "experiment_spec_version": participant.experiment_spec_version,
             "test_page_mode": participant.test_page_mode,
@@ -4563,6 +4595,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             {
                 "id": row.id,
                 "participant_id": row.participant_id,
+                "participant_code": participant.id,
                 "phase": row.phase,
                 "ai_experience_level": row.ai_experience_level,
                 "survey_version": row.survey_version,
@@ -4606,6 +4639,7 @@ LOG_CSV_COLUMNS = [
     "record_type",
     "source_type",
     "participant_id",
+    "participant_code",
     "display_code",
     "test_content_mode",
     "phase",
@@ -4633,6 +4667,7 @@ def _log_csv_rows_from_participant_logs(logs: dict[str, Any]) -> list[dict[str, 
     rows: list[dict[str, Any]] = []
     base = {
         "participant_id": participant["participant_id"],
+        "participant_code": participant.get("participant_code"),
         "display_code": participant["display_code"],
         "test_content_mode": participant.get("test_content_mode"),
     }
@@ -4674,7 +4709,7 @@ def _write_log_csv(path: Path, rows: list[dict[str, Any]], *, encoding: str) -> 
 def export_participant_logs_csv(db: Session, participant_id: str) -> Path:
     logs = participant_logs(db, participant_id)
     participant = logs["participant"]
-    path = Path(get_settings().export_dir) / f"{participant['display_code']}_logs.csv"
+    path = Path(get_settings().export_dir) / f"{participant.get('participant_code') or participant['display_code']}_logs.csv"
     rows = _log_csv_rows_from_participant_logs(logs)
     return _write_log_csv(path, rows, encoding="utf-8")
 
@@ -4682,7 +4717,7 @@ def export_participant_logs_csv(db: Session, participant_id: str) -> Path:
 def export_participant_logs_excel_csv(db: Session, participant_id: str) -> Path:
     logs = participant_logs(db, participant_id)
     participant = logs["participant"]
-    path = Path(get_settings().export_dir) / f"{participant['display_code']}_logs_excel.csv"
+    path = Path(get_settings().export_dir) / f"{participant.get('participant_code') or participant['display_code']}_logs_excel.csv"
     rows = _log_csv_rows_from_participant_logs(logs)
     return _write_log_csv(path, rows, encoding="utf-8-sig")
 
@@ -4690,12 +4725,12 @@ def export_participant_logs_excel_csv(db: Session, participant_id: str) -> Path:
 def export_participant_logs_xlsx(db: Session, participant_id: str) -> Path:
     logs = participant_logs(db, participant_id)
     participant = logs["participant"]
-    path = Path(get_settings().export_dir) / f"{participant['display_code']}_logs.xlsx"
+    path = Path(get_settings().export_dir) / f"{participant.get('participant_code') or participant['display_code']}_logs.xlsx"
     return write_xlsx(
         path,
         columns=LOG_CSV_COLUMNS,
         rows=_log_csv_rows_from_participant_logs(logs),
-        sheet_title="被験者ログ",
+                sheet_title="参加者ログ",
     )
 
 
@@ -4759,7 +4794,11 @@ def export_csv(db: Session, name: str) -> Path:
         writer = csv.DictWriter(f, fieldnames=columns)
         writer.writeheader()
         for row in rows:
-            writer.writerow({col: _csv_value(getattr(row, col)) if isinstance(getattr(row, col), (dict, list)) else getattr(row, col) for col in columns})
+            values = {}
+            for col in columns:
+                value = _stored_participant_code(row) if model is Participant and col == "participant_code" else getattr(row, col)
+                values[col] = _csv_value(value) if isinstance(value, (dict, list)) else value
+            writer.writerow(values)
     db.add(ExportJob(export_name=name, file_path=str(path), status="success", row_count=len(rows)))
     _commit(db)
     return path

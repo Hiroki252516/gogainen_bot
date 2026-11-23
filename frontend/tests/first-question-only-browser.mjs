@@ -125,7 +125,7 @@ try {
   await page.getByRole("heading", { name: "管理画面", exact: true }).waitFor();
   await page.getByRole("tab", { name: logs.participant.group_condition, exact: true }).click();
   const participantRow = page.getByRole("row").filter({ hasText: record.display_code });
-  await participantRow.getByRole("button", { name: "被験者ログを見る", exact: true }).click();
+  await participantRow.getByRole("button", { name: "参加者ログを見る", exact: true }).click();
   const participantNotice = page.locator(".notice").filter({ hasText: record.display_code }).last();
   await participantNotice.waitFor();
   const participantDetail = await participantNotice.innerText();

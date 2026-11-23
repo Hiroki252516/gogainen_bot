@@ -473,7 +473,7 @@ for (const forbiddenText of ["pending_group_condition", "group_condition", "提�
   }
 }
 const consentPage = fs.readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
-for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/presurvey")', "同意して事前アンケートへ", "ConsentDocument", "research_code", "参加者用コードを入力してください（必須）", "アプリ内には保存しません", "timeoutMs: 15000", 'role="alert"', 'inputMode="numeric"', 'pattern="[0-9]*"', 'replace(/[^0-9]/g, "")', '/^[0-9]{1,64}$/']) {
+for (const expectedText of ["研究参加同意書", "assignment_code", "consent_checked: true", 'router.replace("/presurvey")', "同意して事前アンケートへ", "ConsentDocument", "participant_code", "参加者コードを入力してください（必須）", "参加者コードはアプリ内の研究データを結び付ける識別子として保存されます。", "timeoutMs: 15000", 'role="alert"', 'inputMode="numeric"', 'pattern="[0-9]*"', 'replace(/[^0-9]/g, "")', '/^[0-9]{1,64}$/']) {
   if (!consentPage.includes(expectedText)) {
     throw new Error(`consent page missing test-start behavior: ${expectedText}`);
   }
@@ -560,7 +560,7 @@ const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.u
 if (!adminPage.includes("clearParticipantSession") || !adminPage.includes("participantId()")) {
   throw new Error("admin page must clear a deleted participant's browser session");
 }
-for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "新規参加者のテスト問題モード", "4用語版（固定）", "Transformer", "マルチエージェント", "アンケートのデバッグ", "事前アンケートを試す", "事後アンケートを試す", "/admin/survey-preview/presurvey", "/admin/survey-preview/posttest", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "全体ログ Excel (.xlsx)", "被験者ログを見る", "被験者ログCSV UTF-8", "被験者ログ Excel互換CSV", "被験者ログ Excel (.xlsx)", "ギブアップ回数", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/api/admin/logs/overview.xlsx", "/logs.csv", "/logs_excel.csv", "/logs.xlsx"]) {
+for (const expectedText of ["全体ログ", "誤概念推移（群集計）", "eligible_count", "新規参加者のテスト問題モード", "4用語版（固定）", "Transformer", "マルチエージェント", "アンケートのデバッグ", "事前アンケートを試す", "事後アンケートを試す", "/admin/survey-preview/presurvey", "/admin/survey-preview/posttest", "全体ログCSV UTF-8", "全体ログ Excel互換CSV", "全体ログ Excel (.xlsx)", "参加者ログを見る", "参加者ログCSV UTF-8", "参加者ログ Excel互換CSV", "参加者ログ Excel (.xlsx)", "参加者一覧の「参加者ログを見る」", "ギブアップ回数", "参加者を削除", "window.confirm", "/api/admin/participants/", "/api/admin/logs/overview", "/api/admin/logs/overview.csv", "/api/admin/logs/overview_excel.csv", "/api/admin/logs/overview.xlsx", "/logs.csv", "/logs_excel.csv", "/logs.xlsx"]) {
   if (!adminPage.includes(expectedText)) {
     throw new Error(`admin page missing log UI: ${expectedText}`);
   }

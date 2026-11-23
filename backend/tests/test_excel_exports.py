@@ -111,7 +111,7 @@ def test_excel_exports_match_existing_csv_data(isolated):
 
     participant_xlsx = client.get(f"/api/admin/participants/{participant_id}/logs.xlsx")
     participant_csv = client.get(f"/api/admin/participants/{participant_id}/logs.csv")
-    _assert_xlsx_matches_csv(participant_xlsx, participant_csv, "被験者ログ")
+    _assert_xlsx_matches_csv(participant_xlsx, participant_csv, "参加者ログ")
 
     for name, sheet_title in (
         ("hypothesis_metrics", "参加者別"),

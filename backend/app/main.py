@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ConfigDict, SecretStr, Field, StrictBool
+from pydantic import AliasChoices, BaseModel, ConfigDict, SecretStr, Field, StrictBool
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -22,7 +22,14 @@ from app.services import learning_material_glossary_mode
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
 from app.core.admin_auth import require_admin, login as admin_login, logout as admin_logout
-from app.core.experiment_spec import MAX_LEARNING_CONFIRMATION_ATTEMPTS, MAX_POST_PRETEST_TESTS, assert_current_experiment, can_resume
+from app.core.experiment_spec import (
+    CURRENT_EXPERIMENT_SPEC_VERSION,
+    CURRENT_PROTOCOL_ID,
+    MAX_LEARNING_CONFIRMATION_ATTEMPTS,
+    MAX_POST_PRETEST_TESTS,
+    assert_current_experiment,
+    can_resume,
+)
 from app.core.runtime_config import (
     ALLOWED_MODELS,
     ALLOWED_REASONING_EFFORTS,
@@ -86,6 +93,7 @@ from app.services.option_order import current_option_order_mode, save_option_ord
 from app.services.test_content_mode import FOUR_TOPIC_FUNDAMENTALS, mode_label as test_content_mode_label
 from app.services.learning_glossary import load_learning_glossary, public_glossary
 from app.services import identity_mapping
+from app.services.participant_auth import issue_participant_session, require_participant_session, validate_session_configuration
 from app.services.research_protocol import FourTopicPresurveyPayloadV11, PresurveyPayload, SurveyPayload, presurvey_context, survey_context, record_material_view
 from app.services.tutor_prefetch import tutor_prefetch_registry
 from app.services.prefetch import prefetch_coordinator, schedule_prefetch
@@ -193,13 +201,13 @@ async def guard_current_mutation(request: Request, db: Session = Depends(get_db)
     path = request.url.path
     if path.startswith("/api/admin/") or path in {"/api/participants", "/api/seed"}:
         return
-    participant_id = request.path_params.get("participant_id")
-    if path in {"/api/attempts", "/api/tutor-sessions"}:
+    participant_id = request.path_params.get("participant_id") or request.path_params.get("participant_code")
+    if path in {"/api/attempts", "/api/attempts/term-page", "/api/tutor-sessions"}:
         try:
             body = await request.json()
         except ValueError:
             return
-        participant_id = body.get("participant_id") if isinstance(body, dict) else None
+        participant_id = (body.get("participant_code") or body.get("participant_id")) if isinstance(body, dict) else None
     elif request.path_params.get("session_id"):
         session = db.get(TutorSession, request.path_params["session_id"])
         participant_id = session.participant_id if session else None
@@ -211,7 +219,11 @@ async def guard_current_mutation(request: Request, db: Session = Depends(get_db)
         assert_current_experiment(get_participant(db, participant_id))
 
 
-app = FastAPI(title="Learning Log AI Tutor", lifespan=lifespan, dependencies=[Depends(require_admin), Depends(guard_current_mutation)])
+app = FastAPI(
+    title="Learning Log AI Tutor",
+    lifespan=lifespan,
+    dependencies=[Depends(require_admin), Depends(guard_current_mutation), Depends(require_participant_session)],
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin, "http://127.0.0.1:3000"],
@@ -250,12 +262,12 @@ class ParticipantCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     assignment_code: str | None = None
     consent_checked: bool = False
-    research_code: str
+    participant_code: str = Field(validation_alias=AliasChoices("participant_code", "research_code"))
 
 
 class AttemptPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    participant_id: str
+    participant_id: str = Field(validation_alias=AliasChoices("participant_code", "participant_id"))
     question_id: str
     phase: Literal["pretest", "retest", "final_test"] | None = None
     selected_option_ids: list[str]
@@ -272,7 +284,7 @@ class TermPageAnswerPayload(BaseModel):
 
 class TermPageAttemptPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    participant_id: str
+    participant_id: str = Field(validation_alias=AliasChoices("participant_code", "participant_id"))
     phase: Literal["pretest", "retest", "final_test"]
     term_slug: str
     test_round: str
@@ -284,7 +296,7 @@ class TermPageAttemptPayload(BaseModel):
 
 
 class TutorSessionCreate(BaseModel):
-    participant_id: str
+    participant_id: str = Field(validation_alias=AliasChoices("participant_code", "participant_id"))
     term_slug: str
 
 
@@ -364,12 +376,15 @@ async def private_registration_validation(request: Request, exc: RequestValidati
 @app.post("/api/participants")
 async def api_create_participant(
     payload: ParticipantCreate,
+    request: Request,
+    response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
     if not payload.consent_checked:
         raise HTTPException(400, "同意書への同意が必要です。")
-    identity_mapping.validate_research_code(payload.research_code)
+    participant_code = identity_mapping.validate_participant_code(payload.participant_code)
+    validate_session_configuration()
     normalized_key = normalize_idempotency_key(idempotency_key)
     registration_key = normalized_key or str(uuid4())
     if normalized_key and registration_key_was_deleted(db, normalized_key):
@@ -377,26 +392,32 @@ async def api_create_participant(
 
     def operation() -> dict:
         try:
-            participant = create_participant(db, payload.assignment_code, payload.consent_checked)
+            participant = create_participant(
+                db, payload.assignment_code, payload.consent_checked, participant_code
+            )
         except OperationalError as exc:
             _raise_database_unavailable(db, exc)
         return {
             "participant_id": participant.id,
+            "participant_code": participant.id,
             "display_code": participant.display_code,
             "current_step": participant.current_step,
         }
 
     try:
         # Always reserve a transaction, even for clients without a supplied key.
-        return await run_idempotent(
+        result = await run_idempotent(
             db,
             scope="participant:create",
             key=registration_key,
             participant_id=None,
             request_data={"assignment_code": payload.assignment_code, "consent_checked": payload.consent_checked,
+                          "participant_code": participant_code,
                           "consent_document_version": identity_mapping.CONSENT_DOCUMENT_VERSION},
             operation=operation,
         )
+        issue_participant_session(db, response, request, participant_code)
+        return result
     except Exception as exc:
         db.rollback()
         if isinstance(exc, OperationalError):
@@ -880,6 +901,12 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
         "participants": [
             {
                 "participant_id": row.id,
+                "participant_code": (
+                    row.id
+                    if row.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
+                    and row.protocol_id == CURRENT_PROTOCOL_ID
+                    else None
+                ),
                 "show_pretest_results": pretest_display.enabled(row.show_pretest_results),
                 "show_retest_results": pretest_display.enabled(row.show_retest_results),
                 "show_question_reviews": row.show_question_reviews,
@@ -919,7 +946,7 @@ async def api_delete_admin_participant(participant_id: str, db: Session = Depend
                 )
             return deletion_response(previous_deletion)
         if cleanup_state == IDENTITY_MAPPING_CLEANUP_COMPLETE:
-            raise HTTPException(status_code=404, detail="被験者が見つかりません。")
+            raise HTTPException(status_code=404, detail="参加者が見つかりません。")
         raise HTTPException(status_code=409, detail="参加者削除の状態を確認できません。")
 
     assert_current_experiment(get_participant(db, participant_id))

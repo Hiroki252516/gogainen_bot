@@ -33,15 +33,15 @@ client = TestClient(app)
 def test_current_protocol_id_fits_participant_schema():
     protocol_column = Participant.__table__.c.protocol_id
 
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 62
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1"
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 63
+    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-23-participant-code-primary-identifier-v1"
     assert protocol_column.type.length >= len(CURRENT_PROTOCOL_ID)
 
 
 def test_previous_current_spec_is_read_only_after_protocol_update():
     previous = Participant(
-        experiment_spec_version=61,
-        protocol_id="experiment-plan-2026-11-19-presurvey-guidance-example-v1",
+        experiment_spec_version=62,
+        protocol_id="experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1",
     )
     current = Participant(
         experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
@@ -86,13 +86,15 @@ def create_trial(group="A", labels="DEF"):
     result = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()})
     assert result.status_code == 200, result.text
     pid = result.json()["participant_id"]
-    # These cases exercise historical three-topic behavior, not the new registration default.
+    # This helper builds a legacy three-topic flow to verify historical read-only rules.
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.test_content_mode = "application"
         db.commit()
     complete_presurvey(client, pid)
-    questions = client.get(f"/api/experiment/{pid}/pretest").json()["questions"]
+    pretest = client.get(f"/api/experiment/{pid}/pretest")
+    assert pretest.status_code == 200, pretest.text
+    questions = pretest.json()["questions"]
     for question in questions:
         options = {option["label"]: option["option_id"] for option in question["options"]}
         saved = client.post("/api/attempts", json={"participant_id": pid, "question_id": question["question_id"], "selected_option_ids": select_roles(question, [case_roles(labels)[0]])})
@@ -117,7 +119,9 @@ def trial_snapshot(db, pid):
             continue
         else:
             continue
-        output[table.name] = [dict(row) for row in db.execute(text(f"SELECT * FROM {table.name} WHERE {clause} ORDER BY id"), params).mappings()]
+        primary_key = ", ".join(column.name for column in table.primary_key.columns)
+        order_clause = f" ORDER BY {primary_key}" if primary_key else ""
+        output[table.name] = [dict(row) for row in db.execute(text(f"SELECT * FROM {table.name} WHERE {clause}{order_clause}"), params).mappings()]
     return json.dumps(output, default=str, sort_keys=True)
 
 
