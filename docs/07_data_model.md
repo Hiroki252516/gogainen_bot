@@ -1,18 +1,12 @@
 # 現行データと履歴互換
 
-## 仕様版63の現行条件
+## 仕様版64の現行条件
 
-新規参加者の`Participant.id`には入力された半角数字1〜64桁の参加者コードを保存する。`display_code`も新規参加者では同じ値を保持し、旧画面・既存ログとの互換表示に使う。既存参加者のUUID等のID、従来の`P###`表示コード、参加者に紐づく回答・教材・snapshotは変更しない。仕様版63 / `experiment-plan-2026-11-23-participant-code-primary-identifier-v1`以外の既存行は読み取り専用である。
+新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`を使用する。`Participant.id`と`display_code`には入力された半角数字1〜64桁の参加者コードを保存し、既存参加者のID・回答・教材・snapshotは変更しない。参加者コードはAIモデル入力に含めず、学籍番号との対応表はアプリ外で管理する。冪等性fingerprintには要求データのSHA-256のみを保存する。
 
-参加者IDと全FK参照列は最大64文字を扱う。PostgreSQLでは起動時の再実行可能なschema更新で`participants.id`、`display_code`、参加者参照列、`idempotency_records.participant_id`、`audit_events.entity_id`を`VARCHAR(64)`へ拡張する。既存値は書き換えない。SQLiteはVARCHAR長を強制しない。新設`participant_sessions`はtoken hash（SHA-256、PK）、participant_id（FK、CASCADE）、有効期限、作成時刻を保存し、cookie tokenそのものや参加者コードをセッション表のtokenとして保存しない。参加者APIセッションは24時間で失効する。
+参加者IDと参照列は最大64文字、`Participant.protocol_id`は160文字まで保存する。PostgreSQLでは起動時の再実行可能なschema更新で既存列を拡張し、値は書き換えない。新設`participant_sessions`にはcookie tokenそのものではなくSHA-256 hash、participant FK、有効期限を保存する。参加者API sessionは24時間で失効する。
 
-登録の冪等性fingerprintには要求データ（参加者コードを含む）のSHA-256のみを保存し、登録応答JSONにはparticipant_codeを含む。これは参加者コードを参加者データ結合キーとして保存する仕様63の動作である。参加者コードはAIモデル入力に含めない。学籍番号・コード対応表はDBモデルに含めず、研究者がアプリ外で管理する。`IDENTITY_MAPPING_PATH`にある旧SQLiteは通常登録・起動で開かず、明示的参加者削除時の旧データcleanupだけを保持する。
-
-## 仕様版61の履歴条件
-
-`Participant.protocol_id`は160文字まで保存する。PostgreSQLで既存列が短い場合は起動時に160文字へ拡張し、既存のprotocol ID値は変更しない。
-
-仕様版61当時のParticipantは`experiment-plan-2026-11-19-presurvey-guidance-example-v1`を使用した。新規Participantの`test_content_mode`は`four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v4`、事前版`presurvey-four-topic-baseline-v10`、事後版`posttest-5point-v5`を使った。参加者用コードは形式検証後に破棄し、アプリDBへ保存しない方式だった。現行仕様版63の保存方式は直下の「現行の保存契約」を参照する。
+新規Participantは`test_content_mode=four_topic_fundamentals`、問題バンク`split-actions-four-topic-v4`、事前版`presurvey-four-topic-baseline-v12`、事後版`posttest-5point-v5`を固定保存し、同意版`consent-2026-11-23-participant-code-weekly-ai-use-frequency-v1`を記録する。週あたりAI利用日数は既存`ParticipantSurvey.responses_json.general_ratings.ai_usage_days_per_week`へ厳密な整数0〜7として保存し、理解度ガイドは1・2・4・5を示す。回答はphase/version別JSONへ保存し、旧版の回答キー・値は変換・補完しない。仕様版63の参加者と仕様版62以下の既存参加者は閲覧専用で保全する。仕様版52の対応2 protocolにはH1〜H4評価サマリーのみを追加でき、既存サマリー・生データは変更しない。仕様版51以下・未対応protocolは再計算対象外。未閲覧者の教材評価全体はJSON nullとする。現行指標`four-hypotheses-v1`のH4は事後phaseの教材評価6項目を個別に集計する。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[事後アンケート](52_posttest_five_point_evaluation.md)、[指標](12_evaluation_metrics.md)。
 
 ## 仕様版48の条件（履歴）
 
@@ -54,22 +48,22 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 計画書では参加者・群・用語・フェーズ/回次、問題と選択内容、全体正誤とunknown区分、誤答タイプ・再発、時刻/時間、段階・方略、完了/中断、AI実行状態、アンケートを収集する。正誤のboolとunknown分類は別の記録であり、保存型を文書だけで三値へ変更しない。
 
-仕様版48でアンケートを事前・事後phaseに分け、仕様版49で事後版を5段階化し、仕様版50・51で事前質問文と4用語版用語、仕様版52・53で事後アンケートと早期終了条件を別protocolとして更新した。仕様版54で満点後早期終了と事後アンケートv4を統合した。現行事前phaseは用語ごとの見聞き経験・条件付き理解度、直近30日のAI利用日数、3行動の使いこなし自己評価で、問題モードごとに事前版を固定する。既存ParticipantSurvey.phase、survey_version、responses_jsonへ保存し、新DB列は追加しない。旧回答や旧posttest版は新規入力に使わず、既存JSONを変換しない。現行H4は事後phaseの教材評価を対象とし、事前回答は含めない。詳細は[12](12_evaluation_metrics.md)、[49](49_presurvey_baseline.md)、[52](52_posttest_five_point_evaluation.md)。
+仕様版48でアンケートを事前・事後phaseに分け、仕様版49で事後版を5段階化し、仕様版50・51で事前質問文と4用語版用語、仕様版52・53で事後アンケートと早期終了条件を別protocolとして更新した。仕様版54で満点後早期終了と事後アンケートv4を統合した。現行事前phaseは用語ごとの見聞き経験・条件付き理解度、週あたりAI利用日数、3行動の使いこなし自己評価で、問題モードごとに事前版を固定する。既存ParticipantSurvey.phase、survey_version、responses_jsonへ保存し、新DB列は追加しない。旧回答や旧posttest版は新規入力に使わず、既存JSONを変換しない。現行H4は事後phaseの教材評価を対象とし、事前回答は含めない。詳細は[12](12_evaluation_metrics.md)、[49](49_presurvey_baseline.md)、[52](52_posttest_five_point_evaluation.md)。
 
 ## 現行の保存契約
 
-モデルの正本は`backend/app/models/__init__.py`。現行コードは仕様版63 / `experiment-plan-2026-11-23-participant-code-primary-identifier-v1`を使用する。新規Participantの`id`と`display_code`には入力された半角数字1〜64桁の参加者コードを保存し、関連テーブルはこのIDを参照する。冪等性fingerprintはコードを含む要求のSHA-256で、平文の登録本文は保存しない。`participant_sessions`には署名付きcookie token自体ではなく、そのSHA-256 hash、Participant FK、有効期限を保存する。現行条件は仕様版62から維持し、新規`test_content_mode`は`four_topic_fundamentals`、問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v11`、事後アンケートは`posttest-5point-v5`である。`application`=`split-actions-v5`、`basic_understanding`=`split-actions-basic-v1`と旧回答snapshotは履歴復元用に保持する。仕様版62以下のID・回答・snapshotは変更せず、参加者操作を読み取り専用とする。仕様版52の対応する2 protocolにはH1〜H4評価サマリーだけを追加し、既存サマリーは上書きしない。仕様版51以下・未対応protocolは再計算対象外。`question_options.rationale`は内部メタデータで表示APIに含めない。参加者コードと学籍番号の対応表はアプリ外で管理し、DBモデルに含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)。
+モデルの正本は`backend/app/models/__init__.py`。現行コードは仕様版64と統合protocolを使用する。新規Participantの`id`と`display_code`には参加者コードを保存し、関連テーブルは同じIDを参照する。冪等性fingerprintは要求本文のSHA-256で、平文の登録本文は保存しない。`participant_sessions`にはcookie tokenそのものではなくSHA-256 hash、Participant FK、有効期限を保存する。新規モード、問題バンク、アンケート版は直上の仕様版64条件に従い、旧モード・旧回答snapshotは履歴復元用に保持する。仕様版63以下の参加者データは変更せず、参加者操作を読み取り専用とする。仕様版52の対応する2 protocolにはH1〜H4評価サマリーだけを追加し、既存サマリーは上書きしない。仕様版51以下・未対応protocolは再計算対象外。`question_options.rationale`は内部メタデータで表示APIに含めない。参加者コードと学籍番号の対応表はアプリ外で管理し、DBモデルに含めない。詳細は[問題モード](50_basic_understanding_question_mode.md)、[4用語版](51_four_topic_foundation_mode.md)、[事前アンケート](49_presurvey_baseline.md)、[事後アンケート](52_posttest_five_point_evaluation.md)。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 2026-10-21時点の履歴: 学籍番号はSQLAlchemyの研究DBへ追加せず、IDENTITY_MAPPING_PATHが指す別SQLiteの`identity_mappings`へ保存した。当時は対応表APIも存在した。現在は管理画面/APIを廃止し、既存SQLiteファイルと行は登録・通常起動では参照・移行・変更・削除しない。明示的な参加者削除時に限り、既存ファイル内の対象participant_idの旧行をcleanupする。
 
-2026-11-11までの旧登録方式では、研究用コードを分離SQLiteの`research_code_mappings`へ保存し、管理UI/APIから参照していた。仕様版61までの方式では、参加者用コードを登録時に検証後破棄していた。これらは履歴であり、仕様版63の現行登録は冒頭の「現行の保存契約」を参照する。旧IDENTITY_MAPPING_PATHのSQLiteファイル・テーブル・既存行は通常登録・起動・管理APIから参照、移行、変更、削除しない。明示的に参加者を削除する場合のみ、既存SQLiteがあるとき当該participant_idに一致する旧行のcleanupを再試行可能な削除outbox経由で行う。
+2026-11-11までの旧登録方式では、研究用コードを分離SQLiteの`research_code_mappings`へ保存し、管理UI/APIから参照していた。仕様版61までの方式では、参加者用コードを登録時に検証後破棄していた。これらは履歴であり、仕様版63当時の登録は冒頭の「現行の保存契約」を参照する。旧IDENTITY_MAPPING_PATHのSQLiteファイル・テーブル・既存行は通常登録・起動・管理APIから参照、移行、変更、削除しない。明示的に参加者を削除する場合のみ、既存SQLiteがあるとき当該participant_idに一致する旧行のcleanupを再試行可能な削除outbox経由で行う。
 
 参加者の明示的削除では、研究DB内の関連データ削除と`AuditEvent.after_json.identity_mapping_cleanup=pending`を同じトランザクションで確定してから、既存の別SQLiteが存在する場合に限り、旧学籍番号対応表・研究用コード対応表のうち当該participant_idの行だけを削除する。ファイルがない場合は新規作成しない。他の参加者の行と外部Excel対応表は変更しない。cleanup後に監査記録を`complete`へ更新する。途中停止時はpending記録を起動時または同じ削除APIの再送で再試行する。研究DBの確定に失敗した場合は旧ファイルに触れない。外部Excel対応表・USB・バックアップ上のデータは研究者が別途処理する。
 
 モデルの正本は `backend/app/models/__init__.py`。participants.retest_cycles_completed、participants.protocol_id、participant_surveys.survey_version/responses_json、tutor_turns.material_viewed_at、evaluation_summaries.hypothesis_metrics_jsonをnullableで追加する。新規テーブル・尺度変換・旧行のprotocol_id補完はない。既存参加者のretest_cycles_completedは保存値のまま保持し、過去回数の推定や補完はしない。
 
-現行コードでは新規Participantだけ仕様版63と統合protocolを保存し、参加者コード、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、`test_content_mode=four_topic_fundamentals`、`retest_cycles_completed=0`を固定する。RuntimeSettingの問題モードは登録時に参照しない。参加者APIは`PARTICIPANT_SESSION_SECRET`による24時間の署名付きcookieを要求する。事前アンケート版`presurvey-four-topic-baseline-v11`、事後アンケート版`posttest-5point-v5`を保存する。理解度3番は`neither`、事前AI自己評価と事後評価は整数1〜5のみとする。質問項目の選択カードは数値を上、文言を下に表示する。AI利用日数の質問文とAI自己評価3項目の設問文・最初の2項目の例を維持し、3項目目に「AIが答えた営業時間を、お店の公式サイトで確認する。」を表示する条件は維持する。回答値が変わる箇所は別survey_versionに記録し、列追加や旧行の変換・補完は行わない。全問採点後に満点となったテストは既存の`current_step`・Attempt・結果表示snapshotを使って早期終了する。仕様版62以下の参加者操作は読み取り専用とするが、仕様版52の対応2 protocolに限り既存サマリーを上書きしないH1〜H4評価サマリー追加を許可する。仕様版51以下・未対応protocolは再計算しない。起動時補修は仕様版とprotocol_idの両方で対象を限定する。
+現行コードでは新規Participantだけ仕様版64と統合protocolを保存し、参加者コード、教材内解説モード、テスト表示・答え合わせ条件、選択肢配置、`test_content_mode=four_topic_fundamentals`、`retest_cycles_completed=0`をsnapshotする。RuntimeSettingの問題モードは登録時に参照しない。参加者APIは`PARTICIPANT_SESSION_SECRET`による24時間の署名付きcookieを要求する。事前アンケートv12と事後アンケートv5を保存し、週あたりAI利用日数は整数0〜7、理解度ガイドは1・2・4・5である。回答値の変更は別survey_versionに記録し、旧行の変換・補完は行わない。満点後の早期終了は既存の`current_step`・Attempt・結果表示snapshotを使う。仕様版63以下は参加者操作を読み取り専用とするが、仕様版52の対応2 protocolに限り既存サマリーを上書きしないH1〜H4評価サマリー追加を許可する。仕様版51以下・未対応protocolは再計算しない。起動時補修は仕様版とprotocol_idの両方で対象を限定する。
 
 現行の主な保存対象:
 

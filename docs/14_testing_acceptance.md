@@ -1,6 +1,14 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-23 参加者コードを主識別子として保存（仕様版63・fix/issue-379）
+## 2026-11-24 origin/main統合（仕様版64・fix/issue-379）
+
+- 現行仕様を64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`へ統合した。参加者コードを`Participant.id`として保存する登録・Cookie認証と、4用語版、事前アンケートv12の週0〜7日AI利用頻度・理解度目安1・2・4・5を両立する。事後アンケートv5、問題バンクv4、H1〜H4も維持する。
+- 仕様版63の参加者コード導入protocolと週次アンケートprotocolは別々の履歴として保持する。既存回答・snapshotは変更せず、仕様版63以下の参加者操作は読み取り専用。仕様版52の対応protocolに限る評価サマリー追加の例外を維持する。
+- Backend全テスト初回実行は`1,758 passed, 7 failed`。失敗は起動補修テストが現行仕様版を63と固定していた期待値のみで、64へ更新後、該当する7ケースを再実行して`7 passed`を確認した。その他のBackendテストは初回実行で通過。
+- Frontend `npm test`（全7スクリプト）と`npm run build`は成功。staged/unstaged双方の`git -c core.whitespace=cr-at-eol diff --check`が成功し、競合マーカー・未解決ファイルがないことを確認した。
+- 実ブラウザ操作、研究DB、実AIは使用していない。
+
+## 2026-11-23 参加者コードを主識別子として保存（仕様版63・fix/issue-379の採用時記録）
 
 - 新規登録で半角数字1〜64桁の`participant_code`を受け付け、`Participant.id`と`display_code`に保存する。関連データは同じ識別子を参照し、既存参加者のID・回答・snapshotは変更しない。APIの`participant_id`フィールドと既存route名は互換維持し、新規参加者では参加者コードと同じ値を返す。
 - PostgreSQL起動時の再実行可能なschema更新で、参加者ID、display_code、参加者参照列、冪等記録・監査イベント・参加者セッションの識別列を64文字へ拡張する。旧外部SQLite対応表は通常登録で読み書きせず、参加者削除時の互換cleanupだけを維持する。
@@ -8,6 +16,13 @@
 - 管理画面、参加者ログ、CSV/XLSXとファイル名の表示を参加者コードに揃えた。Frontend smoke testは、旧`research_code`・「被験者ログ」の期待値を現行登録payload・画面ラベルへ更新した。
 - Backend全テストは隔離SQLiteで`1745 passed`（警告5件）。PostgreSQL列幅更新は実DBに接続せずモックで検証し、identity mapping関連テストは`18 passed`。Frontend `npm test`は全7スクリプト成功、`npm run build`はTypeScript検査を含め成功した。初回Frontend実行で見つかった旧テスト期待値とpayload型の不一致は修正後に再検証した。
 - 手動ブラウザ確認と実PostgreSQLへの移行実行は未実施。研究DB、既存3000番環境、実AIは使用せず、コミット・pushは行っていない。参加者コードの保存方法を含む同意文書の変更は、指導教員・研究倫理上の承認を意味しない。
+## 2026-11-23 週次AI利用頻度・理解度ガイドの統合（仕様版63・origin/main採用時記録）
+
+- 仕様版63 / `experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1`へ統合し、新規参加者の事前アンケートをv12とした。v12は週0〜7日のAI利用頻度と理解度の回答目安を含む。仕様版62では同じv11名で異なるpayloadを使った2 protocolがあったため、両履歴は変換せず保持する。
+- Backend全テスト1,760件成功。仕様版・protocol読取専用、旧v11 schema、現行v12検証を含む関連292件も成功。テストDBは`/tmp/gogainen-origin-merge-full`以下の隔離SQLiteを使用した。
+- Frontend `npm test`と`npm run build`成功。`git -c core.whitespace=cr-at-eol diff --check`成功。
+- ブラウザ実操作テストは未実行。テストはMock AIを使用し、実AI接続は行っていない。
+- 理解度尺度の妥当性、質問回答目安の影響、研究上の承認は未確認。
 
 ## 2026-11-22 事前理解度の回答目安を4段階に更新（仕様版62・feature/issue-378）
 
@@ -1087,3 +1102,11 @@ git -c core.whitespace=cr-at-eol diff --check
 - 両群とも再テスト1のM3誤答から結果確認を経て再学習へ進み、事前/学習2回/再テストの4件履歴、自由な章立て、教授契約の検証を確認。
 - 生成各試行のmaterial_structureと保存TutorTurnの章立て・節数・証拠配置を照合。証拠不一致は再生成で修正し、検証を緩めなかった。最初の確認でモデル混雑エラーも記録したが、同モデルで再試行し、Mockへ切り替えていない。
 - desktop/mobileの表示と横方向のはみ出しがないことを確認。検証環境はbackend/.local/dynamic-sections-validation.dbを使用し、従来の試用DB・別仕様リポジトリ・履歴資料を変更していない。
+
+## 2026-11-22 週あたりAI利用頻度（仕様版62）
+
+- 事前アンケートを`presurvey-four-topic-baseline-v11`へ更新し、「普段の生活では、1週間あたり何日程度AIを利用しますか。」と0〜7日の8択を表示する。保存値は`general_ratings.ai_usage_days_per_week`の整数0〜7で、v10以前の回答形式・JSONを変換しない。
+- 送信APIのrequest schemaにv11を追加し、v11のpayloadが参加者登録から保存まで通ること、旧30日キーが新規schemaで受け付けられないことを確認した。v11 schema関連14件、4用語版の仕様版62出題・満点遷移関連6件が成功。
+- Backend全件の実行は1755件成功・1件失敗。失敗は登録APIが返さない`test_content_mode`を応答に期待するテスト不整合だったため、保存済みParticipant snapshotをDBで検証するよう修正し、そのテストを単独で再実行して成功した。修正後の全Backend suiteは再実行していない。
+- Frontend `npm test`と`npm run build`は成功。`git -c core.whitespace=cr-at-eol diff --check`も成功した。
+- Playwrightブラウザ検証は未実施。専用スクリプトが要求する隔離backend、`PRESURVEY_VERIFY_ISOLATED=1`、Playwright module pathが用意されていないため、稼働中の研究環境には接続していない。

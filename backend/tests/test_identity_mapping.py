@@ -69,13 +69,13 @@ def test_registration_uses_participant_code_as_primary_identifier_and_issues_opa
         assert participant.id == research_code
         assert participant.display_code == research_code
         assert participant.test_content_mode == "four_topic_fundamentals"
-        assert participant.consent_document_version == "consent-2026-11-23-participant-code-primary-identifier-v1"
+        assert participant.consent_document_version == "consent-2026-11-23-participant-code-weekly-ai-use-frequency-v1"
         record = db.query(IdempotencyRecord).filter_by(idempotency_key=key).one()
         expected_hash = request_fingerprint({
             "assignment_code": "A",
             "consent_checked": True,
             "participant_code": research_code,
-            "consent_document_version": "consent-2026-11-23-participant-code-primary-identifier-v1",
+            "consent_document_version": "consent-2026-11-23-participant-code-weekly-ai-use-frequency-v1",
         })
         assert record.request_hash == expected_hash
         assert record.response_json["participant_code"] == research_code
