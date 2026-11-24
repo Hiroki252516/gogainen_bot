@@ -1,6 +1,22 @@
 # 受け入れ条件と検証記録
 
-## 2026-11-23 origin/main統合（仕様版63）
+## 2026-11-24 origin/main統合（仕様版64・fix/issue-379）
+
+- 現行仕様を64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`へ統合した。参加者コードを`Participant.id`として保存する登録・Cookie認証と、4用語版、事前アンケートv12の週0〜7日AI利用頻度・理解度目安1・2・4・5を両立する。事後アンケートv5、問題バンクv4、H1〜H4も維持する。
+- 仕様版63の参加者コード導入protocolと週次アンケートprotocolは別々の履歴として保持する。既存回答・snapshotは変更せず、仕様版63以下の参加者操作は読み取り専用。仕様版52の対応protocolに限る評価サマリー追加の例外を維持する。
+- Backend全テスト初回実行は`1,758 passed, 7 failed`。失敗は起動補修テストが現行仕様版を63と固定していた期待値のみで、64へ更新後、該当する7ケースを再実行して`7 passed`を確認した。その他のBackendテストは初回実行で通過。
+- Frontend `npm test`（全7スクリプト）と`npm run build`は成功。staged/unstaged双方の`git -c core.whitespace=cr-at-eol diff --check`が成功し、競合マーカー・未解決ファイルがないことを確認した。
+- 実ブラウザ操作、研究DB、実AIは使用していない。
+
+## 2026-11-23 参加者コードを主識別子として保存（仕様版63・fix/issue-379の採用時記録）
+
+- 新規登録で半角数字1〜64桁の`participant_code`を受け付け、`Participant.id`と`display_code`に保存する。関連データは同じ識別子を参照し、既存参加者のID・回答・snapshotは変更しない。APIの`participant_id`フィールドと既存route名は互換維持し、新規参加者では参加者コードと同じ値を返す。
+- PostgreSQL起動時の再実行可能なschema更新で、参加者ID、display_code、参加者参照列、冪等記録・監査イベント・参加者セッションの識別列を64文字へ拡張する。旧外部SQLite対応表は通常登録で読み書きせず、参加者削除時の互換cleanupだけを維持する。
+- 登録時に24時間有効の署名付きHttpOnly/SameSite=Strict Cookieを発行する。DBにはtokenのSHA-256 hashだけを保存し、32文字未満または未設定の`PARTICIPANT_SESSION_SECRET`では参加者を作成せず503を返す。現行参加者APIはCookieを要求し、既存仕様版62以下は読み取り専用とする。参加者コードをAI入力へ含めず、学籍番号は取得しない。
+- 管理画面、参加者ログ、CSV/XLSXとファイル名の表示を参加者コードに揃えた。Frontend smoke testは、旧`research_code`・「被験者ログ」の期待値を現行登録payload・画面ラベルへ更新した。
+- Backend全テストは隔離SQLiteで`1745 passed`（警告5件）。PostgreSQL列幅更新は実DBに接続せずモックで検証し、identity mapping関連テストは`18 passed`。Frontend `npm test`は全7スクリプト成功、`npm run build`はTypeScript検査を含め成功した。初回Frontend実行で見つかった旧テスト期待値とpayload型の不一致は修正後に再検証した。
+- 手動ブラウザ確認と実PostgreSQLへの移行実行は未実施。研究DB、既存3000番環境、実AIは使用せず、コミット・pushは行っていない。参加者コードの保存方法を含む同意文書の変更は、指導教員・研究倫理上の承認を意味しない。
+## 2026-11-23 週次AI利用頻度・理解度ガイドの統合（仕様版63・origin/main採用時記録）
 
 - 仕様版63 / `experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1`へ統合し、新規参加者の事前アンケートをv12とした。v12は週0〜7日のAI利用頻度と理解度の回答目安を含む。仕様版62では同じv11名で異なるpayloadを使った2 protocolがあったため、両履歴は変換せず保持する。
 - Backend全テスト1,760件成功。仕様版・protocol読取専用、旧v11 schema、現行v12検証を含む関連292件も成功。テストDBは`/tmp/gogainen-origin-merge-full`以下の隔離SQLiteを使用した。

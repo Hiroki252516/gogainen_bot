@@ -31,7 +31,7 @@ H4_NUMERIC_KEYS = ("clarity", "readability", "japanese_clarity", "learning_usefu
 CENTERED_RATING_KEYS = ("difficulty_appropriateness", "amount_appropriateness")
 METRICS_CSV_COLUMNS = [
     "metrics_version", "experiment_spec_version", "protocol_id", "survey_version", "test_content_mode",
-    "group_condition", "participant_id", "display_code", "route",
+    "group_condition", "participant_id", "participant_code", "display_code", "route",
     "metric", "value", "n", "mean", "median", "numerator", "denominator", "eligible_count", "missing_count",
     "not_applicable_count", "status", "details_json",
 ]
@@ -177,7 +177,9 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         "metrics_version": METRICS_VERSION, "protocol_id": participant.protocol_id,
         "experiment_spec_version": participant.experiment_spec_version,
         "survey_version": survey.survey_version if survey else expected_survey_version,
-        "participant_id": participant.id, "display_code": participant.display_code,
+        "participant_id": participant.id,
+        "participant_code": participant.id if participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.protocol_id == CURRENT_PROTOCOL_ID else None,
+        "display_code": participant.display_code,
         "scoring_unit": "subquestion" if split else "term", "questions_per_test": expected_count,
         "first_question_only": first_question_enabled(participant),
         "test_content_mode": participant_test_content_mode(participant),
@@ -388,7 +390,7 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
         records.append({"test_content_mode": source["test_content_mode"], "metric": "group_details", "details_json": json.dumps(source, ensure_ascii=False)})
     else:
         for row in rows:
-            base = {k: row[k] for k in ("group_condition", "participant_id", "display_code", "route",
+            base = {k: row[k] for k in ("group_condition", "participant_id", "participant_code", "display_code", "route",
                                         "protocol_id", "experiment_spec_version", "survey_version")}
             base["test_content_mode"] = row.get("test_content_mode") or "application"
             base["first_question_only"] = row.get("first_question_only") is True

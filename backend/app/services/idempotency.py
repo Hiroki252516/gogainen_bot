@@ -106,7 +106,7 @@ async def run_idempotent(
         if participant_id is not None:
             # Synchronize final writes with withdrawal, including deferred AI logs.
             if db.query(Participant.id).filter_by(id=participant_id).with_for_update().first() is None:
-                raise HTTPException(404, "被験者が見つかりません。")
+                raise HTTPException(404, "参加者が見つかりません。")
         _attach_deferred_ai_logs(db)
         record.status = "completed"
         record.response_status = 200
@@ -224,7 +224,7 @@ def _assert_current_participant(db: Session, participant_id: str | None) -> None
         return
     participant = db.get(Participant, participant_id)
     if participant is None:
-        raise HTTPException(status_code=404, detail="被験者が見つかりません。")
+        raise HTTPException(status_code=404, detail="参加者が見つかりません。")
     assert_current_experiment(participant)
 
 

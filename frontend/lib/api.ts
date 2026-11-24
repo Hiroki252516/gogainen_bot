@@ -160,11 +160,14 @@ export async function postIdempotent<T>(
 
 export function participantId(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("participant_id");
+  return localStorage.getItem("participant_code") || localStorage.getItem("participant_id");
 }
+
+export const participantCode = participantId;
 
 export function clearParticipantSession(): void {
   if (typeof window === "undefined") return;
+  localStorage.removeItem("participant_code");
   localStorage.removeItem("participant_id");
   localStorage.removeItem("display_code");
   localStorage.removeItem("pending_assignment_code");
@@ -181,7 +184,7 @@ export function clearParticipantSession(): void {
 export function requireParticipant(): string {
   const id = participantId();
   if (!id) {
-    throw new Error("participant_idがありません。/startから開始してください。");
+    throw new Error("参加者コードがありません。/startから開始してください。");
   }
   return id;
 }

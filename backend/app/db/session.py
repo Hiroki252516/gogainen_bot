@@ -112,6 +112,7 @@ def _ensure_lightweight_schema_updates() -> None:
                 if name not in existing_columns:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
         if "participants" in existing_tables:
+            _ensure_participant_code_capacity(connection, dialect_name)
             _ensure_protocol_id_capacity(
                 connection,
                 dialect_name,
@@ -120,6 +121,119 @@ def _ensure_lightweight_schema_updates() -> None:
         _backfill_completion_reasons(connection)
         _backfill_evaluation_completion_flags(connection)
         _backfill_tutor_prefetch_states(connection)
+
+
+def _ensure_participant_code_capacity(connection, dialect_name: str) -> None:
+    """Widen participant identifiers and all database references without rewriting values."""
+    if dialect_name != "postgresql":
+        return
+
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    participant_columns = {
+        column["name"]: column for column in inspector.get_columns("participants")
+    }
+    current_length = getattr(participant_columns.get("id", {}).get("type"), "length", None)
+    child_references: list[tuple[str, str, dict]] = []
+    for table in sorted(tables - {"participants"}):
+        for foreign_key in inspector.get_foreign_keys(table):
+            if foreign_key.get("referred_table") == "participants" and "id" in foreign_key.get("referred_columns", []):
+                for column in foreign_key.get("constrained_columns", []):
+                    child_references.append((table, column, foreign_key))
+
+    child_columns: set[tuple[str, str]] = set()
+    for table, column, _ in child_references:
+        metadata = next(
+            (item for item in inspector.get_columns(table) if item["name"] == column),
+            None,
+        )
+        length = getattr(metadata["type"], "length", None) if metadata else None
+        if length is not None and length < 64:
+            child_columns.add((table, column))
+
+    participants_need_widening = current_length is not None and current_length < 64
+    explicit_columns = {
+        ("participants", "display_code"),
+        ("idempotency_records", "participant_id"),
+        ("audit_events", "entity_id"),
+        ("participant_sessions", "participant_id"),
+    }
+    needs_explicit_widening = False
+    for table, column in explicit_columns:
+        if table not in tables:
+            continue
+        metadata = next(
+            (item for item in inspector.get_columns(table) if item["name"] == column),
+            None,
+        )
+        length = getattr(metadata["type"], "length", None) if metadata else None
+        needs_explicit_widening = needs_explicit_widening or bool(metadata and (length is None or length < 64))
+    if not participants_need_widening and not child_columns and not needs_explicit_widening:
+        return
+
+    preparer = connection.dialect.identifier_preparer
+
+    def quoted(identifier: str) -> str:
+        return preparer.quote(identifier)
+
+    constraints: dict[tuple[str, str], dict] = {}
+    for table, column, foreign_key in child_references:
+        if (table, column) not in child_columns and not participants_need_widening:
+            continue
+        name = foreign_key.get("name")
+        if not name:
+            raise RuntimeError(f"Cannot safely widen unnamed foreign key on {table}.{column}")
+        constraints[(table, name)] = foreign_key
+
+    for table, name in constraints:
+        connection.execute(
+            text(f"ALTER TABLE {quoted(table)} DROP CONSTRAINT {quoted(name)}")
+        )
+
+    columns_to_widen = {("participants", "id"), ("participants", "display_code")}
+    columns_to_widen.update(child_columns)
+    for table, column in (
+        ("idempotency_records", "participant_id"),
+        ("audit_events", "entity_id"),
+        ("participant_sessions", "participant_id"),
+    ):
+        if table not in tables:
+            continue
+        metadata = next(
+            (item for item in inspector.get_columns(table) if item["name"] == column),
+            None,
+        )
+        length = getattr(metadata["type"], "length", None) if metadata else None
+        if metadata and (length is None or length < 64):
+            columns_to_widen.add((table, column))
+
+    for table, column in sorted(columns_to_widen):
+        if table not in tables:
+            continue
+        metadata = next(
+            (item for item in inspector.get_columns(table) if item["name"] == column),
+            None,
+        )
+        length = getattr(metadata["type"], "length", None) if metadata else None
+        if metadata and (length is None or length < 64):
+            connection.execute(
+                text(f"ALTER TABLE {quoted(table)} ALTER COLUMN {quoted(column)} TYPE VARCHAR(64)")
+            )
+
+    for (table, name), foreign_key in constraints.items():
+        constrained = ", ".join(quoted(column) for column in foreign_key["constrained_columns"])
+        referred = ", ".join(quoted(column) for column in foreign_key["referred_columns"])
+        statement = (
+            f"ALTER TABLE {quoted(table)} ADD CONSTRAINT {quoted(name)} "
+            f"FOREIGN KEY ({constrained}) REFERENCES {quoted('participants')} ({referred})"
+        )
+        ondelete = (foreign_key.get("options") or {}).get("ondelete")
+        onupdate = (foreign_key.get("options") or {}).get("onupdate")
+        if ondelete:
+            statement += f" ON DELETE {ondelete}"
+        if onupdate:
+            statement += f" ON UPDATE {onupdate}"
+        connection.execute(text(statement))
 
 
 def _ensure_protocol_id_capacity(connection, dialect_name: str, participant_columns: list[dict]) -> None:

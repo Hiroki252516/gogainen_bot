@@ -1,8 +1,8 @@
 # 事前アンケート
 
-## 事前アンケートの現行契約（仕様版63更新）
+## 事前アンケートの現行契約（仕様版64更新）
 
-新規参加者は仕様版63 / `experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1`で同意後・事前テスト前に回答する。新規参加者は`four_topic_fundamentals`に固定し、`presurvey-four-topic-baseline-v12`を使う。AI利用頻度は「普段の生活では、1週間あたり何日程度AIを利用しますか。」と尋ね、「0日」〜「7日」の8択から回答し、`general_ratings.ai_usage_days_per_week`へ厳密な整数`0`〜`7`で保存する。理解度は経験項目で「ある」と回答した用語だけに表示し、中央を「どちらとも言えない」として`neither`で保存する。理解度質問は「{用語}の基本的な仕組みを、どの程度理解していますか。」とし、目安として「知らない」=1、「一部知っている」=2、「知っている」=4、「説明できる」=5を示す。事前経験質問の冒頭を「実験を始める前に、」、第三選択肢を「判断できない」と表示する（保存値`cannot_recall`は維持）。4用語版の下位用語は`instruction_tuning` / 「インストラクションチューニング」、`human_feedback_post_training` / 「事後学習」と表示する。AI自己評価3項目は1〜5の必須回答とし、具体例を各項目に表示する。「評価できない」は設けない。全数値評価は数字を上、選択文言を下に配置する。仕様版62以下の保存回答・snapshot・旧ラベルは変換しない。事後アンケートは[posttest-5point-v5](52_posttest_five_point_evaluation.md)。尺度の妥当性や研究上の承認はこの変更だけでは確認されない。
+新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で同意後・事前テスト前に回答する。4用語版に固定され、`presurvey-four-topic-baseline-v12`を使う。AI利用頻度は「普段の生活では、1週間あたり何日程度AIを利用しますか。」と尋ね、「0日」〜「7日」の8択から回答し、`general_ratings.ai_usage_days_per_week`へ厳密な整数0〜7で保存する。用語の見聞き経験は必須で、「ある」の用語だけ理解度を表示して回答を必須にする。理解度の中央値は「どちらとも言えない」／`neither`。質問は「{用語}の基本的な仕組みを、どの程度理解していますか。」とし、回答目安は「知らない」=1、「一部知っている」=2、「知っている」=4、「説明できる」=5。経験質問は「実験を始める前に、{用語}という用語を見たり聞いたりしたことがありますか。」、第三選択肢は「判断できない」／`cannot_recall`。4用語版の下位用語は`instruction_tuning`／「インストラクションチューニング」、`human_feedback_post_training`／「事後学習」と表示する。AI自己評価3項目は1〜5の必須回答とし、全項目に具体例を表示する。「評価できない」は設けない。数値尺度は数字を上、文言を下に配置する。仕様版63以下の保存回答・snapshot・旧ラベルは変換しない。事後アンケートは[posttest-5point-v5](52_posttest_five_point_evaluation.md)。尺度の妥当性や研究上の承認はこの変更だけでは確認されない。
 
 | 問題モード | アンケート版 | 対象用語 |
 | --- | --- | --- |
@@ -47,13 +47,13 @@
 
 ### API・保存・出力
 
-GET `/api/participants/{id}/presurvey`は参加者の保存済み問題モードに基づき、`survey_version`と`term_items`（各用語の`key`・`label`）を返す。仕様版63の新規参加者にはv12を返す。POST同URLは6用語の経験・条件付き理解度、`general_ratings.ai_usage_days_per_week`（厳密な整数0〜7）、3項目のAI自己評価（整数1〜5）を検証する。直近30日区分の`ai_usage_frequency_30d`はv12では拒否する。事前アンケートが未完了なら事前テストを開始できず、保存成功後にpretestへ進む。回答は既存の`ParticipantSurvey`へ`phase=presurvey`・版付きJSONとして保存し、DB列は追加しない。同一内容の冪等再送は保存済み結果を返し、同じ冪等キーで異なる内容を送ると競合を拒否する。仕様版62以下の回答JSONは変換しない。
+GET `/api/participants/{id}/presurvey`は参加者の保存済み問題モードに基づき、`survey_version`と`term_items`（各用語の`key`・`label`）を返す。仕様版64の新規参加者にはv12を返す。POST同URLは6用語の経験・条件付き理解度、`general_ratings.ai_usage_days_per_week`（厳密な整数0〜7）、3項目のAI自己評価（整数1〜5）を検証する。直近30日区分の`ai_usage_frequency_30d`はv12では拒否する。事前アンケートが未完了なら事前テストを開始できず、保存成功後にpretestへ進む。回答は既存の`ParticipantSurvey`へ`phase=presurvey`・版付きJSONとして保存し、DB列は追加しない。同一内容の冪等再送は保存済み結果を返し、同じ冪等キーで異なる内容を送ると競合を拒否する。仕様版62以下の回答JSONは変換しない。
 
 参加者ログ、アンケートCSV、全体ログCSVおよび対応するExcel出力では、`phase`・`survey_version`・回答JSONを保つ。事前回答は事後アンケートの回答として扱わず、事後評価や仮説指標の入力へ合算しない。
 
 ## 旧アンケートと履歴
 
-- `presurvey-four-topic-baseline-v11`（仕様版62の2つのprotocol）: 同じ版名が異なるpayloadに使われた。`experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1`では理解度の回答目安を1・2・4・5に更新した一方、AI利用頻度は直近30日の区分（`ai_usage_frequency_30d`）を維持した。`experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1`では週あたり0〜7日の整数（`ai_usage_days_per_week`）に変更した一方、そのprotocolの理解度ガイドは旧形式だった。これらの仕様版62の記録は閲覧専用で、payloadを相互変換しない。現行仕様版63では両方の変更を統合したv12を使用する。
+- `presurvey-four-topic-baseline-v11`（仕様版62の2つのprotocol）: 同じ版名が異なるpayloadに使われた。`experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1`では理解度の回答目安を1・2・4・5に更新した一方、AI利用頻度は直近30日の区分（`ai_usage_frequency_30d`）を維持した。`experiment-plan-2026-11-22-presurvey-weekly-ai-usage-frequency-v1`では週あたり0〜7日の整数（`ai_usage_days_per_week`）に変更した一方、そのprotocolの理解度ガイドは旧形式だった。これらの仕様版62の記録は閲覧専用で、payloadを相互変換しない。現行仕様版64では両方の変更を統合したv12を使用する。
 
 - `presurvey-four-topic-baseline-v7`（仕様版58）: 5段階理解度（中間値`slightly`）を使い、AI利用自己評価3項目の質問文を更新した。3つ目の例を削除し、「評価できない」を許容した。仕様版59では理解度3番の値と表示、自己評価の中央ラベルおよび選択肢を変更し、過去v7回答は読み取り専用で保全する。
 - `presurvey-four-topic-baseline-v8`（仕様版59）: 理解度の中央値を`neither`とし、AI自己評価から「評価できない」を除いた。経験質問は「実験の説明を受ける前に」、理解度質問は「基本的な意味や働き」を尋ね、対象語を「人の評価・好みを用いる事後学習」と表示した。回答は仕様版61でも変換しない。
@@ -72,7 +72,7 @@ GET `/api/participants/{id}/presurvey`は参加者の保存済み問題モード
 - `presurvey-four-topic-baseline-v1`（仕様版44以降の旧4用語形式）: Transformer、LLMの学習段階、マルチエージェント、記憶プロセスの4項目を取得した。
 - `presurvey-baseline-v1`（仕様版36）: 用語ごとに「知っていた／知らない」のBooleanを保存した。
 
-これらの保存済み回答は新形式へ変換・補完しない。仕様版49では事後アンケート`posttest-5point-v1`でシステム評価2項目、教材評価6項目、任意自由記述を取得した。現行仕様版63の新規参加者は`posttest-5point-v5`を使用する。新規の事後評価は整数1〜5のみとし、過去の評価不能回答は履歴・集計で区別する。教材評価は閲覧者に限り全項目の回答を必須とし、現行H4は`phase=posttest`にある教材評価6項目を個別に参照する。仕様版52の対応protocolの回答は評価サマリー追加時にも保存時の内容を維持する。事前回答は事後アンケート・仮説指標へ合算しない。
+これらの保存済み回答は新形式へ変換・補完しない。仕様版49では事後アンケート`posttest-5point-v1`でシステム評価2項目、教材評価6項目、任意自由記述を取得した。現行仕様版64の新規参加者は`posttest-5point-v5`を使用する。新規の事後評価は整数1〜5のみとし、過去の評価不能回答は履歴・集計で区別する。教材評価は閲覧者に限り全項目の回答を必須とし、現行H4は`phase=posttest`にある教材評価6項目を個別に参照する。仕様版52の対応protocolの回答は評価サマリー追加時にも保存時の内容を維持する。事前回答は事後アンケート・仮説指標へ合算しない。
 
 - `presurvey-baseline-v4`および`presurvey-four-topic-baseline-v4`（仕様版54）: 仕様版55より前に使った版。自己評価に具体例は表示せず、回答項目・尺度・保存形式は現行v5と同じだった。保存済み回答は当時のsurvey_versionで保持し、新規送信には受け付けない。
 

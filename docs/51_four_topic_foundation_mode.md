@@ -1,8 +1,21 @@
 # 4用語版テスト問題モード
 
-## 現行条件（仕様版63・2026-11-23）
+## 現行条件（仕様版64・2026-11-24）
 
-新規参加者には仕様版63 / `experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1`を適用し、事前アンケートv12（`presurvey-four-topic-baseline-v12`）を使う。AI利用日数は週0〜7日の8択を`general_ratings.ai_usage_days_per_week`へ整数で保存する。経験「ある」の用語に表示する理解度の回答目安は1・2・4・5（「知らない」「一部知っている」「知っている」「説明できる」）で、3は中間選択肢とする。仕様版62では同じv11名で異なるpayloadを使った2 protocolがあったため、旧回答はprotocolと保存値に従って保持し、変換しない。4用語、問題バンク、学習・テスト進行、事後アンケートは仕様版61から変更しない。仕様版62以下の参加者記録は読み取り専用で保全する。
+新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で登録する。参加者コードを`Participant.id`として保存し、参加者APIは署名付きHttpOnly session cookieで認証する。4用語・4問・各10択、問題バンクv4、3択またはJ単独の採点、保存snapshotを使う確認問題、満点後早期終了を維持する。事前アンケートは`presurvey-four-topic-baseline-v12`で週あたりAI利用日数0〜7と理解度目安1・2・4・5を取得し、事後アンケートは`posttest-5point-v5`。仕様版63以下の回答・問題・snapshotは変更せず、参加者操作を読み取り専用とする。
+
+### 仕様版63の履歴条件（参加者コード導入・週次アンケート統合前）
+
+#### 仕様版63の履歴: 参加者コード主識別子
+
+新規参加者は仕様版63 / `experiment-plan-2026-11-23-participant-code-primary-identifier-v1`で登録する。4用語・4問・各10択、進行、結果表示、採点、回答後確認、確認問題への保存snapshot再利用を維持し、LLMの学習段階の用語を「インストラクションチューニング」とする。当時の問題バンクは`split-actions-four-topic-v4`（[YAML](../backend/app/seed/content/standard/four_topic_fundamentals_v4.yml)）。v3は仕様版55・56、v4は仕様版57〜63の参加者向けに保持する。指示と対応する回答例で訓練し、指示に沿う応答を調整する内容へ設問・選択肢・提案群の教授対象をそろえた。選択肢役割と正解3択またはJ単独の採点、RAG検索節は変わらない。必要な全設問が採点済みで全問正解した事前・再テスト1/2・内部`final_test`の後は、結果表示snapshotに応じて確認後または直接surveyへ進み、学習・後続テストを省略する。当時の事後アンケートは`posttest-5point-v5`。
+
+事前アンケートは`presurvey-four-topic-baseline-v11`を使用し、下位用語の表示名を「インストラクションチューニング」、`human_feedback_post_training`を「事後学習」とする。理解度質問は「{用語}の基本的な仕組みを、どの程度理解していますか。」、経験質問は「実験を始める前に、{用語}という用語を見たり聞いたりしたことがありますか。」とする。経験の第三選択肢は「判断できない」で、保存値`cannot_recall`を維持する。理解度は「ある」と回答した場合に5段階で尋ね、回答目安は「知らない」=1、「一部知っている」=2、「知っている」=4、「説明できる」=5とする。中央は`neither`として保存する。AI利用日数の質問文とAI利用自己評価3項目の聞き方を維持し、具体例は3項目すべてに表示する。事前AI自己評価3項目と事後評価7項目は整数1〜5のみで、「評価できない」は設けない。数値尺度は数字を上、文言を下に表示する。仕様版62以下の回答・評価不能値は変換しない。通常版・基礎理解版の事前アンケートは従来の`fine_tuning`項目を維持する。
+
+仕様版51には独立した二つのprotocolがあり、issue-336では`split-actions-four-topic-v3`・`presurvey-four-topic-baseline-v4`（`instruction_tuning`）、issue-338では`split-actions-four-topic-v2`・`presurvey-four-topic-baseline-v3`を使用した。仕様版52にも、前者の問題・事前アンケートを引き継ぐprotocolと、後者の問題・事前アンケート・事後アンケートを引き継ぐprotocolがあった。仕様版53にも二つのprotocolがあり、`experiment-plan-2026-11-12-four-topic-instruction-tuning-perfect-test-early-exit-posttest-material-amount-v1`は事後v3と早期終了、`experiment-plan-2026-11-12-four-topic-instruction-tuning-posttest-material-amount-clarity-removal-v1`は事後v4の`system_clarity`削除を含む。仕様版54はこの二条件を統合する。仕様版50ではprotocolに応じて問題バンクv2またはv1と対応する事前アンケート版を復元し、仕様版49以下では`split-actions-four-topic-v1`を復元する。仕様版62以下の記録は保存時の内容として保持し、回答、表示順、snapshot、アンケート値を書き換えない。これらの旧仕様は閲覧専用。尺度・問題の難易度や教育効果は未検証であり、この実装変更は研究上の承認を意味しない。
+#### 仕様版63の履歴: 週次AI利用頻度・理解度目安
+
+仕様版63 / `experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1`では、事前アンケートv12（`presurvey-four-topic-baseline-v12`）を使う。AI利用日数は週0〜7日の8択を`general_ratings.ai_usage_days_per_week`へ整数で保存する。経験「ある」の用語に表示する理解度の回答目安は1・2・4・5（「知らない」「一部知っている」「知っている」「説明できる」）で、3は中間選択肢とする。仕様版62では同じv11名で異なるpayloadを使った2 protocolがあったため、旧回答はprotocolと保存値に従って保持し、変換しない。4用語、問題バンク、学習・テスト進行、事後アンケートは仕様版61から変更しない。仕様版63以下の参加者記録は読み取り専用で保全する。
 
 ## 仕様版61の採用時条件（履歴・2026-11-19）
 

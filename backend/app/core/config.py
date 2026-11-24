@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     max_learning_targets: int = 3
     export_dir: str = "./exports"
     identity_mapping_path: str = "./.private-identities/mappings.sqlite3"
+    participant_session_secret: SecretStr = SecretStr("")
     frontend_origin: str = "http://localhost:3000"
     admin_password: SecretStr = SecretStr("abc")
 

@@ -233,7 +233,7 @@ export default function LearningPage() {
         const participantId = requireParticipant();
         const session = await postIdempotent<{ tutor_session_id: string }>(
           "/api/tutor-sessions",
-          { participant_id: participantId, term_slug: termSlug },
+          { participant_code: participantId, term_slug: termSlug },
           `tutor_session:${participantId}:${termSlug}`,
         );
         setSessionId(session.tutor_session_id);
