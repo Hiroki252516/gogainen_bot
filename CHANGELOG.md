@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Hiroki252516/gogainen_bot/compare/v0.4.0...v0.5.0) (2026-11-24)
+
+
+### Features
+
+* 参加者コードで名称を統一 ([c8a2ee5](https://github.com/Hiroki252516/gogainen_bot/commit/c8a2ee5cb0eaec9c9dc59109c2ab10eb71e1588f)), closes [#379](https://github.com/Hiroki252516/gogainen_bot/issues/379)
+
 ## [0.4.0](https://github.com/Hiroki252516/gogainen_bot/compare/v0.3.0...v0.4.0) (2026-11-23)
 
 
