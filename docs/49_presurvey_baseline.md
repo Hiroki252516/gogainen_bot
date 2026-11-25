@@ -1,14 +1,26 @@
 # 事前アンケート
 
-## 事前アンケートの現行契約（仕様版64更新）
+## 事前アンケートの現行契約（仕様版64）
 
-新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で同意後・事前テスト前に回答する。4用語版に固定され、`presurvey-four-topic-baseline-v12`を使う。AI利用頻度は「普段の生活では、1週間あたり何日程度AIを利用しますか。」と尋ね、「0日」〜「7日」の8択から回答し、`general_ratings.ai_usage_days_per_week`へ厳密な整数0〜7で保存する。用語の見聞き経験は必須で、「ある」の用語だけ理解度を表示して回答を必須にする。理解度の中央値は「どちらとも言えない」／`neither`。質問は「{用語}の基本的な仕組みを、どの程度理解していますか。」とし、回答目安は「知らない」=1、「一部知っている」=2、「知っている」=4、「説明できる」=5。経験質問は「実験を始める前に、{用語}という用語を見たり聞いたりしたことがありますか。」、第三選択肢は「判断できない」／`cannot_recall`。4用語版の下位用語は`instruction_tuning`／「インストラクションチューニング」、`human_feedback_post_training`／「事後学習」と表示する。AI自己評価3項目は1〜5の必須回答とし、全項目に具体例を表示する。「評価できない」は設けない。数値尺度は数字を上、文言を下に配置する。仕様版63以下の保存回答・snapshot・旧ラベルは変換しない。事後アンケートは[posttest-5point-v5](52_posttest_five_point_evaluation.md)。尺度の妥当性や研究上の承認はこの変更だけでは確認されない。
+新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で同意後・事前テスト前に回答する。新規参加者は`four_topic_fundamentals`に固定し、`presurvey-four-topic-baseline-v12`を使う。4用語版の6用語経験、AI自己評価3項目、既存の設問文と回答例は仕様版61から引き継ぐ。理解度は経験「ある」の用語だけに表示し、1・2・4・5の回答目安を示す。AI利用日数は直近1週間の0〜7日の整数を必須回答とし、`general_ratings.ai_usage_days_per_week`に保存する。既存ParticipantSurveyの版付きJSONへ保存し、DB列を追加しない。仕様版63以下の回答は変換・補完しない。尺度の妥当性および研究上の承認はこの実装では確認されない。
 
 | 問題モード | アンケート版 | 対象用語 |
 | --- | --- | --- |
 | `application`（履歴復元用） | `presurvey-baseline-v5` | 事前学習、ファインチューニング、RAG、プロンプトエンジニアリング、マルチエージェント、記憶プロセス |
 | `basic_understanding`（履歴復元用） | `presurvey-baseline-v5` | 事前学習、ファインチューニング、RAG、プロンプトエンジニアリング、マルチエージェント、記憶プロセス |
-| `four_topic_fundamentals`（新規参加者） | `presurvey-four-topic-baseline-v12` | Transformer、事前学習、インストラクションチューニング、事後学習、マルチエージェント、記憶プロセス |
+| `four_topic_fundamentals`（仕様版64の新規参加者） | `presurvey-four-topic-baseline-v12` | Transformer、事前学習、インストラクションチューニング、事後学習、マルチエージェント、記憶プロセス |
+
+理解度の5選択肢は`not_at_all`／`hardly`／`neither`／`moderately`／`well`で、カードには1／2／3／4／5を表示する。3は「どちらとも言えない」とし、回答の目安として1／2／4／5を示す。「ない」「判断できない」の理解度はJSON nullで保存する。週あたりAI利用日数は0から7の整数で保存し、30日区分やカテゴリ値へ変換しない。
+
+## 仕様版61の履歴条件（2026-11-19）
+
+新規参加者は仕様版61 / `experiment-plan-2026-11-19-presurvey-guidance-example-v1`で同意後・事前テスト前に回答する。新規参加者は`four_topic_fundamentals`に固定し、`presurvey-four-topic-baseline-v10`を使う。対象用語、回答キー、保存payload、条件付き表示、AI利用日数質問、自己評価尺度および理解度尺度は仕様版60から維持する。理解度設問の下に回答の目安を表示する。AI自己評価の例は3項目すべてに表示し、3項目目は「AIが答えた営業時間を、お店の公式サイトで確認する。」とする。理解度は経験項目で「ある」と回答した用語だけに表示し、中央を「どちらとも言えない」として`neither`で保存する。事前経験質問の冒頭を「実験を始める前に、」とし、経験の第三選択肢を「判断できない」と表示する（保存値`cannot_recall`は維持）。理解度質問は「{用語}の基本的な仕組みを、どの程度理解していますか。」にする。直下に回答の目安を表示し、「2 あまり理解していない」「4 ある程度理解している」を例示する。4用語版の下位用語は`instruction_tuning` / 「インストラクションチューニング」、`human_feedback_post_training` / 「事後学習」と表示する。AI自己評価は5段階とし、「評価できない」を設けない。全数値評価は数字を上、選択文言を下に配置する。AI利用日数は直近30日の区分で回答する。仕様版60以下の回答と旧ラベルは変換しない。事後アンケートは[posttest-5point-v5](52_posttest_five_point_evaluation.md)。尺度の妥当性や研究上の承認はこの変更だけでは確認されない。
+
+| 問題モード | アンケート版 | 対象用語 |
+| --- | --- | --- |
+| `application`（履歴復元用） | `presurvey-baseline-v5` | 事前学習、ファインチューニング、RAG、プロンプトエンジニアリング、マルチエージェント、記憶プロセス |
+| `basic_understanding`（履歴復元用） | `presurvey-baseline-v5` | 事前学習、ファインチューニング、RAG、プロンプトエンジニアリング、マルチエージェント、記憶プロセス |
+| `four_topic_fundamentals`（新規参加者） | `presurvey-four-topic-baseline-v10` | Transformer、事前学習、インストラクションチューニング、事後学習、マルチエージェント、記憶プロセス |
 
 4用語版の事前アンケートは、問題モード名が示す4つの大項目ではなく、LLMの学習段階を下位用語（事前学習・インストラクションチューニング・事後学習）に分けて個別に尋ねる。用語の定義や正答に相当する説明は質問内に提示しない。
 

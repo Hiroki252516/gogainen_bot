@@ -130,8 +130,8 @@ try {
       assert.equal(logs.attempts.length, 9);
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page.goto(new URL("/admin", base).href);
-      await page.getByRole("tab", { name: assignment === "A" ? "proposed" : "control", exact: true }).click();
-      const row = page.getByRole("row").filter({ hasText: logs.participant.display_code }).filter({ has: page.getByRole("button", { name: "参加者ログを見る", exact: true }) });
+      await page.getByRole("tab", { name: assignment === "A" ? "experimental" : "control", exact: true }).click();
+      const row = page.getByRole("row").filter({ hasText: logs.participant.display_code }).filter({ has: page.getByRole("button", { name: "被験者ログを見る", exact: true }) });
       await row.waitFor();
       assert((await row.innerText()).includes("2 / 2"));
       await row.getByRole("button", { name: "参加者ログを見る", exact: true }).click();

@@ -1,10 +1,12 @@
 # 05. System Architecture
 
+2026-11-25の現行実装は仕様版64である。新規登録は4用語版・事前アンケートv12へ固定し、参加者用コードを`Participant.id`として保存する。参加APIは24時間有効な署名付きHttpOnly Cookieで保護する。AIモデルと推論レベルは管理設定を廃止し、環境変数から固定して読む。仕様版63以下の記録は参加者操作で変更しない。
+
 ## 計画書に対する位置づけ
 
 採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。現行4仮説（指標版`four-hypotheses-v1`）はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧6仮説の評価サマリーとraw dataは上書きせず、旧記録保護は仕様版とprotocol_idで限定する。
 
-現行仕様版64では新規参加者を`four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v4`、事前アンケートv12、事後アンケートv5を使う。v12は週あたりAI利用日数0〜7を整数で保存し、理解度の回答目安1・2・4・5を示す。参加者コードを主キーとして保存し、参加者APIは署名付きセッションCookieを要求する。旧仕様版63以下の問題・回答snapshotは保存時の内容で復元し、参加者操作では変更しない。回答採点はbackendで行い、AIサービスを呼ばない。必要な全設問が採点済みで全問正解なら結果表示snapshotに従い確認後または直接surveyへ進み、学習・後続テストを省略する。現行評価はH1〜H4。教材用語解説、辞書、文字数、事後評価を含むその他の条件は[41](41_learning_glossary_material_mode.md)、[42](42_learning_glossary_material_length.md)、[43](43_glossary_definition_paraphrase.md)、[49](49_presurvey_baseline.md)、[50](50_basic_understanding_question_mode.md)、[51](51_four_topic_foundation_mode.md)、[52](52_posttest_five_point_evaluation.md)を参照する。
+仕様版64の新規参加者は`four_topic_fundamentals`、問題バンク`split-actions-four-topic-v4`、事前アンケート`presurvey-four-topic-baseline-v12`に固定する。理解度は経験ありの用語だけ回答目安1・2・4・5を表示し、AI利用日数は週0〜7日の整数で保存する。選択肢配置は常にランダムで、既存参加者のsnapshotは変更しない。参加者用コードをParticipantの主IDにし、参加APIは24時間有効な署名付きHttpOnly Cookieで保護する。モデル・推論レベルは環境変数固定、Fast modeは常時ONとする。仕様版63以下の回答・snapshotは読み取り専用で保全する。事後アンケートは`posttest-5point-v5`を使う。旧記録の条件・問題・回答は保存時のprotocolに従って復元する。旧設問1・2契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、問題モードは[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)、事前アンケートは[49](49_presurvey_baseline.md)。
 
 ## 現行MVPの実装
 
@@ -70,7 +72,7 @@ Alembicによるマイグレーション運用、非同期DBドライバ、専�
 - Docker volumeで永続化
 - ローカル直接起動時はSQLite
 - 起動時に `Base.metadata.create_all` と互換用の不足列追加を実行
-- IDはアプリケーション上36文字の文字列、構造化列はSQLAlchemyのJSON型
+- 各行の内部IDはUUID文字列、参加者の主IDは半角数字1〜64桁の参加者用コード。参加者IDと参照列は最大64文字、構造化列はSQLAlchemyのJSON型
 
 ## モノレポ構成
 
@@ -194,9 +196,9 @@ sequenceDiagram
 
 ### #138 共通履歴と診断連動の共通出題
 
-両群で既存proposedの診断連動出題規則を使用し、unknownはenrichment、M1/M3はconceptual_changeを選ぶ。出題規則版はshared-diagnosis-route-v1であり、旧control-fixed-v1を新規処理で使わない。controlのLLMには分類や診断由来段階を渡さない。
+両群で共通の診断連動出題規則を使用し、unknownはenrichment、M1/M3はconceptual_changeを選ぶ。出題規則版はshared-diagnosis-route-v1であり、旧control-fixed-v1を新規処理で使わない。controlのLLMには分類や診断由来段階を渡さない。
 
-services/interaction_history.pyが同じ参加者・用語の採点済みAttempt/TutorTurnを全周回から統合する。ai/interaction_history.pyが共通allowlistとproposed専用allowlistを適用し、履歴内の診断・教授情報も除く。教材・正答要約・誤答解説の3タスクで同じ共通履歴を使い、proposedだけに明示的な誤概念対応を追加する。
+services/interaction_history.pyが同じ参加者・用語の採点済みAttempt/TutorTurnを全周回から統合する。ai/interaction_history.pyが共通allowlistとexperimental群専用allowlistを適用し、履歴内の診断・教授情報も除く。教材・正答要約・誤答解説の3タスクで同じ共通履歴を使い、experimental群だけに明示的な誤概念対応を追加する。内部群識別値`proposed`は保存記録・API互換性のため維持する。
 
 同一セッションの次教材では、固定採点した現在回答と時刻を履歴へ投影してAI呼出しを先行する。回答確定後の同期履歴と同じ入力になり、解説失敗時は公開しない。履歴からAI解説を除き、生成教材への過去問題/回答prefix追記をしない。
 

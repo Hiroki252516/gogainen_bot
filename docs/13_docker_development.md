@@ -2,7 +2,7 @@
 
 ## 計画書の目標と環境例
 
-アプリ側標準モデル/推論設定はgpt-6-luna / low。Word計画書原本のgpt-5.6-luna / low記載は変更していない。未指定時のCompose/.env.example既定はgpt-6-lunaだが、明示されたCODEX_MODEL環境変数が優先する。管理画面での一時上書きはbackend再起動後に環境値へ戻る。実施前に配布設定・管理上書き・実送信を確認する。[D04](20_experiment_plan_alignment.md#現行実装との差分)を参照する。今回の検証は隔離SQLiteとローカル実行であり、配布先PostgreSQL/Dockerの確認とは区別する。
+実行時のモデルと推論レベルは`CODEX_MODEL`・`CODEX_REASONING_EFFORT`で固定し、管理画面の切替UIを設けない。未指定時は`gpt-6-luna / low`を使う。Fast modeは常時ON。モデル・推論値を変更するときは`.env`と実行環境を揃えてbackendを再起動し、AI接続・生成成功を確認する。Word計画書原本のgpt-5.6-luna / low記載は変更していない。[D04](20_experiment_plan_alignment.md#現行実装との差分)を参照する。
 
 ## Target Environment
 
@@ -117,8 +117,11 @@ backendからCodex app-serverへの接続先はルート`.env`の`CODEX_APP_SERV
 
 ## .env.example
 
+参加者APIのCookie署名用に`PARTICIPANT_SESSION_SECRET`を設定する。32文字以上のランダムな値を生成し、`.env`に保存する。値はbackend再起動後も維持し、実値をGitへコミットしない。
+
 ```env
 APP_ENV=development
+PARTICIPANT_SESSION_SECRET=replace-with-a-stable-random-secret-at-least-32-characters
 BACKEND_NETWORK_MODE=host
 DATABASE_URL=postgresql+psycopg://app:app@127.0.0.1:5432/ai_tutor
 AI_BACKEND=codex_app_server

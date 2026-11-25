@@ -44,9 +44,9 @@
 
 ## 教材生成入力と群分離
 
-教材内解説モードでは、固定辞書のversionと各entryの`id`、`term`、`definition`を`glossary_reference`に入れる。これはcontrol/proposedの双方に同じ構造で渡す。`project_model_payload`で明示的に許可する任意の共通入力とし、共通回答履歴には追加しない。
+教材内解説モードでは、固定辞書のversionと各entryの`id`、`term`、`definition`を`glossary_reference`に入れる。これはcontrol/experimentalの双方に同じ構造で渡す。`project_model_payload`で明示的に許可する任意の共通入力とし、共通回答履歴には追加しない。
 
-生成指示は、本文で実際に使用する登録語を初出時に短く正確に説明すること、無関係な辞書語を列挙しないこと、本文800文字程度を目安とすることを求める。文字数の上下限による検証や長さを理由にした再生成は行わない。proposed専用の診断・taxonomy・教授情報はproposedだけに渡し、controlへの混入を許さない。仕様版29〜38のannotation-only参加者向けに`glossary_reference`を除く生成分岐は後方互換として残すが、新規参加者には適用しない。
+生成指示は、本文で実際に使用する登録語を初出時に短く正確に説明すること、無関係な辞書語を列挙しないこと、本文800文字程度を目安とすることを求める。文字数の上下限による検証や長さを理由にした再生成は行わない。experimental群専用の診断・taxonomy・教授情報だけを同群へ渡し、controlへの混入を許さない。DB/API上のexperimental群識別値は`proposed`である。仕様版29〜38のannotation-only参加者向けに`glossary_reference`を除く生成分岐は後方互換として残すが、新規参加者には適用しない。
 
 教材表示のmaterial glossary snapshotは従来どおり`TutorTurn.diagnosis_json.material_glossary`に保存する。教材本文に統合された用語説明を自動でsnapshotへ追記したり、旧ターンを再解析したりしない。再表示は保存snapshotと参加者modeを使い、AI再生成や旧記録の補完をしない。
 
@@ -60,4 +60,4 @@
 
 ## 検証境界
 
-自動テストで確認するのは、初期値、保存・再起動後の保持、登録時snapshot、非遡及、DB NULL保全、両群の共通入力、proposed診断情報の分離、教材欄の表示制御、旧版保護、教材長条件である。プロンプトに従う指示を実AI教材が完全に実行すること、説明の意味的な正確さ、用語理解・学習成果の向上は機械検査だけで実証されない。研究者の内容確認・予備調査を別途行う。
+自動テストで確認するのは、初期値、保存・再起動後の保持、登録時snapshot、非遡及、DB NULL保全、両群の共通入力、experimental群の診断情報分離、教材欄の表示制御、旧版保護、教材長条件である。プロンプトに従う指示を実AI教材が完全に実行すること、説明の意味的な正確さ、用語理解・学習成果の向上は機械検査だけで実証されない。研究者の内容確認・予備調査を別途行う。

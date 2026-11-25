@@ -1,18 +1,6 @@
 # 研究計画と仕様・実装の対応
 
-## 現行条件（仕様版64）
-
-新規参加者は統合protocol `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で4用語版に固定する。参加者コードを`Participant.id`に保存し、参加者APIは署名付きcookie sessionで認証する。事前アンケートはv12で週0〜7日のAI利用日数と理解度目安1・2・4・5を記録し、問題バンクv4・事後アンケートv5を使う。現行指標版は`four-hypotheses-v1`（H1〜H4）。仕様版63以下の記録は変更せず、仕様版52の対応protocolには評価サマリーだけを追加できる。
-
-## 仕様版63の履歴（統合前のprotocol）
-
-### 仕様版63の履歴: 参加者コード主識別子
-
-`experiment-plan-2026-11-23-participant-code-primary-identifier-v1`では4用語版に固定し、参加者コードをParticipant.idとして保存した。事前アンケートv11、問題バンクv4、事後アンケートv5を使い、満点後早期終了と結果表示snapshotに従う遷移を維持した。仕様版62以下の回答は変換せず、仕様版52の対応2 protocolへの評価サマリー追加のみを許容した。詳細な項目・画面条件は当時の採用記録を参照する。
-
-### 仕様版63の履歴: 週次AI利用頻度・理解度目安
-
-`experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1`では4用語版に固定し、事前アンケートv12で週0〜7日のAI利用日数と理解度目安1・2・4・5を取得した。問題バンクv4・事後アンケートv5、満点後早期終了、4仮説評価は維持した。仕様版62以下の回答は変換しない。尺度・測定上の同等性や研究上の承認は未確認。
+新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`の`four_topic_fundamentals`に固定する。参加者用コードを主IDとして保存し、参加者APIは24時間有効な署名付きHttpOnly Cookieで保護する。選択肢配置はランダム固定、事前アンケートはv12（週0〜7日のAI利用日数、理解度5択と回答目安1・2・4・5）、事後アンケートはv5。モデル・推論レベルは環境値、Fast modeは常時ONとする。旧protocolを含む結果は`test_content_mode`ごとに分ける。必要な全設問が採点済みで全問正解したテスト後は、結果表示snapshotに応じて確認後または直接surveyへ進み、学習・後続テストを省略する。現行指標版は`four-hypotheses-v1`（H1〜H4）。仕様版52の対応する2 protocolは参加者進行・回答・旧サマリーを変更せず、H1〜H4評価サマリーのみ追加できる。仕様版51以下・未対応protocolは再計算しない。仕様版63以下の回答・snapshotは変換しない。尺度・難易度・測定上の同等性や研究上の承認は未確認。
 
 出典・採用判断は[20](20_experiment_plan_alignment.md)、式と欠測定義は[12](12_evaluation_metrics.md)を正本とする。
 

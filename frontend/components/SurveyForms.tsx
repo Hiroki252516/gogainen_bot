@@ -25,7 +25,15 @@ const UNDERSTANDING_OPTIONS = [
   ["moderately", "ある程度理解している"],
   ["well", "よく理解している"],
 ] as const;
-const WEEKLY_AI_USAGE_OPTIONS = [
+const UNDERSTANDING_OPTIONS_V12 = UNDERSTANDING_OPTIONS;
+const FREQUENCY_OPTIONS = [
+  ["0_days", "0日"],
+  ["1_3_days", "1〜3日"],
+  ["4_8_days", "4〜8日"],
+  ["9_20_days", "9〜20日"],
+  ["21_30_days", "21〜30日"],
+] as const;
+const WEEKLY_USAGE_OPTIONS = [
   ["0", "0日"],
   ["1", "1日"],
   ["2", "2日"],
@@ -82,7 +90,7 @@ const AMOUNT_OPTIONS = [
 ] as const;
 
 type ExposureValue = (typeof EXPOSURE_OPTIONS)[number][0];
-type UnderstandingValue = (typeof UNDERSTANDING_OPTIONS)[number][0];
+type UnderstandingValue = (typeof UNDERSTANDING_OPTIONS)[number][0] | (typeof UNDERSTANDING_OPTIONS_V12)[number][0];
 type RatingValue = number;
 
 export type PresurveySubmission = {
@@ -90,7 +98,8 @@ export type PresurveySubmission = {
   prior_term_exposure: Record<string, ExposureValue>;
   prior_term_understanding: Record<string, UnderstandingValue | null>;
   general_ratings: {
-    ai_usage_days_per_week: number;
+    ai_usage_frequency_30d?: (typeof FREQUENCY_OPTIONS)[number][0];
+    ai_usage_days_per_week?: number;
     ai_proficiency: Record<string, number>;
   };
 };
@@ -118,6 +127,8 @@ export function PresurveyQuestionnaire({
   const [error, setError] = useState("");
   const [completed, setCompleted] = useState(false);
   const [exposureAnnouncement, setExposureAnnouncement] = useState("");
+  const isWeeklyUsageVersion = surveyVersion === "presurvey-four-topic-baseline-v12";
+  const understandingOptions = isWeeklyUsageVersion ? UNDERSTANDING_OPTIONS_V12 : UNDERSTANDING_OPTIONS;
   const update = (key: string, value: string) => setValues((previous) => ({ ...previous, [key]: value }));
   const updateExposure = (termKey: string, value: string) => {
     const wasExperienced = values[`exposure:${termKey}`] === "experienced";
@@ -141,7 +152,7 @@ export function PresurveyQuestionnaire({
         `exposure:${key}`,
         ...(values[`exposure:${key}`] === "experienced" ? [`understanding:${key}`] : []),
       ]),
-      "ai_usage_days_per_week",
+      isWeeklyUsageVersion ? "ai_usage_days_per_week" : "ai_usage_frequency_30d",
       ...PROFICIENCY_ITEMS.map(([key]) => `proficiency:${key}`),
     ];
     if (requiredKeys.some((key) => !values[key])) {
@@ -160,7 +171,9 @@ export function PresurveyQuestionnaire({
           values[`exposure:${key}`] === "experienced" ? values[`understanding:${key}`] : null,
         ])) as Record<string, UnderstandingValue | null>,
         general_ratings: {
-          ai_usage_days_per_week: Number(values.ai_usage_days_per_week),
+          ...(isWeeklyUsageVersion
+            ? { ai_usage_days_per_week: Number(values.ai_usage_days_per_week) }
+            : { ai_usage_frequency_30d: values.ai_usage_frequency_30d as (typeof FREQUENCY_OPTIONS)[number][0] }),
           ai_proficiency: Object.fromEntries(PROFICIENCY_ITEMS.map(([key]) => [key, Number(values[`proficiency:${key}`])])) as Record<string, number>,
         },
       };
@@ -204,9 +217,11 @@ export function PresurveyQuestionnaire({
           <h3 className="presurvey-followup-heading">追加質問：理解度</h3>
           <RatingButtons
             label={understandingQuestion}
-            description={<><strong>回答の目安</strong><br />基本的な仕組みを知らない場合は「1 全く理解していない」、一部知っている場合は「2 あまり理解していない」、知っている場合は「4 ある程度理解している」、説明できる場合は「5 よく理解している」が目安です。</>}
+            description={isWeeklyUsageVersion
+              ? <><strong>回答の目安</strong><br />1 全く理解していない、2 あまり理解していない、4 ある程度理解している、5 よく理解している。</>
+              : <><strong>回答の目安</strong><br />基本的な仕組みがあまり分からない場合は「2 あまり理解していない」が目安です。基本的な仕組みは分かるものの、分からない部分もある場合は「4 ある程度理解している」が目安です。</>}
             value={values[`understanding:${key}`] || ""}
-            options={UNDERSTANDING_OPTIONS}
+            options={understandingOptions}
             disabled={submitting}
             onChange={(value) => update(`understanding:${key}`, value)}
           />
@@ -214,13 +229,21 @@ export function PresurveyQuestionnaire({
       </section>;
     })}
     <h2 className="survey-section-heading">AIの利用経験</h2>
-    <ChoiceButtons
-      label="普段の生活では、1週間あたり何日程度AIを利用しますか。"
-      value={values.ai_usage_days_per_week || ""}
-      options={WEEKLY_AI_USAGE_OPTIONS}
-      disabled={submitting}
-      onChange={(value) => update("ai_usage_days_per_week", value)}
-    />
+    {isWeeklyUsageVersion
+      ? <ChoiceButtons
+        label="直近1週間のうち、AIを利用した日は何日ありましたか。"
+        value={values.ai_usage_days_per_week || ""}
+        options={WEEKLY_USAGE_OPTIONS}
+        disabled={submitting}
+        onChange={(value) => update("ai_usage_days_per_week", value)}
+      />
+      : <ChoiceButtons
+        label="直近30日間のうち、AIを利用した日は何日ありましたか。"
+        value={values.ai_usage_frequency_30d || ""}
+        options={FREQUENCY_OPTIONS}
+        disabled={submitting}
+        onChange={(value) => update("ai_usage_frequency_30d", value)}
+      />}
     <h2 className="survey-section-heading">AIの使い方についての自己評価</h2>
     <p className="muted">次の各項目について、最も当てはまるものを選んでください。</p>
     {PROFICIENCY_ITEMS.map(([key, label, example]) => <RatingButtons
@@ -354,13 +377,14 @@ function ChoiceButtons({
   </div>;
 }
 
-function RatingButtons({ label, options, value, disabled, onChange, description }: {
+function RatingButtons({ label, options, value, disabled, onChange, description, displayNumbers }: {
   label: string;
   options: readonly (readonly [string, string])[];
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
   description?: ReactNode;
+  displayNumbers?: readonly string[];
 }) {
   return <div className="survey-rating">
     <div className="survey-rating-label"><span>{label}</span><span className="required-indicator">必須</span></div>
@@ -375,7 +399,7 @@ function RatingButtons({ label, options, value, disabled, onChange, description 
         aria-pressed={value === rating}
         disabled={disabled}
         onClick={() => onChange(rating)}
-      ><span className="survey-rating-value">{index + 1}</span><span>{optionLabel}</span></button>)}
+      ><span className="survey-rating-value">{displayNumbers?.[index] ?? index + 1}</span><span>{optionLabel}</span></button>)}
     </div>
   </div>;
 }

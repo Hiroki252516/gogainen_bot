@@ -145,3 +145,21 @@ def _create(client: TestClient, assignment_code: str) -> str:
     )
     assert response.status_code == 200, response.text
     return response.json()["participant_id"]
+
+
+def test_admin_option_order_is_fixed_to_randomized_for_new_participants(isolated_api):
+    client, engine = isolated_api
+
+    status = client.get("/api/admin/option-order")
+    assert status.status_code == 200
+    assert status.json() == {"mode": RANDOMIZED, "applies_to": "new_participants_only"}
+
+    assert client.put("/api/admin/option-order", json={"mode": DEBUG_FIXED}).status_code == 409
+    accepted = client.put("/api/admin/option-order", json={"mode": RANDOMIZED})
+    assert accepted.status_code == 200
+    assert accepted.json()["mode"] == RANDOMIZED
+
+    participant_id = _create(client, "A")
+    with Session(engine) as db:
+        participant = db.get(Participant, participant_id)
+        assert participant.option_order_mode == RANDOMIZED

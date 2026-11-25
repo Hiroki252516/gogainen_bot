@@ -1,10 +1,8 @@
 # 学習ログ駆動型AIチューター
 
-2026-11-24現行条件：新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で登録し、`four_topic_fundamentals`に固定します。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v12`、事後アンケートは`posttest-5point-v5`です。AI利用日数は週0〜7日の整数を`general_ratings.ai_usage_days_per_week`に保存し、理解度は経験「ある」の用語だけに回答目安1・2・4・5を示します。参加者コード（半角数字1〜64桁）を`Participant.id`として保存し、管理画面・ログ・CSV/XLSX・ファイル名で識別に使いますが、AI入力には含めません。学籍番号はアプリで取得せず、対応表は研究者がアプリ外で管理します。参加者APIは24時間有効な署名付きHttpOnly Cookieを要求し、署名鍵`PARTICIPANT_SESSION_SECRET`は32文字以上の安定した秘密値です。仕様版63以下のID・回答・snapshotは保持し、参加者操作を読み取り専用とします。現行評価は`four-hypotheses-v1`のH1〜H4です。仕様版52の対応protocolには既存記録を変えず評価サマリーのみ追加できます。尺度・問題の妥当性および研究上の承認は未確認です。[同意・セキュリティ](docs/15_security_privacy.md)、[API](docs/08_backend_api_spec.md)、[データモデル](docs/07_data_model.md)、[事前アンケート](docs/49_presurvey_baseline.md)、[運用手順](docs/19_experiment_operation_runbook.md)、[受入記録](docs/14_testing_acceptance.md)。
+2026-11-25現行条件：新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で登録し、4用語版（`four_topic_fundamentals`）へ固定します。問題バンクは`split-actions-four-topic-v4`、事前アンケートはv12、事後アンケートは`posttest-5point-v5`です。理解度は経験ありの用語だけ5択で尋ね、回答は1〜5、回答の目安は1・2・4・5と表示します。AI利用日数は直近1週間の0〜7日の整数です。参加者用コードを`Participant.id`と`display_code`に保存し、画面・ログ・CSV/XLSXで使いますがAI入力には含めません。参加者APIは24時間有効の署名付きHttpOnly Cookieを要求し、`PARTICIPANT_SESSION_SECRET`には32文字以上の安定した値を設定します。管理画面の固定設定とAIモデル・推論レベル選択UIを削除し、モデル・推論は環境変数、Fast modeは常時ON、選択肢配置はランダム、テスト問題モードは4用語版に固定します。管理画面では群条件`proposed`を`experimental`と表示します。事後アンケートv5と現行指標`four-hypotheses-v1`（H1〜H4）を維持します。仕様版63以下の記録は当時の内容で保持し、参加者操作では変更しません。尺度の妥当性と研究上の承認は未確認です。[事前アンケート](docs/49_presurvey_baseline.md)、[4用語版](docs/51_four_topic_foundation_mode.md)、[事後アンケート](docs/52_posttest_five_point_evaluation.md)、[評価指標](docs/12_evaluation_metrics.md)、[受入記録](docs/14_testing_acceptance.md)。
 
-仕様版63には参加者コード主識別子化と、週次AI利用頻度・理解度目安更新の別protocolがありました。仕様版64で統合し、旧仕様版63記録は保存時のprotocolを保持します。
-
-仕様版48では事前アンケートを経験・理解度の条件付き回答へ改訂し、仕様版49では事後アンケートを5段階化しました。仕様版50〜53で問題・アンケート・早期終了条件を更新し、仕様版54で統合しました。仕様版55では新規参加者向けの事前アンケートに自己評価の具体例を追加します。変更は新規参加者だけに適用し、既存回答には遡及しません。
+履歴：仕様版48では事前アンケートを経験・理解度の条件付き回答へ改訂し、仕様版49では事後アンケートを5段階化しました。仕様版50〜54では当時の問題・アンケート・早期終了条件を更新・統合しました。仕様版55以降の変更も新規参加者だけに適用し、既存回答には遡及しません。現行条件はREADME冒頭と仕様版64の記述を参照してください。
 
 2026-11-07履歴：仕様版41には`experiment-plan-2026-11-07-fixed-admin-settings-control-shared-prompt-v1`と`experiment-plan-2026-11-07-learning-material-target-800-control-shared-prompt-v1`の異なるprotocolがありました。仕様版42では両方の変更を統合し、仕様版41の両protocolは閲覧専用です。2026-11-03履歴：仕様版35では管理画面の「設問1のみ出題」で各用語1問（計3問）と設問1・2（計6問）を切り替えていました。仕様版40で計3問に固定し、設定UI/APIを廃止しています。導入時の記録は[docs/48](docs/48_first_question_only.md)を参照してください。以下の過去版の説明は採用時の記録です。
 
@@ -84,11 +82,11 @@ Release PleaseのworkflowにはGitHub Appのinstallation tokenを使います。
 
 2026-11-11履歴（fix/issue-317）: 研究用コードを分離SQLiteへ保存し、管理画面/APIで対応表を管理していた時期がある。この保存・管理機能は2026-11-12に廃止した。既存の別SQLiteファイルと行は参照・移行・削除せず保持し、参加者の明示的な削除時だけ該当IDの行を後処理する。
 
-2026-11-12当時の登録方式: 同意書には研究責任者の連絡先、データの保存場所、外付けUSBでの対応表保管、10年間の保管を記載し、新規登録では研究用コードを一時受信してデータベース等へ保存しない方式だった。仕様版63では参加者コードを主キーとして保存する。対応表は研究者がアプリ外で管理し、撤回時の照合・アプリ内参加者削除・外部コピーの取扱いを行う。文書・実装変更は指導教員または研究倫理上の承認を意味しない。詳細は[データ保護](docs/15_security_privacy.md)、[API仕様](docs/08_backend_api_spec.md)、[運用手順](docs/19_experiment_operation_runbook.md)を参照してください。
+履歴（2026-11-12時点）: 同意書には研究責任者の連絡先、データ保存場所、外付けUSBでの対応表保管、10年間の保管を記載していました。当時のコードは登録後に破棄していました。現行仕様版64では参加者用コードを`Participant.id`と`display_code`に保存し、学籍番号は取得せず、名前と参加者用コードの対応表は研究者がアプリ外で管理します。撤回時の照合・アプリ内参加者削除・外部コピーの取扱いは研究者が行います。今回の文書・実装変更は指導教員または研究倫理上の承認を意味しません。詳細は[データ保護](docs/15_security_privacy.md)、[API仕様](docs/08_backend_api_spec.md)、[運用手順](docs/19_experiment_operation_runbook.md)を参照してください。
 
 Wordと承認された実装計画に沿い、教材・low設定・新アンケート・現行4仮説の記述集計を実装しています。旧6仮説は過去版の集計記録として保持します。[採用判断と残課題](docs/20_experiment_plan_alignment.md)と[評価定義](docs/12_evaluation_metrics.md)を先に確認してください。
 
-現行の新規参加者には仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`を保存します。仕様版63以下、NULL・未対応版は参加者操作を読み取り専用とし、保存済み値を補完・変更しません。仕様版52の対応2 protocolだけは既存回答・進行状態・旧評価を変えず、H1〜H4評価サマリーを追加できます。仕様版51以下・未対応protocolは再計算・現行集計の対象外です。
+現行の新規参加者には仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`を保存します。仕様版63以下、NULL・未対応版の参加者は参加者操作を読み取り専用とし、版・回数・注釈・教材解説モード・問題モードを補完しません。仕様版52の対応2 protocolだけは既存回答・進行状態・旧評価を変えず、H1〜H4評価サマリーのみ追加できます。仕様版51以下・未対応protocolは再計算・現行集計の対象外です。ParticipantとRuntimeSettingのnullable設定列や保存済み記録は書き換えません。
 
 このリポジトリは、卒業研究で使う「誤概念タイプと学習ステージに基づく AI・情報系専門用語の概念理解支援システム」の仕様と実装を含みます。
 
@@ -98,7 +96,7 @@ Wordと承認された実装計画に沿い、教材・low設定・新アンケ�
 
 ### 現行の問題
 
-新規参加者は4用語版に固定します。管理画面の問題モード切替はなく、互換APIは固定値を返します。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスの4問を10択で出題し、正解3つまたはJ単独を選びます。テストと学習確認は保存snapshotを使って復元します。必要な全設問が採点済みで全問正解した事前・再テスト1/2・内部`final_test`後は、結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略します。未達時は誤答用語を学習し、最大2回の再テストへ進みます。内部`final_test`は過去記録復元用に維持し、新規通常経路では使用しません。参加者コードは`Participant.id`として保存し、参加者APIは登録時に発行する24時間の署名付きHttpOnly Cookieで保護します。学籍番号は取得せず、対応表はアプリ外で管理します。現行指標・参加者別出力は`four-hypotheses-v1`のH1〜H4で、旧6仮説は履歴です。仕様版63以下の参加者記録は当時の問題・アンケート版で復元し、参加者操作では変更しません。仕様版52の対応2 protocolは評価サマリーのみ追加可能で、仕様版51以下と未対応protocolは再計算対象外です。
+新規参加者は仕様版64の4用語版に固定します。管理画面の問題モード切替はなく、互換APIは固定値を返します。4用語版はTransformer、LLMの学習段階、マルチエージェント、記憶プロセスの4問を10択で出題し、正解3つまたはJ単独を選びます。テストと学習確認は保存snapshotを使って復元します。必要な全設問が採点済みで全問正解した事前・再テスト1/2・内部`final_test`後は、結果表示snapshotに従って確認後または直接surveyへ進み、学習・後続テストを省略します。未達時は誤答用語を学習し、最大2回の再テストへ進みます。内部`final_test`は過去記録復元用に維持し、新規通常経路では使用しません。参加者用コードは`Participant.id`と`display_code`に保存し、AI入力には含めません。学籍番号は取得せず、対応表はアプリ外で管理します。参加者APIは登録時に発行する24時間有効の署名付きHttpOnly Cookieで保護します。現行指標・参加者別出力は`four-hypotheses-v1`のH1〜H4で、旧6仮説は履歴です。仕様版63以下の参加者記録は当時の問題・アンケート版で復元し、参加者操作では変更しません。仕様版52の対応2 protocolは評価サマリーのみ追加可能で、仕様版51以下と未対応protocolは再計算対象外です。
 
 研究の比較対象は「AIを使うかどうか」ではありません。両群とも同じ種類の学習履歴を参照する通常AIを使い、実験群だけにbackendの明示的な診断・修正対象・誤概念の定義・タイプ別教授方針を追加した効果を比較します。統制群が生の回答履歴から自然に誤りを訂正することは許容し、「誤概念対応全般の有無」の比較とは位置づけません。
 
@@ -109,19 +107,19 @@ Wordと承認された実装計画に沿い、教材・low設定・新アンケ�
 3. **H3 再テスト満点率:** 実験群は統制群よりも、事前テスト完了・非満点の再テスト対象者における満点到達率が高い。
 4. **H4 教材評価:** 教材閲覧者の教材評価を6項目別に記述集計する。教材評価を単一得点へ合成しない。
 
-大学生40名・各群20名、原則無作為割付が研究目標です。Word計画書のモデル記載はgpt-5.6-luna / lowですが、アプリ側の運用基準はgpt-6-luna / lowです。仕様版64でも教材生成は両群に共通指示・共通入力を使い、提案群だけに診断・タイプ別教授指示を追加します。統制群の`teaching_strategy`値は出力Schemaで固定しますが、方略を説明する自然言語指示は送りません。現行事後アンケートはシステム評価1・教材評価6の1〜5段階と任意自由記述です。
+大学生40名・各群20名、原則無作為割付が研究目標です。Word計画書のモデル記載はgpt-5.6-luna / lowですが、実行時は`CODEX_MODEL`と`CODEX_REASONING_EFFORT`の環境値を使い、管理画面から変更しません。仕様版64でも教材生成は両群に共通指示・共通入力を使い、experimental群だけに診断・タイプ別教授指示を追加します。内部群識別値`proposed`は保存記録・API互換性のため維持します。統制群の`teaching_strategy`値は出力Schemaで固定しますが、方略を説明する自然言語指示は送りません。現行事後アンケートはシステム評価1・教材評価6の1〜5段階と任意自由記述です。
 
-**過去の対応記録（仕様版39まで）:** 計画書に沿う共通/統制群指示、unknownの定義・仕組み・適用確認、low既定値、用語の事前知識6項目・一般4/教材6の10段階・任意自由記述、教材表示ログ、当時の6仮説の管理表示・専用CSVを追加しました。仕様版40で統制群の群別自然言語指示を削除し、現行仕様版64でも共通指示のみを使います。仕様版41から教材本文800文字程度を目安とし、長さによる合否判定・再生成を行いません。旧アンケート値は変換せず版付きJSONへ保存します。自動割付・各群20名上限・正答位置の復旧は対象外です。管理認証は冒頭の2026-10-27追加分を参照してください。AIモデルは既定gpt-6-lunaで、モデル・推論レベル・Fast mode設定はDBへ保存しない一時的なbackend内設定です。Fast modeは使用量が増えるため、実験中は設定を固定してください。
+**過去の対応記録（仕様版39まで）:** 計画書に沿う共通/統制群指示、unknownの定義・仕組み・適用確認、low既定値、用語の事前知識6項目・一般4/教材6の10段階・任意自由記述、教材表示ログ、当時の6仮説の管理表示・専用CSVを追加しました。仕様版40で統制群の群別自然言語指示を削除し、現行仕様版64でも共通指示のみを使います。仕様版41から教材本文800文字程度を目安とし、長さによる合否判定・再生成を行いません。旧アンケート値は変換せず版付きJSONへ保存します。自動割付・各群20名上限・正答位置の復旧は対象外です。管理認証は冒頭の2026-10-27追加分を参照してください。AIモデル・推論レベルは`CODEX_MODEL`・`CODEX_REASONING_EFFORT`環境値で固定し、管理画面から変更できません。Fast modeは常時ONに固定し、管理画面と更新APIからOFFへ変更できません。
 
 これは研究上の評価目的です。新規参加者は事前テスト後に最大2回の再テストを受けます。必要な全設問が採点済みで全問正解した場合、事前・再テスト1/2のいずれでも、結果表示snapshotに応じて確認後または直接surveyへ進み、学習・後続テストを省略します。事前未達者は誤答用語を学習し、再テスト1未達後も誤答用語の学習を挟んで再テスト2へ進みます。再テスト2採点後は正誤にかかわらずsurveyへ進みます。内部`final_test`は履歴復元用に維持し、新規通常経路では使用しません。未回答を含む採点バッチも1回とし、全問未回答の採点は拒否します。早期終了の測定特性・研究上の承認を前提にしません。
 
-テストは最大2回の再テスト（事前を含め最大3回）です。現行仕様版64の新規参加者は4用語版に固定され、問題バンク`split-actions-four-topic-v4`から4用語各1問・計4問を出題します。旧3用語の`application`・`basic_understanding`の問題バンクは過去記録の復元用です。4用語版の事前・再テスト1/2は同じ問題・選択肢で、正解3つまたはJ単独を選びます。全設問採点後に満点なら結果表示snapshotに応じて結果確認後または直接事後アンケートへ進み、学習・後続テストを省略します。未達者は誤答用語を学習し、再テスト1未達後は再学習して再テスト2へ進みます。再テスト2採点後はsurveyへ進みます。内部`final_test`は履歴復元用に維持し、新規通常経路では使いません。学習確認は直前テストで誤答した問題の保存snapshotを再利用します。旧問題・旧学習YAMLは履歴復元用に保持します。共有辞書は`backend/app/seed/content/learning_glossary_v4.yml`です。ログ・CSV/XLSX・現行H1〜H4評価は仕様版/protocolと4用語条件を識別し、旧条件と合算しません。選択肢配置はデバッグ配置またはランダム配置で、ランダム時は「わからない」を最後のJに固定します。採点は表示ラベルでなく選択肢ID・内部メタデータに基づきます。[4用語版の詳細](docs/51_four_topic_foundation_mode.md)。
+現行の4用語版は`split-actions-four-topic-v4`から4用語各1問・計4問を出題します。仕様版51〜56などの旧参加者は保存済みprotocolに対応する当時の問題バンクから復元します。4用語版の事前・再テスト1/2は同じ問題・選択肢で、正解3つまたはJ単独を選びます。全設問採点後に満点なら結果表示snapshotに応じて結果確認後または直接事後アンケートへ進み、学習・後続テストを省略します。未達者は誤答用語を学習し、再テスト1未達後は再学習して再テスト2へ進みます。再テスト2採点後はsurveyへ進みます。内部`final_test`は履歴復元用に維持し、新規通常経路では使いません。学習確認は直前テストで誤答した問題の保存snapshotを再利用します。旧問題・旧学習YAMLは履歴復元用に保持します。共有辞書は`backend/app/seed/content/learning_glossary_v4.yml`です。ログ・CSV/XLSX・現行H1〜H4評価は参加者の保存済みモードごとに集計し、異なるモードを合算しません。選択肢配置は`randomized`に固定し、正解位置の手掛かりが出ないように配置します。「わからない」は最後のJに固定します。採点は表示ラベルでなく選択肢ID・内部メタデータに基づきます。[4用語版の詳細](docs/51_four_topic_foundation_mode.md)。
 
 教材生成・正答要約・誤答解説では、両群に共通用語・構成要素・RAG・`interaction_history`を渡します。履歴は同じ参加者・用語の全フェーズの採点済み回答で、問題・選択・全体正誤・時刻だけを含み、診断ラベルやAI解説は含めません。実験群だけに診断・対象主張・taxonomy・教授方針を追加します。確認問題は両群とも同じ診断連動規則を使いますが、統制群のLLMには診断・段階を渡しません。教授方略はbackendで固定し、実験群の教授契約と教材内transfer_checkを維持します。
 
 ## 実装で守る前提
 
-両群の教材章立てはAIが決め、冒頭の##用語名と非空###節を維持します。実験群の教授内容・適用確認は節本文中の証拠で検査します。契約版はtutoring-teaching-contract-v7、taxonomy版はm1-m3-unknown-v3。証拠を自動補正せず、最大3試行後も不合格なら停止します。DB変更はnullable列追加に限定します。仕様版44は既存の問題モード・ログ列を再利用して第3モードを追加し、仕様版45では既定モードの変更と固定2回フローを別protocolとして導入しました。仕様版46では両条件を統合します。CSV/XLSXの従来列と過去値を維持します。
+両群の教材章立てはAIが決め、冒頭の##用語名と非空###節を維持します。実験群の教授内容・適用確認は節本文中の証拠で検査します。契約版はtutoring-teaching-contract-v7、taxonomy版はm1-m3-unknown-v3。証拠を自動補正せず、最大3試行後も不合格なら停止します。DB変更はnullable列の追加と、参加者コードを64桁まで保存するための識別子列拡張に限ります。仕様版44は既存の問題モード・ログ列を再利用して第3モードを追加し、仕様版45では既定モードの変更と固定2回フローを別protocolとして導入しました。仕様版46では両条件を統合します。CSV/XLSXの従来列と過去値を維持します。
 
 この自動検証は、契約内の対象ID・方略・必須フィールド・本文証拠の一致・章立て・禁止文字列を確認するものです。教材本文の文字数は目標値に対する参考情報として記録し、合否判定には使いません。教材の事実的正しさ、反駁の妥当性、言い換えによる正答漏えい、意味的な過去解説の混入まで保証するものではありません。プロンプト上の指示と自動検査を区別し、教材内容は研究者が目視確認します。詳細は [AI契約の検証範囲](docs/10_ai_prompt_contracts.md#出力検証) を参照してください。
 
@@ -259,7 +257,7 @@ GitHub ActionsのBackend testsは、収集したテストをファイル単位�
 
 ## AIバックエンド
 
-通常実行の既定は `AI_BACKEND=codex_app_server` です。OpenAI APIキーは使わず、ホスト側のCodex app-serverが保持するChatGPT/Codexログインを使います。管理画面のCodex Fast modeは初期OFFで、対応モデル・アカウントに応じて次回呼び出しから有効になります。使用量が増え、速度向上幅はモデルにより異なります。backend再起動でOFFに戻ります。
+通常実行の既定は `AI_BACKEND=codex_app_server` です。OpenAI APIキーは使わず、ホスト側のCodex app-serverが保持するChatGPT/Codexログインを使います。Codex Fast modeは常時ONに固定し、毎回のturnで`serviceTierForTurn=fast`を指定します。管理画面からの切替はできません。対応モデル・アカウントにより利用可否が異なり、使用量が増えます。backend再起動後もONのままです。
 
 ```bash
 ./scripts/start-codex-app-server.sh
@@ -290,7 +288,7 @@ bridge構成を選ぶ場合のapp-server接続例は`CODEX_APP_SERVER_URL=ws://h
 
 ## 管理画面ログとCSV
 
-管理画面では、ログを全体ログと参加者別ログに分けて確認できます。
+管理画面では、ログを全体ログと被験者別ログに分けて確認できます。
 
 ```text
 GET /api/admin/logs/overview
@@ -305,6 +303,6 @@ GET /api/admin/export/hypothesis_group_summary.csv
 GET /api/admin/export/hypothesis_group_summary.xlsx
 ```
 
-CSVは `record_type, source_type, participant_id, participant_code, display_code, test_content_mode, phase, test_round, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。現行仕様版64の参加者行では`participant_id`と`participant_code`は同じ参加者コードを指し、旧記録の`participant_id`は当時のIDを保持します。出力先は `exports/` です。
+CSVは `record_type, source_type, participant_id, display_code, phase, test_round, term_slug, event_time, question_shown_at, answered_at, response_time_sec, question_body, selected_option_body, question_body_snapshot, option_order_snapshot, summary, value_json` の形式で、回答履歴・学習状態・学習セッション・AIログなどを1ファイルにまとめます。回答単位の行は `record_type=answer`、`source_type=test_attempt` または `source_type=learning_turn` です。出力先は `exports/` です。
 
 現行評価サマリーは`four-hypotheses-v1`のH1〜H4を`hypothesis_metrics_json`へ保存します。旧6仮説サマリーは新しい評価版で上書きしません。`pretest_score`、`retest_score`、`attainment_correct_rate`等の従来列は互換性のため残しますが、現行4仮説の定義とは区別します。周回名と`final_score_source`で測定経路を区別します。仕様版52の2つの対応protocolは参加者操作を読み取り専用に保ち、保存済みデータによるH1〜H4評価サマリーのみ追加します。仕様版51以下と未対応protocolは再計算・現行群集計の対象外です。[評価指標と未確定条件](docs/12_evaluation_metrics.md) を参照してください。

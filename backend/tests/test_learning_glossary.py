@@ -157,7 +157,6 @@ def restore_settings():
 
 
 def start_learning(group, research_code=None, labels="DEF"):
-    client.put("/api/admin/option-order", json={"mode": "debug_fixed"})
     research_code = research_code or new_research_code()
     participant_response = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "research_code": research_code})
     assert participant_response.status_code == 200, participant_response.text

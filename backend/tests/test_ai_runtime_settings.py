@@ -36,10 +36,19 @@ def test_gpt6_luna_is_runtime_default_without_env_file(monkeypatch):
     monkeypatch.setattr(runtime_config, "get_settings", lambda: settings)
 
     assert settings.codex_model == "gpt-6-luna"
-    assert runtime_config.current_ai_runtime_settings() == ("gpt-6-luna", "low", False)
+    assert runtime_config.current_ai_runtime_settings() == ("gpt-6-luna", "low", True)
 
 
-def test_admin_ai_api_exposes_and_accepts_all_model_and_effort_options(monkeypatch):
+def test_runtime_model_and_effort_are_read_from_env(monkeypatch):
+    monkeypatch.setenv("CODEX_MODEL", "gpt-6.1-sol")
+    monkeypatch.setenv("CODEX_REASONING_EFFORT", "medium")
+    settings = Settings(_env_file=None)
+    monkeypatch.setattr(runtime_config, "get_settings", lambda: settings)
+
+    assert runtime_config.current_ai_runtime_settings() == ("gpt-6.1-sol", "medium", True)
+
+
+def test_admin_ai_api_hides_and_rejects_runtime_model_and_effort_changes(monkeypatch):
     monkeypatch.setattr(get_settings(), "ai_backend", "codex_app_server")
 
     async def fake_status(self):
@@ -50,49 +59,50 @@ def test_admin_ai_api_exposes_and_accepts_all_model_and_effort_options(monkeypat
 
     status = client.get("/api/admin/ai/status")
     assert status.status_code == 200
-    assert status.json()["allowed_models"] == list(ALLOWED_MODELS)
-    assert status.json()["allowed_reasoning_efforts"] == list(ALLOWED_REASONING_EFFORTS)
-    assert status.json()["fast_mode"] is False
-    assert status.json()["can_change_fast_mode"] is True
+    assert "allowed_models" not in status.json()
+    assert "allowed_reasoning_efforts" not in status.json()
+    assert "model" not in status.json()
+    assert "reasoning_effort" not in status.json()
+    assert status.json()["fast_mode"] is True
+    assert status.json()["can_change_fast_mode"] is False
     assert status.json()["fast_mode_applies"] is True
 
     for model in ALLOWED_MODELS:
         response = client.post("/api/admin/ai/model", json={"model": model})
-        assert response.status_code == 200
-        assert response.json()["model"] == model
+        assert response.status_code == 409
 
     for effort in ALLOWED_REASONING_EFFORTS:
         response = client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": effort})
-        assert response.status_code == 200
-        assert response.json()["reasoning_effort"] == effort
+        assert response.status_code == 409
 
-    assert client.post("/api/admin/ai/model", json={"model": "unknown-model"}).status_code == 422
-    assert client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": "ultra"}).status_code == 422
+    assert client.post("/api/admin/ai/model", json={"model": "unknown-model"}).status_code == 409
+    assert client.post("/api/admin/ai/reasoning-effort", json={"reasoning_effort": "ultra"}).status_code == 409
 
     enabled = client.post("/api/admin/ai/fast-mode", json={"enabled": True})
     assert enabled.status_code == 200
     assert enabled.json()["fast_mode"] is True
     disabled = client.post("/api/admin/ai/fast-mode", json={"enabled": False})
-    assert disabled.status_code == 200
-    assert disabled.json()["fast_mode"] is False
+    assert disabled.status_code == 409
     for value in ("true", 1, None):
         assert client.post("/api/admin/ai/fast-mode", json={"enabled": value}).status_code == 422
 
 
-def test_fast_mode_is_process_local_and_defaults_off():
-    assert current_ai_runtime_settings()[2] is False
+def test_fast_mode_is_fixed_on():
+    assert current_ai_runtime_settings()[2] is True
     assert set_fast_mode(True) is True
     assert current_ai_runtime_settings()[2] is True
+    with pytest.raises(ValueError, match="fixed on"):
+        set_fast_mode(False)
     reset_fast_mode_override()
-    assert current_ai_runtime_settings()[2] is False
+    assert current_ai_runtime_settings()[2] is True
 
 
-def test_fast_mode_api_is_disabled_for_mock_backend(monkeypatch):
+def test_fast_mode_status_is_fixed_on_but_does_not_apply_to_mock_backend(monkeypatch):
     monkeypatch.setattr(get_settings(), "ai_backend", "mock")
     client = AuthenticatedTestClient(app)
 
     status = client.get("/api/admin/ai/status")
-    assert status.json()["fast_mode"] is False
+    assert status.json()["fast_mode"] is True
     assert status.json()["can_change_fast_mode"] is False
     assert status.json()["fast_mode_applies"] is False
     assert client.post("/api/admin/ai/fast-mode", json={"enabled": True}).status_code == 409
@@ -154,9 +164,9 @@ def test_app_server_receives_selected_settings_in_payload_and_audit(monkeypatch,
     assert thread_payload["model"] == model
     assert turn_payload["model"] == model
     assert turn_payload["effort"] == effort
-    assert turn_payload["serviceTierForTurn"] == ("fast" if fast_mode else "default")
+    assert turn_payload["serviceTierForTurn"] == "fast"
     assert result.request_audit["model"] == model
     assert result.request_audit["reasoning_effort"] == effort
-    assert result.request_audit["fast_mode"] is fast_mode
+    assert result.request_audit["fast_mode"] is True
     assert result.request_audit["turn_start_params"]["effort"] == effort
-    assert result.request_audit["turn_start_params"]["serviceTierForTurn"] == ("fast" if fast_mode else "default")
+    assert result.request_audit["turn_start_params"]["serviceTierForTurn"] == "fast"

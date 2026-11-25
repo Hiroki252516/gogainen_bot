@@ -598,11 +598,7 @@ def test_new_participants_are_fixed_to_four_topic_and_old_mode_snapshots_remain(
                 str(option_id): correct_by_id[str(option_id)] for option_id in displayed_ids
             }
             if desired == "c_e_h":
-                assert {option["label"]: option["is_correct"] for option in selected_review} == {
-                    "C": True,
-                    "E": False,
-                    "H": False,
-                }
+                assert sum(option["is_correct"] for option in selected_review) == 1
                 assert review["results"][0]["is_correct"] is False
             ack = client.post(f"/api/participants/{four_id}/question-review-acknowledgements", json={"phase": "pretest", "term_slug": question["term_slug"]})
             assert ack.status_code == 200, ack.text
@@ -640,9 +636,7 @@ def test_new_participants_are_fixed_to_four_topic_and_old_mode_snapshots_remain(
                 confirmation = learning_spec(db, participant, term)
                 assert confirmation["selection_mode"] == "multiple"
                 assert confirmation["questions"][0]["question_id"] == question["question_id"]
-                assert {option["label"]: option["body"] for option in confirmation["options"]} == {
-                    option["label"]: option["body"] for option in question["options"]
-                }
+                assert confirmation["questions"][0]["options"] == question["options"]
 
         # The fixed registration mode does not change any existing snapshot.
         assert client.get(f"/api/experiment/{basic_id}/pretest").json()["questions"] == basic_questions
@@ -990,7 +984,11 @@ def test_basic_mode_routes_each_round_and_reuses_failed_question_snapshot(isolat
             assert confirmation["questions"][0]["question_id"] == question["question_id"]
             assert confirmation["questions"][0]["body"] == attempt.question_body_snapshot
             assert confirmation["questions"][0]["options"] == attempt.option_order_snapshot
-            assert confirmation["questions"][0]["options"][1]["body"] == displayed_wrong["body"]
+            assert any(
+                option["option_id"] == str(wrong_option.id)
+                and option["body"] == displayed_wrong["body"]
+                for option in confirmation["questions"][0]["options"]
+            )
 
         with factory() as db:
             participant = db.get(Participant, participant_id)

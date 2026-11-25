@@ -30,7 +30,7 @@ export default function ConsentPage() {
       return;
     }
     if (!/^[0-9]{1,64}$/.test(participantCode)) {
-      setError("参加者コードは半角数字1〜64桁で入力してください。");
+      setError("参加者用コードは半角数字1〜64桁で入力してください。");
       return;
     }
     setSubmitting(true);
@@ -69,13 +69,13 @@ export default function ConsentPage() {
         <section className="panel stack">
           <h1>研究参加同意書</h1>
           <ConsentDocument />
-          <label>参加者コードを入力してください（必須）
+          <label>参加者用コードを入力してください（必須）
             <input value={participantCode}
               onChange={(event) => setParticipantCode(event.target.value.replace(/[^0-9]/g, ""))}
               required maxLength={64} inputMode="numeric" pattern="[0-9]*"
               autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={submitting} />
           </label>
-          <p className="muted">参加者コードはアプリ内の研究データを結び付ける識別子として保存されます。学籍番号は入力しないでください。研究者が参加者コードと学籍番号の対応表をアプリ外で管理します。</p>
+          <p className="muted">参加者用コードは研究用データの識別に使用し、AIへの入力には含めません。学籍番号は入力しないでください。名前と参加者用コードの対応表は、研究者がアプリ外で管理します。</p>
           <h2>同意確認</h2>
           <label className="option">
             <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={submitting} />

@@ -69,7 +69,7 @@ class RuntimeSetting(Base):
     first_question_only: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     test_content_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     learning_material_glossary_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    option_order_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="debug_fixed")
+    option_order_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="randomized")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

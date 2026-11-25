@@ -95,19 +95,10 @@ def test_exclusions_are_part_of_dictionary_fingerprint():
     assert parse_learning_glossary(content).sha256 != parse_learning_glossary(changed).sha256
 
 
-@pytest.fixture
-def restore_settings():
-    before = {key: client.get(f"/api/admin/{key}").json()["mode"] for key in ("option-order",)}
-    yield
-    for key, mode in before.items():
-        client.put(f"/api/admin/{key}", json={"mode": mode})
-
-
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("phase,completed", [("pretest", 0), ("retest", 0), ("retest", 1), ("final_test", 0)])
-def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(layout, group, phase, completed, restore_settings, monkeypatch):
-    client.put("/api/admin/option-order", json={"mode": layout})
+def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(layout, group, phase, completed, monkeypatch):
     registration = client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()})
     assert registration.status_code == 200, registration.text
     pid = registration.json()["participant_id"]
@@ -119,6 +110,7 @@ def test_test_glossary_uses_all_visible_text_and_is_saved_replayed_and_exported(
         # This test verifies the legacy three-topic question bank and its
         # glossary snapshots, not the current four-topic registration default.
         participant.test_content_mode = "application"
+        participant.option_order_mode = layout
         participant.first_question_only = False
         participant.current_step = phase
         participant.retest_cycles_completed = completed

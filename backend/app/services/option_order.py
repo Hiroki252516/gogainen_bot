@@ -5,7 +5,6 @@ import uuid
 from typing import Any
 
 from app.seed.content_loader import ACTIVE_TERM_SLUGS, FOUR_TOPIC_TERM_SLUGS, ASSESSMENT_VARIANT_COUNTS, LEARNING_SESSION_VARIANT_COUNT, LEARNING_STAGES
-from app.models import RuntimeSetting
 
 
 DEBUG_FIXED = "debug_fixed"
@@ -24,21 +23,13 @@ def effective_option_order_mode(value: str | None) -> str:
 
 
 def current_option_order_mode(db: Any) -> str:
-    setting = db.get(RuntimeSetting, 1)
-    return effective_option_order_mode(setting.option_order_mode if setting else None)
+    return RANDOMIZED
 
 
 def save_option_order_mode(db: Any, mode: str) -> str:
-    if mode not in OPTION_ORDER_MODES:
-        raise ValueError("unsupported option order mode")
-    setting = db.get(RuntimeSetting, 1)
-    if setting is None:
-        setting = RuntimeSetting(id=1, option_order_mode=mode)
-        db.add(setting)
-    else:
-        setting.option_order_mode = mode
-    db.commit()
-    return mode
+    if mode != RANDOMIZED:
+        raise ValueError("option order is fixed to randomized")
+    return RANDOMIZED
 
 
 def assessment_bank_index(term_slug: str, phase: str, variant_key: str) -> int:

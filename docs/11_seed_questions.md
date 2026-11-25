@@ -1,12 +1,8 @@
 # 現行問題バンクと履歴
 
-## 現行条件（仕様版64・2026-11-24）
+## 現行条件（仕様版64・2026-11-25）
 
-新規参加者は`four_topic_fundamentals`に固定し、問題バンク`split-actions-four-topic-v4`を使う。`split-actions-v5`（場面応用版）と`split-actions-basic-v1`（基礎理解版）は過去Participantの履歴復元用に保持する。TransformerのDはM1誤答肢、LLM学習段階の用語は「インストラクションチューニング」とする。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。v1は仕様版49以下、v2は仕様版50等の対応protocol、v3は仕様版51〜56、v4は仕様版57〜63の復元用に保持し、別construct keyでseedする。現行仕様版64でもv4を使う。事前アンケートはv12で、AI利用日数を週0〜7日の整数として取得し、理解度回答の目安1・2・4・5を示す。詳細は[51](51_four_topic_foundation_mode.md)。
-
-## 仕様版61の採用時条件（履歴）
-
-仕様版61の採用時は新規参加者を`four_topic_fundamentals`に固定し、`split-actions-four-topic-v4`を使った。`split-actions-v5`（旧場面応用版）と`split-actions-basic-v1`（基礎理解版）は過去Participantの履歴復元用に保持する。4用語版v4ではTransformerのDをM1誤答肢へ更新し、LLM学習段階の用語を「インストラクションチューニング」とし、問題文・選択肢・提案群の教材生成用情報も合わせる。設問数、選択肢の役割、採点、配置、確認問題での保存snapshot再利用は変更しない。v1は仕様版49以下、v2は仕様版50の対応protocolと仕様版51/52のissue338系protocol、v3は仕様版51〜56の復元用に保持し、別のconstruct keyで各バンクをseedする。現行仕様版64でもv4を使う。詳細は[51](51_four_topic_foundation_mode.md)。
+仕様版64の新規参加者はfour_topic_fundamentalsに固定し、split-actions-four-topic-v4を使う。split-actions-v5（場面応用）とsplit-actions-basic-v1（基礎理解版）は過去Participantの履歴復元用に保持する。4用語版v4ではTransformerのDをM1誤答肢へ更新し、LLM学習段階の用語を「インストラクションチューニング」とし、問題文・選択肢・experimental群の教材生成用情報も合わせる。各用語1問（計4問）を出題し、回答は正解3つまたはunknown単独。選択肢配置はランダム固定とする。確認問題は保存snapshotを再利用する。仕様版63以下は保存時のproblem bankとsnapshotを使って閲覧専用で復元する。v1は仕様版49以下、v2は仕様版50の対応protocolと仕様版51/52のissue338系protocol、v3は仕様版51〜56の復元用に保持し、別のconstruct keyで各バンクをseedする。詳細は[51](51_four_topic_foundation_mode.md)。
 
 ## 仕様版48の条件（履歴）
 
@@ -50,7 +46,7 @@
 
 通常経路の最大はテスト9問＋学習6問＝15固有問題、採点回答イベントはテスト9＋学習18＝27回。事前満点経路では学習が最大1周となり、テスト9＋学習3＝12固有問題、採点回答イベント18回である。
 
-問題バンクのcanonicalな内部ラベルは、A〜C正解・D〜F=M1・G〜I=M3・J=unknownのデバッグ配置で管理する。管理画面のdebug_fixedではこの並びを表示する。randomizedでも「わからない」は最後のJへ固定し、残る9択をA〜Iへ決定的に再配置する。再配置は問題ごとに固定され、全参加者・両群で共通、アプリ再起動後も変わらない。学習確認にも同じテストバンクの選択肢配置規則を適用し、旧学習YAMLのsnapshotは書き換えない。
+問題バンクのcanonicalな内部ラベルは、A〜C正解・D〜F=M1・G〜I=M3・J=unknownのデバッグ配置で管理する。現行の新規参加者は`randomized`に固定し、「わからない」は最後のJ、残る9択はA〜Iへ決定的に再配置して表示する。再配置は問題ごとに固定され、全参加者・両群で共通、アプリ再起動後も変わらない。学習確認にも同じテストバンクの選択肢配置規則を適用し、旧学習YAML・参加者snapshotは書き換えない。`debug_fixed`は旧参加者のsnapshot復元にのみ残す。
 
 teaching_targetsの訂正・仕組み・対比例・M3境界を新事前選択肢へ合わせる。旧問題全12固有問と教授対象は`archive/learning_content_pre_issue156.yml`に原文のまま保全する。新しいconstruct_keyで別Question/QuestionOptionを作り、旧DB問題は削除せず非activeにする。snapshot・旧回答・教材・評価は書き換えず、seed再実行でも新問題を重複作成しない。
 

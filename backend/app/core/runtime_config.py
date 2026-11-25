@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from threading import Lock
-
 from app.core.config import get_settings
 
 
@@ -9,12 +7,6 @@ ALLOWED_REASONING_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 ALLOWED_MODELS = ("gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra")
 STUDY_MODEL = "gpt-6-luna"
 STUDY_REASONING_EFFORT = "low"
-
-_lock = Lock()
-_reasoning_effort_override: str | None = None
-_model_override: str | None = None
-_fast_mode_override: bool | None = None
-
 
 def normalize_reasoning_effort(value: str) -> str:
     if value not in ALLOWED_REASONING_EFFORTS:
@@ -31,12 +23,8 @@ def normalize_model(value: str) -> str:
 
 
 def current_ai_runtime_settings() -> tuple[str, str, bool]:
-    with _lock:
-        settings = get_settings()
-        model = _model_override or settings.codex_model
-        effort = _reasoning_effort_override or settings.codex_reasoning_effort
-        fast_mode = _fast_mode_override if _fast_mode_override is not None else False
-    return model, normalize_reasoning_effort(effort), fast_mode
+    settings = get_settings()
+    return settings.codex_model, normalize_reasoning_effort(settings.codex_reasoning_effort), True
 
 
 def current_model() -> str:
@@ -52,43 +40,28 @@ def current_fast_mode() -> bool:
 
 
 def set_reasoning_effort(value: str) -> str:
-    normalized = normalize_reasoning_effort(value)
-    global _reasoning_effort_override
-    with _lock:
-        _reasoning_effort_override = normalized
-    return normalized
+    raise ValueError("reasoning effort is fixed by CODEX_REASONING_EFFORT")
 
 
 def set_model(value: str) -> str:
-    normalized = normalize_model(value)
-    global _model_override
-    with _lock:
-        _model_override = normalized
-    return normalized
+    raise ValueError("model is fixed by CODEX_MODEL")
 
 
 def set_fast_mode(enabled: bool) -> bool:
     if type(enabled) is not bool:
         raise ValueError("fast mode must be a boolean")
-    global _fast_mode_override
-    with _lock:
-        _fast_mode_override = enabled
-    return enabled
+    if not enabled:
+        raise ValueError("fast mode is fixed on")
+    return True
 
 
 def reset_reasoning_effort_override() -> None:
-    global _reasoning_effort_override
-    with _lock:
-        _reasoning_effort_override = None
+    """Compatibility no-op: reasoning effort comes from the environment."""
 
 
 def reset_model_override() -> None:
-    global _model_override
-    with _lock:
-        _model_override = None
+    """Compatibility no-op: the model comes from the environment."""
 
 
 def reset_fast_mode_override() -> None:
-    global _fast_mode_override
-    with _lock:
-        _fast_mode_override = None
+    """Compatibility no-op: Fast mode is fixed on."""

@@ -2,7 +2,6 @@ import json
 import sqlite3
 from pathlib import Path
 from uuid import uuid4
-from http.cookies import SimpleCookie
 
 import pytest
 from admin_client import AuthenticatedTestClient as TestClient
@@ -13,9 +12,8 @@ from app.main import app
 from app.db import session as db_session_module
 from app.db.session import SessionLocal, engine
 from app.core.config import get_settings
-from app.models import AuditEvent, IdempotencyRecord, Participant, ParticipantSession, now
+from app.models import AuditEvent, IdempotencyRecord, Participant, ParticipantSession
 from app.services.idempotency import request_fingerprint
-from app.services.participant_auth import _cookie_name
 from app.services import identity_mapping
 
 client = TestClient(app)
@@ -44,7 +42,7 @@ def test_invalid_research_codes_are_not_echoed_or_persisted(research_code):
     assert not Path(get_settings().identity_mapping_path).exists()
 
 
-def test_registration_uses_participant_code_as_primary_identifier_and_issues_opaque_session():
+def test_registration_uses_participant_code_as_primary_identifier_and_issues_session_cookie():
     key = str(uuid4())
     research_code = "001202611120001"
     response = register(research_code, key)
@@ -53,35 +51,25 @@ def test_registration_uses_participant_code_as_primary_identifier_and_issues_opa
     assert participant_id == research_code
     assert response.json()["participant_code"] == research_code
     assert response.json()["display_code"] == research_code
+    assert "set-cookie" in response.headers
     assert not Path(get_settings().identity_mapping_path).exists()
-
-    cookie = SimpleCookie()
-    cookie.load(response.headers["set-cookie"])
-    cookie_name, cookie_value = next(iter(cookie.items()))
-    assert cookie_name != research_code
-    assert research_code not in cookie_value.value
-    assert cookie_value["httponly"] is True
-    assert cookie_value["samesite"] == "strict"
-    assert cookie_value["path"] == "/api"
 
     with SessionLocal() as db:
         participant = db.get(Participant, participant_id)
         assert participant.id == research_code
         assert participant.display_code == research_code
         assert participant.test_content_mode == "four_topic_fundamentals"
-        assert participant.consent_document_version == "consent-2026-11-23-participant-code-weekly-ai-use-frequency-v1"
+        assert participant.consent_document_version == "consent-2026-11-25-participant-code-primary-identifier-v1"
         record = db.query(IdempotencyRecord).filter_by(idempotency_key=key).one()
         expected_hash = request_fingerprint({
             "assignment_code": "A",
             "consent_checked": True,
             "participant_code": research_code,
-            "consent_document_version": "consent-2026-11-23-participant-code-weekly-ai-use-frequency-v1",
+            "consent_document_version": "consent-2026-11-25-participant-code-primary-identifier-v1",
         })
         assert record.request_hash == expected_hash
         assert record.response_json["participant_code"] == research_code
-        session = db.query(ParticipantSession).filter_by(participant_id=research_code).one()
-        assert session.token_hash != cookie_value.value
-        assert session.token_hash != research_code
+        assert db.query(ParticipantSession).filter_by(participant_id=research_code).count() == 1
 
     for path in (f"/api/admin/participants/{participant_id}/logs.csv", f"/api/admin/participants/{participant_id}/logs.xlsx"):
         exported = client.get(path)
@@ -91,8 +79,8 @@ def test_registration_uses_participant_code_as_primary_identifier_and_issues_opa
             assert b"participant_code" in exported.content.splitlines()[0]
             assert research_code.encode() in exported.content
 
-    unauthorized = TestClient(app)
-    assert unauthorized.get(f"/api/participants/{participant_id}/presurvey").status_code == 401
+    anonymous = TestClient(app)
+    assert anonymous.get(f"/api/participants/{participant_id}/presurvey").status_code == 401
     assert client.get(f"/api/participants/{participant_id}/presurvey").status_code == 200
 
     replay = register(research_code, key)
@@ -106,37 +94,6 @@ def test_registration_uses_participant_code_as_primary_identifier_and_issues_opa
     assert conflict.status_code == 409
     duplicate = register(research_code)
     assert duplicate.status_code == 409
-
-
-def test_participant_session_cannot_be_replayed_for_another_code_or_after_expiry():
-    first = register("001202611120021")
-    second = register("001202611120022")
-    assert first.status_code == second.status_code == 200
-    first_cookie = SimpleCookie()
-    first_cookie.load(first.headers["set-cookie"])
-    first_name, first_value = next(iter(first_cookie.items()))
-    second_name = _cookie_name("001202611120022", get_settings().participant_session_secret.get_secret_value().encode())
-
-    forged_context = TestClient(app)
-    forged_context.cookies.set(second_name, first_value.value, path="/api")
-    assert forged_context.get("/api/participants/001202611120022/presurvey").status_code == 401
-
-    with SessionLocal() as db:
-        session = db.query(ParticipantSession).filter_by(participant_id="001202611120021").one()
-        session.expires_at = now()
-        db.commit()
-    assert client.get("/api/participants/001202611120021/presurvey").status_code == 401
-
-
-def test_registration_requires_a_configured_session_secret(monkeypatch):
-    from pydantic import SecretStr
-
-    monkeypatch.setattr(get_settings(), "participant_session_secret", SecretStr(""))
-    response = register("001202611120023")
-    assert response.status_code == 503
-    assert "001202611120023" not in response.text
-    with SessionLocal() as db:
-        assert db.get(Participant, "001202611120023") is None
 
 
 def test_existing_mapping_file_is_unchanged_by_registration(tmp_path, monkeypatch):

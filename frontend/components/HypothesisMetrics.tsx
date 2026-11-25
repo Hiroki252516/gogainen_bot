@@ -1,4 +1,5 @@
 import { API_BASE } from "@/lib/api";
+import { displayAdminData, displayGroupCondition } from "@/lib/admin-display";
 
 const LABELS: Record<string, string> = {
   h1: "H1：事前テストから初回再テストへの正答率の伸び（ポイント）",
@@ -45,7 +46,7 @@ function StatsTable({ groups }: { groups: any[] }) {
     <tbody>{Object.entries(LABELS).flatMap(([key, label]) => groups.map((group: any) => {
       const stat = group[key];
       const rate = key === "h2" || key === "h3";
-      return <tr key={`${group.group_condition}-${key}`}><th>{label}</th><td>{group.group_condition}</td><td>{stat.n}</td>
+      return <tr key={`${group.group_condition}-${key}`}><th>{label}</th><td>{displayGroupCondition(group.group_condition)}</td><td>{stat.n}</td>
         <td>{stat.eligible_count}</td><td>{rate ? formatRate(stat.mean) : stat.mean == null ? "対象データなし" : `${format(stat.mean)} pt`}</td>
         <td>{rate ? formatRate(stat.median) : format(stat.median)}</td><td>{stat.missing_count}</td><td>{stat.not_applicable_count}</td></tr>;
     }))}</tbody>
@@ -59,7 +60,7 @@ function MaterialEvaluation({ data }: { data: any }) {
     <div style={{ overflowX: "auto" }}><table><thead><tr><th>項目</th><th>群</th><th>数値回答数</th><th>平均</th><th>中央値</th><th>評価できない</th><th>未回答</th><th>群間差</th></tr></thead>
       <tbody>{H4_NUMERIC_ITEMS.flatMap((key) => data.groups.map((group: any) => {
         const stat = group.h4.items[key];
-        return <tr key={`${key}-${group.group_condition}`}><th>{ITEM_LABELS[key]}</th><td>{group.group_condition}</td><td>{stat.n}</td>
+        return <tr key={`${key}-${group.group_condition}`}><th>{ITEM_LABELS[key]}</th><td>{displayGroupCondition(group.group_condition)}</td><td>{stat.n}</td>
           <td>{format(stat.mean)}</td><td>{format(stat.median)}</td><td>{stat.not_applicable_count}</td><td>{stat.missing_count}</td>
           <td>{format(data.h4_item_differences[key])}</td></tr>;
       }))}</tbody></table></div>
@@ -77,13 +78,13 @@ function MaterialEvaluation({ data }: { data: any }) {
         ];
         return responseRows.map(([value, label]) => {
           const count = distribution[value] || 0;
-          return <tr key={`${key}-${group.group_condition}-${value}`}><th>{ITEM_LABELS[key]}</th><td>{group.group_condition}</td>
+          return <tr key={`${key}-${group.group_condition}-${value}`}><th>{ITEM_LABELS[key]}</th><td>{displayGroupCondition(group.group_condition)}</td>
             <td>{denominator}</td><td>{label}</td><td>{count}</td>
             <td>{denominator ? `${(count / denominator * 100).toFixed(1)}%` : "対象データなし"}</td></tr>;
         });
       }))}</tbody></table></div>
     {data.groups.map((group: any) => <p className="muted" key={`h4-${group.group_condition}`}>
-      {group.group_condition}：閲覧者 {group.h4.viewed_count}人、未閲覧 {group.h4.not_viewed_count}人、閲覧後のアンケート欠測 {group.h4.missing_survey_count}人。
+      {displayGroupCondition(group.group_condition)}：閲覧者 {group.h4.viewed_count}人、未閲覧 {group.h4.not_viewed_count}人、閲覧後のアンケート欠測 {group.h4.missing_survey_count}人。
     </p>)}
   </>;
 }
@@ -91,7 +92,7 @@ function MaterialEvaluation({ data }: { data: any }) {
 export function HypothesisMetrics({ data }: { data: any }) {
   if (!data) return null;
   if (data.strata?.length) return <div className="stack">{data.strata.map((stratum: any) => <div className="stack" key={`${stratum.protocol_id}-${stratum.experiment_spec_version}-${stratum.test_content_mode}-${String(stratum.first_question_only)}`}>
-    <p className="muted">仕様版{stratum.experiment_spec_version}／{stratum.protocol_id}／事後アンケート {stratum.survey_version || "未回答"}</p>
+    <p className="muted">仕様版{stratum.experiment_spec_version}／{displayAdminData(stratum.protocol_id)}／事後アンケート {stratum.survey_version || "未回答"}</p>
     <HypothesisMetrics data={stratum} />
   </div>)}</div>;
   const titleId = `hypotheses-title-${data.protocol_id || "mixed"}-${data.test_content_mode || "application"}-${data.first_question_only ? "q1" : "q12"}`;
@@ -108,24 +109,24 @@ export function HypothesisMetrics({ data }: { data: any }) {
       <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.csv`}>4仮説・群別CSV</a>
       <a className="button secondary" href={`${API_BASE}/api/admin/export/hypothesis_group_summary.xlsx`}>4仮説・群別Excel (.xlsx)</a>
     </div>
-    <h3>群間差（proposed − control）</h3>
+    <h3>群間差（experimental − control）</h3>
     <ul>{Object.entries(LABELS).map(([key, label]) => {
       const difference = data.differences_proposed_minus_control[key];
       return <li key={key}>{label}：{difference == null ? "対象データなし" : key === "h1" ? `${difference.toFixed(2)} pt` : formatRate(difference)}</li>;
     })}</ul>
     <MaterialEvaluation data={data} />
     {data.groups.map((group: any) => <div className="notice" key={group.group_condition}>
-      <strong>{group.group_condition}：登録 {group.participant_count}人、事前満点・早期終了 {group.pretest_perfect_early_exit_count}人、事前未完了 {group.pretest_incomplete_count}人</strong>
+      <strong>{displayGroupCondition(group.group_condition)}：登録 {group.participant_count}人、事前満点・早期終了 {group.pretest_perfect_early_exit_count}人、事前未完了 {group.pretest_incomplete_count}人</strong>
       <p>H2：完答ペア {group.h2.paired_complete_count}人、比較対象M1/M3項目 {group.h2.participant_denominator}件、同じタイプの再選択 {group.h2.participant_numerator}件。参考の項目加重率 {formatRate(group.h2.pooled_rate)}。</p>
       <p>H3：満点到達 {group.h3.numerator}/{group.h3.denominator}人。事前未完了 {group.h3.pretest_incomplete_count}人、事前満点・早期終了 {group.pretest_perfect_early_exit_count}人は対象外。</p>
-      <p>終了状況：{JSON.stringify(group.completion_reasons)}</p>
+      <p>終了状況：{JSON.stringify(displayAdminData(group.completion_reasons))}</p>
     </div>)}
     <details><summary>経路別集計</summary>
       {Object.entries(data.routes).map(([route, groups]) => <div key={route}><h3>{ROUTES[route] || route}</h3><StatsTable groups={groups as any[]} /></div>)}
     </details>
     <details><summary>後続再テストの参考値</summary>
       <p>H1・H2の主比較は初回再テストです。後続回は受験者が異なるため、各回の参考値として分けて表示します。</p>
-      {data.groups.map((group: any) => <div key={group.group_condition}><h3>{group.group_condition}</h3>
+      {data.groups.map((group: any) => <div key={group.group_condition}><h3>{displayGroupCondition(group.group_condition)}</h3>
         <ul>{group.rounds.filter((round: any) => round.round > 1).map((round: any) => <li key={round.round}>
           再テスト{round.round}：正答率の伸び n={round.gain.n}／平均 {format(round.gain.mean)} pt、同タイプ再選択率 n={round.same_type_reselection.n}／平均 {formatRate(round.same_type_reselection.mean)}
         </li>)}</ul>
@@ -150,6 +151,6 @@ export function ParticipantHypothesisMetrics({ data }: { data: any }) {
       <li>H4：教材評価・{h4Status}</li>
     </ul>
     {data.h4.items && <ul>{Object.entries(ITEM_LABELS).map(([key, label]) => <li key={key}>{label}：{data.h4.items[key] ?? "未回答"}</li>)}</ul>}
-    <details><summary>分母・項目・回次別の詳細</summary><pre>{JSON.stringify(data, null, 2)}</pre></details>
+    <details><summary>分母・項目・回次別の詳細</summary><pre>{JSON.stringify(displayAdminData(data), null, 2)}</pre></details>
   </section>;
 }

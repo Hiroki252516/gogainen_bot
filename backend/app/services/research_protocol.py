@@ -93,6 +93,15 @@ class FourTopicPriorTermUnderstandingV8(StrictModel):
     memory_process: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
 
 
+class FourTopicPriorTermUnderstandingV12(StrictModel):
+    transformer: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    pretraining: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    instruction_tuning: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    human_feedback_post_training: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    multi_agent: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    memory_process: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+
+
 class FourTopicPriorTermExposureV3(StrictModel):
     transformer: Literal["experienced", "not_experienced", "cannot_recall"]
     pretraining: Literal["experienced", "not_experienced", "cannot_recall"]
@@ -151,7 +160,7 @@ class CurrentBaselineRatings(StrictModel):
     ai_proficiency: CurrentAIProficiencyRatings
 
 
-class WeeklyCurrentBaselineRatings(StrictModel):
+class WeeklyBaselineRatings(StrictModel):
     ai_usage_days_per_week: Annotated[int, Field(strict=True, ge=0, le=7)]
     ai_proficiency: CurrentAIProficiencyRatings
 
@@ -299,6 +308,8 @@ class FourTopicPresurveyPayloadV10(StrictModel):
 
 
 class FourTopicPresurveyPayloadV11(StrictModel):
+    """Read-only schema for the 30-day-frequency four-topic questionnaire."""
+
     survey_version: Literal["presurvey-four-topic-baseline-v11"] = FOUR_TOPIC_PRESURVEY_VERSION_V11
     prior_term_exposure: FourTopicPriorTermExposure
     prior_term_understanding: FourTopicPriorTermUnderstandingV8
@@ -313,8 +324,8 @@ class FourTopicPresurveyPayloadV11(StrictModel):
 class FourTopicPresurveyPayloadV12(StrictModel):
     survey_version: Literal["presurvey-four-topic-baseline-v12"] = FOUR_TOPIC_PRESURVEY_VERSION_V12
     prior_term_exposure: FourTopicPriorTermExposure
-    prior_term_understanding: FourTopicPriorTermUnderstandingV8
-    general_ratings: WeeklyCurrentBaselineRatings
+    prior_term_understanding: FourTopicPriorTermUnderstandingV12
+    general_ratings: WeeklyBaselineRatings
 
     @model_validator(mode="after")
     def validate_understanding_branch(self):
