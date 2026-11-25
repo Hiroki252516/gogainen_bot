@@ -14,10 +14,14 @@ from app.core.config import get_settings
 CONSENT_DOCUMENT_VERSION = "consent-2026-11-25-participant-code-primary-identifier-v1"
 
 
-def validate_research_code(value: str) -> str:
+def validate_participant_code(value: str) -> str:
     if re.fullmatch(r"[0-9]{1,64}", value) is None:
-        raise HTTPException(400, "参加者用コードは半角数字1〜64桁で入力してください。")
+        raise HTTPException(400, "参加者コードは半角数字1〜64桁で入力してください。")
     return value
+
+
+# Kept for existing importers; the current registration contract calls this a participant code.
+validate_research_code = validate_participant_code
 
 
 def _mapping_path() -> Path:

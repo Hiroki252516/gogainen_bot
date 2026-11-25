@@ -49,6 +49,17 @@ class Participant(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class ParticipantSession(Base):
+    __tablename__ = "participant_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    participant_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class RuntimeSetting(Base):
     __tablename__ = "runtime_settings"
 

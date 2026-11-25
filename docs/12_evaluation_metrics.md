@@ -111,7 +111,7 @@ EvaluationSummary.hypothesis_metrics_jsonに参加者指標と分子・分母・
 - /api/admin/export/hypothesis_metrics.csv：参加者別の長形式。
 - /api/admin/export/hypothesis_group_summary.csv：群別、群間差、回次・経路等の詳細。
 - 上記CSVに対応する`.xlsx`：`hypothesis_metrics.xlsx`と`hypothesis_group_summary.xlsx`。
-- 統合ログCSV・Excel：全体ログと被験者ログを別ファイルで出力する。仕様版43で`test_content_mode`列を追加し、それ以外の従来列とvalue_json、旧値は維持する。
+- 統合ログCSV・Excel：全体ログと参加者ログを別ファイルで出力する。仕様版43で`test_content_mode`列を追加し、それ以外の従来列とvalue_json、旧値は維持する。
 - 既存のExcel互換CSVはUTF-8 BOM付きCSVであり、`.xlsx`ブックとは別形式。
 
 H3の分母は事前テスト完了者から事前満点者を除いた再テスト対象者である。対象者の未受験・中断・未達は0として含め、事前テスト未完了者と事前満点者は対象外として別に数える。H2の主集計は完答ペアの参加者ごとに再選択率を計算し、その参加者平均を用いる。分母0（事前M1/M3なし）は対象外、比較可能な完答ペアがない場合は欠測とする。H2の項目加重率は参考値として別出力する。

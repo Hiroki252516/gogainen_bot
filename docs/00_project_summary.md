@@ -2,7 +2,7 @@
 
 ## 仕様版64の現行コード（2026-11-25）
 
-新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v12`、事後アンケートは`posttest-5point-v5`を使う。週あたりAI利用日数は0〜7日の整数を`ai_usage_days_per_week`へ保存し、理解度は経験「ある」の用語だけに回答目安1・2・4・5を示す。参加者用コード（半角数字1〜64桁）を`Participant.id`と`display_code`に保存し、画面・ログ・CSV/XLSX等で識別に使うがAI入力には含めない。参加者APIは登録時発行の24時間有効な署名付きHttpOnly Cookieを要求し、`PARTICIPANT_SESSION_SECRET`は32文字以上の安定値を使用する。仕様版63以下の記録は変更せず読み取り専用とする。モデル・推論レベルは管理画面/APIから変更できず、`CODEX_MODEL`と`CODEX_REASONING_EFFORT`の環境値を使う。Fast modeは常時ON。管理画面では保存値`proposed`を`experimental`と表示する。尺度・問題の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v12`、事後アンケートは`posttest-5point-v5`を使う。週あたりAI利用日数は0〜7日の整数を`ai_usage_days_per_week`へ保存し、理解度は経験「ある」の用語だけに回答目安1・2・4・5を示す。参加者用コード（半角数字1〜64桁）を`Participant.id`と`display_code`に保存し、画面・ログ・CSV/XLSX等で識別に使うがAI入力には含めない。参加者APIではCookieセッション認証を使わず、参加者コードで対象データを識別する。仕様版63以下の記録は変更せず読み取り専用とする。モデル・推論レベルは管理画面/APIから変更できず、`CODEX_MODEL`と`CODEX_REASONING_EFFORT`の環境値を使う。Fast modeは常時ON。管理画面では保存値`proposed`を`experimental`と表示する。尺度・問題の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版61の履歴条件（2026-11-19）
 

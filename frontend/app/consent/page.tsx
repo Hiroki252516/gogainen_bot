@@ -36,21 +36,22 @@ export default function ConsentPage() {
     setSubmitting(true);
     setError("");
     try {
-      // Persist only an opaque retry key. Never persist the body containing the research code.
+      // Persist only an opaque retry key. Never persist the body containing the participant code.
       let key = sessionStorage.getItem("registration_request_key");
       if (!key) {
         key = crypto.randomUUID();
         sessionStorage.setItem("registration_request_key", key);
       }
-      const data = await api<{ participant_id: string; display_code: string; current_step: string }>(
+      const data = await api<{ participant_id: string; participant_code: string; current_step: string }>(
         "/api/registrations", {
           method: "POST", headers: { "Idempotency-Key": key }, timeoutMs: 15000,
           body: JSON.stringify({ assignment_code: assignmentCode, consent_checked: true, participant_code: participantCode }),
         });
       setParticipantCode("");
       sessionStorage.removeItem("registration_request_key");
-      localStorage.setItem("participant_id", data.participant_id);
-      localStorage.setItem("display_code", data.display_code);
+      localStorage.setItem("participant_code", data.participant_code);
+      localStorage.removeItem("participant_id");
+      localStorage.removeItem("display_code");
       localStorage.removeItem("pending_assignment_code");
       router.replace("/presurvey");
     } catch (err) {

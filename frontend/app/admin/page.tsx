@@ -10,6 +10,7 @@ import { displayAdminData, displayGroupCondition } from "@/lib/admin-display";
 
 type Participant = {
   participant_id: string;
+  participant_code?: string | null;
   display_code: string;
   group_condition: string;
   test_content_mode: TestContentMode | null;
@@ -36,12 +37,13 @@ type AiStatus = {
   last_error?: string | null;
 };
 
-const ADMIN_RESUME_PARTICIPANT_ID_KEY = "admin_resume_participant_id";
+const ADMIN_RESUME_PARTICIPANT_CODE_KEY = "admin_resume_participant_code";
 const ADMIN_RESUME_DISPLAY_CODE_KEY = "admin_resume_display_code";
 
 function rememberAdminResumeParticipant(id: string) {
-  localStorage.setItem(ADMIN_RESUME_PARTICIPANT_ID_KEY, id);
-  const displayCode = localStorage.getItem("display_code");
+  localStorage.setItem(ADMIN_RESUME_PARTICIPANT_CODE_KEY, id);
+  localStorage.removeItem("admin_resume_participant_id");
+  const displayCode = localStorage.getItem("participant_code") || localStorage.getItem("display_code");
   if (displayCode) {
     localStorage.setItem(ADMIN_RESUME_DISPLAY_CODE_KEY, displayCode);
   } else {
@@ -50,8 +52,9 @@ function rememberAdminResumeParticipant(id: string) {
 }
 
 function clearAdminResumeParticipant(id?: string) {
-  if (!id || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_ID_KEY) === id) {
-    localStorage.removeItem(ADMIN_RESUME_PARTICIPANT_ID_KEY);
+  if (!id || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_CODE_KEY) === id || localStorage.getItem("admin_resume_participant_id") === id) {
+    localStorage.removeItem(ADMIN_RESUME_PARTICIPANT_CODE_KEY);
+    localStorage.removeItem("admin_resume_participant_id");
     localStorage.removeItem(ADMIN_RESUME_DISPLAY_CODE_KEY);
   }
 }
@@ -66,7 +69,8 @@ const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
 };
 const MISCONCEPTION_TRANSITION_TYPES = Object.keys(MISCONCEPTION_TRANSITION_LABELS);
 const LOG_FIELD_LABELS: Record<string, string> = {
-  display_code: "被験者",
+  participant_code: "参加者コード",
+  display_code: "旧表示コード",
   legacy_read_only: "閲覧専用",
   test_page_mode: "テスト表示方式（登録値）",
   effective_test_page_mode: "テスト表示方式",
@@ -179,7 +183,7 @@ export default function AdminPage() {
 
   async function resumeExperiment() {
     const activeParticipantId = participantId();
-    const resumeParticipantId = activeParticipantId || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_ID_KEY);
+    const resumeParticipantId = activeParticipantId || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_CODE_KEY) || localStorage.getItem("admin_resume_participant_id");
     if (!resumeParticipantId) {
       setFlowNavigationError("このブラウザで再開できる実験が見つかりません。");
       return;
@@ -196,7 +200,8 @@ export default function AdminPage() {
       const displayCode = activeParticipantId
         ? localStorage.getItem("display_code")
         : localStorage.getItem(ADMIN_RESUME_DISPLAY_CODE_KEY);
-      localStorage.setItem("participant_id", resumeParticipantId);
+      localStorage.setItem("participant_code", resumeParticipantId);
+      localStorage.removeItem("participant_id");
       if (displayCode) {
         localStorage.setItem("display_code", displayCode);
       } else {
@@ -258,7 +263,7 @@ export default function AdminPage() {
   }
 
   async function deleteParticipant(participant: Participant) {
-    const confirmed = window.confirm(`参加者 ${participant.display_code} の研究DB内の回答・教材・AIログ等とアプリ内の対応表を削除します。元に戻せません。ダウンロード済みCSV・USBの対応表・バックアップは自動削除されません。撤回時は別途処理してください。続行しますか？`);
+    const confirmed = window.confirm(`参加者 ${participant.participant_code || participant.display_code} の研究DB内の回答・教材・AIログ等を削除します。元に戻せません。アプリ外の対応表・ダウンロード済みCSV・バックアップは自動削除されません。撤回時は別途処理してください。続行しますか？`);
     if (!confirmed) return;
 
     setLogError("");
@@ -372,13 +377,13 @@ export default function AdminPage() {
             {participantLog?.participant?.participant_id ? (
               <>
                 <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs_excel.csv`}>
-                  被験者ログ Excel互換CSV
+                  参加者ログ Excel互換CSV
                 </a>
                 <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs.xlsx`}>
-                  被験者ログ Excel (.xlsx)
+                  参加者ログ Excel (.xlsx)
                 </a>
                 <a className="button secondary" href={`${API_BASE}/api/admin/participants/${participantLog.participant.participant_id}/logs.csv`}>
-                  被験者ログCSV UTF-8
+                  参加者ログCSV UTF-8
                 </a>
               </>
             ) : null}
@@ -417,8 +422,8 @@ export default function AdminPage() {
               />
             ))}
           </div>
-          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["test_page_mode", "test_timing_unit", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "response_time_unit", "test_page_timing_json", "created_at"]} />
-          <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["test_page_mode", "test_timing_unit", "participant_code", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "response_time_unit", "test_page_timing_json", "created_at"]} />
+          <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["participant_code", "display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
         <HypothesisMetrics data={summary?.hypotheses} />
         <section className="panel">
@@ -426,7 +431,7 @@ export default function AdminPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>ID</th>
+                <th>参加者コード</th>
                 <th>条件</th>
                 <th>テスト問題モード</th>
                 <th>進捗</th>
@@ -455,7 +460,7 @@ export default function AdminPage() {
                   </td>
                   <td>
                     <button className="secondary" onClick={() => loadParticipantLog(p.participant_id)}>
-                      被験者ログを見る
+                      参加者ログを見る
                     </button>
                   </td>
                   <td>
@@ -473,12 +478,12 @@ export default function AdminPage() {
           </table>
         </section>
         <section className="panel stack">
-          <h2>被験者別ログ</h2>
+          <h2>参加者別ログ</h2>
           {logError ? <p className="danger">{logError}</p> : null}
           {participantLog?.participant ? (
             <>
               <div className="notice">
-                <strong>{participantLog.participant.display_code}</strong>
+                <strong>参加者コード: {participantLog.participant.participant_code || participantLog.participant.display_code}</strong>
                 <p>テスト問題モード: {participantLog.participant.test_content_mode_label || participantLog.participant.test_content_mode || "旧記録"}</p>
                 <p>テスト表示方式: {participantLog.participant.effective_test_page_mode === "per_term" ? "用語ごと" : "設問ごと"}</p>
                 <p>テスト時間の計測単位: {participantLog.participant.test_timing_unit === "term_page" ? "用語ページ" : "設問"}</p>
@@ -530,7 +535,7 @@ export default function AdminPage() {
               <SessionLog sessions={participantLog.tutor_sessions || []} />
             </>
           ) : (
-            <p className="muted">被験者一覧の「被験者ログを見る」を押すと、1人分の流れを確認できます。</p>
+            <p className="muted">参加者一覧の「参加者ログを見る」を押すと、1人分の流れを確認できます。</p>
           )}
         </section>
       </div>

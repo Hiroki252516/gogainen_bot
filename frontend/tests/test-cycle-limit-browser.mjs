@@ -134,7 +134,7 @@ try {
       const row = page.getByRole("row").filter({ hasText: logs.participant.display_code }).filter({ has: page.getByRole("button", { name: "被験者ログを見る", exact: true }) });
       await row.waitFor();
       assert((await row.innerText()).includes("2 / 2"));
-      await row.getByRole("button", { name: "被験者ログを見る", exact: true }).click();
+      await row.getByRole("button", { name: "参加者ログを見る", exact: true }).click();
       await page.getByText("事前テスト後のテスト: 2 / 2回（学習前の追加テストを含む）", { exact: true }).waitFor();
       assert.equal(await page.getByText(`学習後の再テスト: ${initialPerfect ? 1 : 2}回`, { exact: true }).count(), 1);
       assert.equal(errors.length, 0, errors.join("\n"));

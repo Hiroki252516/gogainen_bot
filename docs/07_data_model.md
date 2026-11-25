@@ -2,7 +2,7 @@
 
 ## 仕様版64の現行条件
 
-新規Participantは仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`を使う。半角数字1〜64桁の参加者用コードを`Participant.id`と`display_code`に保存し、関連する`participant_id`、冪等記録の参照列、監査`entity_id`は64文字まで扱う。PostgreSQL起動時は既存UUIDの値を保ったまま対象列を拡張する。新規参加者は登録時に24時間有効な署名付きHttpOnly Cookieを受け取り、秘密値は`PARTICIPANT_SESSION_SECRET`から読む。事前アンケートv12は週0〜7日の利用日数と5値の理解度を版付き`responses_json`へ保存する。仕様版63以下のID・回答・snapshotは変更しない。
+新規Participantは仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`を使う。半角数字1〜64桁の参加者用コードを`Participant.id`と`display_code`に保存し、関連する`participant_id`、冪等記録の参照列、監査`entity_id`は64文字まで扱う。PostgreSQL起動時は既存UUIDの値を保ったまま対象列を拡張する。参加者APIはCookieセッション認証を使わず、参加者コードで対象を指定する。事前アンケートv12は週0〜7日の利用日数と5値の理解度を版付き`responses_json`へ保存する。仕様版63以下のID・回答・snapshotは変更しない。
 
 ## 仕様版61の履歴条件
 

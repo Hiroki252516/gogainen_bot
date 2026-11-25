@@ -5,12 +5,15 @@ from uuid import uuid4
 
 import pytest
 from admin_client import AuthenticatedTestClient as TestClient
-from sqlalchemy import text
+from sqlalchemy import String, text
+from sqlalchemy.dialects.postgresql import dialect as postgresql_dialect
 
 from app.main import app
+from app.db import session as db_session_module
 from app.db.session import SessionLocal, engine
 from app.core.config import get_settings
-from app.models import AuditEvent, IdempotencyRecord, Participant
+from app.models import AuditEvent, IdempotencyRecord, Participant, ParticipantSession
+from app.services.idempotency import request_fingerprint
 from app.services import identity_mapping
 
 client = TestClient(app)
@@ -39,39 +42,57 @@ def test_invalid_research_codes_are_not_echoed_or_persisted(research_code):
     assert not Path(get_settings().identity_mapping_path).exists()
 
 
-def test_registration_validates_but_does_not_persist_research_code():
+def test_registration_uses_participant_code_as_primary_identifier_without_participant_cookie():
     key = str(uuid4())
     research_code = "001202611120001"
     response = register(research_code, key)
     assert response.status_code == 200, response.text
     participant_id = response.json()["participant_id"]
-    assert research_code not in response.text
+    assert participant_id == research_code
+    assert response.json()["participant_code"] == research_code
+    assert response.json()["display_code"] == research_code
+    assert "set-cookie" not in response.headers
     assert not Path(get_settings().identity_mapping_path).exists()
 
     with SessionLocal() as db:
         participant = db.get(Participant, participant_id)
+        assert participant.id == research_code
+        assert participant.display_code == research_code
         assert participant.test_content_mode == "four_topic_fundamentals"
-        assert participant.consent_document_version == "consent-2026-11-16-participant-use-code-wording-v1"
+        assert participant.consent_document_version == "consent-2026-11-25-participant-code-primary-identifier-v1"
         record = db.query(IdempotencyRecord).filter_by(idempotency_key=key).one()
-        assert research_code not in record.request_hash
-        assert research_code not in json.dumps(record.response_json)
-
-    with engine.connect() as connection:
-        tables = connection.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).all()
-        for (table_name,) in tables:
-            contents = connection.execute(text(f'SELECT * FROM "{table_name}"')).all()
-            assert research_code not in str(contents)
+        expected_hash = request_fingerprint({
+            "assignment_code": "A",
+            "consent_checked": True,
+            "participant_code": research_code,
+            "consent_document_version": "consent-2026-11-25-participant-code-primary-identifier-v1",
+        })
+        assert record.request_hash == expected_hash
+        assert record.response_json["participant_code"] == research_code
 
     for path in (f"/api/admin/participants/{participant_id}/logs.csv", f"/api/admin/participants/{participant_id}/logs.xlsx"):
         exported = client.get(path)
         assert exported.status_code == 200
-        assert research_code.encode() not in exported.content
+        assert research_code in exported.headers["content-disposition"]
+        if path.endswith(".csv"):
+            assert b"participant_code" in exported.content.splitlines()[0]
+            assert research_code.encode() in exported.content
 
-    replay = register("999202611129999", key)
+    anonymous = TestClient(app)
+    assert anonymous.get(f"/api/participants/{participant_id}/presurvey").status_code == 200
+    assert client.get(f"/api/participants/{participant_id}/presurvey").status_code == 200
+
+    replay = register(research_code, key)
     assert replay.status_code == 200
     assert replay.json() == response.json()
     with SessionLocal() as db:
         assert db.query(Participant).filter_by(id=participant_id).count() == 1
+        assert db.query(ParticipantSession).filter_by(participant_id=participant_id).count() == 0
+
+    conflict = register("999202611129999", key)
+    assert conflict.status_code == 409
+    duplicate = register(research_code)
+    assert duplicate.status_code == 409
 
 
 def test_existing_mapping_file_is_unchanged_by_registration(tmp_path, monkeypatch):
@@ -211,3 +232,88 @@ def test_mapping_cleanup_failure_is_durable_and_retryable(monkeypatch):
     with SessionLocal() as db:
         event = db.query(AuditEvent).filter_by(action="delete_participant", entity_id=participant_id).one()
         assert event.after_json["identity_mapping_cleanup"] == "complete"
+
+
+def test_postgres_participant_code_columns_are_widened_with_foreign_keys_preserved(monkeypatch):
+    columns = {
+        "participants": [
+            {"name": "id", "type": String(36)},
+            {"name": "display_code", "type": String(36)},
+        ],
+        "attempts": [{"name": "participant_id", "type": String(36)}],
+        "tutor_sessions": [{"name": "participant_id", "type": String(36)}],
+        "participant_sessions": [{"name": "participant_id", "type": String(64)}],
+        "idempotency_records": [{"name": "participant_id", "type": String(36)}],
+        "audit_events": [{"name": "entity_id", "type": String(36)}],
+    }
+    foreign_keys = {
+        "attempts": [{
+            "name": "fk_attempt_participant",
+            "constrained_columns": ["participant_id"],
+            "referred_table": "participants",
+            "referred_columns": ["id"],
+            "options": {"ondelete": "CASCADE"},
+        }],
+        "tutor_sessions": [{
+            "name": "fk_tutor_session_participant",
+            "constrained_columns": ["participant_id"],
+            "referred_table": "participants",
+            "referred_columns": ["id"],
+            "options": {},
+        }],
+        "participant_sessions": [{
+            "name": "fk_participant_session_participant",
+            "constrained_columns": ["participant_id"],
+            "referred_table": "participants",
+            "referred_columns": ["id"],
+            "options": {"ondelete": "CASCADE"},
+        }],
+    }
+
+    class Inspector:
+        def get_table_names(self):
+            return list(columns)
+
+        def get_columns(self, table):
+            return columns[table]
+
+        def get_foreign_keys(self, table):
+            return foreign_keys.get(table, [])
+
+    class Connection:
+        dialect = postgresql_dialect()
+
+        def __init__(self):
+            self.statements = []
+
+        def execute(self, statement):
+            sql = str(statement)
+            self.statements.append(sql)
+            if " ALTER COLUMN " in sql and " TYPE VARCHAR(64)" in sql:
+                table = sql.split("ALTER TABLE ", 1)[1].split(" ALTER COLUMN ", 1)[0].strip('"')
+                column = sql.split(" ALTER COLUMN ", 1)[1].split(" TYPE ", 1)[0].strip('"')
+                next(item for item in columns[table] if item["name"] == column)["type"] = String(64)
+
+    inspector = Inspector()
+    connection = Connection()
+    monkeypatch.setattr(db_session_module, "inspect", lambda _: inspector)
+
+    db_session_module._ensure_participant_code_capacity(connection, "postgresql")
+
+    statements = "\n".join(connection.statements)
+    for table, column in (
+        ("participants", "id"),
+        ("participants", "display_code"),
+        ("attempts", "participant_id"),
+        ("tutor_sessions", "participant_id"),
+        ("idempotency_records", "participant_id"),
+        ("audit_events", "entity_id"),
+    ):
+        assert f"ALTER TABLE {table} ALTER COLUMN {column} TYPE VARCHAR(64)" in statements
+    assert "DROP CONSTRAINT fk_attempt_participant" in statements
+    assert "ADD CONSTRAINT fk_attempt_participant FOREIGN KEY (participant_id) REFERENCES participants (id) ON DELETE CASCADE" in statements
+    assert "ADD CONSTRAINT fk_participant_session_participant FOREIGN KEY (participant_id) REFERENCES participants (id) ON DELETE CASCADE" in statements
+
+    executed_count = len(connection.statements)
+    db_session_module._ensure_participant_code_capacity(connection, "postgresql")
+    assert len(connection.statements) == executed_count

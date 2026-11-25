@@ -56,6 +56,7 @@ try {
         const followup = termItem.locator(".presurvey-followup");
         assert.equal(await followup.count(), 1);
         await followup.getByRole("heading", { name: "追加質問：理解度", exact: true }).waitFor();
+        assert((await followup.innerText()).includes("基本的な仕組みを知らない場合は「1 全く理解していない」、一部知っている場合は「2 あまり理解していない」、知っている場合は「4 ある程度理解している」、説明できる場合は「5 よく理解している」が目安です。"));
         assert.equal(await experienced.evaluate((button) => button === document.activeElement), true, "revealing the follow-up must not move focus");
         const announcement = page.locator(".presurvey-announcement");
         assert.equal(await announcement.getAttribute("role"), "status");
@@ -85,7 +86,7 @@ try {
         assert.equal(await page.getByRole("group", { name: `${term}の基本的な仕組みを、どの程度理解していますか。`, exact: true }).count(), 0);
       }
     }
-    await page.getByRole("group", { name: "直近30日間のうち、AIを利用した日は何日ありましたか。", exact: true }).getByRole("button", { name: "0日", exact: true }).click();
+    await page.getByRole("group", { name: "普段の生活では、1週間あたり何日程度AIを利用しますか。", exact: true }).getByRole("button", { name: "0日", exact: true }).click();
     for (const label of proficiencyItems) {
       await page.getByRole("group", { name: label, exact: true }).locator('[data-rating-value="3"]').click();
     }

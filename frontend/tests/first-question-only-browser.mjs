@@ -48,7 +48,7 @@ async function register() {
     prior_term_exposure: Object.fromEntries(termKeys.map((key) => [key, "not_experienced"])),
     prior_term_understanding: Object.fromEntries(termKeys.map((key) => [key, null])),
     general_ratings: {
-      ai_usage_frequency_30d: "0_days",
+      ai_usage_days_per_week: 0,
       ai_proficiency: { goal_aligned_output: 3, revise_instructions: 3, verify_with_sources: 3 },
     },
   });
@@ -125,7 +125,7 @@ try {
   await page.getByRole("heading", { name: "管理画面", exact: true }).waitFor();
   await page.getByRole("tab", { name: logs.participant.group_condition, exact: true }).click();
   const participantRow = page.getByRole("row").filter({ hasText: record.display_code });
-  await participantRow.getByRole("button", { name: "被験者ログを見る", exact: true }).click();
+  await participantRow.getByRole("button", { name: "参加者ログを見る", exact: true }).click();
   const participantNotice = page.locator(".notice").filter({ hasText: record.display_code }).last();
   await participantNotice.waitFor();
   const participantDetail = await participantNotice.innerText();
