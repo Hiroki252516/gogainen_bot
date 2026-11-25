@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     identity_mapping_path: str = "./.private-identities/mappings.sqlite3"
     frontend_origin: str = "http://localhost:3000"
     admin_password: SecretStr = SecretStr("abc")
+    participant_session_secret: SecretStr = SecretStr("")
 
     model_config = SettingsConfigDict(
         env_file=".env",

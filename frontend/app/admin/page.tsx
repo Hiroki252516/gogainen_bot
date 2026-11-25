@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { HypothesisMetrics, ParticipantHypothesisMetrics } from "@/components/HypothesisMetrics";
 import { API_BASE, ApiError, api, clearParticipantSession, participantId } from "@/lib/api";
+import { displayAdminData, displayGroupCondition } from "@/lib/admin-display";
 
 type Participant = {
   participant_id: string;
@@ -25,33 +26,14 @@ type Participant = {
   give_up_experiment_count: number;
 };
 type GroupCondition = "control" | "proposed";
-const REASONING_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
-type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
-const AI_MODELS = [["gpt-6.1-sol", "GPT-6.1 Sol"], ["gpt-6-luna", "GPT-6 Luna"], ["gpt-6-astra", "GPT-6 Astra"]] as const;
-type AiModel = (typeof AI_MODELS)[number][0];
-type OptionOrderMode = "debug_fixed" | "randomized";
-type OptionOrderSetting = { mode: OptionOrderMode; applies_to: "new_participants_only" };
 type TestContentMode = "application" | "basic_understanding" | "four_topic_fundamentals";
 type CurrentStepResponse = { step: string; next_url: string; can_resume: boolean };
 type AiStatus = {
-  study_settings_warning?: string | null;
   ai_backend: string;
   account_label?: string;
   app_server_reachable?: boolean | null;
   logged_in?: boolean | null;
   last_error?: string | null;
-  model?: string;
-  allowed_models?: AiModel[];
-  can_change_model?: boolean;
-  model_applies?: boolean;
-  reasoning_effort?: ReasoningEffort;
-  allowed_reasoning_efforts?: ReasoningEffort[];
-  can_change_reasoning_effort?: boolean;
-  reasoning_effort_change_block_reason?: string | null;
-  reasoning_effort_applies?: boolean;
-  fast_mode?: boolean;
-  can_change_fast_mode?: boolean;
-  fast_mode_applies?: boolean;
 };
 
 const ADMIN_RESUME_PARTICIPANT_ID_KEY = "admin_resume_participant_id";
@@ -134,6 +116,7 @@ const LOG_FIELD_LABELS: Record<string, string> = {
   previous_misconception_type: "前回の誤概念",
   current_misconception_type: "今回の誤概念",
   ai_experience_level: "AI利用経験",
+  ai_usage_days_per_week: "週あたりAI利用日数",
   programming_experience_level: "プログラミング経験",
   llm_usage_level: "LLM利用頻度",
   self_rated_ai_knowledge: "AI自己評価",
@@ -152,20 +135,11 @@ export default function AdminPage() {
   const [overview, setOverview] = useState<any>(null);
   const [participantLog, setParticipantLog] = useState<any>(null);
   const [ai, setAi] = useState<AiStatus | null>(null);
-  const [optionOrder, setOptionOrder] = useState<OptionOrderSetting | null>(null);
-  const [optionOrderSaving, setOptionOrderSaving] = useState(false);
-  const [optionOrderError, setOptionOrderError] = useState("");
   const [summaryError, setSummaryError] = useState("");
   const [summaryRefresh, setSummaryRefresh] = useState(0);
   const [login, setLogin] = useState<any>(null);
   const [loginError, setLoginError] = useState("");
   const [aiStatusError, setAiStatusError] = useState("");
-  const [reasoningEffortSaving, setReasoningEffortSaving] = useState(false);
-  const [reasoningEffortError, setReasoningEffortError] = useState("");
-  const [modelSaving, setModelSaving] = useState(false);
-  const [modelError, setModelError] = useState("");
-  const [fastModeSaving, setFastModeSaving] = useState(false);
-  const [fastModeError, setFastModeError] = useState("");
   const [logError, setLogError] = useState("");
   const [recalculating, setRecalculating] = useState(false);
   const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null);
@@ -178,9 +152,6 @@ export default function AdminPage() {
     api<{ participants: Participant[] }>("/api/admin/participants").then((data) => setParticipants(data.participants)).catch((err) => setLogError(err.message));
     api("/api/admin/logs/overview").then(setOverview).catch((err) => setLogError(err.message));
     api<AiStatus>("/api/admin/ai/status").then(setAi).catch((err) => setAiStatusError(err instanceof Error ? err.message : String(err)));
-    api<OptionOrderSetting>("/api/admin/option-order")
-      .then(setOptionOrder)
-      .catch((err) => setOptionOrderError(err instanceof Error ? err.message : String(err)));
   }, []);
 
   useEffect(() => {
@@ -261,88 +232,6 @@ export default function AdminPage() {
     }
   }
 
-  async function updateReasoningEffort(reasoningEffort: ReasoningEffort) {
-    if (
-      reasoningEffortSaving || modelSaving || fastModeSaving ||
-      !ai ||
-      ai.ai_backend !== "codex_app_server" ||
-      ai.reasoning_effort === reasoningEffort
-    ) {
-      return;
-    }
-
-    setReasoningEffortError("");
-    setReasoningEffortSaving(true);
-    try {
-      const result = await api<AiStatus>("/api/admin/ai/reasoning-effort", {
-        method: "POST",
-        body: JSON.stringify({ reasoning_effort: reasoningEffort })
-      });
-      setAi((current) => ({ ...current, ...result }));
-    } catch (err) {
-      setReasoningEffortError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setReasoningEffortSaving(false);
-    }
-  }
-
-  async function updateAiModel(model: AiModel) {
-    if (modelSaving || reasoningEffortSaving || fastModeSaving || !ai || ai.ai_backend !== "codex_app_server" || ai.model === model) return;
-    setModelError("");
-    setModelSaving(true);
-    try {
-      const result = await api<AiStatus>("/api/admin/ai/model", {
-        method: "POST",
-        body: JSON.stringify({ model })
-      });
-      setAi((current) => ({ ...current, ...result }));
-    } catch (err) {
-      setModelError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setModelSaving(false);
-    }
-  }
-
-  async function updateFastMode(enabled: boolean) {
-    if (
-      fastModeSaving || modelSaving || reasoningEffortSaving ||
-      !ai || ai.ai_backend !== "codex_app_server" || Boolean(ai.fast_mode) === enabled
-    ) {
-      return;
-    }
-
-    setFastModeError("");
-    setFastModeSaving(true);
-    try {
-      const result = await api<AiStatus>("/api/admin/ai/fast-mode", {
-        method: "POST",
-        body: JSON.stringify({ enabled })
-      });
-      setAi((current) => ({ ...current, ...result }));
-    } catch (err) {
-      setFastModeError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setFastModeSaving(false);
-    }
-  }
-
-  async function updateOptionOrder(mode: OptionOrderMode) {
-    if (optionOrderSaving || !optionOrder || optionOrder.mode === mode) return;
-    setOptionOrderError("");
-    setOptionOrderSaving(true);
-    try {
-      const updated = await api<OptionOrderSetting>("/api/admin/option-order", {
-        method: "PUT",
-        body: JSON.stringify({ mode })
-      });
-      setOptionOrder(updated);
-    } catch (err) {
-      setOptionOrderError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setOptionOrderSaving(false);
-    }
-  }
-
   async function loadParticipantLog(participantId: string) {
     setLogError("");
     try {
@@ -418,7 +307,7 @@ export default function AdminPage() {
                 aria-selected={activeGroup === group}
                 onClick={() => setActiveGroup(group)}
               >
-                {group}
+                {displayGroupCondition(group)}
               </button>
             ))}
           </div>
@@ -428,7 +317,6 @@ export default function AdminPage() {
               <p>{ai ? `${ai.ai_backend} / ${ai.account_label}` : aiStatusError ? "取得できません" : "確認中"}</p>
               {ai?.app_server_reachable === false ? <p className="danger">Codex app-serverに接続できません。</p> : null}
               {ai?.last_error ? <p className="muted">{ai.last_error}</p> : null}
-              {ai?.study_settings_warning ? <p className="danger" role="alert">{ai.study_settings_warning}</p> : null}
               {ai?.logged_in === false ? (
                 <div className="actions">
                   <button className="secondary" onClick={() => startLogin("chatgpt")}>
@@ -450,131 +338,13 @@ export default function AdminPage() {
               ) : null}
               {aiStatusError ? <p className="danger" role="alert">AI接続状態を取得できませんでした: {aiStatusError}</p> : null}
               {loginError ? <p className="danger">{loginError}</p> : null}
-              {ai ? (
-                <div className="reasoning-effort-control" aria-labelledby="ai-model-title">
-                  <strong id="ai-model-title">AIモデル</strong>
-                  <p>{ai.ai_backend === "codex_app_server" ? "有効モデル" : "設定値（Mockでは未使用）"}: {ai.model || "不明"}</p>
-                  <div className="reasoning-effort-buttons" role="group" aria-labelledby="ai-model-title">
-                    {AI_MODELS.map(([model, label]) => (
-                      <button
-                        key={model}
-                        type="button"
-                        className={ai.model === model ? "reasoning-effort-button active" : "reasoning-effort-button"}
-                        aria-pressed={ai.model === model}
-                        disabled={
-                          modelSaving || reasoningEffortSaving || fastModeSaving ||
-                          ai.ai_backend !== "codex_app_server" ||
-                          ai.can_change_model === false ||
-                          !(ai.allowed_models || []).includes(model)
-                        }
-                        onClick={() => updateAiModel(model)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  {modelSaving ? <p className="muted">切替中...</p> : null}
-                  <p className="muted">次回のAI呼び出しから適用します。実験中に切り替えると、同じ参加者の記録内でモデルが混在する場合があります。</p>
-                  {ai.ai_backend !== "codex_app_server" ? (
-                    <p className="muted">Mock実行中のためモデル切替は適用されません。</p>
-                  ) : null}
-                  {modelError ? <p className="danger" role="alert">{modelError}</p> : null}
-                </div>
-              ) : null}
-              {ai ? (
-                <div className="reasoning-effort-control" aria-labelledby="reasoning-effort-title">
-                  <strong id="reasoning-effort-title">推論レベル</strong>
-                  <div className="reasoning-effort-buttons" role="group" aria-label="Codex推論レベル">
-                    {REASONING_EFFORTS.map((effort) => (
-                      <button
-                        key={effort}
-                        type="button"
-                        className={ai.reasoning_effort === effort ? "reasoning-effort-button active" : "reasoning-effort-button"}
-                        aria-pressed={ai.reasoning_effort === effort}
-                        disabled={
-                          reasoningEffortSaving || modelSaving || fastModeSaving ||
-                          ai.ai_backend !== "codex_app_server"
-                        }
-                        onClick={() => updateReasoningEffort(effort)}
-                      >
-                        {effort}
-                      </button>
-                    ))}
-                  </div>
-                  {reasoningEffortSaving ? <p className="muted">保存中...</p> : null}
-                  <p className="muted">管理画面からは実験中でも変更できます。次回のCodex app-server呼び出しから適用されます。</p>
-                  {ai.ai_backend !== "codex_app_server" ? (
-                    <p className="muted">AI_BACKEND=mockのため、推論レベルはCodex app-serverには適用されません。</p>
-                  ) : null}
-                  {reasoningEffortError ? <p className="danger">{reasoningEffortError}</p> : null}
-                </div>
-              ) : null}
-              {ai ? (
-                <div className="reasoning-effort-control" aria-labelledby="fast-mode-title">
-                  <strong id="fast-mode-title">応答速度</strong>
-                  <label className="fast-mode-toggle">
-                    <input
-                      type="checkbox"
-                      role="switch"
-                      aria-label="Codex Fast mode"
-                      checked={Boolean(ai.fast_mode)}
-                      disabled={
-                        fastModeSaving || modelSaving || reasoningEffortSaving ||
-                        ai.ai_backend !== "codex_app_server" ||
-                        ai.can_change_fast_mode === false
-                      }
-                      onChange={(event) => updateFastMode(event.target.checked)}
-                    />
-                    <span>Fast mode: {ai.fast_mode ? "ON" : "OFF"}</span>
-                  </label>
-                  {fastModeSaving ? <p className="muted">切替中...</p> : null}
-                  <p className="muted">対応モデル・アカウントで高速処理を利用します。使用量が増え、速度向上幅はモデルにより異なります。</p>
-                  {ai.ai_backend !== "codex_app_server" ? (
-                    <p className="muted">Mock実行中のためFast modeは適用されません。</p>
-                  ) : null}
-                  {fastModeError ? <p className="danger" role="alert">{fastModeError}</p> : null}
-                </div>
-              ) : null}
-            </div>
-            <div className="notice">
-              <strong>選択肢の配置</strong>
-              <p>{optionOrder ? (optionOrder.mode === "debug_fixed" ? "デバッグ配置" : "ランダム配置") : "設定を確認中"}</p>
-              <div className="reasoning-effort-buttons option-order-buttons" role="group" aria-label="選択肢の配置モード">
-                {([
-                  ["debug_fixed", "デバッグ配置"],
-                  ["randomized", "ランダム配置"]
-                ] as [OptionOrderMode, string][]).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={optionOrder?.mode === mode ? "reasoning-effort-button active" : "reasoning-effort-button"}
-                    aria-pressed={optionOrder?.mode === mode}
-                    disabled={!optionOrder || optionOrderSaving}
-                    onClick={() => updateOptionOrder(mode)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <p className="muted">モードの切替は新規参加者から適用します。開始済みの参加者の配置モードは変わりません。</p>
-              <p className="muted">ランダム配置ではA〜Iを並べ替え、「わからない」は最後のJに固定します。</p>
-              {optionOrder?.mode === "debug_fixed" ? (
-                <p className="danger" role="alert">デバッグ配置は正解位置の手掛かりになるため、実験データの収集には使用しないでください。</p>
-              ) : null}
-              {optionOrderSaving ? <p className="muted">保存中...</p> : null}
-              {optionOrderError ? <p className="danger" role="alert">{optionOrderError}</p> : null}
-            </div>
-            <div className="notice">
-              <strong>新規参加者のテスト問題モード</strong>
-              <p>4用語版（固定）</p>
-              <p className="muted">事前テスト・学習・確認問題・再テストでは、Transformer、LLMの学習段階、マルチエージェント、記憶プロセスを扱います。登録済みの参加者の設定と進行は変更しません。</p>
             </div>
           </div>
           {activeGroupSummaries.length ? (
             <div className="grid">
               {activeGroupSummaries.map((group: any) => (
                 <div className="notice" key={`${group.group_condition}-${group.test_content_mode}`}>
-                  <strong>{group.group_condition} / {group.test_content_mode_label}</strong>
+                  <strong>{displayGroupCondition(group.group_condition)} / {group.test_content_mode_label}</strong>
                   <p>参加者: {group.participant_count}</p>
                   <p>確認テスト正答率: {formatRate(group.attainment_correct_rate)}</p>
                   <p>事前比改善: {formatPoints(group.avg_score_delta_from_pretest_pt)}</p>
@@ -652,7 +422,7 @@ export default function AdminPage() {
         </section>
         <HypothesisMetrics data={summary?.hypotheses} />
         <section className="panel">
-          <h2>{activeGroup}群の被験者一覧</h2>
+          <h2>{displayGroupCondition(activeGroup)}群の被験者一覧</h2>
           <table className="table">
             <thead>
               <tr>
@@ -671,7 +441,7 @@ export default function AdminPage() {
               {activeParticipants.map((p) => (
                 <tr key={p.participant_id}>
                   <td>{p.display_code}</td>
-                  <td>{p.group_condition}</td>
+                  <td>{displayGroupCondition(p.group_condition)}</td>
                   <td>{p.test_content_mode_label || p.test_content_mode || "旧記録"}</td>
                   <td>{p.can_resume ? p.current_step : `旧仕様（閲覧専用）: ${p.current_step}`}</td>
                   <td>{p.completion_reason === "give_up" ? "中断" : p.completed_at ? "完了" : "未完了"}</td>
@@ -713,7 +483,7 @@ export default function AdminPage() {
                 <p>テスト表示方式: {participantLog.participant.effective_test_page_mode === "per_term" ? "用語ごと" : "設問ごと"}</p>
                 <p>テスト時間の計測単位: {participantLog.participant.test_timing_unit === "term_page" ? "用語ページ" : "設問"}</p>
                 <p>
-                  {participantLog.participant.group_condition} / {participantLog.participant.current_step}
+                  {displayGroupCondition(participantLog.participant.group_condition)} / {participantLog.participant.current_step}
                 </p>
                 <p>学習後の再テスト: {participantLog.participant.retest_cycles_completed ?? "-"}回</p>
                 <p>事前テスト後のテスト: {participantLog.participant.post_pretest_tests_completed ?? "-"} / {participantLog.participant.post_pretest_test_limit ?? "-"}回（学習前の追加テストを含む）</p>
@@ -746,12 +516,12 @@ export default function AdminPage() {
               {!participantLog.participant.can_resume ? (
                 <details className="raw-json">
                   <summary>旧仕様の保存フィールド（閲覧専用）</summary>
-                  <pre>{JSON.stringify({
+                  <pre>{JSON.stringify(displayAdminData({
                     attempts: participantLog.attempts.map((row: any) => ({ id: row.attempt_id, legacy_fields: row.legacy_fields })),
                     learner_states: participantLog.learner_states,
                     tutor_sessions: participantLog.tutor_sessions,
                     evaluation: participantLog.latest_evaluation_summary,
-                  }, null, 2)}</pre>
+                  }), null, 2)}</pre>
                 </details>
               ) : null}
               <LogList title="アンケート回答" rows={participantLog.surveys} fields={["phase", "survey_version", "responses", "ai_experience_level", "programming_experience_level", "llm_usage_level", "self_rated_ai_knowledge", "usability_rating", "helpfulness_rating", "perceived_hint_amount", "free_comment", "created_at"]} />
@@ -915,7 +685,7 @@ function EvaluationSummary({ summary }: { summary: any }) {
       </div>
       <details className="raw-json">
         <summary>詳細JSON</summary>
-        <pre>{JSON.stringify(summary, null, 2)}</pre>
+        <pre>{JSON.stringify(displayAdminData(summary), null, 2)}</pre>
       </details>
     </section>
   );
@@ -1086,7 +856,7 @@ function SessionLog({ sessions }: { sessions: any[] }) {
               {session.turns?.slice(0, 3).map((turn: any) => (
                 <details key={turn.tutor_turn_id}>
                   <summary>turn {turn.turn_index} 詳細</summary>
-                  <pre>{JSON.stringify(turn, null, 2)}</pre>
+                  <pre>{JSON.stringify(displayAdminData(turn), null, 2)}</pre>
                 </details>
               ))}
             </div>
@@ -1101,6 +871,7 @@ function SessionLog({ sessions }: { sessions: any[] }) {
 
 function formatCell(field: string, value: any) {
   if (value === null || value === undefined) return "-";
+  if (field === "group_condition") return displayGroupCondition(value);
   if (field === "test_page_mode" || field === "effective_test_page_mode") return value === "per_term" ? "用語ごと" : "設問ごと";
   if (field === "test_timing_unit" || field === "response_time_unit") return value === "term_page" ? "用語ページ" : value === "per_question" ? "設問" : String(value);
   if (typeof value === "boolean") {
@@ -1109,6 +880,6 @@ function formatCell(field: string, value: any) {
     if (field === "completed") return value ? "完了" : "未完了";
     return value ? "あり" : "なし";
   }
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return JSON.stringify(displayAdminData(value));
   return String(value);
 }

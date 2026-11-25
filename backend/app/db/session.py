@@ -112,6 +112,7 @@ def _ensure_lightweight_schema_updates() -> None:
                 if name not in existing_columns:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
         if "participants" in existing_tables:
+            _ensure_participant_code_capacity(connection, dialect_name)
             _ensure_protocol_id_capacity(
                 connection,
                 dialect_name,
@@ -120,6 +121,87 @@ def _ensure_lightweight_schema_updates() -> None:
         _backfill_completion_reasons(connection)
         _backfill_evaluation_completion_flags(connection)
         _backfill_tutor_prefetch_states(connection)
+
+
+def _ensure_participant_code_capacity(connection, dialect_name: str) -> None:
+    """Expand participant identifiers without changing existing identifier values."""
+    if dialect_name != "postgresql":
+        # SQLite stores VARCHAR(n) as TEXT and does not enforce the declared length.
+        return
+
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    if "participants" not in tables:
+        return
+
+    def column_length(table: str, name: str) -> int | None:
+        column = next((item for item in inspector.get_columns(table) if item["name"] == name), None)
+        return getattr(column["type"], "length", None) if column else None
+
+    expand_parent = (column_length("participants", "id") or 0) < 64
+    expand_columns: list[tuple[str, str]] = []
+    for table in tables:
+        if table == "participants":
+            continue
+        names = {column["name"] for column in inspector.get_columns(table)}
+        if "participant_id" in names and (column_length(table, "participant_id") or 0) < 64:
+            expand_columns.append((table, "participant_id"))
+    if "participants" in tables and (column_length("participants", "display_code") or 0) < 64:
+        expand_columns.append(("participants", "display_code"))
+    if "idempotency_records" in tables and (column_length("idempotency_records", "participant_id") or 0) < 64:
+        expand_columns.append(("idempotency_records", "participant_id"))
+    if "audit_events" in tables and (column_length("audit_events", "entity_id") or 0) < 64:
+        expand_columns.append(("audit_events", "entity_id"))
+
+    if not expand_parent and not expand_columns:
+        return
+
+    quote = connection.dialect.identifier_preparer.quote
+    foreign_keys: list[tuple[str, dict]] = []
+    for table in tables:
+        if table == "participants":
+            continue
+        for foreign_key in inspector.get_foreign_keys(table):
+            if foreign_key.get("referred_table") == "participants" and "participant_id" in foreign_key.get("constrained_columns", []):
+                foreign_keys.append((table, foreign_key))
+
+    for table, foreign_key in foreign_keys:
+        name = foreign_key.get("name")
+        if name:
+            connection.execute(text(f"ALTER TABLE {quote(table)} DROP CONSTRAINT {quote(name)}"))
+
+    for table, column in expand_columns:
+        connection.execute(
+            text(f"ALTER TABLE {quote(table)} ALTER COLUMN {quote(column)} TYPE VARCHAR(64)")
+        )
+    if expand_parent:
+        connection.execute(text("ALTER TABLE participants ALTER COLUMN id TYPE VARCHAR(64)"))
+
+    for table, foreign_key in foreign_keys:
+        name = foreign_key.get("name")
+        constrained_columns = foreign_key.get("constrained_columns") or []
+        referred_columns = foreign_key.get("referred_columns") or []
+        if not name or not constrained_columns or not referred_columns:
+            continue
+        referred_schema = foreign_key.get("referred_schema")
+        referred_table = quote(foreign_key["referred_table"])
+        if referred_schema:
+            referred_table = f"{quote(referred_schema)}.{referred_table}"
+        local_columns = ", ".join(quote(column) for column in constrained_columns)
+        remote_columns = ", ".join(quote(column) for column in referred_columns)
+        clauses = [
+            f"ALTER TABLE {quote(table)} ADD CONSTRAINT {quote(name)} "
+            f"FOREIGN KEY ({local_columns}) REFERENCES {referred_table} ({remote_columns})"
+        ]
+        options = foreign_key.get("options") or {}
+        for option, sql_name in (("onupdate", "ON UPDATE"), ("ondelete", "ON DELETE"), ("match", "MATCH")):
+            if options.get(option):
+                clauses.append(f"{sql_name} {options[option]}")
+        if options.get("deferrable"):
+            clauses.append("DEFERRABLE")
+            if options.get("initially"):
+                clauses.append(f"INITIALLY {options['initially'].upper()}")
+        connection.execute(text(" ".join(clauses)))
 
 
 def _ensure_protocol_id_capacity(connection, dialect_name: str, participant_columns: list[dict]) -> None:

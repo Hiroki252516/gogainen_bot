@@ -22,14 +22,14 @@ class Base(DeclarativeBase):
 class Participant(Base):
     __tablename__ = "participants"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     show_pretest_results: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     show_retest_results: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     show_question_reviews: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     first_question_only: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     test_content_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     learning_material_glossary_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    display_code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    display_code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     assignment_method: Mapped[str] = mapped_column(String(32), default="manual", nullable=False)
     consent_checked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -58,7 +58,7 @@ class RuntimeSetting(Base):
     first_question_only: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     test_content_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     learning_material_glossary_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    option_order_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="debug_fixed")
+    option_order_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="randomized")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
@@ -67,7 +67,7 @@ class ParticipantSurvey(Base):
     __tablename__ = "participant_surveys"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(64), ForeignKey("participants.id"), nullable=False)
     phase: Mapped[str] = mapped_column(String(32), nullable=False)
     survey_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
     responses_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -90,7 +90,7 @@ class IdempotencyRecord(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     scope: Mapped[str] = mapped_column(String(255), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
-    participant_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    participant_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     response_status: Mapped[int | None] = mapped_column(Integer)
@@ -119,7 +119,7 @@ class TermAssignment(Base):
     __table_args__ = (UniqueConstraint("participant_id", "term_id", name="uq_term_assignment"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(64), ForeignKey("participants.id"), nullable=False)
     term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     is_learning_target: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -164,7 +164,7 @@ class QuestionDisplayOrder(Base):
     __table_args__ = (UniqueConstraint("participant_id", "question_id", name="uq_question_display_order"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(64), ForeignKey("participants.id"), nullable=False)
     question_id: Mapped[str] = mapped_column(String(36), ForeignKey("questions.id"), nullable=False)
     option_order: Mapped[list] = mapped_column(JSON, nullable=False)
     random_seed: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -175,7 +175,7 @@ class Attempt(Base):
     __tablename__ = "attempts"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(64), ForeignKey("participants.id"), nullable=False)
     term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
     question_id: Mapped[str] = mapped_column(String(36), ForeignKey("questions.id"), nullable=False)
     phase: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -215,7 +215,7 @@ class LearnerState(Base):
     __table_args__ = (UniqueConstraint("participant_id", "term_id", name="uq_learner_state"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(64), ForeignKey("participants.id"), nullable=False)
     term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
     current_status: Mapped[str] = mapped_column(String(64), nullable=False)
     primary_misconception: Mapped[str | None] = mapped_column(String(32))
@@ -239,7 +239,7 @@ class TutorSession(Base):
     __tablename__ = "tutor_sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(64), ForeignKey("participants.id"), nullable=False)
     term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
     session_index: Mapped[int] = mapped_column(Integer, nullable=False)
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -294,7 +294,7 @@ class RecurrenceEvent(Base):
     __tablename__ = "recurrence_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(64), ForeignKey("participants.id"), nullable=False)
     term_id: Mapped[str] = mapped_column(String(36), ForeignKey("terms.id"), nullable=False)
     previous_attempt_id: Mapped[str] = mapped_column(String(36), ForeignKey("attempts.id"), nullable=False)
     current_attempt_id: Mapped[str] = mapped_column(String(36), ForeignKey("attempts.id"), nullable=False)
@@ -328,7 +328,7 @@ class EvaluationSummary(Base):
     __tablename__ = "evaluation_summaries"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("participants.id"), nullable=False)
+    participant_id: Mapped[str] = mapped_column(String(64), ForeignKey("participants.id"), nullable=False)
     group_condition: Mapped[str] = mapped_column(String(32), nullable=False)
     pretest_score: Mapped[float | None] = mapped_column(Float)
     retest_score: Mapped[float | None] = mapped_column(Float)
@@ -368,7 +368,7 @@ class AuditEvent(Base):
     actor: Mapped[str] = mapped_column(String(80), nullable=False)
     action: Mapped[str] = mapped_column(String(80), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(80), nullable=False)
-    entity_id: Mapped[str | None] = mapped_column(String(36))
+    entity_id: Mapped[str | None] = mapped_column(String(64))
     before_json: Mapped[dict | None] = mapped_column(JSON)
     after_json: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

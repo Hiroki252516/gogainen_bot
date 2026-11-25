@@ -1,6 +1,6 @@
 # 研究計画と仕様・実装の対応
 
-新規参加者は仕様版61 / `experiment-plan-2026-11-19-presurvey-guidance-example-v1`の`four_topic_fundamentals`に固定する。旧protocolを含む結果を扱う場合は`test_content_mode`ごとに分ける。必要な全設問が採点済みで全問正解したテスト後は、結果表示snapshotに応じて確認後または直接surveyへ進み、学習・後続テストを省略する。事後アンケートは`posttest-5point-v5`、現行指標版は`four-hypotheses-v1`（H1〜H4）。仕様版52の対応する2 protocolは参加者進行・回答・旧サマリーを変更せず、H1〜H4評価サマリーのみ追加できる。仕様版51以下・未対応protocolは再計算しない。事前アンケートv10と問題バンクv4を使う。理解度は中立値`neither`を含む5段階で、仕様版60以下の回答を変換しない。事前AI自己評価と事後評価から「評価できない」を外し、数値を上・文言を下に置く。教材難易度・量は末尾に間隔を置いて配置する。AI利用日数の質問文と自己評価3項目の設問文、最初の2項目の例を維持し、3項目目に「AIが答えた営業時間を、お店の公式サイトで確認する。」を表示する条件は維持する。難易度・測定上の同等性や研究上の承認は未確認。
+新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`の`four_topic_fundamentals`に固定する。参加者用コードを主IDとして保存し、参加者APIは24時間有効な署名付きHttpOnly Cookieで保護する。選択肢配置はランダム固定、事前アンケートはv12（週0〜7日のAI利用日数、理解度5択と回答目安1・2・4・5）、事後アンケートはv5。モデル・推論レベルは環境値、Fast modeは常時ONとする。旧protocolを含む結果は`test_content_mode`ごとに分ける。必要な全設問が採点済みで全問正解したテスト後は、結果表示snapshotに応じて確認後または直接surveyへ進み、学習・後続テストを省略する。現行指標版は`four-hypotheses-v1`（H1〜H4）。仕様版52の対応する2 protocolは参加者進行・回答・旧サマリーを変更せず、H1〜H4評価サマリーのみ追加できる。仕様版51以下・未対応protocolは再計算しない。仕様版63以下の回答・snapshotは変換しない。尺度・難易度・測定上の同等性や研究上の承認は未確認。
 
 出典・採用判断は[20](20_experiment_plan_alignment.md)、式と欠測定義は[12](12_evaluation_metrics.md)を正本とする。
 

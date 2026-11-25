@@ -18,7 +18,8 @@ FOUR_TOPIC_PRESURVEY_VERSION_V7 = "presurvey-four-topic-baseline-v7"
 FOUR_TOPIC_PRESURVEY_VERSION_V8 = "presurvey-four-topic-baseline-v8"
 FOUR_TOPIC_PRESURVEY_VERSION_V9 = "presurvey-four-topic-baseline-v9"
 FOUR_TOPIC_PRESURVEY_VERSION_V10 = "presurvey-four-topic-baseline-v10"
-FOUR_TOPIC_PRESURVEY_VERSION = FOUR_TOPIC_PRESURVEY_VERSION_V10
+FOUR_TOPIC_PRESURVEY_VERSION_V12 = "presurvey-four-topic-baseline-v12"
+FOUR_TOPIC_PRESURVEY_VERSION = FOUR_TOPIC_PRESURVEY_VERSION_V12
 SURVEY_VERSION = "posttest-5point-v5"
 SUPPORTED_SURVEY_VERSIONS = (
     "posttest-10point-v1", "posttest-10point-v2", "posttest-10point-v3",
@@ -91,6 +92,15 @@ class FourTopicPriorTermUnderstandingV8(StrictModel):
     memory_process: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
 
 
+class FourTopicPriorTermUnderstandingV12(StrictModel):
+    transformer: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    pretraining: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    instruction_tuning: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    human_feedback_post_training: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    multi_agent: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+    memory_process: Literal["not_at_all", "hardly", "neither", "moderately", "well"] | None
+
+
 class FourTopicPriorTermExposureV3(StrictModel):
     transformer: Literal["experienced", "not_experienced", "cannot_recall"]
     pretraining: Literal["experienced", "not_experienced", "cannot_recall"]
@@ -146,6 +156,11 @@ class BaselineRatings(StrictModel):
 
 class CurrentBaselineRatings(StrictModel):
     ai_usage_frequency_30d: Literal["0_days", "1_3_days", "4_8_days", "9_20_days", "21_30_days"]
+    ai_proficiency: CurrentAIProficiencyRatings
+
+
+class WeeklyBaselineRatings(StrictModel):
+    ai_usage_days_per_week: Annotated[int, Field(strict=True, ge=0, le=7)]
     ai_proficiency: CurrentAIProficiencyRatings
 
 
@@ -291,6 +306,18 @@ class FourTopicPresurveyPayloadV10(StrictModel):
         return self
 
 
+class FourTopicPresurveyPayloadV12(StrictModel):
+    survey_version: Literal["presurvey-four-topic-baseline-v12"] = FOUR_TOPIC_PRESURVEY_VERSION_V12
+    prior_term_exposure: FourTopicPriorTermExposure
+    prior_term_understanding: FourTopicPriorTermUnderstandingV12
+    general_ratings: WeeklyBaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
+
+
 class PresurveyPayloadV4(PresurveyPayload):
     """Read-only schema for validating the prior standard presurvey version."""
 
@@ -373,7 +400,7 @@ def presurvey_context(participant: Participant) -> dict:
 
 def validate_presurvey_payload(payload: dict, test_content_mode: str | None = None) -> dict:
     if test_content_mode == "four_topic_fundamentals":
-        return FourTopicPresurveyPayloadV10.model_validate(payload).model_dump()
+        return FourTopicPresurveyPayloadV12.model_validate(payload).model_dump()
     return PresurveyPayload.model_validate(payload).model_dump()
 
 

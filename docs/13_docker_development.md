@@ -2,7 +2,7 @@
 
 ## 計画書の目標と環境例
 
-アプリ側標準モデル/推論設定はgpt-6-luna / low。Word計画書原本のgpt-5.6-luna / low記載は変更していない。未指定時のCompose/.env.example既定はgpt-6-lunaだが、明示されたCODEX_MODEL環境変数が優先する。管理画面での一時上書きはbackend再起動後に環境値へ戻る。実施前に配布設定・管理上書き・実送信を確認する。[D04](20_experiment_plan_alignment.md#現行実装との差分)を参照する。今回の検証は隔離SQLiteとローカル実行であり、配布先PostgreSQL/Dockerの確認とは区別する。
+実行時のモデルと推論レベルは`CODEX_MODEL`・`CODEX_REASONING_EFFORT`で固定し、管理画面の切替UIを設けない。未指定時は`gpt-6-luna / low`を使う。Fast modeは常時ON。モデル・推論値を変更するときは`.env`と実行環境を揃えてbackendを再起動し、AI接続・生成成功を確認する。Word計画書原本のgpt-5.6-luna / low記載は変更していない。[D04](20_experiment_plan_alignment.md#現行実装との差分)を参照する。
 
 ## Target Environment
 
@@ -51,6 +51,7 @@ services:
       CODEX_TURN_TIMEOUT_SEC: ${CODEX_TURN_TIMEOUT_SEC}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-6-luna}
       CODEX_REASONING_EFFORT: ${CODEX_REASONING_EFFORT}
+      PARTICIPANT_SESSION_SECRET: ${PARTICIPANT_SESSION_SECRET:?Set a stable secret of at least 32 characters}
       RAG_BASE_DIR: ${RAG_BASE_DIR}
       MAX_LEARNING_TARGETS: ${MAX_LEARNING_TARGETS}
       MAX_TURNS_PER_TERM: ${MAX_TURNS_PER_TERM}

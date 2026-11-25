@@ -11,7 +11,7 @@ export default function ConsentPage() {
   const router = useRouter();
   const [assignmentCode, setAssignmentCode] = useState("");
   const [accepted, setAccepted] = useState(false);
-  const [researchCode, setResearchCode] = useState("");
+  const [participantCode, setParticipantCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -29,7 +29,7 @@ export default function ConsentPage() {
       setError("開始画面から管理者の群割当用コードを入力してください。");
       return;
     }
-    if (!/^[0-9]{1,64}$/.test(researchCode)) {
+    if (!/^[0-9]{1,64}$/.test(participantCode)) {
       setError("参加者用コードは半角数字1〜64桁で入力してください。");
       return;
     }
@@ -45,9 +45,9 @@ export default function ConsentPage() {
       const data = await api<{ participant_id: string; display_code: string; current_step: string }>(
         "/api/registrations", {
           method: "POST", headers: { "Idempotency-Key": key }, timeoutMs: 15000,
-          body: JSON.stringify({ assignment_code: assignmentCode, consent_checked: true, research_code: researchCode }),
+          body: JSON.stringify({ assignment_code: assignmentCode, consent_checked: true, participant_code: participantCode }),
         });
-      setResearchCode("");
+      setParticipantCode("");
       sessionStorage.removeItem("registration_request_key");
       localStorage.setItem("participant_id", data.participant_id);
       localStorage.setItem("display_code", data.display_code);
@@ -69,12 +69,12 @@ export default function ConsentPage() {
           <h1>研究参加同意書</h1>
           <ConsentDocument />
           <label>参加者用コードを入力してください（必須）
-            <input value={researchCode}
-              onChange={(event) => setResearchCode(event.target.value.replace(/[^0-9]/g, ""))}
+            <input value={participantCode}
+              onChange={(event) => setParticipantCode(event.target.value.replace(/[^0-9]/g, ""))}
               required maxLength={64} inputMode="numeric" pattern="[0-9]*"
               autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={submitting} />
           </label>
-          <p className="muted">参加者用コードは登録処理に必要な間だけ受信し、アプリ内には保存しません。学籍番号は入力しないでください。研究者が参加者用コード・学籍番号・参加者IDの対応表をアプリ外で管理します。</p>
+          <p className="muted">参加者用コードは研究用データの識別に使用し、AIへの入力には含めません。学籍番号は入力しないでください。名前と参加者用コードの対応表は、研究者がアプリ外で管理します。</p>
           <h2>同意確認</h2>
           <label className="option">
             <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={submitting} />

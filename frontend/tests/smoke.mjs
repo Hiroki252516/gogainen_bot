@@ -144,10 +144,6 @@ for (const expectedText of [
   "reasoning-effort-buttons",
   "aria-pressed",
   "/api/admin/ai/reasoning-effort",
-  "/api/admin/ai/fast-mode",
-  'role="switch"',
-  "Fast mode: ",
-  "使用量が増え、速度向上幅はモデルにより異なります",
   "保存中...",
   "実験中でも変更できます",
   "AI_BACKEND=mock"
@@ -156,20 +152,14 @@ for (const expectedText of [
     throw new Error(`admin page missing reasoning effort control: ${expectedText}`);
   }
 }
-for (const expectedText of [".fast-mode-toggle", "accent-color: var(--primary)"]) {
-  if (!styles.includes(expectedText)) throw new Error(`Fast mode toggle styling missing: ${expectedText}`);
+if (groupAdminPage.includes("Fast mode:") || groupAdminPage.includes("Codex Fast mode")) {
+  throw new Error("Fast mode must be fixed on and hidden from the admin page");
 }
 if (groupAdminPage.includes("条件統制チェック")) {
   throw new Error("admin page must not show the condition control check card");
 }
-for (const expectedText of [
-  "/api/admin/option-order",
-  '"debug_fixed", "デバッグ配置"',
-  '"randomized", "ランダム配置"',
-  "新規参加者から適用します",
-  "実験データの収集には使用しないでください"
-]) {
-  if (!groupAdminPage.includes(expectedText)) throw new Error(`admin page missing option-order control: ${expectedText}`);
+for (const hiddenSetting of ["選択肢の配置モード", "新規参加者のテスト問題モード", "/api/admin/option-order"]) {
+  if (groupAdminPage.includes(hiddenSetting)) throw new Error(`fixed admin setting must be hidden: ${hiddenSetting}`);
 }
 
 

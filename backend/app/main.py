@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ConfigDict, SecretStr, Field, StrictBool
+from pydantic import AliasChoices, BaseModel, ConfigDict, SecretStr, Field, StrictBool
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -22,17 +22,8 @@ from app.services import learning_material_glossary_mode
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
 from app.core.admin_auth import require_admin, login as admin_login, logout as admin_logout
+from app.core.participant_session import issue_participant_session, require_participant_session, validate_participant_session_secret
 from app.core.experiment_spec import MAX_LEARNING_CONFIRMATION_ATTEMPTS, MAX_POST_PRETEST_TESTS, assert_current_experiment, can_resume
-from app.core.runtime_config import (
-    ALLOWED_MODELS,
-    ALLOWED_REASONING_EFFORTS,
-    STUDY_MODEL,
-    STUDY_REASONING_EFFORT,
-    current_ai_runtime_settings,
-    set_fast_mode,
-    set_model,
-    set_reasoning_effort,
-)
 from app.db.session import get_db, init_db
 from app.seed.seed_questions import seed_database
 from app.services.experiment import (
@@ -143,33 +134,17 @@ def _public_practice_question(question: object) -> dict | None:
     return public_item(question, _PUBLIC_PRACTICE_QUESTION_FIELDS)
 
 
-def _reasoning_effort_status() -> dict:
-    model, effort, fast_mode = current_ai_runtime_settings()
-    study_settings_match = effort == STUDY_REASONING_EFFORT and model == STUDY_MODEL
+def _fast_mode_status() -> dict:
     return {
-        "model": model,
-        "allowed_models": list(ALLOWED_MODELS),
-        "can_change_model": settings.ai_backend == "codex_app_server",
-        "model_applies": settings.ai_backend == "codex_app_server",
-        "reasoning_effort": effort,
-        "allowed_reasoning_efforts": list(ALLOWED_REASONING_EFFORTS),
-        "can_change_reasoning_effort": True,
-        "reasoning_effort_change_block_reason": None,
-        "reasoning_effort_applies": settings.ai_backend == "codex_app_server",
-        "fast_mode": fast_mode,
-        "can_change_fast_mode": settings.ai_backend == "codex_app_server",
+        "fast_mode": True,
+        "can_change_fast_mode": False,
         "fast_mode_applies": settings.ai_backend == "codex_app_server",
-        "study_settings_match": study_settings_match,
-        "study_settings_reference": {
-            "model": STUDY_MODEL,
-            "reasoning_effort": STUDY_REASONING_EFFORT,
-        },
-        "study_settings_warning": None if study_settings_match else "アプリ標準条件（gpt-6-luna / low）と一致していません。計画書原本のモデル記載とは区別してください。",
     }
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_participant_session_secret()
     load_learning_glossary()
     init_db()
     db = next(get_db())
@@ -188,17 +163,13 @@ async def lifespan(_: FastAPI):
 
 async def guard_current_mutation(request: Request, db: Session = Depends(get_db)) -> None:
     """Reject historical writes before body validation, replay, or prefetch."""
-    if request.method != "POST":
-        return
     path = request.url.path
-    if path.startswith("/api/admin/") or path in {"/api/participants", "/api/seed"}:
-        return
     participant_id = request.path_params.get("participant_id")
-    if path in {"/api/attempts", "/api/tutor-sessions"}:
+    if path in {"/api/attempts", "/api/attempts/term-page", "/api/tutor-sessions"}:
         try:
             body = await request.json()
         except ValueError:
-            return
+            body = None
         participant_id = body.get("participant_id") if isinstance(body, dict) else None
     elif request.path_params.get("session_id"):
         session = db.get(TutorSession, request.path_params["session_id"])
@@ -207,6 +178,14 @@ async def guard_current_mutation(request: Request, db: Session = Depends(get_db)
         turn = db.get(TutorTurn, request.path_params["turn_id"])
         session = db.get(TutorSession, turn.tutor_session_id) if turn else None
         participant_id = session.participant_id if session else None
+
+    admin_only_participant_route = path.startswith("/api/admin/") or path.endswith("/evaluation-summary/recalculate")
+    registration_route = path in {"/api/participants", "/api/registrations", "/api/seed"}
+    if participant_id and not admin_only_participant_route and not registration_route:
+        require_participant_session(request, str(participant_id))
+
+    if request.method != "POST" or path.startswith("/api/admin/") or path in {"/api/participants", "/api/registrations", "/api/seed"}:
+        return
     if participant_id:
         assert_current_experiment(get_participant(db, participant_id))
 
@@ -250,7 +229,7 @@ class ParticipantCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     assignment_code: str | None = None
     consent_checked: bool = False
-    research_code: str
+    participant_code: str = Field(validation_alias=AliasChoices("participant_code", "research_code"))
 
 
 class AttemptPayload(BaseModel):
@@ -302,14 +281,6 @@ class AILoginStart(BaseModel):
 
 class AILoginCancel(BaseModel):
     login_id: str
-
-
-class ReasoningEffortPayload(BaseModel):
-    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"]
-
-
-class AIModelPayload(BaseModel):
-    model: Literal["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"]
 
 
 class FastModePayload(BaseModel):
@@ -364,12 +335,13 @@ async def private_registration_validation(request: Request, exc: RequestValidati
 @app.post("/api/participants")
 async def api_create_participant(
     payload: ParticipantCreate,
+    response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
     if not payload.consent_checked:
         raise HTTPException(400, "同意書への同意が必要です。")
-    identity_mapping.validate_research_code(payload.research_code)
+    identity_mapping.validate_research_code(payload.participant_code)
     normalized_key = normalize_idempotency_key(idempotency_key)
     registration_key = normalized_key or str(uuid4())
     if normalized_key and registration_key_was_deleted(db, normalized_key):
@@ -377,7 +349,7 @@ async def api_create_participant(
 
     def operation() -> dict:
         try:
-            participant = create_participant(db, payload.assignment_code, payload.consent_checked)
+            participant = create_participant(db, payload.assignment_code, payload.consent_checked, payload.participant_code)
         except OperationalError as exc:
             _raise_database_unavailable(db, exc)
         return {
@@ -388,15 +360,18 @@ async def api_create_participant(
 
     try:
         # Always reserve a transaction, even for clients without a supplied key.
-        return await run_idempotent(
+        result = await run_idempotent(
             db,
             scope="participant:create",
             key=registration_key,
             participant_id=None,
             request_data={"assignment_code": payload.assignment_code, "consent_checked": payload.consent_checked,
+                          "participant_code": payload.participant_code,
                           "consent_document_version": identity_mapping.CONSENT_DOCUMENT_VERSION},
             operation=operation,
         )
+        issue_participant_session(response, str(result["participant_id"]))
+        return result
     except Exception as exc:
         db.rollback()
         if isinstance(exc, OperationalError):
@@ -853,6 +828,8 @@ def api_admin_option_order(db: Session = Depends(get_db)) -> dict:
 
 @app.put("/api/admin/option-order")
 def api_set_admin_option_order(payload: OptionOrderPayload, db: Session = Depends(get_db)) -> dict:
+    if payload.mode != "randomized":
+        raise HTTPException(status_code=409, detail="選択肢の配置はランダムに固定されています。")
     mode = save_option_order_mode(db, payload.mode)
     return {"mode": mode, "applies_to": "new_participants_only"}
 
@@ -1022,13 +999,13 @@ def api_export_xlsx(name: str, request: Request, db: Session = Depends(get_db)):
 
 @app.get("/api/admin/ai/status")
 async def api_ai_status() -> dict:
-    reasoning_status = _reasoning_effort_status()
+    fast_mode_status = _fast_mode_status()
     if settings.ai_backend == "codex_app_server":
         status = await CodexAppServerBackend().status()
         return {
             "ai_backend": settings.ai_backend,
             **status,
-            **reasoning_status,
+            **fast_mode_status,
         }
     return {
         "ai_backend": "mock",
@@ -1036,38 +1013,29 @@ async def api_ai_status() -> dict:
         "logged_in": None,
         "account_label": "MockAIBackend (test only)",
         "last_error": None,
-        **reasoning_status,
+        **fast_mode_status,
     }
 
 
 @app.post("/api/admin/ai/reasoning-effort")
-def api_set_reasoning_effort(payload: ReasoningEffortPayload) -> dict:
-    set_reasoning_effort(payload.reasoning_effort)
-    return {
-        "ai_backend": "codex_app_server" if settings.ai_backend == "codex_app_server" else "mock",
-        **_reasoning_effort_status(),
-    }
+def api_set_reasoning_effort() -> dict:
+    raise HTTPException(status_code=409, detail="推論レベルはCODEX_REASONING_EFFORTで固定されています。")
 
 
 @app.post("/api/admin/ai/model")
-def api_set_ai_model(payload: AIModelPayload) -> dict:
-    if settings.ai_backend != "codex_app_server":
-        raise HTTPException(status_code=409, detail="AI_BACKEND=mockではモデル設定を適用できません。")
-    set_model(payload.model)
-    return {
-        "ai_backend": "codex_app_server" if settings.ai_backend == "codex_app_server" else "mock",
-        **_reasoning_effort_status(),
-    }
+def api_set_ai_model() -> dict:
+    raise HTTPException(status_code=409, detail="AIモデルはCODEX_MODELで固定されています。")
 
 
 @app.post("/api/admin/ai/fast-mode")
 def api_set_fast_mode(payload: FastModePayload) -> dict:
     if settings.ai_backend != "codex_app_server":
         raise HTTPException(status_code=409, detail="AI_BACKEND=mockではFast modeを適用できません。")
-    set_fast_mode(payload.enabled)
+    if not payload.enabled:
+        raise HTTPException(status_code=409, detail="Fast modeはONに固定されています。")
     return {
         "ai_backend": settings.ai_backend,
-        **_reasoning_effort_status(),
+        **_fast_mode_status(),
     }
 
 

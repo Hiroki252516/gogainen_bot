@@ -8,9 +8,9 @@
 
 ## 用語注釈と生成契約の境界（仕様版26導入・版48現行）
 
-実験仕様版26で導入した注釈はbackendの固定辞書処理である。現行仕様版61の新規参加者は教材内解説に固定されるため、辞書v4を両群共通の`glossary_reference`として教材生成へ渡す。教材注釈snapshotは保存するが、教材本文や回答後解説へ自動挿入せず、共通回答履歴にも加えない。生成Schemaと契約v7は維持する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
+実験仕様版26で導入した注釈はbackendの固定辞書処理である。現行仕様版64の新規参加者は教材内解説に固定されるため、辞書v4を両群共通の`glossary_reference`として教材生成へ渡す。教材注釈snapshotは保存するが、教材本文や回答後解説へ自動挿入せず、共通回答履歴にも加えない。生成Schemaと契約v7は維持する。出現語・説明文の保存と再現は[24](24_learning_glossary.md)を参照し、逐語転載を避ける指示は[43](43_glossary_definition_paraphrase.md)に記録する。
 
-Wordと実装判断を[20](20_experiment_plan_alignment.md)に記録する。仕様版39までは計画書6.7.2の統制群指示を送っていたが、仕様版40で削除し、現行仕様版61でも6.7.1の共通指示と6.7.3の提案群指示を適用する。unknownの証拠Schema・taxonomy・検査・Mockも維持する。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
+Wordと実装判断を[20](20_experiment_plan_alignment.md)に記録する。仕様版39までは計画書6.7.2の統制群指示を送っていたが、仕様版40で削除し、現行仕様版64でも6.7.1の共通指示と6.7.3の提案群指示を適用する。unknownの証拠Schema・taxonomy・検査・Mockも維持する。抜粋と、各入力・Schemaを含む完全な実送信promptを区別する。
 
 ## 目標プロンプトと現行原文
 
@@ -61,7 +61,7 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 ## 教材契約と仕様版42からの継承（版26の基準契約・版29で維持）
 
-仕様版42 / `experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`で定めた教材条件は現行仕様版61でも引き継ぐ。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教材本文は800文字程度を目安とし、文字数による合否判定は行わない。統制群に群別自然言語方略指示を加えず、提案群だけに教授方略の自然言語指示を追加する。出力SchemaとBackend検証は変更せず、統制群のstrategy値は`general_explanation`に固定する。仕様版43で問題モードの登録時固定とモード別仮説集計を追加し、仕様版45では4用語版の進行だけを固定2回に変更する。仕様版60以下は閲覧専用。
+仕様版42 / `experiment-plan-2026-11-07-fixed-admin-settings-learning-material-target-800-control-shared-prompt-v1`で定めた教材条件は現行仕様版64でも引き継ぐ。仕様版26で導入した教材契約`tutoring-teaching-contract-v7-easy-level`、taxonomy `m1-m3-unknown-v3`、共通履歴`interaction-history-v1`、出題規則`shared-diagnosis-route-v1`を維持する。新規参加者には教材内解説を固定し、辞書v4を両群共通入力として渡す。教材本文は800文字程度を目安とし、文字数による合否判定は行わない。統制群に群別自然言語方略指示を加えず、提案群だけに教授方略の自然言語指示を追加する。出力SchemaとBackend検証は変更せず、統制群のstrategy値は`general_explanation`に固定する。仕様版43で問題モードの登録時固定とモード別仮説集計を追加し、仕様版45では4用語版の進行だけを固定2回に変更する。仕様版60以下は閲覧専用。
 
 タスクはgenerate_tutoring_turn、generate_correct_answer_summary、explain_selected_distractorの3つだけ。分類・採点・状態更新・方略決定はbackendが行う。
 
@@ -69,7 +69,7 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 
 共通入力はterm、component_terms、rag_context、interaction_history。教材内解説モードでは`glossary_reference`を追加する。現在出題する未回答の固定問題・全選択肢・正答を教材生成へ渡さない。既回答の問題本文と選択本文は履歴として利用できる。参加者ID/群名はルーティングとログ照合専用でpromptから除く。
 
-| 入力 | control | proposed |
+| 入力 | control | experimental |
 | --- | --- | --- |
 | 用語・構成要素・共通RAG・interaction_history | 共通 | 共通 |
 | glossary_reference（教材内解説モードのみ） | 同じ辞書構造 | 同じ辞書構造 |
@@ -77,19 +77,19 @@ M1/M3の対象主張・訂正・仕組み・対比例、適用確認と本文証
 | pretest_target(s)、diagnostic_evidence、訂正メタデータ | なし | 追加 |
 | taxonomy、教授方針、必須教授要素、診断由来段階 | なし | 追加 |
 
-仕様版40で導入し、現行仕様版61でも維持する統制群では、`general_explanation`を通常説明として定義する自然言語の方略説明は送らない。これは出力JSONの`teaching_strategy`をSchema enumとBackend検証で固定する内部値である。統制群は共通履歴を利用し、回答から自然に誤りを見つけて訂正することが許容される。比較は明示的な誤概念対応の追加効果であり、統制群が誤概念に全く対応しないことを保証する設計ではない。
+仕様版40で導入し、現行仕様版64でも維持する統制群では、`general_explanation`を通常説明として定義する自然言語の方略説明は送らない。これは出力JSONの`teaching_strategy`をSchema enumとBackend検証で固定する内部値である。統制群は共通履歴を利用し、回答から自然に誤りを見つけて訂正することが許容される。比較は明示的な誤概念対応の追加効果であり、統制群が誤概念に全く対応しないことを保証する設計ではない。
 
 interaction_historyは同じ参加者・用語の採点済み事前/再/最終テストと学習確認を全周回から取得する。記録種別、phase/test_round、session_index/turn_index、問題本文、selected_optionsのlabel/body、全体is_correct、表示/回答時刻、回答時間だけを含む。snapshotを優先して復元し、回答時刻または記録時刻で時系列順にする。分類・理由・確信度・段階・方略・再発・訂正メタデータ・内部ID・選択肢別正誤・正答キーは除く。未回答・未利用prefetch・他用語・他参加者を含めない。全文を渡し、暗黙の履歴切り捨てはしない。
 
 AI教材・解説全文は履歴に入れず、過去問題/回答の自動prefix追記もしない。共通履歴と実験群専用情報を別allowlistで投影し、履歴のselected_options内もlabel/bodyだけに制限する。両群で履歴の取得規則は同じだが、参加者ごとの値まで同一にするわけではない。
 
-backend指定方略値はcontrol→general_explanation、M1→belief_revision、M3→category_reorientation、unknown→foundational_explanation。Schemaの`teaching_strategy` enumは当該1つに固定し、不一致を拒否する。仕様版40で値を説明する自然言語テンプレートを提案群だけに追加し、現行仕様版61でもその範囲を維持する。
+backend指定方略値はcontrol→general_explanation、M1→belief_revision、M3→category_reorientation、unknown→foundational_explanation。Schemaの`teaching_strategy` enumは当該1つに固定し、不一致を拒否する。仕様版40で値を説明する自然言語テンプレートを提案群だけに追加し、現行仕様版64でもその範囲を維持する。
 
 ## 出力検証
 
 両群とも冒頭の `## 用語名` と1つ以上の非空 `###` セクションを要求する。小見出しの文言・数・順序・複数要素のまとめ方はAIに任せ、専用見出しや固定順序を強制しない。従来の見出しを自然に生成してもよい。CommonMarkパーサー（markdown-it-py）で実際の見出しと節本文を解析し、インラインの見出し風文字列、コードブロック・引用内の見出しを教材の節とみなさない。空の節、用語見出しの欠落、内部ラベル露出を拒否する。
 
-proposedの教材はtutor_message、teaching_strategy、mandatory_elements、teaching_contractを持つ。契約項目はtarget_claim_id、addressed_claim_ids、refutation_mode、corrected_claim、mechanism_explanation、contrast_example、transfer_check、target_addressed。
+experimental群の教材はtutor_message、teaching_strategy、mandatory_elements、teaching_contractを持つ。契約項目はtarget_claim_id、addressed_claim_ids、refutation_mode、corrected_claim、mechanism_explanation、contrast_example、transfer_check、target_addressed。DB/API上の群識別値は`proposed`。
 
 M1は反駁、M3はカテゴリー比較、unknownは基礎説明を生成するよう指示する。transfer_checkは教材内の適用確認であり必須。backendの自動検証は以下の構造・文字列検査であり、教授内容の意味的な正しさを判定するものではない。本文の目標800文字程度は生成時の目安であり、実測長は合否判定・再試行条件に使わない。構造・教授契約・安全性の検証違反時は初回＋最大2回同backendで再生成する。失敗は503。Mockへ切り替えない。更新識別子は`tutoring-prompt-contract-v11-target-800-control-shared-prompt`。
 
@@ -104,7 +104,7 @@ M1は反駁、M3はカテゴリー比較、unknownは基礎説明を生成する
 
 M1/M3の内部キーとteaching_contractを維持し、unknownのmandatory_elementsだけを上記のtype/definitionへ変更する。証拠文は見出しを除く実際の節本文に存在する必要があり、複数要素が同じ節でよい。JSONだけ・見出しだけ・空欄・本文と不一致の証拠は拒否し、先頭文等で補正しない。構造・証拠・契約・長さを同じ最大3試行内で検査する。統制群に型別契約を要求しない。
 
-正答要約/誤答解説も共通入力を使い、現在の問題・選択内容・表示済み教材を追加する。不正解の現在選択には従来どおり選ばれた誤答本文だけを使う。履歴は現在回答より前の確定分とし、二重掲載しない。proposedだけ診断と教授方針を追加し、固定採点をAI解説で変えない。
+正答要約/誤答解説も共通入力を使い、現在の問題・選択内容・表示済み教材を追加する。不正解の現在選択には従来どおり選ばれた誤答本文だけを使う。履歴は現在回答より前の確定分とし、二重掲載しない。experimental群だけ診断と教授方針を追加し、固定採点をAI解説で変えない。保存上の群識別値は`proposed`とする。
 
 ### 回答後解説の現行指示
 
@@ -118,7 +118,7 @@ M1/M3の内部キーとteaching_contractを維持し、unknownのmandatory_eleme
 
 ## 監査
 
-AICallLogの既存JSON内に実送信thread/start、turn/start全文、SchemaとSHA-256、モデル・推論設定、RAG条件/chunk本文hash、版、試行・検証、生応答を保存する。interaction-history-v1の件数とSHA-256、出題規則版、モデル入力投影も記録する。controlのinstruction_routeはshared_history_general、proposedはshared_history_diagnostic。認証情報を保存しない。Mock入力を実送信として扱わない。TutorTurnにも版・履歴指紋・契約・検証を保存する。
+AICallLogの既存JSON内に実送信thread/start、turn/start全文、SchemaとSHA-256、モデル・推論設定、RAG条件/chunk本文hash、版、試行・検証、生応答を保存する。interaction-history-v1の件数とSHA-256、出題規則版、モデル入力投影も記録する。controlのinstruction_routeはshared_history_general、experimentalはshared_history_diagnostic。認証情報を保存しない。Mock入力を実送信として扱わない。TutorTurnにも版・履歴指紋・契約・検証を保存する。
 
 監査ログ・CSVを研究者限定で取り扱うことは運用方針である。現行管理APIに管理者認証・権限確認はなく、アクセスがシステムで制限されているとはみなさない。[セキュリティ仕様](15_security_privacy.md) に未解決事項を記載する。
 

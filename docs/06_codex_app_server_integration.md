@@ -2,7 +2,7 @@
 
 ## 目標設定と現行設定
 
-アプリ側標準条件は両群共通のgpt-6-luna / low。Word計画書原本にあるgpt-5.6-luna / lowの記載は別の目標記録であり、原本は変更していない。管理画面でgpt-6.1-sol / gpt-6-luna / gpt-6-astraと推論レベルlow/medium/high/xhigh/maxを一時切替できる。モデル・推論レベルは一呼び出しの開始時に一緒に確定し、その呼び出しのthread/start、turn/start、監査ログに同一値を使う。切替は両群・進行中参加者にも次回呼び出しから適用し、backend再起動後は環境値へ戻る。収集中の切替は同一参加者内のモデル混在を生み得るため、実験前に設定を固定する。実送信model/effortを監査し、過去の検証記録は書き換えない。[対応表](20_experiment_plan_alignment.md)を参照する。
+現行コードは各呼び出しで`CODEX_MODEL`と`CODEX_REASONING_EFFORT`を読み、管理画面のモデル・推論レベル切替は表示しない。管理APIからの変更要求も409で拒否する。既定値は`gpt-6-luna / low`で、実行環境の`.env`が指定されていればその値を使う。Fast modeは常時ONとし、app-serverの各turnへ`serviceTierForTurn=fast`を渡す。モデル・推論値を変える場合は環境値を更新してbackendを再起動し、実験開始前にアカウントで生成成功を確認する。Word計画書原本のgpt-5.6-luna / lowの記載は変更していない。同一参加者内の実験中に環境値を変更すると記録内でモデルが混在する可能性がある。[対応表](20_experiment_plan_alignment.md)を参照する。
 
 仕様版28の設問ペア答え合わせは、保存済みAttemptの選択内容・正誤を表示するもので、AI生成タスクやapp-server呼び出しを追加しない。[詳細](40_question_pair_answer_review.md)。
 
@@ -183,7 +183,7 @@ Codex app-serverの `thread/start` と `turn/start` を使い、毎回「構造�
 }
 ```
 
-モデルは起動時の `CODEX_MODEL` を基準とし、管理画面での一時上書きを含む有効値をthread/startとturn/startへ渡す。管理選択肢は `gpt-6.1-sol`、`gpt-6-luna`、`gpt-6-astra`、推論レベルは`low`、`medium`、`high`、`xhigh`、`max`。アプリ標準値は `gpt-6-luna / low` である。未指定の環境既定もこれに合わせるが、明示された環境変数は優先する。Fast modeは初期OFFのプロセス内一時設定で、ONでは`turn/start.serviceTierForTurn`へ`fast`、OFFでは`default`を明示する。対応モデル・アカウントでのみ利用でき、使用量が増える。速度向上幅はモデルにより異なるため、一定の倍率を保証しない。backend再起動後はOFFへ戻る。
+モデルは起動時の `CODEX_MODEL` を基準とし、管理画面での一時上書きを含む有効値をthread/startとturn/startへ渡す。管理選択肢は `gpt-6.1-sol`、`gpt-6-luna`、`gpt-6-astra`、推論レベルは`low`、`medium`、`high`、`xhigh`、`max`。アプリ標準値は `gpt-6-luna / low` である。未指定の環境既定もこれに合わせるが、明示された環境変数は優先する。Fast modeは常時ONに固定し、すべての`turn/start.serviceTierForTurn`に`fast`を指定する。管理画面および更新APIからOFFへ変更できない。対応モデル・アカウントでのみ利用でき、使用量が増える。速度向上幅はモデルにより異なるため、一定の倍率を保証しない。backend再起動後もONを維持する。
 
 `cwd` は既定で `/tmp` にする。アプリが研究仕様リポジトリ配下の `AGENTS.md` をAIタスクへ混入させないためである。
 
@@ -245,7 +245,7 @@ MVPではフロントエンドにAI生成途中のストリームを見せなく
 
 各Codex呼び出しでは、`AICallLog.request_payload.effective_request`に送信直前の実際の`thread/start`設定、`turn/start`の全文prompt・JSON Schema・モデル・推論レベル・`serviceTierForTurn`を保存する。Fast modeの有効状態と実際に指定したtierも監査し、設定と送信値を照合できるようにする。併せてprompt/taxonomy版、Schema SHA-256、RAG query・section・chunk ID・本文SHA-256、教材生成試行番号、送信状態を記録する。認証ヘッダー・tokenは保存しない。接続や送信前の失敗では、送信試行と実送信の状態を区別する。Mockの入力にはこのCodex実送信監査を付けない。
 
-仕様版26でも共通interaction_historyの版・件数・SHA-256、共通出題規則版とactual_ai_inputを記録する。モデルへは共通履歴の診断除外投影を送り、proposedだけに診断・対象主張・教授方針を追加する。input_projectionはサーバー側投影であり、送信済みかどうかはeffective_request.transmissionを確認する。仕様版4で追加した学習後retest回数制限はbackendの遷移制御であり、AI promptの送信内容を変更しない。
+仕様版26でも共通interaction_historyの版・件数・SHA-256、共通出題規則版とactual_ai_inputを記録する。モデルへは共通履歴の診断除外投影を送り、experimental群だけに診断・対象主張・教授方針を追加する。内部の群識別値`proposed`は保存記録とAPI互換性のため維持する。input_projectionはサーバー側投影であり、送信済みかどうかはeffective_request.transmissionを確認する。仕様版4で追加した学習後retest回数制限はbackendの遷移制御であり、AI promptの送信内容を変更しない。
 
 章立てはAIが決め、本文構造と実験群の本文証拠をbackendで検査する。unknownのmandatory_elementsをtype/definitionへ変更し、teaching_contractの仕組み・適用確認と合わせる。不一致を補正せず同backendへ再生成させ、章立て・検証を保存する。契約版はtutoring-teaching-contract-v7-easy-level。
 

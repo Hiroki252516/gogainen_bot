@@ -745,27 +745,27 @@ def give_up_experiment(db: Session, participant_id: str) -> dict[str, Any]:
     }
 
 
-def next_display_code(db: Session) -> str:
-    display_codes = db.query(Participant.display_code).all()
-    max_number = 0
-    for (display_code,) in display_codes:
-        match = re.fullmatch(r"P(\d+)", display_code or "")
-        if match:
-            max_number = max(max_number, int(match.group(1)))
-    return f"P{max_number + 1:03d}"
-
-
-def create_participant(db: Session, assignment_code: str | None, consent_checked: bool) -> Participant:
+def create_participant(
+    db: Session,
+    assignment_code: str | None,
+    consent_checked: bool,
+    participant_code: str,
+) -> Participant:
     from app.services.identity_mapping import CONSENT_DOCUMENT_VERSION
     if not consent_checked:
         raise HTTPException(status_code=400, detail="同意書への同意が必要です。")
+    if re.fullmatch(r"[0-9]{1,64}", participant_code) is None:
+        raise HTTPException(status_code=400, detail="参加者用コードは半角数字1〜64桁で入力してください。")
+    if db.get(Participant, participant_code) is not None:
+        raise HTTPException(status_code=409, detail="この参加者用コードはすでに登録されています。研究者に確認してください。")
     normalized_code = (assignment_code or "").strip().upper()
     group_condition_by_code = {"A": "proposed", "B": "control"}
     group_condition = group_condition_by_code.get(normalized_code)
     if group_condition is None:
         raise HTTPException(status_code=400, detail="管理者から伝えられた群割当用コード（AまたはB）が必要です。")
     participant = Participant(
-        display_code=next_display_code(db),
+        id=participant_code,
+        display_code=participant_code,
         show_pretest_results=False,
         show_retest_results=False,
         show_question_reviews=True,

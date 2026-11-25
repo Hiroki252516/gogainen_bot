@@ -165,14 +165,15 @@ class CodexAppServerBackend:
         fast_mode: bool | None = None,
     ) -> None:
         self.settings = get_settings()
-        configured_model, configured_effort, configured_fast_mode = (None, None, None)
-        if model is None or reasoning_effort is None or fast_mode is None:
-            configured_model, configured_effort, configured_fast_mode = current_ai_runtime_settings()
+        configured_model, configured_effort = (None, None)
+        if model is None or reasoning_effort is None:
+            configured_model, configured_effort, _ = current_ai_runtime_settings()
         self.model = model if model is not None else configured_model
         self.reasoning_effort = normalize_reasoning_effort(
             reasoning_effort if reasoning_effort is not None else configured_effort
         )
-        self.fast_mode = fast_mode if fast_mode is not None else configured_fast_mode
+        # Retain the argument for caller compatibility, but the study runtime always uses Fast mode.
+        self.fast_mode = True
 
     async def status(self) -> dict[str, Any]:
         try:
