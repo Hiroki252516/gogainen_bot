@@ -22,7 +22,14 @@ from app.services import learning_material_glossary_mode
 from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServerError
 from app.core.config import get_settings
 from app.core.admin_auth import require_admin, login as admin_login, logout as admin_logout
-from app.core.experiment_spec import MAX_LEARNING_CONFIRMATION_ATTEMPTS, MAX_POST_PRETEST_TESTS, assert_current_experiment, can_resume
+from app.core.experiment_spec import (
+    CURRENT_EXPERIMENT_SPEC_VERSION,
+    CURRENT_PROTOCOL_ID,
+    MAX_LEARNING_CONFIRMATION_ATTEMPTS,
+    MAX_POST_PRETEST_TESTS,
+    assert_current_experiment,
+    can_resume,
+)
 from app.db.session import get_db, init_db
 from app.seed.seed_questions import seed_database
 from app.services.experiment import (
