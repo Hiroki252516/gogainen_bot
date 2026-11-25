@@ -13,30 +13,18 @@ def ok(response):
     return response.json()
 
 
-@pytest.fixture(autouse=True)
-def restore_option_order():
-    client = AuthenticatedTestClient(app)
-    ok(client.put("/api/admin/option-order", json={"mode": "debug_fixed"}))
-    try:
-        yield
-    finally:
-        current_mode = ok(client.get("/api/admin/option-order"))["mode"]
-        if current_mode != "debug_fixed":
-            ok(client.put("/api/admin/option-order", json={"mode": "debug_fixed"}))
-
-
 @pytest.mark.parametrize("group", ["A", "B"])
 @pytest.mark.parametrize("layout", ["debug_fixed", "randomized"])
 @pytest.mark.parametrize("first_role", ["unknown", "M1"])
 @pytest.mark.parametrize("target_slug", ["llm_knowledge", "multi_agent", "memory_process"])
 def test_split_flow(group, layout, first_role, target_slug):
     client = AuthenticatedTestClient(app)
-    ok(client.put("/api/admin/option-order", json={"mode": layout}))
     pid = ok(client.post("/api/registrations", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()}))["participant_id"]
     # Keep this paired-assessment integration test on its explicit legacy fixture.
     with SessionLocal() as db:
         participant = db.get(Participant, pid)
         participant.test_content_mode = "application"
+        participant.option_order_mode = layout
         participant.first_question_only = False
         db.commit()
     complete_presurvey(client, pid)

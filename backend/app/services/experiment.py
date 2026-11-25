@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -4452,7 +4452,20 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
     for turn in turns:
         turns_by_session.setdefault(turn.tutor_session_id, []).append(turn)
     recurrences = db.query(RecurrenceEvent).filter_by(participant_id=participant.id).order_by(RecurrenceEvent.created_at).all()
-    surveys = db.query(ParticipantSurvey).filter_by(participant_id=participant.id).order_by(ParticipantSurvey.created_at).all()
+    surveys = (
+        db.query(ParticipantSurvey)
+        .filter_by(participant_id=participant.id)
+        .order_by(
+            case(
+                (ParticipantSurvey.phase == "presurvey", 0),
+                (ParticipantSurvey.phase == "posttest", 1),
+                else_=2,
+            ),
+            ParticipantSurvey.created_at,
+            ParticipantSurvey.id,
+        )
+        .all()
+    )
     audit_events = (
         db.query(AuditEvent)
         .filter_by(entity_type="participant", entity_id=participant.id)

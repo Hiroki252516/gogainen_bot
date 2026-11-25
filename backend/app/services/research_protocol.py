@@ -18,6 +18,7 @@ FOUR_TOPIC_PRESURVEY_VERSION_V7 = "presurvey-four-topic-baseline-v7"
 FOUR_TOPIC_PRESURVEY_VERSION_V8 = "presurvey-four-topic-baseline-v8"
 FOUR_TOPIC_PRESURVEY_VERSION_V9 = "presurvey-four-topic-baseline-v9"
 FOUR_TOPIC_PRESURVEY_VERSION_V10 = "presurvey-four-topic-baseline-v10"
+FOUR_TOPIC_PRESURVEY_VERSION_V11 = "presurvey-four-topic-baseline-v11"
 FOUR_TOPIC_PRESURVEY_VERSION_V12 = "presurvey-four-topic-baseline-v12"
 FOUR_TOPIC_PRESURVEY_VERSION = FOUR_TOPIC_PRESURVEY_VERSION_V12
 SURVEY_VERSION = "posttest-5point-v5"
@@ -296,6 +297,20 @@ class FourTopicPresurveyPayloadV9(StrictModel):
 
 class FourTopicPresurveyPayloadV10(StrictModel):
     survey_version: Literal["presurvey-four-topic-baseline-v10"] = FOUR_TOPIC_PRESURVEY_VERSION_V10
+    prior_term_exposure: FourTopicPriorTermExposure
+    prior_term_understanding: FourTopicPriorTermUnderstandingV8
+    general_ratings: CurrentBaselineRatings
+
+    @model_validator(mode="after")
+    def validate_understanding_branch(self):
+        _validate_understanding_branch(self.prior_term_exposure, self.prior_term_understanding)
+        return self
+
+
+class FourTopicPresurveyPayloadV11(StrictModel):
+    """Read-only schema for the 30-day-frequency four-topic questionnaire."""
+
+    survey_version: Literal["presurvey-four-topic-baseline-v11"] = FOUR_TOPIC_PRESURVEY_VERSION_V11
     prior_term_exposure: FourTopicPriorTermExposure
     prior_term_understanding: FourTopicPriorTermUnderstandingV8
     general_ratings: CurrentBaselineRatings

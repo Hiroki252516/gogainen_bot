@@ -31,14 +31,13 @@ client = TestClient(app)
 
 
 def create_trial(group="A", labels="DEF"):
-    option_order_response = client.put("/api/admin/option-order", json={"mode": "debug_fixed"})
-    assert option_order_response.status_code == 200, option_order_response.text
     participant = client.post("/api/participants", json={"assignment_code": group, "consent_checked": True, "research_code": new_research_code()}).json()
     pid = participant["participant_id"]
     # This suite exercises the historical two-question interaction-history path.
     with SessionLocal() as db:
         row = db.get(Participant, pid)
         row.test_content_mode = "application"
+        row.option_order_mode = "debug_fixed"
         row.first_question_only = False
         db.commit()
     complete_presurvey(client, pid)
