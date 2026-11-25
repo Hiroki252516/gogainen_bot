@@ -9,6 +9,7 @@ test_db.parent.mkdir(parents=True, exist_ok=True)
 test_db.unlink(missing_ok=True)
 os.environ["DATABASE_URL"] = f"sqlite:///{test_db}"
 os.environ["EXPORT_DIR"] = str(test_db.parent / "exports")
+os.environ["PARTICIPANT_SESSION_SECRET"] = "isolated-test-participant-session-secret-0123456789"
 identity_test_db = test_db.parent / "test-identities.sqlite3"
 identity_test_db.unlink(missing_ok=True)
 os.environ["IDENTITY_MAPPING_PATH"] = str(identity_test_db)

@@ -1,6 +1,6 @@
 ## 仕様版64：参加者コード・週次AI利用頻度・理解度の回答目安（現行）
 
-現行protocolは`experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`。新規参加者は仕様版64・4用語版に固定し、問題バンク`split-actions-four-topic-v4`、事前アンケート`presurvey-four-topic-baseline-v12`、事後アンケート`posttest-5point-v5`を使う。参加者用コードをParticipant.idとして保存し、参加者APIは24時間有効な署名付きHttpOnly Cookieで保護する。理解度は5択（保存値`not_at_all`／`hardly`／`neither`／`moderately`／`well`）に回答目安1／2／4／5を示し、AI利用日数は直近1週間の0〜7日を整数保存する。仕様版63以下の記録は読み取り専用で保持する。モデルと推論レベルは環境変数で固定し、Fast modeは常時ON、選択肢配置はランダム、新規参加者の問題モードは4用語版に固定する。尺度の妥当性および研究上の承認は未確認。[仕様](49_presurvey_baseline.md)、[運用](19_experiment_operation_runbook.md)、[受入記録](14_testing_acceptance.md)。
+現行protocolは`experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`。新規参加者は仕様版64・4用語版に固定し、問題バンク`split-actions-four-topic-v4`、事前アンケート`presurvey-four-topic-baseline-v12`、事後アンケート`posttest-5point-v5`を使う。参加者用コードをParticipant.idとして保存し、参加者APIは24時間有効な署名付きHttpOnly Cookieで保護する。署名秘密値`PARTICIPANT_SESSION_SECRET`は32文字以上でbackend再起動後も維持する。理解度は5択（保存値`not_at_all`／`hardly`／`neither`／`moderately`／`well`）に回答目安1／2／4／5を示し、AI利用日数は直近1週間の0〜7日を整数保存する。仕様版63以下の記録は読み取り専用で保持する。モデルと推論レベルは環境変数で固定し、Fast modeは常時ON、選択肢配置はランダム、新規参加者の問題モードは4用語版に固定する。尺度の妥当性および研究上の承認は未確認。[仕様](49_presurvey_baseline.md)、[運用](19_experiment_operation_runbook.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版61：事前アンケートの回答ガイドと例（履歴）
 

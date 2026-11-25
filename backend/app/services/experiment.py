@@ -766,8 +766,6 @@ def create_participant(
     group_condition = group_condition_by_code.get(normalized_code)
     if group_condition is None:
         raise HTTPException(status_code=400, detail="管理者から伝えられた群割当用コード（AまたはB）が必要です。")
-    if db.get(Participant, participant_code) is not None:
-        raise HTTPException(status_code=409, detail="この参加者コードはすでに登録されています。")
     participant = Participant(
         id=participant_code,
         display_code=participant_code,

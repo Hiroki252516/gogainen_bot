@@ -42,7 +42,7 @@ def test_invalid_research_codes_are_not_echoed_or_persisted(research_code):
     assert not Path(get_settings().identity_mapping_path).exists()
 
 
-def test_registration_uses_participant_code_as_primary_identifier_without_participant_cookie():
+def test_registration_uses_participant_code_as_primary_identifier_and_issues_session_cookie():
     key = str(uuid4())
     research_code = "001202611120001"
     response = register(research_code, key)
@@ -51,7 +51,7 @@ def test_registration_uses_participant_code_as_primary_identifier_without_partic
     assert participant_id == research_code
     assert response.json()["participant_code"] == research_code
     assert response.json()["display_code"] == research_code
-    assert "set-cookie" not in response.headers
+    assert "set-cookie" in response.headers
     assert not Path(get_settings().identity_mapping_path).exists()
 
     with SessionLocal() as db:
@@ -69,6 +69,7 @@ def test_registration_uses_participant_code_as_primary_identifier_without_partic
         })
         assert record.request_hash == expected_hash
         assert record.response_json["participant_code"] == research_code
+        assert db.query(ParticipantSession).filter_by(participant_id=research_code).count() == 1
 
     for path in (f"/api/admin/participants/{participant_id}/logs.csv", f"/api/admin/participants/{participant_id}/logs.xlsx"):
         exported = client.get(path)
@@ -79,7 +80,7 @@ def test_registration_uses_participant_code_as_primary_identifier_without_partic
             assert research_code.encode() in exported.content
 
     anonymous = TestClient(app)
-    assert anonymous.get(f"/api/participants/{participant_id}/presurvey").status_code == 200
+    assert anonymous.get(f"/api/participants/{participant_id}/presurvey").status_code == 401
     assert client.get(f"/api/participants/{participant_id}/presurvey").status_code == 200
 
     replay = register(research_code, key)
@@ -87,7 +88,7 @@ def test_registration_uses_participant_code_as_primary_identifier_without_partic
     assert replay.json() == response.json()
     with SessionLocal() as db:
         assert db.query(Participant).filter_by(id=participant_id).count() == 1
-        assert db.query(ParticipantSession).filter_by(participant_id=participant_id).count() == 0
+        assert db.query(ParticipantSession).filter_by(participant_id=participant_id).count() == 2
 
     conflict = register("999202611129999", key)
     assert conflict.status_code == 409

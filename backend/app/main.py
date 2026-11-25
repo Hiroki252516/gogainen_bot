@@ -83,6 +83,11 @@ from app.services.option_order import current_option_order_mode, save_option_ord
 from app.services.test_content_mode import FOUR_TOPIC_FUNDAMENTALS, mode_label as test_content_mode_label
 from app.services.learning_glossary import load_learning_glossary, public_glossary
 from app.services import identity_mapping
+from app.services.participant_auth import (
+    issue_participant_session,
+    require_participant_session,
+    validate_session_configuration,
+)
 from app.services.research_protocol import (
     FourTopicPresurveyPayloadV12,
     PresurveyPayload,
@@ -157,6 +162,7 @@ def _fast_mode_status() -> dict:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_session_configuration()
     load_learning_glossary()
     init_db()
     db = next(get_db())
@@ -202,7 +208,7 @@ async def guard_current_mutation(request: Request, db: Session = Depends(get_db)
 app = FastAPI(
     title="Learning Log AI Tutor",
     lifespan=lifespan,
-    dependencies=[Depends(require_admin), Depends(guard_current_mutation)],
+    dependencies=[Depends(require_admin), Depends(guard_current_mutation), Depends(require_participant_session)],
 )
 app.add_middleware(
     CORSMiddleware,
@@ -218,21 +224,6 @@ async def prevent_identifier_caching(request: Request, call_next):
     response = await call_next(request)
     if request.url.path in {"/api/participants", "/api/registrations", "/api/seed"} or request.url.path.startswith("/api/admin/"):
         response.headers["Cache-Control"] = "no-store"
-    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
-    secure_cookie = (
-        request.url.scheme == "https"
-        or forwarded_proto == "https"
-        or settings.app_env.lower() in {"production", "prod"}
-    )
-    for cookie_name in request.cookies:
-        if cookie_name == "participant_session" or cookie_name.startswith("tutor_participant_"):
-            response.delete_cookie(
-                key=cookie_name,
-                path="/api",
-                httponly=True,
-                secure=secure_cookie,
-                samesite="strict",
-            )
     return response
 
 
@@ -363,12 +354,15 @@ async def private_registration_validation(request: Request, exc: RequestValidati
 @app.post("/api/participants")
 async def api_create_participant(
     payload: ParticipantCreate,
+    request: Request,
+    response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> dict:
     if not payload.consent_checked:
         raise HTTPException(400, "同意書への同意が必要です。")
     participant_code = identity_mapping.validate_participant_code(payload.participant_code)
+    validate_session_configuration()
     normalized_key = normalize_idempotency_key(idempotency_key)
     registration_key = normalized_key or str(uuid4())
     if normalized_key and registration_key_was_deleted(db, normalized_key):
@@ -398,6 +392,7 @@ async def api_create_participant(
                           "consent_document_version": identity_mapping.CONSENT_DOCUMENT_VERSION},
             operation=operation,
         )
+        issue_participant_session(db, response, request, result["participant_code"])
         return result
     except Exception as exc:
         db.rollback()

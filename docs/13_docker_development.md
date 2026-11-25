@@ -117,8 +117,11 @@ backendからCodex app-serverへの接続先はルート`.env`の`CODEX_APP_SERV
 
 ## .env.example
 
+参加者APIのCookie署名用に`PARTICIPANT_SESSION_SECRET`を設定する。32文字以上のランダムな値を生成し、`.env`に保存する。値はbackend再起動後も維持し、実値をGitへコミットしない。
+
 ```env
 APP_ENV=development
+PARTICIPANT_SESSION_SECRET=replace-with-a-stable-random-secret-at-least-32-characters
 BACKEND_NETWORK_MODE=host
 DATABASE_URL=postgresql+psycopg://app:app@127.0.0.1:5432/ai_tutor
 AI_BACKEND=codex_app_server

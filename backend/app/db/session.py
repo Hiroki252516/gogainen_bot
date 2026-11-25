@@ -138,51 +138,74 @@ def _ensure_participant_code_capacity(connection, dialect_name: str) -> None:
         column = next((item for item in inspector.get_columns(table) if item["name"] == name), None)
         return getattr(column["type"], "length", None) if column else None
 
-    expand_parent = (column_length("participants", "id") or 0) < 64
-    expand_columns: list[tuple[str, str]] = []
-    for table in tables:
+    def needs_expansion(table: str, name: str) -> bool:
+        length = column_length(table, name)
+        return length is not None and length < 64
+
+    expand_parent = needs_expansion("participants", "id")
+    expand_columns: set[tuple[str, str]] = set()
+    for table in sorted(tables):
         if table == "participants":
             continue
         names = {column["name"] for column in inspector.get_columns(table)}
-        if "participant_id" in names and (column_length(table, "participant_id") or 0) < 64:
-            expand_columns.append((table, "participant_id"))
-    if "participants" in tables and (column_length("participants", "display_code") or 0) < 64:
-        expand_columns.append(("participants", "display_code"))
-    if "idempotency_records" in tables and (column_length("idempotency_records", "participant_id") or 0) < 64:
-        expand_columns.append(("idempotency_records", "participant_id"))
-    if "audit_events" in tables and (column_length("audit_events", "entity_id") or 0) < 64:
-        expand_columns.append(("audit_events", "entity_id"))
+        if "participant_id" in names and needs_expansion(table, "participant_id"):
+            expand_columns.add((table, "participant_id"))
+    if needs_expansion("participants", "display_code"):
+        expand_columns.add(("participants", "display_code"))
+    expanded_participant_columns = {"id", "display_code"}
+    if "audit_events" in tables and needs_expansion("audit_events", "entity_id"):
+        expand_columns.add(("audit_events", "entity_id"))
+
+    foreign_keys: list[tuple[str, dict]] = []
+    for table in sorted(tables):
+        for foreign_key in inspector.get_foreign_keys(table):
+            if foreign_key.get("referred_table") != "participants":
+                continue
+            name = foreign_key.get("name")
+            constrained_columns = foreign_key.get("constrained_columns") or []
+            referred_columns = foreign_key.get("referred_columns") or []
+            if (
+                not name
+                or not constrained_columns
+                or not referred_columns
+                or len(constrained_columns) != len(referred_columns)
+            ):
+                raise RuntimeError(
+                    f"Cannot safely expand participant identifier columns: incomplete foreign-key metadata for {table}."
+                )
+            foreign_keys.append((table, foreign_key))
+            for local_column, referred_column in zip(constrained_columns, referred_columns):
+                if referred_column in expanded_participant_columns and needs_expansion(table, local_column):
+                    if (table, local_column) != ("participants", "id"):
+                        expand_columns.add((table, local_column))
 
     if not expand_parent and not expand_columns:
         return
 
     quote = connection.dialect.identifier_preparer.quote
-    foreign_keys: list[tuple[str, dict]] = []
-    for table in tables:
-        if table == "participants":
-            continue
-        for foreign_key in inspector.get_foreign_keys(table):
-            if foreign_key.get("referred_table") == "participants" and "participant_id" in foreign_key.get("constrained_columns", []):
-                foreign_keys.append((table, foreign_key))
 
     for table, foreign_key in foreign_keys:
         name = foreign_key.get("name")
-        if name:
-            connection.execute(text(f"ALTER TABLE {quote(table)} DROP CONSTRAINT {quote(name)}"))
+        connection.execute(text(f"ALTER TABLE {quote(table)} DROP CONSTRAINT {quote(name)}"))
 
-    for table, column in expand_columns:
+    for table, column in sorted(expand_columns):
         connection.execute(
             text(f"ALTER TABLE {quote(table)} ALTER COLUMN {quote(column)} TYPE VARCHAR(64)")
         )
     if expand_parent:
         connection.execute(text("ALTER TABLE participants ALTER COLUMN id TYPE VARCHAR(64)"))
 
+    refreshed_inspector = inspect(connection)
+    if expand_parent and not has_code_capacity(refreshed_inspector, "participants", "id"):
+        raise RuntimeError("Participant identifier column expansion was not reflected by PostgreSQL.")
+    for table, column in expand_columns:
+        if not has_code_capacity(refreshed_inspector, table, column):
+            raise RuntimeError(f"Participant identifier column expansion was not reflected for {table}.{column}.")
+
     for table, foreign_key in foreign_keys:
         name = foreign_key.get("name")
         constrained_columns = foreign_key.get("constrained_columns") or []
         referred_columns = foreign_key.get("referred_columns") or []
-        if not name or not constrained_columns or not referred_columns:
-            continue
         referred_schema = foreign_key.get("referred_schema")
         referred_table = quote(foreign_key["referred_table"])
         if referred_schema:
@@ -202,6 +225,12 @@ def _ensure_participant_code_capacity(connection, dialect_name: str) -> None:
             if options.get("initially"):
                 clauses.append(f"INITIALLY {options['initially'].upper()}")
         connection.execute(text(" ".join(clauses)))
+
+
+def has_code_capacity(inspector, table: str, name: str) -> bool:
+    column = next((item for item in inspector.get_columns(table) if item["name"] == name), None)
+    length = getattr(column["type"], "length", None) if column else None
+    return length is not None and length >= 64
 
 
 def _ensure_protocol_id_capacity(connection, dialect_name: str, participant_columns: list[dict]) -> None:

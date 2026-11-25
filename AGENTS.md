@@ -2,7 +2,7 @@
 
 ## 仕様版64の現行条件（2026-11-24）
 
-新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v12`、事後アンケートは`posttest-5point-v5`を使う。週あたりAI利用日数は0〜7日の整数を`ai_usage_days_per_week`に保存し、理解度は経験「ある」の用語だけに回答目安1・2・4・5を示す。参加者コード（半角数字1〜64桁）を`Participant.id`として保存し、画面・ログ・CSV/XLSX等で識別に使うがAI入力には含めない。学籍番号は取得せず、対応表は研究者がアプリ外で管理する。参加者APIではCookieセッション認証を使わず、参加者コードで対象データを識別する。仕様版63以下のID・回答・snapshotは変更せず読み取り専用とする。仕様版52の対応protocolでは参加者記録を変えず評価サマリーのみ追加でき、仕様版51以下・未対応protocolは再計算対象外。尺度・問題の妥当性、研究上の承認は未確認。詳細はdocs/07、08、15、19、49、51、52、12、14を参照する。
+新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v12`、事後アンケートは`posttest-5point-v5`を使う。週あたりAI利用日数は0〜7日の整数を`ai_usage_days_per_week`に保存し、理解度は経験「ある」の用語だけに回答目安1・2・4・5を示す。参加者コード（半角数字1〜64桁）を`Participant.id`として保存し、画面・ログ・CSV/XLSX等で識別に使うがAI入力には含めない。学籍番号は取得せず、対応表は研究者がアプリ外で管理する。参加者APIは登録時に発行する24時間有効の署名付きHttpOnly Cookieで保護し、`PARTICIPANT_SESSION_SECRET`に32文字以上の安定した秘密値を使う。仕様版63以下のID・回答・snapshotは変更せず読み取り専用とする。仕様版52の対応protocolでは参加者記録を変えず評価サマリーのみ追加でき、仕様版51以下・未対応protocolは再計算対象外。尺度・問題の妥当性、研究上の承認は未確認。詳細はdocs/07、08、15、19、49、51、52、12、14を参照する。
 
 ## 仕様版63の履歴条件（2026-11-23）
 
@@ -116,8 +116,8 @@
 - テスト回答中はチャット・ヒント・即時正解を表示しない。新規参加者は4用語各1問を出題し、複数選択は正解3つまたはJ単独。回答後は選択肢別（本人が選んだ項目のみ）と設問全体の正誤を示す。未選択肢の正誤は表示しない。既存参加者は保存snapshotで復元する。過去の設問ペア表示契約はdocs/40を参照する。
 - 学習確認は1用語・1セッションあたり最大3回答。必要な全設問を採点して全問正解した事前・再テスト1/2・内部`final_test`の後はsurveyへ進み、学習・後続テストを省略する。未達時は誤答用語を学習する。再テスト2後は正誤にかかわらずsurveyへ進む。採点済みバッチは1回とし、全問未回答は採点しない。
 - 新規Participantのテストは`four_topic_fundamentals`=`split-actions-four-topic-v4`に固定し、4用語各1問・計4問を出題する。A〜Cは正解、D〜FはM1、G〜IはM3、Jはunknownの10択。内部`final_test` APIは履歴復元用に保持し、新規通常経路では使わない。既存Participantは保存済みモード・protocol・snapshotに基づいて当時の問題を復元し、版付きconstruct_keyで本文・選択肢を上書きしない。学習確認は直前テストの保存snapshotを利用する。通常の学習v15と教材条件は維持する。
-- 選択肢配置は管理画面のDB保存設定で切り替える。既定値は`debug_fixed`で、新規参加者だけに適用する。実験データ収集前に`randomized`へ変更し、正答位置の手掛かりがないことを確認する。判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
-- 現行コードでは仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`だけを新規参加者に適用し、`retest_cycles_completed=0`で開始する。問題バンクv4、事前アンケートv12（週0〜7日のAI利用日数を整数で保存）、事後アンケートv5、4仮説指標を使う。理解度は経験ありの場合だけ回答目安1・2・4・5付きで尋ねる。参加者コードは主キーとして保存し、画面・ログ・出力に使うがAIモデルには送らない。参加者APIではCookieセッション認証を行わない。仕様版63以下のID・回答・snapshotは変更しない。仕様版52の対応2 protocolは参加者記録を変えずH1〜H4評価サマリーのみ追加可能。仕様版51以下・未対応protocolは再計算対象外。
+- 選択肢配置は新規参加者を含め常に`randomized`とし、管理画面・管理APIから変更できない。既存参加者は保存済みsnapshotで復元する。正答位置の手掛かりがないことを確認し、判定は表示ラベルでなく選択肢ID・内部メタデータで行う。
+- 現行コードでは仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`だけを新規参加者に適用し、`retest_cycles_completed=0`で開始する。問題バンクv4、事前アンケートv12（週0〜7日のAI利用日数を整数で保存）、事後アンケートv5、4仮説指標を使う。理解度は経験ありの場合だけ回答目安1・2・4・5付きで尋ねる。参加者コードは主キーとして保存し、画面・ログ・出力に使うがAIモデルには送らない。参加者APIは登録時に発行する24時間有効の署名付きHttpOnly Cookieで保護し、`PARTICIPANT_SESSION_SECRET`に32文字以上の安定した秘密値を使う。仕様版63以下のID・回答・snapshotは変更しない。仕様版52の対応2 protocolは参加者記録を変えずH1〜H4評価サマリーのみ追加可能。仕様版51以下・未対応protocolは再計算対象外。
 - 両群の教材の小見出し・数・順序・まとめ方はAIが決める。冒頭の##用語名と非空の###セクションだけを要求し、実験群の必須教授内容・transfer_checkは本文内証拠で検証する。固定見出しから証拠文を自動補正しない。
 - 教材内のtransfer_checkは維持するが、独立した追加テスト・旧支援量・自由回答処理を戻さない。
 - 過去のapplication/basic_understandingの対象は`llm_knowledge`、`multi_agent`、`memory_process`。現行新規4用語版の対象は`transformer`、`llm_training_stages`、`multi_agent_four_topic`、`memory_process_four_topic`。
@@ -129,7 +129,7 @@
 - AI呼び出しは必ず `AIBackend` インターフェース経由にする。
 - AIタスクは教材生成・正答要約・誤答解説だけ。採点・分類・状態更新・方略決定はbackendで行う。
 - 通常実行では `CodexAppServerBackend` を使い、ユーザーのChatGPT/Codexログイン済みapp-serverへ接続する。
-- アプリ既定のAI設定は `gpt-6-luna / low`。管理画面では `gpt-6.1-sol` / `gpt-6-luna` / `gpt-6-astra`、low/medium/high/xhigh/max、および初期OFFのCodex Fast modeを一時切替でき、両群・進行中参加者の次回呼び出しから適用する。Fast modeはapp-serverのturn単位service tierで指定し、OFF時にも`default`を明示する。選択値はDBに保存せず、Fast modeはbackend再起動でOFFへ戻る。対応モデル・アカウントに依存し、使用量が増えるため、実験中は設定を固定する。研究計画書原本のgpt-5.6-luna記載は変更せず、アプリ設定との差を明示する。同一参加者内での実験中切替は条件・モデル混在を生む。
+- 実行モデルと推論レベルは`CODEX_MODEL`・`CODEX_REASONING_EFFORT`環境変数から読み、管理画面・管理APIで変更できない。既定値は`gpt-6-luna / low`。Codex Fast modeは常にONとし、管理画面・管理APIで変更できない。Fast modeはapp-serverのturn単位service tierで指定する。対応モデル・アカウントに依存し、使用量が増えるため、実験中は環境設定を固定する。研究計画書原本のgpt-5.6-luna記載は変更せず、アプリ設定との差を明示する。同一参加者内での実験中切替は条件・モデル混在を生む。
 - `MockAIBackend` は自動テスト・障害切り分け専用にし、通常実験データへ混ぜない。
 - `AI_BACKEND=codex_app_server` ではMockへ自動フォールバックしない。
 - ChatGPT/Codex認証情報、アクセストークン、APIキーをDBに保存しない。
