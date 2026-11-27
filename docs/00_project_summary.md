@@ -1,8 +1,12 @@
 # 実験の概要と現行仕様
 
-## 仕様版64の現行コード（2026-11-25）
+## 仕様版65の現行コード（2026-11-27）
 
-新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v12`、事後アンケートは`posttest-5point-v5`を使う。週あたりAI利用日数は0〜7日の整数を`ai_usage_days_per_week`へ保存し、理解度は経験「ある」の用語だけに回答目安1・2・4・5を示す。参加者用コード（半角数字1〜64桁）を`Participant.id`と`display_code`に保存し、画面・ログ・CSV/XLSX等で識別に使うがAI入力には含めない。参加者APIは登録時に発行する24時間有効の署名付きHttpOnly Cookieで保護し、`PARTICIPANT_SESSION_SECRET`には32文字以上の安定した秘密値を使う。仕様版63以下の記録は変更せず読み取り専用とする。モデル・推論レベルは管理画面/APIから変更できず、`CODEX_MODEL`と`CODEX_REASONING_EFFORT`の環境値を使う。Fast modeは常時ON。管理画面では保存値`proposed`を`experimental`と表示する。尺度・問題の妥当性、研究上の承認は未確認。[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+新規参加者は仕様版65 / `experiment-plan-2026-11-27-generated-participant-id-v1`で登録し、`four_topic_fundamentals`に固定する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v12`、事後アンケートは`posttest-5point-v5`を使う。週あたりAI利用日数は0〜7日の整数を`ai_usage_days_per_week`へ保存し、理解度は経験「ある」の用語だけに回答目安1・2・4・5を示す。登録確認用コードは半角数字1〜64桁を検証後に破棄し、Participant.idはUUID、display_codeは生成`P###`とする。参加者APIは24時間有効の署名付きHttpOnly Cookieで保護し、`PARTICIPANT_SESSION_SECRET`には32文字以上の安定した秘密値を使う。仕様版64の参加者コードIDと記録は変更せず、有効な既存Cookieで再開できる。仕様版63以下の記録は変更せず読み取り専用とする。モデル・推論レベルは管理画面/APIから変更できず、`CODEX_MODEL`と`CODEX_REASONING_EFFORT`の環境値を使う。Fast modeは常時ON。管理画面では保存値`proposed`を`experimental`と表示する。尺度・問題の妥当性、研究上の承認は未確認。[仕様版65](65_generated_participant_id.md)、[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[評価指標](12_evaluation_metrics.md)、[受入記録](14_testing_acceptance.md)。
+
+### 仕様版64の既存参加者
+
+仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`は新規登録には使用しない。既存のParticipant.id・participant_code・回答・snapshotは当時のまま保持し、有効なブラウザーセッションがある場合に限り、そのIDで進行を再開できる。仕様65の新しい登録確認用コードとは区別し、64/65の集計は混合しない。
 
 ## 仕様版61の履歴条件（2026-11-19）
 
@@ -54,9 +58,9 @@
 
 通常版のPRETEST・RETEST・内部final_testで、設問1・2の両方を保存した後に同じテスト画面内で選択内容と正誤を示し、続行で次の用語へ進む。設定・API・保存・受入条件は[40](40_question_pair_answer_review.md)を参照する。
 
-当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。設問ペア確認の履歴契約は現行仕様版64でも復元互換性のため保持するが、新規参加者は選択した問題モードの対象設問を出題し、各問の回答後に確認する。過去に存在した設定UI/APIは廃止した。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
+当時のprotocolは`experiment-plan-2026-10-30-question-review-v1`。設問ペア確認の履歴契約は現行仕様版65でも復元互換性のため保持するが、新規参加者は選択した問題モードの対象設問を出題し、各問の回答後に確認する。過去に存在した設定UI/APIは廃止した。仕様版27の採用時記録[39](39_split_assessment.md)は保持し、受入検証の実行状況は[14](14_testing_acceptance.md)に記録する。
 
-## 仕様版26で採用した共通の用語注釈辞書（現行仕様版64でも維持）
+## 仕様版26で採用した共通の用語注釈辞書（現行仕様版65でも維持）
 
 以下は採用時点の記録を含む。現在の保存版・read-only境界は冒頭の仕様版61の記述を正とする。仕様版52の対応2 protocolに限る評価サマリー追加は参加者操作を伴わない例外として扱う。
 
@@ -77,7 +81,7 @@ Word「卒業研究計画書_6.7挿入済み.docx」とユーザー承認済み�
 
 ## 版・保存・フロー
 
-現行コードは新規参加者に仕様版64 / experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1を保存し、仕様版63以下・NULLや未対応版は閲覧専用で保全する。4用語版・問題バンクv4・事前アンケートv12（週0〜7日の整数、理解度5択と目安1/2/4/5）・事後アンケートv5を適用する。参加者用コードはParticipant.idに保存し、AI入力には含めない。選択肢配置はrandomized、Fast modeは常時ONとする。モデル・推論レベルは環境変数で固定する。参加者・回答・snapshot・教材条件は登録後に切り替えない。現行指標はH1〜H4。仕様版52の対応2 protocolに限り旧サマリーを上書きせず評価サマリーを追加できる。
+現行コードは新規参加者に仕様版65 / `experiment-plan-2026-11-27-generated-participant-id-v1`を保存し、仕様版63以下・NULLや未対応版は閲覧専用で保全する。4用語版・問題バンクv4・事前アンケートv12（週0〜7日の整数、理解度5択と目安1/2/4/5）・事後アンケートv5を適用する。登録確認用コードは検証後に破棄し、Participant.idは生成UUID、display_codeは生成値とする。仕様版64の既存参加者コードIDは変更せず、有効な既存Cookieから再開できる。選択肢配置はrandomized、Fast modeは常時ONとする。モデル・推論レベルは環境変数で固定する。参加者・回答・snapshot・教材条件は登録後に切り替えない。現行指標はH1〜H4。仕様版52の対応2 protocolに限り旧サマリーを上書きせず評価サマリーを追加できる。
 
 現行版・基礎理解版は各用語の設問1、計3問・各6択単一選択、4用語版は4問・各10択で正解3つまたはJ単独を選択する。必要な全設問が採点済みで全問正解なら、全モードで事前・再テスト後に学習・後続テストを省略して事後アンケートへ進む。4用語版も再テスト1満点後は固定学習対象を設定しない。未達の場合は問題モードに応じた誤答用語を学習し、再テスト2まで進む。内部`final_test`は過去記録の復元用に維持し、新規参加者の通常経路では使用しない。学習確認には直前テストで誤答した問題の保存済みsnapshotを使う。回答後は選択内容と選択肢別・設問全体の正誤を表示する。テスト上限・採点・回次は[39](39_split_assessment.md)、旧問題本文は[44](44_pretest_content_revision.md)以降の履歴を参照する。詳細は[問題モード](50_basic_understanding_question_mode.md)・[4用語版](51_four_topic_foundation_mode.md)・[アンケート](49_presurvey_baseline.md)・[評価指標](12_evaluation_metrics.md)。
 
@@ -91,4 +95,4 @@ A〜C正解等の配置はデバッグ用であり収集に使わない。管理
 
 ## 旧問題版設定の廃止（履歴）
 
-以前のeasy-mode整理で旧`question_set_mode`列・APIを廃止した。これは現在の問題モードを廃止したものではない。仕様版43〜57では新規Participantの`test_content_mode`を登録時に固定していた。現行仕様版64では新規参加者を`four_topic_fundamentals`に固定し、既存記録は保存済みprotocol・snapshotに従って復元する。登録済みParticipantの問題・回答・snapshotを切り替えない。版付きconstruct keyと保存snapshotから当時の問題を復元し、異なるバンクへフォールバックしない。研究DB内の旧条件に関するデータを削除する操作は、専用手順・明示設定を確認して扱い、起動や通常seedから削除しない。
+以前のeasy-mode整理で旧`question_set_mode`列・APIを廃止した。これは現在の問題モードを廃止したものではない。仕様版43〜57では新規Participantの`test_content_mode`を登録時に固定していた。現行仕様版65では新規参加者を`four_topic_fundamentals`に固定し、既存記録は保存済みprotocol・snapshotに従って復元する。登録済みParticipantの問題・回答・snapshotを切り替えない。版付きconstruct keyと保存snapshotから当時の問題を復元し、異なるバンクへフォールバックしない。研究DB内の旧条件に関するデータを削除する操作は、専用手順・明示設定を確認して扱い、起動や通常seedから削除しない。

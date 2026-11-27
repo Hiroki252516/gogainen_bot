@@ -43,6 +43,8 @@ from app.core.experiment_spec import (
     MAX_LEARNING_CONFIRMATION_ATTEMPTS,
     assert_current_experiment,
     can_resume,
+    is_current_registration,
+    participant_code_for_record,
 )
 from app.services.first_question_only import enabled as first_question_enabled, question_numbers
 from app.services.research_protocol import (
@@ -125,6 +127,7 @@ from app.models import (
     TermAssignment,
     TutorSession,
     TutorTurn,
+    new_id,
     now,
 )
 from app.services.idempotency import idempotency_error, run_idempotent
@@ -748,27 +751,33 @@ def give_up_experiment(db: Session, participant_id: str) -> dict[str, Any]:
     }
 
 
+def next_display_code(db: Session) -> str:
+    max_number = 0
+    for (display_code,) in db.query(Participant.display_code).all():
+        match = re.fullmatch(r"P(\d+)", display_code or "")
+        if match:
+            max_number = max(max_number, int(match.group(1)))
+    return f"P{max_number + 1:03d}"
+
+
 def create_participant(
     db: Session,
     assignment_code: str | None,
     consent_checked: bool,
-    participant_code: str,
+    research_code: str,
 ) -> Participant:
-    from app.services.identity_mapping import CONSENT_DOCUMENT_VERSION
+    from app.services.identity_mapping import CONSENT_DOCUMENT_VERSION, validate_research_code
     if not consent_checked:
         raise HTTPException(status_code=400, detail="同意書への同意が必要です。")
-    if re.fullmatch(r"[0-9]{1,64}", participant_code) is None:
-        raise HTTPException(status_code=400, detail="参加者用コードは半角数字1〜64桁で入力してください。")
-    if db.get(Participant, participant_code) is not None:
-        raise HTTPException(status_code=409, detail="この参加者用コードはすでに登録されています。研究者に確認してください。")
+    validate_research_code(research_code)
     normalized_code = (assignment_code or "").strip().upper()
     group_condition_by_code = {"A": "proposed", "B": "control"}
     group_condition = group_condition_by_code.get(normalized_code)
     if group_condition is None:
         raise HTTPException(status_code=400, detail="管理者から伝えられた群割当用コード（AまたはB）が必要です。")
     participant = Participant(
-        id=participant_code,
-        display_code=participant_code,
+        id=new_id(),
+        display_code=next_display_code(db),
         show_pretest_results=False,
         show_retest_results=False,
         show_question_reviews=True,
@@ -794,7 +803,7 @@ def create_participant(
         _commit(db)
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="この参加者コードはすでに登録されています。") from exc
+        raise HTTPException(status_code=409, detail="参加登録を確定できませんでした。もう一度お試しください。") from exc
     db.refresh(participant)
     return participant
 
@@ -1696,13 +1705,18 @@ async def _ai_call(db: Session, purpose: str, payload: dict[str, Any]) -> dict[s
     # contract or prompt input.
     generation_audit = payload.get("_generation_audit")
     backend_payload = {key: value for key, value in payload.items() if key != "_generation_audit"}
+    participant = db.get(Participant, backend_payload.get("participant_id")) if backend_payload.get("participant_id") else None
+    experiment_context = {
+        "experiment_spec_version": participant.experiment_spec_version if participant else CURRENT_EXPERIMENT_SPEC_VERSION,
+        "protocol_id": participant.protocol_id if participant else CURRENT_PROTOCOL_ID,
+    }
+    backend_payload["_experiment_context"] = experiment_context
     logged_payload = {
         **backend_payload,
         "reasoning_effort": reasoning_effort,
         "fast_mode": fast_mode,
         "service_tier": "fast" if fast_mode else "default",
-        "experiment_spec_version": CURRENT_EXPERIMENT_SPEC_VERSION,
-        "protocol_id": CURRENT_PROTOCOL_ID,
+        **experiment_context,
         "model": model,
         "study_settings_reference": {
             "model": STUDY_MODEL,
@@ -2085,7 +2099,7 @@ def _test_result_question(
     phase: str,
 ) -> Question | None:
     historical_banks = historical_assessment_bank_versions_for(participant)
-    uses_scenario_bank = historical_banks is not None or participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
+    uses_scenario_bank = historical_banks is not None or can_resume(participant)
     expected_variant: str | None = None
     if test_round == "test":
         expected_variant = "pretest_v1"
@@ -2116,7 +2130,7 @@ def _test_result_question(
         .order_by(Question.created_at.desc(), Question.variant_key)
     )
     if uses_scenario_bank:
-        if participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION:
+        if can_resume(participant):
             try:
                 bank_version = assessment_bank_for_participant(participant)
             except ValueError as exc:
@@ -4028,54 +4042,71 @@ def _group_misconception_transition_summary(
 
 
 def admin_summary(db: Session) -> dict[str, Any]:
-    participants = db.query(Participant).filter_by(experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION, protocol_id=CURRENT_PROTOCOL_ID, consent_checked=True).all()
+    participants = [
+        participant for participant in db.query(Participant).filter_by(consent_checked=True).all()
+        if can_resume(participant)
+    ]
     terms = _term_map(db)
     rows = []
-    conditions = sorted({first_question_enabled(p) for p in participants}) or [True]
-    modes = ("application", "basic_understanding", "four_topic_fundamentals")
-    for condition, mode, group in (
-        (condition, mode, group)
-        for condition in conditions
-        for mode in modes
-        for group in ("control", "proposed")
-    ):
-        group_participants = [
-            p for p in participants
-            if p.group_condition == group
-            and first_question_enabled(p) == condition
-            and participant_test_content_mode(p) == mode
-        ]
-        latest_summaries = []
-        for p in group_participants:
-            s = _ensure_evaluation_summary(db, p)
-            if s:
-                latest_summaries.append(s)
-        def avg(attr: str):
-            vals = [getattr(s, attr) for s in latest_summaries if getattr(s, attr) is not None]
-            return sum(vals) / len(vals) if vals else None
-        def avg_final_delta() -> float | None:
-            vals = []
-            for summary in latest_summaries:
-                rounds = (summary.score_timeline_json or {}).get("rounds") or []
-                final_round = next((row for row in reversed(rounds) if row.get("phase") in {"final_test"}), None)
-                if final_round and final_round.get("score_delta_from_pretest_pt") is not None:
-                    vals.append(final_round["score_delta_from_pretest_pt"])
-                elif (summary.score_timeline_json or {}).get("final_score_source") == "retest_mastery" and summary.pretest_score is not None and summary.attainment_correct_rate is not None:
-                    vals.append(round((summary.attainment_correct_rate - summary.pretest_score) * 100, 6))
-            return sum(vals) / len(vals) if vals else None
-        rows.append(
-            {
-                "group_condition": group,
-                "test_content_mode": mode,
-                "test_content_mode_label": test_content_mode_label(mode),
-                "participant_count": len(group_participants),
-                "first_question_only": condition,
-                "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
-                "attainment_correct_rate": avg("attainment_correct_rate"),
-                "avg_score_delta_from_pretest_pt": avg_final_delta(),
-                "misconception_transition_summary": _group_misconception_transition_summary(group_participants, latest_summaries, terms, mode),
-            }
+    cohorts = {
+        (
+            first_question_enabled(participant),
+            participant_test_content_mode(participant),
+            participant.experiment_spec_version,
+            participant.protocol_id,
         )
+        for participant in participants
+    } or {(True, "four_topic_fundamentals", CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)}
+    for condition, mode, spec_version, protocol_id in sorted(cohorts):
+        for group in ("control", "proposed"):
+            group_participants = [
+                p for p in participants
+                if p.group_condition == group
+                and first_question_enabled(p) == condition
+                and participant_test_content_mode(p) == mode
+                and p.experiment_spec_version == spec_version
+                and p.protocol_id == protocol_id
+            ]
+            latest_summaries = []
+            for p in group_participants:
+                summary = (
+                    _ensure_evaluation_summary(db, p)
+                    if is_current_registration(p)
+                    else db.get(EvaluationSummary, p.id)
+                )
+                if summary:
+                    latest_summaries.append(summary)
+
+            def avg(attr: str):
+                vals = [getattr(summary, attr) for summary in latest_summaries if getattr(summary, attr) is not None]
+                return sum(vals) / len(vals) if vals else None
+
+            def avg_final_delta() -> float | None:
+                vals = []
+                for summary in latest_summaries:
+                    rounds = (summary.score_timeline_json or {}).get("rounds") or []
+                    final_round = next((row for row in reversed(rounds) if row.get("phase") == "final_test"), None)
+                    if final_round and final_round.get("score_delta_from_pretest_pt") is not None:
+                        vals.append(final_round["score_delta_from_pretest_pt"])
+                    elif (summary.score_timeline_json or {}).get("final_score_source") == "retest_mastery" and summary.pretest_score is not None and summary.attainment_correct_rate is not None:
+                        vals.append(round((summary.attainment_correct_rate - summary.pretest_score) * 100, 6))
+                return sum(vals) / len(vals) if vals else None
+
+            rows.append(
+                {
+                    "group_condition": group,
+                    "experiment_spec_version": spec_version,
+                    "protocol_id": protocol_id,
+                    "test_content_mode": mode,
+                    "test_content_mode_label": test_content_mode_label(mode),
+                    "participant_count": len(group_participants),
+                    "first_question_only": condition,
+                    "same_misconception_recurrence_rate": avg("same_misconception_recurrence_rate"),
+                    "attainment_correct_rate": avg("attainment_correct_rate"),
+                    "avg_score_delta_from_pretest_pt": avg_final_delta(),
+                    "misconception_transition_summary": _group_misconception_transition_summary(group_participants, latest_summaries, terms, mode),
+                }
+            )
     hypothesis_rows = current_metrics(db)
     for metric_row in hypothesis_rows:
         if metric_row["experiment_spec_version"] == 52:
@@ -4117,13 +4148,7 @@ def _question_map(db: Session) -> dict[str, Question]:
 
 
 def _stored_participant_code(participant: Participant | None) -> str | None:
-    if (
-        participant is not None
-        and participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
-        and participant.protocol_id == CURRENT_PROTOCOL_ID
-    ):
-        return participant.id
-    return None
+    return participant_code_for_record(participant) if participant is not None else None
 
 
 def _attempt_log_row(
@@ -4604,7 +4629,7 @@ def participant_logs(db: Session, participant_id: str) -> dict[str, Any]:
             {
                 "id": row.id,
                 "participant_id": row.participant_id,
-                "participant_code": participant.id,
+                "participant_code": _stored_participant_code(participant),
                 "phase": row.phase,
                 "ai_experience_level": row.ai_experience_level,
                 "survey_version": row.survey_version,

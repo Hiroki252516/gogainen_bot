@@ -1,8 +1,8 @@
 # 4用語版テスト問題モード
 
-## 現行条件（仕様版64・2026-11-24）
+## 現行条件（仕様版65・2026-11-27）
 
-新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`で登録する。参加者コードを`Participant.id`として保存し、参加者APIは署名付きHttpOnly session cookieで認証する。4用語・4問・各10択、問題バンクv4、3択またはJ単独の採点、保存snapshotを使う確認問題、満点後早期終了を維持する。事前アンケートは`presurvey-four-topic-baseline-v12`で週あたりAI利用日数0〜7と理解度目安1・2・4・5を取得し、事後アンケートは`posttest-5point-v5`。仕様版63以下の回答・問題・snapshotは変更せず、参加者操作を読み取り専用とする。
+新規参加者は仕様版65 / `experiment-plan-2026-11-27-generated-participant-id-v1`で登録する。登録確認用コードは検証後に破棄し、Participant.idは生成UUID、display_codeは生成`P###`とする。仕様版64の既存コードID・回答・snapshotは保持し、有効な既存Cookieで同じIDの進行を再開できる。参加者APIは署名付きHttpOnly session cookieで認証する。4用語・4問・各10択、問題バンクv4、3択またはJ単独の採点、保存snapshotを使う確認問題、満点後早期終了を維持する。事前アンケートは`presurvey-four-topic-baseline-v12`で週あたりAI利用日数0〜7と理解度目安1・2・4・5を取得し、事後アンケートは`posttest-5point-v5`。仕様版63以下は参加者操作に対して読み取り専用とする。
 
 ### 仕様版63の履歴条件（参加者コード導入・週次アンケート統合前）
 

@@ -1,12 +1,12 @@
 # 05. System Architecture
 
-2026-11-25の現行実装は仕様版64である。新規登録は4用語版・事前アンケートv12へ固定し、参加者用コードを`Participant.id`として保存する。参加APIは24時間有効な署名付きHttpOnly Cookieで保護する。AIモデルと推論レベルは管理設定を廃止し、環境変数から固定して読む。仕様版63以下の記録は参加者操作で変更しない。
+2026-11-27の現行実装は仕様版65である。新規登録は4用語版・事前アンケートv12へ固定し、確認用コードは形式確認後に破棄する。Participant.idには生成UUID、display_codeには生成`P###`を保存する。参加APIは24時間有効な署名付きHttpOnly Cookieで保護する。仕様版64のコードIDと記録は維持し、有効な既存セッションから再開できる。仕様版63以下は参加者操作で変更しない。AIモデルと推論レベルは管理設定を廃止し、環境変数から固定して読む。
 
 ## 計画書に対する位置づけ
 
 採用仕様は[計画書対応表](20_experiment_plan_alignment.md)。構成図の将来分割案と現行実装を区別する。現行4仮説（指標版`four-hypotheses-v1`）はservices/hypothesis_metrics、新アンケート・表示記録はservices/research_protocolが担当する。旧6仮説の評価サマリーとraw dataは上書きせず、旧記録保護は仕様版とprotocol_idで限定する。
 
-仕様版64の新規参加者は`four_topic_fundamentals`、問題バンク`split-actions-four-topic-v4`、事前アンケート`presurvey-four-topic-baseline-v12`に固定する。理解度は経験ありの用語だけ回答目安1・2・4・5を表示し、AI利用日数は週0〜7日の整数で保存する。選択肢配置は常にランダムで、既存参加者のsnapshotは変更しない。参加者用コードをParticipantの主IDにし、参加APIは24時間有効な署名付きHttpOnly Cookieで保護する。モデル・推論レベルは環境変数固定、Fast modeは常時ONとする。仕様版63以下の回答・snapshotは読み取り専用で保全する。事後アンケートは`posttest-5point-v5`を使う。旧記録の条件・問題・回答は保存時のprotocolに従って復元する。旧設問1・2契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、問題モードは[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)、事前アンケートは[49](49_presurvey_baseline.md)。
+仕様版65の新規参加者は`four_topic_fundamentals`、問題バンク`split-actions-four-topic-v4`、事前アンケート`presurvey-four-topic-baseline-v12`に固定する。理解度は経験ありの用語だけ回答目安1・2・4・5を表示し、AI利用日数は週0〜7日の整数で保存する。選択肢配置は常にランダムで、既存参加者のsnapshotは変更しない。確認用コードは検証後に破棄し、主IDは生成UUID、表示コードは生成`P###`とする。仕様64の既存コードIDは有効なセッションから再開でき、データを変更しない。v64/v65の参加APIは24時間有効な署名付きHttpOnly Cookieで保護する。モデル・推論レベルは環境変数固定、Fast modeは常時ONとする。仕様版63以下の回答・snapshotは読み取り専用で保全する。事後アンケートは`posttest-5point-v5`を使う。旧記録の条件・問題・回答は保存時のprotocolに従って復元する。旧設問1・2契約は[詳細](40_question_pair_answer_review.md)。教材用語解説モードは[41](41_learning_glossary_material_mode.md)、文字数目標は[42](42_learning_glossary_material_length.md)、用語辞書と言い換えは[43](43_glossary_definition_paraphrase.md)、問題モードは[50](50_basic_understanding_question_mode.md)・[51](51_four_topic_foundation_mode.md)、事前アンケートは[49](49_presurvey_baseline.md)。
 
 ## 現行MVPの実装
 
@@ -72,7 +72,7 @@ Alembicによるマイグレーション運用、非同期DBドライバ、専�
 - Docker volumeで永続化
 - ローカル直接起動時はSQLite
 - 起動時に `Base.metadata.create_all` と互換用の不足列追加を実行
-- 各行の内部IDはUUID文字列、参加者の主IDは半角数字1〜64桁の参加者用コード。参加者IDと参照列は最大64文字、構造化列はSQLAlchemyのJSON型
+- 各行の内部IDと仕様版65以降のParticipant.idはUUID文字列。仕様版64のParticipant.idには旧参加者コードをそのまま保持する。Participant.idと参照列は互換性のため最大64文字で、構造化列はSQLAlchemyのJSON型
 
 ## モノレポ構成
 

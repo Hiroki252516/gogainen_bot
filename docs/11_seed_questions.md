@@ -1,8 +1,8 @@
 # 現行問題バンクと履歴
 
-## 現行条件（仕様版64・2026-11-25）
+## 現行条件（仕様版65・2026-11-25）
 
-仕様版64の新規参加者はfour_topic_fundamentalsに固定し、split-actions-four-topic-v4を使う。split-actions-v5（場面応用）とsplit-actions-basic-v1（基礎理解版）は過去Participantの履歴復元用に保持する。4用語版v4ではTransformerのDをM1誤答肢へ更新し、LLM学習段階の用語を「インストラクションチューニング」とし、問題文・選択肢・experimental群の教材生成用情報も合わせる。各用語1問（計4問）を出題し、回答は正解3つまたはunknown単独。選択肢配置はランダム固定とする。確認問題は保存snapshotを再利用する。仕様版63以下は保存時のproblem bankとsnapshotを使って閲覧専用で復元する。v1は仕様版49以下、v2は仕様版50の対応protocolと仕様版51/52のissue338系protocol、v3は仕様版51〜56の復元用に保持し、別のconstruct keyで各バンクをseedする。詳細は[51](51_four_topic_foundation_mode.md)。
+仕様版65の新規参加者はfour_topic_fundamentalsに固定し、split-actions-four-topic-v4を使う。split-actions-v5（場面応用）とsplit-actions-basic-v1（基礎理解版）は過去Participantの履歴復元用に保持する。4用語版v4ではTransformerのDをM1誤答肢へ更新し、LLM学習段階の用語を「インストラクションチューニング」とし、問題文・選択肢・experimental群の教材生成用情報も合わせる。各用語1問（計4問）を出題し、回答は正解3つまたはunknown単独。選択肢配置はランダム固定とする。確認問題は保存snapshotを再利用する。仕様版63以下は保存時のproblem bankとsnapshotを使って閲覧専用で復元する。v1は仕様版49以下、v2は仕様版50の対応protocolと仕様版51/52のissue338系protocol、v3は仕様版51〜56の復元用に保持し、別のconstruct keyで各バンクをseedする。詳細は[51](51_four_topic_foundation_mode.md)。
 
 ## 仕様版48の条件（履歴）
 

@@ -11,7 +11,7 @@ export default function ConsentPage() {
   const router = useRouter();
   const [assignmentCode, setAssignmentCode] = useState("");
   const [accepted, setAccepted] = useState(false);
-  const [participantCode, setParticipantCode] = useState("");
+  const [researchCode, setResearchCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -29,8 +29,8 @@ export default function ConsentPage() {
       setError("開始画面から管理者の群割当用コードを入力してください。");
       return;
     }
-    if (!/^[0-9]{1,64}$/.test(participantCode)) {
-      setError("参加者用コードは半角数字1〜64桁で入力してください。");
+    if (!/^[0-9]{1,64}$/.test(researchCode)) {
+      setError("登録確認用コードは半角数字1〜64桁で入力してください。");
       return;
     }
     setSubmitting(true);
@@ -42,16 +42,16 @@ export default function ConsentPage() {
         key = crypto.randomUUID();
         sessionStorage.setItem("registration_request_key", key);
       }
-      const data = await api<{ participant_id: string; participant_code: string; current_step: string }>(
+      const data = await api<{ participant_id: string; display_code: string; current_step: string }>(
         "/api/registrations", {
           method: "POST", headers: { "Idempotency-Key": key }, timeoutMs: 15000,
-          body: JSON.stringify({ assignment_code: assignmentCode, consent_checked: true, participant_code: participantCode }),
+          body: JSON.stringify({ assignment_code: assignmentCode, consent_checked: true, research_code: researchCode }),
         });
-      setParticipantCode("");
+      setResearchCode("");
       sessionStorage.removeItem("registration_request_key");
-      localStorage.setItem("participant_code", data.participant_code);
-      localStorage.removeItem("participant_id");
-      localStorage.removeItem("display_code");
+      localStorage.setItem("participant_id", data.participant_id);
+      localStorage.setItem("display_code", data.display_code);
+      localStorage.removeItem("participant_code");
       localStorage.removeItem("pending_assignment_code");
       router.replace("/presurvey");
     } catch (err) {
@@ -69,13 +69,13 @@ export default function ConsentPage() {
         <section className="panel stack">
           <h1>研究参加同意書</h1>
           <ConsentDocument />
-          <label>参加者用コードを入力してください（必須）
-            <input value={participantCode}
-              onChange={(event) => setParticipantCode(event.target.value.replace(/[^0-9]/g, ""))}
+          <label>登録確認用コードを入力してください（必須）
+            <input value={researchCode}
+              onChange={(event) => setResearchCode(event.target.value.replace(/[^0-9]/g, ""))}
               required maxLength={64} inputMode="numeric" pattern="[0-9]*"
               autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={submitting} />
           </label>
-          <p className="muted">参加者用コードは研究用データの識別に使用し、AIへの入力には含めません。学籍番号は入力しないでください。名前と参加者用コードの対応表は、研究者がアプリ外で管理します。</p>
+          <p className="muted">入力したコードは形式確認後に破棄し、研究用データには保存しません。システムが発行する参加者IDと表示コードで記録を管理します。学籍番号は入力しないでください。</p>
           <h2>同意確認</h2>
           <label className="option">
             <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={submitting} />

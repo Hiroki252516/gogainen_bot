@@ -10,13 +10,13 @@ from fastapi import Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID
+from app.core.experiment_spec import CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID, can_resume
 from app.db.session import get_db
 from app.models import Participant, ParticipantSession, now
 
 
 SESSION_SECONDS = 24 * 60 * 60
-_UNAUTHORIZED = "参加者セッションを確認できません。参加者コードを確認して同意画面から開始してください。"
+_UNAUTHORIZED = "参加者セッションを確認できません。同意画面から実験を開始してください。"
 
 
 def _secret() -> bytes:
@@ -30,8 +30,8 @@ def validate_session_configuration() -> None:
     _secret()
 
 
-def _cookie_name(participant_code: str, secret: bytes) -> str:
-    digest = hmac.new(secret, b"participant-cookie:" + participant_code.encode("ascii"), hashlib.sha256).hexdigest()
+def _cookie_name(participant_id: str, secret: bytes) -> str:
+    digest = hmac.new(secret, b"participant-cookie:" + participant_id.encode("ascii"), hashlib.sha256).hexdigest()
     return f"tutor_participant_{digest[:32]}"
 
 
@@ -47,10 +47,10 @@ def issue_participant_session(
     db: Session,
     response: Response,
     request: Request,
-    participant_code: str,
+    participant_id: str,
 ) -> None:
     secret = _secret()
-    participant = db.get(Participant, participant_code)
+    participant = db.get(Participant, participant_id)
     if participant is None or participant.experiment_spec_version != CURRENT_EXPERIMENT_SPEC_VERSION or participant.protocol_id != CURRENT_PROTOCOL_ID:
         raise HTTPException(status_code=409, detail="参加者登録を確認できません。")
 
@@ -61,13 +61,13 @@ def issue_participant_session(
     db.query(ParticipantSession).filter(ParticipantSession.expires_at <= now()).delete(synchronize_session=False)
     db.add(ParticipantSession(
         token_hash=_token_hash(token),
-        participant_id=participant_code,
+        participant_id=participant_id,
         expires_at=expires_at,
     ))
     db.commit()
     forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
     response.set_cookie(
-        _cookie_name(participant_code, secret),
+        _cookie_name(participant_id, secret),
         token,
         max_age=SESSION_SECONDS,
         path="/api",
@@ -77,8 +77,8 @@ def issue_participant_session(
     )
 
 
-async def _participant_code_from_request(request: Request, db: Session) -> str | None:
-    for name in ("participant_code", "participant_id"):
+async def _participant_id_from_request(request: Request, db: Session) -> str | None:
+    for name in ("participant_id", "participant_code"):
         value = request.path_params.get(name)
         if isinstance(value, str):
             return value
@@ -92,7 +92,7 @@ async def _participant_code_from_request(request: Request, db: Session) -> str |
         try:
             payload = await request.json()
             if isinstance(payload, dict):
-                value = payload.get("participant_code") or payload.get("participant_id")
+                value = payload.get("participant_id") or payload.get("participant_code")
                 if isinstance(value, str):
                     return value
         except Exception:
@@ -121,13 +121,13 @@ async def require_participant_session(request: Request, db: Session = Depends(ge
     if path.startswith("/api/admin/"):
         return
 
-    participant_code = await _participant_code_from_request(request, db)
-    if not participant_code:
+    participant_id = await _participant_id_from_request(request, db)
+    if not participant_id:
         return
-    participant = db.get(Participant, participant_code)
+    participant = db.get(Participant, participant_id)
     if participant is None:
         return
-    if participant.experiment_spec_version != CURRENT_EXPERIMENT_SPEC_VERSION or participant.protocol_id != CURRENT_PROTOCOL_ID:
+    if not can_resume(participant):
         return
 
     secret = _secret()
@@ -141,7 +141,7 @@ async def require_participant_session(request: Request, db: Session = Depends(ge
         if origin and origin.rstrip("/") not in allowed_origins:
             raise HTTPException(status_code=403, detail="この接続元から参加者操作はできません。")
 
-    name = _cookie_name(participant_code, secret)
+    name = _cookie_name(participant_id, secret)
     token = request.cookies.get(name, "")
     try:
         version, nonce, expires_text, signature = token.split(".")
@@ -159,7 +159,7 @@ async def require_participant_session(request: Request, db: Session = Depends(ge
     session = db.get(ParticipantSession, _token_hash(token))
     if (
         session is None
-        or session.participant_id != participant_code
+        or session.participant_id != participant_id
         or session.expires_at <= now()
     ):
         raise HTTPException(status_code=401, detail=_UNAUTHORIZED)

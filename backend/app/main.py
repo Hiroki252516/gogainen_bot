@@ -23,12 +23,11 @@ from app.ai.codex_app_server_backend import CodexAppServerBackend, CodexAppServe
 from app.core.config import get_settings
 from app.core.admin_auth import require_admin, login as admin_login, logout as admin_logout
 from app.core.experiment_spec import (
-    CURRENT_EXPERIMENT_SPEC_VERSION,
-    CURRENT_PROTOCOL_ID,
     MAX_LEARNING_CONFIRMATION_ATTEMPTS,
     MAX_POST_PRETEST_TESTS,
     assert_current_experiment,
     can_resume,
+    participant_code_for_record,
 )
 from app.db.session import get_db, init_db
 from app.seed.seed_questions import seed_database
@@ -248,7 +247,7 @@ class ParticipantCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     assignment_code: str | None = None
     consent_checked: bool = False
-    participant_code: str = Field(validation_alias=AliasChoices("participant_code", "research_code"))
+    research_code: str = Field(validation_alias=AliasChoices("research_code", "participant_code"))
 
 
 class AttemptPayload(BaseModel):
@@ -361,7 +360,7 @@ async def api_create_participant(
 ) -> dict:
     if not payload.consent_checked:
         raise HTTPException(400, "同意書への同意が必要です。")
-    participant_code = identity_mapping.validate_participant_code(payload.participant_code)
+    identity_mapping.validate_research_code(payload.research_code)
     validate_session_configuration()
     normalized_key = normalize_idempotency_key(idempotency_key)
     registration_key = normalized_key or str(uuid4())
@@ -370,12 +369,11 @@ async def api_create_participant(
 
     def operation() -> dict:
         try:
-            participant = create_participant(db, payload.assignment_code, payload.consent_checked, participant_code)
+            participant = create_participant(db, payload.assignment_code, payload.consent_checked, payload.research_code)
         except OperationalError as exc:
             _raise_database_unavailable(db, exc)
         return {
             "participant_id": participant.id,
-            "participant_code": participant.id,
             "display_code": participant.display_code,
             "current_step": participant.current_step,
         }
@@ -388,11 +386,10 @@ async def api_create_participant(
             key=registration_key,
             participant_id=None,
             request_data={"assignment_code": payload.assignment_code, "consent_checked": payload.consent_checked,
-                          "participant_code": participant_code,
                           "consent_document_version": identity_mapping.CONSENT_DOCUMENT_VERSION},
             operation=operation,
         )
-        issue_participant_session(db, response, request, result["participant_code"])
+        issue_participant_session(db, response, request, result["participant_id"])
         return result
     except Exception as exc:
         db.rollback()
@@ -879,12 +876,7 @@ def api_admin_participants(db: Session = Depends(get_db)) -> dict:
         "participants": [
             {
                 "participant_id": row.id,
-                "participant_code": (
-                    row.id
-                    if row.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION
-                    and row.protocol_id == CURRENT_PROTOCOL_ID
-                    else None
-                ),
+                "participant_code": participant_code_for_record(row),
                 "show_pretest_results": pretest_display.enabled(row.show_pretest_results),
                 "show_retest_results": pretest_display.enabled(row.show_retest_results),
                 "show_question_reviews": row.show_question_reviews,

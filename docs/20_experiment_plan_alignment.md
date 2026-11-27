@@ -1,6 +1,10 @@
-## 仕様版64：参加者コード・週次AI利用頻度・理解度の回答目安（現行）
+## 仕様版65：新規参加者ID生成・v64再開互換（現行）
 
-現行protocolは`experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`。新規参加者は仕様版64・4用語版に固定し、問題バンク`split-actions-four-topic-v4`、事前アンケート`presurvey-four-topic-baseline-v12`、事後アンケート`posttest-5point-v5`を使う。参加者用コードをParticipant.idとして保存し、参加者APIは24時間有効な署名付きHttpOnly Cookieで保護する。署名秘密値`PARTICIPANT_SESSION_SECRET`は32文字以上でbackend再起動後も維持する。理解度は5択（保存値`not_at_all`／`hardly`／`neither`／`moderately`／`well`）に回答目安1／2／4／5を示し、AI利用日数は直近1週間の0〜7日を整数保存する。仕様版63以下の記録は読み取り専用で保持する。モデルと推論レベルは環境変数で固定し、Fast modeは常時ON、選択肢配置はランダム、新規参加者の問題モードは4用語版に固定する。尺度の妥当性および研究上の承認は未確認。[仕様](49_presurvey_baseline.md)、[運用](19_experiment_operation_runbook.md)、[受入記録](14_testing_acceptance.md)。
+現行protocolは`experiment-plan-2026-11-27-generated-participant-id-v1`。新規参加者は4用語版・問題バンクv4・事前アンケートv12・事後アンケートv5を使う。`research_code`（互換入力`participant_code`）は半角数字1〜64桁を検証後に破棄し、Participant.idは生成UUID、display_codeは生成`P###`とする。確認用コードをDB、冪等性記録、ログ、CSV/XLSX、AI入力、ブラウザー永続領域へ保存しない。仕様版64参加者は従来のコードID・データ・Cookieを保持し、有効な既存ブラウザーセッションから同じIDで進行を再開する。v64/v65は管理ログと仮説集計で仕様版・protocol別に分離する。仕様版63以下・未対応protocolは閲覧専用。問題・採点・学習・4仮説、事前/事後アンケート内容と保存版、モデル/推論設定は変更しない。今回の文書・実装変更は指導教員または研究倫理上の承認を意味しない。[運用](19_experiment_operation_runbook.md)、[データモデル](07_data_model.md)、[API](08_backend_api_spec.md)、[受入記録](14_testing_acceptance.md)。
+
+## 仕様版64：参加者コード・週次AI利用頻度・理解度の回答目安（既存参加者protocol）
+
+このprotocolは仕様版64の既存Participant向け履歴条件である。当時は参加者用コードをParticipant.idとして保存していた。参加者APIは24時間有効な署名付きHttpOnly Cookieで保護する。署名秘密値`PARTICIPANT_SESSION_SECRET`は32文字以上でbackend再起動後も維持する。理解度は5択（保存値`not_at_all`／`hardly`／`neither`／`moderately`／`well`）に回答目安1／2／4／5を示し、AI利用日数は直近1週間の0〜7日を整数保存する。仕様版64参加者は既存の有効Cookieで再開できる。モデルと推論レベルは環境変数で固定し、Fast modeは常時ON、選択肢配置はランダムだった。尺度の妥当性および研究上の承認は未確認。[仕様](49_presurvey_baseline.md)、[運用](19_experiment_operation_runbook.md)、[受入記録](14_testing_acceptance.md)。
 
 ## 仕様版61：事前アンケートの回答ガイドと例（履歴）
 
@@ -166,7 +170,7 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 
 > 現行変更: 学習確認は各用語・各セッション1回答とする。以下の過去の版や判断に記載された3回答・同一用語の再回答用先行生成は当時の記録である。
 
-> 仕様版38採用時の記録。現行版は冒頭の仕様版64節を参照する。仕様版43で新規参加者の問題モードを登録時に固定し、仕様版45で4用語版だけを固定2回の進行へ変更した。旧easy-mode条件の削除手順は現在の問題モード資産・Participant.test_content_modeとは別管理である。[運用手順](19_experiment_operation_runbook.md)、[検証](14_testing_acceptance.md)、[問題モード仕様](50_basic_understanding_question_mode.md)を参照する。
+> 仕様版38採用時の記録。現行版は冒頭の仕様版65節を参照する。仕様版43で新規参加者の問題モードを登録時に固定し、仕様版45で4用語版だけを固定2回の進行へ変更した。旧easy-mode条件の削除手順は現在の問題モード資産・Participant.test_content_modeとは別管理である。[運用手順](19_experiment_operation_runbook.md)、[検証](14_testing_acceptance.md)、[問題モード仕様](50_basic_understanding_question_mode.md)を参照する。
 
 ## 仕様版28の採用仕様（仕様版35でも維持）
 
@@ -345,14 +349,14 @@ DB構造・公開APIの形・問題データは変更しない。既存snapshot�
 | ID | 今回の対応 | 状態 |
 | --- | --- | --- |
 | D01 | 共通指示を意味や仕組みの解説へ変更。具体例・注意点の一律必須指定を撤廃 | 実装 |
-| D02 | 統制群の通常説明の追加指示を6.7.2へ一致。自然な誤り訂正を許容 | 仕様版39まで適用。仕様版40で群別指示を削除し、現行仕様版64でも共通指示のみ |
+| D02 | 統制群の通常説明の追加指示を6.7.2へ一致。自然な誤り訂正を許容 | 仕様版39まで適用。仕様版40で群別指示を削除し、現行仕様版65でも共通指示のみ |
 | D03 | unknownを意味・仕組み・適用確認へ変更。taxonomy/指針/Schema/検査/Mockを整合 | 実装 |
 | D04 | Word原本のモデル記載はgpt-5.6-luna / low。モデル・推論レベルは`CODEX_MODEL`・`CODEX_REASONING_EFFORT`で固定し、Fast modeは常時ON | 管理画面の切替UIを廃止し、現行環境値を使用。現在のCodex app-server接続先での実AI生成成功は別途確認する。このアプリ側変更はWord原本を改訂したことを意味しない |
 | D05 | 仕様版37で4段階の事前知識6・AI利用2評定と事後システム評価2・教材評価6・任意自由記述をphase/version別JSONに保存 | 実装 |
 | D06 | 現行4仮説を専用指標として保存・管理表示・CSV/XLSX出力 | 実装。記述集計のみ。指標版`four-hypotheses-v1`、旧6仮説サマリーは履歴保持 |
 | D07 | 研究者のA/B割付を維持 | 自動無作為割付・20名上限は今回対象外 |
 | D08 | 事前後テストをfinal_test込み最大2回、事前込み最大3回に制限。2回目未達は未達のままアンケート | 実装。2026-10-24の追加判断 |
-| D09 | 仕様版28で通常版PRETEST/RETEST/final_testに用語ごとの設問別答え合わせを追加。現行仕様版64は4用語各1問で回答後に設問別確認を行い、満点者の全体結果確認は登録snapshotに従ってから、または省略してsurveyへ進む | 実装・受入検証状況は[14](14_testing_acceptance.md)、履歴契約は[40](40_question_pair_answer_review.md) |
+| D09 | 仕様版28で通常版PRETEST/RETEST/final_testに用語ごとの設問別答え合わせを追加。現行仕様版65は4用語各1問で回答後に設問別確認を行い、満点者の全体結果確認は登録snapshotに従ってから、または省略してsurveyへ進む | 実装・受入検証状況は[14](14_testing_acceptance.md)、履歴契約は[40](40_question_pair_answer_review.md) |
 
 ## 要確認事項
 
@@ -370,7 +374,7 @@ Q01〜Q07・Q09〜Q11は、Wordだけから補わずユーザーへの確認と�
 | Q08 | Chi本文2008/参考文献2009の版・ページ照合は未解決。引用年を無断訂正しない |
 | Q09 | 1用語あたり最大3回答/3回不正解終了を維持。これは参加者あたりの事前後テスト最大2回とは別の上限。測定は0〜3不正解として明文化 |
 | Q10 | unknownはmandatory_elements.definitionと既存teaching_contractのmechanism_explanation/transfer_checkを本文証拠として要求。旧6項目は撤廃 |
-| Q11 | （旧仕様）PRETEST/RETEST/final_testは1用語の設問1・2を保存後に同画面で本人の選択内容と正誤を表示。現行仕様版64は新規参加者をfour_topic_fundamentalsに固定し、4用語各1問（計4問）を出題する。application/basic_understandingは既存参加者の記録復元用に保持する。回答後に設問別確認を行い、必要な全問採点済み・満点後はsurveyへ進む。事前アンケートv12は週0〜7日のAI利用日数を整数で保存し、経験ありの場合の理解度を5択（3は「どちらとも言えない」）・目安1/2/4/5で表示する。事後アンケートはposttest-5point-v5でシステム評価1項目、教材評価6項目。仕様版63以下は保存時protocolとsnapshotを保全し、参加者操作では変更しない |
+| Q11 | （旧仕様）PRETEST/RETEST/final_testは1用語の設問1・2を保存後に同画面で本人の選択内容と正誤を表示。現行仕様版65は新規参加者をfour_topic_fundamentalsに固定し、4用語各1問（計4問）を出題する。application/basic_understandingは既存参加者の記録復元用に保持する。回答後に設問別確認を行い、必要な全問採点済み・満点後はsurveyへ進む。事前アンケートv12は週0〜7日のAI利用日数を整数で保存し、経験ありの場合の理解度を5択（3は「どちらとも言えない」）・目安1/2/4/5で表示する。事後アンケートはposttest-5point-v5でシステム評価1項目、教材評価6項目。仕様版63以下は保存時protocolとsnapshotを保全し、参加者操作では変更しない |
 
 PR #142の修正では、指標版v2として仮説2の未達人数を未観測として表示し、中断・継続中・完了時点で未達等の内訳と観測回数を追加した。到達者平均・仮説6の登録者分母・実験プロトコルは変えない。教材表示だけの離脱でも既存の更新時刻監視でキャッシュが更新されることを回帰テストで確認した。CSVは未作成の出力先ディレクトリにも出力できるようにした。
 

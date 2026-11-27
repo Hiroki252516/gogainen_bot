@@ -37,13 +37,14 @@ type AiStatus = {
   last_error?: string | null;
 };
 
-const ADMIN_RESUME_PARTICIPANT_CODE_KEY = "admin_resume_participant_code";
+const ADMIN_RESUME_PARTICIPANT_ID_KEY = "admin_resume_participant_id";
+const LEGACY_ADMIN_RESUME_PARTICIPANT_CODE_KEY = "admin_resume_participant_code";
 const ADMIN_RESUME_DISPLAY_CODE_KEY = "admin_resume_display_code";
 
 function rememberAdminResumeParticipant(id: string) {
-  localStorage.setItem(ADMIN_RESUME_PARTICIPANT_CODE_KEY, id);
-  localStorage.removeItem("admin_resume_participant_id");
-  const displayCode = localStorage.getItem("participant_code") || localStorage.getItem("display_code");
+  localStorage.setItem(ADMIN_RESUME_PARTICIPANT_ID_KEY, id);
+  localStorage.removeItem(LEGACY_ADMIN_RESUME_PARTICIPANT_CODE_KEY);
+  const displayCode = localStorage.getItem("display_code") || localStorage.getItem("participant_code");
   if (displayCode) {
     localStorage.setItem(ADMIN_RESUME_DISPLAY_CODE_KEY, displayCode);
   } else {
@@ -52,9 +53,9 @@ function rememberAdminResumeParticipant(id: string) {
 }
 
 function clearAdminResumeParticipant(id?: string) {
-  if (!id || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_CODE_KEY) === id || localStorage.getItem("admin_resume_participant_id") === id) {
-    localStorage.removeItem(ADMIN_RESUME_PARTICIPANT_CODE_KEY);
-    localStorage.removeItem("admin_resume_participant_id");
+  if (!id || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_ID_KEY) === id || localStorage.getItem(LEGACY_ADMIN_RESUME_PARTICIPANT_CODE_KEY) === id) {
+    localStorage.removeItem(ADMIN_RESUME_PARTICIPANT_ID_KEY);
+    localStorage.removeItem(LEGACY_ADMIN_RESUME_PARTICIPANT_CODE_KEY);
     localStorage.removeItem(ADMIN_RESUME_DISPLAY_CODE_KEY);
   }
 }
@@ -69,8 +70,9 @@ const MISCONCEPTION_TRANSITION_LABELS: Record<string, string> = {
 };
 const MISCONCEPTION_TRANSITION_TYPES = Object.keys(MISCONCEPTION_TRANSITION_LABELS);
 const LOG_FIELD_LABELS: Record<string, string> = {
-  participant_code: "参加者コード",
-  display_code: "旧表示コード",
+  participant_code: "旧仕様の参加者コード",
+  participant_id: "参加者ID",
+  display_code: "表示コード",
   legacy_read_only: "閲覧専用",
   test_page_mode: "テスト表示方式（登録値）",
   effective_test_page_mode: "テスト表示方式",
@@ -183,7 +185,9 @@ export default function AdminPage() {
 
   async function resumeExperiment() {
     const activeParticipantId = participantId();
-    const resumeParticipantId = activeParticipantId || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_CODE_KEY) || localStorage.getItem("admin_resume_participant_id");
+    const resumeParticipantId = activeParticipantId
+      || localStorage.getItem(ADMIN_RESUME_PARTICIPANT_ID_KEY)
+      || localStorage.getItem(LEGACY_ADMIN_RESUME_PARTICIPANT_CODE_KEY);
     if (!resumeParticipantId) {
       setFlowNavigationError("このブラウザで再開できる実験が見つかりません。");
       return;
@@ -200,8 +204,8 @@ export default function AdminPage() {
       const displayCode = activeParticipantId
         ? localStorage.getItem("display_code")
         : localStorage.getItem(ADMIN_RESUME_DISPLAY_CODE_KEY);
-      localStorage.setItem("participant_code", resumeParticipantId);
-      localStorage.removeItem("participant_id");
+      localStorage.setItem("participant_id", resumeParticipantId);
+      localStorage.removeItem("participant_code");
       if (displayCode) {
         localStorage.setItem("display_code", displayCode);
       } else {
@@ -263,7 +267,10 @@ export default function AdminPage() {
   }
 
   async function deleteParticipant(participant: Participant) {
-    const confirmed = window.confirm(`参加者 ${participant.participant_code || participant.display_code} の研究DB内の回答・教材・AIログ等を削除します。元に戻せません。アプリ外の対応表・ダウンロード済みCSV・バックアップは自動削除されません。撤回時は別途処理してください。続行しますか？`);
+    const identifier = participant.participant_code
+      ? `旧仕様コード ${participant.participant_code}`
+      : `参加者ID ${participant.participant_id}`;
+    const confirmed = window.confirm(`${identifier}（表示コード ${participant.display_code}）の研究DB内の回答・教材・AIログ等を削除します。元に戻せません。アプリ外の対応表・ダウンロード済みCSV・バックアップは自動削除されません。撤回時は別途処理してください。続行しますか？`);
     if (!confirmed) return;
 
     setLogError("");
@@ -348,8 +355,8 @@ export default function AdminPage() {
           {activeGroupSummaries.length ? (
             <div className="grid">
               {activeGroupSummaries.map((group: any) => (
-                <div className="notice" key={`${group.group_condition}-${group.test_content_mode}`}>
-                  <strong>{displayGroupCondition(group.group_condition)} / {group.test_content_mode_label}</strong>
+                <div className="notice" key={`${group.experiment_spec_version}-${group.protocol_id}-${group.group_condition}-${group.test_content_mode}`}>
+                  <strong>{displayGroupCondition(group.group_condition)} / {group.test_content_mode_label} / 仕様版{group.experiment_spec_version}</strong>
                   <p>参加者: {group.participant_count}</p>
                   <p>確認テスト正答率: {formatRate(group.attainment_correct_rate)}</p>
                   <p>事前比改善: {formatPoints(group.avg_score_delta_from_pretest_pt)}</p>
@@ -416,14 +423,14 @@ export default function AdminPage() {
           <div className="grid">
             {activeGroupSummaries.map((group: any) => (
               <MisconceptionTransitionSummary
-                key={`${group.group_condition}-${group.test_content_mode}-misconceptions`}
+                key={`${group.experiment_spec_version}-${group.protocol_id}-${group.group_condition}-${group.test_content_mode}-misconceptions`}
                 summary={group.misconception_transition_summary}
-                title={`${group.test_content_mode_label}の誤概念推移`}
+                title={`${group.test_content_mode_label}・仕様版${group.experiment_spec_version}の誤概念推移`}
               />
             ))}
           </div>
-          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["test_page_mode", "test_timing_unit", "participant_code", "display_code", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "response_time_unit", "test_page_timing_json", "created_at"]} />
-          <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["participant_code", "display_code", "group_condition", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
+          <LogList title="最近の回答履歴" rows={activeAnswerHistory} fields={["participant_id", "participant_code", "display_code", "test_page_mode", "test_timing_unit", "legacy_read_only", "source_type", "test_round", "term_slug", "learning_stage", "component_term", "is_correct", "misconception_type", "teaching_strategy", "question_shown_at", "answered_at", "question_review_acknowledged_at", "response_time_sec", "response_time_unit", "test_page_timing_json", "created_at"]} />
+          <LogList title="現行参加者の評価サマリー" rows={activeEvaluationSummaries} fields={["participant_id", "participant_code", "display_code", "group_condition", "experiment_spec_version", "protocol_id", "pretest_score", "retest_score", "attainment_correct_rate", "same_misconception_recurrence_rate", "completed", "completion_reason", "created_at"]} />
         </section>
         <HypothesisMetrics data={summary?.hypotheses} />
         <section className="panel">
@@ -431,7 +438,7 @@ export default function AdminPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>参加者コード</th>
+                <th>表示コード / ID</th>
                 <th>条件</th>
                 <th>テスト問題モード</th>
                 <th>進捗</th>
@@ -445,7 +452,10 @@ export default function AdminPage() {
             <tbody>
               {activeParticipants.map((p) => (
                 <tr key={p.participant_id}>
-                  <td>{p.display_code}</td>
+                  <td>
+                    <div>{p.display_code}</div>
+                    <div className="muted">{p.participant_code ? `旧コード: ${p.participant_code}` : `ID: ${p.participant_id}`}</div>
+                  </td>
                   <td>{displayGroupCondition(p.group_condition)}</td>
                   <td>{p.test_content_mode_label || p.test_content_mode || "旧記録"}</td>
                   <td>{p.can_resume ? p.current_step : `旧仕様（閲覧専用）: ${p.current_step}`}</td>
@@ -483,7 +493,12 @@ export default function AdminPage() {
           {participantLog?.participant ? (
             <>
               <div className="notice">
-                <strong>参加者コード: {participantLog.participant.participant_code || participantLog.participant.display_code}</strong>
+                <strong>
+                  {participantLog.participant.participant_code
+                    ? `旧仕様の参加者コード: ${participantLog.participant.participant_code}`
+                    : `参加者ID: ${participantLog.participant.participant_id}`}
+                  {` / 表示コード: ${participantLog.participant.display_code}`}
+                </strong>
                 <p>テスト問題モード: {participantLog.participant.test_content_mode_label || participantLog.participant.test_content_mode || "旧記録"}</p>
                 <p>テスト表示方式: {participantLog.participant.effective_test_page_mode === "per_term" ? "用語ごと" : "設問ごと"}</p>
                 <p>テスト時間の計測単位: {participantLog.participant.test_timing_unit === "term_page" ? "用語ページ" : "設問"}</p>

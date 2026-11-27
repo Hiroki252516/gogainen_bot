@@ -9,10 +9,12 @@ from statistics import mean, median
 from sqlalchemy.orm import Session
 
 from app.core.experiment_spec import (
+    ACTIVE_EXPERIMENT_PROTOCOLS,
     CURRENT_EXPERIMENT_SPEC_VERSION,
     CURRENT_PROTOCOL_ID,
     can_resume,
     assert_current_experiment,
+    participant_code_for_record,
 )
 from app.models import Attempt, Participant, ParticipantSurvey, Term, TutorSession, TutorTurn
 from app.services.split_assessment import uses_split, split_item_keys
@@ -178,7 +180,7 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
         "experiment_spec_version": participant.experiment_spec_version,
         "survey_version": survey.survey_version if survey else expected_survey_version,
         "participant_id": participant.id,
-        "participant_code": participant.id if participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION and participant.protocol_id == CURRENT_PROTOCOL_ID else None,
+        "participant_code": participant_code_for_record(participant),
         "display_code": participant.display_code,
         "scoring_unit": "subquestion" if split else "term", "questions_per_test": expected_count,
         "first_question_only": first_question_enabled(participant),
@@ -208,6 +210,10 @@ def participant_metrics(db: Session, participant: Participant) -> dict:
 def current_metrics(db: Session) -> list[dict]:
     from sqlalchemy import and_, or_
 
+    active_conditions = [
+        and_(Participant.experiment_spec_version == spec_version, Participant.protocol_id == protocol_id)
+        for spec_version, protocol_id in ACTIVE_EXPERIMENT_PROTOCOLS
+    ]
     spec52_conditions = [
         and_(Participant.experiment_spec_version == 52, Participant.protocol_id == protocol)
         for protocol in SPEC52_METRICS_PROTOCOLS
@@ -215,8 +221,7 @@ def current_metrics(db: Session) -> list[dict]:
     participants = db.query(Participant).filter(
         Participant.consent_checked.is_(True),
         or_(
-            and_(Participant.experiment_spec_version == CURRENT_EXPERIMENT_SPEC_VERSION,
-                 Participant.protocol_id == CURRENT_PROTOCOL_ID),
+            *active_conditions,
             *spec52_conditions,
         ),
     ).order_by(Participant.created_at, Participant.id).all()
@@ -315,12 +320,14 @@ def group_metrics(rows: list[dict]) -> dict:
     conditions = sorted({row.get("first_question_only", False) is True for row in rows}) or [True]
     modes = sorted({row.get("test_content_mode") or "application" for row in rows}) or ["application"]
     protocols = sorted({row.get("protocol_id") or CURRENT_PROTOCOL_ID for row in rows}) or [CURRENT_PROTOCOL_ID]
-    if len(conditions) > 1 or len(modes) > 1 or len(protocols) > 1:
+    spec_versions = sorted({row.get("experiment_spec_version") or CURRENT_EXPERIMENT_SPEC_VERSION for row in rows}) or [CURRENT_EXPERIMENT_SPEC_VERSION]
+    if len(conditions) > 1 or len(modes) > 1 or len(protocols) > 1 or len(spec_versions) > 1:
         strata_keys = sorted({
             (row.get("first_question_only") is True, row.get("test_content_mode") or "application",
+             row.get("experiment_spec_version") or CURRENT_EXPERIMENT_SPEC_VERSION,
              row.get("protocol_id") or CURRENT_PROTOCOL_ID)
             for row in rows
-        }) or [(True, "application", CURRENT_PROTOCOL_ID)]
+        }) or [(True, "application", CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)]
         return {"metrics_version": METRICS_VERSION, "protocol_id": None,
                 "groups": [], "routes": {},
                 "differences_proposed_minus_control": {}, "h4_item_differences": {},
@@ -329,9 +336,10 @@ def group_metrics(rows: list[dict]) -> dict:
                         row for row in rows
                         if (row.get("first_question_only") is True) == condition
                         and (row.get("test_content_mode") or "application") == mode
+                        and (row.get("experiment_spec_version") or CURRENT_EXPERIMENT_SPEC_VERSION) == spec_version
                         and (row.get("protocol_id") or CURRENT_PROTOCOL_ID) == protocol
                     ])
-                    for condition, mode, protocol in strata_keys
+                    for condition, mode, spec_version, protocol in strata_keys
                 ],
                 "descriptive_only": True}
     first_only = conditions[0] if conditions else False
@@ -346,7 +354,7 @@ def group_metrics(rows: list[dict]) -> dict:
     }
     routes = {route: [{"group_condition": group, **_group([r for r in rows if r["group_condition"] == group and r["route"] == route])} for group in ("control", "proposed")] for route in ("pretest_perfect_early_exit", "learning_retest", "pretest_incomplete")}
     return {"metrics_version": METRICS_VERSION, "protocol_id": protocols[0],
-            "experiment_spec_version": next((row.get("experiment_spec_version") for row in rows), CURRENT_EXPERIMENT_SPEC_VERSION),
+            "experiment_spec_version": next((row.get("experiment_spec_version") or CURRENT_EXPERIMENT_SPEC_VERSION for row in rows), CURRENT_EXPERIMENT_SPEC_VERSION),
             "survey_version": next((row.get("survey_version") for row in rows if row.get("survey_version")), None),
             "groups": groups,
             "test_content_mode": mode, "test_content_mode_label": test_content_mode_label(mode),
@@ -366,6 +374,7 @@ def metrics_export_rows(rows: list[dict], *, grouped: bool) -> list[dict]:
             [row for row in rows
              if (row.get("first_question_only") is True) == stratum["first_question_only"]
              and (row.get("test_content_mode") or "application") == stratum["test_content_mode"]
+             and (row.get("experiment_spec_version") or CURRENT_EXPERIMENT_SPEC_VERSION) == stratum["experiment_spec_version"]
              and (row.get("protocol_id") or CURRENT_PROTOCOL_ID) == stratum["protocol_id"]],
             grouped=True,
         )]

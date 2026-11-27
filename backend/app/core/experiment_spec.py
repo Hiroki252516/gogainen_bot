@@ -7,19 +7,46 @@ from fastapi import HTTPException
 from app.core.question_sets import LEARNING_CONTENT_VERSION
 
 
-CURRENT_EXPERIMENT_SPEC_VERSION = 64
-CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1"
+CURRENT_EXPERIMENT_SPEC_VERSION = 65
+CURRENT_PROTOCOL_ID = "experiment-plan-2026-11-27-generated-participant-id-v1"
+PREVIOUSLY_ACTIVE_EXPERIMENT_PROTOCOLS = frozenset({
+    (
+        64,
+        "experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1",
+    ),
+})
+ACTIVE_EXPERIMENT_PROTOCOLS = frozenset({
+    (CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID),
+    *PREVIOUSLY_ACTIVE_EXPERIMENT_PROTOCOLS,
+})
 MAX_POST_PRETEST_TESTS = 2
 MAX_LEARNING_CONFIRMATION_ATTEMPTS = 1
 
 
+def is_current_registration(participant: Any) -> bool:
+    return (
+        participant.experiment_spec_version,
+        getattr(participant, "protocol_id", None),
+    ) == (CURRENT_EXPERIMENT_SPEC_VERSION, CURRENT_PROTOCOL_ID)
+
+
+def uses_participant_code_identifier(participant: Any) -> bool:
+    return (
+        participant.experiment_spec_version,
+        getattr(participant, "protocol_id", None),
+    ) in PREVIOUSLY_ACTIVE_EXPERIMENT_PROTOCOLS
+
+
+def participant_code_for_record(participant: Any) -> str | None:
+    """Expose the stored code only for records created under the code-ID protocol."""
+    return participant.id if uses_participant_code_identifier(participant) else None
+
+
 def can_resume(participant: Any) -> bool:
-    if (
-        participant.experiment_spec_version != CURRENT_EXPERIMENT_SPEC_VERSION
-        or getattr(participant, "protocol_id", None) != CURRENT_PROTOCOL_ID
-    ):
-        return False
-    return True
+    return (
+        participant.experiment_spec_version,
+        getattr(participant, "protocol_id", None),
+    ) in ACTIVE_EXPERIMENT_PROTOCOLS
 
 
 def assert_current_experiment(participant: Any) -> None:

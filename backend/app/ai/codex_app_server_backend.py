@@ -516,13 +516,14 @@ class CodexAppServerBackend:
 
     def _audit_context(self, payload: dict[str, Any], *, generation: bool = False) -> dict[str, Any]:
         rag = payload.get("rag_context") or {}
+        experiment_context = payload.get("_experiment_context") or {}
         retry_attempt = (payload.get("mandatory_element_retry") or {}).get("attempt")
         attempt = payload.get("generation_attempt")
         if attempt is None:
             attempt = retry_attempt if retry_attempt is not None else 1
         return {
-            "experiment_spec_version": CURRENT_EXPERIMENT_SPEC_VERSION,
-            "protocol_id": CURRENT_PROTOCOL_ID,
+            "experiment_spec_version": experiment_context.get("experiment_spec_version", CURRENT_EXPERIMENT_SPEC_VERSION),
+            "protocol_id": experiment_context.get("protocol_id", CURRENT_PROTOCOL_ID),
             "interaction_history": interaction_history_audit(payload),
             "question_route_version": SHARED_QUESTION_ROUTE_VERSION,
             "actual_ai_input": project_model_payload(payload, proposed=payload.get("group_condition", "proposed") == "proposed", feedback=not generation),

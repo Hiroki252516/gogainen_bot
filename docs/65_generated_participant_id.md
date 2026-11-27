@@ -1,0 +1,25 @@
+# 仕様版65：新規参加者IDの生成と仕様版64の再開互換
+
+## 現行条件
+
+仕様版65は`experiment-plan-2026-11-27-generated-participant-id-v1`を使う。変更対象は新規登録時の識別子発行方式であり、問題、採点、学習内容、アンケート、進行条件は仕様版64から変更しない。
+
+## 新規登録
+
+- `/consent`で受け取る登録確認用コードはASCII半角数字1〜64桁を形式検証する。群割当用コードとは別の入力である。
+- 確認用コードはParticipant作成後に保持せず、Participant.idはUUID、画面表示用`display_code`はシステム生成の`P###`とする。
+- 確認用コードはParticipantや対応表へ保存しない。IdempotencyRecordのrequest fingerprint・保存応答、監査・アプリログ、参加者ログ、CSV/XLSX、出力ファイル名、AI入力、localStorage/sessionStorageにも含めない。
+- 登録リクエストの冪等再送は確認用コードをfingerprintに含めず、同じキーでは最初に確定した参加者IDと表示コードを返す。再送キーだけをsessionStorageに保持する。
+- 参加者名との対応表は研究者がアプリ外で作成・管理する。アプリは学籍番号を取得せず、確認用コードとの対応付けを行わない。
+
+## 仕様版64参加者
+
+仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`のParticipant.idには、当時の参加者コードが保存されている。既存ID、display_code、回答、教材、問題・回答snapshot、評価、同意記録を変換・補完・削除しない。旧参加者コードは仕様版64の既存記録に限り管理ログ・エクスポートの履歴値として表示する。
+
+仕様版64のParticipantは、保存済みのIDに対応する有効な署名付きHttpOnly参加者セッションCookieがある既存ブラウザーから再開できる。Cookie名、署名材料、参加者ID、24時間の有効期限は当時の方式を維持する。IDを入力するだけで別端末から再開する機能は設けない。仕様版64のparticipant_codeだけが保存されているlocalStorageも読取互換を維持する。
+
+仕様版63以下・NULL版・未対応protocolは参加者操作に対して読み取り専用とする。仕様版64と65のログ・集計はspec versionおよびprotocolで分離し、同一群へ無条件に合算しない。
+
+## 受入上の注意
+
+実装・文書の変更は指導教員や研究倫理審査の承認を意味しない。研究計画書・同意文書・運用手順との整合、参加者への説明、対応表とバックアップの管理は研究者が別途確認する。

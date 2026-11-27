@@ -1,14 +1,14 @@
 # 現行データと履歴互換
 
-## 仕様版64の現行条件
+## 仕様版65の現行条件
 
-新規Participantは仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`を使う。半角数字1〜64桁の参加者用コードを`Participant.id`と`display_code`に保存し、関連する`participant_id`、冪等記録の参照列、監査`entity_id`は64文字まで扱う。PostgreSQL起動時は既存UUIDの値を保ったまま対象列を拡張する。参加者APIはCookieセッション認証を使わず、参加者コードで対象を指定する。事前アンケートv12は週0〜7日の利用日数と5値の理解度を版付き`responses_json`へ保存する。仕様版63以下のID・回答・snapshotは変更しない。
+新規Participantは仕様版65 / `experiment-plan-2026-11-27-generated-participant-id-v1`を使う。登録時の半角数字1〜64桁の確認用コードは検証後に破棄し、Participant.idにはUUID、display_codeにはシステム生成`P###`を保存する。新規確認用コードはDB・冪等性記録・ログ・CSV/XLSX・AI入力・ブラウザー永続領域に保存しない。仕様64の既存Participant.id（入力コード）・display_code・関連記録は変更せず、有効な既存ブラウザーセッションに限り同じIDで再開できる。Participant.idと参照列は旧コードID互換のため最大64文字とし、PostgreSQL起動時は既存値を保ったまま対象列を拡張する。事前アンケートv12は週0〜7日の利用日数と5値の理解度を版付き`responses_json`へ保存する。仕様版63以下のID・回答・snapshotは変更しない。
 
 ## 仕様版61の履歴条件
 
 `Participant.protocol_id`は160文字まで保存する。PostgreSQLで既存列が短い場合は起動時に160文字へ拡張し、既存のprotocol ID値は変更しない。
 
-仕様版61当時の新規Participantは、参加者用コードを形式検証後に破棄していた。仕様版64では参加者用コードを`Participant.id`と`display_code`へ保存し、関連する参照列も64文字へ拡張する。コードは管理画面・ログ・出力で参加者識別に使い、AI入力には含めない。名前との対応表はアプリ外で管理する。仕様版61の回答・snapshot・同意版は履歴として保持し、変更しない。[現行仕様版64](00_project_summary.md)、[事前アンケート](49_presurvey_baseline.md)。
+仕様版61当時の新規Participantは、参加者用コードを形式検証後に破棄していた。仕様版64で参加者用コードを`Participant.id`と`display_code`へ保存する方式へ変更し、仕様版65で新規登録だけUUID/P###発行へ戻した。仕様版64記録はコードIDを含めそのまま保持し、現在も有効な旧セッションから再開できる。学籍番号は取得せず、名前との対応表は研究者がアプリ外で管理する。仕様版61の回答・snapshot・同意版は履歴として保持し、変更しない。[現行仕様版65](00_project_summary.md)、[仕様版65](65_generated_participant_id.md)、[事前アンケート](49_presurvey_baseline.md)。
 
 ## 仕様版48の条件（履歴）
 
@@ -50,22 +50,24 @@ RuntimeSetting.show_question_reviewsとParticipant.show_question_reviewsはnulla
 
 計画書では参加者・群・用語・フェーズ/回次、問題と選択内容、全体正誤とunknown区分、誤答タイプ・再発、時刻/時間、段階・方略、完了/中断、AI実行状態、アンケートを収集する。正誤のboolとunknown分類は別の記録であり、保存型を文書だけで三値へ変更しない。
 
-仕様版48〜61の事前アンケートは保存時の版付きJSONを履歴として保持する。現行仕様版64ではpresurvey-four-topic-baseline-v12を使い、理解度5択の回答目安1/2/4/5と週0〜7日の整数ai_usage_days_per_weekを保存する。ParticipantSurvey.phase、survey_version、responses_jsonを再利用し、旧回答を変換しない。現行H4は事後phaseの教材評価を対象とし、事前回答は含めない。[12](12_evaluation_metrics.md)、[49](49_presurvey_baseline.md)、[52](52_posttest_five_point_evaluation.md)。
+仕様版48〜64の事前アンケートは保存時の版付きJSONを履歴として保持する。現行仕様版65ではpresurvey-four-topic-baseline-v12を使い、理解度5択の回答目安1/2/4/5と週0〜7日の整数ai_usage_days_per_weekを保存する。ParticipantSurvey.phase、survey_version、responses_jsonを再利用し、旧回答を変換しない。現行H4は事後phaseの教材評価を対象とし、事前回答は含めない。[12](12_evaluation_metrics.md)、[49](49_presurvey_baseline.md)、[52](52_posttest_five_point_evaluation.md)。
 
 ## 現行の保存契約
 
-モデルの正本はbackend/app/models/__init__.py。現行コードは仕様版64 / experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1を使う。新規Participant.idとdisplay_codeは参加者用コード、test_content_modeはfour_topic_fundamentalsに固定する。参照列は64文字で、PostgreSQL起動時に既存UUIDを保ったまま拡張する。問題バンクv4、事前アンケートv12、事後アンケートv5を保存版から復元する。仕様版63以下は参加者操作をread-onlyとし、問題・回答・snapshotを変更しない。仕様版52の対応protocolにはH1〜H4評価サマリーだけを追加する。
+モデルの正本はbackend/app/models/__init__.py。現行コードは仕様版65 / `experiment-plan-2026-11-27-generated-participant-id-v1`を使う。新規Participant.idはUUID、display_codeは生成`P###`、test_content_modeはfour_topic_fundamentalsに固定する。参照列は旧64文字コードID互換のため64文字を保持し、PostgreSQL起動時に既存値を保ったまま拡張する。仕様版64の既存ID・回答は変更せず、既存の有効セッションで再開できる。問題バンクv4、事前アンケートv12、事後アンケートv5を保存版から復元する。仕様版63以下は参加者操作をread-onlyとし、問題・回答・snapshotを変更しない。仕様版52の対応protocolにはH1〜H4評価サマリーだけを追加する。
 2026-10-21追加: participantsにnullableのconsent_document_version / consented_atを追加する。新規登録だけconsent-2026-10-21-draft-v1と同意時刻を保存し、既存行はNULLのままにする。実験仕様版・protocol_id・既存CSVヘッダは変更しない。
 
 2026-10-21時点の履歴: 学籍番号はSQLAlchemyの研究DBへ追加せず、IDENTITY_MAPPING_PATHが指す別SQLiteの`identity_mappings`へ保存した。当時は対応表APIも存在した。現在は管理画面/APIを廃止し、既存SQLiteファイルと行は登録・通常起動では参照・移行・変更・削除しない。明示的な参加者削除時に限り、既存ファイル内の対象participant_idの旧行をcleanupする。
 
-2026-11-11までの旧登録方式では、研究用コードを分離SQLiteの`research_code_mappings`へ保存し、管理UI/APIから参照していた。この段落は履歴であり、現在の登録仕様ではない。現行登録は参加者用コードを半角数字1〜64桁として検証するだけで、参加者作成後は値を保持しない。研究DB、冪等性request_hash/response_json、ログ、CSV/XLSX、AI入力、ブラウザ永続領域には保存しない。参加者用コードと学籍番号はアプリで照合しない。対応表は研究者がアプリ外で作成・保管する。旧IDENTITY_MAPPING_PATHのSQLiteファイル・テーブル・既存行は登録・通常起動・管理APIから参照、移行、変更、削除しない。アプリ内管理API/UIは廃止済み。明示的に参加者を削除する場合のみ、既存SQLiteがあるとき当該participant_idに一致する旧行のcleanupを再試行可能な削除outbox経由で行う。
+2026-11-11までの旧登録方式では、研究用コードを分離SQLiteの`research_code_mappings`へ保存し、管理UI/APIから参照していた。この段落は履歴であり、現在の登録仕様ではない。仕様版65では登録確認用コードを半角数字1〜64桁として検証後に破棄する。研究DB、冪等性request_hash/response_json、ログ、CSV/XLSX、AI入力、ブラウザ永続領域には保存しない。参加者用コードと学籍番号はアプリで照合しない。対応表は研究者がアプリ外で作成・保管する。旧IDENTITY_MAPPING_PATHのSQLiteファイル・テーブル・既存行は登録・通常起動・管理APIから参照、移行、変更、削除しない。アプリ内管理API/UIは廃止済み。明示的に参加者を削除する場合のみ、既存SQLiteがあるとき当該participant_idに一致する旧行のcleanupを再試行可能な削除outbox経由で行う。
 
 参加者の明示的削除では、研究DB内の関連データ削除と`AuditEvent.after_json.identity_mapping_cleanup=pending`を同じトランザクションで確定してから、既存の別SQLiteが存在する場合に限り、旧学籍番号対応表・研究用コード対応表のうち当該participant_idの行だけを削除する。ファイルがない場合は新規作成しない。他の参加者の行と外部Excel対応表は変更しない。cleanup後に監査記録を`complete`へ更新する。途中停止時はpending記録を起動時または同じ削除APIの再送で再試行する。研究DBの確定に失敗した場合は旧ファイルに触れない。外部Excel対応表・USB・バックアップ上のデータは研究者が別途処理する。
 
-モデルの正本はbackend/app/models/__init__.py。現行コードは仕様版64 / experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1を使う。新規Participant.idとdisplay_codeは参加者用コード、test_content_modeはfour_topic_fundamentalsに固定する。参照列は64文字で、PostgreSQL起動時に既存UUIDを保ったまま拡張する。問題バンクv4、事前アンケートv12、事後アンケートv5を保存版から復元する。仕様版63以下は参加者操作をread-onlyとし、問題・回答・snapshotを変更しない。仕様版52の対応protocolにはH1〜H4評価サマリーだけを追加する。
+### 仕様版64の保存条件（履歴・既存参加者は再開可能）
 
-現行コードでは新規Participantだけ仕様版64と統合protocolを保存し、教材内解説、テスト表示・答え合わせ、選択肢配置randomized、test_content_mode=four_topic_fundamentals、retest_cycles_completed=0を固定する。参加者用コードはParticipant.idとdisplay_codeへ保存し、AI入力には含めない。事前アンケートv12は理解度5択と週0〜7日を版付きJSONに保存し、事後アンケートはv5とする。既存行のprotocolやsnapshotは補完・変換しない。
+仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`では、新規Participant.idとdisplay_codeに参加者用コードを保存していた。仕様版65への移行時に既存コードID・display_code・回答・snapshotを変更せず、有効な既存セッションがある場合に限り再開できる。
+
+現行コードでは新規Participantだけ仕様版65とprotocolを保存し、教材内解説、テスト表示・答え合わせ、選択肢配置randomized、test_content_mode=four_topic_fundamentals、retest_cycles_completed=0を固定する。入力確認用コードは検証後破棄し、Participant.idはUUID、display_codeは`P###`とする。事前アンケートv12は理解度5択と週0〜7日を版付きJSONに保存し、事後アンケートはv5とする。既存行のprotocolやsnapshotは補完・変換しない。v64の既存参加者は旧ID・値を保ったまま有効Cookieで再開でき、v63以下は読み取り専用とする。
 
 現行の主な保存対象:
 
