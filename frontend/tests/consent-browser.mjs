@@ -24,7 +24,7 @@ try {
   assert.equal(await page.getByText("未確定項目を含む動作確認用です。", { exact: false }).count(), 0);
   assert.equal(await page.getByText("4つの専門用語", { exact: false }).count(), 1);
   assert.equal(await page.getByText("Codex app-server", { exact: false }).count(), 1);
-  const researchCodeInput = page.getByRole("textbox", { name: "参加者用コードを入力してください（必須）" });
+  const researchCodeInput = page.getByRole("textbox", { name: "登録確認用コードを入力してください（必須）" });
   await researchCodeInput.waitFor();
   assert.equal(await page.getByRole("textbox", { name: /学籍番号/ }).count(), 0);
 
@@ -44,6 +44,10 @@ try {
     const created = await response;
     assert.equal(created.status(), 200);
     const participant = await created.json();
+    assert.notEqual(participant.participant_id, synthetic);
+    assert.match(participant.participant_id, /^[0-9a-f-]{36}$/);
+    assert.match(participant.display_code, /^P\d{3,}$/);
+    assert.equal("participant_code" in participant, false);
     await page.waitForURL("**/presurvey");
     const presurvey = await context.request.get(new URL(`/api/participants/${participant.participant_id}/presurvey`, base).href);
     assert.equal(presurvey.status(), 200);
@@ -72,7 +76,7 @@ try {
     const deleted = await context.request.delete(new URL(`/api/admin/participants/${participant.participant_id}`, base).href);
     assert.equal(deleted.status(), 200, await deleted.text());
     if (process.env.CONSENT_SCREENSHOT) await page.screenshot({ path: process.env.CONSENT_SCREENSHOT, fullPage: true });
-    console.log("consent browser checks passed: current copy, transient code, fixed mode, removed mapping UI/API");
+    console.log("consent browser checks passed: transient registration code, generated participant ID, display code, fixed mode");
   }
 } finally {
   await browser.close();

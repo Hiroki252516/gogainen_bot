@@ -11,7 +11,7 @@ const FINISH_STEPS = ["finish"] as const;
 export default function FinishPage() {
   const router = useRouter();
   const displayCode = typeof window !== "undefined"
-    ? localStorage.getItem("participant_code") || localStorage.getItem("display_code")
+    ? localStorage.getItem("display_code") || localStorage.getItem("participant_code")
     : "";
 
   function startNewExperiment() {
@@ -26,7 +26,7 @@ export default function FinishPage() {
         <section className="panel stack">
           <h1>実験は終了です</h1>
           <p>ご協力ありがとうございました。研究者に終了したことを知らせてください。</p>
-          <p className="muted">参加者コード: {displayCode}</p>
+          <p className="muted">表示コード: {displayCode}</p>
           <button className="secondary" type="button" onClick={startNewExperiment}>
             新しい実験を開始
           </button>

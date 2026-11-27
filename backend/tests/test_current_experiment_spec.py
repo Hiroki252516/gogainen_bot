@@ -33,14 +33,15 @@ client = TestClient(app)
 def test_current_protocol_id_fits_participant_schema():
     protocol_column = Participant.__table__.c.protocol_id
 
-    assert CURRENT_EXPERIMENT_SPEC_VERSION == 64
-    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1"
+    assert CURRENT_EXPERIMENT_SPEC_VERSION == 65
+    assert CURRENT_PROTOCOL_ID == "experiment-plan-2026-11-27-generated-participant-id-v1"
     assert protocol_column.type.length >= len(CURRENT_PROTOCOL_ID)
 
 
 @pytest.mark.parametrize(
     ("version", "protocol_id"),
     [
+        (64, "experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1"),
         (63, "experiment-plan-2026-11-23-participant-code-primary-identifier-v1"),
         (63, "experiment-plan-2026-11-23-presurvey-weekly-frequency-understanding-anchor-v1"),
         (62, "experiment-plan-2026-11-22-presurvey-understanding-anchor-guidance-v1"),
@@ -55,7 +56,7 @@ def test_previous_current_spec_is_read_only_after_protocol_update(version, proto
         protocol_id=CURRENT_PROTOCOL_ID,
     )
 
-    assert can_resume(previous) is False
+    assert can_resume(previous) is (version == 64)
     assert can_resume(current) is True
 
 
@@ -271,13 +272,18 @@ def test_legacy_trials_reject_replays_prefetch_and_recalculation_without_writes(
     assert all(row["legacy_read_only"] for row in overview["recent_answer_history"] if row["participant_id"] == pid)
     with SessionLocal() as db:
         for group in summary["groups"]:
-            assert group["participant_count"] == db.query(Participant).filter_by(
-                group_condition=group["group_condition"],
-                experiment_spec_version=CURRENT_EXPERIMENT_SPEC_VERSION,
-                protocol_id=CURRENT_PROTOCOL_ID,
-                test_content_mode=group["test_content_mode"],
-                first_question_only=group["first_question_only"],
-            ).count()
+            matching_participants = [
+                participant
+                for participant in db.query(Participant).all()
+                if participant.consent_checked
+                and can_resume(participant)
+                and participant.group_condition == group["group_condition"]
+                and participant.experiment_spec_version == group["experiment_spec_version"]
+                and participant.protocol_id == group["protocol_id"]
+                and experiment.participant_test_content_mode(participant) == group["test_content_mode"]
+                and experiment.first_question_enabled(participant) == group["first_question_only"]
+            ]
+            assert group["participant_count"] == len(matching_participants)
     exported = client.get(f"/api/admin/participants/{pid}/logs.csv")
     assert exported.status_code == 200
     assert next(csv.reader(exported.text.splitlines())) == experiment.LOG_CSV_COLUMNS

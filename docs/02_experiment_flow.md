@@ -1,12 +1,12 @@
 # 実験フロー
 
-## 仕様版64の現行フロー（2026-11-24）
+## 仕様版65の現行フロー（2026-11-27）
 
-新規参加者は仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`を使い、`four_topic_fundamentals`に固定する。参加者コード（半角数字1〜64桁）は`Participant.id`として保存し、登録後の参加者APIには24時間有効な署名付きHttpOnly Cookieを要求する。コードはAI入力に含めず、学籍番号はアプリで取得しない。対応表は研究者がアプリ外で管理する。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v12`、事後アンケートは`posttest-5point-v5`。事前では週あたりAI利用日数を0〜7の整数で保存し、理解度の回答目安に1・2・4・5を示す。必要な全設問が採点済みで全問正解した事前・再テスト1/2後は、結果表示snapshotに従って確認後または直接事後アンケートへ進み、学習・後続テストを省略する。未達時は従来経路を維持し、内部`final_test`は履歴復元用に残す。現行評価は`four-hypotheses-v1`のH1〜H4。仕様版63以下のID・回答・snapshotは変更せず読み取り専用とする。仕様版52の対応2 protocolに限り評価サマリーを追加でき、仕様版51以下・未対応protocolは再計算対象外。[API](08_backend_api_spec.md)、[データモデル](07_data_model.md)、[セキュリティ](15_security_privacy.md)、[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[評価指標](12_evaluation_metrics.md)。
+新規参加者は仕様版65 / `experiment-plan-2026-11-27-generated-participant-id-v1`を使い、`four_topic_fundamentals`に固定する。確認用コード（半角数字1〜64桁）は登録時に形式検証後破棄し、Participant.idは生成UUID、display_codeは生成`P###`とする。参加者APIは24時間有効な署名付きHttpOnly Cookieを要求する。仕様版64の既存参加者はコードID・DB記録・既存Cookieを維持し、該当する有効ブラウザーセッションから再開できる。仕様版63以下は読み取り専用。問題バンクは`split-actions-four-topic-v4`、事前アンケートは`presurvey-four-topic-baseline-v12`、事後アンケートは`posttest-5point-v5`。事前では週あたりAI利用日数を0〜7の整数で保存し、理解度の回答目安に1・2・4・5を示す。必要な全設問が採点済みで全問正解した事前・再テスト1/2後は、結果表示snapshotに従って確認後または直接事後アンケートへ進み、学習・後続テストを省略する。未達時は従来経路を維持し、内部`final_test`は履歴復元用に残す。仮説集計は仕様版・protocol別に行い、現行評価`four-hypotheses-v1`のH1〜H4にv64/v65を混合しない。仕様版52の対応2 protocolに限り評価サマリーを追加できる。[API](08_backend_api_spec.md)、[データモデル](07_data_model.md)、[セキュリティ](15_security_privacy.md)、[事前アンケート](49_presurvey_baseline.md)、[4用語版](51_four_topic_foundation_mode.md)、[評価指標](12_evaluation_metrics.md)。
 
 ## 仕様版63の履歴フロー（2026-11-23）
 
-統合前のブランチには参加者コード主識別子化と、週次AI利用頻度・理解度目安更新の2 protocolが別々に存在した。仕様版64で統合し、仕様版63参加者の記録は変更しない。
+仕様版64 / `experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1`では参加者コードを新規Participant.idとして保存した。仕様版65ではこの登録方法を廃止し、新規コードを検証後に破棄する。v64の既存ID・回答は変更しないが、有効な既存Cookieがある参加者は進行を再開できる。
 
 ## 仕様版62の履歴フロー（2026-11-22）
 

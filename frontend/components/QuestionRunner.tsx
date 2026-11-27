@@ -49,7 +49,7 @@ type TestQuestionsResponse = {
 };
 type TestPageAnswer = { question_id: string; selected_option_ids: string[] };
 type TestPageSubmission = {
-  participant_code: string;
+  participant_id: string;
   phase: string;
   term_slug: string;
   test_round: string;
@@ -295,7 +295,7 @@ export function QuestionRunner({
     const answeredAt = new Date().toISOString();
     const responseTimeSec = Math.max(0.001, (Date.now() - questionStartedAt) / 1000);
     const attemptBody = {
-      participant_code: id,
+      participant_id: id,
       question_id: current.question_id,
       phase,
       selected_option_ids: selectedIds,
@@ -520,9 +520,9 @@ function isPageSubmissionFor(
   page: { term_slug: string; test_round: string | null; questions: Question[] },
 ): value is TestPageSubmission {
   if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<TestPageSubmission> & { participant_id?: string };
+  const candidate = value as Partial<TestPageSubmission> & { participant_code?: string };
   const expectedIds = new Set(page.questions.map((question) => question.question_id));
-  return (candidate.participant_code ?? candidate.participant_id) === participantId
+  return (candidate.participant_id ?? candidate.participant_code) === participantId
     && candidate.phase === phase
     && candidate.term_slug === page.term_slug
     && sameTestRound(candidate.test_round, page.test_round)
@@ -702,7 +702,7 @@ function TermPageQuestionRunner({
       }
       const answeredAt = new Date().toISOString();
       body = {
-        participant_code: participantId,
+        participant_id: participantId,
         phase,
         term_slug: page.term_slug,
         test_round: normalizeTestRound(page.test_round),

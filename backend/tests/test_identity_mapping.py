@@ -1,5 +1,8 @@
 import json
+import re
 import sqlite3
+import time
+from datetime import timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,9 +15,11 @@ from app.main import app
 from app.db import session as db_session_module
 from app.db.session import SessionLocal, engine
 from app.core.config import get_settings
-from app.models import AuditEvent, IdempotencyRecord, Participant, ParticipantSession
+from app.models import AuditEvent, IdempotencyRecord, Participant, ParticipantSession, now
 from app.services.idempotency import request_fingerprint
 from app.services import identity_mapping
+from app.services.participant_auth import _cookie_name, _secret, _token_hash, _token_signature
+from app.core.question_sets import LEARNING_CONTENT_VERSION
 
 client = TestClient(app)
 
@@ -42,42 +47,46 @@ def test_invalid_research_codes_are_not_echoed_or_persisted(research_code):
     assert not Path(get_settings().identity_mapping_path).exists()
 
 
-def test_registration_uses_participant_code_as_primary_identifier_and_issues_session_cookie():
+def test_registration_discards_research_code_and_uses_generated_id_and_display_code():
     key = str(uuid4())
     research_code = "001202611120001"
     response = register(research_code, key)
     assert response.status_code == 200, response.text
     participant_id = response.json()["participant_id"]
-    assert participant_id == research_code
-    assert response.json()["participant_code"] == research_code
-    assert response.json()["display_code"] == research_code
+    assert participant_id != research_code
+    assert re.fullmatch(r"[0-9a-f-]{36}", participant_id)
+    assert response.json()["display_code"].startswith("P")
+    assert re.fullmatch(r"P\d{3,}", response.json()["display_code"])
+    assert "participant_code" not in response.json()
     assert "set-cookie" in response.headers
     assert not Path(get_settings().identity_mapping_path).exists()
 
     with SessionLocal() as db:
         participant = db.get(Participant, participant_id)
-        assert participant.id == research_code
-        assert participant.display_code == research_code
+        assert participant.id == participant_id
+        assert participant.display_code == response.json()["display_code"]
         assert participant.test_content_mode == "four_topic_fundamentals"
-        assert participant.consent_document_version == "consent-2026-11-25-participant-code-primary-identifier-v1"
+        assert participant.consent_document_version == "consent-2026-11-27-generated-participant-id-v1"
         record = db.query(IdempotencyRecord).filter_by(idempotency_key=key).one()
         expected_hash = request_fingerprint({
             "assignment_code": "A",
             "consent_checked": True,
-            "participant_code": research_code,
-            "consent_document_version": "consent-2026-11-25-participant-code-primary-identifier-v1",
+            "consent_document_version": "consent-2026-11-27-generated-participant-id-v1",
         })
         assert record.request_hash == expected_hash
-        assert record.response_json["participant_code"] == research_code
-        assert db.query(ParticipantSession).filter_by(participant_id=research_code).count() == 1
+        assert record.response_json["participant_id"] == participant_id
+        assert research_code not in json.dumps(record.response_json)
+        assert db.query(ParticipantSession).filter_by(participant_id=participant_id).count() == 1
+        assert participant_code_not_persisted(db, research_code)
 
     for path in (f"/api/admin/participants/{participant_id}/logs.csv", f"/api/admin/participants/{participant_id}/logs.xlsx"):
         exported = client.get(path)
         assert exported.status_code == 200
-        assert research_code in exported.headers["content-disposition"]
+        assert response.json()["display_code"] in exported.headers["content-disposition"]
         if path.endswith(".csv"):
             assert b"participant_code" in exported.content.splitlines()[0]
-            assert research_code.encode() in exported.content
+            assert participant_id.encode() in exported.content
+            assert research_code.encode() not in exported.content
 
     anonymous = TestClient(app)
     assert anonymous.get(f"/api/participants/{participant_id}/presurvey").status_code == 401
@@ -86,14 +95,74 @@ def test_registration_uses_participant_code_as_primary_identifier_and_issues_ses
     replay = register(research_code, key)
     assert replay.status_code == 200
     assert replay.json() == response.json()
+    replay_with_different_code = register("987654321", key)
+    assert replay_with_different_code.status_code == 200
+    assert replay_with_different_code.json() == response.json()
     with SessionLocal() as db:
         assert db.query(Participant).filter_by(id=participant_id).count() == 1
-        assert db.query(ParticipantSession).filter_by(participant_id=participant_id).count() == 2
+        assert db.query(ParticipantSession).filter_by(participant_id=participant_id).count() == 3
 
-    conflict = register("999202611129999", key)
-    assert conflict.status_code == 409
     duplicate = register(research_code)
-    assert duplicate.status_code == 409
+    assert duplicate.status_code == 200
+    assert duplicate.json()["participant_id"] != participant_id
+
+
+def participant_code_not_persisted(db, research_code):
+    for row in db.query(IdempotencyRecord).all():
+        assert research_code not in json.dumps(row.response_json)
+    for row in db.query(AuditEvent).all():
+        assert research_code not in json.dumps([row.before_json, row.after_json])
+    return True
+
+
+def test_v64_participant_resumes_only_with_its_existing_valid_session():
+    participant_code = "001202611120001"
+    protocol_id = "experiment-plan-2026-11-23-participant-code-primary-identifier-presurvey-weekly-frequency-understanding-anchor-v1"
+    with SessionLocal() as db:
+        participant = Participant(
+            id=participant_code,
+            display_code=participant_code,
+            group_condition="proposed",
+            consent_checked=True,
+            current_step="presurvey",
+            experiment_spec_version=64,
+            protocol_id=protocol_id,
+            learning_content_version=LEARNING_CONTENT_VERSION,
+        )
+        db.add(participant)
+        secret = _secret()
+        expires_unix = int(time.time()) + 3600
+        payload = f"v1.existing-v64-session.{expires_unix}"
+        token = f"{payload}.{_token_signature(payload, secret)}"
+        db.add(ParticipantSession(
+            token_hash=_token_hash(token),
+            participant_id=participant_code,
+            expires_at=now() + timedelta(hours=1),
+        ))
+        db.commit()
+
+    cookie_name = _cookie_name(participant_code, _secret())
+    anonymous = TestClient(app)
+    assert anonymous.get(f"/api/participants/{participant_code}/current-step").status_code == 401
+    resumed = TestClient(app)
+    resumed.cookies.set(cookie_name, token)
+    response = resumed.get(f"/api/participants/{participant_code}/current-step")
+    assert response.status_code == 200, response.text
+    assert response.json()["can_resume"] is True
+    assert response.json()["step"] == "presurvey"
+    logs = client.get(f"/api/admin/participants/{participant_code}/logs")
+    assert logs.status_code == 200
+    assert logs.json()["participant"]["participant_code"] == participant_code
+    assert logs.json()["participant"]["participant_id"] == participant_code
+    exported = client.get(f"/api/admin/participants/{participant_code}/logs.csv")
+    assert exported.status_code == 200
+    assert participant_code.encode() in exported.content
+    assert b"participant_code" in exported.content.splitlines()[0]
+    with SessionLocal() as db:
+        saved = db.get(Participant, participant_code)
+        assert saved.id == participant_code
+        assert saved.experiment_spec_version == 64
+        assert saved.protocol_id == protocol_id
 
 
 def test_existing_mapping_file_is_unchanged_by_registration(tmp_path, monkeypatch):
