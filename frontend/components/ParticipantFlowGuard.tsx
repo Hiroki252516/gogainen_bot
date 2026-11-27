@@ -15,10 +15,24 @@ type LearningTargetsResponse = {
   targets: Array<{ term_slug: string }>;
 };
 
-export function CheckingFlow({ error = false, legacy = false, onRetry }: { error?: boolean; legacy?: boolean; onRetry?: () => void } = {}) {
+export function CheckingFlow({ error = false, legacy = false, sessionUnavailable = false, onRetry }: {
+  error?: boolean;
+  legacy?: boolean;
+  sessionUnavailable?: boolean;
+  onRetry?: () => void;
+} = {}) {
   if (legacy) return <LegacyTrialNotice />;
+  if (sessionUnavailable) {
+    return (
+      <section className="panel stack">
+        <h1>参加者セッションを確認できません</h1>
+        <p>このブラウザからは実験を再開できません。途中から再開したい場合は、実験担当者にご確認ください。新しく開始しても、以前の記録は削除されません。</p>
+        <button type="button" onClick={startNewExperiment}>新しい実験を開始</button>
+      </section>
+    );
+  }
   return (
-    <section className="panel" aria-busy="true" role="status">
+    <section className="panel" aria-busy={!error} role="status">
       {error ? (
         <>
           <p>実験の現在位置を確認できませんでした。</p>
@@ -31,15 +45,17 @@ export function CheckingFlow({ error = false, legacy = false, onRetry }: { error
   );
 }
 
+function startNewExperiment() {
+  clearParticipantSession();
+  window.location.assign("/start");
+}
+
 export function LegacyTrialNotice() {
   return (
     <section className="panel stack">
       <h1>この試用記録は閲覧専用です</h1>
       <p>保存済みの記録は管理画面から確認できます。</p>
-      <button type="button" onClick={() => {
-        clearParticipantSession();
-        window.location.assign("/start");
-      }}>新しい実験を開始</button>
+      <button type="button" onClick={startNewExperiment}>新しい実験を開始</button>
     </section>
   );
 }
@@ -49,6 +65,7 @@ export function useParticipantFlowGuard(allowedSteps: readonly string[]) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [checkError, setCheckError] = useState(false);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [legacy, setLegacy] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -56,6 +73,7 @@ export function useParticipantFlowGuard(allowedSteps: readonly string[]) {
     let active = true;
     setReady(false);
     setCheckError(false);
+    setSessionUnavailable(false);
     const id = participantId();
     if (!id) {
       router.replace("/start");
@@ -84,6 +102,10 @@ export function useParticipantFlowGuard(allowedSteps: readonly string[]) {
       })
       .catch((error) => {
         if (!active) return;
+        if (error instanceof ApiError && error.status === 401) {
+          setSessionUnavailable(true);
+          return;
+        }
         if (error instanceof ApiError && error.status === 404) {
           clearParticipantSession();
           router.replace("/start");
@@ -98,7 +120,7 @@ export function useParticipantFlowGuard(allowedSteps: readonly string[]) {
     };
   }, [allowedSteps, pathname, retryCount, router]);
 
-  return { ready, legacy, error: checkError, retry: () => setRetryCount((count) => count + 1) };
+  return { ready, legacy, sessionUnavailable, error: checkError, retry: () => setRetryCount((count) => count + 1) };
 }
 
 export function useLearningTargetFlowGuard(termSlug: string) {
@@ -106,6 +128,7 @@ export function useLearningTargetFlowGuard(termSlug: string) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [checkError, setCheckError] = useState(false);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [legacy, setLegacy] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -113,6 +136,7 @@ export function useLearningTargetFlowGuard(termSlug: string) {
     let active = true;
     setReady(false);
     setCheckError(false);
+    setSessionUnavailable(false);
     const id = participantId();
     if (!id) {
       router.replace("/start");
@@ -146,6 +170,10 @@ export function useLearningTargetFlowGuard(termSlug: string) {
         }
       } catch (error) {
         if (!active) return;
+        if (error instanceof ApiError && error.status === 401) {
+          setSessionUnavailable(true);
+          return;
+        }
         if (error instanceof ApiError && error.status === 404) {
           clearParticipantSession();
           router.replace("/start");
@@ -162,7 +190,7 @@ export function useLearningTargetFlowGuard(termSlug: string) {
     };
   }, [pathname, retryCount, router, termSlug]);
 
-  return { ready, legacy, error: checkError, retry: () => setRetryCount((count) => count + 1) };
+  return { ready, legacy, sessionUnavailable, error: checkError, retry: () => setRetryCount((count) => count + 1) };
 }
 
 export function ParticipantFlowGuard({
@@ -173,7 +201,7 @@ export function ParticipantFlowGuard({
   children: ReactNode;
 }) {
   const flow = useParticipantFlowGuard(allowedSteps);
-  return flow.ready ? <>{children}</> : <CheckingFlow legacy={flow.legacy} error={flow.error} onRetry={flow.retry} />;
+  return flow.ready ? <>{children}</> : <CheckingFlow legacy={flow.legacy} sessionUnavailable={flow.sessionUnavailable} error={flow.error} onRetry={flow.retry} />;
 }
 
 export function ParticipantEntryGuard({ children }: { children: ReactNode }) {
@@ -181,6 +209,7 @@ export function ParticipantEntryGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [checkError, setCheckError] = useState(false);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [legacy, setLegacy] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -188,6 +217,7 @@ export function ParticipantEntryGuard({ children }: { children: ReactNode }) {
     let active = true;
     setReady(false);
     setCheckError(false);
+    setSessionUnavailable(false);
     const id = participantId();
     if (!id) {
       setReady(true);
@@ -212,6 +242,10 @@ export function ParticipantEntryGuard({ children }: { children: ReactNode }) {
       })
       .catch((error) => {
         if (!active) return;
+        if (error instanceof ApiError && error.status === 401) {
+          setSessionUnavailable(true);
+          return;
+        }
         if (error instanceof ApiError && error.status === 404) {
           clearParticipantSession();
           setReady(true);
@@ -226,5 +260,7 @@ export function ParticipantEntryGuard({ children }: { children: ReactNode }) {
     };
   }, [pathname, retryCount, router]);
 
-  return ready ? <>{children}</> : <CheckingFlow legacy={legacy} error={checkError} onRetry={() => setRetryCount((count) => count + 1)} />;
+  return ready ? <>{children}</> : (
+    <CheckingFlow legacy={legacy} sessionUnavailable={sessionUnavailable} error={checkError} onRetry={() => setRetryCount((count) => count + 1)} />
+  );
 }

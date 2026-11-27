@@ -353,7 +353,7 @@ export default function LearningPage() {
     }
   }
 
-  if (!flowReady) return <CheckingFlow legacy={flow.legacy} error={flow.error} onRetry={flow.retry} />;
+  if (!flowReady) return <CheckingFlow legacy={flow.legacy} sessionUnavailable={flow.sessionUnavailable} error={flow.error} onRetry={flow.retry} />;
 
   const progress = questionProgress || (turn ? progressForNewQuestion(termSlug, turn) : null);
   const displayedProgress = progress ? Math.min(progress.current, progress.total) : null;

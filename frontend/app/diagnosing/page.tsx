@@ -36,7 +36,7 @@ export default function DiagnosingPage() {
       .catch((err) => setMessage(err.message));
   }, [flowReady, router]);
 
-  if (!flowReady) return <CheckingFlow error={flow.error} onRetry={flow.retry} />;
+  if (!flowReady) return <CheckingFlow sessionUnavailable={flow.sessionUnavailable} error={flow.error} onRetry={flow.retry} />;
 
   return (
     <AppShell step="診断">
