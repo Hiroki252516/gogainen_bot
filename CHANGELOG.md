@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/Hiroki252516/gogainen_bot/compare/v0.6.0...v0.7.0) (2026-11-27)
+
+
+### Features
+
+* 起動エラーを修正 ([8b3ade2](https://github.com/Hiroki252516/gogainen_bot/commit/8b3ade270adb22d4f0e213ee3d019a8d1d37528e))
+
 ## [0.6.0](https://github.com/Hiroki252516/gogainen_bot/compare/v0.5.1...v0.6.0) (2026-11-27)
 
 
