@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/Hiroki252516/gogainen_bot/compare/v0.5.0...v0.5.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* align PR checks with fixed experiment settings ([5a43425](https://github.com/Hiroki252516/gogainen_bot/commit/5a434250baf107ed525fabafb46f5beccf70455d))
+* restore participant sessions and safe id widening ([4b0c08e](https://github.com/Hiroki252516/gogainen_bot/commit/4b0c08e73043259777200c46f88fab30dce7344d))
+
 ## [0.5.0](https://github.com/Hiroki252516/gogainen_bot/compare/v0.4.0...v0.5.0) (2026-11-24)
 
 
