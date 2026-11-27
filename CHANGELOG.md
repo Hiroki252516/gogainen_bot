@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/Hiroki252516/gogainen_bot/compare/v0.5.1...v0.6.0) (2026-11-27)
+
+
+### Features
+
+* issue-389ブランチで実装した内容を削除 ([a9e91e8](https://github.com/Hiroki252516/gogainen_bot/commit/a9e91e856749269642a6c0fae3600fb1a25568c0))
+* issue-389ブランチで実装した内容を削除 ([fca7b2b](https://github.com/Hiroki252516/gogainen_bot/commit/fca7b2bf585609c2c1c59b0cef6ce031ef095578))
+
 ## [0.5.1](https://github.com/Hiroki252516/gogainen_bot/compare/v0.5.0...v0.5.1) (2026-11-25)
 
 
